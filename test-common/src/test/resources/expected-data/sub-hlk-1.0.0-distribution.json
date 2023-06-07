@@ -1,0 +1,10 @@
+{
+  "explicit": true,
+  "external": true,
+  "GAV": "",
+  "securityGroups": {
+    "read": [
+      "vfiler1-default#group"
+    ]
+  }
+}

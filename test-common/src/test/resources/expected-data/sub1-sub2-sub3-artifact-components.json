@@ -1,0 +1,42 @@
+{
+  "artifactComponents": [
+    {
+      "artifact": {
+        "group": "org.octopusden.octopus.sub1",
+        "name": "sub-component1",
+        "version": "1.0"
+      },
+      "component": {
+        "id": "sub-component1",
+        "name": null,
+        "version": "1.0",
+        "componentOwner": "",
+        "releaseManager": null,
+        "distribution": null
+      }
+    },
+    {
+      "artifact": {
+        "group": "org.octopusden.octopus.sub2",
+        "name": "sub-component2",
+        "version": "1.0"
+      },
+      "component": {
+        "id": "sub-component2",
+        "name": null,
+        "version": "1.0",
+        "componentOwner": "",
+        "releaseManager": null,
+        "distribution": null
+      }
+    },
+    {
+      "artifact": {
+        "group": "org.octopusden.octopus.sub3",
+        "name": "sub-component3",
+        "version": "1.0"
+      },
+      "component": null
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+//noinspection GroovyAssignabilityCheck
+plugins {
+    id 'groovy'
+}
+dependencies {
+    api project(':components-registry-api')
+    api "org.codehaus.groovy:groovy-all:${project['groovy.version']}"
+    api "org.apache.maven:maven-artifact:${project['maven.version']}"
+    api "org.octopusden.octopus.releng:releng-lib:${project['releng-lib.version']}"
+    implementation "com.fasterxml.jackson.core:jackson-annotations"
+    implementation "com.fasterxml.jackson.core:jackson-databind"
+    api "org.apache.logging.log4j:log4j-api:${project['log4j2.version']}"
+    api "org.slf4j:slf4j-api:1.7.12"
+}
+
+sourceSets {
+  main {
+    java { srcDirs = [] }    // no source dirs for the java compiler
+    groovy { srcDirs = ["src/main/groovy", "src/main/java"] }  // compile   everything in src/ with groovy
+  }
+}

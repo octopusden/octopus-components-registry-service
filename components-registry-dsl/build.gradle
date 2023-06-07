@@ -1,0 +1,39 @@
+//noinspection GroovyAssignabilityCheck
+plugins {
+    id 'org.jetbrains.kotlin.jvm'
+}
+
+dependencies {
+    api project(':components-registry-api')
+    api "com.fasterxml.jackson.core:jackson-databind"
+    api "com.fasterxml.jackson.datatype:jackson-datatype-jdk8"
+    api "com.fasterxml.jackson.datatype:jackson-datatype-jsr310"
+    api "com.fasterxml.jackson.module:jackson-module-kotlin"
+    api "org.jetbrains.kotlin:kotlin-reflect"
+    api "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
+    api group: 'org.jetbrains.kotlin', name: 'kotlin-script-runtime'
+    api group: 'org.jetbrains.kotlin', name: 'kotlin-stdlib'
+    api group: 'org.jetbrains.kotlin', name: 'kotlin-script-util'
+    api group: 'org.jetbrains.kotlin', name: 'kotlin-compiler-embeddable'
+    api group: 'org.jetbrains.kotlin', name: 'kotlin-scripting-compiler-embeddable'
+    api group: 'org.jetbrains.kotlin', name: 'kotlin-scripting-jsr223'
+
+    testImplementation group: 'org.assertj', name: 'assertj-core', version: project['assertj.version']
+}
+
+task storeDslLibraryDependencies {
+    doLast {
+        def copiedConfiguration = project.configurations.api.copyRecursive()
+        copiedConfiguration.canBeResolved = true
+        copiedConfiguration.canBeConsumed = true
+
+        def artifacts = ["${project.name}-${project.version}.jar"]
+        copiedConfiguration.resolvedConfiguration.resolvedArtifacts.forEach { artifacts.add(it.file.name) }
+        artifacts
+        def file = file("$buildDir/resources/main/${project.name}.txt")
+        file.getParentFile().mkdirs()
+        file.write(artifacts.join('\n'))
+    }
+}
+
+processResources.finalizedBy storeDslLibraryDependencies

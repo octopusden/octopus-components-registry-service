@@ -1,0 +1,17 @@
+[
+  {
+    "group": "org.octopusden.octopus.sub1",
+    "name": "sub-component1",
+    "version": "1.0"
+  },
+  {
+    "group": "org.octopusden.octopus.sub2",
+    "name": "sub-component2",
+    "version": "1.0"
+  },
+  {
+    "group": "org.octopusden.octopus.sub3",
+    "name": "sub-component3",
+    "version": "1.0"
+  }
+]

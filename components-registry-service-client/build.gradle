@@ -1,0 +1,42 @@
+//noinspection GroovyAssignabilityCheck
+plugins {
+    id 'org.springframework.boot'
+    id 'org.jetbrains.kotlin.plugin.spring'
+    id 'java-test-fixtures'
+}
+
+dependencies {
+    implementation project(":components-registry-service-core")
+    implementation "com.fasterxml.jackson.core:jackson-databind"
+
+    implementation(platform("io.github.openfeign:feign-bom:12.2"))
+    implementation("io.github.openfeign:feign-httpclient")
+    implementation("io.github.openfeign:feign-jackson")
+    implementation("io.github.openfeign:feign-slf4j")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+
+    testImplementation project(":components-registry-service-server")
+    testImplementation testFixtures(project(":test-common"))
+    testImplementation "org.octopusden.octopus.infrastructure:components-registry-service-server:${project.version}"
+    testImplementation platform("org.springframework.boot:spring-boot-dependencies:${project['spring-boot.version']}")
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+
+    testImplementation group: 'org.assertj', name: 'assertj-core', version: '3.21.0'
+    testImplementation group: 'ch.qos.logback', name: 'logback-classic', version: '1.2.7'
+}
+
+bootJar {
+    enabled = false
+}
+
+jar {
+    enabled = true
+    archiveClassifier = ''
+}
+sourceSets {
+    test {
+        resources {
+            srcDirs += [ project(':test-common').sourceSets.test.resources ]
+        }
+    }
+}

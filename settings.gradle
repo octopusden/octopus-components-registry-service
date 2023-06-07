@@ -1,0 +1,26 @@
+//
+pluginManagement {
+    plugins {
+        id 'org.springframework.boot'            version settings['spring-boot.version']
+        id 'org.jetbrains.kotlin.jvm'            version settings['kotlin.version']
+        id 'org.jetbrains.kotlin.plugin.spring'  version settings['kotlin.version']
+        id 'org.jetbrains.kotlin.plugin.jpa'     version settings['kotlin.version']
+        id 'com.bmuschko.docker-java-application'   version settings['gradle-docker-plugin.version']
+    }
+    repositories {
+        gradlePluginPortal()
+        mavenCentral()
+        jcenter()
+    }
+}
+
+rootProject.name = 'components-registry-service'
+
+include ':component-resolver-api'
+include ':component-resolver-core'
+include ':components-registry-api'
+include ':components-registry-dsl'
+include ':components-registry-service-core'
+include ':components-registry-service-client'
+include ':components-registry-service-server'
+include ':test-common'

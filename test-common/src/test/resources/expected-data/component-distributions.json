@@ -1,0 +1,42 @@
+{
+  "client": {
+    "explicit": true,
+    "external": true,
+    "GAV": "",
+    "securityGroups": {
+      "read": [
+        "vfiler1-default#group"
+      ]
+    }
+  },
+  "SUB_WITH_SIMPLE_VERSION_FORMAT": {
+    "explicit": false,
+    "external": true,
+    "GAV": "",
+    "securityGroups": {
+      "read": [
+        "vfiler1-default#group"
+      ]
+    }
+  },
+  "SUB": {
+    "explicit": false,
+    "external": true,
+    "GAV": "",
+    "securityGroups": {
+      "read": [
+        "vfiler1-default#group"
+      ]
+    }
+  },
+  "commoncomponent-test": {
+    "explicit": false,
+    "external": true,
+    "GAV": "",
+    "securityGroups": {
+      "read": [
+        "vfiler1-default#group"
+      ]
+    }
+  }
+}

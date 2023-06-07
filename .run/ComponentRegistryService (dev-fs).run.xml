@@ -1,0 +1,34 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="ComponentRegistryService (dev-fs)" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
+    <option name="ACTIVE_PROFILES" value="dev,dev-fs" />
+    <additionalParameters>
+      <param>
+        <option name="enabled" value="true" />
+        <option name="name" value="components-registry.work-dir" />
+        <option name="value" value="${COMPONENTS_REGISTRY_PROJECT_DIR}" />
+      </param>
+      <param>
+        <option name="enabled" value="true" />
+        <option name="name" value="spring.config.additional-location" />
+        <option name="value" value="components-registry-service-server/dev/" />
+      </param>
+    </additionalParameters>
+    <option name="HIDE_BANNER" value="true" />
+    <module name="components-registry-service.components-registry-service-server.main" />
+    <option name="SPRING_BOOT_MAIN_CLASS" value="org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication" />
+    <extension name="net.ashald.envfile">
+      <option name="IS_ENABLED" value="true" />
+      <option name="IS_SUBST" value="true" />
+      <option name="IS_PATH_MACRO_SUPPORTED" value="true" />
+      <option name="IS_IGNORE_MISSING_FILES" value="true" />
+      <option name="IS_ENABLE_EXPERIMENTAL_INTEGRATIONS" value="true" />
+      <ENTRIES>
+        <ENTRY IS_ENABLED="true" PARSER="runconfig" />
+        <ENTRY IS_ENABLED="true" PARSER="env" PATH="$USER_HOME$/dev.env" />
+      </ENTRIES>
+    </extension>
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

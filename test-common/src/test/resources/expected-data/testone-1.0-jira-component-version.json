@@ -1,0 +1,19 @@
+{
+  "name": "TESTONE",
+  "version": "1.0",
+  "component": {
+    "projectKey": "TESTONE",
+    "displayName": "TESTONE DISPLAY NAME WITH VERSIONS-API",
+    "componentVersionFormat": {
+      "majorVersionFormat": "$major",
+      "releaseVersionFormat": "$major.$minor",
+      "buildVersionFormat": "$major.$minor.$service",
+      "lineVersionFormat": "$major"
+    },
+    "componentInfo": {
+      "versionPrefix": "",
+      "versionFormat": "$versionPrefix-$baseVersionFormat"
+    },
+    "technical": false
+  }
+}

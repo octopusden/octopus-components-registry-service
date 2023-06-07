@@ -1,0 +1,27 @@
+//noinspection GroovyAssignabilityCheck
+plugins {
+    id 'groovy'
+}
+
+dependencies {
+    api project(":component-resolver-api")
+    api project(':components-registry-dsl')
+    implementation "org.springframework:spring-context:4.1.2.RELEASE"
+    implementation( 'org.octopusden.octopus.employee:client:2.0.19') {
+        exclude group: 'org.jetbrains.kotlin', module: '*'
+    }
+    implementation "org.gradle:gradle-core:1.6"
+    implementation "org.gradle:gradle-base-services:1.6"
+    implementation "org.gradle:gradle-base-services-groovy:4.2"
+
+    implementation "org.codehaus.groovy.modules.http-builder:http-builder:0.7.1"
+    testImplementation "org.springframework:spring-test:4.1.2.RELEASE"
+    testImplementation group: 'org.assertj', name: 'assertj-core', version: '3.21.0'
+}
+
+sourceSets {
+  main {
+    java { srcDirs = [] }    // no source dirs for the java compiler
+    groovy { srcDirs = ["src/main/groovy", "src/main/java"] }  // compile   everything in src/ with groovy
+  }
+}

@@ -1,0 +1,12 @@
+spring:
+  cloud:
+    config:
+      fail-fast: true
+      retry:
+        multiplier: 2
+        max-interval: 60000
+        max-attempts: 5000
+        initial-interval: 1000
+      token: ${VAULT_TOKEN}
+  application:
+    name: components-registry-service

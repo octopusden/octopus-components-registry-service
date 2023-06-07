@@ -1,0 +1,158 @@
+[
+  {
+    "componentName": "SUB",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "SUB",
+      "displayName": "PPROJECT WITH CLIENT COMPONENT",
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major",
+        "releaseVersionFormat": "$major.$minor",
+        "buildVersionFormat": "$major.$minor.$service",
+        "lineVersionFormat": "$major"
+      },
+      "componentInfo": {
+        "versionPrefix": "sub1k",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [
+        {
+          "name": "main",
+          "vcsPath": "ssh://hg@mercurial/sub",
+          "type": "MERCURIAL",
+          "tag": "$module-$version",
+          "branch": "v2"
+        }
+      ],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "commoncomponent-test",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "SUB",
+      "displayName": "commoncomponent TEST",
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major",
+        "releaseVersionFormat": "$major.$minor",
+        "buildVersionFormat": "$major.$minor.$service-$fix",
+        "lineVersionFormat": "$major"
+      },
+      "componentInfo": {
+        "versionPrefix": "",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "client",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "SUB",
+      "displayName": "PPROJECT WITH CLIENT COMPONENT",
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major",
+        "releaseVersionFormat": "$major.$minor",
+        "buildVersionFormat": "$major.$minor.$service",
+        "lineVersionFormat": "$major"
+      },
+      "componentInfo": {
+        "versionPrefix": "hlk",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": true,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [
+        {
+          "name": "main",
+          "vcsPath": "ssh://hg@mercurial/client",
+          "type": "MERCURIAL",
+          "tag": "$module-$version",
+          "branch": "default"
+        }
+      ],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "SUB_WITH_SIMPLE_VERSION_FORMAT",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "SUB",
+      "displayName": "Subcomponent with simple version format",
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major",
+        "releaseVersionFormat": "$major.$minor",
+        "buildVersionFormat": "$major.$minor",
+        "lineVersionFormat": "$major"
+      },
+      "componentInfo": {
+        "versionPrefix": "s1mple",
+        "versionFormat": "$versionPrefix.$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [
+        {
+          "name": "main",
+          "vcsPath": "ssh://hg@mercurial/sub",
+          "type": "MERCURIAL",
+          "tag": "$module-$version",
+          "branch": "v2"
+        }
+      ],
+      "externalRegistry": null
+    }
+  }
+]

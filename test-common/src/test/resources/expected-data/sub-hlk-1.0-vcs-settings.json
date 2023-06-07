@@ -1,0 +1,12 @@
+{
+  "versionControlSystemRoots": [
+    {
+      "name": "main",
+      "vcsPath": "ssh://hg@mercurial/client",
+      "type": "MERCURIAL",
+      "tag": "client-hlk-1.0",
+      "branch": "default"
+    }
+  ],
+  "externalRegistry": null
+}

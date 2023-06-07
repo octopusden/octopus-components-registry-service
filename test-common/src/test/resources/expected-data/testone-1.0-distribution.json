@@ -1,0 +1,10 @@
+{
+  "explicit": false,
+  "external": false,
+  "GAV": "org.octopusden.octopus.test:versions-api:jar",
+  "securityGroups": {
+    "read": [
+      "vfiler1-default#group"
+    ]
+  }
+}

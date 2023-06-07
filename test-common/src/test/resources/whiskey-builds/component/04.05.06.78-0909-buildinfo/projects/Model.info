@@ -1,0 +1,13 @@
+{
+  "name": "Model",
+  "type": "copy",
+  "tasks": {
+    "getSrc": {
+      "tim": "2017.07.18 10:59:24",
+      "ela": 1263,
+      "repotype": "cvs",
+      "tag": "TEST_COMPONENT2_03_45_29_29_10_T",
+      "repoPath": "OctopusSource/Octopus/Other/models/Model"
+    }
+  }
+}

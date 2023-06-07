@@ -1,0 +1,7 @@
+components-registry:
+  vcs:
+    root: # envFile property
+    username: # envFile property
+    password: # envFile property
+
+  work-dir: /tmp/components-registry
