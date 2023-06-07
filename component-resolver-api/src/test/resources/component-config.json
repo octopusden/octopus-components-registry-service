@@ -1,0 +1,549 @@
+{
+  "componentItems": [
+    {
+      "jiraProjectKey": "TEST",
+      "versionFormatMap": {
+        "(,0),[0,)": {
+          "releaseVersionFormat": "$major.$minor.$service",
+          "majorVersionFormat": "$major.$minor",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "PK1",
+      "versionFormatMap": {
+        "(,0),[0,)": {
+          "releaseVersionFormat": "$major.$minor",
+          "majorVersionFormat": "$major",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "SMS_COMPONENT",
+      "versionFormatMap": {
+        "[2.6,)": {
+          "releaseVersionFormat": "$major.$minor.$service",
+          "majorVersionFormat": "$major.$minor",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "PK2",
+      "versionFormatMap": {
+        "[2.1.48-0005,2.1.48-0005]": {
+          "releaseVersionFormat": "$major.$minor.$service-$fix04",
+          "majorVersionFormat": "$major.$minor.$service",
+          "buildVersionFormat": null
+        },
+        "[2.1.47-0010,2.1.47-0010]": {
+          "releaseVersionFormat": "$major.$minor.$service-$fix04",
+          "majorVersionFormat": "$major.$minor.$service",
+          "buildVersionFormat": null
+        },
+        "[2.1.32-0002,2.1.47-0010),(2.1.47-0010,2.1.48-0005),(2.1.48-0005,)": {
+          "releaseVersionFormat": "$major.$minor.$service-$fix04",
+          "majorVersionFormat": "$major.$minor.$service",
+          "buildVersionFormat": null
+        },
+        "[2-1-18-0022,2.1.32-0001)": {
+          "releaseVersionFormat": "$major.$minor.$service-$fix04",
+          "majorVersionFormat": "$major.$minor.$service",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "ASMAVEN",
+      "versionFormatMap": {
+        "(,0),[0,)": {
+          "releaseVersionFormat": "$major.$minor",
+          "majorVersionFormat": "$major",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "PK3",
+      "versionFormatMap": {
+        "(1,)": {
+          "releaseVersionFormat": "IntralinkAdapter.$major.$minor.$service",
+          "majorVersionFormat": "IntralinkAdapter.$major",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "PK4",
+      "versionFormatMap": {
+        "[1.1,)": {
+          "releaseVersionFormat": "$major.$minor.$service",
+          "majorVersionFormat": "$major.$minor",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "PK3",
+      "versionFormatMap": {
+        "(10,)": {
+          "releaseVersionFormat": "NetworkAdapter.$major.$minor.$service",
+          "majorVersionFormat": "NetworkAdapter.$major",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "FIRSTSUB",
+      "versionFormatMap": {
+        "(,0),[0,)": {
+          "releaseVersionFormat": "$major.$minor.$service",
+          "majorVersionFormat": "$major.$minor",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "SECONDSUB",
+      "versionFormatMap": {
+        "(,0),[0,)": {
+          "releaseVersionFormat": "$major.$minor",
+          "majorVersionFormat": "$major",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "PK5",
+      "versionFormatMap": {
+        "(,0),[0,)": {
+          "releaseVersionFormat": "$major.$minor.$service",
+          "majorVersionFormat": "$major.$minor",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "PK4",
+      "versionFormatMap": {
+        "[1.1.40,1.1.40],[1.1.49,1.1.49],[1.1.51,1.1.51]": {
+          "releaseVersionFormat": "$major.$minor.$service",
+          "majorVersionFormat": "$major.$minor",
+          "buildVersionFormat": null
+        },
+        "[1.1,1.1.39],[1.1.41,1.1.49),(1.1.51,1.2)": {
+          "releaseVersionFormat": "$major.$minor.$service",
+          "majorVersionFormat": "$major.$minor",
+          "buildVersionFormat": null
+        },
+        "[1.2,)": {
+          "releaseVersionFormat": "$major.$minor.$service",
+          "majorVersionFormat": "$major.$minor",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "TESTONE",
+      "versionFormatMap": {
+        "(,0),[0,)": {
+          "releaseVersionFormat": "$major.$minor",
+          "majorVersionFormat": "$major",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "NS",
+      "versionFormatMap": {
+        "(,0),[0,)": {
+          "releaseVersionFormat": "$major.$minor.$service",
+          "majorVersionFormat": "$major.$minor",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "MCOMPONENT",
+      "versionFormatMap": {
+        "(,0),[0,)": {
+          "releaseVersionFormat": "$major.$minor",
+          "majorVersionFormat": "$major",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "TEST_COMPONENT2",
+      "versionFormatMap": {
+        "(,0),[0,)": {
+          "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
+          "majorVersionFormat": "$major02.$minorC.$serviceC",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "TEST_COMPONENT6",
+      "versionFormatMap": {
+        "[2.1,)": {
+          "releaseVersionFormat": "$major.$minor.$service-$fix",
+          "majorVersionFormat": "$major.$minor.$service",
+          "buildVersionFormat": null
+        },
+        "[,2.1)": {
+          "releaseVersionFormat": "$major.$minor.$service",
+          "majorVersionFormat": "$major.$minor",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "BCOMPONENT",
+      "versionFormatMap": {
+        "[1.12.108-490,)": {
+          "releaseVersionFormat": "$major.$minor.$service-$fix",
+          "majorVersionFormat": "$major.$minor",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "PKS",
+      "versionFormatMap": {
+        "[1.1,)": {
+          "releaseVersionFormat": "$major.$minor.$service-$fix",
+          "majorVersionFormat": "$major.$minor",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "MCOMPONENT",
+      "versionFormatMap": {
+        "[,1.9.128.1),[1.9.129,)": {
+          "releaseVersionFormat": "$major.$minor.$service",
+          "majorVersionFormat": "$major.$minor",
+          "buildVersionFormat": null
+        },
+        "[1.9.128.1,1.9.129)": {
+          "releaseVersionFormat": "$major.$minor.$service.$fix",
+          "majorVersionFormat": "$major.$minor",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "ECOMPONENT",
+      "versionFormatMap": {
+        "(,0),[0,)": {
+          "releaseVersionFormat": "$major.$minor",
+          "majorVersionFormat": "$major",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "MCOMPONENT",
+      "versionFormatMap": {
+        "[1.8.21,1.11)": {
+          "releaseVersionFormat": "$major.$minor.$service",
+          "majorVersionFormat": "$major",
+          "buildVersionFormat": null
+        },
+        "[1.11,)": {
+          "releaseVersionFormat": "$major.$minor.$service",
+          "majorVersionFormat": "$major",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "WG",
+      "versionFormatMap": {
+        "[2.6,2.6.144],(2.6.145,2.6.179),(2.6.180,2.6.370),(2.6.370,)": {
+          "releaseVersionFormat": "$major.$minor.$service",
+          "majorVersionFormat": "$major.$minor",
+          "buildVersionFormat": null
+        },
+        "[2.6.145,2.6.145]": {
+          "releaseVersionFormat": "$major.$minor.$service",
+          "majorVersionFormat": "$major.$minor",
+          "buildVersionFormat": null
+        },
+        "[2.6.179,2.6.179]": {
+          "releaseVersionFormat": "$major.$minor.$service",
+          "majorVersionFormat": "$major.$minor",
+          "buildVersionFormat": null
+        },
+        "[2.6.370,2.6.370]": {
+          "releaseVersionFormat": "$major.$minor.$service",
+          "majorVersionFormat": "$major.$minor",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "WM",
+      "versionFormatMap": {
+        "[1.3,)": {
+          "releaseVersionFormat": "$major.$minor.$service",
+          "majorVersionFormat": "$major.$minor",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "RELENG",
+      "versionFormatMap": {
+        "(,0),[0,)": {
+          "releaseVersionFormat": "versions-api.$major.$minor",
+          "majorVersionFormat": "versions-api.$major",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "AS",
+      "versionFormatMap": {
+        "[1.5,)": {
+          "releaseVersionFormat": "$major.$minor.$service",
+          "majorVersionFormat": "$major.$minor",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "WCOMPONENT",
+      "versionFormatMap": {
+        "[2.1,)": {
+          "releaseVersionFormat": "$major.$minor.$service-$fix",
+          "majorVersionFormat": "$major.$minor.$service",
+          "buildVersionFormat": null
+        },
+        "[,2.1)": {
+          "releaseVersionFormat": "$major.$minor.$service",
+          "majorVersionFormat": "$major.$minor",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "SCOMPONENT",
+      "versionFormatMap": {
+        "(,0),[0,)": {
+          "releaseVersionFormat": "$major.$minor.$service",
+          "majorVersionFormat": "$major.$minor",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "BCOMPONENT",
+      "versionFormatMap": {
+        "(,0),[0,)": {
+          "releaseVersionFormat": "Model.$major.$minor.$service",
+          "majorVersionFormat": "Model.$major.$minor",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "TEST_COMPONENT7",
+      "versionFormatMap": {
+        "(2.4,)": {
+          "releaseVersionFormat": "$major.$minor.$service",
+          "majorVersionFormat": "$major",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "PK3",
+      "versionFormatMap": {
+        "(10,)": {
+          "releaseVersionFormat": "DBAdapter.$major.$minor.$service",
+          "majorVersionFormat": "DBAdapter.$major",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "jiraProjectKey",
+      "versionFormatMap": {
+        "[3.0,)": {
+          "releaseVersionFormat": "$major.$minor.$service",
+          "majorVersionFormat": "$major.$minor",
+          "buildVersionFormat": null
+        },
+        "[,3.0)": {
+          "releaseVersionFormat": "$major.$minor.$service",
+          "majorVersionFormat": "$major.$minor",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "PIPE",
+      "versionFormatMap": {
+        "(,0),[0,)": {
+          "releaseVersionFormat": "$major.$minor.$service",
+          "majorVersionFormat": "$major.$minor",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "JADMIN",
+      "versionFormatMap": {
+        "(,0),[0,)": {
+          "releaseVersionFormat": "$major.$minor.$service",
+          "majorVersionFormat": "$major.$minor",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "jiraProjectKey",
+      "versionFormatMap": {
+        "(,0),[0,)": {
+          "releaseVersionFormat": "$major.$minor.$service",
+          "majorVersionFormat": "$major.$minor",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "BCOMPONENT",
+      "versionFormatMap": {
+        "(,0),[0,)": {
+          "releaseVersionFormat": "Mojo.$major.$minor.$service",
+          "majorVersionFormat": "Mojo.$major.$minor",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "SQLP",
+      "versionFormatMap": {
+        "(,0),[0,)": {
+          "releaseVersionFormat": "$major.$minor.$service",
+          "majorVersionFormat": "$major.$minor",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "MSP",
+      "versionFormatMap": {
+        "(,0),[0,)": {
+          "releaseVersionFormat": "$major.$minor.$service",
+          "majorVersionFormat": "$major.$minor",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "AS",
+      "versionFormatMap": {
+        "[1.5,)": {
+          "releaseVersionFormat": "$major.$minor.$service",
+          "majorVersionFormat": "$major.$minor",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "WWCL",
+      "versionFormatMap": {
+        "[2.2,)": {
+          "releaseVersionFormat": "$major.$minor.$service-$fix",
+          "majorVersionFormat": "$major.$minor.$service",
+          "buildVersionFormat": null
+        },
+        "[,2.2)": {
+          "releaseVersionFormat": "$major.$minor.$service",
+          "majorVersionFormat": "$major.$minor",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "SUB",
+      "versionFormatMap": {
+        "(,0),[0,)": {
+          "releaseVersionFormat": "$major.$minor",
+          "majorVersionFormat": "$major",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "TEST_COMPONENT2",
+      "versionFormatMap": {
+        "(,0),[0,)": {
+          "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
+          "majorVersionFormat": "$major02.$minorC.$serviceC",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "DDD",
+      "versionFormatMap": {
+        "(,0),[0,)": {
+          "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
+          "majorVersionFormat": "$major02.$minorC.$serviceC",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "RELENG",
+      "versionFormatMap": {
+        "(,0),[0,)": {
+          "releaseVersionFormat": "$major.$minor",
+          "majorVersionFormat": "$major",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "MPARENT",
+      "versionFormatMap": {
+        "[1.2.0,)": {
+          "releaseVersionFormat": "$major.$minor",
+          "majorVersionFormat": "$major",
+          "buildVersionFormat": null
+        },
+        "[1.0,1.2.0)": {
+          "releaseVersionFormat": "$major.$minor",
+          "majorVersionFormat": "$major",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "ASEM",
+      "versionFormatMap": {
+        "[1.0.51,1.4)": {
+          "releaseVersionFormat": "$major.$minor.$service",
+          "majorVersionFormat": "$major.$minor",
+          "buildVersionFormat": null
+        }
+      }
+    },
+    {
+      "jiraProjectKey": "bs-core-jira",
+      "versionFormatMap": {
+        "(,0),[0,)": {
+          "releaseVersionFormat": "$major.$minor",
+          "majorVersionFormat": "$major",
+          "buildVersionFormat": null
+        }
+      }
+    }
+  ]
+}

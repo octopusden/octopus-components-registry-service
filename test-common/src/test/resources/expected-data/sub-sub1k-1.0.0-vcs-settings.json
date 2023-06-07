@@ -1,0 +1,12 @@
+{
+  "versionControlSystemRoots": [
+    {
+      "name": "main",
+      "vcsPath": "ssh://hg@mercurial/sub",
+      "type": "MERCURIAL",
+      "tag": "SUB-sub1k-1.0.0",
+      "branch": "v2"
+    }
+  ],
+  "externalRegistry": null
+}

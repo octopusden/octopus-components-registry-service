@@ -1,0 +1,5 @@
+//
+dependencies {
+    api project(":components-registry-api")
+    implementation "com.fasterxml.jackson.core:jackson-annotations"
+}

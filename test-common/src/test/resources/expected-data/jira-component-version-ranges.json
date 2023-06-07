@@ -1,0 +1,1578 @@
+[
+  {
+    "componentName": "TEST_COMPONENT4_TECHNICAL_COMPONENT",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "TEST_COMPONENT4",
+      "displayName": "TECHNICAL COMPONENT",
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major02.$minorC.$serviceC",
+        "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
+        "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
+        "lineVersionFormat": "$major02.$minorC"
+      },
+      "componentInfo": {
+        "versionPrefix": "technical",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": true
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [
+        {
+          "name": "main",
+          "vcsPath": "ssh://hg@mercurial/ddd/technical",
+          "type": "MERCURIAL",
+          "tag": "HELLO TAG23434",
+          "branch": "v2"
+        }
+      ],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "TEST_COMPONENT2_WITH_CVS_ROOT",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "TEST_COMPONENT2",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major02.$minorC.$serviceC",
+        "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
+        "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
+        "lineVersionFormat": "$major"
+      },
+      "componentInfo": {
+        "versionPrefix": "cvs",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [
+        {
+          "name": "main",
+          "vcsPath": "OctopusSource/COMPONENT",
+          "type": "CVS",
+          "tag": "$module-$version",
+          "branch": "MAIN"
+        }
+      ],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "MYPRJ",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "MYPRJ",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major.$minor",
+        "releaseVersionFormat": "$major.$minor.$service",
+        "buildVersionFormat": "$major.$minor.$service-$fix",
+        "lineVersionFormat": "$major"
+      },
+      "componentInfo": {
+        "versionPrefix": "",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "TEST_COMPONENT2_WITH_UPDATED_FORMAT",
+    "versionRange": "(03.38.29,)",
+    "component": {
+      "projectKey": "TEST_COMPONENT2",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major.$minor",
+        "releaseVersionFormat": "$major.$minor.$service-$fix",
+        "buildVersionFormat": "$major.$minor.$service-$fix",
+        "lineVersionFormat": "$major"
+      },
+      "componentInfo": {
+        "versionPrefix": "format",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [
+        {
+          "name": "main",
+          "vcsPath": "ssh://hg@mercurial/releng",
+          "type": "MERCURIAL",
+          "tag": "$module-$version",
+          "branch": "v2"
+        }
+      ],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "TEST_COMPONENT2_WITH_EXTERNAL_REGISTRY_NOT_EXISTS",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "TEST_COMPONENT2",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major02.$minorC.$serviceC",
+        "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
+        "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build04",
+        "lineVersionFormat": "$major"
+      },
+      "componentInfo": {
+        "versionPrefix": "external-roots-not",
+        "versionFormat": "$versionPrefix.$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": true,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [],
+      "externalRegistry": "component_db_not_exists"
+    }
+  },
+  {
+    "componentName": "TEST_COMPONENT2_WITH_SEVERAL_BRANCHES",
+    "versionRange": "(,03.38.25]",
+    "component": {
+      "projectKey": "TEST_COMPONENT2",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major02.$minorC.$serviceC",
+        "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
+        "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
+        "lineVersionFormat": "$major02.$minorC"
+      },
+      "componentInfo": {
+        "versionPrefix": "several-branches",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [
+        {
+          "name": "main",
+          "vcsPath": "ssh://hg@mercurial/releng",
+          "type": "MERCURIAL",
+          "tag": "$module-$version",
+          "branch": "v2"
+        }
+      ],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "SUB_COMPONENT_ONE",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "TEST_COMPONENT2",
+      "displayName": "SUB COMPONENT ONE",
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major.$minor",
+        "releaseVersionFormat": "$major.$minor.$service",
+        "buildVersionFormat": "$major.$minor.$service-$fix",
+        "lineVersionFormat": "$major"
+      },
+      "componentInfo": {
+        "versionPrefix": "sub_component_one",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": true
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [
+        {
+          "name": "main",
+          "vcsPath": "ssh://hg@mercurial/technical",
+          "type": "MERCURIAL",
+          "tag": "$module-$version",
+          "branch": "v2"
+        }
+      ],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "TEST_COMPONENT2",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "TEST_COMPONENT2",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major02.$minorC.$serviceC",
+        "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
+        "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
+        "lineVersionFormat": "$major"
+      },
+      "componentInfo": {
+        "versionPrefix": "",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": true,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [
+        {
+          "name": "main",
+          "vcsPath": "ssh://hg@mercurial/test-component",
+          "type": "MERCURIAL",
+          "tag": "$module-$version",
+          "branch": "v2"
+        }
+      ],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "TEST_COMPONENT2_WITH_EXTERNAL_REGISTRY_NOT_EXPLICIT",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "TEST_COMPONENT2",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major02.$minorC.$serviceC",
+        "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
+        "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build04",
+        "lineVersionFormat": "$major02.$minorC"
+      },
+      "componentInfo": {
+        "versionPrefix": "external-roots-not-explicit",
+        "versionFormat": "$versionPrefix.$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [],
+      "externalRegistry": "componentc_db"
+    }
+  },
+  {
+    "componentName": "TEST_COMPONENT2_WITH_EXTERNAL_REGISTRY",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "TEST_COMPONENT2",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major02.$minorC.$serviceC",
+        "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
+        "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build04",
+        "lineVersionFormat": "$major02.$minorC"
+      },
+      "componentInfo": {
+        "versionPrefix": "external-roots",
+        "versionFormat": "$versionPrefix.$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": true,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [],
+      "externalRegistry": "componentc_db"
+    }
+  },
+  {
+    "componentName": "TEST_COMPONENT_WITHOUT_VCS",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "PROJ",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major.$minor",
+        "releaseVersionFormat": "$major.$minor.$service",
+        "buildVersionFormat": "$major.$minor.$service-$fix",
+        "lineVersionFormat": "$major"
+      },
+      "componentInfo": {
+        "versionPrefix": "test",
+        "versionFormat": "$versionPrefix.$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "TESTONE",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "TESTONE",
+      "displayName": "TESTONE DISPLAY NAME WITH VERSIONS-API",
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major",
+        "releaseVersionFormat": "$major.$minor",
+        "buildVersionFormat": "$major.$minor.$service",
+        "lineVersionFormat": "$major"
+      },
+      "componentInfo": {
+        "versionPrefix": "",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": false,
+      "GAV": "org.octopusden.octopus.test:versions-api:jar",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [
+        {
+          "name": "main",
+          "vcsPath": "ssh://hg@mercurial/test-component",
+          "type": "MERCURIAL",
+          "tag": "$module-$version",
+          "branch": "v2"
+        }
+      ],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "SUB",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "SUB",
+      "displayName": "PPROJECT WITH CLIENT COMPONENT",
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major",
+        "releaseVersionFormat": "$major.$minor",
+        "buildVersionFormat": "$major.$minor.$service",
+        "lineVersionFormat": "$major"
+      },
+      "componentInfo": {
+        "versionPrefix": "sub1k",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [
+        {
+          "name": "main",
+          "vcsPath": "ssh://hg@mercurial/sub",
+          "type": "MERCURIAL",
+          "tag": "$module-$version",
+          "branch": "v2"
+        }
+      ],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "TEST_COMPONENT3",
+    "versionRange": "[1.0.107,)",
+    "component": {
+      "projectKey": "TDS",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major.$minor",
+        "releaseVersionFormat": "$major.$minor.$service-$fix",
+        "buildVersionFormat": "$major.$minor.$service-$fix",
+        "lineVersionFormat": "$major"
+      },
+      "componentInfo": {
+        "versionPrefix": "",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": true,
+      "external": true,
+      "GAV": "org.octopusden.octopus.test:octopusmpi:war,org.octopusden.octopus.test:octopusacs:war,org.octopusden.octopus.test:demo:war,file:///acs:$major-$minor-$service-$fix",
+      "securityGroups": {
+        "read": [
+          "vfiler1#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [
+        {
+          "name": "main",
+          "type": "MERCURIAL",
+          "vcsPath": "ssh://hg@mercurial/tdsecure",
+          "tag": "tdsecure-$version",
+          "branch": "default"
+        }
+      ],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "versions-api",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "TESTONE",
+      "displayName": "VERSIONS API COMPONENT",
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major",
+        "releaseVersionFormat": "$major.$minor",
+        "buildVersionFormat": "$major.$minor.$service",
+        "lineVersionFormat": "$major"
+      },
+      "componentInfo": {
+        "versionPrefix": "versions-api",
+        "versionFormat": "$versionPrefix.$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [
+        {
+          "name": "main",
+          "type": "MERCURIAL",
+          "vcsPath": "ssh://hg@mercurial/versions-api",
+          "tag": "$module-$version",
+          "branch": "default"
+        }
+      ],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "TECHNICAL_COMPONENT",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "TEST_COMPONENT2",
+      "displayName": "TECHNICAL COMPONENT",
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major02.$minorC.$serviceC",
+        "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
+        "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
+        "lineVersionFormat": "$major02.$minorC"
+      },
+      "componentInfo": {
+        "versionPrefix": "technical",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": true
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [
+        {
+          "name": "main",
+          "vcsPath": "ssh://hg@mercurial/technical",
+          "type": "MERCURIAL",
+          "tag": "$module-$version",
+          "branch": "v2"
+        }
+      ],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "SUB_WITH_SIMPLE_VERSION_FORMAT",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "SUB",
+      "displayName": "Subcomponent with simple version format",
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major",
+        "releaseVersionFormat": "$major.$minor",
+        "buildVersionFormat": "$major.$minor",
+        "lineVersionFormat": "$major"
+      },
+      "componentInfo": {
+        "versionPrefix": "s1mple",
+        "versionFormat": "$versionPrefix.$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [
+        {
+          "name": "main",
+          "vcsPath": "ssh://hg@mercurial/sub",
+          "type": "MERCURIAL",
+          "tag": "$module-$version",
+          "branch": "v2"
+        }
+      ],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "TEST_COMPONENT2_WITH_SEVERAL_BRANCHES",
+    "versionRange": "(03.38.31,)",
+    "component": {
+      "projectKey": "TEST_COMPONENT2",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major02.$minorC.$serviceC",
+        "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
+        "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
+        "lineVersionFormat": "$major02.$minorC"
+      },
+      "componentInfo": {
+        "versionPrefix": "several-branches",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [
+        {
+          "name": "main",
+          "vcsPath": "ssh://hg@mercurial/releng",
+          "type": "MERCURIAL",
+          "tag": "$module-$version",
+          "branch": "v3"
+        }
+      ],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "TEST_COMPONENT2_WITH_GIT_ROOT",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "TEST_COMPONENT2",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major02.$minorC.$serviceC",
+        "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
+        "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
+        "lineVersionFormat": "$major02.$minorC"
+      },
+      "componentInfo": {
+        "versionPrefix": "git",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [
+        {
+          "name": "main",
+          "vcsPath": "ssh://git@gitlab:releng.git",
+          "type": "GIT",
+          "tag": "$module-$version",
+          "branch": "v2"
+        }
+      ],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "FAKE",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "FAKE",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major.$minor",
+        "releaseVersionFormat": "$major.$minor.$service",
+        "buildVersionFormat": "$major.$minor.$service-$fix",
+        "lineVersionFormat": "$major"
+      },
+      "componentInfo": {
+        "versionPrefix": "",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "TEST_COMPONENT5",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "TEST_COMPONENT2",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major02.$minorC.$serviceC",
+        "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
+        "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build04",
+        "lineVersionFormat": "$major"
+      },
+      "componentInfo": {
+        "versionPrefix": "test_component5",
+        "versionFormat": "$versionPrefix.$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [],
+      "externalRegistry": "NOT_AVAILABLE"
+    }
+  },
+  {
+    "componentName": "TEST_COMPONENT2_NOT_EXPLICIT",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "TEST_COMPONENT2",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major02.$minorC.$serviceC",
+        "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
+        "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
+        "lineVersionFormat": "$major"
+      },
+      "componentInfo": {
+        "versionPrefix": "not-expl",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [
+        {
+          "name": "main",
+          "vcsPath": "ssh://hg@mercurial/test-component",
+          "type": "MERCURIAL",
+          "tag": "$module-$version",
+          "branch": "v2"
+        }
+      ],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "TEST_COMPONENT2_WITH_SEVERAL_ROOTS",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "TEST_COMPONENT2",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major02.$minorC.$serviceC",
+        "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
+        "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
+        "lineVersionFormat": "$major"
+      },
+      "componentInfo": {
+        "versionPrefix": "several",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [
+        {
+          "name": "cvs",
+          "vcsPath": "OctopusSource/COMPONENT",
+          "type": "CVS",
+          "tag": "$module-$version",
+          "branch": "MAIN"
+        },
+        {
+          "name": "mercurial",
+          "vcsPath": "ssh://hg@mercurial/releng",
+          "type": "MERCURIAL",
+          "tag": "$module-$version",
+          "branch": "v2"
+        }
+      ],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "TEST_COMPONENT2_INTERNAL",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "TEST_COMPONENT2",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major02.$minorC.$serviceC",
+        "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
+        "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
+        "lineVersionFormat": "$major"
+      },
+      "componentInfo": {
+        "versionPrefix": "internal",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": false,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [
+        {
+          "name": "main",
+          "vcsPath": "ssh://hg@mercurial/test-component",
+          "type": "MERCURIAL",
+          "tag": "$module-$version",
+          "branch": "v2"
+        }
+      ],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "client",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "SUB",
+      "displayName": "PPROJECT WITH CLIENT COMPONENT",
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major",
+        "releaseVersionFormat": "$major.$minor",
+        "buildVersionFormat": "$major.$minor.$service",
+        "lineVersionFormat": "$major"
+      },
+      "componentInfo": {
+        "versionPrefix": "hlk",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": true,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [
+        {
+          "name": "main",
+          "vcsPath": "ssh://hg@mercurial/client",
+          "type": "MERCURIAL",
+          "tag": "$module-$version",
+          "branch": "default"
+        }
+      ],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "TECHNICAL_TEST_COMPONENT2_WITH_EXTERNAL_REGISTRY",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "TEST_COMPONENT2",
+      "displayName": "DB",
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major02.$minorC.$serviceC",
+        "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
+        "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build04",
+        "lineVersionFormat": "$major02.$minorC"
+      },
+      "componentInfo": {
+        "versionPrefix": "db",
+        "versionFormat": "$baseVersionFormat-$versionPrefix"
+      },
+      "technical": true
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [],
+      "externalRegistry": "componentc_db"
+    }
+  },
+  {
+    "componentName": "TEST_COMPONENT2_WITH_UPDATED_FORMAT",
+    "versionRange": "(,03.38.29]",
+    "component": {
+      "projectKey": "TEST_COMPONENT2",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major.$minor",
+        "releaseVersionFormat": "$major.$minor.$service",
+        "buildVersionFormat": "$major.$minor.$service-$fix",
+        "lineVersionFormat": "$major"
+      },
+      "componentInfo": {
+        "versionPrefix": "format",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [
+        {
+          "name": "main",
+          "vcsPath": "ssh://hg@mercurial/releng",
+          "type": "MERCURIAL",
+          "tag": "$module-$version",
+          "branch": "v2"
+        }
+      ],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "SUB_COMPONENT_TWO",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "TEST_COMPONENT2",
+      "displayName": "SUB COMPONENT TWO",
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major.$minor",
+        "releaseVersionFormat": "$major.$minor.$service",
+        "buildVersionFormat": "$major.$minor.$service-$fix",
+        "lineVersionFormat": "$major"
+      },
+      "componentInfo": {
+        "versionPrefix": "sub_component_two",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": true
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [
+        {
+          "name": "main",
+          "vcsPath": "ssh://hg@mercurial/technical",
+          "type": "MERCURIAL",
+          "tag": "$module-$version",
+          "branch": "v2"
+        }
+      ],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "sub-component1",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "FIRSTSUB",
+      "displayName": "FIRST SUB SOMPONRNT",
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major.$minor",
+        "releaseVersionFormat": "$major.$minor.$service",
+        "buildVersionFormat": "$major.$minor.$service-$fix",
+        "lineVersionFormat": "$major"
+      },
+      "componentInfo": {
+        "versionPrefix": "",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "DOUBLE_TECHNICAL_COMPONENT",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "TEST_COMPONENT2",
+      "displayName": "DOUBLE TECHNICAL COMPONENT",
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major02.$minorC.$serviceC",
+        "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
+        "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
+        "lineVersionFormat": "$major02.$minorC"
+      },
+      "componentInfo": {
+        "versionPrefix": "doubletechnical",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": true
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [
+        {
+          "name": "main",
+          "vcsPath": "ssh://hg@mercurial/dtechnical",
+          "type": "MERCURIAL",
+          "tag": "$module-$version",
+          "branch": "v2"
+        }
+      ],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "TEST_COMPONENT2_WITH_SEVERAL_BRANCHES",
+    "versionRange": "(03.38.25,03.38.31]",
+    "component": {
+      "projectKey": "TEST_COMPONENT2",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major02.$minorC.$serviceC",
+        "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
+        "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
+        "lineVersionFormat": "$major02.$minorC"
+      },
+      "componentInfo": {
+        "versionPrefix": "several-branches",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [
+        {
+          "name": "main",
+          "vcsPath": "ssh://hg@mercurial/releng",
+          "type": "MERCURIAL",
+          "tag": "$module-$version",
+          "branch": "v2"
+        }
+      ],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "commoncomponent-test",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "SUB",
+      "displayName": "commoncomponent TEST",
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major",
+        "releaseVersionFormat": "$major.$minor",
+        "buildVersionFormat": "$major.$minor.$service-$fix",
+        "lineVersionFormat": "$major"
+      },
+      "componentInfo": {
+        "versionPrefix": "",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "TEST_COMPONENT3",
+    "versionRange": "(,1.0.107)",
+    "component": {
+      "projectKey": "TDS",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major.$minor",
+        "releaseVersionFormat": "$major.$minor.$service",
+        "buildVersionFormat": "$major.$minor.$service-$fix",
+        "lineVersionFormat": "$major"
+      },
+      "componentInfo": {
+        "versionPrefix": "",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": true,
+      "external": true,
+      "GAV": "org.octopusden.octopus.test:octopusmpi:war,org.octopusden.octopus.test:octopusacs:war,org.octopusden.octopus.test:demo:war,file:///acs:$major-$minor-$service-$fix",
+      "securityGroups": {
+        "read": [
+          "vfiler1#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [
+        {
+          "name": "main",
+          "type": "MERCURIAL",
+          "vcsPath": "ssh://hg@mercurial/tdsecure",
+          "tag": "octopustds-$version",
+          "branch": "default"
+        }
+      ],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "TEST_COMPONENT",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "PROJ",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major.$minor",
+        "releaseVersionFormat": "$major.$minor.$service",
+        "buildVersionFormat": "$major.$minor.$service-$fix",
+        "lineVersionFormat": "$major.$minor"
+      },
+      "componentInfo": {
+        "versionPrefix": "",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [
+        {
+          "name": "main",
+          "vcsPath": "ssh://hg@mercurial/test-component",
+          "type": "MERCURIAL",
+          "tag": "$module-$version",
+          "branch": "v2"
+        }
+      ],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "TEST_COMPONENT2_WITH_MERCURIAL_ROOT",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "TEST_COMPONENT2",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major02.$minorC.$serviceC",
+        "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
+        "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
+        "lineVersionFormat": "$major02.$minorC"
+      },
+      "componentInfo": {
+        "versionPrefix": "mercurial",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [
+        {
+          "name": "main",
+          "vcsPath": "ssh://hg@mercurial/releng",
+          "type": "MERCURIAL",
+          "tag": "$module-$version",
+          "branch": "v2"
+        }
+      ],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "TEST_COMPONENT2_WITH_FORMATTED_CVS_ROOT",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "TEST_COMPONENT2",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major02.$minorC.$serviceC",
+        "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
+        "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
+        "lineVersionFormat": "$major"
+      },
+      "componentInfo": {
+        "versionPrefix": "formatted",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [
+        {
+          "name": "main",
+          "vcsPath": "OctopusSource/COMPONENT",
+          "type": "CVS",
+          "tag": "$module-$version",
+          "branch": "TEST_COMPONENT2_${major02}_${minor02}_${service02}"
+        }
+      ],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "test-release",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "MSP",
+      "displayName": "MULTI SUPER PROJJ",
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major.$minor",
+        "releaseVersionFormat": "$major.$minor.$service",
+        "buildVersionFormat": "$major.$minor.$service-$fix",
+        "lineVersionFormat": "$major"
+      },
+      "componentInfo": {
+        "versionPrefix": "",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "sub-component2",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "SECONDSUB",
+      "displayName": "SECOND SUB COMPONENT",
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major",
+        "releaseVersionFormat": "$major.$minor",
+        "buildVersionFormat": "$major.$minor.$service-$fix",
+        "lineVersionFormat": "$major"
+      },
+      "componentInfo": {
+        "versionPrefix": "",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "test-project",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "TEST",
+      "displayName": "TEST PROJECT",
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major.$minor",
+        "releaseVersionFormat": "$major.$minor.$service",
+        "buildVersionFormat": "$major.$minor.$service-$fix",
+        "lineVersionFormat": "$major"
+      },
+      "componentInfo": {
+        "versionPrefix": "",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "TEST_COMPONENT4",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "TEST_COMPONENT4",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major02.$minorC.$serviceC",
+        "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
+        "buildVersionFormat": "$major.$minor.$service-$fix",
+        "lineVersionFormat": "$major"
+      },
+      "componentInfo": {
+        "versionPrefix": "",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [
+        {
+          "name": "main",
+          "vcsPath": "ssh://hg@mercurial/test-ptddd-component",
+          "type": "MERCURIAL",
+          "tag": "$module-$version",
+          "branch": "v2"
+        }
+      ],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "test-simple",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "TEST",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major.$minor",
+        "releaseVersionFormat": "$major.$minor.$service",
+        "buildVersionFormat": "$major.$minor.$service-$fix",
+        "lineVersionFormat": "$major"
+      },
+      "componentInfo": {
+        "versionPrefix": "",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "GAV": "",
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [],
+      "externalRegistry": null
+    }
+  }
+]

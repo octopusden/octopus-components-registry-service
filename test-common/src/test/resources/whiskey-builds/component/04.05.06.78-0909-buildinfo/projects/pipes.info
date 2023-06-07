@@ -1,0 +1,14 @@
+{
+  "name": "pipes",
+  "type": "external",
+  "tasks": {
+    "getExternal": {
+      "tim": "2017.03.06 12:43:05",
+      "ela": 390.0
+    },
+    "home": {
+      "tim": "2017.03.06 12:45:38",
+      "ela": 1708
+    }
+  }
+}

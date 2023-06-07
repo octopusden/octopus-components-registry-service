@@ -1,0 +1,15 @@
+server:
+  port: 4567
+
+components-registry:
+  vcs:
+    enabled: false
+  work-dir: ${COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR}/components-registry/production
+  main-groovy-file: Aggregator.groovy
+  groovy-path: ${components-registry.work-dir}
+
+pathToConfig: file://${components-registry.groovy-path}
+supportedGroupIds: org.octopusden.octopus, io.lekton
+supportedSystems: NONE,CLASSIC,SIGMA
+
+eureka.client.enabled: false

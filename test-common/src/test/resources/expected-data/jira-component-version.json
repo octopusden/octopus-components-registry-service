@@ -1,0 +1,19 @@
+{
+  "name": "SUB",
+  "version": "3.0",
+  "component": {
+    "projectKey": "SUB",
+    "displayName": "PPROJECT WITH CLIENT COMPONENT",
+    "componentVersionFormat": {
+      "majorVersionFormat": "$major",
+      "releaseVersionFormat": "$major.$minor",
+      "buildVersionFormat": "$major.$minor.$service",
+      "lineVersionFormat": "$major"
+    },
+    "componentInfo": {
+      "versionPrefix": "sub1k",
+      "versionFormat": "$versionPrefix-$baseVersionFormat"
+    },
+    "technical": false
+  }
+}

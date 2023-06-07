@@ -1,0 +1,17 @@
+{
+  "name": "DbJava",
+  "type": "copy",
+  "tasks": {
+    "rtag": {
+      "tim": "2017.05.15 16:40:41",
+      "ela": 11.0
+    },
+    "getSrc": {
+      "tim": "2017.05.15 16:41:14",
+      "ela": 1964,
+      "repotype": "hg",
+      "tag": "7ffb881ed570c6dddbb3d4115064e3fb4ce377c9",
+      "repoPath": "ssh://hg@mercurial/products/octopuscomponent/DbJava"
+    }
+  }
+}

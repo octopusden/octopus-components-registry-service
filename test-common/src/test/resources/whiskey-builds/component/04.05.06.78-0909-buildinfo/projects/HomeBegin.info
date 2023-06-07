@@ -1,0 +1,18 @@
+{
+  "name": "HomeBegin",
+  "type": "copy",
+  "tasks": {
+    "getSrc": {
+      "tim": "2017.03.06 12:42:46",
+      "ela": 30451.0,
+      "repotype": "cvs",
+      "tag": "TEST_COMPONENT2_03_42_30",
+      "cvsTime": "2017-03-06T09:42:00+00",
+      "repoPath": "OctopusSource/Octopus/StaticData"
+    },
+    "home": {
+      "tim": "2017.03.06 12:46:07",
+      "ela": 34671
+    }
+  }
+}

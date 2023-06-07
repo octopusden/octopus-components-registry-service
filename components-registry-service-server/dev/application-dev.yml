@@ -1,0 +1,34 @@
+server:
+  port: 4567
+
+service-registry:
+  username: user
+  password: password
+
+eureka:
+  client:
+    enabled: false
+#    serviceUrl:
+#      defaultZone: http://${service-registry.username}:${service-registry.password}@localhost:8761/eureka/
+
+components-registry:
+  vcs:
+    tag-version-prefix: refs/tags/components-registry-
+  groovy-path: ${components-registry.work-dir}/src/main/resources
+  main-groovy-file: Aggregator.groovy
+  dependency-mapping-file: dependency_mapping.properties
+
+supportedGroupIds: org.octopusden.octopus, io.lekton
+supportedSystems: NONE,CLASSIC,SIGMA
+
+management:
+  endpoint:
+    health:
+      show-details: always
+  endpoints:
+    web:
+      exposure:
+        #        curl -i -X POST -H 'Content-Type: application/json' -d '{"configuredLevel": "INFO"}' http://localhost:4567/actuator/loggers/ROOT
+        include: health, env, metrics, threaddump, heapdump, info, configprops, prometheus, loggers
+    loggers:
+      enabled: true

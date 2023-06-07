@@ -1,0 +1,4 @@
+components-registry:
+  vcs:
+    root: # envFile property
+  work-dir: /tmp/components-registry

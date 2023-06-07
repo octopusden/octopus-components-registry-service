@@ -1,0 +1,4 @@
+components-registry:
+  vcs:
+    enabled: false
+  work-dir: # envFile property

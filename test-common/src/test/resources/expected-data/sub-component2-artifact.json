@@ -1,0 +1,6 @@
+{
+  "(,0),[0,)" : {
+    "groupPattern": "org.octopusden.octopus.sub2",
+    "artifactPattern": "sub-component2"
+  }
+}

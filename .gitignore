@@ -1,0 +1,8 @@
+.idea
+*.iml
+.gradle/
+tmp/
+out/
+*.retry
+*/build/**
+!*/src/**

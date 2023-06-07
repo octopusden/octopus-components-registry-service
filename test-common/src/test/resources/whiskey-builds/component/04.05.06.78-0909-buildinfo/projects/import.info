@@ -1,0 +1,37 @@
+{
+  "name": "import",
+  "type": "type",
+  "tasks": {
+    "getSrc": {
+      "tim": "2017.03.06 12:42:17",
+      "ela": 849.0,
+      "repotype": "cvs",
+      "tag": "TEST_COMPONENT2_03_42_30",
+      "cvsTime": "2017-03-06T09:42:00+00",
+      "repoPath": "back/Octopus/source/report/import"
+    },
+    "genJPipeSource": {
+      "tim": "2017.01.26 20:54:53",
+      "ela": 2786.0,
+      "log": "C:\\WS_WRK\\03_42_30\\dst\\component2\\03.42.30.77\\import/tmp/genJPipeSource.log",
+      "log1": "C:\\WS_WRK\\03_42_30\\dst\\component2\\03.42.30.77\\import/tmp/genJPipeSource1.log"
+    },
+    "compileJava": {
+      "tim": "2017.03.02 13:08:42",
+      "ela": 3612.0,
+      "log": "C:\\WS_WRK\\03_42_30\\dst\\component2\\03.42.30.77\\import/tmp/compileJava.log"
+    },
+    "processResources": {
+      "tim": "2017.01.26 20:54:55",
+      "ela": 91.0
+    },
+    "jar": {
+      "tim": "2017.01.26 20:54:55",
+      "ela": 62.0
+    },
+    "home": {
+      "tim": "2017.03.06 12:45:32",
+      "ela": 24
+    }
+  }
+}
