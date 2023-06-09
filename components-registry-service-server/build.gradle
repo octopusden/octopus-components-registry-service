@@ -3,6 +3,7 @@ plugins {
     id 'org.springframework.boot'
     id 'org.jetbrains.kotlin.plugin.spring'
     id 'java-test-fixtures'
+    id 'com.bmuschko.docker-java-application'
 }
 
 apply plugin: 'docker-compose'
@@ -58,4 +59,21 @@ bootJar  {
 
 springBoot {
     buildInfo()
+}
+
+def dockerRegistry = System.getenv().getOrDefault("DOCKER_REGISTRY", project.properties["docker.registry"])
+def octopusGithubDockerRegistry = System.getenv().getOrDefault("OCTOPUS_GITHUB_DOCKER_REGISTRY", project.properties["octopus.github.docker.registry"])
+
+dockerCreateDockerfile.doLast {
+    copy {
+        from 'Dockerfile'
+        into dockerSyncBuildContext.destinationDir
+    }
+}
+
+dockerBuildImage {
+    inputDir = file(".")
+    buildArgs.put("IMAGE", "$dockerRegistry/openjdk:11")
+    buildArgs.put("BUILD_VERSION", "${project.version}")
+    images.set(["$octopusGithubDockerRegistry/octopusden/${project.name}:${project.version}", "$octopusGithubDockerRegistry/octopusden/${project.name}:latest"])
 }
