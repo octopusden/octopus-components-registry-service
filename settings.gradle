@@ -1,11 +1,13 @@
 //
 pluginManagement {
     plugins {
-        id 'org.springframework.boot'            version settings['spring-boot.version']
-        id 'org.jetbrains.kotlin.jvm'            version settings['kotlin.version']
-        id 'org.jetbrains.kotlin.plugin.spring'  version settings['kotlin.version']
-        id 'org.jetbrains.kotlin.plugin.jpa'     version settings['kotlin.version']
-        id 'com.bmuschko.docker-java-application'   version settings['gradle-docker-plugin.version']
+        id 'io.github.gradle-nexus.publish-plugin'     version '1.3.0'
+        id 'org.octopusden.octopus-release-management' version settings['octopus-release-management.version']
+        id 'org.springframework.boot'                  version settings['spring-boot.version']
+        id 'org.jetbrains.kotlin.jvm'                  version settings['kotlin.version']
+        id 'org.jetbrains.kotlin.plugin.spring'        version settings['kotlin.version']
+        id 'org.jetbrains.kotlin.plugin.jpa'           version settings['kotlin.version']
+        id 'com.bmuschko.docker-java-application'      version settings['gradle-docker-plugin.version']
     }
     repositories {
         gradlePluginPortal()
