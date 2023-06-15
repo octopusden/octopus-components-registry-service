@@ -6,10 +6,27 @@ buildscript {
 }
 //noinspection GroovyAssignabilityCheck
 plugins {
+    id 'io.github.gradle-nexus.publish-plugin'
+    id 'org.octopusden.octopus-release-management'
     id 'org.springframework.boot'                 apply false
     id 'org.jetbrains.kotlin.jvm'                 apply false
     id 'org.jetbrains.kotlin.plugin.spring'       apply false
     id 'org.jetbrains.kotlin.plugin.jpa'          apply false
+    id 'signing'
+}
+
+def sonatypeUsername = System.getenv().getOrDefault("MAVEN_USERNAME", project.findProperty('octopus.sonatype.user'))
+def sonatypePassword = System.getenv().getOrDefault("MAVEN_PASSWORD", project.findProperty('octopus.sonatype.password'))
+
+nexusPublishing {
+    repositories {
+        sonatype {
+            nexusUrl.set(uri("https://s01.oss.sonatype.org/service/local/"))
+            snapshotRepositoryUrl.set(uri("https://s01.oss.sonatype.org/content/repositories/snapshots/"))
+            username.set(sonatypeUsername)
+            password.set(sonatypePassword)
+        }
+    }
 }
 
 allprojects {
@@ -30,9 +47,11 @@ subprojects {
 }
 
 configure(subprojects) {
+    apply plugin: 'signing'
     apply plugin: 'idea'
     apply plugin: 'java-library'
     apply plugin: 'org.jetbrains.kotlin.jvm'
+    apply plugin: 'maven-publish'
 
     dependencies {
         api "org.jetbrains.kotlin:kotlin-stdlib"
@@ -69,12 +88,43 @@ configure(subprojects) {
         withSourcesJar()
     }
 
-    apply plugin: 'maven-publish'
     publishing {
         publications {
             mavenJava(MavenPublication) {
                 from components.java
+                pom {
+                    name.set(project.name)
+                    description.set("Octopus module: ${project.name}")
+                    url.set("https://github.com/octopusden/octopus-component-registry-service.git")
+                    licenses {
+                        license {
+                            name.set("The Apache License, Version 2.0")
+                            url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+                        }
+                    }
+                    scm {
+                        url.set("https://github.com/octopusden/octopus-component-registry-service.git")
+                        connection.set("scm:git://github.com/octopusden/octopus-component-registry-service.git")
+                    }
+                    developers {
+                        developer {
+                            id.set("octopus")
+                            name.set("octopus")
+                        }
+                    }
+                }
             }
         }
+    }
+
+    signing {
+        required(gradle.taskGraph.hasTask("publishToSonatype"))
+        sign(publishing.publications)
+        def signingKey = findProperty("signingKey")
+        def signingPassword = findProperty("signingPassword")
+        useInMemoryPgpKeys(
+                signingKey,
+                signingPassword
+        )
     }
 }
