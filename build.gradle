@@ -15,17 +15,15 @@ plugins {
     id 'signing'
 }
 
-def sonatypeUsername = System.getenv().getOrDefault("MAVEN_USERNAME", project.findProperty('octopus.sonatype.user'))
-def sonatypePassword = System.getenv().getOrDefault("MAVEN_PASSWORD", project.findProperty('octopus.sonatype.password'))
+if (project.hasProperty("nexus")) {
 
-if (gradle.taskGraph.hasTask("publishToSonatype")) {
     nexusPublishing {
         repositories {
             sonatype {
                 nexusUrl.set(uri("https://s01.oss.sonatype.org/service/local/"))
                 snapshotRepositoryUrl.set(uri("https://s01.oss.sonatype.org/content/repositories/snapshots/"))
-                username.set(sonatypeUsername)
-                password.set(sonatypePassword)
+                username.set(System.getenv("MAVEN_USERNAME"))
+                password.set(System.getenv("MAVEN_PASSWORD"))
             }
         }
     }
