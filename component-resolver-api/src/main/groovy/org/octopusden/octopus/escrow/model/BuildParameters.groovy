@@ -70,7 +70,7 @@ class BuildParameters {
         return systemProperties != null && systemProperties.trim().length() > 0 ? SystemPropertiesParser.parse(systemProperties) : [:]
     }
 
-    String getprojectVersion() {
+    String getProjectVersion() {
         return projectVersion
     }
 
