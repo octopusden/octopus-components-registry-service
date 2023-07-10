@@ -7,6 +7,7 @@ import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoa
 import org.octopusden.octopus.escrow.resolvers.IJiraParametersResolver;
 import org.octopusden.octopus.escrow.resolvers.JiraParametersResolver;
 import org.apache.commons.lang3.Validate;
+import org.octopusden.releng.versions.VersionNames;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -45,29 +46,42 @@ public class JiraParametersResolverConfig {
     }
 
     @Bean
+    VersionNames versionNames() {
+        return new VersionNames(
+                getConfigHelper().serviceBranch(),
+                getConfigHelper().service(),
+                getConfigHelper().minor()
+        );
+    }
+
+    @Bean
     String customersMappingConfigUrl() {
         return environment.containsProperty(PATH_TO_CONFIG) ?
                 environment.getRequiredProperty(PATH_TO_CONFIG) + File.separator + CUSTOMERS_MAPPING_CONFIG_FILE : null;
     }
 
     @Bean
-    public IJiraParametersResolver componentInfoResolver() throws IOException {
-        return new JiraParametersResolver(escrowConfigurationLoader(), Collections.emptyMap());
+    public IJiraParametersResolver componentInfoResolver(VersionNames versionNames, EscrowConfigurationLoader escrowConfigurationLoader) throws IOException {
+        return new JiraParametersResolver(escrowConfigurationLoader, Collections.emptyMap());
     }
 
     @Bean
-    public EscrowConfigurationLoader escrowConfigurationLoader() throws IOException {
-        return new EscrowConfigurationLoader(configLoader(), getConfigHelper().supportedGroupIds(), getConfigHelper().supportedSystems());
+    public EscrowConfigurationLoader escrowConfigurationLoader(VersionNames versionNames, ConfigLoader configLoader) throws IOException {
+        return new EscrowConfigurationLoader(configLoader,
+                getConfigHelper().supportedGroupIds(),
+                getConfigHelper().supportedSystems(),
+                versionNames
+        );
     }
 
     @Bean
-    public ConfigLoader configLoader() throws IOException {
+    public ConfigLoader configLoader(VersionNames versionNames) throws IOException {
         String moduleConfigUrl = moduleConfigUrl();
         Validate.notNull(moduleConfigUrl, "configName system property is not set");
         Resource resource = resourceLoader.getResource(moduleConfigUrl);
         Validate.notNull(resource, "cant load resource from moduleConfigUrl " + moduleConfigUrl);
         URL url = resource.getURL();
-        return new ConfigLoader(ComponentRegistryInfo.createFromURL(url));
+        return new ConfigLoader(ComponentRegistryInfo.createFromURL(url), versionNames);
     }
 
 }

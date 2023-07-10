@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull
 import static org.junit.jupiter.api.Assertions.assertTrue
 import static org.junit.jupiter.api.Assertions.assertFalse
 import static org.junit.jupiter.api.Assertions.assertEquals
+import static org.octopusden.octopus.escrow.TestConfigUtils.VERSION_NAMES
 
 @TypeChecked
 class BuildToolResolverTest {
@@ -29,9 +30,10 @@ class BuildToolResolverTest {
     static {
         def aggregatorPath = Paths.get(EscrowConfigurationLoaderTest.class.getResource("/production/Aggregator.groovy").toURI())
         EscrowConfigurationLoader escrowConfigurationLoader = new EscrowConfigurationLoader(
-                new ConfigLoader(ComponentRegistryInfo.createFromFileSystem(aggregatorPath.getParent().toString(), aggregatorPath.getFileName().toString())),
+                new ConfigLoader(ComponentRegistryInfo.createFromFileSystem(aggregatorPath.getParent().toString(), aggregatorPath.getFileName().toString()), VERSION_NAMES),
                 SUPPORTED_GROUP_IDS,
-                SUPPORTED_SYSTEMS
+                SUPPORTED_SYSTEMS,
+                VERSION_NAMES
         )
         buildToolsResolver = new BuildToolsResolver(escrowConfigurationLoader.loadFullConfiguration(Collections.emptyMap()))
     }

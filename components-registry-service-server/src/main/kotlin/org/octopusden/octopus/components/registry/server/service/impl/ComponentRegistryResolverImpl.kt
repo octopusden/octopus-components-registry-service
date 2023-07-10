@@ -23,6 +23,9 @@ import org.octopusden.octopus.releng.dto.JiraComponentVersion
 import org.octopusden.releng.versions.NumericVersion
 import org.octopusden.releng.versions.VersionRange
 import org.apache.maven.artifact.DefaultArtifact
+import org.octopusden.releng.versions.NumericVersionFactory
+import org.octopusden.releng.versions.VersionNames
+import org.octopusden.releng.versions.VersionRangeFactory
 import org.slf4j.LoggerFactory
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.stereotype.Service
@@ -41,10 +44,15 @@ class ComponentRegistryResolverImpl(
     private val jiraComponentVersionFormatter: JiraComponentVersionFormatter,
     private val moduleByArtifactResolver: ModuleByArtifactResolver,
     private val componentsRegistryProperties: ComponentsRegistryProperties,
+    private val numericVersionFactory: NumericVersionFactory,
+    private val versionRangeFactory: VersionRangeFactory,
     @Resource(name = "dependencyMapping") private val dependencyMapping: MutableMap<String, String>
 ) : ComponentRegistryResolver {
 
     private lateinit var configuration: EscrowConfiguration
+    private val versionNames = VersionNames(componentsRegistryProperties.versionName.serviceBranch,
+        componentsRegistryProperties.versionName.service,
+        componentsRegistryProperties.versionName.minor)
 
     override fun updateCache() {
         configuration = configurationLoader.loadFullConfigurationWithoutValidationForUnknownAttributes(emptyMap())
@@ -63,9 +71,11 @@ class ComponentRegistryResolverImpl(
 
     override fun getJiraComponentVersion(component: String, version: String): JiraComponentVersion {
         val keyToVersionRanges = jiraParametersResolver.componentConfig.componentNameToJiraComponentVersionRangeMap
-
-        return getJiraComponentVersionRange(component, version, keyToVersionRanges, false)
-            .getJiraComponentVersion(version)!!
+        val range = getJiraComponentVersionRange(component, version, keyToVersionRanges, false)
+        val  builder = JiraComponentVersion.builder(jiraComponentVersionFormatter)
+            .component(range.jiraComponent)
+            .componentVersionByNameAndVersion(range.componentName, version)
+        return builder.build()!!
     }
 
     override fun getJiraComponentVersions(
@@ -79,23 +89,25 @@ class ComponentRegistryResolverImpl(
         val result = mutableMapOf<String, JiraComponentVersion>()
 
         val mutableVersionSet = versions.toMutableSet()
-
+        val builder = JiraComponentVersion.builder(jiraComponentVersionFormatter)
+        val factory = VersionRangeFactory(versionNames)
         for (jiraComponentVersionRange in jiraComponentVersionRanges) {
 
-            val versionRange = VersionRange.createFromVersionSpec(jiraComponentVersionRange.versionRange)
+            val versionRange = factory.create(jiraComponentVersionRange.versionRange)
 
             val versionIterator = mutableVersionSet.iterator()
             while (versionIterator.hasNext()) {
 
                 val version = versionIterator.next()
 
-                val numericArtifactVersion = NumericVersion.parse(version)
+                val numericArtifactVersion = numericVersionFactory.create(version)
                 if (versionRange.containsVersion(numericArtifactVersion)) {
-
-                    val jiraComponentVersion = jiraComponentVersionRange.getJiraComponentVersion(version)
+                    builder.component(jiraComponentVersionRange.jiraComponent)
+                        .componentVersionByNameAndVersion(jiraComponentVersionRange.componentName, version)
+                    val jiraComponentVersion = builder.build()
                     if (jiraComponentVersionFormatter.matchesAny(jiraComponentVersion, version, false)) {
                         jiraComponentVersionRange?.let {
-                            result[version] = it.getJiraComponentVersion(version)
+                            result[version] = jiraComponentVersion
                             versionIterator.remove()
                         }
                     }
@@ -110,14 +122,14 @@ class ComponentRegistryResolverImpl(
 
     override fun getVCSSettings(component: String, version: String): VCSSettings {
         return with(getJiraComponentVersion(component, version)) {
-            val buildVersion = this.component.componentVersionFormat.buildVersionFormat.formatVersion(this.version)
+            val buildVersion = this.component.componentVersionFormat.buildVersionFormat.formatVersion(numericVersionFactory, this.version)
             getJiraComponentVersionRange(component, buildVersion)
                 .let {
                     ModelConfigPostProcessor(
                         ComponentVersion.create(
                             component,
                             buildVersion
-                        )
+                        ), versionNames
                     ).resolveVariables(it.vcsSettings)
                 }
         }
@@ -227,11 +239,14 @@ class ComponentRegistryResolverImpl(
     ): JiraComponentVersionRange {
         val jiraComponentVersionRanges =
             keyToVersionRanges[key] ?: throw NotFoundException("Component id $key is not found")
+        val builder = JiraComponentVersion.builder(jiraComponentVersionFormatter)
         val foundRanges = jiraComponentVersionRanges.map { item ->
-            val versionRange = VersionRange.createFromVersionSpec(item.versionRange)
-            val numericArtifactVersion = NumericVersion.parse(version)
+            val versionRange = versionRangeFactory.create(item.versionRange)
+            val numericArtifactVersion = numericVersionFactory.create(version)
             if (versionRange.containsVersion(numericArtifactVersion)) {
-                val jiraComponentVersion = item.getJiraComponentVersion(version)
+                builder.component(item.jiraComponent)
+                    .componentVersion(ComponentVersion.create(item.componentName, version))
+                val jiraComponentVersion = builder.build()
                 if (jiraComponentVersionFormatter.matchesAny(jiraComponentVersion, version, strict)) {
                     if (LOG.isTraceEnabled) {
                         LOG.trace("Found {} component by {}:{}", jiraComponentVersion, key, version)
@@ -256,8 +271,11 @@ class ComponentRegistryResolverImpl(
         keyToVersionRangeMap: Map<String, List<JiraComponentVersionRange>>,
         strict: Boolean = true
     ): JiraComponentVersion? {
-        return getJiraComponentVersionRange(key, version, keyToVersionRangeMap, strict)
-            .getJiraComponentVersion(version)
+        val range = getJiraComponentVersionRange(key, version, keyToVersionRangeMap, strict)
+        return JiraComponentVersion.builder(jiraComponentVersionFormatter)
+            .component(range.jiraComponent)
+            .componentVersion(ComponentVersion.create(range.componentName, version))
+            .build()
     }
 
     private fun getDistribution(
@@ -278,7 +296,7 @@ class ComponentRegistryResolverImpl(
                 ComponentVersion.create(
                     it.componentName,
                     version
-                )
+                ), versionNames
             ).resolveVariables(it.vcsSettings)
         }
     }

@@ -8,6 +8,7 @@ import org.octopusden.octopus.releng.dto.ComponentVersion
 import groovy.transform.TypeChecked
 import org.apache.logging.log4j.LogManager
 import org.apache.logging.log4j.Logger
+import org.octopusden.releng.versions.VersionNames
 
 @TypeChecked
 class ReleaseInfoResolver extends AbstractResolver implements IReleaseInfoResolver {
@@ -16,9 +17,11 @@ class ReleaseInfoResolver extends AbstractResolver implements IReleaseInfoResolv
     public static final String DEFAULT_SETTINGS = "Defaults"
     public static final String TOOLS_SETTINGS = "Tools"
 
+    private final VersionNames versionNames
 
     ReleaseInfoResolver(EscrowConfigurationLoader escrowConfigurationLoader) {
         super(escrowConfigurationLoader)
+        this.versionNames = escrowConfigurationLoader.getVersionNames()
     }
 
     @Override
@@ -28,16 +31,16 @@ class ReleaseInfoResolver extends AbstractResolver implements IReleaseInfoResolv
 
     @Override
     ReleaseInfo resolveRelease(ComponentVersion componentRelease, Map<String, String> params) {
-        return resolveComponentRelease(getEscrowModuleConfig(componentRelease, false, params), componentRelease)
+        return resolveComponentRelease(getEscrowModuleConfig(componentRelease, false, params), componentRelease, versionNames)
     }
 
-    static ReleaseInfo resolveComponentRelease(EscrowModuleConfig configuration, ComponentVersion componentRelease) {
+    static ReleaseInfo resolveComponentRelease(EscrowModuleConfig configuration, ComponentVersion componentRelease, VersionNames versionNames) {
         if (configuration == null) {
             LOG.warn("Configuration for $componentRelease is not found")
             return null
         }
 
-        def vcsSettings = createVCSRootWithFormattedBranch(configuration.getVcsSettings(), componentRelease.componentName, componentRelease.version)
+        def vcsSettings = createVCSRootWithFormattedBranch(configuration.getVcsSettings(), versionNames, componentRelease.componentName, componentRelease.version)
         def releaseInfo = ReleaseInfo.create(vcsSettings,
                 configuration.getBuildSystem(),
                 configuration.getBuildFilePath(),
@@ -46,7 +49,7 @@ class ReleaseInfoResolver extends AbstractResolver implements IReleaseInfoResolv
                 configuration.isDeprecated(),
                 configuration.escrow
         )
-        ModelConfigPostProcessor modelConfigPostProcessor = new ModelConfigPostProcessor(componentRelease)
+        ModelConfigPostProcessor modelConfigPostProcessor = new ModelConfigPostProcessor(componentRelease, versionNames)
         return modelConfigPostProcessor.resolveVariables(releaseInfo)
     }
 }

@@ -15,8 +15,12 @@ public class ConfigHelper {
     public static final String CUSTOMERS_MAPPING_CONFIG_FILE = "mapping" + File.separator + "customersMapping.properties";
     public static final String DEFAULT_MAIN_CONFIG_FILE = "Aggregator.groovy";
     public static final String PATH_TO_CONFIG = "pathToConfig";
-    private static final String SUPPORTED_GROUP_IDS = "supportedGroupIds";
-    private static final String SUPPORTED_SYSTEMS = "supportedSystems";
+    private static final String SUPPORTED_GROUP_IDS = "components-registry.supportedGroupIds";
+    private static final String SUPPORTED_SYSTEMS = "components-registry.supportedSystems";
+
+    private static final String VERSION_NAME_SERVICE_BRANCH = "components-registry.version-name.service-branch";
+    private static final String VERSION_NAME_SERVICE = "components-registry.version-name.service";
+    private static final String VERSION_NAME_MINOR = "components-registry.version-name.minor";
 
     private final Environment environment;
 
@@ -49,5 +53,17 @@ public class ConfigHelper {
             return Arrays.stream(value.split(",")).map(String::trim).collect(Collectors.toList());
         }
         return Collections.emptyList();
+    }
+
+    public String serviceBranch() {
+        return environment.getRequiredProperty(VERSION_NAME_SERVICE_BRANCH);
+    }
+
+    public String service() {
+        return environment.getRequiredProperty(VERSION_NAME_SERVICE);
+    }
+
+    public String minor() {
+        return environment.getRequiredProperty(VERSION_NAME_MINOR);
     }
 }

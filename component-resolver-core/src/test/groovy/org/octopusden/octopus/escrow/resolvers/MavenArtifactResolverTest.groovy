@@ -17,6 +17,7 @@ import java.util.regex.Pattern
 
 import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_GROUP_IDS
 import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_SYSTEMS
+import static org.octopusden.octopus.escrow.TestConfigUtils.VERSION_NAMES
 import static org.octopusden.octopus.releng.dto.ComponentVersion.create
 import static org.octopusden.octopus.escrow.TestConfigUtils.escrowConfigurationLoader
 
@@ -36,13 +37,14 @@ class MavenArtifactResolverTest {
 
     @Test
     @Ignore
-    public void testProdConfig() {
+    void testProdConfig() {
         URL url = new File("C:\\projects\\escrow\\components-registry\\src\\main\\resources\\Aggregator.groovy").toURI().toURL()
 
         def loader = new EscrowConfigurationLoader(
-                new ConfigLoader(ComponentRegistryInfo.createFromURL(url)),
+                new ConfigLoader(ComponentRegistryInfo.createFromURL(url), VERSION_NAMES),
                 SUPPORTED_GROUP_IDS,
-                SUPPORTED_SYSTEMS
+                SUPPORTED_SYSTEMS,
+                VERSION_NAMES
         )
         JiraParametersResolver jiraParametersResolver = new JiraParametersResolver(loader, new HashMap<String, String>());
         def vcsRoots = jiraParametersResolver.getVersionControlSystemRootsByJiraProject(JiraProjectVersion.create("MCOMPONENT", "1.0"))

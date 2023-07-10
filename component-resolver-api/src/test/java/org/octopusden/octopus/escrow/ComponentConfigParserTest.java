@@ -20,6 +20,7 @@ import org.octopusden.releng.versions.ComponentVersionFormat;
 import org.apache.maven.artifact.versioning.InvalidVersionSpecificationException;
 import org.jetbrains.annotations.NotNull;
 import org.junit.Test;
+import org.octopusden.releng.versions.VersionNames;
 
 import java.io.IOException;
 
@@ -30,13 +31,14 @@ public class ComponentConfigParserTest {
     public static final ComponentVersionFormat COMPONENT_VERSION_FORMAT_1 = ComponentVersionFormat.create("$major.$minor.$service", "$major.$minor.$service-$fix");
     private static final String COMPONENT = "WCOMPONENT";
     private static final String CLIENT = "client";
+private static final VersionNames VERSION_NAMES = new VersionNames("serviceCBranch", "serviceC", "minorC");
     private static final ComponentVersionFormat COMPONENT_VERSION_FORMAT_2 = ComponentVersionFormat.create("$major.$minor", "$major.$minor.$service");
 
     @Test
     public void testParseFromSerializedObject() throws InvalidVersionSpecificationException, IOException {
         ComponentConfig componentConfig = getComponentConfig();
         String componentConfigJson = serialize(componentConfig);
-        ComponentConfig newComponentConfig = new ComponentConfigParser().parse(componentConfigJson);
+        ComponentConfig newComponentConfig = new ComponentConfigParser(VERSION_NAMES).parse(componentConfigJson);
         assertEquals(componentConfig, newComponentConfig);
     }
 
@@ -83,8 +85,13 @@ public class ComponentConfigParserTest {
                                                                    ComponentInfo componentInfo, Distribution distribution,
                                                                    VCSSettings vcsSettings, boolean technical) {
         JiraComponent jiraComponent = getJiraComponent(projectKey, componentVersionFormat, componentInfo, technical);
-        return new JiraComponentVersionRange(componentName, versionRange, jiraComponent, distribution,
-                vcsSettings);
+        JiraComponentVersionRange.Builder builder = JiraComponentVersionRange.builder(VERSION_NAMES)
+                .componentName(componentName)
+                .versionRange(versionRange)
+                .jiraComponent(jiraComponent)
+                .distribution(distribution)
+                .vcsSettings(vcsSettings);
+        return builder.build();
     }
 
     private JiraComponent getJiraComponent(String projectKey, ComponentVersionFormat componentVersionFormat, ComponentInfo componentInfo, boolean technical) {

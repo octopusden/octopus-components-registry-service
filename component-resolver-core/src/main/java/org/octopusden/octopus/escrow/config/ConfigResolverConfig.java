@@ -6,6 +6,7 @@ import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoa
 import org.octopusden.octopus.escrow.exceptions.EscrowConfigurationException;
 import org.octopusden.octopus.escrow.resolvers.IReleaseInfoResolver;
 import org.octopusden.octopus.escrow.resolvers.ReleaseInfoResolver;
+import org.octopusden.releng.versions.VersionNames;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
@@ -29,21 +30,34 @@ public class ConfigResolverConfig {
     }
 
     @Bean
-    public IReleaseInfoResolver releaseInfoResolver(ConfigHelper configHelper) {
-        return new ReleaseInfoResolver(escrowConfigurationLoader(configHelper));
+    VersionNames versionNames(ConfigHelper configHelper) {
+        return new VersionNames(
+                configHelper.serviceBranch(),
+                configHelper.service(),
+                configHelper.minor()
+        );
+    }
+    @Bean
+    public IReleaseInfoResolver releaseInfoResolver(ConfigHelper configHelper, VersionNames versionNames) {
+        return new ReleaseInfoResolver(escrowConfigurationLoader(configHelper, versionNames));
     }
 
     @Bean
-    public EscrowConfigurationLoader escrowConfigurationLoader(ConfigHelper configHelper) {
-        return new EscrowConfigurationLoader(configLoader(configHelper), configHelper.supportedGroupIds(), configHelper.supportedSystems());
+    public EscrowConfigurationLoader escrowConfigurationLoader(ConfigHelper configHelper, VersionNames versionNames) {
+        return new EscrowConfigurationLoader(
+                configLoader(configHelper, versionNames),
+                configHelper.supportedGroupIds(),
+                configHelper.supportedSystems(),
+                versionNames
+        );
     }
 
     @Bean
-    public ConfigLoader configLoader(ConfigHelper configHelper) {
+    public ConfigLoader configLoader(ConfigHelper configHelper, VersionNames versionNames) {
         try {
             String moduleConfigUrl = Objects.requireNonNull(moduleConfigUrl(configHelper));
             URL configFileResource = new File(moduleConfigUrl).toURI().toURL();
-            return new ConfigLoader(ComponentRegistryInfo.createFromURL(configFileResource));
+            return new ConfigLoader(ComponentRegistryInfo.createFromURL(configFileResource), versionNames );
         } catch (MalformedURLException e) {
             throw new EscrowConfigurationException("Malformed url: " + moduleConfigUrl(configHelper), e);
         }

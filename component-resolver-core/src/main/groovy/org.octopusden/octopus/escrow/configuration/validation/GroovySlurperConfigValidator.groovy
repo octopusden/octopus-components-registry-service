@@ -6,6 +6,8 @@ import org.octopusden.octopus.escrow.exceptions.EscrowConfigurationException
 import org.octopusden.octopus.escrow.resolvers.ReleaseInfoResolver
 import org.octopusden.octopus.escrow.utilities.DistributionUtilities
 import org.octopusden.octopus.escrow.utilities.EscrowExpressionParser
+import org.octopusden.releng.versions.NumericVersionFactory
+import org.octopusden.releng.versions.VersionNames
 
 import java.util.regex.Pattern
 
@@ -56,6 +58,11 @@ class GroovySlurperConfigValidator {
     public static final String EXTERNAL_REGISTRY = "externalRegistry"
 
     List<String> errors = new ArrayList<>();
+    private final VersionNames versionNames
+
+    GroovySlurperConfigValidator(VersionNames versionNames) {
+        this.versionNames = versionNames
+    }
 
     void validateConfig(ConfigObject rootObject) {
         validateAttributes(rootObject)
@@ -191,7 +198,7 @@ class GroovySlurperConfigValidator {
     private void validateDistributionParameters(ConfigObject configObject, String moduleConfigName, String moduleName) {
         def distributionSectionValue = configObject.get(DISTRIBUTION)
         if (distributionSectionValue instanceof ConfigObject) {
-            validateDistributionSection(distributionSectionValue as ConfigObject, moduleName, moduleConfigName)
+            validateDistributionSection(distributionSectionValue as ConfigObject, versionNames, moduleName, moduleConfigName)
         } else {
             registerError("Distribution section is not correctly configured in " +
                     getWhereMessage(moduleConfigName, moduleName));
@@ -218,11 +225,12 @@ class GroovySlurperConfigValidator {
         }
     }
 
-    def validateDistributionSection(ConfigObject distributionSection, String moduleName, String moduleConfigName) {
+    def validateDistributionSection(ConfigObject distributionSection, VersionNames versionNames,  String moduleName, String moduleConfigName) {
         validateForUnknownAttributes(distributionSection, DISTRIBUTION, SUPPORTED_DISTRIBUTION_ATTRIBUTES, moduleName, moduleConfigName)
         if (distributionSection.containsKey("GAV")) {
             try {
-                def gavValue = EscrowExpressionParser.getInstance().parseAndEvaluate(distributionSection.get("GAV") as String, EscrowExpressionContext.validationEscrowExpressionContext)
+                def numericFormatFactory = new NumericVersionFactory(versionNames)
+                def gavValue = EscrowExpressionParser.getInstance().parseAndEvaluate(distributionSection.get("GAV") as String, EscrowExpressionContext.getValidationEscrowExpressionContext(numericFormatFactory))
                 try {
                     DistributionUtilities.parseDistributionGAV(gavValue).forEach{ distributionItem ->
                         if (distributionItem instanceof MavenArtifactDistributionEntity) {

@@ -12,43 +12,46 @@ import org.octopusden.octopus.releng.dto.JiraComponent
 import org.octopusden.releng.versions.ComponentVersionFormat
 import groovy.transform.TypeChecked
 import org.junit.Test
+import org.octopusden.releng.versions.VersionNames
 
 @TypeChecked
 class ModelConfigPostProcessorTest extends GroovyTestCase {
 
+    static final VersionNames VERSION_NAMES = new VersionNames("serviceCBranch", "serviceC", "minorC")
+
     @Test
     void testComponent() {
         def branch = 'TEST_COMPONENT2_$major02_$minor02_$service02'
-        assert "TEST_COMPONENT2_03_38_30" == getModelConfigProcessor("03.38.30.15-23").resolveVariables(branch)
+        assert "TEST_COMPONENT2_03_38_30" == getModelConfigProcessor("03.38.30.15-23", VERSION_NAMES).resolveVariables(branch)
     }
 
     void testProcess() {
-        ModelConfigPostProcessor modelConfigPostProcessor = getModelConfigProcessor("1.2")
+        ModelConfigPostProcessor modelConfigPostProcessor = getModelConfigProcessor("1.2", VERSION_NAMES)
         def value = '$module-$version'
         assert modelConfigPostProcessor.resolveVariables(value) == "zenit-1.2"
     }
 
     void testProcessWithReplacement() {
         def value = '$module-${version.replaceAll(\'\\\\.\', \'_\')}'
-        ModelConfigPostProcessor modelConfigPostProcessor = getModelConfigProcessor("1.2");
+        ModelConfigPostProcessor modelConfigPostProcessor = getModelConfigProcessor("1.2", VERSION_NAMES)
         def result = modelConfigPostProcessor.resolveVariables(value)
         assert result == 'zenit-null'
     }
 
     void testProcessCVSCompatibleVersion() {
-        ModelConfigPostProcessor modelConfigPostProcessor = getModelConfigProcessor("1.2");
+        ModelConfigPostProcessor modelConfigPostProcessor = getModelConfigProcessor("1.2", VERSION_NAMES)
         def value = '$module-$cvsCompatibleVersion'
         assert modelConfigPostProcessor.resolveVariables(value) == "zenit-1-2"
     }
 
     void testProcessCVSCompatibleUnderscoreVersion() {
-        ModelConfigPostProcessor modelConfigPostProcessor = getModelConfigProcessor("1.2");
+        ModelConfigPostProcessor modelConfigPostProcessor = getModelConfigProcessor("1.2", VERSION_NAMES)
         def value = '$module-$cvsCompatibleUnderscoreVersion'
         assert modelConfigPostProcessor.resolveVariables(value) == "zenit-1_2"
     }
 
     void testProcessVCSSettings() {
-        ModelConfigPostProcessor modelConfigPostProcessor = getModelConfigProcessor("1.2")
+        ModelConfigPostProcessor modelConfigPostProcessor = getModelConfigProcessor("1.2", VERSION_NAMES)
         VCSSettings versionControlSystemRoot = createTestVCSSettings()
 
         VCSSettings formatted = VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("cvs1", RepositoryType.CVS, 'vcsPath/zenit',
@@ -65,7 +68,7 @@ class ModelConfigPostProcessorTest extends GroovyTestCase {
 
     @TypeChecked
     void testReleaseInfo() {
-        ModelConfigPostProcessor modelConfigPostProcessor = getModelConfigProcessor("1.2")
+        ModelConfigPostProcessor modelConfigPostProcessor = getModelConfigProcessor("1.2", VERSION_NAMES)
 
 
         BuildParameters buildParameters = BuildParameters.create("1.7", "3", "2.10", true, "03.32", '-Dpkgj_version=$version', "build", [], [])
@@ -82,7 +85,7 @@ class ModelConfigPostProcessorTest extends GroovyTestCase {
     @TypeChecked
     void testProcessJiraComponent() {
         def fullFilledJiraComponent = getJiraComponent("KEY", "displayName", '$major.$minor', '$major.$minor.$service.$fix', '$major.$minor.$service.$fix-$build', '$major.$minor.$service', "", "", false)
-        def postProcessor = getModelConfigProcessor("1.2")
+        def postProcessor = getModelConfigProcessor("1.2", VERSION_NAMES)
         def actualFullFilledJiraComponent = postProcessor.resolveJiraConfiguration(fullFilledJiraComponent)
         assert fullFilledJiraComponent == actualFullFilledJiraComponent
         def semiFilledJiraComponent = getJiraComponent("KEY", "displayName", '$major.$minor', '$major.$minor.$service.$fix', null, null, "", "", false)
@@ -92,8 +95,8 @@ class ModelConfigPostProcessorTest extends GroovyTestCase {
 
     }
 
-    private static ModelConfigPostProcessor getModelConfigProcessor(String version) {
-        new ModelConfigPostProcessor(ComponentVersion.create("zenit", version))
+    private static ModelConfigPostProcessor getModelConfigProcessor(String version, VersionNames versionNames) {
+        new ModelConfigPostProcessor(ComponentVersion.create("zenit", version), versionNames)
     }
 
     private static JiraComponent getJiraComponent(String projectKey, String displayName, String majorVersionFormat, String releaseVersionFormat, String buildVersionFormat, String lineVersionFormat, String versionPrefix, String versionFormat, boolean isTechincal) {

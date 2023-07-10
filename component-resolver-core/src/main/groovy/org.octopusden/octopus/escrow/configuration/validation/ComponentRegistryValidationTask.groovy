@@ -15,6 +15,7 @@ import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.TaskAction
+import org.octopusden.releng.versions.VersionNames
 
 import static groovyx.net.http.ContentType.TEXT
 
@@ -42,6 +43,12 @@ class ComponentRegistryValidationTask extends DefaultTask {
     String supportedGroupIds
     @Input
     String supportedSystems
+    @Input
+    String serviceBranch
+    @Input
+    String service
+    @Input
+    String minor
 
     @Input
     boolean isEmployeeServiceEnabled() {
@@ -189,16 +196,30 @@ class ComponentRegistryValidationTask extends DefaultTask {
 
     private Map<String, EscrowModule> getComponentsFromConfig(String configPath) {
         getLogger().info("Loading: {}", configPath)
-        def loader = new ConfigLoader(ComponentRegistryInfo.createFromFileSystem(configPath, mainConfigFileName))
+        def loader = new ConfigLoader(ComponentRegistryInfo.createFromFileSystem(configPath, mainConfigFileName), new VersionNames(serviceBranch, service, minor))
         def config = getConfig(loader,
                 supportedGroupIds.split(",").collect {it -> it.trim()},
                 supportedSystems.split(",").collect {it -> it.trim()},
+                serviceBranch,
+                service,
+                minor
         )
         config.escrowModules
     }
 
-    private static EscrowConfiguration getConfig(ConfigLoader loader, List<String> supportedGroupIds, List<String> supportedSystems) {
-        EscrowConfigurationLoader escrowConfigurationLoader = new EscrowConfigurationLoader(loader, supportedGroupIds, supportedSystems)
+    private static EscrowConfiguration getConfig(ConfigLoader loader,
+                                                 List<String> supportedGroupIds,
+                                                 List<String> supportedSystems,
+                                                 String serviceBranch,
+                                                 String service,
+                                                 String minor
+    ) {
+        EscrowConfigurationLoader escrowConfigurationLoader = new EscrowConfigurationLoader(
+                loader,
+                supportedGroupIds,
+                supportedSystems,
+                new VersionNames(serviceBranch, service, minor)
+        )
         def configuration = escrowConfigurationLoader.loadFullConfiguration(null)
         assert configuration != null
         return configuration

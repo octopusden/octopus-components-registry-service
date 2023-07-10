@@ -17,9 +17,8 @@ import java.util.Collections;
 import java.util.Objects;
 import java.util.stream.Stream;
 
-import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_GROUP_IDS;
-import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_SYSTEMS;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
+import static org.octopusden.octopus.escrow.TestConfigUtils.*;
 
 @DisplayName("Components registry component's validator test")
 class ComponentsRegistryValidatorTest {
@@ -45,8 +44,9 @@ class ComponentsRegistryValidatorTest {
             ) throws Exception {
         final Path aggregatorPath = Paths.get(Objects.requireNonNull(ComponentsRegistryValidatorTest.class.getResource("/" + sourceComponentRegistry + "/Aggregator.groovy")).toURI());
         final EscrowConfigurationLoader escrowConfigurationLoader = new EscrowConfigurationLoader(new ConfigLoader(
-                ComponentRegistryInfo.createFromFileSystem(aggregatorPath.getParent().toString(), aggregatorPath.getFileName().toString())
-        ), SUPPORTED_GROUP_IDS, SUPPORTED_SYSTEMS);
+                ComponentRegistryInfo.createFromFileSystem(aggregatorPath.getParent().toString(), aggregatorPath.getFileName().toString()),
+                VERSION_NAMES
+        ), SUPPORTED_GROUP_IDS, SUPPORTED_SYSTEMS, VERSION_NAMES);
         assertThatThrownBy(() -> escrowConfigurationLoader.loadFullConfiguration(Collections.emptyMap()))
                 .isInstanceOf(EscrowConfigurationException.class).hasMessageContainingAll(expectedValidationErrors.toArray(new String[0]));
     }

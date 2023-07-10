@@ -1,20 +1,19 @@
 package org.octopusden.octopus.escrow.dto;
 
 import org.octopusden.releng.versions.IVersionInfo;
-import org.octopusden.releng.versions.NumericVersion;
+import org.octopusden.releng.versions.NumericVersionFactory;
 
 import java.util.Map;
 import java.util.function.Function;
 
 public class EscrowExpressionContext {
+    private static volatile EscrowExpressionContext VALIDATION_CONTEXT = null;
     private final Map<String, String> env = System.getenv();
     private final String fileName;
     private final String version;
     private String component;
     private String baseDir;
     private IVersionInfo versionInfo;
-    private static final EscrowExpressionContext VALIDATION_CONTEXT = new EscrowExpressionContext("zenit", "1984", "gold-medal.zip");
-
 
     public EscrowExpressionContext(String component, String version, String fileName, Function<String, IVersionInfo> versionItemExtractor) {
         this.component = component;
@@ -24,11 +23,19 @@ public class EscrowExpressionContext {
         versionInfo = versionItemExtractor.apply(version);
     }
 
-    public EscrowExpressionContext(String component, String version, String fileName) {
-        this(component, version, fileName, componentVersion -> NumericVersion.parse(componentVersion));
+    public EscrowExpressionContext(String component, String version, String fileName, NumericVersionFactory numericVersionFactory) {
+        this(component, version, fileName, componentVersion -> numericVersionFactory.create(componentVersion));
     }
 
-    public static EscrowExpressionContext getValidationEscrowExpressionContext() {
+    public static EscrowExpressionContext getValidationEscrowExpressionContext(NumericVersionFactory numericVersionFactory) {
+        if (VALIDATION_CONTEXT != null) {
+            return VALIDATION_CONTEXT;
+        }
+        synchronized (EscrowExpressionContext.class) {
+            if (VALIDATION_CONTEXT == null) {
+                VALIDATION_CONTEXT = new EscrowExpressionContext("zenit", "1984", "gold-medal.zip", numericVersionFactory);
+            }
+        }
         return VALIDATION_CONTEXT;
     }
 

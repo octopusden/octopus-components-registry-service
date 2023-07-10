@@ -1,5 +1,7 @@
 package org.octopusden.octopus.escrow.resolvers
 
+import groovy.transform.TypeChecked
+import org.junit.Test
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.TestConfigUtils
 import org.octopusden.octopus.escrow.configuration.loader.ComponentRegistryInfo
@@ -8,26 +10,16 @@ import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
 import org.octopusden.octopus.escrow.configuration.validation.util.VersionRangeHelper
 import org.octopusden.octopus.escrow.exceptions.ComponentResolverException
 import org.octopusden.octopus.escrow.exceptions.EscrowConfigurationException
-import org.octopusden.octopus.escrow.model.BuildParameters
-import org.octopusden.octopus.escrow.model.Distribution
-import org.octopusden.octopus.escrow.model.SecurityGroups
-import org.octopusden.octopus.escrow.model.Tool
-import org.octopusden.octopus.escrow.model.VCSSettings
-import org.octopusden.octopus.escrow.model.VersionControlSystemRoot
+import org.octopusden.octopus.escrow.model.*
 import org.octopusden.octopus.releng.dto.ComponentInfo
 import org.octopusden.octopus.releng.dto.JiraComponent
 import org.octopusden.releng.versions.ComponentVersionFormat
-import org.octopusden.releng.versions.NumericVersion
 import org.octopusden.releng.versions.VersionRange
-import groovy.transform.TypeChecked
-import org.junit.Test
 
-import static org.octopusden.octopus.escrow.BuildSystem.MAVEN
-import static org.octopusden.octopus.escrow.BuildSystem.GRADLE
-import static org.octopusden.octopus.escrow.BuildSystem.BS2_0
+import static org.octopusden.octopus.escrow.BuildSystem.*
 import static org.octopusden.octopus.escrow.RepositoryType.CVS
 import static org.octopusden.octopus.escrow.RepositoryType.MERCURIAL
-import static org.octopusden.octopus.escrow.TestConfigUtils.loadConfiguration
+import static org.octopusden.octopus.escrow.TestConfigUtils.*
 import static org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader.FAKE_VCS_URL_FOR_BS20
 import static org.octopusden.octopus.escrow.model.VCSSettings.createForSingleRoot
 
@@ -39,6 +31,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
     public static
     final BuildParameters DEFAULT_BUILD_PARAMETERS = BuildParameters.create("1.8", "3.3.9", "2.10", false, null, null, null,
             [new Tool(name: "BuildEnv", escrowEnvironmentVariable: "BUILD_ENV", targetLocation: "tools/BUILD_ENV", sourceLocation: "env.BUILD_ENV")], [])
+
 
     JiraComponent EMPTY_JIRA_CONFIG = null
     BuildParameters EMPTY_BUILD_CONFIG = null
@@ -146,7 +139,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
     void testAllVersions() {
         EscrowConfiguration configuration = loadConfiguration("single-module/noVersionRange.groovy")
         def configurations = configuration.escrowModules.get(TEST_MODULE).moduleConfigurations
-        VersionRangeHelper.ALL_VERSIONS == configurations.get(0).versionRange
+        VersionRangeHelper.ALL_VERSIONS == VERSION_RANGE_FACTORY.create(configurations.get(0).versionRangeString)
     }
 
     @Test
@@ -361,13 +354,13 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
 
     @Test
     void testVersionRangeEverything() {
-        VersionRange allVersions = VersionRange.createFromVersionSpec(VersionRangeHelper.ALL_VERSIONS)
-        assertTrue(allVersions.containsVersion(NumericVersion.parse("0.0.0")))
-        assertTrue(allVersions.containsVersion(NumericVersion.parse("2.3.50.3")))
-        assertTrue(allVersions.containsVersion(NumericVersion.parse("999.999.0")))
-        assertTrue(allVersions.containsVersion(NumericVersion.parse("1.0.37-0012")))
-        assertTrue(allVersions.containsVersion(NumericVersion.parse("1.0-SNAPSHOT")))
-        assertTrue(allVersions.containsVersion(NumericVersion.parse("38.30.399")))
+        VersionRange allVersions = VERSION_RANGE_FACTORY.create(VersionRangeHelper.ALL_VERSIONS)
+        assertTrue(allVersions.containsVersion(NUMERIC_VERSION_FACTORY.create("0.0.0")))
+        assertTrue(allVersions.containsVersion(NUMERIC_VERSION_FACTORY.create("2.3.50.3")))
+        assertTrue(allVersions.containsVersion(NUMERIC_VERSION_FACTORY.create("999.999.0")))
+        assertTrue(allVersions.containsVersion(NUMERIC_VERSION_FACTORY.create("1.0.37-0012")))
+        assertTrue(allVersions.containsVersion(NUMERIC_VERSION_FACTORY.create("1.0-SNAPSHOT")))
+        assertTrue(allVersions.containsVersion(NUMERIC_VERSION_FACTORY.create("38.30.399")))
     }
 
     @Test
@@ -476,9 +469,9 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
             loadConfiguration("invalid/noSecurityChampionInExplicitDistributed.groovy")
         })
         assert exception.message == "Validation of module config failed due following errors: \n" +
-            "componentDisplayName is not set in 'component1'\n" +
-            "securityChampion is not set in 'component2'\n" +
-            "securityChampion is not matched '\\w+(,\\w+)*' in 'component3'"
+                "componentDisplayName is not set in 'component1'\n" +
+                "securityChampion is not set in 'component2'\n" +
+                "securityChampion is not matched '\\w+(,\\w+)*' in 'component3'"
     }
 
     @Test
@@ -519,7 +512,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
     void testLoadSecurityGroups() {
         EscrowConfiguration configuration = loadConfiguration("testSecurityGroupLoading.groovy")
         assert 2 == configuration.escrowModules.size()
-        ["octopusweb"          : "vfiler1-default-rd",
+        ["octopusweb"    : "vfiler1-default-rd",
          "mudule-dbModel": "group1"]
                 .each { String component, String expectedReadGroups ->
                     def actualReadGroups = configuration.escrowModules[component]
