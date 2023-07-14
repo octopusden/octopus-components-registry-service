@@ -9,7 +9,8 @@ import org.octopusden.octopus.escrow.configuration.model.EscrowModule
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
 import org.octopusden.octopus.escrow.configuration.validation.util.VersionRangeHelper
 import org.octopusden.octopus.escrow.model.VersionControlSystemRoot
-import org.octopusden.octopus.escrow.resolvers.JiraParametersResolver
+import org.octopusden.releng.versions.KotlinVersionFormatter
+import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRange
 import groovy.transform.TupleConstructor
 import groovy.transform.TypeChecked
@@ -17,6 +18,7 @@ import kotlin.Pair
 import org.apache.commons.lang3.StringUtils
 import org.apache.logging.log4j.LogManager
 import org.apache.logging.log4j.Logger
+import org.octopusden.releng.versions.VersionRangeFactory
 
 import java.util.function.BinaryOperator
 import java.util.regex.Pattern
@@ -34,6 +36,7 @@ class EscrowConfigValidator {
 
     private List<String> supportedGroupIds
     private List<String> supportedSystems
+    private VersionNames versionNames
 
     @TupleConstructor
     static class MavenArtifact {
@@ -69,9 +72,10 @@ class EscrowConfigValidator {
 
     Map<MavenArtifact, List<EscrowModuleConfig>> map = new HashMap<>()
 
-    EscrowConfigValidator(List<String> supportedGroupIds, List<String> supportedSystems) {
+    EscrowConfigValidator(List<String> supportedGroupIds, List<String> supportedSystems, VersionNames versionNames ) {
         this.supportedGroupIds = supportedGroupIds
         this.supportedSystems = supportedSystems
+        this.versionNames = versionNames
     }
 
     List<String> errors = new ArrayList<>()
@@ -142,13 +146,14 @@ class EscrowConfigValidator {
 
     def validateGroupIdAndVersionIdIntersections(EscrowConfiguration configuration) {
         List<MavenArtifact> mavenArtifacts = []
+        def versionRangeFactory = new VersionRangeFactory(configuration.versionNames)
         configuration.escrowModules.each { key, value ->
             value.moduleConfigurations.each {moduleConfiguration ->
                 moduleConfiguration.artifactIdPattern.split(SPLIT_PATTERN).each { String artifactId ->
                     mavenArtifacts.add(new MavenArtifact(groupId: moduleConfiguration.groupIdPattern,
                             artifactId: artifactId,
                             componentName: value.moduleName,
-                            versionRange: moduleConfiguration.versionRange))
+                            versionRange: versionRangeFactory.create(moduleConfiguration.versionRangeString)))
                 }
             }
         }
@@ -216,6 +221,7 @@ class EscrowConfigValidator {
                 }
             }
         }
+        def versionRangeFactory = new VersionRangeFactory(escrowConfiguration.versionNames)
         map.each { it ->
             def mavenArtifact = it.key
             List<EscrowModuleConfig> configs = it.value
@@ -224,7 +230,9 @@ class EscrowConfigValidator {
                     EscrowModuleConfig config1 = configs[i]
                     for (int j = i + 1; j < configs.size(); j++) {
                         EscrowModuleConfig config2 = configs[j]
-                        if (versionRangeHelper.hasIntersection(config1.getVersionRange(), config2.getVersionRange())) {
+                        def vr1 = versionRangeFactory.create(config1.getVersionRangeString())
+                        def vr2 = versionRangeFactory.create(config2.getVersionRangeString())
+                        if (versionRangeHelper.hasIntersection(vr1, vr2)) {
                             registerError("More than one configuration matches $mavenArtifact. " +
                                     "Intersection of version ranges ${config1.getVersionRangeString()} with ${config2.getVersionRangeString()}.")
                         }
@@ -296,7 +304,8 @@ class EscrowConfigValidator {
             registerError("Version range in module '$module' isn't set")
         } else {
             try {
-                moduleConfig.getVersionRange()
+                def factory = new VersionRangeFactory(versionNames)
+                factory.create(moduleConfig.getVersionRangeString())
             } catch (exception) {
                 LOG.error("Module $module validation error", exception)
                 registerError("Version range '${moduleConfig.getVersionRangeString()}' in module '$module' doesn't satisfy version range syntax/rules: " + exception.message)
@@ -329,7 +338,7 @@ class EscrowConfigValidator {
             }
         } else {
             def finishedString = Stream.of(
-                JiraParametersResolver.FORMATTER
+                    new KotlinVersionFormatter(versionNames)
                     .getPREDEFINED_VARIABLES_LIST()
                     .stream()
                     .map({ i -> '$' + ((Pair) i).first })

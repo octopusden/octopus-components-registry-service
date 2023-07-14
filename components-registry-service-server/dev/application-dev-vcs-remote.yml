@@ -5,3 +5,7 @@ components-registry:
     password: # envFile property
 
   work-dir: /tmp/components-registry
+  version-name:
+    service-branch: serviceCBranch
+    service: serviceC
+    minor: minorC

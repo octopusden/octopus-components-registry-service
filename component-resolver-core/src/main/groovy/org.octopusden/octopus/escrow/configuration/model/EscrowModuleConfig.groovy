@@ -11,7 +11,6 @@ import org.octopusden.octopus.escrow.model.BuildParameters
 import org.octopusden.octopus.escrow.model.Distribution
 import org.octopusden.octopus.escrow.model.VCSSettings
 import org.octopusden.octopus.releng.dto.JiraComponent
-import org.octopusden.releng.versions.VersionRange
 import groovy.transform.AutoClone
 import groovy.transform.EqualsAndHashCode
 import groovy.transform.ToString
@@ -71,10 +70,6 @@ class EscrowModuleConfig {
 
     String getGroupIdPattern() {
         return groupIdPattern
-    }
-
-    VersionRange getVersionRange() {
-        return VersionRange.createFromVersionSpec(versionRange)
     }
 
     String getVersionRangeString() {

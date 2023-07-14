@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
+import org.octopusden.releng.versions.NumericVersionFactory
 
 import java.nio.file.Paths
 import java.util.stream.Stream
@@ -29,6 +30,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals
 import static org.junit.jupiter.api.Assertions.assertNotNull
 import static org.junit.jupiter.api.Assertions.assertNull
 import static org.junit.jupiter.api.Assertions.assertTrue
+import static org.octopusden.octopus.escrow.TestConfigUtils.VERSION_NAMES
+import static org.octopusden.octopus.escrow.TestConfigUtils.VERSION_RANGE_FACTORY
 
 class EscrowConfigurationLoaderTest {
 
@@ -37,9 +40,10 @@ class EscrowConfigurationLoaderTest {
     static {
         def aggregatorPath = Paths.get(EscrowConfigurationLoaderTest.class.getResource("/production/Aggregator.groovy").toURI())
         EscrowConfigurationLoader escrowConfigurationLoader = new EscrowConfigurationLoader(
-                new ConfigLoader(ComponentRegistryInfo.createFromFileSystem(aggregatorPath.getParent().toString(), aggregatorPath.getFileName().toString())),
+                new ConfigLoader(ComponentRegistryInfo.createFromFileSystem(aggregatorPath.getParent().toString(), aggregatorPath.getFileName().toString()), VERSION_NAMES),
                 SUPPORTED_GROUP_IDS,
-                SUPPORTED_SYSTEMS
+                SUPPORTED_SYSTEMS,
+                VERSION_NAMES
         )
         escrowConfiguration = escrowConfigurationLoader.loadFullConfiguration(Collections.emptyMap())
     }
@@ -65,7 +69,9 @@ class EscrowConfigurationLoaderTest {
     @DisplayName("Test transforming to versioned component")
     void testToVersionComponent(String componentName, String componentVersion, BuildSystemType buildSystemType, GitVersionControlSystemBean gitVersionControlSystemBean) {
         def escrowModule = getEscrowConfiguration().escrowModules.get(componentName)
-        def moduleConfiguration = Objects.requireNonNull(escrowModule.getModuleConfigurations().find {module -> module.versionRange.containsVersion(NumericVersion.parse(componentVersion)) })
+        def vrf =  VERSION_RANGE_FACTORY
+        def numericVersionFactory = new NumericVersionFactory(VERSION_NAMES)
+        def moduleConfiguration = Objects.requireNonNull(escrowModule.getModuleConfigurations().find {module -> vrf.create(module.versionRangeString).containsVersion(numericVersionFactory.create(componentVersion)) })
         def versionedComponent = moduleConfiguration.toVersionedComponent()
         assertThat(versionedComponent.build.buildSystem.type).isEqualTo(buildSystemType)
         assertThat(versionedComponent.vcs).isEqualTo(gitVersionControlSystemBean)
@@ -97,7 +103,9 @@ class EscrowConfigurationLoaderTest {
     @DisplayName("Test dependencies DSL")
     void testDependenciesDsl(String componentName, String componentVersion, boolean autoUpdate) {
         def escrowModule = getEscrowConfiguration().escrowModules.get(componentName)
-        def moduleConfiguration = Objects.requireNonNull(escrowModule.getModuleConfigurations().find {module -> module.versionRange.containsVersion(NumericVersion.parse(componentVersion)) })
+        def vrf = VERSION_RANGE_FACTORY
+        def numericVersionFactory = new NumericVersionFactory(VERSION_NAMES)
+        def moduleConfiguration = Objects.requireNonNull(escrowModule.getModuleConfigurations().find {module -> vrf.create(module.versionRangeString).containsVersion(numericVersionFactory.create(componentVersion)) })
         assertThat(moduleConfiguration).isNotNull().extracting {it.buildConfiguration?.dependencies?.autoUpdate ?: false }.isEqualTo(autoUpdate)
     }
 

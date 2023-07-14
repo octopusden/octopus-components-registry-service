@@ -1,29 +1,32 @@
 package org.octopusden.octopus.escrow
 
-
+import groovy.transform.CompileStatic
+import org.apache.commons.lang3.StringUtils
+import org.apache.commons.lang3.Validate
+import org.apache.logging.log4j.LogManager
+import org.apache.logging.log4j.Logger
 import org.octopusden.octopus.components.registry.api.model.Dependencies
 import org.octopusden.octopus.escrow.model.Distribution
 import org.octopusden.octopus.releng.dto.ComponentVersion
 import org.octopusden.octopus.releng.dto.JiraComponent
 import org.octopusden.releng.versions.ComponentVersionFormat
 import org.octopusden.releng.versions.KotlinVersionFormatter
-import org.octopusden.releng.versions.NumericVersion
+import org.octopusden.releng.versions.NumericVersionFactory
+import org.octopusden.releng.versions.VersionNames
 import org.octopusden.utils.StringUtilsKt
-import groovy.transform.CompileStatic
-import org.apache.commons.lang3.StringUtils
-import org.apache.commons.lang3.Validate
-import org.apache.logging.log4j.LogManager
-import org.apache.logging.log4j.Logger
 
 @CompileStatic
 class ModelConfigPostProcessor {
     private static final Logger log = LogManager.getLogger(ModelConfigPostProcessor.class)
 
     private final ComponentVersion componentRelease
+    private final VersionNames versionNames
 
-    ModelConfigPostProcessor(ComponentVersion componentRelease) {
+    ModelConfigPostProcessor(ComponentVersion componentRelease, VersionNames versionNames) {
         Validate.notNull(componentRelease)
+        Validate.notNull(versionNames)
         this.componentRelease = componentRelease
+        this.versionNames = versionNames
     }
 
     String resolveVariables(String value) {
@@ -31,8 +34,9 @@ class ModelConfigPostProcessor {
             return value
         }
 
-        def kvf = new KotlinVersionFormatter()
-        def version = NumericVersion.parse(componentRelease.version)
+        def kvf = new KotlinVersionFormatter(versionNames)
+        def factory = new NumericVersionFactory(versionNames)
+        def version = factory.create(componentRelease.version)
 
         Map<String, String> context = new HashMap<>()
         for (def i : kvf.PREDEFINED_VARIABLES_LIST) {
@@ -61,10 +65,10 @@ class ModelConfigPostProcessor {
         }
         def componentVersionFormat = jiraComponent.componentVersionFormat
         final ComponentVersionFormat enrichedComponentVersionFormat = componentVersionFormat == null ? null : ComponentVersionFormat.create(
-            componentVersionFormat.majorVersionFormat,
-            componentVersionFormat.releaseVersionFormat,
-            componentVersionFormat.buildVersionFormat != null ? componentVersionFormat.buildVersionFormat : componentVersionFormat.releaseVersionFormat,
-            componentVersionFormat.lineVersionFormat != null ? componentVersionFormat.lineVersionFormat : componentVersionFormat.majorVersionFormat
+                componentVersionFormat.majorVersionFormat,
+                componentVersionFormat.releaseVersionFormat,
+                componentVersionFormat.buildVersionFormat != null ? componentVersionFormat.buildVersionFormat : componentVersionFormat.releaseVersionFormat,
+                componentVersionFormat.lineVersionFormat != null ? componentVersionFormat.lineVersionFormat : componentVersionFormat.majorVersionFormat
         )
         return new JiraComponent(jiraComponent.projectKey, jiraComponent.displayName, enrichedComponentVersionFormat, jiraComponent.componentInfo, jiraComponent.technical)
     }

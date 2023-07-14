@@ -13,19 +13,19 @@ import org.octopusden.octopus.escrow.model.SecurityGroups;
 import org.octopusden.octopus.escrow.model.VCSSettings;
 import org.octopusden.octopus.releng.JiraComponentVersionDeserializer;
 import org.octopusden.octopus.releng.dto.JiraComponent;
+import org.octopusden.releng.versions.VersionNames;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class ComponentConfigDeserializer extends JsonDeserializer<ComponentConfig> {
 
-
     private static final VCSSettingsDeserializer VCS_SETTINGS_DESERIALIZER = new VCSSettingsDeserializer();
+    private final VersionNames versionNames;
+
+    public ComponentConfigDeserializer(VersionNames versionNames) {
+        this.versionNames = versionNames;
+    }
 
     @Override
     public ComponentConfig deserialize(JsonParser jsonParser, DeserializationContext deserializationContext) throws IOException {
@@ -68,12 +68,18 @@ public class ComponentConfigDeserializer extends JsonDeserializer<ComponentConfi
     private JiraComponentVersionRange getJiraComponentVersionRange(JsonNode node) {
         TextNode versionRange = (TextNode) node.get("versionRange");
         TextNode componentName = (TextNode) node.get("componentName");
-        JiraComponentVersionDeserializer jiraComponentVersionDeserializer = new JiraComponentVersionDeserializer();
+        JiraComponentVersionDeserializer jiraComponentVersionDeserializer = new JiraComponentVersionDeserializer(versionNames);
         JiraComponent jiraComponent = jiraComponentVersionDeserializer.getJiraComponent(node);
         Distribution distribution = getDistribution(node);
         VCSSettings vcsSettings = VCS_SETTINGS_DESERIALIZER.deserialize(node.get("vcsSettings"));
 
-        return new JiraComponentVersionRange(componentName.textValue(), versionRange.textValue(), jiraComponent, distribution, vcsSettings);
+        JiraComponentVersionRange.Builder builder = new JiraComponentVersionRange.Builder(versionNames)
+                .componentName(componentName.textValue())
+                .versionRange(versionRange.textValue())
+                .jiraComponent(jiraComponent)
+                .distribution(distribution)
+                .vcsSettings(vcsSettings);
+        return builder.build();
     }
 
 

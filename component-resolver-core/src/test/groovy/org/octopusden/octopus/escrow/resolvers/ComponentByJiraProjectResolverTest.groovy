@@ -15,6 +15,7 @@ import groovy.transform.TypeChecked
 import groovy.transform.TypeCheckingMode
 import org.apache.maven.artifact.versioning.InvalidVersionSpecificationException
 import org.junit.Test
+import org.octopusden.releng.versions.VersionNames
 
 import static org.octopusden.octopus.escrow.JiraProjectVersion.create
 import static JiraParametersResolverTest.createJiraParametersResolverFromConfig
@@ -26,6 +27,7 @@ class ComponentByJiraProjectResolverTest extends GroovyTestCase {
     public static final String TEST_COMPONENT2_BUILD = TEST_COMPONENT2_VERSION + "-1"
     public static final String SYSTEM_VERSIONS = "system.10.2.3"
     public static final String COMPONENT = "WCOMPONENT"
+    public static final VersionNames VERSION_NAMES = new VersionNames("serviceCBranch", "serviceC", "minorC")
 
     private static
     final ComponentVersionFormat COMPONENT_VERSION_FORMAT_1 = ComponentVersionFormat.create('$major.$minor.$service', '$major.$minor.$service-$fix', '$major.$minor.$service-$fix', '$major.$minor.$service');
@@ -138,8 +140,15 @@ class ComponentByJiraProjectResolverTest extends GroovyTestCase {
                                                                   Distribution distribution = null,
                                                                   VCSSettings vcsSettings = VCSSettings.createEmpty(),
                                                                   boolean technical = false) {
-        JiraComponent jiraComponent = getJiraComponent(projectKey, componentVersionFormat, componentInfo, technical);
-        return new JiraComponentVersionRange(componentName, versionRange, jiraComponent, distribution, vcsSettings);
+        JiraComponent jiraComponent = getJiraComponent(projectKey, componentVersionFormat, componentInfo, technical)
+        def jiraComponentVersionRange = JiraComponentVersionRange.builder(VERSION_NAMES)
+                .componentName(componentName)
+                .versionRange(versionRange)
+                .jiraComponent(jiraComponent)
+                .distribution(distribution)
+                .vcsSettings(vcsSettings)
+                .build()
+        return jiraComponentVersionRange
     }
 
     private
