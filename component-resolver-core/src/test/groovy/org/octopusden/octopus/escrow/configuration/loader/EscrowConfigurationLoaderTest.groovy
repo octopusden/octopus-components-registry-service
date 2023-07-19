@@ -10,7 +10,6 @@ import org.octopusden.octopus.escrow.configuration.model.EscrowModule
 import org.octopusden.octopus.escrow.configuration.validation.util.VersionRangeHelper
 import org.octopusden.octopus.escrow.resolvers.ModuleByArtifactResolver
 import org.octopusden.octopus.releng.dto.ComponentVersion
-import org.octopusden.releng.versions.NumericVersion
 import org.apache.maven.artifact.DefaultArtifact
 import org.apache.maven.artifact.versioning.VersionRange
 import org.junit.jupiter.api.DisplayName
@@ -23,6 +22,7 @@ import org.octopusden.releng.versions.NumericVersionFactory
 import java.nio.file.Paths
 import java.util.stream.Stream
 
+import static org.octopusden.octopus.escrow.TestConfigUtils.PRODUCT_TYPES
 import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_GROUP_IDS
 import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_SYSTEMS
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat
@@ -40,7 +40,13 @@ class EscrowConfigurationLoaderTest {
     static {
         def aggregatorPath = Paths.get(EscrowConfigurationLoaderTest.class.getResource("/production/Aggregator.groovy").toURI())
         EscrowConfigurationLoader escrowConfigurationLoader = new EscrowConfigurationLoader(
-                new ConfigLoader(ComponentRegistryInfo.createFromFileSystem(aggregatorPath.getParent().toString(), aggregatorPath.getFileName().toString()), VERSION_NAMES),
+                new ConfigLoader(
+                        ComponentRegistryInfo.createFromFileSystem(
+                                aggregatorPath.getParent().toString(),
+                                aggregatorPath.getFileName().toString()),
+                        VERSION_NAMES,
+                        PRODUCT_TYPES
+                ),
                 SUPPORTED_GROUP_IDS,
                 SUPPORTED_SYSTEMS,
                 VERSION_NAMES

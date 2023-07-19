@@ -57,9 +57,9 @@ data class JiraComponent(var versionPrefix: String, var versionFormat: String)
 data class Distribution(var explicit: Boolean, var external: Boolean)
 
 open class ComponentDSL(private val parentComponent: ComponentBean): SubComponentDSL(parentComponent) {
-    var productType = parentComponent.productType
+    var productType = parentComponent.productType?.let { ComponentsRegistryScriptRunner.encodeParameters(it) }
         set(value) {
-            parentComponent.productType = value
+            parentComponent.productType = value?.let { ComponentsRegistryScriptRunner.decodeParameters(it) }
             field = value
         }
 
@@ -331,38 +331,22 @@ class OracleDSL {
 
 class ProductDSL {
     internal val productTools = ArrayList<ProductTool>()
-    fun ptc(init: OctopusProductDSL.() -> Unit) {
+
+    fun type(name: String, init: OctopusProductDSL.() -> Unit) {
+        val productType = ComponentsRegistryScriptRunner.decodeParameters(name)
         val product = OctopusProductDSL()
         product.init()
-        val componentProduct = PTCProductToolBean()
+        val componentProduct = when(productType) {
+            ProductTypes.PT_C -> PTCProductToolBean()
+            ProductTypes.PT_K -> PTKProductToolBean()
+            ProductTypes.PT_D_DB -> PTDDbProductToolBean()
+            ProductTypes.PT_D -> PTDProductToolBean()
+        }
         componentProduct.version = product.version
-        checkIntegrity("More than one COMPONENT product is set") { !productTools.any { it.type == ProductTypes.PT_C } }
+        checkIntegrity("More than one COMPONENT product is set") { !productTools.any { it.type == productType } }
         productTools.add(componentProduct)
     }
-    fun ptk(init: OctopusProductDSL.() -> Unit) {
-        val product = OctopusProductDSL()
-        product.init()
-        val ptk = PTKProductToolBean()
-        ptk.version = product.version
-        checkIntegrity("More than one product is set") { !productTools.any { it.type == ProductTypes.PT_K } }
-        productTools.add(ptk)
-    }
-    fun ptdDb(init: OctopusProductDSL.() -> Unit) {
-        val product = OctopusProductDSL()
-        product.init()
-        val dwhDbProduct = PTDDbProductToolBean()
-        dwhDbProduct.version = product.version
-        checkIntegrity("More than one DWH DB product is set") { !productTools.any { it.type == ProductTypes.PT_D_DB } }
-        productTools.add(dwhDbProduct)
-    }
-    fun ptd(init: OctopusProductDSL.() -> Unit) {
-        val product = OctopusProductDSL()
-        product.init()
-        val dwhProduct = PTDProductToolBean()
-        dwhProduct.version = product.version
-        checkIntegrity("More than one DWH product is set") { !productTools.any { it.type == ProductTypes.PT_D } }
-        productTools.add(dwhProduct)
-    }
+
 }
 
 open class VcsSpecificationDSL {
@@ -406,6 +390,10 @@ class DependenciesDSL {
     internal fun toDependencies(): Dependencies =
         Dependencies(autoUpdate)
 
+}
+
+class SettingsDSL {
+    var param1: String = ""
 }
 
 fun throwException(message: String) {

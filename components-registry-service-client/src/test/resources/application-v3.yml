@@ -14,6 +14,11 @@ components-registry:
     service-branch: serviceCBranch
     service: serviceC
     minor: minorC
+  product-type:
+    c: PT_C
+    k: PT_K
+    d: PT_D
+    ddb: PT_D_DB
 
 pathToConfig: file://${components-registry.groovy-path}
 

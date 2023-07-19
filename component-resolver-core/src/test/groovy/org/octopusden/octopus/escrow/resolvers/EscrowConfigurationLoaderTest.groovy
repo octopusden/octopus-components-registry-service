@@ -10,18 +10,24 @@ import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
 import org.octopusden.octopus.escrow.configuration.validation.util.VersionRangeHelper
 import org.octopusden.octopus.escrow.exceptions.ComponentResolverException
 import org.octopusden.octopus.escrow.exceptions.EscrowConfigurationException
-import org.octopusden.octopus.escrow.model.*
+import org.octopusden.octopus.escrow.model.BuildParameters
+import org.octopusden.octopus.escrow.model.Distribution
+import org.octopusden.octopus.escrow.model.SecurityGroups
+import org.octopusden.octopus.escrow.model.Tool
+import org.octopusden.octopus.escrow.model.VCSSettings
+import org.octopusden.octopus.escrow.model.VersionControlSystemRoot
 import org.octopusden.octopus.releng.dto.ComponentInfo
 import org.octopusden.octopus.releng.dto.JiraComponent
 import org.octopusden.releng.versions.ComponentVersionFormat
 import org.octopusden.releng.versions.VersionRange
 
-import static org.octopusden.octopus.escrow.BuildSystem.*
+import static BuildSystem.MAVEN
 import static org.octopusden.octopus.escrow.RepositoryType.CVS
 import static org.octopusden.octopus.escrow.RepositoryType.MERCURIAL
-import static org.octopusden.octopus.escrow.TestConfigUtils.*
+import static org.octopusden.octopus.escrow.TestConfigUtils.NUMERIC_VERSION_FACTORY
+import static org.octopusden.octopus.escrow.TestConfigUtils.VERSION_RANGE_FACTORY
+import static org.octopusden.octopus.escrow.TestConfigUtils.loadConfiguration
 import static org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader.FAKE_VCS_URL_FOR_BS20
-import static org.octopusden.octopus.escrow.model.VCSSettings.createForSingleRoot
 
 class EscrowConfigurationLoaderTest extends GroovyTestCase {
 
@@ -48,12 +54,12 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
         escrowModuleConfig.toString()
 
         def expectedConfig = new EscrowModuleConfig(vcsSettings:
-                createForSingleRoot(VersionControlSystemRoot.create("main", MERCURIAL, VCS_URL, '$module.$version', 'default')),
+                VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", MERCURIAL, VCS_URL, '$module.$version', 'default')),
                 componentOwner: "user",
                 releaseManager: "user",
                 securityChampion: "user",
                 system: "CLASSIC",
-                buildSystem: MAVEN,
+                buildSystem: BuildSystem.MAVEN,
                 artifactIdPattern: "builder",
                 groupIdPattern: "io.bcomponent",
                 versionRange: VERSION_RANGE,
@@ -148,7 +154,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
         def configurations = configuration.escrowModules.get(TEST_MODULE).moduleConfigurations
         def expectedConfig1 = new EscrowModuleConfig(
                 componentOwner: "user1",
-                vcsSettings: createForSingleRoot(
+                vcsSettings: VCSSettings.createForSingleRoot(
                         VersionControlSystemRoot.create("main", MERCURIAL, 'ssh://hg@mercurial/bcomponent',
                                 '$module-$version', null)),
                 buildSystem: MAVEN,
@@ -163,7 +169,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
         def expectedConfig2 = new EscrowModuleConfig(
                 componentOwner: "user1",
                 vcsSettings: VCSSettings.create([VersionControlSystemRoot.create("main", CVS, FAKE_VCS_URL_FOR_BS20, '$module-$version', 'default')]),
-                buildSystem: BS2_0,
+                buildSystem: BuildSystem.BS2_0,
                 groupIdPattern: "org.octopusden.octopus.bcomponent",
                 artifactIdPattern: /[\w-]+/,
                 versionRange: "(,1.12.1-150)",
@@ -187,7 +193,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
         def configurations = configuration.escrowModules.get(TEST_MODULE).moduleConfigurations
         def expectedConfig = new EscrowModuleConfig(
                 componentOwner: "user1",
-                vcsSettings: createForSingleRoot(VersionControlSystemRoot.create("main", MERCURIAL, "ssh://hg@mercurial/bcomponent", '$module-$version', null)),
+                vcsSettings: VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", MERCURIAL, "ssh://hg@mercurial/bcomponent", '$module-$version', null)),
                 buildSystem: MAVEN,
                 artifactIdPattern: /[\w-]+/,
                 groupIdPattern: "org.octopusden.octopus.bcomponent",
@@ -210,7 +216,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
         assert 1 == configurations.size()
         def expectedModuleConfig = new EscrowModuleConfig(
                 componentOwner: "user1",
-                vcsSettings: createForSingleRoot(VersionControlSystemRoot.create("main", CVS, "back/build/test/sources/test-maven", '$module-$cvsCompatibleVersion', "bcomponent-branch")),
+                vcsSettings: VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", CVS, "back/build/test/sources/test-maven", '$module-$cvsCompatibleVersion', "bcomponent-branch")),
                 buildSystem: MAVEN,
                 artifactIdPattern: "test-cvs-maven-parent,test-cvs-maven-module1",
                 groupIdPattern: "org.octopusden.octopus.bcomponent",
@@ -235,8 +241,8 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
         assert 1 == configurations.size()
         def expectedModuleConfig = new EscrowModuleConfig(
                 componentOwner: "user1",
-                vcsSettings: createForSingleRoot(VersionControlSystemRoot.create("main", CVS, "back/build/test/sources/test-maven", '$module-$cvsCompatibleVersion', "bcomponent-branch")),
-                buildSystem: MAVEN,
+                vcsSettings: VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", CVS, "back/build/test/sources/test-maven", '$module-$cvsCompatibleVersion', "bcomponent-branch")),
+                buildSystem: BuildSystem.MAVEN,
                 artifactIdPattern: "test-cvs-maven-parent,test-cvs-maven-module1",
                 groupIdPattern: "org.octopusden.octopus.bcomponent",
                 versionRange: "(,0),[0,)",
@@ -280,10 +286,10 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
 
 
         def expectedModuleConfig = new EscrowModuleConfig(
-                vcsSettings: createForSingleRoot(
+                vcsSettings: VCSSettings.createForSingleRoot(
                         VersionControlSystemRoot.create("main", MERCURIAL, "ssh://hg@mercurial//buildsystem-model",
                                 '$module-$version', "1.6-branch")),
-                buildSystem: MAVEN,
+                buildSystem: BuildSystem.MAVEN,
                 artifactIdPattern: /[\w-\.]+/,
                 groupIdPattern: "org.octopusden.octopus.buildsystem.model",
                 versionRange: "[1.2,)",
@@ -304,11 +310,11 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
         modelConfiguration = getAndAssertConfiguration(configuration, "notJiraComponent")
 
         expectedModuleConfig = new EscrowModuleConfig(
-                vcsSettings: createForSingleRoot(VersionControlSystemRoot.create("main", MERCURIAL,
+                vcsSettings: VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", MERCURIAL,
                         "ssh://hg@mercurial//not-jira-component",
                         '$module-$version',
                         MERCURIAL.getDefaultBranch())),
-                buildSystem: GRADLE,
+                buildSystem: BuildSystem.GRADLE,
                 artifactIdPattern: "notJiraComponent",
                 groupIdPattern: "org.octopusden.octopus.bcomponent",
                 versionRange: "(,0),[0,)",
@@ -327,7 +333,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
 
         modelConfiguration = getAndAssertConfiguration(configuration, "sub-component-with-defaults")
         expectedModuleConfig = new EscrowModuleConfig(
-                vcsSettings: createForSingleRoot(VersionControlSystemRoot.create("main", CVS, "OctopusSource/zenit", '$module-$version', CVS.getDefaultBranch())),
+                vcsSettings: VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", CVS, "OctopusSource/zenit", '$module-$version', CVS.getDefaultBranch())),
                 buildSystem: BuildSystem.GRADLE,
                 artifactIdPattern: /[\w-\.]+/,
                 groupIdPattern: "org.octopusden.octopus.buildsystem.sub5",

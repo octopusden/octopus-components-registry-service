@@ -20,8 +20,6 @@ import org.octopusden.octopus.escrow.resolvers.ModuleByArtifactResolver
 import org.octopusden.octopus.releng.JiraComponentVersionFormatter
 import org.octopusden.octopus.releng.dto.ComponentVersion
 import org.octopusden.octopus.releng.dto.JiraComponentVersion
-import org.octopusden.releng.versions.NumericVersion
-import org.octopusden.releng.versions.VersionRange
 import org.apache.maven.artifact.DefaultArtifact
 import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionNames
@@ -73,7 +71,7 @@ class ComponentRegistryResolverImpl(
         val keyToVersionRanges = jiraParametersResolver.componentConfig.componentNameToJiraComponentVersionRangeMap
         val range = getJiraComponentVersionRange(component, version, keyToVersionRanges, false)
         val  builder = JiraComponentVersion.builder(jiraComponentVersionFormatter)
-            .component(range.jiraComponent)
+            .component(range.component)
             .componentVersionByNameAndVersion(range.componentName, version)
         return builder.build()!!
     }
@@ -102,7 +100,7 @@ class ComponentRegistryResolverImpl(
 
                 val numericArtifactVersion = numericVersionFactory.create(version)
                 if (versionRange.containsVersion(numericArtifactVersion)) {
-                    builder.component(jiraComponentVersionRange.jiraComponent)
+                    builder.component(jiraComponentVersionRange.component)
                         .componentVersionByNameAndVersion(jiraComponentVersionRange.componentName, version)
                     val jiraComponentVersion = builder.build()
                     if (jiraComponentVersionFormatter.matchesAny(jiraComponentVersion, version, false)) {
@@ -244,7 +242,7 @@ class ComponentRegistryResolverImpl(
             val versionRange = versionRangeFactory.create(item.versionRange)
             val numericArtifactVersion = numericVersionFactory.create(version)
             if (versionRange.containsVersion(numericArtifactVersion)) {
-                builder.component(item.jiraComponent)
+                builder.component(item.component)
                     .componentVersion(ComponentVersion.create(item.componentName, version))
                 val jiraComponentVersion = builder.build()
                 if (jiraComponentVersionFormatter.matchesAny(jiraComponentVersion, version, strict)) {
@@ -273,7 +271,7 @@ class ComponentRegistryResolverImpl(
     ): JiraComponentVersion? {
         val range = getJiraComponentVersionRange(key, version, keyToVersionRangeMap, strict)
         return JiraComponentVersion.builder(jiraComponentVersionFormatter)
-            .component(range.jiraComponent)
+            .component(range.component)
             .componentVersion(ComponentVersion.create(range.componentName, version))
             .build()
     }

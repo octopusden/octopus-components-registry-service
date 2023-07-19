@@ -15,6 +15,7 @@ import org.junit.Test
 
 import java.util.regex.Pattern
 
+import static org.octopusden.octopus.escrow.TestConfigUtils.PRODUCT_TYPES
 import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_GROUP_IDS
 import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_SYSTEMS
 import static org.octopusden.octopus.escrow.TestConfigUtils.VERSION_NAMES
@@ -41,7 +42,7 @@ class MavenArtifactResolverTest {
         URL url = new File("C:\\projects\\escrow\\components-registry\\src\\main\\resources\\Aggregator.groovy").toURI().toURL()
 
         def loader = new EscrowConfigurationLoader(
-                new ConfigLoader(ComponentRegistryInfo.createFromURL(url), VERSION_NAMES),
+                new ConfigLoader(ComponentRegistryInfo.createFromURL(url), VERSION_NAMES, PRODUCT_TYPES),
                 SUPPORTED_GROUP_IDS,
                 SUPPORTED_SYSTEMS,
                 VERSION_NAMES

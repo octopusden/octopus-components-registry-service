@@ -3,26 +3,27 @@ package org.octopusden.octopus.escrow;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import org.apache.maven.artifact.versioning.InvalidVersionSpecificationException;
+import org.jetbrains.annotations.NotNull;
+import org.junit.Test;
 import org.octopusden.octopus.escrow.config.ComponentConfig;
 import org.octopusden.octopus.escrow.config.ComponentConfigParser;
 import org.octopusden.octopus.escrow.config.JiraComponentVersionRange;
+import org.octopusden.octopus.escrow.config.JiraComponentVersionRangeFactory;
 import org.octopusden.octopus.escrow.model.Distribution;
 import org.octopusden.octopus.escrow.model.SecurityGroups;
 import org.octopusden.octopus.escrow.model.VCSSettings;
 import org.octopusden.octopus.releng.dto.ComponentInfo;
 import org.octopusden.octopus.releng.dto.JiraComponent;
 import org.octopusden.releng.versions.ComponentVersionFormat;
-import org.apache.maven.artifact.versioning.InvalidVersionSpecificationException;
-import org.jetbrains.annotations.NotNull;
-import org.junit.Test;
 import org.octopusden.releng.versions.VersionNames;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 
@@ -31,8 +32,10 @@ public class ComponentConfigParserTest {
     public static final ComponentVersionFormat COMPONENT_VERSION_FORMAT_1 = ComponentVersionFormat.create("$major.$minor.$service", "$major.$minor.$service-$fix");
     private static final String COMPONENT = "WCOMPONENT";
     private static final String CLIENT = "client";
-private static final VersionNames VERSION_NAMES = new VersionNames("serviceCBranch", "serviceC", "minorC");
+    private static final VersionNames VERSION_NAMES = new VersionNames("serviceCBranch", "serviceC", "minorC");
     private static final ComponentVersionFormat COMPONENT_VERSION_FORMAT_2 = ComponentVersionFormat.create("$major.$minor", "$major.$minor.$service");
+
+    private static final JiraComponentVersionRangeFactory JIRA_COMPONENT_VERSION_RANGE_FACTORY = new JiraComponentVersionRangeFactory(VERSION_NAMES);
 
     @Test
     public void testParseFromSerializedObject() throws InvalidVersionSpecificationException, IOException {
@@ -68,7 +71,7 @@ private static final VersionNames VERSION_NAMES = new VersionNames("serviceCBran
 
     private List<JiraComponentVersionRange> getJiraComponentVersionRangeList() throws InvalidVersionSpecificationException {
         return Arrays.asList(getJiraComponentVersionRange("octopusweb", "[2.1,)", COMPONENT, COMPONENT_VERSION_FORMAT_1, null, null,
-                VCSSettings.createEmpty(), false),
+                        VCSSettings.createEmpty(), false),
                 getJiraComponentVersionRange("octopusweb", "[,2.1)", COMPONENT, COMPONENT_VERSION_FORMAT_2, null, null,
                         TestHelper.createTestVCSSettings(), false));
     }
@@ -85,13 +88,13 @@ private static final VersionNames VERSION_NAMES = new VersionNames("serviceCBran
                                                                    ComponentInfo componentInfo, Distribution distribution,
                                                                    VCSSettings vcsSettings, boolean technical) {
         JiraComponent jiraComponent = getJiraComponent(projectKey, componentVersionFormat, componentInfo, technical);
-        JiraComponentVersionRange.Builder builder = JiraComponentVersionRange.builder(VERSION_NAMES)
-                .componentName(componentName)
-                .versionRange(versionRange)
-                .jiraComponent(jiraComponent)
-                .distribution(distribution)
-                .vcsSettings(vcsSettings);
-        return builder.build();
+        return JIRA_COMPONENT_VERSION_RANGE_FACTORY.create(
+                componentName,
+                versionRange,
+                jiraComponent,
+                distribution,
+                vcsSettings
+        );
     }
 
     private JiraComponent getJiraComponent(String projectKey, ComponentVersionFormat componentVersionFormat, ComponentInfo componentInfo, boolean technical) {

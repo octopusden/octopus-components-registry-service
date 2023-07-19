@@ -6,12 +6,15 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.util.logging.Logger
 import org.jetbrains.kotlin.script.jsr223.KotlinJsr223JvmLocalScriptEngineFactory
+import org.octopusden.octopus.components.registry.api.enums.ProductTypes
+import java.util.EnumMap
 import kotlin.script.experimental.jsr223.KotlinJsr223DefaultScriptEngineFactory
 import kotlin.collections.ArrayList
 
 object ComponentsRegistryScriptRunner {
     private val logger = Logger.getLogger(ComponentsRegistryScriptRunner::class.java.canonicalName)
     private val currentRegistry = ArrayList<Component>()
+    private val productTypeMap = HashMap<String, ProductTypes>()
 
     init {
         setIdeaIoUseFallback()
@@ -26,16 +29,19 @@ object ComponentsRegistryScriptRunner {
      * Load  kotlin DSL Components Registry.
      * For boot jar based application System property 'kotlin.script.classpath' has to be set to DSL libraries before call.
      */
-    fun loadDSL(basePath: Path): Collection<Component> {
+    fun loadDSL(basePath: Path, products: Map<ProductTypes, String>): Collection<Component> {
         val registry = ArrayList<Component>()
         Files.list(basePath).filter { path -> path.fileName.toString().endsWith(".kts") }.forEach { path ->
-            val loadedComponents = loadDSLFile(path)
+            val loadedComponents = loadDSLFile(path, products)
             registry.addAll(loadedComponents)
         }
         return registry
     }
 
-    fun loadDSLFile(dslFilePath: Path): Collection<Component> {
+    fun loadDSLFile(dslFilePath: Path, products: Map<ProductTypes, String>): Collection<Component> {
+        if (productTypeMap.isEmpty()) {
+            products.forEach { k, v -> productTypeMap[v] = k }
+        }
         val engine = try {
             KotlinJsr223DefaultScriptEngineFactory().scriptEngine
         } catch (e: Exception) {
@@ -53,6 +59,14 @@ object ComponentsRegistryScriptRunner {
     fun addRootComponent(component: Component) {
         currentRegistry.add(component)
     }
+
+    fun decodeParameters(name: String): ProductTypes =
+        productTypeMap[name] ?: throw IllegalArgumentException("Unknown product type $name")
+
+    fun encodeParameters(type: ProductTypes): String =
+        productTypeMap.filter { it.value == type }.keys.firstOrNull {
+            it == null
+        } ?: throw IllegalArgumentException("Unknown product type $type")
 
     fun getCurrentRegistry() = currentRegistry
 }

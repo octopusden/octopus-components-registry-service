@@ -20,14 +20,17 @@ class ModuleByArtifactResolver implements IModuleByArtifactResolver {
 
     private final VersionNames versionNames
     private EscrowConfiguration escrowConfiguration
-    private final EscrowModuleConfigMatcher escrowModuleConfigMatcher =  new EscrowModuleConfigMatcher()
+    private final EscrowModuleConfigMatcher escrowModuleConfigMatcher
     private EscrowConfigurationLoader configLoader
     private Map<String, String> params
     private VersionRangeFactory versionRangeFactory
+    private NumericVersionFactory numericVersionFactory
 
     ModuleByArtifactResolver(VersionNames versionNames) {
         this.versionNames = versionNames
         versionRangeFactory = new VersionRangeFactory(versionNames)
+        numericVersionFactory = new NumericVersionFactory(versionNames)
+        escrowModuleConfigMatcher = new EscrowModuleConfigMatcher(versionRangeFactory, numericVersionFactory)
     }
 
     ModuleByArtifactResolver(EscrowConfiguration escrowConfiguration) {
@@ -61,7 +64,7 @@ class ModuleByArtifactResolver implements IModuleByArtifactResolver {
         for (String module: escrowConfiguration.escrowModules.keySet()) {
             def escrowModule = escrowConfiguration.escrowModules.get(module)
             for (EscrowModuleConfig moduleConfig : escrowModule.moduleConfigurations) {
-                if (escrowModuleConfigMatcher.match(mavenArtifact, moduleConfig, new NumericVersionFactory(versionNames), versionRangeFactory)) {
+                if (escrowModuleConfigMatcher.match(mavenArtifact, moduleConfig)) {
                     LOG.debug("$mavenArtifact matches versionRange ${moduleConfig.getVersionRangeString()}")
                     matchedModuleName = module
                     matchedComponentConfigurations["$module:${moduleConfig.getVersionRangeString()}"] = moduleConfig

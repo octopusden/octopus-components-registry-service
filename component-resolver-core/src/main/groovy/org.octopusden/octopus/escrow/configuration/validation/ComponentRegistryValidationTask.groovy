@@ -4,6 +4,7 @@ import org.octopusden.employee.client.EmployeeServiceClient
 import org.octopusden.employee.client.common.exception.NotFoundException
 import org.octopusden.employee.client.impl.ClassicEmployeeServiceClient
 import org.octopusden.employee.client.impl.EmployeeServiceClientParametersProvider
+import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.escrow.configuration.loader.ComponentRegistryInfo
 import org.octopusden.octopus.escrow.configuration.loader.ConfigLoader
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
@@ -49,6 +50,15 @@ class ComponentRegistryValidationTask extends DefaultTask {
     String service
     @Input
     String minor
+    @Input
+    String productTypeC
+    @Input
+    String productTypeK
+    @Input
+    String productTypeD
+    @Input
+    String productTypeDDB
+
 
     @Input
     boolean isEmployeeServiceEnabled() {
@@ -70,8 +80,14 @@ class ComponentRegistryValidationTask extends DefaultTask {
                 "prodConfigPath=$productionConfigPath \n" +
                 "supportedGroupIds=$supportedGroupIds"
 
-        def oldComponents = getComponentsFromConfig(productionConfigPath)
-        def newComponents = getComponentsFromConfig(basePath)
+        def productTypeMap = new EnumMap(ProductTypes.class)
+        productTypeMap.put(ProductTypes.PT_C, productTypeC)
+        productTypeMap.put(ProductTypes.PT_K, productTypeK)
+        productTypeMap.put(ProductTypes.PT_D, productTypeD)
+        productTypeMap.put(ProductTypes.PT_D_DB, productTypeDDB)
+
+        def oldComponents = getComponentsFromConfig(productionConfigPath, productTypeMap)
+        def newComponents = getComponentsFromConfig(basePath, productTypeMap)
 
         def oldComponentNames = oldComponents.keySet()
         def newComponentNames = newComponents.keySet()
@@ -194,9 +210,14 @@ class ComponentRegistryValidationTask extends DefaultTask {
         components
     }
 
-    private Map<String, EscrowModule> getComponentsFromConfig(String configPath) {
+    private Map<String, EscrowModule> getComponentsFromConfig(String configPath, Map<ProductTypes, String> productTypeMap) {
         getLogger().info("Loading: {}", configPath)
-        def loader = new ConfigLoader(ComponentRegistryInfo.createFromFileSystem(configPath, mainConfigFileName), new VersionNames(serviceBranch, service, minor))
+        getLogger().info("Product types: {}", productTypeMap.toMapString())
+        def loader = new ConfigLoader(
+                ComponentRegistryInfo.createFromFileSystem(configPath, mainConfigFileName),
+                new VersionNames(serviceBranch, service, minor),
+                productTypeMap
+        )
         def config = getConfig(loader,
                 supportedGroupIds.split(",").collect {it -> it.trim()},
                 supportedSystems.split(",").collect {it -> it.trim()},

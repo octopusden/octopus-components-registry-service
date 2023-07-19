@@ -1,5 +1,6 @@
 package org.octopusden.octopus.escrow
 
+import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.escrow.configuration.loader.ComponentRegistryInfo
 import org.octopusden.octopus.escrow.configuration.loader.ConfigLoader
 import org.octopusden.octopus.escrow.exceptions.ComponentResolverException
@@ -19,6 +20,13 @@ class ConfigLoaderTest {
     public static final String TEST_VALUE = "1234"
     public static final String TEST_PARAMETER = "pkgj_version"
     public static final VersionNames VERSION_NAMES = new VersionNames("serviceCBranch", "serviceC", "minorC")
+    public static final Map<ProductTypes, String> PRODUCT_TYPES = new EnumMap(ProductTypes.class) {
+        {
+            put(ProductTypes.PT_C, "PT_C");
+            put(ProductTypes.PT_K, "PT_K");
+            put(ProductTypes.PT_D, "PT_D");
+            put(ProductTypes.PT_D_DB, "PT_D_DB");
+        }};
 
     @Test
     void testLoad() {
@@ -27,7 +35,7 @@ class ConfigLoaderTest {
     }
 
     private static ConfigLoader fromClassPath(String config) {
-        return new ConfigLoader(ComponentRegistryInfo.fromClassPath((config)), VERSION_NAMES)
+        return new ConfigLoader(ComponentRegistryInfo.fromClassPath((config)), VERSION_NAMES, PRODUCT_TYPES)
     }
 
     @Test
@@ -38,7 +46,8 @@ class ConfigLoaderTest {
 
     @Test
     void testModularConfig() {
-        def loader = new ConfigLoader(createFromFileSystem("src/test/resources", "experimental/Aggregator.groovy"), VERSION_NAMES)
+        def loader = new ConfigLoader(createFromFileSystem("src/test/resources", "experimental/Aggregator.groovy"),
+                VERSION_NAMES, PRODUCT_TYPES)
         checkAggregatorConfig(loader)
     }
 
@@ -66,7 +75,8 @@ class ConfigLoaderTest {
     @Test
     @Ignore
     void stressTest() {
-        def loader = new ConfigLoader(createFromFileSystem("vcs-resolver/src/test/resources", "testModuleConfig.groovy"), VERSION_NAMES)
+        def loader = new ConfigLoader(createFromFileSystem("vcs-resolver/src/test/resources", "testModuleConfig.groovy"),
+                VERSION_NAMES, PRODUCT_TYPES)
         for (int i = 0; i < 10000; i++) {
             println i;
             loader.loadModuleConfig()

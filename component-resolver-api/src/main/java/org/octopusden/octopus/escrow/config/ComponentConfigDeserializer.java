@@ -16,15 +16,22 @@ import org.octopusden.octopus.releng.dto.JiraComponent;
 import org.octopusden.releng.versions.VersionNames;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 
 public class ComponentConfigDeserializer extends JsonDeserializer<ComponentConfig> {
 
     private static final VCSSettingsDeserializer VCS_SETTINGS_DESERIALIZER = new VCSSettingsDeserializer();
     private final VersionNames versionNames;
+    private final JiraComponentVersionRangeFactory jiraComponentVersionRangeFactory;
 
     public ComponentConfigDeserializer(VersionNames versionNames) {
         this.versionNames = versionNames;
+        this.jiraComponentVersionRangeFactory = new JiraComponentVersionRangeFactory(versionNames);
     }
 
     @Override
@@ -73,13 +80,13 @@ public class ComponentConfigDeserializer extends JsonDeserializer<ComponentConfi
         Distribution distribution = getDistribution(node);
         VCSSettings vcsSettings = VCS_SETTINGS_DESERIALIZER.deserialize(node.get("vcsSettings"));
 
-        JiraComponentVersionRange.Builder builder = new JiraComponentVersionRange.Builder(versionNames)
-                .componentName(componentName.textValue())
-                .versionRange(versionRange.textValue())
-                .jiraComponent(jiraComponent)
-                .distribution(distribution)
-                .vcsSettings(vcsSettings);
-        return builder.build();
+        return jiraComponentVersionRangeFactory.create(
+                componentName.textValue(),
+                versionRange.textValue(),
+                jiraComponent,
+                distribution,
+                vcsSettings
+        );
     }
 
 

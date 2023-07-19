@@ -9,6 +9,7 @@ import org.junit.Test
 
 import java.nio.file.Paths
 
+import static org.octopusden.octopus.escrow.TestConfigUtils.PRODUCT_TYPES
 import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_GROUP_IDS
 import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_SYSTEMS
 import static org.junit.Assert.assertEquals
@@ -45,7 +46,12 @@ class ReleaseInfoResolverTest {
     private static ReleaseInfoResolver getResolver() {
         def aggregatorPath = Paths.get(ReleaseInfoResolverTest.class.getResource("/production/Aggregator.groovy").toURI())
         def escrowConfigurationLoader = new EscrowConfigurationLoader(
-                new ConfigLoader(ComponentRegistryInfo.createFromFileSystem(aggregatorPath.getParent().toString(), aggregatorPath.getFileName().toString()), VERSION_NAMES),
+                new ConfigLoader(
+                        ComponentRegistryInfo.createFromFileSystem(aggregatorPath.getParent().toString(),
+                                aggregatorPath.getFileName().toString()),
+                        VERSION_NAMES,
+                        PRODUCT_TYPES
+                ),
                 SUPPORTED_GROUP_IDS,
                 SUPPORTED_SYSTEMS,
                 VERSION_NAMES

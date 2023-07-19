@@ -1,101 +1,74 @@
 package org.octopusden.octopus.escrow.config;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
 import org.octopusden.octopus.escrow.model.Distribution;
 import org.octopusden.octopus.escrow.model.VCSSettings;
-import org.octopusden.octopus.releng.JiraComponentVersionFormatter;
-import org.octopusden.octopus.releng.dto.ComponentVersion;
 import org.octopusden.octopus.releng.dto.JiraComponent;
 import org.octopusden.octopus.releng.dto.JiraComponentVersion;
-import org.octopusden.releng.versions.VersionNames;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class JiraComponentVersionRange {
 
     @JsonProperty
-    public final String componentName;
+    private final String componentName;
 
     @JsonProperty
-    public final String versionRange;
-
-    @JsonProperty("component")
-    public final JiraComponent jiraComponent;
+    private final String versionRange;
 
     @JsonProperty
-    public final Distribution distribution;
+    private final JiraComponent jiraComponent;
 
     @JsonProperty
-    public final VCSSettings vcsSettings;
+    private final Distribution distribution;
 
-    public final JiraComponentVersion jiraComponentVersion;
+    @JsonProperty
+    private final VCSSettings vcsSettings;
 
-    public static Builder builder(VersionNames versionNames) {
-        return new Builder(versionNames);
-    }
-    @JsonPOJOBuilder(withPrefix = "")
-    public static class Builder {
+    private final JiraComponentVersion jiraComponentVersion;
 
-        private String componentName;
-        private String versionRange;
-        private Distribution distribution;
-        private VCSSettings vcsSettings;
-        public JiraComponent jiraComponent;
-        private JiraComponentVersion jiraComponentVersion;
-
-        private final VersionNames versionNames;
-
-        public Builder(VersionNames versionNames) {
-            this.versionNames = versionNames;
-        }
-
-        public JiraComponentVersionRange build() {
-            JiraComponentVersionFormatter jiraComponentVersionFormatter = new JiraComponentVersionFormatter(versionNames);
-            jiraComponentVersion = JiraComponentVersion.builder(jiraComponentVersionFormatter)
-                    .componentVersion(ComponentVersion.create(componentName, versionRange))
-                    .component(jiraComponent)
-                    .build();
-            return new JiraComponentVersionRange(this);
-        }
-
-        public Builder componentName(String componentName) {
-            this.componentName = componentName;
-            return this;
-        }
-
-        public Builder versionRange(String versionRange) {
-            this.versionRange = versionRange;
-            return this;
-        }
-
-        public Builder distribution(Distribution distribution) {
-            this.distribution = distribution;
-            return this;
-        }
-
-        public Builder vcsSettings(VCSSettings vcsSettings) {
-            this.vcsSettings = vcsSettings;
-            return this;
-        }
-
-        public Builder jiraComponent(JiraComponent jiraComponent) {
-            this.jiraComponent = jiraComponent;
-            return this;
-        }
+    @JsonCreator
+    JiraComponentVersionRange(@JsonProperty("componentName") String componentName,
+                              @JsonProperty("versionRange") String versionRange,
+                              @JsonProperty("component")JiraComponent component,
+                              @JsonProperty("distribution") Distribution distribution,
+                              @JsonProperty("vcsSettings") VCSSettings vcsSettings,
+                              JiraComponentVersion jiraComponentVersion) {
+        this.componentName = componentName;
+        this.versionRange = versionRange;
+        this.jiraComponent = component;
+        this.distribution = distribution;
+        this.vcsSettings = vcsSettings;
+        this.jiraComponentVersion = jiraComponentVersion;
     }
 
-    private JiraComponentVersionRange(Builder builder) {
-        this.componentName = builder.componentName;
-        this.versionRange = builder.versionRange;
-        this.jiraComponent = builder.jiraComponent;
-        this.distribution = builder.distribution;
-        this.vcsSettings = builder.vcsSettings;
-        this.jiraComponentVersion = builder.jiraComponentVersion;
+    public JiraComponent getComponent() {
+        return jiraComponent;
+    }
+
+    public String getVersionRange() {
+        return versionRange;
+    }
+
+    public JiraComponentVersion getJiraComponentVersion() {
+        return jiraComponentVersion;
+    }
+
+    public String getComponentName() {
+        return componentName;
+    }
+
+    public Distribution getDistribution() {
+        return distribution;
+    }
+
+    public VCSSettings getVcsSettings() {
+        return vcsSettings;
     }
 
     @Override

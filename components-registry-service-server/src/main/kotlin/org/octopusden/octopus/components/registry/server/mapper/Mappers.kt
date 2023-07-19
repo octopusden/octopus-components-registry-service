@@ -32,7 +32,7 @@ fun JiraComponent.toDTO(): JiraComponentDTO {
 
 fun JiraComponentVersionRange.toDTO(): JiraComponentVersionRangeDTO {
     val distribution = distribution?.toDTO() ?: DistributionDTO(false, false, "", SecurityGroupsDTO())
-    return JiraComponentVersionRangeDTO(componentName, versionRange, this.jiraComponent.toDTO(), distribution, vcsSettings.toDTO())
+    return JiraComponentVersionRangeDTO(componentName, versionRange, component.toDTO(), distribution, vcsSettings.toDTO())
 }
 
 fun Distribution.toDTO(): DistributionDTO {

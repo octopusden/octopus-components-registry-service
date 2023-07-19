@@ -51,7 +51,9 @@ class ComponentRegistryServiceApplication {
         return ConfigLoader(
             ComponentRegistryInfo.createFromURL(
                 url
-            ), versionNames
+            ),
+            versionNames,
+            configHelper.productTypes()
         )
     }
 

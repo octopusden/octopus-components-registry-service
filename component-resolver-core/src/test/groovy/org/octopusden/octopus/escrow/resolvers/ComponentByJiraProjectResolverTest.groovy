@@ -1,8 +1,13 @@
 package org.octopusden.octopus.escrow.resolvers
 
+import groovy.transform.TypeChecked
+import groovy.transform.TypeCheckingMode
+import org.apache.maven.artifact.versioning.InvalidVersionSpecificationException
+import org.junit.Test
 import org.octopusden.octopus.escrow.RepositoryType
 import org.octopusden.octopus.escrow.config.ComponentConfig
 import org.octopusden.octopus.escrow.config.JiraComponentVersionRange
+import org.octopusden.octopus.escrow.config.JiraComponentVersionRangeFactory
 import org.octopusden.octopus.escrow.model.Distribution
 import org.octopusden.octopus.escrow.model.SecurityGroups
 import org.octopusden.octopus.escrow.model.VCSSettings
@@ -11,14 +16,10 @@ import org.octopusden.octopus.releng.dto.ComponentInfo
 import org.octopusden.octopus.releng.dto.ComponentVersion
 import org.octopusden.octopus.releng.dto.JiraComponent
 import org.octopusden.releng.versions.ComponentVersionFormat
-import groovy.transform.TypeChecked
-import groovy.transform.TypeCheckingMode
-import org.apache.maven.artifact.versioning.InvalidVersionSpecificationException
-import org.junit.Test
 import org.octopusden.releng.versions.VersionNames
 
-import static org.octopusden.octopus.escrow.JiraProjectVersion.create
 import static JiraParametersResolverTest.createJiraParametersResolverFromConfig
+import static org.octopusden.octopus.escrow.JiraProjectVersion.create
 
 @TypeChecked
 class ComponentByJiraProjectResolverTest extends GroovyTestCase {
@@ -28,6 +29,7 @@ class ComponentByJiraProjectResolverTest extends GroovyTestCase {
     public static final String SYSTEM_VERSIONS = "system.10.2.3"
     public static final String COMPONENT = "WCOMPONENT"
     public static final VersionNames VERSION_NAMES = new VersionNames("serviceCBranch", "serviceC", "minorC")
+    public static final JiraComponentVersionRangeFactory JIRA_COMPONENT_VERSION_RANGE_FACTORY = new JiraComponentVersionRangeFactory(VERSION_NAMES)
 
     private static
     final ComponentVersionFormat COMPONENT_VERSION_FORMAT_1 = ComponentVersionFormat.create('$major.$minor.$service', '$major.$minor.$service-$fix', '$major.$minor.$service-$fix', '$major.$minor.$service');
@@ -133,22 +135,22 @@ class ComponentByJiraProjectResolverTest extends GroovyTestCase {
     }
 
 
-    private
-    static JiraComponentVersionRange getJiraComponentVersionRange(String componentName, String versionRange, String projectKey,
-                                                                  ComponentVersionFormat componentVersionFormat,
-                                                                  ComponentInfo componentInfo = null,
-                                                                  Distribution distribution = null,
-                                                                  VCSSettings vcsSettings = VCSSettings.createEmpty(),
-                                                                  boolean technical = false) {
+    private static JiraComponentVersionRange getJiraComponentVersionRange(String componentName,
+                                                                          String versionRange,
+                                                                          String projectKey,
+                                                                          ComponentVersionFormat componentVersionFormat,
+                                                                          ComponentInfo componentInfo = null,
+                                                                          Distribution distribution = null,
+                                                                          VCSSettings vcsSettings = VCSSettings.createEmpty(),
+                                                                          boolean technical = false) {
         JiraComponent jiraComponent = getJiraComponent(projectKey, componentVersionFormat, componentInfo, technical)
-        def jiraComponentVersionRange = JiraComponentVersionRange.builder(VERSION_NAMES)
-                .componentName(componentName)
-                .versionRange(versionRange)
-                .jiraComponent(jiraComponent)
-                .distribution(distribution)
-                .vcsSettings(vcsSettings)
-                .build()
-        return jiraComponentVersionRange
+        return JIRA_COMPONENT_VERSION_RANGE_FACTORY.create(
+                componentName,
+                versionRange,
+                jiraComponent,
+                distribution,
+                vcsSettings
+        )
     }
 
     private

@@ -57,7 +57,7 @@ public class ConfigResolverConfig {
         try {
             String moduleConfigUrl = Objects.requireNonNull(moduleConfigUrl(configHelper));
             URL configFileResource = new File(moduleConfigUrl).toURI().toURL();
-            return new ConfigLoader(ComponentRegistryInfo.createFromURL(configFileResource), versionNames );
+            return new ConfigLoader(ComponentRegistryInfo.createFromURL(configFileResource), versionNames, configHelper.productTypes());
         } catch (MalformedURLException e) {
             throw new EscrowConfigurationException("Malformed url: " + moduleConfigUrl(configHelper), e);
         }

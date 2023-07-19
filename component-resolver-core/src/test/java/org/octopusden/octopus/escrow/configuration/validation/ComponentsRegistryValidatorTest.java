@@ -1,13 +1,13 @@
 package org.octopusden.octopus.escrow.configuration.validation;
 
-import org.octopusden.octopus.escrow.configuration.loader.ComponentRegistryInfo;
-import org.octopusden.octopus.escrow.configuration.loader.ConfigLoader;
-import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader;
-import org.octopusden.octopus.escrow.exceptions.EscrowConfigurationException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.octopusden.octopus.escrow.configuration.loader.ComponentRegistryInfo;
+import org.octopusden.octopus.escrow.configuration.loader.ConfigLoader;
+import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader;
+import org.octopusden.octopus.escrow.exceptions.EscrowConfigurationException;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -41,12 +41,16 @@ class ComponentsRegistryValidatorTest {
     void testCrsValidation(
             final String sourceComponentRegistry,
             final Collection<String> expectedValidationErrors
-            ) throws Exception {
+    ) throws Exception {
         final Path aggregatorPath = Paths.get(Objects.requireNonNull(ComponentsRegistryValidatorTest.class.getResource("/" + sourceComponentRegistry + "/Aggregator.groovy")).toURI());
-        final EscrowConfigurationLoader escrowConfigurationLoader = new EscrowConfigurationLoader(new ConfigLoader(
-                ComponentRegistryInfo.createFromFileSystem(aggregatorPath.getParent().toString(), aggregatorPath.getFileName().toString()),
-                VERSION_NAMES
-        ), SUPPORTED_GROUP_IDS, SUPPORTED_SYSTEMS, VERSION_NAMES);
+        final EscrowConfigurationLoader escrowConfigurationLoader = new EscrowConfigurationLoader(
+                new ConfigLoader(
+                        ComponentRegistryInfo.createFromFileSystem(aggregatorPath.getParent().toString(),
+                                aggregatorPath.getFileName().toString()
+                        ),
+                        VERSION_NAMES,
+                        PRODUCT_TYPES
+                ), SUPPORTED_GROUP_IDS, SUPPORTED_SYSTEMS, VERSION_NAMES);
         assertThatThrownBy(() -> escrowConfigurationLoader.loadFullConfiguration(Collections.emptyMap()))
                 .isInstanceOf(EscrowConfigurationException.class).hasMessageContainingAll(expectedValidationErrors.toArray(new String[0]));
     }

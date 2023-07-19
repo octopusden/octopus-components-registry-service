@@ -16,7 +16,15 @@ class EscrowModuleConfigMatcher {
 
     MavenArtifactMatcher mavenArtifactMatcher = new MavenArtifactMatcher()
 
-    boolean match(Artifact mavenArtifact, EscrowModuleConfig moduleConfig, NumericVersionFactory numericVersionFactory, VersionRangeFactory versionRangeFactory) {
+    VersionRangeFactory versionRangeFactory
+    NumericVersionFactory numericVersionFactory
+
+    EscrowModuleConfigMatcher(VersionRangeFactory versionRangeFactory, NumericVersionFactory numericVersionFactory) {
+        this.versionRangeFactory = versionRangeFactory
+        this.numericVersionFactory = numericVersionFactory
+    }
+
+    boolean match(Artifact mavenArtifact, EscrowModuleConfig moduleConfig) {
         Objects.requireNonNull(mavenArtifact.version)
         if (mavenArtifactMatcher.groupIdMatches(mavenArtifact.getGroupId(), moduleConfig.getGroupIdPattern()) &&
                 mavenArtifactMatcher.artifactIdMatches(mavenArtifact.getArtifactId(), moduleConfig.getArtifactIdPattern())) {

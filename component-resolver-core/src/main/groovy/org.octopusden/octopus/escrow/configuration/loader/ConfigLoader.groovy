@@ -1,6 +1,7 @@
 package org.octopusden.octopus.escrow.configuration.loader
 
 import org.octopusden.octopus.components.registry.api.Component
+import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.components.registry.dsl.script.ComponentsRegistryScriptRunner
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.RepositoryType
@@ -22,10 +23,12 @@ class ConfigLoader implements IConfigLoader {
 
     private final VersionNames versionNames
     private final ComponentRegistryInfo componentRegistryInfo
+    private final Map<ProductTypes, String> products
 
-    ConfigLoader(ComponentRegistryInfo componentRegistryInfo, VersionNames versionNames) {
+    ConfigLoader(ComponentRegistryInfo componentRegistryInfo, VersionNames versionNames, Map<ProductTypes, String> products) {
         this.componentRegistryInfo = componentRegistryInfo
         this.versionNames = versionNames
+        this.products = products
     }
 
     @Override
@@ -89,7 +92,7 @@ class ConfigLoader implements IConfigLoader {
 
     @Override
     Collection<Component> loadDslDefinedComponents() {
-        return ComponentsRegistryScriptRunner.INSTANCE.loadDSL(Paths.get(componentRegistryInfo.basePath))
+        return ComponentsRegistryScriptRunner.INSTANCE.loadDSL(Paths.get(componentRegistryInfo.basePath), products)
     }
 
     def static validateConfig(ConfigObject configObject, VersionNames versionNames) {
