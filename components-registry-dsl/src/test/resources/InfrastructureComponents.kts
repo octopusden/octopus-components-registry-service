@@ -1,10 +1,7 @@
-import org.octopusden.octopus.components.registry.dsl.GIT
-import org.octopusden.octopus.components.registry.dsl.GRADLE
-import org.octopusden.octopus.components.registry.dsl.PT_K
-import org.octopusden.octopus.components.registry.dsl.component
+import org.octopusden.octopus.components.registry.dsl.*
 
 component("DDD") {
-    productType = PT_K
+    productType = "PT_K"
     build {
        tools {
            database {
@@ -20,7 +17,7 @@ component("TEST_COMPONENT2") {
     build {
         tools {
             product {
-                 ptc {
+                type("PT_C") {
                 }
             }
         }

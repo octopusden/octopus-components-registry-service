@@ -4,7 +4,7 @@ component("Component") {
     build {
         tools {
             product {
-                ptk {
+                type("PT_K") {
                 }
             }
         }

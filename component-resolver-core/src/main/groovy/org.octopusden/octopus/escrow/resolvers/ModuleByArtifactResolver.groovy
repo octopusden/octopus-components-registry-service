@@ -10,23 +10,36 @@ import groovy.transform.TypeChecked
 import org.apache.logging.log4j.LogManager
 import org.apache.logging.log4j.Logger
 import org.apache.maven.artifact.Artifact
+import org.octopusden.releng.versions.NumericVersionFactory
+import org.octopusden.releng.versions.VersionNames
+import org.octopusden.releng.versions.VersionRangeFactory
 
 @TypeChecked
 class ModuleByArtifactResolver implements IModuleByArtifactResolver {
     private static final Logger LOG = LogManager.getLogger(ModuleByArtifactResolver.class)
 
+    private final VersionNames versionNames
     private EscrowConfiguration escrowConfiguration
-    private final EscrowModuleConfigMatcher escrowModuleConfigMatcher =  new EscrowModuleConfigMatcher()
+    private final EscrowModuleConfigMatcher escrowModuleConfigMatcher
     private EscrowConfigurationLoader configLoader
     private Map<String, String> params
+    private VersionRangeFactory versionRangeFactory
+    private NumericVersionFactory numericVersionFactory
 
-    ModuleByArtifactResolver() {}
+    ModuleByArtifactResolver(VersionNames versionNames) {
+        this.versionNames = versionNames
+        versionRangeFactory = new VersionRangeFactory(versionNames)
+        numericVersionFactory = new NumericVersionFactory(versionNames)
+        escrowModuleConfigMatcher = new EscrowModuleConfigMatcher(versionRangeFactory, numericVersionFactory)
+    }
 
     ModuleByArtifactResolver(EscrowConfiguration escrowConfiguration) {
+        this(escrowConfiguration.versionNames)
         this.escrowConfiguration = escrowConfiguration
     }
 
     ModuleByArtifactResolver(EscrowConfigurationLoader configLoader, Map<String, String> params) {
+        this(configLoader.getVersionNames())
         Objects.requireNonNull(configLoader)
         this.configLoader = configLoader
         this.params = params
@@ -52,7 +65,7 @@ class ModuleByArtifactResolver implements IModuleByArtifactResolver {
             def escrowModule = escrowConfiguration.escrowModules.get(module)
             for (EscrowModuleConfig moduleConfig : escrowModule.moduleConfigurations) {
                 if (escrowModuleConfigMatcher.match(mavenArtifact, moduleConfig)) {
-                    LOG.debug("$mavenArtifact matches versionRange ${moduleConfig.getVersionRange()}")
+                    LOG.debug("$mavenArtifact matches versionRange ${moduleConfig.getVersionRangeString()}")
                     matchedModuleName = module
                     matchedComponentConfigurations["$module:${moduleConfig.getVersionRangeString()}"] = moduleConfig
                 }

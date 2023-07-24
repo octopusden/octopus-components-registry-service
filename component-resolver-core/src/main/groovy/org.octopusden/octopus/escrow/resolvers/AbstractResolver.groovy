@@ -8,9 +8,11 @@ import org.octopusden.octopus.escrow.model.VersionControlSystemRoot
 import org.octopusden.octopus.releng.dto.ComponentVersion
 import org.octopusden.releng.versions.KotlinVersionFormatter
 import org.octopusden.releng.versions.NumericVersion
+import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionFormatter
 import org.apache.logging.log4j.LogManager
 import org.apache.logging.log4j.Logger
+import org.octopusden.releng.versions.VersionNames
 
 import java.util.concurrent.TimeUnit
 
@@ -33,16 +35,16 @@ class AbstractResolver {
         configuration
     }
 
-    static VCSSettings createVCSRootWithFormattedBranch(VCSSettings vcsSettings, String componentName, String version) {
-        VersionFormatter versionFormatter = new KotlinVersionFormatter();
-        def parsedVersion = NumericVersion.parse(version)
+    static VCSSettings createVCSRootWithFormattedBranch(VCSSettings vcsSettings, VersionNames versionNames, String componentName, String version) {
+        VersionFormatter versionFormatter = new KotlinVersionFormatter(versionNames);
+        def parsedVersion = new NumericVersionFactory(versionNames).create(version)
         Collection<VersionControlSystemRoot> vcsRootsResolved = new ArrayList<>()
         vcsSettings.getVersionControlSystemRoots().each { VersionControlSystemRoot root ->
             String formattedBranch = versionFormatter.format(root.getBranch(), parsedVersion)
             vcsRootsResolved.add(VersionControlSystemRoot.create(root.name, root.repositoryType, root.vcsPath, root.tag, formattedBranch == "null" ? null : formattedBranch))
         }
         VCSSettings vcsSettingsNew = VCSSettings.create(vcsSettings.externalRegistry, vcsRootsResolved)
-        ModelConfigPostProcessor modelConfigPostProcessor = new ModelConfigPostProcessor(ComponentVersion.create(componentName, version))
+        ModelConfigPostProcessor modelConfigPostProcessor = new ModelConfigPostProcessor(ComponentVersion.create(componentName, version), versionNames)
         return modelConfigPostProcessor.resolveVariables(vcsSettingsNew)
     }
 }

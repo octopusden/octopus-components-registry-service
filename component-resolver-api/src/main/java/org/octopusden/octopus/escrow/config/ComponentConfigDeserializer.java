@@ -13,6 +13,7 @@ import org.octopusden.octopus.escrow.model.SecurityGroups;
 import org.octopusden.octopus.escrow.model.VCSSettings;
 import org.octopusden.octopus.releng.JiraComponentVersionDeserializer;
 import org.octopusden.octopus.releng.dto.JiraComponent;
+import org.octopusden.releng.versions.VersionNames;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -24,8 +25,14 @@ import java.util.Map;
 
 public class ComponentConfigDeserializer extends JsonDeserializer<ComponentConfig> {
 
-
     private static final VCSSettingsDeserializer VCS_SETTINGS_DESERIALIZER = new VCSSettingsDeserializer();
+    private final VersionNames versionNames;
+    private final JiraComponentVersionRangeFactory jiraComponentVersionRangeFactory;
+
+    public ComponentConfigDeserializer(VersionNames versionNames) {
+        this.versionNames = versionNames;
+        this.jiraComponentVersionRangeFactory = new JiraComponentVersionRangeFactory(versionNames);
+    }
 
     @Override
     public ComponentConfig deserialize(JsonParser jsonParser, DeserializationContext deserializationContext) throws IOException {
@@ -68,12 +75,18 @@ public class ComponentConfigDeserializer extends JsonDeserializer<ComponentConfi
     private JiraComponentVersionRange getJiraComponentVersionRange(JsonNode node) {
         TextNode versionRange = (TextNode) node.get("versionRange");
         TextNode componentName = (TextNode) node.get("componentName");
-        JiraComponentVersionDeserializer jiraComponentVersionDeserializer = new JiraComponentVersionDeserializer();
+        JiraComponentVersionDeserializer jiraComponentVersionDeserializer = new JiraComponentVersionDeserializer(versionNames);
         JiraComponent jiraComponent = jiraComponentVersionDeserializer.getJiraComponent(node);
         Distribution distribution = getDistribution(node);
         VCSSettings vcsSettings = VCS_SETTINGS_DESERIALIZER.deserialize(node.get("vcsSettings"));
 
-        return new JiraComponentVersionRange(componentName.textValue(), versionRange.textValue(), jiraComponent, distribution, vcsSettings);
+        return jiraComponentVersionRangeFactory.create(
+                componentName.textValue(),
+                versionRange.textValue(),
+                jiraComponent,
+                distribution,
+                vcsSettings
+        );
     }
 
 

@@ -16,7 +16,8 @@ class ComponentsRegistryProperties(
     @field:NotBlank
     val mainGroovyFile: String,
     val dependencyMappingFile: String?,
-    val vcs: VcsSettings
+    val vcs: VcsSettings,
+    val versionName: VersionNameSettings
 ) {
     data class VcsSettings(
         val enabled: Boolean = true,
@@ -24,5 +25,11 @@ class ComponentsRegistryProperties(
         var username: String?,
         var password: String = "",
         var tagVersionPrefix: String = ""
+    )
+
+    data class VersionNameSettings(
+        val serviceBranch: String,
+        val service: String,
+        val minor: String
     )
 }

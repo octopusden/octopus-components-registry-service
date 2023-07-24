@@ -4,13 +4,12 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.octopusden.octopus.escrow.model.Distribution;
-import org.octopusden.octopus.escrow.model.VCSSettings;
-import org.octopusden.octopus.releng.dto.ComponentVersion;
-import org.octopusden.octopus.releng.dto.JiraComponent;
-import org.octopusden.octopus.releng.dto.JiraComponentVersion;
 import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
+import org.octopusden.octopus.escrow.model.Distribution;
+import org.octopusden.octopus.escrow.model.VCSSettings;
+import org.octopusden.octopus.releng.dto.JiraComponent;
+import org.octopusden.octopus.releng.dto.JiraComponentVersion;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -31,15 +30,21 @@ public class JiraComponentVersionRange {
     @JsonProperty
     private final VCSSettings vcsSettings;
 
+    private final JiraComponentVersion jiraComponentVersion;
+
     @JsonCreator
-    public JiraComponentVersionRange(@JsonProperty("componentName") String componentName, @JsonProperty("versionRange") String versionRange,
-                                     @JsonProperty("component") JiraComponent component, @JsonProperty("distribution") Distribution distribution,
-                                     @JsonProperty("vcsSettings") VCSSettings vcsSettings) {
+    JiraComponentVersionRange(@JsonProperty("componentName") String componentName,
+                              @JsonProperty("versionRange") String versionRange,
+                              @JsonProperty("component")JiraComponent component,
+                              @JsonProperty("distribution") Distribution distribution,
+                              @JsonProperty("vcsSettings") VCSSettings vcsSettings,
+                              JiraComponentVersion jiraComponentVersion) {
         this.componentName = componentName;
         this.versionRange = versionRange;
         this.jiraComponent = component;
         this.distribution = distribution;
         this.vcsSettings = vcsSettings;
+        this.jiraComponentVersion = jiraComponentVersion;
     }
 
     public JiraComponent getComponent() {
@@ -50,8 +55,8 @@ public class JiraComponentVersionRange {
         return versionRange;
     }
 
-    public JiraComponentVersion getJiraComponentVersion(String version) {
-        return new JiraComponentVersion(ComponentVersion.create(componentName, version), jiraComponent);
+    public JiraComponentVersion getJiraComponentVersion() {
+        return jiraComponentVersion;
     }
 
     public String getComponentName() {

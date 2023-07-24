@@ -9,8 +9,18 @@ components-registry:
   groovy-path: ${components-registry.work-dir}
   dependency-mapping-file: dependency_mapping.properties
 
+  supportedGroupIds: org.octopusden.octopus,io.bcomponent
+  supportedSystems: NONE,CLASSIC,ALFA
+  version-name:
+    service-branch: serviceCBranch
+    service: serviceC
+    minor: minorC
+  product-type:
+    c: PT_C
+    k: PT_K
+    d: PT_D
+    ddb: PT_D_DB
+
 pathToConfig: file://${components-registry.groovy-path}
-supportedGroupIds: org.octopusden.octopus,io.bcomponent
-supportedSystems: NONE,CLASSIC,ALFA
 
 eureka.client.enabled: false

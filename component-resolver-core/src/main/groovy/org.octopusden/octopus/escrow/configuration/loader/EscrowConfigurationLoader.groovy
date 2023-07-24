@@ -27,7 +27,6 @@ import org.octopusden.octopus.releng.dto.ComponentInfo
 import org.octopusden.octopus.releng.dto.ComponentVersion
 import org.octopusden.octopus.releng.dto.JiraComponent
 import org.octopusden.releng.versions.ComponentVersionFormat
-import org.octopusden.releng.versions.NumericVersion
 import groovy.transform.TypeChecked
 import groovy.transform.TypeCheckingMode
 import org.apache.commons.lang3.StringUtils
@@ -36,6 +35,9 @@ import org.apache.logging.log4j.LogManager
 import org.apache.logging.log4j.Logger
 import org.apache.maven.artifact.versioning.InvalidVersionSpecificationException
 import org.apache.maven.artifact.versioning.VersionRange
+import org.octopusden.releng.versions.NumericVersionFactory
+import org.octopusden.releng.versions.VersionNames
+import org.octopusden.releng.versions.VersionRangeFactory
 
 import java.util.stream.Collectors
 
@@ -48,11 +50,17 @@ class EscrowConfigurationLoader {
     private final IConfigLoader configLoader
     private final List<String> supportedGroupIds
     private final List<String> supportedSystems
+    private final VersionNames versionNames
 
-    EscrowConfigurationLoader(IConfigLoader configLoader, List<String> supportedGroupIds, List<String> supportedSystems) {
+    EscrowConfigurationLoader(IConfigLoader configLoader, List<String> supportedGroupIds, List<String> supportedSystems, VersionNames versionNames) {
         this.configLoader = configLoader
         this.supportedGroupIds = supportedGroupIds
         this.supportedSystems = supportedSystems
+        this.versionNames = versionNames
+    }
+
+    VersionNames getVersionNames() {
+        versionNames
     }
 
     EscrowModuleConfig loadModuleConfiguration(ComponentVersion componentRelease, Map<String, String> params) {
@@ -78,8 +86,12 @@ class EscrowConfigurationLoader {
      * @return resolved component configuration
      */
     static EscrowModuleConfig resolveComponentConfiguration(EscrowConfiguration escrowConfiguration, String componentKey, String componentVersion) {
-        def version = NumericVersion.parse(componentVersion)
-        def modules = escrowConfiguration.escrowModules.get(componentKey)?.moduleConfigurations?.stream()?.filter{ moduleConfiguration -> moduleConfiguration.versionRange.containsVersion(version)}?.collect(Collectors.toList())
+        def numericVersionFactory = new NumericVersionFactory(escrowConfiguration.versionNames)
+        def version = numericVersionFactory.create(componentVersion)
+        def versionRangeFactory = new VersionRangeFactory(escrowConfiguration.versionNames)
+        def modules = escrowConfiguration.escrowModules.get(componentKey)?.moduleConfigurations?.stream()?.filter{
+            moduleConfiguration -> versionRangeFactory.create(moduleConfiguration.versionRangeString).containsVersion(version)
+        }?.collect(Collectors.toList())
         if (modules == null || modules.isEmpty()) {
             LOG.warn("There is no component {}:{} module", componentKey, componentVersion)
             return null
@@ -89,7 +101,7 @@ class EscrowConfigurationLoader {
         }
         def config = modules[0]
         def escrowModuleConfig = config.clone()
-        def postProcessor = new ModelConfigPostProcessor(ComponentVersion.create(componentKey, componentVersion))
+        def postProcessor = new ModelConfigPostProcessor(ComponentVersion.create(componentKey, componentVersion), escrowConfiguration.versionNames)
         escrowModuleConfig.distribution = postProcessor.resolveDistribution(config.distribution)
         escrowModuleConfig.jiraConfiguration = postProcessor.resolveJiraConfiguration(config.jiraConfiguration)
         escrowModuleConfig
@@ -114,7 +126,7 @@ class EscrowConfigurationLoader {
         DefaultConfigParameters commonDefaultConfiguration = getCommonDefaultConfiguration(rootObject, toolsConfiguration)
         Objects.requireNonNull(commonDefaultConfiguration)
 
-        def fullConfig = new EscrowConfiguration()
+        def fullConfig = new EscrowConfiguration(versionNames: versionNames)
 
         def components = loadComponentsFromConfigObject(rootObject, commonDefaultConfiguration, toolsConfiguration, ignoreUnknownAttributes)
         components.each { EscrowModule escrowComponent ->
@@ -128,7 +140,7 @@ class EscrowConfigurationLoader {
             component.subComponents.forEach { name, subComponent -> mergeGroovyAndDslSubComponent(subComponent, fullConfig)}
         }
 
-        EscrowConfigValidator validator = new EscrowConfigValidator(supportedGroupIds, supportedSystems)
+        EscrowConfigValidator validator = new EscrowConfigValidator(supportedGroupIds, supportedSystems, versionNames)
         if (!ignoreUnknownAttributes) {
             validator.validateEscrowConfiguration(fullConfig)
             if (validator.hasErrors()) {
@@ -215,6 +227,7 @@ class EscrowConfigurationLoader {
         def components = loadSubComponents(componentDefaultConfiguration, defaultConfiguration, tools, moduleConfigObject, ignoreUnknownAttributes);
 
         if (!moduleConfigObject.isEmpty()) {
+            def versionRangeFactory = new VersionRangeFactory(versionNames)
             for (moduleConfigItem in moduleConfigObject) {
 
                 def moduleConfigItemName = moduleConfigItem.key
@@ -253,7 +266,6 @@ class EscrowConfigurationLoader {
                         componentDefaultConfiguration.buildFilePath
 
                 def vcsSettingsWrapper = loadVCSSettings(moduleConfigSection, componentDefaultConfiguration, buildSystem)
-
                 def escrowModuleConfiguration = new EscrowModuleConfig(buildSystem: buildSystem,
                         groupIdPattern: moduleConfigSection.containsKey("groupId") ? moduleConfigSection.groupId : componentDefaultConfiguration.groupIdPattern,
                         artifactIdPattern: moduleConfigSection.containsKey("artifactId") ? moduleConfigSection.artifactId.toString().trim() :

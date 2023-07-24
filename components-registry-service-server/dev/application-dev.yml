@@ -17,6 +17,10 @@ components-registry:
   groovy-path: ${components-registry.work-dir}/src/main/resources
   main-groovy-file: Aggregator.groovy
   dependency-mapping-file: dependency_mapping.properties
+  version-name:
+    service-branch: serviceCBranch
+    service: serviceC
+    minor: minorC
 
 supportedGroupIds: org.octopusden.octopus,io.bcomponent
 supportedSystems: NONE,CLASSIC,ALFA

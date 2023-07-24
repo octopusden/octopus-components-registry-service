@@ -7,6 +7,7 @@ import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoa
 import org.octopusden.octopus.escrow.resolvers.IJiraParametersResolver;
 import org.octopusden.octopus.escrow.resolvers.JiraParametersResolver;
 import org.apache.commons.lang3.Validate;
+import org.octopusden.releng.versions.VersionNames;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -25,23 +26,28 @@ import static org.octopusden.octopus.escrow.config.ConfigHelper.PATH_TO_CONFIG;
 @Configuration
 public class JiraParametersResolverConfig {
 
-    private ConfigHelper configHelper;
-
     @Autowired
     private ResourceLoader resourceLoader;
 
     @Autowired
     private Environment environment;
 
-    String moduleConfigUrl() {
-        return getConfigHelper().moduleConfigUrl("configName");
+    String moduleConfigUrl(ConfigHelper configHelper) {
+        return configHelper.moduleConfigUrl("configName");
     }
 
-    private ConfigHelper getConfigHelper() {
-        if (configHelper == null) {
-            configHelper = new ConfigHelper(environment);
-        }
-        return configHelper;
+    @Bean
+    ConfigHelper configHelper() {
+        return new ConfigHelper(environment);
+    }
+
+    @Bean
+    VersionNames versionNames(ConfigHelper configHelper) {
+        return new VersionNames(
+                configHelper.serviceBranch(),
+                configHelper.service(),
+                configHelper.minor()
+        );
     }
 
     @Bean
@@ -51,23 +57,27 @@ public class JiraParametersResolverConfig {
     }
 
     @Bean
-    public IJiraParametersResolver componentInfoResolver() throws IOException {
-        return new JiraParametersResolver(escrowConfigurationLoader(), Collections.emptyMap());
+    public IJiraParametersResolver componentInfoResolver(VersionNames versionNames, EscrowConfigurationLoader escrowConfigurationLoader) throws IOException {
+        return new JiraParametersResolver(escrowConfigurationLoader, Collections.emptyMap());
     }
 
     @Bean
-    public EscrowConfigurationLoader escrowConfigurationLoader() throws IOException {
-        return new EscrowConfigurationLoader(configLoader(), getConfigHelper().supportedGroupIds(), getConfigHelper().supportedSystems());
+    public EscrowConfigurationLoader escrowConfigurationLoader(ConfigHelper configHelper, VersionNames versionNames, ConfigLoader configLoader) throws IOException {
+        return new EscrowConfigurationLoader(configLoader,
+                configHelper.supportedGroupIds(),
+                configHelper.supportedSystems(),
+                versionNames
+        );
     }
 
     @Bean
-    public ConfigLoader configLoader() throws IOException {
-        String moduleConfigUrl = moduleConfigUrl();
+    public ConfigLoader configLoader(ConfigHelper configHelper, VersionNames versionNames) throws IOException {
+        String moduleConfigUrl = moduleConfigUrl(configHelper);
         Validate.notNull(moduleConfigUrl, "configName system property is not set");
         Resource resource = resourceLoader.getResource(moduleConfigUrl);
         Validate.notNull(resource, "cant load resource from moduleConfigUrl " + moduleConfigUrl);
         URL url = resource.getURL();
-        return new ConfigLoader(ComponentRegistryInfo.createFromURL(url));
+        return new ConfigLoader(ComponentRegistryInfo.createFromURL(url), versionNames, configHelper.productTypes());
     }
 
 }

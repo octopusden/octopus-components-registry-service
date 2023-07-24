@@ -1,6 +1,7 @@
 package org.octopusden.octopus.escrow.configuration.loader
 
 import org.octopusden.octopus.components.registry.api.Component
+import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.components.registry.dsl.script.ComponentsRegistryScriptRunner
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.RepositoryType
@@ -10,6 +11,7 @@ import groovy.transform.TupleConstructor
 import groovy.transform.TypeChecked
 import org.apache.logging.log4j.LogManager
 import org.apache.logging.log4j.Logger
+import org.octopusden.releng.versions.VersionNames
 
 import java.nio.file.Paths
 
@@ -19,10 +21,14 @@ class ConfigLoader implements IConfigLoader {
 
     private static final Logger LOG = LogManager.getLogger(ConfigLoader.class)
 
-    private ComponentRegistryInfo componentRegistryInfo
+    private final VersionNames versionNames
+    private final ComponentRegistryInfo componentRegistryInfo
+    private final Map<ProductTypes, String> products
 
-    ConfigLoader(ComponentRegistryInfo componentRegistryInfo) {
+    ConfigLoader(ComponentRegistryInfo componentRegistryInfo, VersionNames versionNames, Map<ProductTypes, String> products) {
         this.componentRegistryInfo = componentRegistryInfo
+        this.versionNames = versionNames
+        this.products = products
     }
 
     @Override
@@ -73,7 +79,7 @@ class ConfigLoader implements IConfigLoader {
         GroovySystem.getMetaClassRegistry().removeMetaClass(script.getClass())
         classLoader.clearCache()
         if (validateConfig) {
-            ConfigLoader.validateConfig(config)
+            ConfigLoader.validateConfig(config, versionNames)
         }
         return config
     }
@@ -86,11 +92,11 @@ class ConfigLoader implements IConfigLoader {
 
     @Override
     Collection<Component> loadDslDefinedComponents() {
-        return ComponentsRegistryScriptRunner.INSTANCE.loadDSL(Paths.get(componentRegistryInfo.basePath))
+        return ComponentsRegistryScriptRunner.INSTANCE.loadDSL(Paths.get(componentRegistryInfo.basePath), products)
     }
 
-    def static validateConfig(ConfigObject configObject) {
-        def validator = new GroovySlurperConfigValidator()
+    def static validateConfig(ConfigObject configObject, VersionNames versionNames) {
+        def validator = new GroovySlurperConfigValidator(versionNames)
         validator.validateConfig(configObject)
     }
 }

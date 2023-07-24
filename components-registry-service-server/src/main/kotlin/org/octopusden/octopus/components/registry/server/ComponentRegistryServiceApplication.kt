@@ -8,6 +8,9 @@ import org.octopusden.octopus.escrow.resolvers.JiraParametersResolver
 import org.octopusden.octopus.escrow.resolvers.ModuleByArtifactResolver
 import org.apache.commons.lang3.Validate
 import org.octopusden.octopus.releng.JiraComponentVersionFormatter
+import org.octopusden.releng.versions.NumericVersionFactory
+import org.octopusden.releng.versions.VersionNames
+import org.octopusden.releng.versions.VersionRangeFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.SpringApplication
 import org.springframework.boot.autoconfigure.SpringBootApplication
@@ -36,7 +39,7 @@ class ComponentRegistryServiceApplication {
         else null
 
     @Bean
-    fun configLoader(configHelper: ConfigHelper): ConfigLoader {
+    fun configLoader(configHelper: ConfigHelper, versionNames: VersionNames): ConfigLoader {
         val moduleConfigUrl = configHelper.moduleConfigUrl()
         Validate.notNull(moduleConfigUrl, "configName system property is not set")
         val resource = resourceLoader.getResource(moduleConfigUrl)
@@ -48,27 +51,43 @@ class ComponentRegistryServiceApplication {
         return ConfigLoader(
             ComponentRegistryInfo.createFromURL(
                 url
-            )
+            ),
+            versionNames,
+            configHelper.productTypes()
         )
     }
 
     @Bean
-    fun escrowConfigurationLoader(configLoader: ConfigLoader, configHelper: ConfigHelper) =
+    fun escrowConfigurationLoader(configLoader: ConfigLoader, configHelper: ConfigHelper, versionNames: VersionNames) =
         EscrowConfigurationLoader(
             configLoader,
             configHelper.supportedGroupIds(),
-            configHelper.supportedSystems()
+            configHelper.supportedSystems(),
+            versionNames
         )
 
     @Bean
-    fun componentInfoResolver() = JiraParametersResolver()
+    fun componentInfoResolver(versionNames: VersionNames) = JiraParametersResolver(versionNames)
 
     @Bean
-    fun jiraComponentVersionFormatter() = JiraComponentVersionFormatter()
+    fun jiraComponentVersionFormatter(versionNames: VersionNames) = JiraComponentVersionFormatter(versionNames)
 
     @Bean
-    fun moduleByArtifactResolver() =
-        ModuleByArtifactResolver()
+    fun numericVersionFactory(versionNames: VersionNames) = NumericVersionFactory(versionNames)
+
+    @Bean
+    fun versionRangeFactory(versionNames: VersionNames) = VersionRangeFactory(versionNames)
+
+    @Bean
+    fun moduleByArtifactResolver(versionNames: VersionNames) =
+        ModuleByArtifactResolver(versionNames)
+
+    @Bean
+    fun versionNames(configHelper: ConfigHelper) = VersionNames(
+        configHelper.serviceBranch(),
+        configHelper.service(),
+        configHelper.minor()
+    )
 }
 
 fun main(args: Array<String>) {

@@ -63,7 +63,7 @@ class ComponentsRegistryDSLTest {
     fun testProductTypes() {
         val components = registryDsl {
             component("DDD") {
-                productType = PT_K
+                productType = "PT_K"
                 build {
                     tools {
                         database {
@@ -82,14 +82,14 @@ class ComponentsRegistryDSLTest {
                 build {
                     tools {
                         product {
-                            ptc {
+                            type("PT_C") {
                             }
                         }
                     }
                 }
             }
             component("component_db") {
-                productType = PT_D_DB
+                productType = "PT_D_DB"
                 build {
                     tools {
                         product {
@@ -103,11 +103,11 @@ class ComponentsRegistryDSLTest {
                 }
             }
             component("COMPONENT") {
-                productType = PT_D
+                productType = "PT_D"
                 build {
                     tools {
                         product {
-                            ptdDb {
+                            type("PT_D_DB") {
                             }
                         }
                     }
@@ -117,7 +117,7 @@ class ComponentsRegistryDSLTest {
                 build {
                     tools {
                         product {
-                            ptd {
+                            type("PT_D") {
                             }
                         }
                     }

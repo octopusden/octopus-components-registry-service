@@ -1,10 +1,10 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
-import org.octopusden.octopus.components.registry.server.config.ComponentsRegistryProperties
-import org.octopusden.octopus.components.registry.server.service.VcsService
-import org.octopusden.releng.versions.NumericVersion
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider
+import org.octopusden.octopus.components.registry.server.config.ComponentsRegistryProperties
+import org.octopusden.octopus.components.registry.server.service.VcsService
+import org.octopusden.releng.versions.NumericVersionFactory
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
@@ -18,9 +18,15 @@ import javax.annotation.PreDestroy
 
 @Service
 @EnableConfigurationProperties(ComponentsRegistryProperties::class)
-@ConditionalOnProperty(prefix = "components-registry.vcs", name = ["enabled"], havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(
+    prefix = "components-registry.vcs",
+    name = ["enabled"],
+    havingValue = "true",
+    matchIfMissing = true
+)
 class GitVcsServiceImpl(
-    private val componentsRegistryProperties: ComponentsRegistryProperties
+    private val componentsRegistryProperties: ComponentsRegistryProperties,
+    private val numericVersionFactory: NumericVersionFactory,
 ) : VcsService {
 
     override fun cloneComponentsRegistry(): String {
@@ -54,7 +60,7 @@ class GitVcsServiceImpl(
             .call()
             .filter { it.name.startsWith(tagPrefix) }
             .map { ref ->
-                NumericVersion.parse(ref.name) to ref
+                numericVersionFactory.create(ref.name) to ref
             }
             .maxByOrNull { (version, _) -> version }
             ?.let { (_, ref) ->

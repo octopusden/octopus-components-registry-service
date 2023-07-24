@@ -4,7 +4,7 @@ component("component_commons") {
     build {
         tools {
             product {
-                ptk {
+                type("PT_K") {
                 }
             }
         }
@@ -20,7 +20,7 @@ component("app") {
                 }
             }
             product {
-                ptk {
+                type("PT_K") {
                     version = "03.49"
                 }
             }
@@ -44,7 +44,7 @@ component("app") {
                     }
                 }
                 product {
-                    ptk {
+                    type("PT_K") {
                         version = "03.50"
                     }
                 }
@@ -62,7 +62,7 @@ component("monitoring") {
                 }
             }
             product {
-                ptk {
+                type("PT_K") {
                     version = "03.49"
                 }
             }

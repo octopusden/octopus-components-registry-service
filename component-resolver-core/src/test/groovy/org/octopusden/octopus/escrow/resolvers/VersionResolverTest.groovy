@@ -4,9 +4,12 @@ import org.octopusden.octopus.escrow.TestConfigUtils
 import org.octopusden.octopus.releng.dto.ComponentVersion
 import groovy.transform.TypeChecked
 import org.junit.Test
+import org.octopusden.releng.versions.VersionNames
 
 @TypeChecked
 class VersionResolverTest {
+
+    public static final VersionNames VERSION_NAMES = new VersionNames("serviceCBranch", "serviceC", "minorC")
 
     @Test
     void testVersionDefaultInheritance() {
@@ -50,7 +53,7 @@ class VersionResolverTest {
 
     private static void loadAndCheckVersion(String component, String version, Closure<Void> versionChecking) {
         def componentVersion = ComponentVersion.create(component, version)
-        def resolver = new VersionResolver(TestConfigUtils.escrowConfigurationLoader("VersionInheritance.groovy"))
+        def resolver = new VersionResolver(TestConfigUtils.escrowConfigurationLoader("VersionInheritance.groovy"), VERSION_NAMES)
 
         def moduleConfig = resolver.getEscrowModuleConfig(componentVersion)
         assert moduleConfig != null
