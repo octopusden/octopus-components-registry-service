@@ -24,10 +24,11 @@ public class JiraComponentVersionRangeFactory {
             VCSSettings vcsSettings
     ) {
         JiraComponentVersionFormatter jiraComponentVersionFormatter = new JiraComponentVersionFormatter(versionNames);
-        JiraComponentVersion jiraComponentVersion = JiraComponentVersion.builder(jiraComponentVersionFormatter)
-                .componentVersion(ComponentVersion.create(componentName, versionRange))
-                .component(jiraComponent)
-                .build();
+        JiraComponentVersion jiraComponentVersion = new JiraComponentVersion(
+                ComponentVersion.create(componentName, versionRange),
+                jiraComponent,
+                jiraComponentVersionFormatter
+        );
 
         return new JiraComponentVersionRange(
                 componentName,

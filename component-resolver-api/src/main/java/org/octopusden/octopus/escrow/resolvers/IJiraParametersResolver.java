@@ -25,9 +25,6 @@ public interface IJiraParametersResolver {
 
     ComponentVersion getComponentByJiraProject(JiraProjectVersion jiraProjectVersion) throws NoConfigurationFoundException;
 
-    /**
-     * Not nullable
-     */
     VCSSettings getVersionControlSystemRootsByJiraProject(JiraProjectVersion jiraProjectVersion);
 
     ComponentConfig getComponentConfig();
