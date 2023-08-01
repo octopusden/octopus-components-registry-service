@@ -37,7 +37,7 @@ class JiraComponentVersionToDetailedComponentVersionMapper(
         target.rcVersion = ComponentRegistryVersion(
                 ComponentVersionType.RC,
                 componentVersionFormat.releaseVersionFormat.formatVersion(versionNumericVersionFactory, src.version) + JiraComponentVersion.RC_SUFFIX,
-                src.rCversion
+                src.rcVersion
         )
         target.releaseVersion = ComponentRegistryVersion(
                 ComponentVersionType.RELEASE,

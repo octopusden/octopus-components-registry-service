@@ -33,10 +33,11 @@ class JiraComponentVersionRangeTest extends GroovyTestCase {
                 distribution,
                 VCSSettings.createEmpty()
         )
-        def expectedComponent = JiraComponentVersion.builder(new JiraComponentVersionFormatter(VERSION_NAMES))
-                .componentVersion(ComponentVersion.create(TEST_COMPONENT, TEST_VERSION))
-                .component(jiraComponent)
-                .build()
+        def expectedComponent = new JiraComponentVersion(
+                ComponentVersion.create(TEST_COMPONENT, TEST_VERSION),
+                jiraComponent,
+                new JiraComponentVersionFormatter(VERSION_NAMES)
+        )
 
         assert expectedComponent == range.jiraComponentVersion
     }
