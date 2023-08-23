@@ -71,6 +71,8 @@ val EXPLICIT_DISTRIBUTION = DistributionDTO(
     false,
     false,
     "org.octopusden.octopus.test:versions-api:jar",
+    null,
+    null,
     SecurityGroupsDTO(listOf("vfiler1-default#group"))
 )
 
@@ -181,7 +183,7 @@ abstract class BaseComponentsRegistryServiceTest {
         Assertions.assertEquals(SecurityGroupsDTO(listOf("vfiler1#group")), actualDistribution.securityGroups)
         Assertions.assertEquals(
             "org.octopusden.octopus.test:octopusmpi:war,org.octopusden.octopus.test:octopusacs:war,org.octopusden.octopus.test:demo:war,file:///acs:\$major-\$minor-\$service-\$fix",
-            actualDistribution.GAV,
+            actualDistribution.gav,
             "Was returned distribution as is to perform expression evaluation on client side"
         )
     }

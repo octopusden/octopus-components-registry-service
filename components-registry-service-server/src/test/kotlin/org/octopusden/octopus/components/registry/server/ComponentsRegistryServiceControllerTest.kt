@@ -291,6 +291,8 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
             false,
             false,
             "org.octopusden.octopus.test:versions-api:jar",
+            null,
+            null,
             SecurityGroupsDTO(
                 listOf("vfiler1-default#group")
             )
@@ -340,6 +342,8 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
             false,
             false,
             "org.octopusden.octopus.test:versions-api:jar",
+            null,
+            null,
             SecurityGroupsDTO(listOf("vfiler1-default#group"))
         )
         expectedComponent.releaseManager = "user"

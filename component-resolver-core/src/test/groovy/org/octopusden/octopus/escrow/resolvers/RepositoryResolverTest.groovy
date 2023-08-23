@@ -193,7 +193,7 @@ class RepositoryResolverTest {
     void testDefaultSettingsOfComponent() {
         ReleaseInfo info = withConfigResolver("defaultSettingsOfComponent").resolveRelease(create("component_23", "11.0"))
         def expectedInfo = ReleaseInfo.create(VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", MERCURIAL, "ssh://hg@mercurial/o2/other/component_23", "component_23-R-11.0", null)),
-                BuildSystem.MAVEN, null, null, new Distribution(true, false, null, new SecurityGroups(null)), false, null)
+                BuildSystem.MAVEN, null, null, new Distribution(true, false, null, null, null, new SecurityGroups(null)), false, null)
         assert expectedInfo == info
     }
 

@@ -104,7 +104,9 @@ abstract class BaseComponentController<T : Component> {
                 DistributionDTO(
                     distribution != null && distribution.explicit(),
                     distribution != null && distribution.external(),
-                    distribution?.GAV() ?: "",
+                    distribution?.GAV() ?: "", // TODO: elvis for GAV backward compatibility, remove when all clients are updated to the latest version
+                    distribution?.DEB(),
+                    distribution?.RPM(),
                     SecurityGroupsDTO(distribution?.securityGroups?.read?.split(",") ?: emptyList())
                 )
             }
