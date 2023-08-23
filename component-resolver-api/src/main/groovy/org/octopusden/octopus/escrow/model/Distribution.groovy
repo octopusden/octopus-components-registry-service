@@ -20,12 +20,20 @@ class Distribution {
     private final String GAV
 
     @JsonProperty
+    private final String DEB
+
+    @JsonProperty
+    private final String RPM
+
+    @JsonProperty
     private SecurityGroups securityGroups
 
-    Distribution(boolean explicit, boolean external, String GAV, SecurityGroups securityGroups) {
+    Distribution(boolean explicit, boolean external, String GAV, String DEB, String RPM, SecurityGroups securityGroups) {
         this.explicit = explicit
         this.external = external
         this.GAV = GAV
+        this.DEB = DEB
+        this.RPM = RPM
         this.securityGroups = securityGroups
     }
 
@@ -41,6 +49,14 @@ class Distribution {
         return GAV
     }
 
+    String DEB() {
+        return DEB
+    }
+
+    String RPM() {
+        return RPM
+    }
+
     SecurityGroups getSecurityGroups() {
         return securityGroups
     }
@@ -51,6 +67,8 @@ class Distribution {
                 "explicit=" + explicit +
                 ", external=" + external +
                 ", GAV='" + (GAV ?: "N/A") + '\'' +
+                ", DEB='" + (DEB ?: "N/A") + '\'' +
+                ", RPM='" + (RPM ?: "N/A") + '\'' +
                 ", securityGroups='" + securityGroups + '\'' +
                 '}'
     }

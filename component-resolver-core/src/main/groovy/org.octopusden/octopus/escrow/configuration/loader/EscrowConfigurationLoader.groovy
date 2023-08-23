@@ -701,8 +701,10 @@ class EscrowConfigurationLoader {
         def explicit = distributionConfigObject.containsKey("explicit") ? distributionConfigObject.explicit : defaultDistribution.explicit()
         def external = distributionConfigObject.containsKey("external") ? distributionConfigObject.external : defaultDistribution.external()
         def GAV = distributionConfigObject.getOrDefault("GAV", defaultDistribution?.GAV())
+        def DEB = distributionConfigObject.getOrDefault("DEB", defaultDistribution?.DEB())
+        def RPM = distributionConfigObject.getOrDefault("RPM", defaultDistribution?.RPM())
         def securityGroup = loadSecurityGroups(distributionConfigObject, defaultDistribution?.securityGroups)
-        return new Distribution(explicit, external, GAV, securityGroup)
+        return new Distribution(explicit, external, GAV, DEB, RPM, securityGroup)
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)

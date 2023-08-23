@@ -52,7 +52,7 @@ class ModelConfigPostProcessor {
         if (distribution == null) {
             return null
         }
-        return new Distribution(distribution.explicit(), distribution.external(), distribution.GAV(), distribution.securityGroups)
+        return new Distribution(distribution.explicit(), distribution.external(), distribution.GAV(), distribution.DEB(), distribution.RPM(), distribution.securityGroups)
     }
 
     Dependencies resolveDependencies(final Dependencies dependencies) {
