@@ -96,6 +96,8 @@ public class ComponentConfigDeserializer extends JsonDeserializer<ComponentConfi
             BooleanNode explicit = (BooleanNode) distributionNode.get("explicit");
             BooleanNode external = (BooleanNode) distributionNode.get("external");
             TextNode gav = (TextNode) distributionNode.get("GAV");
+            TextNode deb = (TextNode) distributionNode.get("DEB");
+            TextNode rpm = (TextNode) distributionNode.get("RPM");
             ObjectNode securityGroups = (ObjectNode) distributionNode.get("securityGroups");
             final JsonNode rdNode = securityGroups.get("read");
 
@@ -104,6 +106,8 @@ public class ComponentConfigDeserializer extends JsonDeserializer<ComponentConfi
             return new Distribution(explicit.asBoolean(),
                     external.asBoolean(),
                     gav != null ? gav.textValue() : null,
+                    deb != null ? deb.textValue() : null,
+                    rpm != null ? rpm.textValue() : null,
                     new SecurityGroups(read)
             );
         }

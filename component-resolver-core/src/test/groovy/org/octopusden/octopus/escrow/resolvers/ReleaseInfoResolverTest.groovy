@@ -6,13 +6,13 @@ import org.octopusden.octopus.escrow.configuration.loader.ConfigLoader
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
 import org.octopusden.octopus.releng.dto.ComponentVersion
 import org.junit.Test
-
 import java.nio.file.Paths
 
 import static org.octopusden.octopus.escrow.TestConfigUtils.PRODUCT_TYPES
 import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_GROUP_IDS
 import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_SYSTEMS
 import static org.junit.Assert.assertEquals
+import static org.junit.Assert.assertNull
 import static org.junit.Assert.assertTrue
 import static org.octopusden.octopus.escrow.TestConfigUtils.VERSION_NAMES
 
@@ -20,7 +20,7 @@ class ReleaseInfoResolverTest {
 
     @Test
     void testResolvedConfiguration() {
-        def releaseInfo = getResolver().resolveRelease(ComponentVersion.create("TEST_COMPONENT3", "1.0.107"))
+        def releaseInfo = getResolver("/production/Aggregator.groovy").resolveRelease(ComponentVersion.create("TEST_COMPONENT3", "1.0.107"))
         assertTrue(releaseInfo.distribution.explicit())
         assertTrue(releaseInfo.distribution.external())
         assertEquals('org.octopusden.octopus.test:octopusmpi:war,org.octopusden.octopus.test:octopusacs:war,org.octopusden.octopus.test:demo:war,' +
@@ -29,8 +29,9 @@ class ReleaseInfoResolverTest {
 
     @Test
     void testResolvedDistributionConfiguration() {
-        def releaseInfo162720 = getResolver().resolveRelease(ComponentVersion.create("app", "1.6.2720"))
-        def releaseInfo173630 = getResolver().resolveRelease(ComponentVersion.create("app", "1.7.3630"))
+        def resolver = getResolver("/production/Aggregator.groovy")
+        def releaseInfo162720 = resolver.resolveRelease(ComponentVersion.create("app", "1.6.2720"))
+        def releaseInfo173630 = resolver.resolveRelease(ComponentVersion.create("app", "1.7.3630"))
         assertTrue(releaseInfo162720.distribution.explicit())
         assertTrue(releaseInfo162720.distribution.external())
         assertEquals('file:///as-1.6', releaseInfo162720.distribution.GAV())
@@ -39,12 +40,25 @@ class ReleaseInfoResolverTest {
 
     @Test
     void testResolvedBuildTools() {
-        def plCommonReleaseInfo = getResolver().resolveRelease(ComponentVersion.create("component_commons", "1.2.3630"))
+        def plCommonReleaseInfo = getResolver("/production/Aggregator.groovy").resolveRelease(ComponentVersion.create("component_commons", "1.2.3630"))
         assertTrue(plCommonReleaseInfo.buildParameters.buildTools.any { buildTool -> buildTool instanceof PTKProductTool })
     }
 
-    private static ReleaseInfoResolver getResolver() {
-        def aggregatorPath = Paths.get(ReleaseInfoResolverTest.class.getResource("/production/Aggregator.groovy").toURI())
+    @Test
+    void testReleaseInfoResolverDebRpm() {
+        def resolver = getResolver("/deb-rpm/Aggregator.groovy")
+        def releaseInfo3 = resolver.resolveRelease(ComponentVersion.create("logcomp", "3.0"))
+        def releaseInfo4 = resolver.resolveRelease(ComponentVersion.create("logcomp", "4.0"))
+        assertEquals('org.octopusden.octopus.logcomp:logcomp', releaseInfo3.distribution.GAV())
+        assertEquals('logcomp_${version}-1_amd64.deb', releaseInfo3.distribution.DEB())
+        assertNull(releaseInfo3.distribution.RPM())
+        assertNull(releaseInfo4.distribution.GAV())
+        assertEquals('logcomp_${version}-1_amd64.deb', releaseInfo4.distribution.DEB())
+        assertEquals('logcomp_${version}.el8.noarch.rpm', releaseInfo4.distribution.RPM())
+    }
+
+    private static ReleaseInfoResolver getResolver(String resource) {
+        def aggregatorPath = Paths.get(ReleaseInfoResolverTest.class.getResource(resource).toURI())
         def escrowConfigurationLoader = new EscrowConfigurationLoader(
                 new ConfigLoader(
                         ComponentRegistryInfo.createFromFileSystem(aggregatorPath.getParent().toString(),

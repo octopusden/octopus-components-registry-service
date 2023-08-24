@@ -23,11 +23,15 @@ class GroovySlurperConfigValidator {
     public static final String DEPENDENCIES = 'dependencies'
     public static final String SECURITY_GROUPS = 'securityGroups'
     public static final String SECURITY_GROUPS_READ = "read"
-    private static final String GAV_PROHIBITED_SYMBOLS = ":,\\s/"
-    private static final String GAV_FILE_PATTERN ="(file:)(/|/{3})([^/\\\\0,]+(/)?)+"
-    private static final String GAV_MAVEN_PATTERN =String.format("[^%1\$s]+(:[^%1\$s]+){1,3}", GAV_PROHIBITED_SYMBOLS)
-    private static final String GAV_ENTRY_PATTERN = "($GAV_FILE_PATTERN)|($GAV_MAVEN_PATTERN)"
+    private static final String FILE_PATTERN = "(file:)(/|/{3})([^/\\\\0,]+(/)?)+"
+    private static final String PROHIBITED_SYMBOLS = ":,\\s/"
+    private static final String GAV_MAVEN_PATTERN = "[^$PROHIBITED_SYMBOLS]+(:[^$PROHIBITED_SYMBOLS]+){1,3}"
+    private static final String GAV_ENTRY_PATTERN = "($FILE_PATTERN)|($GAV_MAVEN_PATTERN)"
     public static final Pattern GAV_PATTERN = Pattern.compile("^($GAV_ENTRY_PATTERN)(,($GAV_ENTRY_PATTERN))*\$")
+    private static final String DEB_ENTRY_PATTERN = "[^$PROHIBITED_SYMBOLS]+\\.deb"
+    public static final Pattern DEB_PATTERN = Pattern.compile("^($DEB_ENTRY_PATTERN)(,($DEB_ENTRY_PATTERN))*\$")
+    private static final String RPM_ENTRY_PATTERN = "[^$PROHIBITED_SYMBOLS]+\\.rpm"
+    public static final Pattern RPM_PATTERN = Pattern.compile("^($RPM_ENTRY_PATTERN)(,($RPM_ENTRY_PATTERN))*\$")
     private static final String SG_ENTRY_REGEX = "[\\w-#\\s]+"
     public static final Pattern SECURITY_GROUPS_PATTERN = Pattern.compile("^($SG_ENTRY_REGEX)(,($SG_ENTRY_REGEX))*\$")
 
@@ -47,7 +51,7 @@ class GroovySlurperConfigValidator {
 
     static SUPPORTED_TOOLS_ATTRIBUTES = ['escrowEnvironmentVariable', 'sourceLocation', 'targetLocation', 'installScript']
 
-    static SUPPORTED_DISTRIBUTION_ATTRIBUTES = ['external', 'explicit', 'GAV', 'securityGroups']
+    static SUPPORTED_DISTRIBUTION_ATTRIBUTES = ['external', 'explicit', 'GAV', 'DEB', 'RPM', 'securityGroups']
     static SUPPORTED_DEPENDENCIES_ATTRIBUTES = ['autoUpdate']
     static SUPPORTED_SECURITY_GROUPS_ATTRIBUTES = [SECURITY_GROUPS_READ]
 
@@ -227,23 +231,44 @@ class GroovySlurperConfigValidator {
 
     def validateDistributionSection(ConfigObject distributionSection, VersionNames versionNames,  String moduleName, String moduleConfigName) {
         validateForUnknownAttributes(distributionSection, DISTRIBUTION, SUPPORTED_DISTRIBUTION_ATTRIBUTES, moduleName, moduleConfigName)
+        def numericFormatFactory = new NumericVersionFactory(versionNames)
         if (distributionSection.containsKey("GAV")) {
             try {
-                def numericFormatFactory = new NumericVersionFactory(versionNames)
                 def gavValue = EscrowExpressionParser.getInstance().parseAndEvaluate(distributionSection.get("GAV") as String, EscrowExpressionContext.getValidationEscrowExpressionContext(numericFormatFactory))
-                try {
-                    DistributionUtilities.parseDistributionGAV(gavValue).forEach{ distributionItem ->
+                try { //TODO: GAV_PATTERN should be used to verify whole gavValue
+                    DistributionUtilities.parseDistributionGAV(gavValue as String).forEach { distributionItem ->
                         if (distributionItem instanceof MavenArtifactDistributionEntity) {
                             if (!GAV_PATTERN.matcher(distributionItem.gav).matches()) {
+                                //TODO: MavenArtifactDistributionEntity should match GAV_MAVEN_PATTERN instead of GAV_PATTERN
                                 registerError("GAV '${distributionItem.gav}' must match pattern '$GAV_PATTERN'")
                             }
                         }
-                    }
-                } catch(Exception parsingException) {
+                    } //TODO: FileDistributionEntity should match GAV_FILE_PATTERN
+                } catch (Exception parsingException) {
                     registerError("Fail to parse GAV: " + parsingException)
                 }
             } catch (Exception exception) {
                 registerError("GAV expression is not valid: " + exception.getMessage())
+            }
+        }
+        if (distributionSection.containsKey("DEB")) {
+            try {
+                def debValue = EscrowExpressionParser.getInstance().parseAndEvaluate(distributionSection.get("DEB") as String, EscrowExpressionContext.getValidationEscrowExpressionContext(numericFormatFactory))
+                if (!DEB_PATTERN.matcher(debValue as String).matches()) {
+                    registerError("DEB '$debValue' must match pattern '$DEB_PATTERN'")
+                }
+            } catch (Exception exception) {
+                registerError("DEB expression is not valid: " + exception.getMessage())
+            }
+        }
+        if (distributionSection.containsKey("RPM")) {
+            try {
+                def rpmValue = EscrowExpressionParser.getInstance().parseAndEvaluate(distributionSection.get("RPM") as String, EscrowExpressionContext.getValidationEscrowExpressionContext(numericFormatFactory))
+                if (!RPM_PATTERN.matcher(rpmValue as String).matches()) {
+                    registerError("RPM '$rpmValue' must match pattern '$RPM_PATTERN'")
+                }
+            } catch (Exception exception) {
+                registerError("RPM expression is not valid: " + exception.getMessage())
             }
         }
         if (distributionSection.containsKey(SECURITY_GROUPS)) {
