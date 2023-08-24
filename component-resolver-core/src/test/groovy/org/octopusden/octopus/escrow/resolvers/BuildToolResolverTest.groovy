@@ -1,35 +1,43 @@
 package org.octopusden.octopus.escrow.resolvers
 
+import groovy.transform.TypeChecked
+import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.octopusden.octopus.components.registry.api.beans.OracleDatabaseToolBean
 import org.octopusden.octopus.components.registry.api.beans.PTCProductToolBean
 import org.octopusden.octopus.components.registry.api.beans.PTKProductToolBean
-import org.octopusden.octopus.components.registry.api.beans.OracleDatabaseToolBean
 import org.octopusden.octopus.components.registry.api.distribution.entities.MavenArtifactDistributionEntity
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.escrow.configuration.loader.ComponentRegistryInfo
 import org.octopusden.octopus.escrow.configuration.loader.ConfigLoader
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
 import org.octopusden.octopus.releng.dto.ComponentVersion
-import groovy.transform.TypeChecked
-import org.junit.jupiter.api.Test
 
 import java.nio.file.Paths
 
+import static org.junit.jupiter.api.Assertions.assertEquals
+import static org.junit.jupiter.api.Assertions.assertFalse
+import static org.junit.jupiter.api.Assertions.assertNotNull
+import static org.junit.jupiter.api.Assertions.assertTrue
 import static org.octopusden.octopus.escrow.TestConfigUtils.PRODUCT_TYPES
 import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_GROUP_IDS
 import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_SYSTEMS
-import static org.junit.jupiter.api.Assertions.assertNotNull
-import static org.junit.jupiter.api.Assertions.assertTrue
-import static org.junit.jupiter.api.Assertions.assertFalse
-import static org.junit.jupiter.api.Assertions.assertEquals
 import static org.octopusden.octopus.escrow.TestConfigUtils.VERSION_NAMES
 
 @TypeChecked
 class BuildToolResolverTest {
 
-    static IBuildToolsResolver buildToolsResolver
+    IBuildToolsResolver buildToolsResolver
+    static EscrowConfigurationLoader escrowConfigurationLoader
 
-    static {
-        EscrowConfigurationLoader escrowConfigurationLoader = initEscrowConfigurationLoader()
+    @BeforeAll
+    static void initBeforeClass() {
+        escrowConfigurationLoader = initEscrowConfigurationLoader()
+    }
+
+    @BeforeEach
+    void setUp() {
         buildToolsResolver = initBuildToolResolver(escrowConfigurationLoader)
     }
 
@@ -65,8 +73,6 @@ class BuildToolResolverTest {
 
     @Test
     void testGetBuildTool() {
-        EscrowConfigurationLoader escrowConfigurationLoader = initEscrowConfigurationLoader()
-        buildToolsResolver = initBuildToolResolver(escrowConfigurationLoader)
         def tools = buildToolsResolver.getComponentBuildTools(ComponentVersion.create("app", "1.6.1"))
         def oracle = new OracleDatabaseToolBean()
         oracle.version = "11.2"
@@ -78,8 +84,6 @@ class BuildToolResolverTest {
 
     @Test
     void testGetOverriddenBuildTool() {
-        EscrowConfigurationLoader escrowConfigurationLoader = initEscrowConfigurationLoader()
-        buildToolsResolver = initBuildToolResolver(escrowConfigurationLoader)
         def tools = buildToolsResolver.getComponentBuildTools(ComponentVersion.create("app", "1.6.1"))
         def ptk = new PTKProductToolBean()
         ptk.version = "03.49"
