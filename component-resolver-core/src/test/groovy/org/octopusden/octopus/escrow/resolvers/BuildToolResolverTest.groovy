@@ -28,8 +28,8 @@ import static org.octopusden.octopus.escrow.TestConfigUtils.VERSION_NAMES
 @TypeChecked
 class BuildToolResolverTest {
 
-    IBuildToolsResolver buildToolsResolver
-    static EscrowConfigurationLoader escrowConfigurationLoader
+    private IBuildToolsResolver buildToolsResolver
+    private static EscrowConfigurationLoader escrowConfigurationLoader
 
     @BeforeAll
     static void initBeforeClass() {
