@@ -59,7 +59,7 @@ class BuildToolResolverTest {
         def tools = buildToolsResolver.getComponentBuildTools(ComponentVersion.create("app", "1.6.1"))
         def oracle = new OracleDatabaseToolBean()
         oracle.version = "11.2"
-        assertTrue(tools.contains(oracle))
+        assertTrue(tools.contains(oracle), "$tools doesn't contain $oracle")
         def ptk = new PTKProductToolBean()
         ptk.version = "03.49"
         assertTrue(tools.contains(ptk))
@@ -70,7 +70,7 @@ class BuildToolResolverTest {
         def tools = buildToolsResolver.getComponentBuildTools(ComponentVersion.create("app", "1.6.1"))
         def ptk = new PTKProductToolBean()
         ptk.version = "03.49"
-        assertTrue(tools.contains(ptk))
+        assertTrue(tools.contains(ptk), "$tools doesn't contain $ptk")
 
         tools = buildToolsResolver.getComponentBuildTools(ComponentVersion.create("app", "1.6.1"), "03.50.30.45")
         ptk.version = "03.50.30.45"

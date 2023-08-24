@@ -88,6 +88,11 @@ open class ProductToolBean(private val type: ProductTypes, private var settingsP
         result = 31 * result + (version?.hashCode() ?: 0)
         return result
     }
+
+    override fun toString(): String {
+        return "ProductToolBean(type=$type, settingsProperty='$settingsProperty', version=$version)"
+    }
+
 }
 
 open class PTCProductToolBean: ProductToolBean(ProductTypes.PT_C, "uscschema"),
@@ -158,6 +163,10 @@ class OracleDatabaseToolBean: DatabaseToolBean(DatabaseTypes.ORACLE, "db"),
         var result = super.hashCode()
         result = 31 * result + (edition?.hashCode() ?: 0)
         return result
+    }
+
+    override fun toString(): String {
+        return "OracleDatabaseToolBean(edition=$edition)"
     }
 }
 
