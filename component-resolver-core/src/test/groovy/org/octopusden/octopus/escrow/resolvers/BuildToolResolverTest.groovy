@@ -29,6 +29,11 @@ class BuildToolResolverTest {
     static IBuildToolsResolver buildToolsResolver
 
     static {
+        EscrowConfigurationLoader escrowConfigurationLoader = initEscrowConfigurationLoader()
+        buildToolsResolver = initBuildToolResolver(escrowConfigurationLoader)
+    }
+
+    private static EscrowConfigurationLoader initEscrowConfigurationLoader() {
         def aggregatorPath = Paths.get(EscrowConfigurationLoaderTest.class.getResource("/production/Aggregator.groovy").toURI())
         EscrowConfigurationLoader escrowConfigurationLoader = new EscrowConfigurationLoader(
                 new ConfigLoader(
@@ -43,7 +48,11 @@ class BuildToolResolverTest {
                 SUPPORTED_SYSTEMS,
                 VERSION_NAMES
         )
-        buildToolsResolver = new BuildToolsResolver(escrowConfigurationLoader.loadFullConfiguration(Collections.emptyMap()))
+        escrowConfigurationLoader
+    }
+
+    private static BuildToolsResolver initBuildToolResolver(EscrowConfigurationLoader escrowConfigurationLoader) {
+        new BuildToolsResolver(escrowConfigurationLoader.loadFullConfiguration(Collections.emptyMap()))
     }
 
     @Test
@@ -56,6 +65,8 @@ class BuildToolResolverTest {
 
     @Test
     void testGetBuildTool() {
+        EscrowConfigurationLoader escrowConfigurationLoader = initEscrowConfigurationLoader()
+        buildToolsResolver = initBuildToolResolver(escrowConfigurationLoader)
         def tools = buildToolsResolver.getComponentBuildTools(ComponentVersion.create("app", "1.6.1"))
         def oracle = new OracleDatabaseToolBean()
         oracle.version = "11.2"
@@ -67,6 +78,8 @@ class BuildToolResolverTest {
 
     @Test
     void testGetOverriddenBuildTool() {
+        EscrowConfigurationLoader escrowConfigurationLoader = initEscrowConfigurationLoader()
+        buildToolsResolver = initBuildToolResolver(escrowConfigurationLoader)
         def tools = buildToolsResolver.getComponentBuildTools(ComponentVersion.create("app", "1.6.1"))
         def ptk = new PTKProductToolBean()
         ptk.version = "03.49"
