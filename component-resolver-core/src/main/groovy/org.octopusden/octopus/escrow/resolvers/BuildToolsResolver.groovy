@@ -1,5 +1,7 @@
 package org.octopusden.octopus.escrow.resolvers
 
+import groovy.transform.TypeChecked
+import groovy.util.logging.Slf4j
 import org.octopusden.octopus.components.registry.api.beans.PTCProductToolBean
 import org.octopusden.octopus.components.registry.api.beans.PTKProductToolBean
 import org.octopusden.octopus.components.registry.api.beans.ProductToolBean
@@ -11,9 +13,9 @@ import org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration
 import org.octopusden.octopus.escrow.dto.DistributionEntity
 import org.octopusden.octopus.escrow.utilities.DistributionUtilities
 import org.octopusden.octopus.releng.dto.ComponentVersion
-import groovy.transform.TypeChecked
 
 @TypeChecked
+@Slf4j
 class BuildToolsResolver implements IBuildToolsResolver {
     private final EscrowConfiguration configuration
 
@@ -36,6 +38,7 @@ class BuildToolsResolver implements IBuildToolsResolver {
     @Override
     Collection<BuildTool> getComponentBuildTools(ComponentVersion component, String projectVersion, boolean ignoreRequired) {
         def componentConfiguration = EscrowConfigurationLoader.getEscrowModuleConfig(escrowConfiguration, component)
+        log.info("getEscrowModuleConfig($component,$projectVersion)=$componentConfiguration")
         def buildTools = componentConfiguration?.buildConfiguration?.buildTools
         Collection<BuildTool> overriddenBuildTools = new ArrayList<>()
         def buildConfiguration = componentConfiguration?.buildConfiguration
