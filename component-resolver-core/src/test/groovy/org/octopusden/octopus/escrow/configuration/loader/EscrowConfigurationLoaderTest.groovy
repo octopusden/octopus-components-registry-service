@@ -1,15 +1,5 @@
 package org.octopusden.octopus.escrow.configuration.loader
 
-import org.octopusden.octopus.components.registry.api.beans.GitVersionControlSystemBean
-import org.octopusden.octopus.components.registry.api.beans.PTKProductToolBean
-import org.octopusden.octopus.components.registry.api.beans.OracleDatabaseToolBean
-import org.octopusden.octopus.components.registry.api.enums.BuildSystemType
-import org.octopusden.octopus.escrow.RepositoryType
-import org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration
-import org.octopusden.octopus.escrow.configuration.model.EscrowModule
-import org.octopusden.octopus.escrow.configuration.validation.util.VersionRangeHelper
-import org.octopusden.octopus.escrow.resolvers.ModuleByArtifactResolver
-import org.octopusden.octopus.releng.dto.ComponentVersion
 import org.apache.maven.artifact.DefaultArtifact
 import org.apache.maven.artifact.versioning.VersionRange
 import org.junit.jupiter.api.DisplayName
@@ -17,19 +7,29 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
+import org.octopusden.octopus.components.registry.api.beans.GitVersionControlSystemBean
+import org.octopusden.octopus.components.registry.api.beans.OracleDatabaseToolBean
+import org.octopusden.octopus.components.registry.api.beans.PTKProductToolBean
+import org.octopusden.octopus.components.registry.api.enums.BuildSystemType
+import org.octopusden.octopus.escrow.RepositoryType
+import org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration
+import org.octopusden.octopus.escrow.configuration.model.EscrowModule
+import org.octopusden.octopus.escrow.configuration.validation.util.VersionRangeHelper
+import org.octopusden.octopus.escrow.resolvers.ModuleByArtifactResolver
+import org.octopusden.octopus.releng.dto.ComponentVersion
 import org.octopusden.releng.versions.NumericVersionFactory
 
 import java.nio.file.Paths
 import java.util.stream.Stream
 
-import static org.octopusden.octopus.escrow.TestConfigUtils.PRODUCT_TYPES
-import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_GROUP_IDS
-import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_SYSTEMS
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat
 import static org.junit.jupiter.api.Assertions.assertEquals
 import static org.junit.jupiter.api.Assertions.assertNotNull
 import static org.junit.jupiter.api.Assertions.assertNull
 import static org.junit.jupiter.api.Assertions.assertTrue
+import static org.octopusden.octopus.escrow.TestConfigUtils.PRODUCT_TYPES
+import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_GROUP_IDS
+import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_SYSTEMS
 import static org.octopusden.octopus.escrow.TestConfigUtils.VERSION_NAMES
 import static org.octopusden.octopus.escrow.TestConfigUtils.VERSION_RANGE_FACTORY
 
@@ -196,7 +196,7 @@ class EscrowConfigurationLoaderTest {
     void testEmptyProduct() {
         getEscrowConfiguration().escrowModules.get("component_commons").moduleConfigurations.forEach { moduleConfiguration ->
             def product = new PTKProductToolBean()
-            assertTrue(moduleConfiguration.buildConfiguration.buildTools.contains(product))
+            assertTrue(moduleConfiguration.buildConfiguration.buildTools.contains(product), "$moduleConfiguration.buildConfiguration.buildTools doesn't contain $product")
         }
     }
 
