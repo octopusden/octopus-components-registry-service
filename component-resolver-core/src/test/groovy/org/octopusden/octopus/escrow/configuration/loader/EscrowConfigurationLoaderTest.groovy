@@ -1,5 +1,6 @@
 package org.octopusden.octopus.escrow.configuration.loader
 
+import groovy.util.logging.Slf4j
 import org.apache.maven.artifact.DefaultArtifact
 import org.apache.maven.artifact.versioning.VersionRange
 import org.junit.jupiter.api.DisplayName
@@ -33,6 +34,7 @@ import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_SYSTEMS
 import static org.octopusden.octopus.escrow.TestConfigUtils.VERSION_NAMES
 import static org.octopusden.octopus.escrow.TestConfigUtils.VERSION_RANGE_FACTORY
 
+@Slf4j
 class EscrowConfigurationLoaderTest {
 
     static EscrowConfiguration escrowConfiguration
@@ -154,7 +156,7 @@ class EscrowConfigurationLoaderTest {
             } else {
                 oracle.version = "11.2"
             }
-            assertTrue(moduleConfiguration.buildConfiguration.buildTools.contains(oracle))
+            assertTrue(moduleConfiguration.buildConfiguration.buildTools.contains(oracle), "${moduleConfiguration.buildConfiguration.buildTools} 1sn't contain $oracle escrowModule=$escrowModule")
         }
     }
 
@@ -165,7 +167,8 @@ class EscrowConfigurationLoaderTest {
                 assertTrue(moduleConfiguration.escrow.gradle.includeTestConfigurations)
                 assertEquals("build", moduleConfiguration.escrow.buildTask)
             } else {
-                assertNull(moduleConfiguration.escrow.buildTask)
+                log.info("moduleConfiguration=$moduleConfiguration")
+                assertNull(moduleConfiguration.escrow.buildTask, "${moduleConfiguration.escrow.buildTask} should be empty")
             }
         }
     }
@@ -175,7 +178,7 @@ class EscrowConfigurationLoaderTest {
         getEscrowConfiguration().escrowModules.get("monitoring").moduleConfigurations.forEach { moduleConfiguration ->
             def kProduct = new PTKProductToolBean()
             kProduct.version = "03.49"
-            assertTrue(moduleConfiguration.buildConfiguration.buildTools.contains(kProduct))
+            assertTrue(moduleConfiguration.buildConfiguration.buildTools.contains(kProduct), "${moduleConfiguration.buildConfiguration.buildTools} doesn't contain $kProduct moduleConfiguration=$moduleConfiguration")
         }
     }
 
