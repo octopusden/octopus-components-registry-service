@@ -178,6 +178,7 @@ class EscrowConfigurationLoaderTest {
         getEscrowConfiguration().escrowModules.get("monitoring").moduleConfigurations.forEach { moduleConfiguration ->
             def kProduct = new PTKProductToolBean()
             kProduct.version = "03.49"
+            log.info("moduleConfiguration=$moduleConfiguration")
             assertTrue(moduleConfiguration.buildConfiguration.buildTools.contains(kProduct), "${moduleConfiguration.buildConfiguration.buildTools} doesn't contain $kProduct moduleConfiguration=$moduleConfiguration")
         }
     }

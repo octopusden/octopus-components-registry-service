@@ -11,33 +11,17 @@ import org.octopusden.octopus.components.registry.api.build.Build
 import org.octopusden.octopus.components.registry.api.build.BuildSystem
 import org.octopusden.octopus.components.registry.api.build.tools.BuildTool
 import org.octopusden.octopus.components.registry.api.build.tools.databases.DatabaseTool
-import org.octopusden.octopus.components.registry.api.build.tools.products.ProductTool
 import org.octopusden.octopus.components.registry.api.build.tools.databases.OracleDatabaseTool
 import org.octopusden.octopus.components.registry.api.build.tools.oracle.OdbcTool
-import org.octopusden.octopus.components.registry.api.build.tools.products.PTCProductTool
-import org.octopusden.octopus.components.registry.api.build.tools.products.PTDDbProductTool
-import org.octopusden.octopus.components.registry.api.build.tools.products.PTDProductTool
-import org.octopusden.octopus.components.registry.api.build.tools.products.PTKProductTool
+import org.octopusden.octopus.components.registry.api.build.tools.products.*
 import org.octopusden.octopus.components.registry.api.distribution.entities.MavenArtifactDistributionEntity
 import org.octopusden.octopus.components.registry.api.enums.*
 import org.octopusden.octopus.components.registry.api.escrow.Escrow
 import org.octopusden.octopus.components.registry.api.escrow.GradleBuild
 import org.octopusden.octopus.components.registry.api.model.Dependencies
-import org.octopusden.octopus.components.registry.api.vcs.CommonVersionControlSystem
-import org.octopusden.octopus.components.registry.api.vcs.ExternalVersionControlSystem
-import org.octopusden.octopus.components.registry.api.vcs.GitVersionControlSystem
-import org.octopusden.octopus.components.registry.api.vcs.MultiplyVersionControlSystem
-import org.octopusden.octopus.components.registry.api.vcs.VersionControlSystem
+import org.octopusden.octopus.components.registry.api.vcs.*
 import java.util.*
 import java.util.regex.Pattern
-import org.octopusden.octopus.components.registry.api.enums.BuildSystemType
-import org.octopusden.octopus.components.registry.api.enums.BuildToolTypes
-import org.octopusden.octopus.components.registry.api.enums.DatabaseTypes
-import org.octopusden.octopus.components.registry.api.enums.OracleDatabaseEditions
-import org.octopusden.octopus.components.registry.api.enums.ProductTypes
-import org.octopusden.octopus.components.registry.api.enums.VersionControlSystemType
-import kotlin.collections.ArrayList
-import kotlin.collections.HashMap
 
 open class OdbcToolBean:
     OdbcTool {
@@ -226,6 +210,11 @@ open class EscrowBean: Escrow {
     fun setReusable(reusable: Boolean) {
         this.reusable = reusable
     }
+
+    override fun toString(): String {
+        return "EscrowBean(buildTask=$buildTask, gradle=$gradle, providedDependencies=$providedDependencies, diskSpaceRequirement=$diskSpaceRequirement, additionalSources=$additionalSources, reusable=$reusable)"
+    }
+
 }
 
 open class BuildBean: Build {
