@@ -312,6 +312,9 @@ open class ComponentBean: SubComponentBean(),
     }
 
     override fun getSubComponents(): MutableMap<String, SubComponentBean> = subComponents
+    override fun toString(): String {
+        return "Component(productType=$productType, subComponents=$subComponents, displayName=$displayName)"
+    }
 }
 
 @JsonTypeName("mavenDistribution")
