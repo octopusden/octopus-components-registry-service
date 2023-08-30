@@ -9,6 +9,7 @@ import java.nio.file.Path
 import java.util.logging.Logger
 import java.util.stream.Collectors
 import kotlin.script.experimental.jsr223.KotlinJsr223DefaultScriptEngineFactory
+import kotlin.streams.toList
 
 object ComponentsRegistryScriptRunner {
     private val logger = Logger.getLogger(ComponentsRegistryScriptRunner::class.java.canonicalName)
@@ -31,9 +32,9 @@ object ComponentsRegistryScriptRunner {
     fun loadDSL(basePath: Path, products: Map<ProductTypes, String>): Collection<Component> {
         logger.info("loadDSL from $basePath")
         val registry = ArrayList<Component>()
-        val fileList = Files.list(basePath)
-        logger.info("File list = ${fileList.map { it.fileName.toString() }.collect(Collectors.joining(","))}")
-        fileList.filter { path -> path.fileName.toString().endsWith(".kts") }.forEach { path ->
+        val ktsFiles = Files.list(basePath).filter { path -> path.fileName.toString().endsWith(".kts") }.toList()
+        logger.info("File list = ${ktsFiles.stream().map { it.fileName.toString() }.collect(Collectors.joining(","))}")
+        ktsFiles.forEach { path ->
             val loadedComponents = loadDSLFile(path, products)
             registry.addAll(loadedComponents)
         }
