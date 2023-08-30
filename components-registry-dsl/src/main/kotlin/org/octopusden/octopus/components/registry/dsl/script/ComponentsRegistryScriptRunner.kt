@@ -7,6 +7,7 @@ import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.logging.Logger
+import java.util.stream.Collectors
 import kotlin.script.experimental.jsr223.KotlinJsr223DefaultScriptEngineFactory
 
 object ComponentsRegistryScriptRunner {
@@ -28,8 +29,11 @@ object ComponentsRegistryScriptRunner {
      * For boot jar based application System property 'kotlin.script.classpath' has to be set to DSL libraries before call.
      */
     fun loadDSL(basePath: Path, products: Map<ProductTypes, String>): Collection<Component> {
+        logger.info("loadDSL from $basePath")
         val registry = ArrayList<Component>()
-        Files.list(basePath).filter { path -> path.fileName.toString().endsWith(".kts") }.forEach { path ->
+        val fileList = Files.list(basePath)
+        logger.info("File list = ${fileList.map { it.fileName.toString() }.collect(Collectors.joining(","))}")
+        fileList.filter { path -> path.fileName.toString().endsWith(".kts") }.forEach { path ->
             val loadedComponents = loadDSLFile(path, products)
             registry.addAll(loadedComponents)
         }
