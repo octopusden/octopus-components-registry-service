@@ -1,22 +1,15 @@
 package org.octopusden.octopus.components.registry.dsl.test
 
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertNotNull
-import org.junit.jupiter.api.Assertions.assertNull
-import org.junit.jupiter.api.Assertions.assertTrue
-import org.octopusden.octopus.components.registry.api.build.tools.databases.OracleDatabaseTool
-import org.octopusden.octopus.components.registry.api.build.tools.oracle.OdbcTool
-import org.octopusden.octopus.components.registry.api.enums.BuildToolTypes
-import org.octopusden.octopus.components.registry.api.enums.ProductTypes
+import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.parallel.Execution
 import org.junit.jupiter.api.parallel.ExecutionMode
 import org.junit.jupiter.api.parallel.ResourceLock
-import org.octopusden.octopus.components.registry.dsl.PT_D
-import org.octopusden.octopus.components.registry.dsl.PT_D_DB
-import org.octopusden.octopus.components.registry.dsl.PT_K
-import org.octopusden.octopus.components.registry.dsl.component
+import org.octopusden.octopus.components.registry.api.build.tools.databases.OracleDatabaseTool
+import org.octopusden.octopus.components.registry.api.build.tools.oracle.OdbcTool
+import org.octopusden.octopus.components.registry.api.enums.BuildToolTypes
+import org.octopusden.octopus.components.registry.api.enums.ProductTypes
+import org.octopusden.octopus.components.registry.dsl.*
 
 /**
  * Parallel execution is not supported.
@@ -61,7 +54,7 @@ class ComponentsRegistryDSLTest {
 
     @Test
     fun testProductTypes() {
-        val components = registryDsl {
+        val components = registryDsl ({
             component("DDD") {
                 productType = "PT_K"
                 build {
@@ -123,7 +116,7 @@ class ComponentsRegistryDSLTest {
                     }
                 }
             }
-        }
+        }, PRODUCT_TYPES_MAP)
         assertEquals(ProductTypes.PT_K, components.getValue("DDD").productType)
         assertEquals(ProductTypes.PT_D_DB, components.getValue("component_db").productType)
         assertEquals(ProductTypes.PT_D, components.getValue("COMPONENT").productType)
@@ -285,5 +278,9 @@ class ComponentsRegistryDSLTest {
         assertNull(components.getValue("Z").build)
         assertTrue(components.getValue("Z").subComponents.getValue("Z1").build.dependencies.autoUpdate)
         assertNull(components.getValue("Z").subComponents.getValue("Z2").build)
+    }
+
+    companion object {
+        val PRODUCT_TYPES_MAP: Map<String, ProductTypes> = mapOf("PT_C" to PT_C, "PT_K" to PT_K, "PT_D" to PT_D, "PT_D_DB" to PT_D_DB)
     }
 }

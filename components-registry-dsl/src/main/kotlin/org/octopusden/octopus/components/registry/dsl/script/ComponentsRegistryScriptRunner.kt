@@ -73,4 +73,5 @@ object ComponentsRegistryScriptRunner {
         } ?: throw IllegalArgumentException("Unknown product type $type")
 
     fun getCurrentRegistry() = currentRegistry
+    fun getProductTypeMap()  = productTypeMap
 }
