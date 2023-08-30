@@ -3,6 +3,8 @@ package org.octopusden.octopus.escrow.configuration.loader
 import groovy.util.logging.Slf4j
 import org.apache.maven.artifact.DefaultArtifact
 import org.apache.maven.artifact.versioning.VersionRange
+import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -37,11 +39,13 @@ import static org.octopusden.octopus.escrow.TestConfigUtils.VERSION_RANGE_FACTOR
 @Slf4j
 class EscrowConfigurationLoaderTest {
 
-    static EscrowConfiguration escrowConfiguration
+    EscrowConfiguration escrowConfiguration
+    private static EscrowConfigurationLoader escrowConfigurationLoader
 
-    static {
+    @BeforeAll
+    static void init() {
         def aggregatorPath = Paths.get(EscrowConfigurationLoaderTest.class.getResource("/production/Aggregator.groovy").toURI())
-        EscrowConfigurationLoader escrowConfigurationLoader = new EscrowConfigurationLoader(
+         escrowConfigurationLoader  = new EscrowConfigurationLoader(
                 new ConfigLoader(
                         ComponentRegistryInfo.createFromFileSystem(
                                 aggregatorPath.getParent().toString(),
@@ -53,6 +57,10 @@ class EscrowConfigurationLoaderTest {
                 SUPPORTED_SYSTEMS,
                 VERSION_NAMES
         )
+    }
+
+    @BeforeEach
+    void setUp() {
         escrowConfiguration = escrowConfigurationLoader.loadFullConfiguration(Collections.emptyMap())
     }
 
@@ -198,7 +206,7 @@ class EscrowConfigurationLoaderTest {
 
     @Test
     void testEmptyProduct() {
-        getEscrowConfiguration().escrowModules.get("component_commons").moduleConfigurations.forEach { moduleConfiguration ->
+        escrowConfiguration.escrowModules.get("component_commons").moduleConfigurations.forEach { moduleConfiguration ->
             def product = new PTKProductToolBean()
             assertTrue(moduleConfiguration.buildConfiguration.buildTools.contains(product), "$moduleConfiguration.buildConfiguration.buildTools doesn't contain $product")
         }
