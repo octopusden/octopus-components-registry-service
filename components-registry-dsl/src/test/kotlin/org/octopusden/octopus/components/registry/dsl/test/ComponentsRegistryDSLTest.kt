@@ -54,7 +54,7 @@ class ComponentsRegistryDSLTest {
 
     @Test
     fun testProductTypes() {
-        val components = registryDsl ({
+        val components = registryDsl (PRODUCT_TYPES_MAP) {
             component("DDD") {
                 productType = "PT_K"
                 build {
@@ -116,7 +116,7 @@ class ComponentsRegistryDSLTest {
                     }
                 }
             }
-        }, PRODUCT_TYPES_MAP)
+        }
         assertEquals(ProductTypes.PT_K, components.getValue("DDD").productType)
         assertEquals(ProductTypes.PT_D_DB, components.getValue("component_db").productType)
         assertEquals(ProductTypes.PT_D, components.getValue("COMPONENT").productType)

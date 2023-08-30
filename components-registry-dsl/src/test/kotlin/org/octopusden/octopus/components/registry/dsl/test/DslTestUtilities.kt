@@ -6,9 +6,9 @@ import org.octopusden.octopus.components.registry.dsl.script.ComponentsRegistryS
 import java.util.*
 
 fun registryDsl(closure: ()-> Unit): Map<String, Component> {
-    return registryDsl(closure, Collections.emptyMap())
+    return registryDsl(Collections.emptyMap(), closure)
 }
-fun registryDsl(closure: ()-> Unit, productTypesMap: Map<String, ProductTypes>): Map<String, Component> {
+fun registryDsl(productTypesMap: Map<String, ProductTypes>, closure: () -> Unit): Map<String, Component> {
     ComponentsRegistryScriptRunner.getCurrentRegistry().clear()
     ComponentsRegistryScriptRunner.getProductTypeMap().clear()
     ComponentsRegistryScriptRunner.getProductTypeMap().putAll(productTypesMap)
