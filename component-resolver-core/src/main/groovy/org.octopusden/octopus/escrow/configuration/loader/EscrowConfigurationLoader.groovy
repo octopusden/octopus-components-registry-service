@@ -138,12 +138,12 @@ class EscrowConfigurationLoader {
             fullConfig.escrowModules.put(escrowComponent.moduleName, escrowComponent)
         }
 
-        LOG.info("Loading DSL")
+        LOG.debug("Loading DSL")
         def dslComponents = configLoader.loadDslDefinedComponents()
         LOG.info("Loaded $dslComponents.size DSL components")
 
         dslComponents.forEach {component ->
-            LOG.info("processing dsl $component.")
+            LOG.info("processing dsl $component")
             mergeGroovyAndDslComponent(component, fullConfig)
             component.subComponents.forEach { name, subComponent -> mergeGroovyAndDslSubComponent(subComponent, fullConfig)}
         }
