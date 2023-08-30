@@ -79,7 +79,7 @@ configure(subprojects) {
     test {
         useJUnitPlatform()
         systemProperties = [
-            'junit.jupiter.execution.parallel.enabled': true
+            'junit.jupiter.execution.parallel.enabled': false
         ]
     }
 
