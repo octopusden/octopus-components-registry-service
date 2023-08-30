@@ -38,7 +38,6 @@ class BuildToolsResolver implements IBuildToolsResolver {
     @Override
     Collection<BuildTool> getComponentBuildTools(ComponentVersion component, String projectVersion, boolean ignoreRequired) {
         def componentConfiguration = EscrowConfigurationLoader.getEscrowModuleConfig(escrowConfiguration, component)
-        log.info("getEscrowModuleConfig($component,$projectVersion)=$componentConfiguration")
         def buildTools = componentConfiguration?.buildConfiguration?.buildTools
         Collection<BuildTool> overriddenBuildTools = new ArrayList<>()
         def buildConfiguration = componentConfiguration?.buildConfiguration
