@@ -1,15 +1,13 @@
 package org.octopusden.octopus.components.registry.dsl.script
 
-import org.octopusden.octopus.components.registry.api.Component
 import org.jetbrains.kotlin.cli.common.environment.setIdeaIoUseFallback
+import org.jetbrains.kotlin.script.jsr223.KotlinJsr223JvmLocalScriptEngineFactory
+import org.octopusden.octopus.components.registry.api.Component
+import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.logging.Logger
-import org.jetbrains.kotlin.script.jsr223.KotlinJsr223JvmLocalScriptEngineFactory
-import org.octopusden.octopus.components.registry.api.enums.ProductTypes
-import java.util.EnumMap
 import kotlin.script.experimental.jsr223.KotlinJsr223DefaultScriptEngineFactory
-import kotlin.collections.ArrayList
 
 object ComponentsRegistryScriptRunner {
     private val logger = Logger.getLogger(ComponentsRegistryScriptRunner::class.java.canonicalName)
@@ -39,6 +37,7 @@ object ComponentsRegistryScriptRunner {
     }
 
     fun loadDSLFile(dslFilePath: Path, products: Map<ProductTypes, String>): Collection<Component> {
+        logger.info("loadDSLFile $dslFilePath")
         if (productTypeMap.isEmpty()) {
             products.forEach { k, v -> productTypeMap[v] = k }
         }
