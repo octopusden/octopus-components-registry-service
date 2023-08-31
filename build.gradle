@@ -79,6 +79,8 @@ configure(subprojects) {
     test {
         useJUnitPlatform()
         systemProperties = [
+                //NOTE: when parallel.enabled = true EscrowConfigurationLoaderTest + BuildToolResolverTest
+                // can fail sporadically on GH
             'junit.jupiter.execution.parallel.enabled': false
         ]
     }
