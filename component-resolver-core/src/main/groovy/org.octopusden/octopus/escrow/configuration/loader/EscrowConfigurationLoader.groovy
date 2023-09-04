@@ -1,5 +1,13 @@
 package org.octopusden.octopus.escrow.configuration.loader
 
+import groovy.transform.TypeChecked
+import groovy.transform.TypeCheckingMode
+import org.apache.commons.lang3.StringUtils
+import org.apache.commons.lang3.Validate
+import org.apache.logging.log4j.LogManager
+import org.apache.logging.log4j.Logger
+import org.apache.maven.artifact.versioning.InvalidVersionSpecificationException
+import org.apache.maven.artifact.versioning.VersionRange
 import org.octopusden.octopus.components.registry.api.Component
 import org.octopusden.octopus.components.registry.api.SubComponent
 import org.octopusden.octopus.components.registry.api.VersionedComponentConfiguration
@@ -27,21 +35,18 @@ import org.octopusden.octopus.releng.dto.ComponentInfo
 import org.octopusden.octopus.releng.dto.ComponentVersion
 import org.octopusden.octopus.releng.dto.JiraComponent
 import org.octopusden.releng.versions.ComponentVersionFormat
-import groovy.transform.TypeChecked
-import groovy.transform.TypeCheckingMode
-import org.apache.commons.lang3.StringUtils
-import org.apache.commons.lang3.Validate
-import org.apache.logging.log4j.LogManager
-import org.apache.logging.log4j.Logger
-import org.apache.maven.artifact.versioning.InvalidVersionSpecificationException
-import org.apache.maven.artifact.versioning.VersionRange
 import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRangeFactory
 
 import java.util.stream.Collectors
 
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.*
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.BRANCH
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.REPOSITORY_TYPE
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.SECURITY_GROUPS_READ
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.TAG
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.VCS_SETTINGS
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.VCS_URL
 
 class EscrowConfigurationLoader {
     private static final Logger LOG = LogManager.getLogger(EscrowConfigurationLoader.class)
@@ -135,7 +140,10 @@ class EscrowConfigurationLoader {
 
         LOG.debug("Loading DSL")
         def dslComponents = configLoader.loadDslDefinedComponents()
+        LOG.info("Loaded $dslComponents.size DSL components")
+
         dslComponents.forEach {component ->
+            LOG.debug("processing dsl $component")
             mergeGroovyAndDslComponent(component, fullConfig)
             component.subComponents.forEach { name, subComponent -> mergeGroovyAndDslSubComponent(subComponent, fullConfig)}
         }

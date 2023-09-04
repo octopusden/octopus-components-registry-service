@@ -1,8 +1,18 @@
 package org.octopusden.octopus.escrow.configuration.loader
 
+import groovy.util.logging.Slf4j
+import org.apache.maven.artifact.DefaultArtifact
+import org.apache.maven.artifact.versioning.VersionRange
+import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.Arguments
+import org.junit.jupiter.params.provider.MethodSource
 import org.octopusden.octopus.components.registry.api.beans.GitVersionControlSystemBean
-import org.octopusden.octopus.components.registry.api.beans.PTKProductToolBean
 import org.octopusden.octopus.components.registry.api.beans.OracleDatabaseToolBean
+import org.octopusden.octopus.components.registry.api.beans.PTKProductToolBean
 import org.octopusden.octopus.components.registry.api.enums.BuildSystemType
 import org.octopusden.octopus.escrow.RepositoryType
 import org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration
@@ -10,36 +20,32 @@ import org.octopusden.octopus.escrow.configuration.model.EscrowModule
 import org.octopusden.octopus.escrow.configuration.validation.util.VersionRangeHelper
 import org.octopusden.octopus.escrow.resolvers.ModuleByArtifactResolver
 import org.octopusden.octopus.releng.dto.ComponentVersion
-import org.apache.maven.artifact.DefaultArtifact
-import org.apache.maven.artifact.versioning.VersionRange
-import org.junit.jupiter.api.DisplayName
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.Arguments
-import org.junit.jupiter.params.provider.MethodSource
 import org.octopusden.releng.versions.NumericVersionFactory
 
 import java.nio.file.Paths
 import java.util.stream.Stream
 
-import static org.octopusden.octopus.escrow.TestConfigUtils.PRODUCT_TYPES
-import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_GROUP_IDS
-import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_SYSTEMS
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat
 import static org.junit.jupiter.api.Assertions.assertEquals
 import static org.junit.jupiter.api.Assertions.assertNotNull
 import static org.junit.jupiter.api.Assertions.assertNull
 import static org.junit.jupiter.api.Assertions.assertTrue
+import static org.octopusden.octopus.escrow.TestConfigUtils.PRODUCT_TYPES
+import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_GROUP_IDS
+import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_SYSTEMS
 import static org.octopusden.octopus.escrow.TestConfigUtils.VERSION_NAMES
 import static org.octopusden.octopus.escrow.TestConfigUtils.VERSION_RANGE_FACTORY
 
+@Slf4j
 class EscrowConfigurationLoaderTest {
 
-    static EscrowConfiguration escrowConfiguration
+    EscrowConfiguration escrowConfiguration
+    private static EscrowConfigurationLoader escrowConfigurationLoader
 
-    static {
+    @BeforeAll
+    static void init() {
         def aggregatorPath = Paths.get(EscrowConfigurationLoaderTest.class.getResource("/production/Aggregator.groovy").toURI())
-        EscrowConfigurationLoader escrowConfigurationLoader = new EscrowConfigurationLoader(
+         escrowConfigurationLoader  = new EscrowConfigurationLoader(
                 new ConfigLoader(
                         ComponentRegistryInfo.createFromFileSystem(
                                 aggregatorPath.getParent().toString(),
@@ -51,6 +57,10 @@ class EscrowConfigurationLoaderTest {
                 SUPPORTED_SYSTEMS,
                 VERSION_NAMES
         )
+    }
+
+    @BeforeEach
+    void setUp() {
         escrowConfiguration = escrowConfigurationLoader.loadFullConfiguration(Collections.emptyMap())
     }
 
@@ -154,7 +164,7 @@ class EscrowConfigurationLoaderTest {
             } else {
                 oracle.version = "11.2"
             }
-            assertTrue(moduleConfiguration.buildConfiguration.buildTools.contains(oracle))
+            assertTrue(moduleConfiguration.buildConfiguration.buildTools.contains(oracle), "${moduleConfiguration.buildConfiguration.buildTools} 1sn't contain $oracle escrowModule=$escrowModule")
         }
     }
 
@@ -165,7 +175,8 @@ class EscrowConfigurationLoaderTest {
                 assertTrue(moduleConfiguration.escrow.gradle.includeTestConfigurations)
                 assertEquals("build", moduleConfiguration.escrow.buildTask)
             } else {
-                assertNull(moduleConfiguration.escrow.buildTask)
+                log.info("moduleConfiguration=$moduleConfiguration")
+                assertNull(moduleConfiguration.escrow.buildTask, "${moduleConfiguration.escrow.buildTask} should be empty")
             }
         }
     }
@@ -175,7 +186,8 @@ class EscrowConfigurationLoaderTest {
         getEscrowConfiguration().escrowModules.get("monitoring").moduleConfigurations.forEach { moduleConfiguration ->
             def kProduct = new PTKProductToolBean()
             kProduct.version = "03.49"
-            assertTrue(moduleConfiguration.buildConfiguration.buildTools.contains(kProduct))
+            log.info("moduleConfiguration=$moduleConfiguration")
+            assertTrue(moduleConfiguration.buildConfiguration.buildTools.contains(kProduct), "${moduleConfiguration.buildConfiguration.buildTools} doesn't contain $kProduct moduleConfiguration=$moduleConfiguration")
         }
     }
 
@@ -194,9 +206,9 @@ class EscrowConfigurationLoaderTest {
 
     @Test
     void testEmptyProduct() {
-        getEscrowConfiguration().escrowModules.get("component_commons").moduleConfigurations.forEach { moduleConfiguration ->
+        escrowConfiguration.escrowModules.get("component_commons").moduleConfigurations.forEach { moduleConfiguration ->
             def product = new PTKProductToolBean()
-            assertTrue(moduleConfiguration.buildConfiguration.buildTools.contains(product))
+            assertTrue(moduleConfiguration.buildConfiguration.buildTools.contains(product), "$moduleConfiguration.buildConfiguration.buildTools doesn't contain $product")
         }
     }
 

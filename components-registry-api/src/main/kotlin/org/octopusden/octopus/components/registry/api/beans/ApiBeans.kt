@@ -11,15 +11,20 @@ import org.octopusden.octopus.components.registry.api.build.Build
 import org.octopusden.octopus.components.registry.api.build.BuildSystem
 import org.octopusden.octopus.components.registry.api.build.tools.BuildTool
 import org.octopusden.octopus.components.registry.api.build.tools.databases.DatabaseTool
-import org.octopusden.octopus.components.registry.api.build.tools.products.ProductTool
 import org.octopusden.octopus.components.registry.api.build.tools.databases.OracleDatabaseTool
 import org.octopusden.octopus.components.registry.api.build.tools.oracle.OdbcTool
 import org.octopusden.octopus.components.registry.api.build.tools.products.PTCProductTool
 import org.octopusden.octopus.components.registry.api.build.tools.products.PTDDbProductTool
 import org.octopusden.octopus.components.registry.api.build.tools.products.PTDProductTool
 import org.octopusden.octopus.components.registry.api.build.tools.products.PTKProductTool
+import org.octopusden.octopus.components.registry.api.build.tools.products.ProductTool
 import org.octopusden.octopus.components.registry.api.distribution.entities.MavenArtifactDistributionEntity
-import org.octopusden.octopus.components.registry.api.enums.*
+import org.octopusden.octopus.components.registry.api.enums.BuildSystemType
+import org.octopusden.octopus.components.registry.api.enums.BuildToolTypes
+import org.octopusden.octopus.components.registry.api.enums.DatabaseTypes
+import org.octopusden.octopus.components.registry.api.enums.OracleDatabaseEditions
+import org.octopusden.octopus.components.registry.api.enums.ProductTypes
+import org.octopusden.octopus.components.registry.api.enums.VersionControlSystemType
 import org.octopusden.octopus.components.registry.api.escrow.Escrow
 import org.octopusden.octopus.components.registry.api.escrow.GradleBuild
 import org.octopusden.octopus.components.registry.api.model.Dependencies
@@ -30,14 +35,6 @@ import org.octopusden.octopus.components.registry.api.vcs.MultiplyVersionControl
 import org.octopusden.octopus.components.registry.api.vcs.VersionControlSystem
 import java.util.*
 import java.util.regex.Pattern
-import org.octopusden.octopus.components.registry.api.enums.BuildSystemType
-import org.octopusden.octopus.components.registry.api.enums.BuildToolTypes
-import org.octopusden.octopus.components.registry.api.enums.DatabaseTypes
-import org.octopusden.octopus.components.registry.api.enums.OracleDatabaseEditions
-import org.octopusden.octopus.components.registry.api.enums.ProductTypes
-import org.octopusden.octopus.components.registry.api.enums.VersionControlSystemType
-import kotlin.collections.ArrayList
-import kotlin.collections.HashMap
 
 open class OdbcToolBean:
     OdbcTool {
@@ -88,6 +85,11 @@ open class ProductToolBean(private val type: ProductTypes, private var settingsP
         result = 31 * result + (version?.hashCode() ?: 0)
         return result
     }
+
+    override fun toString(): String {
+        return "ProductToolBean(type=$type, settingsProperty='$settingsProperty', version=$version)"
+    }
+
 }
 
 open class PTCProductToolBean: ProductToolBean(ProductTypes.PT_C, "uscschema"),
@@ -159,6 +161,10 @@ class OracleDatabaseToolBean: DatabaseToolBean(DatabaseTypes.ORACLE, "db"),
         result = 31 * result + (edition?.hashCode() ?: 0)
         return result
     }
+
+    override fun toString(): String {
+        return "OracleDatabaseToolBean(edition=$edition)"
+    }
 }
 
 open class GradleBuildBean: GradleBuild {
@@ -217,6 +223,11 @@ open class EscrowBean: Escrow {
     fun setReusable(reusable: Boolean) {
         this.reusable = reusable
     }
+
+    override fun toString(): String {
+        return "EscrowBean(buildTask=$buildTask, gradle=$gradle, providedDependencies=$providedDependencies, diskSpaceRequirement=$diskSpaceRequirement, additionalSources=$additionalSources, reusable=$reusable)"
+    }
+
 }
 
 open class BuildBean: Build {
@@ -314,6 +325,9 @@ open class ComponentBean: SubComponentBean(),
     }
 
     override fun getSubComponents(): MutableMap<String, SubComponentBean> = subComponents
+    override fun toString(): String {
+        return "Component(productType=$productType, subComponents=$subComponents, displayName=$displayName)"
+    }
 }
 
 @JsonTypeName("mavenDistribution")

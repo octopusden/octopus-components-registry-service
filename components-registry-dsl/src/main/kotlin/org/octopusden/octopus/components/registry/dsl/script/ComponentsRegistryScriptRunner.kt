@@ -1,15 +1,15 @@
 package org.octopusden.octopus.components.registry.dsl.script
 
-import org.octopusden.octopus.components.registry.api.Component
 import org.jetbrains.kotlin.cli.common.environment.setIdeaIoUseFallback
+import org.jetbrains.kotlin.script.jsr223.KotlinJsr223JvmLocalScriptEngineFactory
+import org.octopusden.octopus.components.registry.api.Component
+import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.logging.Logger
-import org.jetbrains.kotlin.script.jsr223.KotlinJsr223JvmLocalScriptEngineFactory
-import org.octopusden.octopus.components.registry.api.enums.ProductTypes
-import java.util.EnumMap
+import java.util.stream.Collectors
 import kotlin.script.experimental.jsr223.KotlinJsr223DefaultScriptEngineFactory
-import kotlin.collections.ArrayList
+import kotlin.streams.toList
 
 object ComponentsRegistryScriptRunner {
     private val logger = Logger.getLogger(ComponentsRegistryScriptRunner::class.java.canonicalName)
@@ -30,8 +30,11 @@ object ComponentsRegistryScriptRunner {
      * For boot jar based application System property 'kotlin.script.classpath' has to be set to DSL libraries before call.
      */
     fun loadDSL(basePath: Path, products: Map<ProductTypes, String>): Collection<Component> {
+        logger.info("loadDSL from $basePath")
         val registry = ArrayList<Component>()
-        Files.list(basePath).filter { path -> path.fileName.toString().endsWith(".kts") }.forEach { path ->
+        val ktsFiles = Files.list(basePath).filter { path -> path.fileName.toString().endsWith(".kts") }.toList()
+        logger.info("File list = ${ktsFiles.stream().map { it.fileName.toString() }.collect(Collectors.joining(","))}")
+        ktsFiles.forEach { path ->
             val loadedComponents = loadDSLFile(path, products)
             registry.addAll(loadedComponents)
         }
@@ -39,6 +42,7 @@ object ComponentsRegistryScriptRunner {
     }
 
     fun loadDSLFile(dslFilePath: Path, products: Map<ProductTypes, String>): Collection<Component> {
+        logger.info("loadDSLFile $dslFilePath")
         if (productTypeMap.isEmpty()) {
             products.forEach { k, v -> productTypeMap[v] = k }
         }
@@ -69,4 +73,5 @@ object ComponentsRegistryScriptRunner {
         } ?: throw IllegalArgumentException("Unknown product type $type")
 
     fun getCurrentRegistry() = currentRegistry
+    fun getProductTypeMap()  = productTypeMap
 }
