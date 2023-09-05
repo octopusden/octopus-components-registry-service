@@ -24,8 +24,9 @@ class GroovySlurperConfigValidator {
     public static final String SECURITY_GROUPS = 'securityGroups'
     public static final String SECURITY_GROUPS_READ = "read"
     private static final String FILE_PATTERN = "(file:)(/|/{3})([^/\\\\0,]+(/)?)+"
-    private static final String PROHIBITED_SYMBOLS = ":,\\s/"
-    private static final String GAV_MAVEN_PATTERN = "[^$PROHIBITED_SYMBOLS]+(:[^$PROHIBITED_SYMBOLS]+){1,3}"
+    private static final String PROHIBITED_SYMBOLS = "\\\\\\s:|\\?\\*\"'<>\\+"
+    private static final String GAV_PROHIBITED_SYMBOLS = "/$PROHIBITED_SYMBOLS"
+    private static final String GAV_MAVEN_PATTERN = "[^$GAV_PROHIBITED_SYMBOLS]+(:[^$GAV_PROHIBITED_SYMBOLS]+){1,3}"
     private static final String GAV_ENTRY_PATTERN = "($FILE_PATTERN)|($GAV_MAVEN_PATTERN)"
     public static final Pattern GAV_PATTERN = Pattern.compile("^($GAV_ENTRY_PATTERN)(,($GAV_ENTRY_PATTERN))*\$")
     private static final String DEB_ENTRY_PATTERN = "[^$PROHIBITED_SYMBOLS]+\\.deb"
