@@ -34,4 +34,13 @@ class CommonControllerV2(
     fun getSupportedGroupIds(): Set<String> {
         return configHelper.supportedGroupIds().toSet()
     }
+
+    @GetMapping("version-names", produces = [MediaType.APPLICATION_JSON_VALUE])
+    fun getVersionNames(): Map<String, String> {
+        return mapOf(
+            "service-branch" to configHelper.serviceBranch(),
+            "service" to configHelper.service(),
+            "minor" to configHelper.minor(),
+        )
+    }
 }

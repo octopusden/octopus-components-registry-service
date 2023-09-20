@@ -95,6 +95,9 @@ interface ComponentsRegistryServiceClient {
     @RequestLine("GET rest/api/2/common/supported-groups")
     fun getSupportedGroupIds(): Set<String>
 
+    @RequestLine("GET rest/api/2/common/version-names")
+    fun getVersionNames(): Map<String, String>
+
     @RequestLine("GET rest/api/2/components-registry/service/status")
     fun getServiceStatus(): ServiceStatusDTO
 

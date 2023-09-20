@@ -104,6 +104,8 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
 
     override fun getSupportedGroupIds(): Set<String> = componentsRegistryClient.getSupportedGroupIds()
 
+    override fun getVersionNames(): Map<String, String> = componentsRegistryClient.getVersionNames()
+
     override fun getDependencyAliasToComponentMapping(): Map<String, String> =
         componentsRegistryClient.getDependencyAliasToComponentMapping()
 

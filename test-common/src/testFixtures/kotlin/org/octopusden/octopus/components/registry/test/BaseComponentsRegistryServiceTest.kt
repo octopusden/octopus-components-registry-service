@@ -87,6 +87,7 @@ abstract class BaseComponentsRegistryServiceTest {
     //common
     protected abstract fun getAllJiraComponentVersionRanges(): Collection<JiraComponentVersionRangeDTO>
     protected abstract fun getSupportedGroupIds(): Set<String>
+    abstract fun getVersionNames(): Map<String, String>
     protected abstract fun getDependencyAliasToComponentMapping(): Map<String, String>
 
     protected abstract fun getComponentV1(component: String): ComponentV1
@@ -131,6 +132,15 @@ abstract class BaseComponentsRegistryServiceTest {
     @Test
     fun testGetSupportedGroupIds() {
         Assertions.assertEquals(Arrays.asList("org.octopusden.octopus", "io.bcomponent").sorted(), getSupportedGroupIds().sorted())
+    }
+
+    @Test
+    fun testVersionNames() {
+        val map = getVersionNames()
+        Assertions.assertEquals(3, map.size)
+        Assertions.assertEquals("serviceCBranch", map["service-branch"])
+        Assertions.assertEquals("serviceC", map["service"])
+        Assertions.assertEquals("minorC", map["minor"])
     }
 
     @Test

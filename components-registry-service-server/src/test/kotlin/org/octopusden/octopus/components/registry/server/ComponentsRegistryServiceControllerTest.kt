@@ -62,6 +62,16 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
             .response
             .toObject(object : TypeReference<Set<String>>() {})
 
+    override fun getVersionNames(): Map<String, String> =
+        mvc.perform(
+            MockMvcRequestBuilders.get(URI.create("/rest/api/2/common/version-names"))
+                .accept(APPLICATION_JSON)
+        )
+            .andExpect(status().isOk)
+            .andReturn()
+            .response
+            .toObject(object : TypeReference<Map<String, String>>() {})
+
     override fun getDependencyAliasToComponentMapping() =
         mvc.perform(
             MockMvcRequestBuilders.get(URI.create("/rest/api/2/common/dependency-aliases"))
