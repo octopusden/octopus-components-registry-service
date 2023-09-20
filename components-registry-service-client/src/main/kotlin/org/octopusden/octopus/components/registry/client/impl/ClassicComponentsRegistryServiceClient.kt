@@ -91,6 +91,9 @@ class ClassicComponentsRegistryServiceClient(
     override fun getSupportedGroupIds(): Set<String> =
         client.getSupportedGroupIds()
 
+    override fun getVersionNames(): Map<String, String> =
+        client.getVersionNames()
+
     override fun getServiceStatus(): ServiceStatusDTO =
         client.getServiceStatus()
 
