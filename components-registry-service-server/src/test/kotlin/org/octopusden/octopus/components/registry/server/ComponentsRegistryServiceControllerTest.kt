@@ -21,6 +21,7 @@ import org.octopusden.octopus.components.registry.test.BaseComponentsRegistrySer
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
+import org.octopusden.octopus.components.registry.core.dto.VersionNamesDTO
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
@@ -62,15 +63,14 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
             .response
             .toObject(object : TypeReference<Set<String>>() {})
 
-    override fun getVersionNames(): Map<String, String> =
-        mvc.perform(
-            MockMvcRequestBuilders.get(URI.create("/rest/api/2/common/version-names"))
-                .accept(APPLICATION_JSON)
-        )
-            .andExpect(status().isOk)
-            .andReturn()
-            .response
-            .toObject(object : TypeReference<Map<String, String>>() {})
+    override fun getVersionNames(): VersionNamesDTO = mvc.perform(
+        MockMvcRequestBuilders.get(URI.create("/rest/api/2/common/version-names"))
+            .accept(APPLICATION_JSON)
+    )
+        .andExpect(status().isOk)
+        .andReturn()
+        .response
+        .toObject(VersionNamesDTO::class.java)
 
     override fun getDependencyAliasToComponentMapping() =
         mvc.perform(

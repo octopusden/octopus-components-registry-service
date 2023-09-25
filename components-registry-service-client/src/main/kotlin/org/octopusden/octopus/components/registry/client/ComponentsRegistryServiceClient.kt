@@ -15,6 +15,7 @@ import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionD
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionRangeDTO
 import org.octopusden.octopus.components.registry.core.dto.ServiceStatusDTO
 import org.octopusden.octopus.components.registry.core.dto.VCSSettingsDTO
+import org.octopusden.octopus.components.registry.core.dto.VersionNamesDTO
 import org.octopusden.octopus.components.registry.core.dto.VersionRequest
 import org.octopusden.octopus.components.registry.core.dto.VersionedComponent
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
@@ -96,7 +97,7 @@ interface ComponentsRegistryServiceClient {
     fun getSupportedGroupIds(): Set<String>
 
     @RequestLine("GET rest/api/2/common/version-names")
-    fun getVersionNames(): Map<String, String>
+    fun getVersionNames(): VersionNamesDTO
 
     @RequestLine("GET rest/api/2/components-registry/service/status")
     fun getServiceStatus(): ServiceStatusDTO

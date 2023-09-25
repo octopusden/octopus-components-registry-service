@@ -21,6 +21,7 @@ import feign.httpclient.ApacheHttpClient
 import feign.jackson.JacksonDecoder
 import feign.jackson.JacksonEncoder
 import feign.slf4j.Slf4jLogger
+import org.octopusden.octopus.components.registry.core.dto.VersionNamesDTO
 
 class ClassicComponentsRegistryServiceClient(
     apiUrlProvider: ClassicComponentsRegistryServiceClientUrlProvider,
@@ -91,7 +92,7 @@ class ClassicComponentsRegistryServiceClient(
     override fun getSupportedGroupIds(): Set<String> =
         client.getSupportedGroupIds()
 
-    override fun getVersionNames(): Map<String, String> =
+    override fun getVersionNames(): VersionNamesDTO =
         client.getVersionNames()
 
     override fun getServiceStatus(): ServiceStatusDTO =

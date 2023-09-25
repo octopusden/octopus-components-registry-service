@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.parallel.ResourceLock
+import org.octopusden.octopus.components.registry.core.dto.VersionNamesDTO
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.test.context.ActiveProfiles
@@ -104,7 +105,7 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
 
     override fun getSupportedGroupIds(): Set<String> = componentsRegistryClient.getSupportedGroupIds()
 
-    override fun getVersionNames(): Map<String, String> = componentsRegistryClient.getVersionNames()
+    override fun getVersionNames(): VersionNamesDTO = componentsRegistryClient.getVersionNames()
 
     override fun getDependencyAliasToComponentMapping(): Map<String, String> =
         componentsRegistryClient.getDependencyAliasToComponentMapping()
