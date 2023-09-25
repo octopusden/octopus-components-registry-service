@@ -6,7 +6,7 @@ plugins {
 }
 
 dependencies {
-    implementation project(":components-registry-service-core")
+    api project(":components-registry-service-core")
     implementation "com.fasterxml.jackson.core:jackson-databind"
 
     implementation(platform("io.github.openfeign:feign-bom:12.2"))

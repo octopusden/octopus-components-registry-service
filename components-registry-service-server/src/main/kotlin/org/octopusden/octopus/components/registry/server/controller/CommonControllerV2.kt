@@ -1,9 +1,11 @@
 package org.octopusden.octopus.components.registry.server.controller
 
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionRangeDTO
+import org.octopusden.octopus.components.registry.core.dto.VersionNamesDTO
 import org.octopusden.octopus.components.registry.server.mapper.toDTO
 import org.octopusden.octopus.components.registry.server.service.ComponentRegistryResolver
 import org.octopusden.octopus.escrow.config.ConfigHelper
+import org.octopusden.releng.versions.VersionNames
 import org.springframework.core.env.Environment
 import org.springframework.http.MediaType
 import org.springframework.web.bind.annotation.GetMapping
@@ -14,7 +16,8 @@ import org.springframework.web.bind.annotation.RestController
 @RequestMapping("rest/api/2/common")
 class CommonControllerV2(
     private val componentRegistryResolver: ComponentRegistryResolver,
-    private val environment: Environment
+    private val environment: Environment,
+    private val versionNames: VersionNames
 ) {
 
     val configHelper: ConfigHelper =
@@ -35,12 +38,7 @@ class CommonControllerV2(
         return configHelper.supportedGroupIds().toSet()
     }
 
+    @Deprecated( replaceWith = ReplaceWith("getVersionNamesV2()"), message = "Use getVersionNamesV2() instead")
     @GetMapping("version-names", produces = [MediaType.APPLICATION_JSON_VALUE])
-    fun getVersionNames(): Map<String, String> {
-        return mapOf(
-            "service-branch" to configHelper.serviceBranch(),
-            "service" to configHelper.service(),
-            "minor" to configHelper.minor(),
-        )
-    }
+    fun getVersionNames(): VersionNamesDTO = VersionNamesDTO(versionNames.serviceBranch, versionNames.service, versionNames.minor)
 }

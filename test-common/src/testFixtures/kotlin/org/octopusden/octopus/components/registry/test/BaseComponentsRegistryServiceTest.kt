@@ -24,6 +24,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
 import org.junit.jupiter.params.provider.ValueSource
+import org.octopusden.octopus.components.registry.core.dto.VersionNamesDTO
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -87,7 +88,7 @@ abstract class BaseComponentsRegistryServiceTest {
     //common
     protected abstract fun getAllJiraComponentVersionRanges(): Collection<JiraComponentVersionRangeDTO>
     protected abstract fun getSupportedGroupIds(): Set<String>
-    abstract fun getVersionNames(): Map<String, String>
+    abstract fun getVersionNames(): VersionNamesDTO
     protected abstract fun getDependencyAliasToComponentMapping(): Map<String, String>
 
     protected abstract fun getComponentV1(component: String): ComponentV1
@@ -136,11 +137,10 @@ abstract class BaseComponentsRegistryServiceTest {
 
     @Test
     fun testVersionNames() {
-        val map = getVersionNames()
-        Assertions.assertEquals(3, map.size)
-        Assertions.assertEquals("serviceCBranch", map["service-branch"])
-        Assertions.assertEquals("serviceC", map["service"])
-        Assertions.assertEquals("minorC", map["minor"])
+        val value = getVersionNames()
+        Assertions.assertEquals("serviceCBranch", value.serviceBranch)
+        Assertions.assertEquals("serviceC", value.service)
+        Assertions.assertEquals("minorC", value.minor)
     }
 
     @Test
