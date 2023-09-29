@@ -7,7 +7,6 @@ import java.util.Map;
 import java.util.function.Function;
 
 public class EscrowExpressionContext {
-    private static volatile EscrowExpressionContext VALIDATION_CONTEXT = null;
     private final Map<String, String> env = System.getenv();
     private final String fileName;
     private final String version;
