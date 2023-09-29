@@ -399,7 +399,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
             loadConfiguration("invalid/invalidDistributionGAV.groovy")
             assert false: 'EscrowException should be thrown'
         } catch (EscrowConfigurationException e) {
-            assert e.message.contains("GAV 'org.octopusden.octopus.bcomponent:build/er:war' must match pattern")
+            assert e.message.contains("GAV 'org.octopusden.octopus.bcomponent:build/er:war,org.octopusden.octopus.bcomponent:builder:jar' must match pattern")
         }
     }
 

@@ -23,7 +23,7 @@ class GroovySlurperConfigValidator {
     public static final String DEPENDENCIES = 'dependencies'
     public static final String SECURITY_GROUPS = 'securityGroups'
     public static final String SECURITY_GROUPS_READ = "read"
-    private static final String FILE_PATTERN = "(file:)(/|/{3})([^/\\\\0,]+(/)?)+"
+    private static final String FILE_PATTERN = "file:/.+"
     private static final String PROHIBITED_SYMBOLS = "\\\\\\s:|\\?\\*\"'<>\\+"
     private static final String GAV_PROHIBITED_SYMBOLS = "/$PROHIBITED_SYMBOLS"
     private static final String GAV_MAVEN_PATTERN = "[^$GAV_PROHIBITED_SYMBOLS]+(:[^$GAV_PROHIBITED_SYMBOLS]+){1,3}"
@@ -230,23 +230,14 @@ class GroovySlurperConfigValidator {
         }
     }
 
-    def validateDistributionSection(ConfigObject distributionSection, VersionNames versionNames,  String moduleName, String moduleConfigName) {
+    def validateDistributionSection(ConfigObject distributionSection, VersionNames versionNames, String moduleName, String moduleConfigName) {
         validateForUnknownAttributes(distributionSection, DISTRIBUTION, SUPPORTED_DISTRIBUTION_ATTRIBUTES, moduleName, moduleConfigName)
-        def numericFormatFactory = new NumericVersionFactory(versionNames)
+        def expressionContext = new EscrowExpressionContext("validation", "1.0", "distribution.zip", new NumericVersionFactory(versionNames))
         if (distributionSection.containsKey("GAV")) {
             try {
-                def gavValue = EscrowExpressionParser.getInstance().parseAndEvaluate(distributionSection.get("GAV") as String, EscrowExpressionContext.getValidationEscrowExpressionContext(numericFormatFactory))
-                try { //TODO: GAV_PATTERN should be used to verify whole gavValue
-                    DistributionUtilities.parseDistributionGAV(gavValue as String).forEach { distributionItem ->
-                        if (distributionItem instanceof MavenArtifactDistributionEntity) {
-                            if (!GAV_PATTERN.matcher(distributionItem.gav).matches()) {
-                                //TODO: MavenArtifactDistributionEntity should match GAV_MAVEN_PATTERN instead of GAV_PATTERN
-                                registerError("GAV '${distributionItem.gav}' must match pattern '$GAV_PATTERN'")
-                            }
-                        }
-                    } //TODO: FileDistributionEntity should match GAV_FILE_PATTERN
-                } catch (Exception parsingException) {
-                    registerError("Fail to parse GAV: " + parsingException)
+                def gavValue = EscrowExpressionParser.getInstance().parseAndEvaluate(distributionSection.get("GAV") as String, expressionContext)
+                if (!GAV_PATTERN.matcher(gavValue as String).matches()) {
+                    registerError("GAV '$gavValue' must match pattern '$GAV_PATTERN'")
                 }
             } catch (Exception exception) {
                 registerError("GAV expression is not valid: " + exception.getMessage())
@@ -254,7 +245,7 @@ class GroovySlurperConfigValidator {
         }
         if (distributionSection.containsKey("DEB")) {
             try {
-                def debValue = EscrowExpressionParser.getInstance().parseAndEvaluate(distributionSection.get("DEB") as String, EscrowExpressionContext.getValidationEscrowExpressionContext(numericFormatFactory))
+                def debValue = EscrowExpressionParser.getInstance().parseAndEvaluate(distributionSection.get("DEB") as String, expressionContext)
                 if (!DEB_PATTERN.matcher(debValue as String).matches()) {
                     registerError("DEB '$debValue' must match pattern '$DEB_PATTERN'")
                 }
@@ -264,7 +255,7 @@ class GroovySlurperConfigValidator {
         }
         if (distributionSection.containsKey("RPM")) {
             try {
-                def rpmValue = EscrowExpressionParser.getInstance().parseAndEvaluate(distributionSection.get("RPM") as String, EscrowExpressionContext.getValidationEscrowExpressionContext(numericFormatFactory))
+                def rpmValue = EscrowExpressionParser.getInstance().parseAndEvaluate(distributionSection.get("RPM") as String, expressionContext)
                 if (!RPM_PATTERN.matcher(rpmValue as String).matches()) {
                     registerError("RPM '$rpmValue' must match pattern '$RPM_PATTERN'")
                 }

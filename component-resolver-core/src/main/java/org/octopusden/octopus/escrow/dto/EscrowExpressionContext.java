@@ -7,7 +7,6 @@ import java.util.Map;
 import java.util.function.Function;
 
 public class EscrowExpressionContext {
-    private static volatile EscrowExpressionContext VALIDATION_CONTEXT = null;
     private final Map<String, String> env = System.getenv();
     private final String fileName;
     private final String version;
@@ -26,19 +25,6 @@ public class EscrowExpressionContext {
     public EscrowExpressionContext(String component, String version, String fileName, NumericVersionFactory numericVersionFactory) {
         this(component, version, fileName, componentVersion -> numericVersionFactory.create(componentVersion));
     }
-
-    public static EscrowExpressionContext getValidationEscrowExpressionContext(NumericVersionFactory numericVersionFactory) {
-        if (VALIDATION_CONTEXT != null) {
-            return VALIDATION_CONTEXT;
-        }
-        synchronized (EscrowExpressionContext.class) {
-            if (VALIDATION_CONTEXT == null) {
-                VALIDATION_CONTEXT = new EscrowExpressionContext("zenit", "1984", "gold-medal.zip", numericVersionFactory);
-            }
-        }
-        return VALIDATION_CONTEXT;
-    }
-
 
     public String getFileName() {
         return fileName;
