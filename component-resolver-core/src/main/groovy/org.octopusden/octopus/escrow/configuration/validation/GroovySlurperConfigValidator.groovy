@@ -23,7 +23,7 @@ class GroovySlurperConfigValidator {
     public static final String DEPENDENCIES = 'dependencies'
     public static final String SECURITY_GROUPS = 'securityGroups'
     public static final String SECURITY_GROUPS_READ = "read"
-    private static final String FILE_PATTERN = "(file:)(/|/{3})([^/\\\\0,]+(/)?)+"
+    private static final String FILE_PATTERN = "file:/.+"
     private static final String PROHIBITED_SYMBOLS = "\\\\\\s:|\\?\\*\"'<>\\+"
     private static final String GAV_PROHIBITED_SYMBOLS = "/$PROHIBITED_SYMBOLS"
     private static final String GAV_MAVEN_PATTERN = "[^$GAV_PROHIBITED_SYMBOLS]+(:[^$GAV_PROHIBITED_SYMBOLS]+){1,3}"
