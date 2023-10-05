@@ -15,7 +15,7 @@ class GroovySlurperConfigValidatorTest extends GroovyTestCase {
 
     void testDEBPattern() {
         assert DEB_PATTERN.matcher("foundationdb-clients_1.0.amd64.deb").matches()
-        assert DEB_PATTERN.matcher("pool/l/logcomp/logcomp_1.0.54-1_amd64.deb,mesh-agent2_2.0.101-1_amd64.deb").matches()
+        assert DEB_PATTERN.matcher("pool/l/logcomp/logcomp_1.0.54-1_amd64.deb,meag_2.0.101-1_amd64.deb").matches()
         assert !DEB_PATTERN.matcher("logcomp_1.0.54-1_amd64.deb,file:///dir/file").matches()
         assert !DEB_PATTERN.matcher("foundationdb clients_1.0.amd64.deb").matches()
     }
