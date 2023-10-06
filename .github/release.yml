@@ -8,7 +8,7 @@ changelog:
       exclude:
         labels:
           - dependencies
-            bug
+          - bug
     - title: Bugfixes
       labels:
         - bug
