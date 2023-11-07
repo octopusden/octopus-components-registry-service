@@ -13,10 +13,43 @@ plugins {
     id 'org.jetbrains.kotlin.plugin.spring'       apply false
     id 'org.jetbrains.kotlin.plugin.jpa'          apply false
     id 'signing'
+    id 'org.asciidoctor.jvm.convert' version '3.3.2'
 }
 
-if (project.hasProperty("nexus")) {
+def adocProperties = [:]
+['header', 'glossary-component-link', 'components-registry-link', 'release-management-automation-link',
+ 'escrow-automation-tool-link', 'components-registry-validation-link', 'service-desk-link'
+].each {
+    (project.findProperty("adoc.$it") as String)?.with { property -> adocProperties[it] = property }
+}
 
+def checkMandatoryAdocProperties = {
+    ['glossary-component-link', 'components-registry-link', 'release-management-automation-link',
+     'escrow-automation-tool-link', 'components-registry-validation-link', 'service-desk-link'
+    ].each {
+        if (adocProperties[it] == null) throw new Exception("`adoc.$it` property must be defined")
+    }
+}
+
+asciidoctorj {
+    attributes adocProperties
+}
+
+asciidoctor {
+    sourceDir file('docs')
+    sources {
+        include 'configuration.adoc'
+    }
+    outputDir file('build/docs')
+}
+
+tasks.asciidoctor.doFirst {
+    checkMandatoryAdocProperties.run()
+}
+
+//add task docker image publish + after check mandatory parameters!!!
+
+if (project.hasProperty("nexus")) {
     nexusPublishing {
         repositories {
             sonatype {

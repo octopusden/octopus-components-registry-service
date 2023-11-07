@@ -1,0 +1,119 @@
+:icons: image
+:header: Octopus Components Registry Configuration
+= {header}
+:toc:
+
+== Overview
+Components Registry is a registry of all link:{glossary-component-link}[components] developed in R&D.
+It keeps basic parameters of components required for organizing automated release management and Escrow package generation.
+
+WARNING: All components must be registered in link:{components-registry-link}[Components Registry]!
+
+Components Registry stores the following information about Components:
+
+* Release Management parameters (used for automated link:{release-management-automation-link}[registration of releases and generation of client release notes])
+** Desired JIRA Project Key
+** Major version format in JIRA
+** Release version format in JIRA
+** VCS repository url/path
+** VCS tag/branch format
+* Build/Escrow parameters (used for link:{escrow-automation-tool-link}[Escrow package generation])
+** build system (Maven, Gradle etc)
+** groupId/artifactId of artifacts produced and published in Artifactory at each release (*it's highly recommended to use unique groupId for the component*)
+** java version required for build escrow component
+** additional system properties for maven build
+* Distribution type and distribution artifacts coordinates
+
+== How To Register/Change Component Configuration manually
+Source is located in link:{components-registry-link}[git repository].
+
+* Clone repository
+* Create branch with name of a corresponding JIRA issue key
+* Add/Change component configuration to the specific file in _src/main/resources_
+* Commit and push changes
+* Check (after several minutes) that the new version of configuration has been successfully validated (link:{components-registry-validation-link}[Components Registry Validation])
+* In case of success, create Pull Request, then wait for approvals and merge it
+
+== Information to be provided for registration of Component
+WARNING: In case of difficulties with manual registration of component, raise a public ticket in link:{service-desk-link}[Service Desk].
+
+Example:
+----
+component name: 'NewComponent'
+component owner: <username>
+
+jira project key  = 'NEW'
+majorVersionFormat = '$major.$minor'
+releaseVersionFormat = '$major.$minor.$service-$fix'
+
+groupId = 'org.company.newcomponent'
+artifact = *  // i.e. all artifacts
+
+build system = MAVEN
+vcs type = GIT
+vcsUrl = 'ssh://git@git.company.org/newproject/newcomponent.git'
+java version = '11'
+
+distribution:
+explicit = true/false
+external = true/false
+//for explicit/external specify artifacts to be published in DMS
+<artifacts coordinates>
+----
+
+== Configuration of version format
+
+The rules of how to calculate major/release version of project in JIRA by a build version (i.e. release version on TeamCity) can be configured using Expression Language.
+
+The build version is parsed and split into the items which can be referred with following variables:
+
+* *$major* - first item of the build version
+* *$minor* - second item of the build version
+* *$service* - third item of the build version
+* *$fix* - forth item of the build version
+* *$major02* - first item of the build version in format %02d
+* *$minor02* - second item of the build version in format %02d
+* *$service02* - third item of the build version in format %02d
+* *$fix02* - forth item of the build version in format %02d
+
+== Configuration of distribution
+The distribution section of the component configuration describes how the component is distributed.
+
+Below is the list of available parameters:
+
+* *explicit* - indicates whether component has its own distribution (true/false)
+* *external* - indicates whether component is delivered to external customer or used only internally (true/false)
+* *GAV* - comma-separated list of MAVEN distribution artifacts
+* *DEB* - comma-separated list of DEBIAN distribution artifacts
+* *RPM* - comma-separated list of RPM distribution artifacts
+
+*GAV*, *DEB* and *RPM* parameters can be configured using Expression Language with following variables:
+
+* *$component* - component name
+* *$version* - build version
+* all variables specified in _Configuration of version format_ section above
+
+WARNING: *GAV* and/or *DEB* and/or *RPM* parameter should be defined for *external* *explicit* component!
+
+=== MAVEN artifacts configuration
+Each artifact can be either:
+
+* loaded from MAVEN storage (then one should specify MAVEN GAV *except version*)
+* taken from local FS on build agent and uploaded to MAVEN storage (then one should specify file URL)
+
+File URL can be extended with query parameters *artifactId* and/or *classifier* (that affects calculation of MAVEN GAV to be used for uploading).
+
+Example:
+----
+GAV=org.company.newcomponent:artifact:jar,file:///target/application-${version}.exe?artifactId=NewComponent
+----
+
+
+
+
+
+
+
+
+
+
