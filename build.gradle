@@ -18,14 +18,14 @@ plugins {
 
 def adocProperties = [:]
 ['header', 'glossary-component-link', 'components-registry-link', 'release-management-automation-link',
- 'escrow-automation-tool-link', 'components-registry-validation-link', 'service-desk-link'
+ 'escrow-automation-tool-link', 'service-desk-link', 'components-registry-validation-link'
 ].each {
     (project.findProperty("adoc.$it") as String)?.with { property -> adocProperties[it] = property }
 }
 
 def checkMandatoryAdocProperties = {
     ['glossary-component-link', 'components-registry-link', 'release-management-automation-link',
-     'escrow-automation-tool-link', 'components-registry-validation-link', 'service-desk-link'
+     'escrow-automation-tool-link', 'service-desk-link', 'components-registry-validation-link'
     ].each {
         if (adocProperties[it] == null) throw new Exception("`adoc.$it` property must be defined")
     }

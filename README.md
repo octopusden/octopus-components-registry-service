@@ -29,8 +29,9 @@ docker build --build-arg IMAGE=docker.io/customspace/openjdk11:latest .
 | adoc.components-registry-link            | Link to Component Registry repository.        | +         |                                           |
 | adoc.release-management-automation-link  | Link to Release Management Automation page.   | +         |                                           |
 | adoc.escrow-automation-tool-link         | Link to Escrow Automation Tool page.          | +         |                                           |
-| adoc.components-registry-validation-link | Link to Component Registry Validation builds. | +         |                                           |
 | adoc.service-desk-link                   | Link to Service Desk portal.                  | +         |                                           |
+| adoc.components-registry-validation-link | Link to Component Registry Validation builds. | +         |                                           |
+
 
 ### Generate locally
 

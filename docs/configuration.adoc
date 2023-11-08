@@ -19,20 +19,10 @@ Components Registry stores the following information about Components:
 ** VCS tag/branch format
 * Build/Escrow parameters (used for link:{escrow-automation-tool-link}[Escrow package generation])
 ** build system (Maven, Gradle etc)
-** groupId/artifactId of artifacts produced and published in Artifactory at each release (*it's highly recommended to use unique groupId for the component*)
+** groupId/artifactId of artifacts produced and published in Artifactory at each release (*it's recommended to use unique groupId for the component*)
 ** java version required for build escrow component
 ** additional system properties for maven build
 * Distribution type and distribution artifacts coordinates
-
-== How To Register/Change Component Configuration manually
-Source is located in link:{components-registry-link}[git repository].
-
-* Clone repository
-* Create branch with name of a corresponding JIRA issue key
-* Add/Change component configuration to the specific file in _src/main/resources_
-* Commit and push changes
-* Check (after several minutes) that the new version of configuration has been successfully validated (link:{components-registry-validation-link}[Components Registry Validation])
-* In case of success, create Pull Request, then wait for approvals and merge it
 
 == Information to be provided for registration of Component
 WARNING: In case of difficulties with manual registration of component, raise a public ticket in link:{service-desk-link}[Service Desk].
@@ -61,11 +51,132 @@ external = true/false
 <artifacts coordinates>
 ----
 
-== Configuration of version format
+== How to register/change Component configuration manually
+Source is located in link:{components-registry-link}[git repository].
 
-The rules of how to calculate major/release version of project in JIRA by a build version (i.e. release version on TeamCity) can be configured using Expression Language.
+* Clone repository
+* Create branch with name of a corresponding JIRA issue key
+* Add/Change component configuration to the specific file in _src/main/resources_
+* Commit and push changes
+* Check (after several minutes) that the new version of configuration has been successfully validated (link:{components-registry-validation-link}[Components Registry Validation])
+* In case of success, create Pull Request, then wait for approvals and merge it
 
-The build version is parsed and split into the items which can be referred with following variables:
+== Component configuration format
+Components Registry is originally stored as configuration files with ConfigSlurper groovy format.
+
+Each Component must be configured in corresponding configuration file according to following format:
+----
+<component name> {
+        buildSystem = <build tool> // MAVEN, GRADLE etc. (default for all versions)
+
+        vcsSettings {
+           repositoryType = <version control system> // GIT, CVS or MERCURIAL. (default for all versions)
+           vcsUrl = <vsc url> // Repository url. (default for all versions)
+           branch = <branch> // Repository branch. "master" is used if not specified. (default for all versions)
+           tag = <format of vcs tag> // Tag used for releases labelling. (can be configured using Expression Language) (default for all versions)
+        }
+
+        groupId = <groupId list> // Comma-separated list of groupId of artifacts that belongs to the component. It's recommended to use unique groupId. (default for all versions)
+        artifactId = <artifactId regexp pattern> // artifactId regex pattern of artifacts that belongs to the component. (default for all versions)
+
+        jira { // Parameters releated to build/release registration in JIRA and generation of client release notes (default for all versions)
+            projectKey = <JIRA project key>
+            majorVersionFormat = <format of major version in JIRA> (can be configured using Expression Language)
+            releaseVersionFormat = <format of release version for registration in JIRA> (can be configured using Expression Language)
+        }
+
+        build { // Parameters related to escrow build (default for all versions)
+            javaVersion = <java version>
+            systemProperties = <additional properties for maven build>
+        }
+
+        distribution { // Distribution parameters (default for all versions)
+            explicit = <true|false>
+            external = <true|false>
+            GAV = <MAVEN distribution artifacts> (can be configured using Expression Language)
+            DEB = <DEBIAN distribution artifacts> (can be configured using Expression Language)
+            RPM = <RPM distribution artifacts> (can be configured using Expression Language)
+        }
+
+    "<version range 1>" {  // configuration of the component for first range of version
+        buildSystem = <build tool> // MAVEN, GRADLE etc. (for specific version range)
+
+        vcsSettings {
+           repositoryType = <version control system> // GIT, CVS or MERCURIAL. (for specific version range)
+           vcsUrl = <vsc url> // Repository url. (for specific version range)
+           branch = <branch> // Repository branch. (for specific version range)
+           tag = <format of vcs tag> // Tag used for releases labelling. (can be configured using Expression Language) (for specific version range)
+        }
+
+        groupId = <groupId list> // Comma-separated list of groupId of artifacts that belongs to the component. It's recommended to use unique groupId. (for specific version range)
+        artifactId = <artifactId regexp pattern> // artifactId regex pattern of artifacts that belongs to the component. (for specific version range)
+
+        jira { // Parameters releated to build/release registration in JIRA and generation of client release notes (for specific version range)
+            projectKey = <JIRA project key>
+            majorVersionFormat = <format of major version in JIRA> (can be configured using Expression Language)
+            releaseVersionFormat = <format of release version for registration in JIRA> (can be configured using Expression Language)
+        }
+
+        build { // Parameters related to escrow build (for specific version range)
+            javaVersion = <java version>
+            systemProperties = <additional properties for maven build>
+        }
+
+        distribution { // Distribution parameters (for specific version range)
+            explicit = <true|false>
+            external = <true|false>
+            GAV = <MAVEN distribution artifacts> (can be configured using Expression Language)
+            DEB = <DEBIAN distribution artifacts> (can be configured using Expression Language)
+            RPM = <RPM distribution artifacts> (can be configured using Expression Language)
+        }
+    }
+    "<version range 2>" {
+            // Configuration of the component for the second range of version
+    }
+    ...
+    "<version range N>" {
+            // // Configuration of the component for the N range of version
+    }
+}
+----
+
+=== Version ranges
+Different configurations of component depending on version of its release are supported.
+It can be configured using version range section in configuration of the component.
+For each component at least one version range section should be defined.
+Version range section defines configuration of the component for versions that matches version range specified in the name of the section.
+Version range has Maven 2.x/3.x format.
+
+Examples of version range:
+
+[cols="1,1"]
+|===
+|(,1.0]
+|version \<= 1.0
+
+|[1.0]
+|version = 1.0
+
+|(,1.0],[1.2,)
+|version \<= 1.0 or version >= 1.2
+
+|(,1.1),(1.1,)
+|version <> 1.1
+|===
+
+*ALL_VERSIONS* constant can also be used as "no limit" version range.
+
+WARNING: Version ranges of a component should have no intersections!
+
+=== Expression Language
+The rules of how to calculate major/release version and some other fields by a build version can be configured using Expression Language.
+
+Basic variables are:
+
+* *$component* - component name
+* *$version* - component build version
+
+The component build version is parsed and split into the items which can be referred with following variables:
 
 * *$major* - first item of the build version
 * *$minor* - second item of the build version
@@ -76,7 +187,7 @@ The build version is parsed and split into the items which can be referred with 
 * *$service02* - third item of the build version in format %02d
 * *$fix02* - forth item of the build version in format %02d
 
-== Configuration of distribution
+=== Distribution section
 The distribution section of the component configuration describes how the component is distributed.
 
 Below is the list of available parameters:
@@ -89,13 +200,9 @@ Below is the list of available parameters:
 
 *GAV*, *DEB* and *RPM* parameters can be configured using Expression Language with following variables:
 
-* *$component* - component name
-* *$version* - build version
-* all variables specified in _Configuration of version format_ section above
-
 WARNING: *GAV* and/or *DEB* and/or *RPM* parameter should be defined for *external* *explicit* component!
 
-=== MAVEN artifacts configuration
+==== MAVEN artifacts configuration
 Each artifact can be either:
 
 * loaded from MAVEN storage (then one should specify MAVEN GAV *except version*)
