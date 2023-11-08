@@ -33,7 +33,7 @@ def checkMandatoryAdocProperties = {
 }
 
 def wikiProperties = [:]
-['url', 'username', 'password', 'page-id'].each {
+['url', 'username', 'password', 'space-key', 'page-id'].each {
     (project.findProperty("wiki.$it") as String)?.with { property -> wikiProperties[it] = property }
 }
 
