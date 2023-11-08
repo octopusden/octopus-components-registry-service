@@ -135,7 +135,7 @@ Each Component must be configured in corresponding configuration file according 
     }
     ...
     "<version range N>" {
-            // // Configuration of the component for the N range of version
+            // Configuration of the component for the N range of version
     }
 }
 ----
@@ -187,6 +187,8 @@ The component build version is parsed and split into the items which can be refe
 * *$service02* - third item of the build version in format %02d
 * *$fix02* - forth item of the build version in format %02d
 
+WARNING: One should use single-quoted `String` with Expression Language statements. Using of double-quoted `GString` may lead to clash with standard Groovy template engine.
+
 === Distribution section
 The distribution section of the component configuration describes how the component is distributed.
 
@@ -212,7 +214,7 @@ File URL can be extended with query parameters *artifactId* and/or *classifier* 
 
 Example:
 ----
-GAV=org.company.newcomponent:artifact:jar,file:///target/application-${version}.exe?artifactId=NewComponent
+GAV='org.company.newcomponent:artifact:jar,file:///target/application-${version}.exe?artifactId=NewComponent'
 ----
 
 
