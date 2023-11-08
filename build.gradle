@@ -1,4 +1,5 @@
 import com.platformlib.plugins.gradle.wrapper.task.DockerTask
+import groovy.json.JsonOutput
 
 buildscript {
     dependencies {
@@ -78,7 +79,7 @@ tasks.register('adocPublishToWiki', DockerTask) {
            "ANCESTOR_ID"            : wikiProperties['page-id'],
            "PUBLISHING_STRATEGY"    : "REPLACE_ANCESTOR",
            "ORPHAN_REMOVAL_STRATEGY": "KEEP_ORPHANS",
-           "ATTRIBUTES"             : adocProperties,
+           "ATTRIBUTES"             : JsonOutput.toJson(adocProperties),
            "NOTIFY_WATCHERS"        : "false",
            "CONVERT_ONLY"           : "false"
     ]
