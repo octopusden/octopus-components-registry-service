@@ -1,10 +1,11 @@
-//noinspection GroovyAssignabilityCheck
+import com.platformlib.plugins.gradle.wrapper.task.DockerTask
+
 buildscript {
     dependencies {
         classpath "com.avast.gradle:gradle-docker-compose-plugin:0.6.8"
     }
 }
-//noinspection GroovyAssignabilityCheck
+
 plugins {
     id 'io.github.gradle-nexus.publish-plugin'
     id 'org.octopusden.octopus-release-management'
@@ -14,21 +15,33 @@ plugins {
     id 'org.jetbrains.kotlin.plugin.jpa'          apply false
     id 'signing'
     id 'org.asciidoctor.jvm.convert' version '3.3.2'
+    id 'com.platformlib.gradle-wrapper' version '0.2.6'
 }
 
 def adocProperties = [:]
 ['header', 'glossary-component-link', 'components-registry-link', 'release-management-automation-link',
- 'escrow-automation-tool-link', 'service-desk-link', 'components-registry-validation-link'
-].each {
+ 'escrow-automation-tool-link', 'service-desk-link', 'components-registry-validation-link'].each {
     (project.findProperty("adoc.$it") as String)?.with { property -> adocProperties[it] = property }
 }
 
 def checkMandatoryAdocProperties = {
     ['glossary-component-link', 'components-registry-link', 'release-management-automation-link',
-     'escrow-automation-tool-link', 'service-desk-link', 'components-registry-validation-link'
-    ].each {
+     'escrow-automation-tool-link', 'service-desk-link', 'components-registry-validation-link'].each {
         if (adocProperties[it] == null) throw new Exception("`adoc.$it` property must be defined")
     }
+    return
+}
+
+def wikiProperties = [:]
+['url', 'username', 'password', 'page-id'].each {
+    (project.findProperty("wiki.$it") as String)?.with { property -> wikiProperties[it] = property }
+}
+
+def checkMandatoryWikiProperties = {
+    ['url', 'username', 'password', 'space-key', 'page-id'].each {
+        if (wikiProperties[it] == null) throw new Exception("`wiki.$it` property must be defined")
+    }
+    return
 }
 
 asciidoctorj {
@@ -47,7 +60,29 @@ tasks.asciidoctor.doFirst {
     checkMandatoryAdocProperties.run()
 }
 
-//add task docker image publish + after check mandatory parameters!!!
+tasks.register('adocPublishToWiki', DockerTask) {
+    doFirst {
+        if (project.findProperty('docker.registry') == null) throw new Exception("`docker.registry` property must be defined")
+        checkMandatoryWikiProperties.run()
+        checkMandatoryAdocProperties.run()
+    }
+    image = "${project.findProperty('docker.registry')}/confluencepublisher/confluence-publisher:0.14.0"
+    dockerOptions = ['--network', 'host']
+    bindMounts = ["${file('docs')}:/var/asciidoc-root-folder"]
+    env = ["ROOT_CONFLUENCE_URL"    : wikiProperties['url'],
+           "SKIP_SSL_VERIFICATION"  : "true",
+           "MAX_REQUESTS_PER_SECOND": "10",
+           "USERNAME"               : wikiProperties['username'],
+           "PASSWORD"               : wikiProperties['password'],
+           "SPACE_KEY"              : wikiProperties['space-key'],
+           "ANCESTOR_ID"            : wikiProperties['page-id'],
+           "PUBLISHING_STRATEGY"    : "REPLACE_ANCESTOR",
+           "ORPHAN_REMOVAL_STRATEGY": "KEEP_ORPHANS",
+           "ATTRIBUTES"             : adocProperties,
+           "NOTIFY_WATCHERS"        : "false",
+           "CONVERT_ONLY"           : "false"
+    ]
+}
 
 if (project.hasProperty("nexus")) {
     nexusPublishing {
