@@ -15,9 +15,9 @@ Components Registry stores the following information about Components:
 ** Desired JIRA Project Key
 ** Major version format in JIRA
 ** Release version format in JIRA
-** GIT repository url
-** GIT repository branch
-** GIT repository release tag format
+** VCS repository url
+** VCS repository branch
+** VCS repository release tag format
 * Build/Escrow parameters (used for link:{escrow-automation-tool-link}[Escrow package generation])
 ** build system (Maven, Gradle etc)
 ** groupId/artifactId of artifacts produced and published in Artifactory at each release (*it's recommended to use unique groupId for the component*)
