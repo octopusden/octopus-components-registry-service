@@ -15,8 +15,9 @@ Components Registry stores the following information about Components:
 ** Desired JIRA Project Key
 ** Major version format in JIRA
 ** Release version format in JIRA
-** VCS repository url/path
-** VCS tag/branch format
+** GIT repository url
+** GIT repository branch
+** GIT repository release tag format
 * Build/Escrow parameters (used for link:{escrow-automation-tool-link}[Escrow package generation])
 ** build system (Maven, Gradle etc)
 ** groupId/artifactId of artifacts produced and published in Artifactory at each release (*it's recommended to use unique groupId for the component*)
@@ -39,9 +40,8 @@ releaseVersionFormat = '$major.$minor.$service-$fix'
 groupId = 'org.company.newcomponent'
 artifact = *  // i.e. all artifacts
 
-build system = MAVEN
-vcs type = GIT
 vcsUrl = 'ssh://git@git.company.org/newproject/newcomponent.git'
+build system = MAVEN
 java version = '11'
 
 distribution:
@@ -70,9 +70,8 @@ Each Component must be configured in corresponding configuration file according 
         buildSystem = <build tool> // MAVEN, GRADLE etc. (default for all versions)
 
         vcsSettings {
-           repositoryType = <version control system> // GIT, CVS or MERCURIAL. (default for all versions)
            vcsUrl = <vsc url> // Repository url. (default for all versions)
-           branch = <branch> // Repository branch. If not specified following value is used: "master" for GIT, "HEAD" for CVS, "default" for MERCURIAL. (default for all versions)
+           branch = <branch> // Repository branch. If not specified "master" is used. (default for all versions)
            tag = <format of vcs tag> // Tag used for releases labelling. (can be configured using Expression Language) (default for all versions)
         }
 
@@ -102,9 +101,8 @@ Each Component must be configured in corresponding configuration file according 
         buildSystem = <build tool> // MAVEN, GRADLE etc. (for specific version range)
 
         vcsSettings {
-           repositoryType = <version control system> // GIT, CVS or MERCURIAL. (for specific version range)
            vcsUrl = <vsc url> // Repository url. (for specific version range)
-           branch = <branch> // Repository branch. If not specified following value is used: "master" for GIT, "HEAD" for CVS, "default" for MERCURIAL. (for specific version range)
+           branch = <branch> // Repository branch. If not specified "master" is used. (for specific version range)
            tag = <format of vcs tag> // Tag used for releases labelling. (can be configured using Expression Language) (for specific version range)
         }
 
