@@ -1,5 +1,5 @@
-:icons: image
-:header: Octopus Components Registry Configuration
+:icons: font
+:header: Components Registry Configuration
 = {header}
 :toc:
 
@@ -72,7 +72,7 @@ Each Component must be configured in corresponding configuration file according 
         vcsSettings {
            repositoryType = <version control system> // GIT, CVS or MERCURIAL. (default for all versions)
            vcsUrl = <vsc url> // Repository url. (default for all versions)
-           branch = <branch> // Repository branch. "master" is used if not specified. (default for all versions)
+           branch = <branch> // Repository branch. If not specified following value is used: "master" for GIT, "HEAD" for CVS, "default" for MERCURIAL. (default for all versions)
            tag = <format of vcs tag> // Tag used for releases labelling. (can be configured using Expression Language) (default for all versions)
         }
 
@@ -104,7 +104,7 @@ Each Component must be configured in corresponding configuration file according 
         vcsSettings {
            repositoryType = <version control system> // GIT, CVS or MERCURIAL. (for specific version range)
            vcsUrl = <vsc url> // Repository url. (for specific version range)
-           branch = <branch> // Repository branch. (for specific version range)
+           branch = <branch> // Repository branch. If not specified following value is used: "master" for GIT, "HEAD" for CVS, "default" for MERCURIAL. (for specific version range)
            tag = <format of vcs tag> // Tag used for releases labelling. (can be configured using Expression Language) (for specific version range)
         }
 
@@ -216,13 +216,3 @@ Example:
 ----
 GAV='org.company.newcomponent:artifact:jar,file:///target/application-${version}.exe?artifactId=NewComponent'
 ----
-
-
-
-
-
-
-
-
-
-

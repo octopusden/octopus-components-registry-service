@@ -28,7 +28,7 @@ def adocProperties = [:]
 def checkMandatoryAdocProperties = {
     ['glossary-component-link', 'components-registry-link', 'release-management-automation-link',
      'escrow-automation-tool-link', 'service-desk-link', 'components-registry-validation-link'].each {
-        if (adocProperties[it] == null) throw new Exception("`adoc.$it` property must be defined")
+        if (adocProperties[it] == null) throw new IllegalArgumentException("`adoc.$it` property must be defined")
     }
     return
 }
@@ -40,7 +40,7 @@ def wikiProperties = [:]
 
 def checkMandatoryWikiProperties = {
     ['url', 'username', 'password', 'space-key', 'page-id'].each {
-        if (wikiProperties[it] == null) throw new Exception("`wiki.$it` property must be defined")
+        if (wikiProperties[it] == null) throw new IllegalArgumentException("`wiki.$it` property must be defined")
     }
     return
 }
@@ -63,7 +63,7 @@ tasks.asciidoctor.doFirst {
 
 tasks.register('adocPublishToWiki', DockerTask) {
     doFirst {
-        if (project.findProperty('docker.registry') == null) throw new Exception("`docker.registry` property must be defined")
+        if (project.findProperty('docker.registry') == null) throw new IllegalArgumentException("`docker.registry` property must be defined")
         checkMandatoryWikiProperties.run()
         checkMandatoryAdocProperties.run()
     }
