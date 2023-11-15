@@ -3,6 +3,8 @@
 = {header}
 :toc:
 
+IMPORTANT: This page is auto-generated!
+
 == Overview
 Components Registry is a registry of all link:{glossary-component-link}[components] developed in R&D.
 It keeps basic parameters of components required for organizing automated release management and Escrow package generation.
