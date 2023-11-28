@@ -11,6 +11,7 @@ enum VCS {
     MERCURIAL
 }
 Defaults {
+    system = "NONE"
     jira {
         majorVersionFormat = '$major.$minor'
         releaseVersionFormat = '$major.$minor.$service'

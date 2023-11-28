@@ -3,6 +3,7 @@ import static org.octopusden.octopus.escrow.RepositoryType.MERCURIAL
 
 
 Defaults {
+    system = "NONE"
     repositoryType = MERCURIAL
     buildSystem = MAVEN;
 }

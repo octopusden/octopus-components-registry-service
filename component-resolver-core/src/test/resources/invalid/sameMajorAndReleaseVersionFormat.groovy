@@ -2,6 +2,10 @@ package invalid
 
 import static org.octopusden.octopus.escrow.BuildSystem.*
 
+Defaults {
+    system = "NONE"
+}
+
 Tools {
     BuildEnv {
         escrowEnvironmentVariable = "BUILD_ENV"
@@ -13,6 +17,7 @@ Tools {
 }
 
 bcomponent {
+
     componentOwner = "user"
     releaseManager = "user"
     securityChampion = "user"

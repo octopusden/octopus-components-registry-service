@@ -3,6 +3,7 @@ import static org.octopusden.octopus.escrow.RepositoryType.*
 
 
 Defaults {
+    system = "NONE"
     buildSystem = MAVEN;
     repositoryType = GIT
     tag = '$module-$version';

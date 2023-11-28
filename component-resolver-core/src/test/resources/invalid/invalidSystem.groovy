@@ -20,7 +20,29 @@ component1 {
     system = "INVALID"
     groupId = "org.octopusden.octopus.component1"
     vcsSettings {
-        vcsUrl = "OctopusSource/zenit"
+        vcsUrl = "OctopusSource/zenit1"
+    }
+    jira {
+        projectKey = "PRJ1"
+    }
+
+    components {
+        component3 {
+            componentOwner = "user1"
+            releaseManager = "user1"
+            vcsSettings {
+                vcsUrl = "OctopusSource/zenit3"
+            }
+        }
+    }
+}
+
+component2 {
+    componentOwner = "user1"
+    releaseManager = "user1"
+    groupId = "org.octopusden.octopus.component1"
+    vcsSettings {
+        vcsUrl = "OctopusSource/zenit2"
     }
     jira {
         projectKey = "PRJ1"

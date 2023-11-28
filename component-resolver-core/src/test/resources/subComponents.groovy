@@ -20,6 +20,7 @@ Tools {
 }
 
 Defaults {
+    system = "NONE"
     repositoryType = CVS
     buildSystem = GRADLE
     tag = '$module-$version'

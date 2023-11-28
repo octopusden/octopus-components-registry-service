@@ -1,6 +1,10 @@
 import static org.octopusden.octopus.escrow.BuildSystem.MAVEN
 import static org.octopusden.octopus.escrow.RepositoryType.CVS
 
+Defaults {
+    system = "NONE"
+}
+
 bcomponent {
     componentOwner = "user1"
     groupId = "org.octopusden.octopus.bcomponent"

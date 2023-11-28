@@ -5,6 +5,7 @@ final DEFAULT_TAG = '$module-$version'
 final ANY_ARTIFACT = /[\w-\.]+/
 
 Defaults {
+    system = "NONE"
     artifactId = ANY_ARTIFACT
     jira {
         majorVersionFormat = '$major.$minor'

@@ -1,6 +1,9 @@
 import static org.octopusden.octopus.escrow.BuildSystem.PROVIDED
 import static org.octopusden.octopus.escrow.RepositoryType.CVS
 
+Defaults {
+    system = "NONE"
+}
 
 "mudule-dbModel" {
     componentOwner = "user1"

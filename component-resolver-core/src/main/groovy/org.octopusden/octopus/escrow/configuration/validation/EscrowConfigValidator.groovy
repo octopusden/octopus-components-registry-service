@@ -1,5 +1,11 @@
 package org.octopusden.octopus.escrow.configuration.validation
 
+import groovy.transform.TupleConstructor
+import groovy.transform.TypeChecked
+import kotlin.Pair
+import org.apache.commons.lang3.StringUtils
+import org.apache.logging.log4j.LogManager
+import org.apache.logging.log4j.Logger
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.MavenArtifactMatcher
 import org.octopusden.octopus.escrow.RepositoryType
@@ -12,12 +18,6 @@ import org.octopusden.octopus.escrow.model.VersionControlSystemRoot
 import org.octopusden.releng.versions.KotlinVersionFormatter
 import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRange
-import groovy.transform.TupleConstructor
-import groovy.transform.TypeChecked
-import kotlin.Pair
-import org.apache.commons.lang3.StringUtils
-import org.apache.logging.log4j.LogManager
-import org.apache.logging.log4j.Logger
 import org.octopusden.releng.versions.VersionRangeFactory
 
 import java.util.function.BinaryOperator
@@ -72,7 +72,7 @@ class EscrowConfigValidator {
 
     Map<MavenArtifact, List<EscrowModuleConfig>> map = new HashMap<>()
 
-    EscrowConfigValidator(List<String> supportedGroupIds, List<String> supportedSystems, VersionNames versionNames ) {
+    EscrowConfigValidator(List<String> supportedGroupIds, List<String> supportedSystems, VersionNames versionNames) {
         this.supportedGroupIds = supportedGroupIds
         this.supportedSystems = supportedSystems
         this.versionNames = versionNames
@@ -354,7 +354,9 @@ class EscrowConfigValidator {
 
     def validateSystem(EscrowModuleConfig moduleConfig, String component) {
         def system = moduleConfig.getSystem()
+
         if (system == null) {
+            registerError("system is not specified in component '$component'")
             return
         }
 

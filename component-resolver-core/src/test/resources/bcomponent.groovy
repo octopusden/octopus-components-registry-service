@@ -28,6 +28,7 @@ Tools {
 }
 
 Defaults {
+    system = "NONE"
     repositoryType = MERCURIAL
     buildSystem = MAVEN;
     tag = DEFAULT_TAG;
