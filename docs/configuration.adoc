@@ -1,13 +1,6 @@
 :icons: font
-//
-// ifndef::page-header[]
-// :page-header: How to configure Components Registry
-// endif::[]
-
-= {page-header}
+= {header}
 :toc:
-
-Some Text: {page-header}
 
 IMPORTANT: This page is auto-generated!
 
