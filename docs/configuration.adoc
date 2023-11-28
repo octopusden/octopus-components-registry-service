@@ -1,9 +1,5 @@
 :icons: font
 
-ifndef::header[]
-:header: How to configure Components Registry
-endif::[]
-
 ifndef::page-header[]
 :page-header: How to configure Components Registry
 endif::[]
