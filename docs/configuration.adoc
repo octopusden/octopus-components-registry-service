@@ -1,5 +1,9 @@
 :icons: font
+
+ifndef::header[]
 :header: Components Registry Configuration
+endif::[]
+
 = {header}
 :toc:
 
