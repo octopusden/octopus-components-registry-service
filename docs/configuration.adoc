@@ -8,8 +8,7 @@ ifndef::page-header[]
 :page-header: How to configure Components Registry
 endif::[]
 
-
-= {header}
+= {page-header}
 :toc:
 
 == {page-header}
