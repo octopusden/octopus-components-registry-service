@@ -9,7 +9,10 @@ components-registry:
   groovy-path: ${components-registry.work-dir}
 
   supportedGroupIds: org.octopusden.octopus,io.bcomponent
+
+  systemMandatory: false
   supportedSystems: NONE,CLASSIC,ALFA
+
   version-name:
     service-branch: serviceCBranch
     service: serviceC

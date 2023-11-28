@@ -357,18 +357,20 @@ class EscrowConfigValidator {
     def validateSystem(EscrowModuleConfig moduleConfig, String component) {
         def system = moduleConfig.getSystem()
         if (system == null) {
-            return
-        }
-
-        def systemPattern = "\\w+(,\\w+)*"
-        if (!system.matches(Pattern.compile(systemPattern))) {
-            registerError("system is not matched '$systemPattern' in '$component'")
+            if (systemMandatory) {
+                registerError("system is not specified in component '$component'")
+            }
         } else {
-            def unsupportedSystems = system?.split(SPLIT_PATTERN)
-                    ?.findAll { s -> !supportedSystems.contains(s) }
-                    ?.toList() ?: Collections.emptyList()
-            if (!unsupportedSystems.isEmpty()) {
-                registerError("system contains unsupported values: ${unsupportedSystems.join(",")} in component '$component'")
+            def systemPattern = "\\w+(,\\w+)*"
+            if (!system.matches(Pattern.compile(systemPattern))) {
+                registerError("system is not matched '$systemPattern' in '$component'")
+            } else {
+                def unsupportedSystems = system?.split(SPLIT_PATTERN)
+                        ?.findAll { s -> !supportedSystems.contains(s) }
+                        ?.toList() ?: Collections.emptyList()
+                if (!unsupportedSystems.isEmpty()) {
+                    registerError("system contains unsupported values: ${unsupportedSystems.join(",")} in component '$component'")
+                }
             }
         }
     }

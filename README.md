@@ -10,13 +10,14 @@ docker build --build-arg IMAGE=docker.io/customspace/openjdk11:latest .
 
 ## Parameters
 
-| Name                                            | Description                       |
-|-------------------------------------------------|-----------------------------------|
-| components-registry.supportedGroupIds           | Supported group ids.              |
-| components-registry.supportedSystems            | Supported systems.                |
-| components-registry.version-name.service-branch | Name of a service branch version. |
-| components-registry.version-name.service        | Name of a service version.        |
-| components-registry.version-name.minor          | Name of a minor version.          |
+| Name                                            | Description                        |
+|-------------------------------------------------|------------------------------------|
+| components-registry.supportedGroupIds           | Supported group ids.               |
+| components-registry.systemMandatory             | Enable/disable system as mandatory |
+| components-registry.supportedSystems            | Supported systems.                 |
+| components-registry.version-name.service-branch | Name of a service branch version.  |
+| components-registry.version-name.service        | Name of a service version.         |
+| components-registry.version-name.minor          | Name of a minor version.           |
 
 ## Documentation
 

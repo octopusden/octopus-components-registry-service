@@ -10,7 +10,10 @@ components-registry:
   dependency-mapping-file: dependency_mapping.properties
 
   supportedGroupIds: org.octopusden.octopus,io.bcomponent
+
+  systemMandatory: false
   supportedSystems: NONE,CLASSIC,ALFA
+
   version-name:
     service-branch: serviceCBranch
     service: serviceC

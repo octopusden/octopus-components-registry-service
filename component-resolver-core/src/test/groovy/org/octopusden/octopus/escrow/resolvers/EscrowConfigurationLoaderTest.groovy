@@ -27,6 +27,7 @@ import static org.octopusden.octopus.escrow.RepositoryType.MERCURIAL
 import static org.octopusden.octopus.escrow.TestConfigUtils.NUMERIC_VERSION_FACTORY
 import static org.octopusden.octopus.escrow.TestConfigUtils.VERSION_RANGE_FACTORY
 import static org.octopusden.octopus.escrow.TestConfigUtils.loadConfiguration
+import static org.octopusden.octopus.escrow.TestConfigUtils.loadFromURL
 import static org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader.FAKE_VCS_URL_FOR_BS20
 
 class EscrowConfigurationLoaderTest extends GroovyTestCase {
@@ -483,10 +484,13 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
     @Test
     void testValidationUnsupportedSystem() {
         def exception = GroovyAssert.shouldFail(EscrowConfigurationException.class, {
-            loadConfiguration("invalid/invalidSystem.groovy")
+            loadFromURL(ComponentRegistryInfo.fromClassPath("invalid/invalidSystem.groovy"), TestConfigUtils.VERSION_NAMES, TestConfigUtils.PRODUCT_TYPES, TestConfigUtils.SUPPORTED_GROUP_IDS, true, TestConfigUtils.SUPPORTED_SYSTEMS)
+                    .loadFullConfiguration(null);
         })
         assert exception.message == "Validation of module config failed due following errors: \n" +
-                "system contains unsupported values: INVALID in component 'component1'"
+                "system contains unsupported values: INVALID in component 'component1'\n" +
+                "system is not specified in component 'component2'\n" +
+                "system contains unsupported values: INVALID in component 'component3'"
     }
 
     @Test
