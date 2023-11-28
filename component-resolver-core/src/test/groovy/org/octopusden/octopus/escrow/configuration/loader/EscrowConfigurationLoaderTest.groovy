@@ -54,11 +54,11 @@ class EscrowConfigurationLoaderTest {
                         VERSION_NAMES,
                         PRODUCT_TYPES
                 ),
-                SYSTEM_MANDATORY,
                 SUPPORTED_GROUP_IDS,
+                SYSTEM_MANDATORY,
                 SUPPORTED_SYSTEMS,
                 VERSION_NAMES
-        )
+         )
     }
 
     @BeforeEach
