@@ -1,11 +1,18 @@
 :icons: font
 
 ifndef::header[]
-:header: Components Registry Configuration
+:header: How to configure Components Registry
 endif::[]
+
+ifndef::page-header[]
+:page-header: How to configure Components Registry
+endif::[]
+
 
 = {header}
 :toc:
+
+== {page-header}
 
 IMPORTANT: This page is auto-generated!
 
