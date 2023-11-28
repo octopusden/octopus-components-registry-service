@@ -45,6 +45,8 @@ class ComponentRegistryValidationTask extends DefaultTask {
     @Input
     String supportedSystems
     @Input
+    String systemMandatory
+    @Input
     String serviceBranch
     @Input
     String service
@@ -220,6 +222,7 @@ class ComponentRegistryValidationTask extends DefaultTask {
         )
         def config = getConfig(loader,
                 supportedGroupIds.split(",").collect {it -> it.trim()},
+                systemMandatory,
                 supportedSystems.split(",").collect {it -> it.trim()},
                 serviceBranch,
                 service,
@@ -230,6 +233,7 @@ class ComponentRegistryValidationTask extends DefaultTask {
 
     private static EscrowConfiguration getConfig(ConfigLoader loader,
                                                  List<String> supportedGroupIds,
+                                                 boolean systemMandatory,
                                                  List<String> supportedSystems,
                                                  String serviceBranch,
                                                  String service,
@@ -238,6 +242,7 @@ class ComponentRegistryValidationTask extends DefaultTask {
         EscrowConfigurationLoader escrowConfigurationLoader = new EscrowConfigurationLoader(
                 loader,
                 supportedGroupIds,
+                systemMandatory,
                 supportedSystems,
                 new VersionNames(serviceBranch, service, minor)
         )

@@ -65,6 +65,7 @@ public class JiraParametersResolverConfig {
     public EscrowConfigurationLoader escrowConfigurationLoader(ConfigHelper configHelper, VersionNames versionNames, ConfigLoader configLoader) throws IOException {
         return new EscrowConfigurationLoader(configLoader,
                 configHelper.supportedGroupIds(),
+                configHelper.systemMandatory(),
                 configHelper.supportedSystems(),
                 versionNames
         );

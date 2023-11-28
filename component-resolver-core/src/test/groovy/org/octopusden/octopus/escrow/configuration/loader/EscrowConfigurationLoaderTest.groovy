@@ -30,6 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals
 import static org.junit.jupiter.api.Assertions.assertNotNull
 import static org.junit.jupiter.api.Assertions.assertNull
 import static org.junit.jupiter.api.Assertions.assertTrue
+import static org.octopusden.octopus.escrow.TestConfigUtils.SYSTEM_MANDATORY
 import static org.octopusden.octopus.escrow.TestConfigUtils.PRODUCT_TYPES
 import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_GROUP_IDS
 import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_SYSTEMS
@@ -53,6 +54,7 @@ class EscrowConfigurationLoaderTest {
                         VERSION_NAMES,
                         PRODUCT_TYPES
                 ),
+                SYSTEM_MANDATORY,
                 SUPPORTED_GROUP_IDS,
                 SUPPORTED_SYSTEMS,
                 VERSION_NAMES

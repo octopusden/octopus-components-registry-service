@@ -35,6 +35,7 @@ class EscrowConfigValidator {
     public static final String SPLIT_PATTERN = "[,|\\s]+"
 
     private List<String> supportedGroupIds
+    private boolean systemMandatory
     private List<String> supportedSystems
     private VersionNames versionNames
 
@@ -72,7 +73,8 @@ class EscrowConfigValidator {
 
     Map<MavenArtifact, List<EscrowModuleConfig>> map = new HashMap<>()
 
-    EscrowConfigValidator(List<String> supportedGroupIds, List<String> supportedSystems, VersionNames versionNames ) {
+    EscrowConfigValidator(List<String> supportedGroupIds, boolean systemMandatory, List<String> supportedSystems, VersionNames versionNames ) {
+        this.systemMandatory = systemMandatory
         this.supportedGroupIds = supportedGroupIds
         this.supportedSystems = supportedSystems
         this.versionNames = versionNames
