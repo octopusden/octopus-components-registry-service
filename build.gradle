@@ -67,7 +67,7 @@ tasks.register('adocPublishToWiki', DockerTask) {
         checkMandatoryWikiProperties.run()
         checkMandatoryAdocProperties.run()
     }
-    image = "${project.findProperty('docker.registry')}/confluencepublisher/confluence-publisher:0.14.0"
+    image = "${project.findProperty('docker.registry')}/confluencepublisher/confluence-publisher:0.22.0"
     dockerOptions = ['--network', 'host']
     bindMounts = ["${file('docs')}:/var/asciidoc-root-folder"]
     env = ["ROOT_CONFLUENCE_URL"    : wikiProperties['url'],
