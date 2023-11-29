@@ -16,6 +16,7 @@ final ANY_ARTIFACT = /[\w-]+/
 final SOME_VERSION_RANGE = "[1.12.1-151,)"
 
 Defaults {
+    system = "NONE"
     buildSystem = MAVEN
     repositoryType = CVS
     artifactId = ANY_ARTIFACT

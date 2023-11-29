@@ -7,6 +7,7 @@ final ANY_ARTIFACT = /[\w-\.]+/
 final String ALL_VERSIONS = "(,0),[0,)"
 
 Defaults {
+    system = "NONE"
     repositoryType = MERCURIAL
     buildSystem = MAVEN;
     tag = DEFAULT_TAG;

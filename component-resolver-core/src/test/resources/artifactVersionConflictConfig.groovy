@@ -8,6 +8,7 @@ DEFAULT_TAG = '$module-$version'
 
 
 Defaults {
+    system = "NONE"
 //    repositoryType = MERCURIAL
 //    buildSystem = MAVEN;
 //    versionRange = "(,)"

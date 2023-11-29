@@ -2,6 +2,7 @@ import static org.octopusden.octopus.escrow.BuildSystem.MAVEN
 import static org.octopusden.octopus.escrow.RepositoryType.MERCURIAL
 
 Defaults {
+    system = "NONE"
     repositoryType = MERCURIAL
     buildSystem = MAVEN
     tag = DEFAULT_TAG

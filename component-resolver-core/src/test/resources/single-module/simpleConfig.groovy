@@ -2,6 +2,7 @@ import static org.octopusden.octopus.escrow.BuildSystem.MAVEN
 import static org.octopusden.octopus.escrow.RepositoryType.MERCURIAL
 
 Defaults {
+    system = "NONE"
     jira {
         majorVersionFormat = '$major.$minor'
         releaseVersionFormat = '$major.$minor.$service'

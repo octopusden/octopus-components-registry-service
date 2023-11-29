@@ -158,6 +158,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                         VersionControlSystemRoot.create("main", MERCURIAL, 'ssh://hg@mercurial/bcomponent',
                                 '$module-$version', null)),
                 buildSystem: MAVEN,
+                system: "NONE",
                 artifactIdPattern: /[\w-]+/,
                 groupIdPattern: "org.octopusden.octopus.bcomponent",
                 versionRange: "[1.12.1-150,)",
@@ -170,6 +171,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 componentOwner: "user1",
                 vcsSettings: VCSSettings.create([VersionControlSystemRoot.create("main", CVS, FAKE_VCS_URL_FOR_BS20, '$module-$version', 'default')]),
                 buildSystem: BuildSystem.BS2_0,
+                system: "NONE",
                 groupIdPattern: "org.octopusden.octopus.bcomponent",
                 artifactIdPattern: /[\w-]+/,
                 versionRange: "(,1.12.1-150)",
@@ -195,6 +197,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 componentOwner: "user1",
                 vcsSettings: VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", MERCURIAL, "ssh://hg@mercurial/bcomponent", '$module-$version', null)),
                 buildSystem: MAVEN,
+                system: "NONE",
                 artifactIdPattern: /[\w-]+/,
                 groupIdPattern: "org.octopusden.octopus.bcomponent",
                 versionRange: "[1.12.1-151,)",
@@ -218,6 +221,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 componentOwner: "user1",
                 vcsSettings: VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", CVS, "back/build/test/sources/test-maven", '$module-$cvsCompatibleVersion', "bcomponent-branch")),
                 buildSystem: MAVEN,
+                system: "NONE",
                 artifactIdPattern: "test-cvs-maven-parent,test-cvs-maven-module1",
                 groupIdPattern: "org.octopusden.octopus.bcomponent",
                 versionRange: "(,0),[0,)",
@@ -243,6 +247,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 componentOwner: "user1",
                 vcsSettings: VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", CVS, "back/build/test/sources/test-maven", '$module-$cvsCompatibleVersion', "bcomponent-branch")),
                 buildSystem: BuildSystem.MAVEN,
+                system: "NONE",
                 artifactIdPattern: "test-cvs-maven-parent,test-cvs-maven-module1",
                 groupIdPattern: "org.octopusden.octopus.bcomponent",
                 versionRange: "(,0),[0,)",
@@ -486,7 +491,9 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
             loadConfiguration("invalid/invalidSystem.groovy")
         })
         assert exception.message == "Validation of module config failed due following errors: \n" +
-                "system contains unsupported values: INVALID in component 'component1'"
+                "system contains unsupported values: INVALID in component 'component1'\n" +
+                "system is not specified in component 'component2'\n" +
+                "system contains unsupported values: INVALID in component 'component3'"
     }
 
     @Test

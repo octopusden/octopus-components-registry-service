@@ -8,6 +8,7 @@ final DEFAULT_TAG = '$module-$version'
 final ANY_ARTIFACT = /[\w-\.]+/
 
 Defaults {
+    system = "NONE"
     repositoryType = MERCURIAL
     buildSystem = MAVEN;
     tag = DEFAULT_TAG;

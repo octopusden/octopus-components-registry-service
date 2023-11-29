@@ -7,6 +7,7 @@ import static org.octopusden.octopus.escrow.RepositoryType.MERCURIAL
 final ANY_ARTIFACT = /[\w-\.]+/
 
 Defaults {
+    system = "NONE"
     tag = '$module-$version'
     artifactId = ANY_ARTIFACT
 }
