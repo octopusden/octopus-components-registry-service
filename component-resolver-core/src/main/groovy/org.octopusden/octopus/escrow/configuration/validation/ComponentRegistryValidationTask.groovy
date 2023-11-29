@@ -1,5 +1,12 @@
 package org.octopusden.octopus.escrow.configuration.validation
 
+import groovyx.net.http.HTTPBuilder
+import org.apache.commons.lang3.StringUtils
+import org.gradle.api.DefaultTask
+import org.gradle.api.GradleException
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.Optional
+import org.gradle.api.tasks.TaskAction
 import org.octopusden.employee.client.EmployeeServiceClient
 import org.octopusden.employee.client.common.exception.NotFoundException
 import org.octopusden.employee.client.impl.ClassicEmployeeServiceClient
@@ -10,12 +17,6 @@ import org.octopusden.octopus.escrow.configuration.loader.ConfigLoader
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
 import org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration
 import org.octopusden.octopus.escrow.configuration.model.EscrowModule
-import groovyx.net.http.HTTPBuilder
-import org.apache.commons.lang3.StringUtils
-import org.gradle.api.DefaultTask
-import org.gradle.api.GradleException
-import org.gradle.api.tasks.Input
-import org.gradle.api.tasks.TaskAction
 import org.octopusden.releng.versions.VersionNames
 
 import static groovyx.net.http.ContentType.TEXT
@@ -45,7 +46,8 @@ class ComponentRegistryValidationTask extends DefaultTask {
     @Input
     String supportedSystems
     @Input
-    String systemMandatory
+    @Optional
+    Boolean systemMandatory
     @Input
     String serviceBranch
     @Input
@@ -222,7 +224,7 @@ class ComponentRegistryValidationTask extends DefaultTask {
         )
         def config = getConfig(loader,
                 supportedGroupIds.split(",").collect {it -> it.trim()},
-                systemMandatory,
+                systemMandatory != null ? systemMandatory : false,
                 supportedSystems.split(",").collect {it -> it.trim()},
                 serviceBranch,
                 service,
