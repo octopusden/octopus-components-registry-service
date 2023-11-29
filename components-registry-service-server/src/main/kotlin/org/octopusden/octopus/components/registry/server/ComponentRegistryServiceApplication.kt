@@ -62,7 +62,6 @@ class ComponentRegistryServiceApplication {
         EscrowConfigurationLoader(
             configLoader,
             configHelper.supportedGroupIds(),
-            configHelper.systemMandatory(),
             configHelper.supportedSystems(),
             versionNames
         )

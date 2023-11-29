@@ -17,7 +17,6 @@ import java.util.Map;
 public class TestConfigUtils {
 
     public static final List<String> SUPPORTED_GROUP_IDS = Arrays.asList("org.octopusden.octopus","io.bcomponent");
-    public static final boolean SYSTEM_MANDATORY = false;
     public static final List<String> SUPPORTED_SYSTEMS = Arrays.asList("NONE", "CLASSIC", "ALFA");
 
     public static final VersionNames VERSION_NAMES = new VersionNames("serviceCBranch", "serviceC", "minorC");
@@ -42,16 +41,11 @@ public class TestConfigUtils {
     }
 
     public static EscrowConfigurationLoader loadFromURL(ComponentRegistryInfo resource) {
-        return loadFromURL(resource, VERSION_NAMES, PRODUCT_TYPES, SUPPORTED_GROUP_IDS, SYSTEM_MANDATORY, SUPPORTED_SYSTEMS);
-    }
-
-    public static EscrowConfigurationLoader loadFromURL(ComponentRegistryInfo resource, VersionNames versionNames, Map<ProductTypes, String> productTypes, List<String> supportedGroupIds, boolean systemMandatory, List<String> supportedSystems) {
         return new EscrowConfigurationLoader(
-                new ConfigLoader(resource, versionNames, productTypes),
-                supportedGroupIds,
-                systemMandatory,
-                supportedSystems,
-                versionNames
+                new ConfigLoader(resource, VERSION_NAMES, PRODUCT_TYPES),
+                SUPPORTED_GROUP_IDS,
+                SUPPORTED_SYSTEMS,
+                VERSION_NAMES
         );
     }
 }

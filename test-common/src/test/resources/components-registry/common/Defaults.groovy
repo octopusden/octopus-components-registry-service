@@ -1,6 +1,7 @@
 import static org.octopusden.octopus.escrow.BuildSystem.*
 
 Defaults {
+    system = "NONE"
     buildSystem = PROVIDED
     artifactId = ANY_ARTIFACT
     jira {

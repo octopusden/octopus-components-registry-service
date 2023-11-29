@@ -14,6 +14,7 @@ enum VCS {
 }
 
 Defaults {
+    system = "NONE"
     repositoryType = MERCURIAL
     buildSystem = MAVEN;
     versionRange = "(,)"

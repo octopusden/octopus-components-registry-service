@@ -20,7 +20,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals
 import static org.junit.jupiter.api.Assertions.assertFalse
 import static org.junit.jupiter.api.Assertions.assertNotNull
 import static org.junit.jupiter.api.Assertions.assertTrue
-import static org.octopusden.octopus.escrow.TestConfigUtils.SYSTEM_MANDATORY
 import static org.octopusden.octopus.escrow.TestConfigUtils.PRODUCT_TYPES
 import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_GROUP_IDS
 import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_SYSTEMS
@@ -54,7 +53,6 @@ class BuildToolResolverTest {
                         PRODUCT_TYPES
                 ),
                 SUPPORTED_GROUP_IDS,
-                SYSTEM_MANDATORY,
                 SUPPORTED_SYSTEMS,
                 VERSION_NAMES
         )

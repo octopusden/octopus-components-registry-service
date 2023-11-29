@@ -15,7 +15,6 @@ public class ConfigHelper {
     public static final String DEFAULT_MAIN_CONFIG_FILE = "Aggregator.groovy";
     public static final String PATH_TO_CONFIG = "pathToConfig";
     private static final String SUPPORTED_GROUP_IDS = "components-registry.supportedGroupIds";
-    private static final String SYSTEM_MANDATORY = "components-registry.systemMandatory";
     private static final String SUPPORTED_SYSTEMS = "components-registry.supportedSystems";
 
     private static final String VERSION_NAME_SERVICE_BRANCH = "components-registry.version-name.service-branch";
@@ -50,13 +49,6 @@ public class ConfigHelper {
             return Arrays.stream(value.split(",")).map(String::trim).collect(Collectors.toList());
         }
         return Collections.emptyList();
-    }
-
-    public boolean systemMandatory() {
-        if (environment.containsProperty(SYSTEM_MANDATORY)) {
-            return environment.getRequiredProperty(SYSTEM_MANDATORY, Boolean.class);
-        }
-        return false;
     }
 
     public List<String> supportedSystems() {

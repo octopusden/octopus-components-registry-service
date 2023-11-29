@@ -1,5 +1,11 @@
 package org.octopusden.octopus.escrow.configuration.validation
 
+import groovy.transform.TupleConstructor
+import groovy.transform.TypeChecked
+import kotlin.Pair
+import org.apache.commons.lang3.StringUtils
+import org.apache.logging.log4j.LogManager
+import org.apache.logging.log4j.Logger
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.MavenArtifactMatcher
 import org.octopusden.octopus.escrow.RepositoryType
@@ -12,12 +18,6 @@ import org.octopusden.octopus.escrow.model.VersionControlSystemRoot
 import org.octopusden.releng.versions.KotlinVersionFormatter
 import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRange
-import groovy.transform.TupleConstructor
-import groovy.transform.TypeChecked
-import kotlin.Pair
-import org.apache.commons.lang3.StringUtils
-import org.apache.logging.log4j.LogManager
-import org.apache.logging.log4j.Logger
 import org.octopusden.releng.versions.VersionRangeFactory
 
 import java.util.function.BinaryOperator
@@ -35,7 +35,6 @@ class EscrowConfigValidator {
     public static final String SPLIT_PATTERN = "[,|\\s]+"
 
     private List<String> supportedGroupIds
-    private boolean systemMandatory
     private List<String> supportedSystems
     private VersionNames versionNames
 
@@ -73,8 +72,7 @@ class EscrowConfigValidator {
 
     Map<MavenArtifact, List<EscrowModuleConfig>> map = new HashMap<>()
 
-    EscrowConfigValidator(List<String> supportedGroupIds, boolean systemMandatory, List<String> supportedSystems, VersionNames versionNames ) {
-        this.systemMandatory = systemMandatory
+    EscrowConfigValidator(List<String> supportedGroupIds, List<String> supportedSystems, VersionNames versionNames) {
         this.supportedGroupIds = supportedGroupIds
         this.supportedSystems = supportedSystems
         this.versionNames = versionNames
@@ -356,21 +354,21 @@ class EscrowConfigValidator {
 
     def validateSystem(EscrowModuleConfig moduleConfig, String component) {
         def system = moduleConfig.getSystem()
+
         if (system == null) {
-            if (systemMandatory) {
-                registerError("system is not specified in component '$component'")
-            }
+            registerError("system is not specified in component '$component'")
+            return
+        }
+
+        def systemPattern = "\\w+(,\\w+)*"
+        if (!system.matches(Pattern.compile(systemPattern))) {
+            registerError("system is not matched '$systemPattern' in '$component'")
         } else {
-            def systemPattern = "\\w+(,\\w+)*"
-            if (!system.matches(Pattern.compile(systemPattern))) {
-                registerError("system is not matched '$systemPattern' in '$component'")
-            } else {
-                def unsupportedSystems = system?.split(SPLIT_PATTERN)
-                        ?.findAll { s -> !supportedSystems.contains(s) }
-                        ?.toList() ?: Collections.emptyList()
-                if (!unsupportedSystems.isEmpty()) {
-                    registerError("system contains unsupported values: ${unsupportedSystems.join(",")} in component '$component'")
-                }
+            def unsupportedSystems = system?.split(SPLIT_PATTERN)
+                    ?.findAll { s -> !supportedSystems.contains(s) }
+                    ?.toList() ?: Collections.emptyList()
+            if (!unsupportedSystems.isEmpty()) {
+                registerError("system contains unsupported values: ${unsupportedSystems.join(",")} in component '$component'")
             }
         }
     }

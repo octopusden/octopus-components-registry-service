@@ -50,7 +50,7 @@ class ComponentsRegistryValidatorTest {
                         ),
                         VERSION_NAMES,
                         PRODUCT_TYPES
-                ), SUPPORTED_GROUP_IDS, SYSTEM_MANDATORY, SUPPORTED_SYSTEMS, VERSION_NAMES);
+                ), SUPPORTED_GROUP_IDS, SUPPORTED_SYSTEMS, VERSION_NAMES);
         assertThatThrownBy(() -> escrowConfigurationLoader.loadFullConfiguration(Collections.emptyMap()))
                 .isInstanceOf(EscrowConfigurationException.class).hasMessageContainingAll(expectedValidationErrors.toArray(new String[0]));
     }

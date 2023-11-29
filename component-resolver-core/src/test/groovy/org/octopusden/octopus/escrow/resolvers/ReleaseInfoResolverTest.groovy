@@ -8,7 +8,6 @@ import org.octopusden.octopus.releng.dto.ComponentVersion
 import org.junit.Test
 import java.nio.file.Paths
 
-import static org.octopusden.octopus.escrow.TestConfigUtils.SYSTEM_MANDATORY
 import static org.octopusden.octopus.escrow.TestConfigUtils.PRODUCT_TYPES
 import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_GROUP_IDS
 import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_SYSTEMS
@@ -68,7 +67,6 @@ class ReleaseInfoResolverTest {
                         PRODUCT_TYPES
                 ),
                 SUPPORTED_GROUP_IDS,
-                SYSTEM_MANDATORY,
                 SUPPORTED_SYSTEMS,
                 VERSION_NAMES
         )

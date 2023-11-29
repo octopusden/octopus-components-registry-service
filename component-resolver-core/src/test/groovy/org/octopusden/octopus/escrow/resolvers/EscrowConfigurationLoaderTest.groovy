@@ -27,7 +27,6 @@ import static org.octopusden.octopus.escrow.RepositoryType.MERCURIAL
 import static org.octopusden.octopus.escrow.TestConfigUtils.NUMERIC_VERSION_FACTORY
 import static org.octopusden.octopus.escrow.TestConfigUtils.VERSION_RANGE_FACTORY
 import static org.octopusden.octopus.escrow.TestConfigUtils.loadConfiguration
-import static org.octopusden.octopus.escrow.TestConfigUtils.loadFromURL
 import static org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader.FAKE_VCS_URL_FOR_BS20
 
 class EscrowConfigurationLoaderTest extends GroovyTestCase {
@@ -159,6 +158,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                         VersionControlSystemRoot.create("main", MERCURIAL, 'ssh://hg@mercurial/bcomponent',
                                 '$module-$version', null)),
                 buildSystem: MAVEN,
+                system: "NONE",
                 artifactIdPattern: /[\w-]+/,
                 groupIdPattern: "org.octopusden.octopus.bcomponent",
                 versionRange: "[1.12.1-150,)",
@@ -171,6 +171,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 componentOwner: "user1",
                 vcsSettings: VCSSettings.create([VersionControlSystemRoot.create("main", CVS, FAKE_VCS_URL_FOR_BS20, '$module-$version', 'default')]),
                 buildSystem: BuildSystem.BS2_0,
+                system: "NONE",
                 groupIdPattern: "org.octopusden.octopus.bcomponent",
                 artifactIdPattern: /[\w-]+/,
                 versionRange: "(,1.12.1-150)",
@@ -196,6 +197,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 componentOwner: "user1",
                 vcsSettings: VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", MERCURIAL, "ssh://hg@mercurial/bcomponent", '$module-$version', null)),
                 buildSystem: MAVEN,
+                system: "NONE",
                 artifactIdPattern: /[\w-]+/,
                 groupIdPattern: "org.octopusden.octopus.bcomponent",
                 versionRange: "[1.12.1-151,)",
@@ -219,6 +221,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 componentOwner: "user1",
                 vcsSettings: VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", CVS, "back/build/test/sources/test-maven", '$module-$cvsCompatibleVersion', "bcomponent-branch")),
                 buildSystem: MAVEN,
+                system: "NONE",
                 artifactIdPattern: "test-cvs-maven-parent,test-cvs-maven-module1",
                 groupIdPattern: "org.octopusden.octopus.bcomponent",
                 versionRange: "(,0),[0,)",
@@ -244,6 +247,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 componentOwner: "user1",
                 vcsSettings: VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", CVS, "back/build/test/sources/test-maven", '$module-$cvsCompatibleVersion', "bcomponent-branch")),
                 buildSystem: BuildSystem.MAVEN,
+                system: "NONE",
                 artifactIdPattern: "test-cvs-maven-parent,test-cvs-maven-module1",
                 groupIdPattern: "org.octopusden.octopus.bcomponent",
                 versionRange: "(,0),[0,)",
@@ -484,8 +488,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
     @Test
     void testValidationUnsupportedSystem() {
         def exception = GroovyAssert.shouldFail(EscrowConfigurationException.class, {
-            loadFromURL(ComponentRegistryInfo.fromClassPath("invalid/invalidSystem.groovy"), TestConfigUtils.VERSION_NAMES, TestConfigUtils.PRODUCT_TYPES, TestConfigUtils.SUPPORTED_GROUP_IDS, true, TestConfigUtils.SUPPORTED_SYSTEMS)
-                    .loadFullConfiguration(null);
+            loadConfiguration("invalid/invalidSystem.groovy")
         })
         assert exception.message == "Validation of module config failed due following errors: \n" +
                 "system contains unsupported values: INVALID in component 'component1'\n" +

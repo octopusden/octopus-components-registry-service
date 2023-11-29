@@ -1,5 +1,9 @@
 import static org.octopusden.octopus.escrow.BuildSystem.*
 
+Defaults {
+    system = "NONE"
+}
+
 Tools {
     BuildEnv {
         escrowEnvironmentVariable = "BUILD_ENV"

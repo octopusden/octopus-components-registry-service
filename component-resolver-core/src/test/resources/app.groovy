@@ -12,6 +12,7 @@ Tools {
 }
 
 Defaults {
+    system = "NONE"
     repositoryType = MERCURIAL
     buildSystem = MAVEN;
     tag = '$module-$version';

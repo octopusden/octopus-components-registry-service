@@ -47,7 +47,6 @@ public class ConfigResolverConfig {
         return new EscrowConfigurationLoader(
                 configLoader(configHelper, versionNames),
                 configHelper.supportedGroupIds(),
-                configHelper.systemMandatory(),
                 configHelper.supportedSystems(),
                 versionNames
         );
