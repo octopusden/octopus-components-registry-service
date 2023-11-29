@@ -25,10 +25,13 @@ def adocProperties = [:]
     (project.findProperty("adoc.$it") as String)?.with { property -> adocProperties[it] = property }
 }
 
+if (adocProperties['header'] == null) {
+    adocProperties['header'] = 'Components Registry Configuration'
+}
+
 def checkMandatoryAdocProperties = {
     ['glossary-component-link', 'components-registry-link', 'release-management-automation-link',
-     'escrow-automation-tool-link', 'service-desk-link', 'components-registry-validation-link',
-     'header'].each {
+     'escrow-automation-tool-link', 'service-desk-link', 'components-registry-validation-link'].each {
         if (adocProperties[it] == null) throw new IllegalArgumentException("`adoc.$it` property must be defined")
     }
     return
