@@ -18,7 +18,7 @@ class VersionControlSystemRoot {
                                            String tag, String branch) {
         def vcsBranch = branch
         return new VersionControlSystemRoot(name, repositoryType,
-                (repositoryType?.caseInsensitive) ? vcsPath?.toLowerCase() : vcsPath,
+                (repositoryType?.isCaseSensitive() == false) ? vcsPath?.toLowerCase() : vcsPath,
                 tag, vcsBranch)
     }
 

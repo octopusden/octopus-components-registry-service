@@ -38,7 +38,7 @@ abstract class BaseComponentController<T : Component> {
                 val vcsPathEquals = vcsPath?.let { vcsPathValue ->
                     config.vcsSettings
                         .versionControlSystemRoots
-                        .any {vcsPathValue.equals(it.vcsPath, true) }
+                        .any { vcsPathValue.equals(it.vcsPath, true) }
                 } ?: true
 
                 val buildSystemEquals = buildSystem?.let { buildSystemValue ->
