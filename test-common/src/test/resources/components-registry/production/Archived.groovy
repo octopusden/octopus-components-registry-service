@@ -8,13 +8,13 @@ import static org.octopusden.octopus.escrow.BuildSystem.*
     buildSystem = GRADLE
     "(,1.200),[2,)" {
         vcsSettings {
-            vcsUrl = "ssh://git@github.com:octopusden/octopus-rm-gradle-plugin.git"
+            vcsUrl = "ssh://git@github.com:OCTOPUSDEN/octopus-rm-gradle-plugin.git"
             tag = 'release-management-gradle-plugin-$version'
         }
     }
     "[1.200, 2)" {
         vcsSettings {
-            vcsUrl = "ssh://git@github.com:octopusden/archive/gradle-staging-plugin.git"
+            vcsUrl = "ssh://git@github.com:OCTOPUSDEN/archive/gradle-staging-plugin.git"
         }
     }
     jira {
