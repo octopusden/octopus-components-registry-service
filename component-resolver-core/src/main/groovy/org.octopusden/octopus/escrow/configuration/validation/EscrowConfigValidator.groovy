@@ -283,9 +283,6 @@ class EscrowConfigValidator {
             if (!(moduleConfig.buildSystem == BuildSystem.BS2_0 || moduleConfig.buildSystem == BuildSystem.PROVIDED || moduleConfig.buildSystem == BuildSystem.ESCROW_PROVIDED_MANUALLY) && StringUtils.isEmpty(vcsRoot.vcsPath)) {
                 registerError("empty vcsUrl is not allowed in configuration of component $component (type=$moduleConfig.buildSystem)")
             }
-            if (vcsRoot.repositoryType == RepositoryType.GIT && vcsRoot.vcsPath.startsWith("ssh://git@bitbucket") && vcsRoot.vcsPath != vcsRoot.vcsPath.toLowerCase()) {
-                registerError("component $component git's VCS URL contains upper case char(s): ${vcsRoot.vcsPath}")
-            }
         }
         if (moduleConfig.getBuildSystem() == BuildSystem.BS2_0) {
             if (vcsRoots.size() > 1) {

@@ -640,7 +640,7 @@ TEST_COMPONENT2 {
     groupId = "org.octopusden.octopus.conponentt_merc"
     artifactId = "conponentt_merc"
     repositoryType = MERCURIAL
-    vcsUrl = "ssh://hg@mercurial/releng"
+    vcsUrl = "ssh://hg@mercurial/RELENG"
     branch = "v2"
     jira {
         projectKey = "TEST_COMPONENT2"
@@ -659,7 +659,7 @@ TEST_COMPONENT2 {
     groupId = "org.octopusden.octopus.conponentt_git"
     artifactId = "conponentt_git"
     repositoryType = GIT
-    vcsUrl = "ssh://git@gitlab:releng.git"
+    vcsUrl = "ssh://git@gitlab:RELENG.git"
     branch = "v2"
     jira {
         projectKey = "TEST_COMPONENT2"
