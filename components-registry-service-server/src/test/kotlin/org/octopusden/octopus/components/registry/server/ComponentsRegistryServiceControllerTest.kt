@@ -1,6 +1,11 @@
 package org.octopusden.octopus.components.registry.server
 
 import com.fasterxml.jackson.core.type.TypeReference
+import java.net.URI
+import java.util.Date
+import org.junit.jupiter.api.Assertions
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
 import org.octopusden.octopus.components.registry.core.dto.ArtifactComponentsDTO
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.core.dto.BuildSystem
@@ -15,13 +20,10 @@ import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionR
 import org.octopusden.octopus.components.registry.core.dto.SecurityGroupsDTO
 import org.octopusden.octopus.components.registry.core.dto.ServiceStatusDTO
 import org.octopusden.octopus.components.registry.core.dto.VCSSettingsDTO
+import org.octopusden.octopus.components.registry.core.dto.VersionNamesDTO
 import org.octopusden.octopus.components.registry.core.dto.VersionRequest
 import org.octopusden.octopus.components.registry.core.dto.VersionedComponent
 import org.octopusden.octopus.components.registry.test.BaseComponentsRegistryServiceTest
-import org.junit.jupiter.api.Assertions
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.extension.ExtendWith
-import org.octopusden.octopus.components.registry.core.dto.VersionNamesDTO
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
@@ -32,8 +34,6 @@ import org.springframework.test.context.junit.jupiter.SpringExtension
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
-import java.net.URI
-import java.util.Date
 
 @AutoConfigureMockMvc
 @ExtendWith(SpringExtension::class)
@@ -83,7 +83,7 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
             .toObject(object : TypeReference<Map<String, String>>() {})
 
     override fun getComponentV1(component: String): ComponentV1 = mvc.perform(
-        MockMvcRequestBuilders.get("/rest/api/1/components/TESTONE")
+        MockMvcRequestBuilders.get("/rest/api/1/components/$component")
             .accept(APPLICATION_JSON)
     )
         .andExpect(status().isOk)
@@ -310,6 +310,7 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
         expectedComponent.releaseManager = "user"
         expectedComponent.securityChampion = "user"
         expectedComponent.system = listOf("NONE")
+        expectedComponent.clientCode = "CLIENT_CODE"
 
         Assertions.assertEquals(37, components.components.size)
         Assertions.assertTrue(expectedComponent in components.components) {
@@ -359,6 +360,7 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
         expectedComponent.releaseManager = "user"
         expectedComponent.securityChampion = "user"
         expectedComponent.system = listOf("NONE")
+        expectedComponent.clientCode = "CLIENT_CODE"
         Assertions.assertEquals(expectedComponent, actualComponent)
     }
 

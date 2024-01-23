@@ -2,13 +2,16 @@ package org.octopusden.octopus.escrow.configuration.validation
 
 import groovy.transform.TupleConstructor
 import groovy.transform.TypeChecked
+import java.util.function.BinaryOperator
+import java.util.regex.Pattern
+import java.util.regex.PatternSyntaxException
+import java.util.stream.Stream
 import kotlin.Pair
 import org.apache.commons.lang3.StringUtils
 import org.apache.logging.log4j.LogManager
 import org.apache.logging.log4j.Logger
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.MavenArtifactMatcher
-import org.octopusden.octopus.escrow.RepositoryType
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
 import org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration
 import org.octopusden.octopus.escrow.configuration.model.EscrowModule
@@ -20,11 +23,6 @@ import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRange
 import org.octopusden.releng.versions.VersionRangeFactory
 
-import java.util.function.BinaryOperator
-import java.util.regex.Pattern
-import java.util.regex.PatternSyntaxException
-import java.util.stream.Stream
-
 @TypeChecked
 class EscrowConfigValidator {
 
@@ -33,6 +31,7 @@ class EscrowConfigValidator {
 
     private static final Logger LOG = LogManager.getLogger(EscrowConfigValidator.class)
     public static final String SPLIT_PATTERN = "[,|\\s]+"
+    private static final Pattern CLIENT_CODE_PATTERN = Pattern.compile("[A-Z_0-9]+")
 
     private List<String> supportedGroupIds
     private List<String> supportedSystems
@@ -82,31 +81,31 @@ class EscrowConfigValidator {
 
     boolean validateEscrowConfiguration(EscrowConfiguration configuration) {
         LOG.info("Validate of escrow configuration started")
-        def modules = configuration.getEscrowModules()
-        for (String component : modules.keySet()) {
-            EscrowModule escrowModule = configuration.getEscrowModules().get(component)
+        configuration.escrowModules.each { String componentName, EscrowModule escrowModule ->
             def configurations = escrowModule.getModuleConfigurations()
             if (configurations.isEmpty()) {
-                registerError("No configurations in module $component")
+                registerError("No configurations in module $componentName")
             }
             for (EscrowModuleConfig moduleConfig : configurations) {
-                validateMandatoryFields(moduleConfig, component)
-                validateBuildSystem(moduleConfig.getBuildSystem(), component)
-                validateArtifactId(moduleConfig.getArtifactIdPattern(), component)
-                validateGroupId(moduleConfig, component)
-                validateVcsSettings(moduleConfig, component)
-                validateVersionRange(moduleConfig, component)
-                validateJiraParams(moduleConfig, component)
-                validateExplicitExternalComponent(moduleConfig, component)
-                validateSystem(moduleConfig, component)
+                validateMandatoryFields(moduleConfig, componentName)
+                validateBuildSystem(moduleConfig.getBuildSystem(), componentName)
+                validateArtifactId(moduleConfig.getArtifactIdPattern(), componentName)
+                validateGroupId(moduleConfig, componentName)
+                validateVcsSettings(moduleConfig, componentName)
+                validateVersionRange(moduleConfig, componentName)
+                validateJiraParams(moduleConfig, componentName)
+                validateExplicitExternalComponent(moduleConfig, componentName)
+                validateSystem(moduleConfig, componentName)
+                validateClientCode(moduleConfig, componentName)
             }
         }
         if (!hasErrors()) {
             validateVersionConflicts(configuration)
             validateGroupIdAndVersionIdIntersections(configuration)
+            validateComponentParent(configuration)
             validateArchivedComponents(configuration)
         } else {
-            LOG.warn("Validating version conflicts is skipped due to the previous errors")
+            LOG.warn("Composite validations are skipped due to the previous errors")
         }
         LOG.info("Validate of escrow configuration completed")
         return hasErrors()
@@ -171,6 +170,25 @@ class EscrowConfigValidator {
         }
     }
 
+    def validateComponentParent(EscrowConfiguration configuration) {
+        configuration.escrowModules.each { String componentName, EscrowModule escrowModule ->
+            escrowModule.moduleConfigurations.each { moduleConfiguration ->
+                if (moduleConfiguration.parentComponent != null) {
+                    def parentEscrowModule = configuration.escrowModules[moduleConfiguration.parentComponent]
+                    if (parentEscrowModule == null) {
+                        registerError("parentComponent '${moduleConfiguration.parentComponent}' is not found for '$componentName'")
+                    }  else {
+                        parentEscrowModule.moduleConfigurations.find { parentComponentConfiguration ->
+                            parentComponentConfiguration.parentComponent != null
+                        }?.with {
+                            registerError("Component '${moduleConfiguration.parentComponent}' having parentComponent specified is set as parentComponent for '$componentName'")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     /**
      * Validate archived component.
      * Check distribution section of the component.
@@ -223,7 +241,6 @@ class EscrowConfigValidator {
         }
         def versionRangeFactory = new VersionRangeFactory(escrowConfiguration.versionNames)
         map.each { it ->
-            def mavenArtifact = it.key
             List<EscrowModuleConfig> configs = it.value
             if (configs.size() > 1) {
                 for (int i = 0; i < configs.size() - 1; i++) {
@@ -233,7 +250,7 @@ class EscrowConfigValidator {
                         def vr1 = versionRangeFactory.create(config1.getVersionRangeString())
                         def vr2 = versionRangeFactory.create(config2.getVersionRangeString())
                         if (versionRangeHelper.hasIntersection(vr1, vr2)) {
-                            registerError("More than one configuration matches $mavenArtifact. " +
+                            registerError("More than one configuration matches ${it.key}. " +
                                     "Intersection of version ranges ${config1.getVersionRangeString()} with ${config2.getVersionRangeString()}.")
                         }
                     }
@@ -367,6 +384,13 @@ class EscrowConfigValidator {
             if (!unsupportedSystems.isEmpty()) {
                 registerError("system contains unsupported values: ${unsupportedSystems.join(",")} in component '$component'")
             }
+        }
+    }
+
+    def validateClientCode(EscrowModuleConfig moduleConfig, String component) {
+        def clientCode = moduleConfig.getClientCode()
+        if (clientCode != null && !CLIENT_CODE_PATTERN.matcher(clientCode).matches()) {
+            registerError("clientCode is not matched '${CLIENT_CODE_PATTERN.pattern()}' in '$component'")
         }
     }
 

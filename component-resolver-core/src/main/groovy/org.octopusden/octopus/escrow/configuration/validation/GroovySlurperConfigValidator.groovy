@@ -1,15 +1,12 @@
 package org.octopusden.octopus.escrow.configuration.validation
 
+import java.util.regex.Pattern
 import org.octopusden.octopus.escrow.dto.EscrowExpressionContext
-import org.octopusden.octopus.escrow.dto.MavenArtifactDistributionEntity
 import org.octopusden.octopus.escrow.exceptions.EscrowConfigurationException
 import org.octopusden.octopus.escrow.resolvers.ReleaseInfoResolver
-import org.octopusden.octopus.escrow.utilities.DistributionUtilities
 import org.octopusden.octopus.escrow.utilities.EscrowExpressionParser
 import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionNames
-
-import java.util.regex.Pattern
 
 class GroovySlurperConfigValidator {
 
@@ -41,8 +38,9 @@ class GroovySlurperConfigValidator {
                                    TAG, 'versionRange', 'version', 'module',
                                    'teamcityReleaseConfigId', 'jiraProjectKey', 'jiraMajorVersionFormat', 'jiraReleaseVersionFormat',
                                    'buildFilePath', 'deprecated', BRANCH,
-                                   'componentDisplayName', 'componentOwner', 'releaseManager', 'securityChampion', 'system', 'octopusVersion']
-    static SUPPORTED_JIRA_ATTRIBUTES = ['projectKey', 'lineVersionFormat', 'majorVersionFormat', 'releaseVersionFormat', 'buildVersionFormat', "displayName", 'technical'];
+                                   'componentDisplayName', 'componentOwner', 'releaseManager', 'securityChampion', 'system',
+                                   'clientCode', 'parentComponent', 'octopusVersion']
+    static SUPPORTED_JIRA_ATTRIBUTES = ['projectKey', 'lineVersionFormat', 'majorVersionFormat', 'releaseVersionFormat', 'buildVersionFormat', "displayName", 'technical']
 
     static SUPPORTED_BUILD_ATTRIBUTES = ['dependencies', 'javaVersion', 'mavenVersion', 'gradleVersion', 'requiredProject', 'systemProperties', 'projectVersion', 'requiredTools', 'buildTasks']
 
@@ -62,7 +60,7 @@ class GroovySlurperConfigValidator {
     public static final String VCS_URL = 'vcsUrl'
     public static final String EXTERNAL_REGISTRY = "externalRegistry"
 
-    List<String> errors = new ArrayList<>();
+    List<String> errors = new ArrayList<>()
     private final VersionNames versionNames
 
     GroovySlurperConfigValidator(VersionNames versionNames) {
@@ -72,11 +70,11 @@ class GroovySlurperConfigValidator {
     void validateConfig(ConfigObject rootObject) {
         validateAttributes(rootObject)
         if (hasErrors()) {
-            StringBuilder errorBuff = new StringBuilder();
+            StringBuilder errorBuff = new StringBuilder()
             getErrors().each {
-                errorBuff.append "\n$it";
+                errorBuff.append "\n$it"
             }
-            throw new EscrowConfigurationException("Validation of module config failed due to following errors: ${errorBuff.toString()}");
+            throw new EscrowConfigurationException("Validation of module config failed due to following errors: ${errorBuff.toString()}")
         }
     }
 
@@ -104,7 +102,7 @@ class GroovySlurperConfigValidator {
                 def attribute = configTypeObject.key
                 if (SUPPORTED_ATTRIBUTES.contains(attribute)) {
                     if (configTypeObject.value instanceof ConfigObject) {
-                        registerError("Incorrect value of attribute $attribute in module $componentName. String expected");
+                        registerError("Incorrect value of attribute $attribute in module $componentName. String expected")
                     }
                 } else if (attribute == JIRA) {
                     validateJiraParameters(moduleConfigObject, "defaults", componentName)
@@ -117,7 +115,7 @@ class GroovySlurperConfigValidator {
                 } else if (attribute == DEPENDENCIES) {
                     validateDependenciesParameters(moduleConfigObject, "dependencies", componentName)
                 } else if (attribute == "components") {
-                    validateSubComponents(moduleConfigObject);
+                    validateSubComponents(moduleConfigObject)
                 } else {
                     validateConfigSectionForUnknownAttributes(configTypeObject, componentName)
                 }
@@ -131,7 +129,7 @@ class GroovySlurperConfigValidator {
             componentsObject.each { String key, value ->
                 if (!value instanceof ConfigObject) {
                     registerError("Incorrect data ($key:$value) in components{} section")
-                    return;
+                    return
                 }
                 validateComponent(value as ConfigObject, key)
             }
@@ -142,7 +140,7 @@ class GroovySlurperConfigValidator {
         tools.each { String key, value ->
             if (!value instanceof ConfigObject) {
                 registerError("Incorrect data ($key:$value) in components{} section")
-                return;
+                return
             }
             validateToolSection(value as ConfigObject, key)
         }
@@ -155,10 +153,10 @@ class GroovySlurperConfigValidator {
                 def attribute = vcsTypeObject.key
                 if (SUPPORTED_TOOLS_ATTRIBUTES.contains(attribute)) {
                     if (vcsTypeObject.value instanceof ConfigObject) {
-                        registerError("Incorrect value of attribute $attribute in module $moduleName. String expected");
+                        registerError("Incorrect value of attribute $attribute in module $moduleName. String expected")
                     }
                 } else {
-                    registerError("Unsupported attribute '$attribute' in component $moduleName");
+                    registerError("Unsupported attribute '$attribute' in component $moduleName")
                 }
             }
         }
@@ -168,8 +166,8 @@ class GroovySlurperConfigValidator {
                                                            String componentName) {
         String moduleConfigName = configTypeObject.key as String
         if (!(configTypeObject.value instanceof ConfigObject)) {
-            registerError("Unsupported attribute '$moduleConfigName' in component $componentName");
-            return;
+            registerError("Unsupported attribute '$moduleConfigName' in component $componentName")
+            return
         }
         ConfigObject configObject = configTypeObject.value as ConfigObject
 
@@ -184,7 +182,7 @@ class GroovySlurperConfigValidator {
                 validateVCSSettingsSection(configObject, componentName, key as String)
             } else if (!SUPPORTED_ATTRIBUTES.contains(key)) {
                 registerError("Unknown attribute '$key' in " +
-                        getWhereMessage(moduleConfigName, componentName));
+                        getWhereMessage(moduleConfigName, componentName))
             }
         }
     }
@@ -196,7 +194,7 @@ class GroovySlurperConfigValidator {
             validateBuildSection(buildSectionValue as ConfigObject, moduleName, moduleConfigName)
         } else {
             registerError("Build section is not correctly configured in " +
-                    getWhereMessage(moduleConfigName, moduleName));
+                    getWhereMessage(moduleConfigName, moduleName))
         }
     }
 
@@ -206,7 +204,7 @@ class GroovySlurperConfigValidator {
             validateDistributionSection(distributionSectionValue as ConfigObject, versionNames, moduleName, moduleConfigName)
         } else {
             registerError("Distribution section is not correctly configured in " +
-                    getWhereMessage(moduleConfigName, moduleName));
+                    getWhereMessage(moduleConfigName, moduleName))
         }
     }
 
@@ -216,7 +214,7 @@ class GroovySlurperConfigValidator {
             validateSecurityGroupsSection(securityGroupsSectionValue as ConfigObject, moduleName, moduleConfigName)
         } else {
             registerError("Security Groups section is not correctly configured in " +
-                    getWhereMessage(moduleConfigName, moduleName));
+                    getWhereMessage(moduleConfigName, moduleName))
         }
     }
 
@@ -226,7 +224,7 @@ class GroovySlurperConfigValidator {
             validateDependenciesSection(dependenciesSectionValue as ConfigObject, moduleName, moduleConfigName)
         } else {
             registerError("Dependencies section is not correctly configured in " +
-                    getWhereMessage(moduleConfigName, moduleName));
+                    getWhereMessage(moduleConfigName, moduleName))
         }
     }
 
@@ -280,7 +278,7 @@ class GroovySlurperConfigValidator {
         section.keySet().each {
             if (!supportedAttributes.contains(it)) {
                 registerError("Unknown $sectionName attribute '$it' in " +
-                        getWhereMessage(moduleConfigName, moduleName));
+                        getWhereMessage(moduleConfigName, moduleName))
             }
         }
     }
@@ -296,7 +294,7 @@ class GroovySlurperConfigValidator {
             validateJiraSection(jiraSectionValue as ConfigObject, moduleName, moduleConfigName)
         } else {
             registerError("JIRA section is not correctly configured in " +
-                    getWhereMessage(moduleConfigName, moduleName));
+                    getWhereMessage(moduleConfigName, moduleName))
         }
     }
 
@@ -309,7 +307,7 @@ class GroovySlurperConfigValidator {
             if (it == CUSTOMER || it == COMPONENT) {
                 validateCustomParameters(jiraSection.get(it) as ConfigObject, "defaults", moduleName)
             } else if (!SUPPORTED_JIRA_ATTRIBUTES.contains(it)) {
-                registerError("Unknown jira attribute '$it' in " + getWhereMessage(moduleConfigName, moduleName));
+                registerError("Unknown jira attribute '$it' in " + getWhereMessage(moduleConfigName, moduleName))
             }
         }
     }
@@ -326,7 +324,7 @@ class GroovySlurperConfigValidator {
             validateVCSSettingsSection(moduleConfigObject as ConfigObject, moduleConfigName, componentName)
         } else {
             registerError("$VCS_SETTINGS section is not correctly configured in " +
-                    getWhereMessage(moduleConfigName, componentName));
+                    getWhereMessage(moduleConfigName, componentName))
         }
     }
 
@@ -339,12 +337,12 @@ class GroovySlurperConfigValidator {
                     ConfigObject vcsRootObject = valueObject as ConfigObject
                     validateVCSRoot(vcsRootObject, key, componentName + "->" + moduleConfigName)
                 } else if (!SUPPORTED_VCS_ATTRIBUTES.contains(key)) {
-                    registerError("Unknown '$key' attribute in " + getWhereMessage(moduleConfigName, componentName));
+                    registerError("Unknown '$key' attribute in " + getWhereMessage(moduleConfigName, componentName))
                 }
             }
         } else {
             registerError("VCS Settings section is not correctly configured in " +
-                    getWhereMessage(moduleConfigName, componentName));
+                    getWhereMessage(moduleConfigName, componentName))
         }
     }
 
@@ -364,7 +362,7 @@ class GroovySlurperConfigValidator {
             if (valueObject instanceof ConfigObject) {
                 registerError("VCS Root is not correctly configured in " + getWhereMessage(componentName, configSectionName))
             } else if (!SUPPORTED_VCS_ATTRIBUTES.contains(key)) {
-                registerError("Unknown '$key' attribute in " + getWhereMessage(componentName, configSectionName));
+                registerError("Unknown '$key' attribute in " + getWhereMessage(componentName, configSectionName))
             }
         }
     }
@@ -378,7 +376,7 @@ class GroovySlurperConfigValidator {
             validateComponentSection(customerSectionValue as ConfigObject, moduleName, moduleConfigName)
         } else {
             registerError("Customer/Component section is not correctly configured in " +
-                    getWhereMessage(moduleConfigName, moduleName));
+                    getWhereMessage(moduleConfigName, moduleName))
         }
     }
 
@@ -391,7 +389,7 @@ class GroovySlurperConfigValidator {
     }
 
     boolean hasErrors() {
-        return !errors.isEmpty();
+        return !errors.isEmpty()
     }
 
     List<String> getErrors() {

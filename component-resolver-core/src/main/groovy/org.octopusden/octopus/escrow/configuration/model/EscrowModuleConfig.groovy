@@ -1,5 +1,10 @@
 package org.octopusden.octopus.escrow.configuration.model
 
+import groovy.transform.AutoClone
+import groovy.transform.AutoCloneStyle
+import groovy.transform.EqualsAndHashCode
+import groovy.transform.ToString
+import groovy.transform.TupleConstructor
 import org.octopusden.octopus.components.registry.api.VersionedComponentConfiguration
 import org.octopusden.octopus.components.registry.api.beans.VersionedComponentConfigurationBean
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes
@@ -11,17 +16,13 @@ import org.octopusden.octopus.escrow.model.BuildParameters
 import org.octopusden.octopus.escrow.model.Distribution
 import org.octopusden.octopus.escrow.model.VCSSettings
 import org.octopusden.octopus.releng.dto.JiraComponent
-import groovy.transform.AutoClone
-import groovy.transform.EqualsAndHashCode
-import groovy.transform.ToString
-import groovy.transform.TupleConstructor
-import groovy.transform.AutoCloneStyle
 
 @TupleConstructor
 @AutoClone(style = AutoCloneStyle.CLONE)
 @EqualsAndHashCode(includeFields = true, includes = ["buildSystem", "artifactIdPattern", "groupIdPattern",// "versionRange",
-    "buildFilePath", "jiraConfiguration", "buildConfiguration", "deprecated", "vcsSettings",
-    "distribution", "componentDisplayName", "componentOwner", "releaseManager", "securityChampion", "system", "octopusVersion", "escrow", "productType"])
+        "buildFilePath", "jiraConfiguration", "buildConfiguration", "deprecated", "vcsSettings",
+        "distribution", "componentDisplayName", "componentOwner", "releaseManager", "securityChampion", "system",
+        "clientCode", "parentComponent", "octopusVersion", "escrow", "productType"])
 @ToString(includeFields = true)
 class EscrowModuleConfig {
     private BuildSystem buildSystem
@@ -53,6 +54,10 @@ class EscrowModuleConfig {
     private String securityChampion
 
     private String system
+
+    private String clientCode
+
+    private String parentComponent
 
     private String octopusVersion
 
@@ -114,6 +119,14 @@ class EscrowModuleConfig {
 
     String getSystem() {
         return system
+    }
+
+    String getClientCode() {
+        return clientCode
+    }
+
+    String getParentComponent() {
+        return parentComponent
     }
 
     String getComponentDisplayName() {

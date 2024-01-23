@@ -83,7 +83,7 @@ class JiraParametersResolver implements IJiraParametersResolver {
         escrowConfiguration.escrowModules.each { String componentName, EscrowModule escrowModule ->
             escrowModule.moduleConfigurations.each { EscrowModuleConfig moduleConfig ->
                 if (escrowModuleConfigMatcher.match(mavenArtifact, moduleConfig)) {
-                    componentRelease = ComponentVersion.create(componentName, mavenArtifact.getVersion());
+                    componentRelease = ComponentVersion.create(componentName, mavenArtifact.getVersion())
                 }
             }
         }
@@ -137,11 +137,11 @@ class JiraParametersResolver implements IJiraParametersResolver {
     @Override
     ComponentVersion getComponentByJiraProject(JiraProjectVersion jiraProjectVersion) {
         Validate.notNull(jiraProjectVersion)
-        String foundComponent = null;
+        String foundComponent = null
         escrowConfiguration.escrowModules.each { String componentName, EscrowModule escrowModule ->
             escrowModule.moduleConfigurations.each { EscrowModuleConfig escrowModuleConfig ->
                 if (matchesComponentByProjectKeyAndVersion(escrowModuleConfig, jiraProjectVersion, formatter)) {
-                    foundComponent = componentName;
+                    foundComponent = componentName
                 }
             }
         }
@@ -152,7 +152,6 @@ class JiraParametersResolver implements IJiraParametersResolver {
     ComponentConfig getComponentConfig() {
         Map<String, List<JiraComponentVersionRange>> projectKeyToJiraComponentVersionRangeMap = [:]
         Map<String, List<JiraComponentVersionRange>> componentNameToJiraComponentVersionRangeMap = [:]
-        def versionRangeFactory = new VersionRangeFactory(versionNames)
         escrowConfiguration.escrowModules.each { String componentName, EscrowModule escrowModule ->
             escrowModule.moduleConfigurations.each { EscrowModuleConfig escrowModuleConfig ->
                 String projectKey = escrowModuleConfig?.jiraConfiguration?.projectKey
@@ -176,14 +175,16 @@ class JiraParametersResolver implements IJiraParametersResolver {
                         componentOwner: escrowModuleConfig.componentOwner,
                         releaseManager: escrowModuleConfig.releaseManager,
                         securityChampion: escrowModuleConfig.securityChampion,
-                        system: escrowModuleConfig.system
+                        system: escrowModuleConfig.system,
+                        clientCode: escrowModuleConfig.clientCode,
+                        parentComponent: escrowModuleConfig.parentComponent
                 )
                 addJiraComponentVersionRange(projectKey, projectKeyToJiraComponentVersionRangeMap, enrichedModuleConfig, projectKey, componentName, versionNames)
                 addJiraComponentVersionRange(componentName, componentNameToJiraComponentVersionRangeMap, enrichedModuleConfig, projectKey, componentName, versionNames)
             }
         }
 
-        return new ComponentConfig(projectKeyToJiraComponentVersionRangeMap, componentNameToJiraComponentVersionRangeMap);
+        return new ComponentConfig(projectKeyToJiraComponentVersionRangeMap, componentNameToJiraComponentVersionRangeMap)
     }
 
     private static void addJiraComponentVersionRange(String key,
@@ -204,10 +205,10 @@ class JiraParametersResolver implements IJiraParametersResolver {
             )
             if (keyToVersionRangeMap.containsKey(key)) {
                 List<JiraComponentVersionRange> versionRangeList = new ArrayList(keyToVersionRangeMap.get(key))
-                versionRangeList.add(versionRange);
-                keyToVersionRangeMap.put(key, versionRangeList);
+                versionRangeList.add(versionRange)
+                keyToVersionRangeMap.put(key, versionRangeList)
             } else {
-                keyToVersionRangeMap.put(key, Arrays.asList(versionRange));
+                keyToVersionRangeMap.put(key, Arrays.asList(versionRange))
             }
         }
     }
@@ -215,7 +216,7 @@ class JiraParametersResolver implements IJiraParametersResolver {
     private static boolean matchesComponentByProjectKeyAndVersion(EscrowModuleConfig escrowModuleConfig,
                                                                   JiraProjectVersion jiraProjectVersion,
                                                                   KotlinVersionFormatter formatter) {
-        def jiraConfiguration = escrowModuleConfig.jiraConfiguration;
+        def jiraConfiguration = escrowModuleConfig.jiraConfiguration
         if (jiraProjectVersion?.projectKey == escrowModuleConfig?.jiraConfiguration?.projectKey) {
 
             def componentVersionFormat = jiraConfiguration.componentVersionFormat
@@ -274,7 +275,7 @@ class JiraParametersResolver implements IJiraParametersResolver {
             }
         }
         if (vcsSettings == null) {
-            return VCSSettings.createEmpty();
+            return VCSSettings.createEmpty()
         }
         return AbstractResolver.createVCSRootWithFormattedBranch(vcsSettings, versionNames, componentName, jiraProjectVersion.getVersion())
     }
@@ -305,7 +306,7 @@ class JiraParametersResolver implements IJiraParametersResolver {
     private EscrowModuleConfig getEscrowModuleConfig(String component, Closure accept) {
         List<EscrowModuleConfig> escrowModuleConfigList = getEscrowModuleConfigs(accept)
         if (escrowModuleConfigList.size() == 0) {
-            throw new EscrowConfigurationException("Failed to resolve artifact $component in Escrow Config. Now configurations found");
+            throw new EscrowConfigurationException("Failed to resolve artifact $component in Escrow Config. Now configurations found")
         }
         if (escrowModuleConfigList.size() > 1) {
             throw new EscrowConfigurationException("Failed to resolve component in config. There are more than one matching result for $component")
