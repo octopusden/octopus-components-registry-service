@@ -1,15 +1,15 @@
 package org.octopusden.octopus.escrow.configuration.model
 
-import org.octopusden.octopus.escrow.BuildSystem
-import org.octopusden.octopus.escrow.configuration.loader.VCSSettingsWrapper
-import org.octopusden.octopus.escrow.model.BuildParameters
-import org.octopusden.octopus.escrow.model.Distribution
-import org.octopusden.octopus.releng.dto.JiraComponent
 import groovy.transform.AutoClone
 import groovy.transform.EqualsAndHashCode
 import groovy.transform.ToString
 import groovy.transform.TupleConstructor
 import groovy.transform.TypeChecked
+import org.octopusden.octopus.escrow.BuildSystem
+import org.octopusden.octopus.escrow.configuration.loader.VCSSettingsWrapper
+import org.octopusden.octopus.escrow.model.BuildParameters
+import org.octopusden.octopus.escrow.model.Distribution
+import org.octopusden.octopus.releng.dto.JiraComponent
 
 @TupleConstructor
 @EqualsAndHashCode
@@ -26,7 +26,7 @@ class DefaultConfigParameters {
 
     String artifactIdPattern
 
-    String groupIdPattern;
+    String groupIdPattern
 
     JiraComponent jiraComponent
 
@@ -45,6 +45,10 @@ class DefaultConfigParameters {
     String securityChampion
 
     String system
+
+    String clientCode
+
+    String parentComponent
 
     String octopusVersion
 }

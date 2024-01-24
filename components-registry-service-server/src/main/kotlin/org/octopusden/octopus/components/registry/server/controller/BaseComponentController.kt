@@ -92,6 +92,8 @@ abstract class BaseComponentController<T : Component> {
             securityChampion = escrowModuleConfig.securityChampion
             distribution = getComponentDistribution(escrowModuleConfig)
             system = escrowModuleConfig.system?.split(EscrowConfigValidator.SPLIT_PATTERN)
+            clientCode = escrowModuleConfig.clientCode
+            parentComponent = escrowModuleConfig.parentComponent
             this
         }
 

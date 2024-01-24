@@ -162,6 +162,7 @@ Defaults {
     groupId = "org.octopusden.octopus.test"
     artifactId = "test2"
     componentDisplayName = "Test ONE display name"
+    clientCode="CLIENT_CODE"
     jira {
         projectKey = "TESTONE"
         majorVersionFormat = '$major'
@@ -178,6 +179,7 @@ Defaults {
     components {
         "versions-api" {
             componentOwner = "user9"
+            parentComponent = "TESTONE"
             artifactId = "versions-api"
             jira {
                 majorVersionFormat = '$major'

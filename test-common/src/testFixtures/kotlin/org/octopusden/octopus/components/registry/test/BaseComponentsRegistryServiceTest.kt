@@ -2,6 +2,18 @@ package org.octopusden.octopus.components.registry.test
 
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
+import java.util.Arrays
+import java.util.stream.Collectors
+import java.util.stream.Stream
+import org.junit.jupiter.api.Assertions
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.Arguments
+import org.junit.jupiter.params.provider.MethodSource
+import org.junit.jupiter.params.provider.ValueSource
 import org.octopusden.octopus.components.registry.core.dto.ArtifactComponentsDTO
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.core.dto.ComponentArtifactConfigurationDTO
@@ -17,20 +29,8 @@ import org.octopusden.octopus.components.registry.core.dto.SecurityGroupsDTO
 import org.octopusden.octopus.components.registry.core.dto.ServiceStatusDTO
 import org.octopusden.octopus.components.registry.core.dto.VCSSettingsDTO
 import org.octopusden.octopus.components.registry.core.dto.VersionControlSystemRootDTO
-import org.octopusden.octopus.components.registry.core.dto.VersionedComponent
-import org.junit.jupiter.api.Assertions
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.Arguments
-import org.junit.jupiter.params.provider.MethodSource
-import org.junit.jupiter.params.provider.ValueSource
 import org.octopusden.octopus.components.registry.core.dto.VersionNamesDTO
-import java.nio.file.Files
-import java.nio.file.Path
-import java.nio.file.Paths
-import java.util.Arrays
-import java.util.stream.Collectors
-import java.util.stream.Stream
+import org.octopusden.octopus.components.registry.core.dto.VersionedComponent
 
 const val LINE_VERSION = "3"
 const val MINOR_VERSION = "3"
@@ -66,15 +66,6 @@ val VCS_SETTINGS = VCSSettingsDTO(
             type = RepositoryType.MERCURIAL
         )
     )
-)
-
-val EXPLICIT_DISTRIBUTION = DistributionDTO(
-    false,
-    false,
-    "org.octopusden.octopus.test:versions-api:jar",
-    null,
-    null,
-    SecurityGroupsDTO(listOf("vfiler1-default#group"))
 )
 
 abstract class BaseComponentsRegistryServiceTest {
@@ -156,10 +147,27 @@ abstract class BaseComponentsRegistryServiceTest {
         val actualComponent = getComponentV1("TESTONE")
 
         val expectedComponent = ComponentV1("TESTONE", "Test ONE display name", "adzuba")
-        expectedComponent.distribution = EXPLICIT_DISTRIBUTION
+        expectedComponent.distribution = DistributionDTO( false, false, "org.octopusden.octopus.test:versions-api:jar",
+            securityGroups = SecurityGroupsDTO(listOf("vfiler1-default#group")))
         expectedComponent.releaseManager = "user"
         expectedComponent.securityChampion = "user"
         expectedComponent.system = listOf("NONE")
+        expectedComponent.clientCode = "CLIENT_CODE"
+        Assertions.assertEquals(expectedComponent, actualComponent)
+    }
+
+    @Test
+    fun testGetSubComponentV1() {
+        val actualComponent = getComponentV1("versions-api")
+
+        val expectedComponent = ComponentV1("versions-api", "versions-api", "user9")
+        expectedComponent.distribution = DistributionDTO(false, true, "",
+            securityGroups = SecurityGroupsDTO(listOf("vfiler1-default#group")))
+        expectedComponent.releaseManager = "user"
+        expectedComponent.securityChampion = "user"
+        expectedComponent.system = listOf("NONE")
+        expectedComponent.clientCode = "CLIENT_CODE"
+        expectedComponent.parentComponent = "TESTONE"
         Assertions.assertEquals(expectedComponent, actualComponent)
     }
 

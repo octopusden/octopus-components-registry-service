@@ -2,6 +2,7 @@ package org.octopusden.octopus.escrow.configuration.loader
 
 import groovy.transform.TypeChecked
 import groovy.transform.TypeCheckingMode
+import java.util.stream.Collectors
 import org.apache.commons.lang3.StringUtils
 import org.apache.commons.lang3.Validate
 import org.apache.logging.log4j.LogManager
@@ -20,7 +21,6 @@ import org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration
 import org.octopusden.octopus.escrow.configuration.model.EscrowModule
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
 import org.octopusden.octopus.escrow.configuration.validation.EscrowConfigValidator
-import org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator
 import org.octopusden.octopus.escrow.configuration.validation.util.VersionRangeHelper
 import org.octopusden.octopus.escrow.exceptions.ComponentResolverException
 import org.octopusden.octopus.escrow.exceptions.EscrowConfigurationException
@@ -39,12 +39,15 @@ import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRangeFactory
 
-import java.util.stream.Collectors
-
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.BRANCH
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.BUILD
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.DISTRIBUTION
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.JIRA
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.REPOSITORY_TYPE
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.SECURITY_GROUPS_READ
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.SUPPORTED_ATTRIBUTES
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.TAG
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.TOOLS
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.VCS_SETTINGS
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.VCS_URL
 
@@ -232,32 +235,31 @@ class EscrowConfigurationLoader {
         def escrowModule = new EscrowModule(moduleName: moduleName)
         ConfigObject moduleConfigObject = rootObject."$moduleName" as ConfigObject
         DefaultConfigParameters componentDefaultConfiguration = loadDefaultComponentConfiguration(moduleName, moduleConfigObject, defaultConfiguration, tools)
-        def components = loadSubComponents(componentDefaultConfiguration, defaultConfiguration, tools, moduleConfigObject, ignoreUnknownAttributes);
+        def components = loadSubComponents(componentDefaultConfiguration, defaultConfiguration, tools, moduleConfigObject, ignoreUnknownAttributes)
 
         if (!moduleConfigObject.isEmpty()) {
-            def versionRangeFactory = new VersionRangeFactory(versionNames)
             for (moduleConfigItem in moduleConfigObject) {
 
                 def moduleConfigItemName = moduleConfigItem.key
-                if (GroovySlurperConfigValidator.SUPPORTED_ATTRIBUTES.contains(moduleConfigItemName) ||
-                        moduleConfigItemName == GroovySlurperConfigValidator.JIRA ||
-                        moduleConfigItemName == GroovySlurperConfigValidator.BUILD ||
-                        moduleConfigItemName == GroovySlurperConfigValidator.DISTRIBUTION ||
-                        moduleConfigItemName == GroovySlurperConfigValidator.TOOLS ||
-                        moduleConfigItemName == GroovySlurperConfigValidator.VCS_SETTINGS) {
-                    continue;  //TODO: bad style
+                if (SUPPORTED_ATTRIBUTES.contains(moduleConfigItemName) ||
+                        moduleConfigItemName == JIRA ||
+                        moduleConfigItemName == BUILD ||
+                        moduleConfigItemName == DISTRIBUTION ||
+                        moduleConfigItemName == TOOLS ||
+                        moduleConfigItemName == VCS_SETTINGS) {
+                    continue  //TODO: bad style
                 }
 
                 if ("components".equalsIgnoreCase(moduleConfigItemName as String)) {
-                    continue; //TODO
+                    continue //TODO
                 }
                 if (moduleConfigItem.value instanceof String && ignoreUnknownAttributes) {
-                    continue;
+                    continue
                 }
 
                 ConfigObject moduleConfigSection = moduleConfigItem.value as ConfigObject
                 def buildSystem = moduleConfigSection.containsKey("buildSystem") ? BuildSystem.valueOf(moduleConfigSection.buildSystem.toString()) :
-                        componentDefaultConfiguration.buildSystem;
+                        componentDefaultConfiguration.buildSystem
 
                 JiraComponent jiraConfiguration = loadJiraConfiguration(moduleConfigSection, componentDefaultConfiguration.jiraComponent)
                 BuildParameters buildConfiguration = loadBuildConfiguration(moduleConfigSection, componentDefaultConfiguration.buildParameters, tools)
@@ -266,6 +268,8 @@ class EscrowConfigurationLoader {
                 final String releaseManager = loadComponentReleaseManager(moduleConfigSection, componentDefaultConfiguration.releaseManager)
                 final String securityChampion = loadComponentSecurityChampion(moduleConfigSection, componentDefaultConfiguration.securityChampion)
                 final String system = loadComponentSystem(moduleConfigSection, componentDefaultConfiguration.system)
+                final String clientCode = loadComponentClientCode(moduleConfigSection, componentDefaultConfiguration.clientCode)
+                final String parentComponent = loadComponentParentComponent(moduleConfigSection, componentDefaultConfiguration.parentComponent)
                 final String componentDisplayName = loadComponentDisplayName(moduleConfigSection, componentDefaultConfiguration.componentDisplayName)
                 final String octopusVersion = loadVersion(moduleConfigSection, componentDefaultConfiguration.octopusVersion, LoaderInheritanceType.VERSION_RANGE.octopusVersionInherit)
 
@@ -285,6 +289,8 @@ class EscrowConfigurationLoader {
                         releaseManager: releaseManager,
                         securityChampion: securityChampion,
                         system: system,
+                        clientCode: clientCode,
+                        parentComponent: parentComponent,
                         jiraConfiguration: jiraConfiguration,
                         buildConfiguration: buildConfiguration?.clone(),
                         deprecated: moduleConfigSection.containsKey("deprecated") ? moduleConfigSection.deprecated : componentDefaultConfiguration.deprecated,
@@ -305,6 +311,8 @@ class EscrowConfigurationLoader {
                         releaseManager: componentDefaultConfiguration.releaseManager,
                         securityChampion: componentDefaultConfiguration.securityChampion,
                         system: componentDefaultConfiguration.system,
+                        clientCode: componentDefaultConfiguration.clientCode,
+                        parentComponent: componentDefaultConfiguration.parentComponent,
                         buildFilePath: componentDefaultConfiguration.getBuildFilePath(),
                         jiraConfiguration: componentDefaultConfiguration.jiraComponent,
                         buildConfiguration: componentDefaultConfiguration.buildParameters?.clone(),
@@ -328,10 +336,10 @@ class EscrowConfigurationLoader {
         def vscRootName2ParametersFromDefaultsMap = [:]
         vcsSettingsObject.each { vcsRootName, value ->
             if (value instanceof ConfigObject) {
-                def (pureVCSSettings, currentVCSRootParametersFromDefault) = loadVCSRoot(vcsRootName, value as ConfigObject, parentVCSSettings, defaultVCSRoot)
+                def (pureVCSSettings, currentVCSRootParametersFromDefault) = loadVCSRoot(vcsRootName as String, value as ConfigObject, parentVCSSettings, defaultVCSRoot)
                 def pureVCSRoot = pureVCSSettings.getVersionControlSystemRoots()?.isEmpty() ? null : pureVCSSettings.getVersionControlSystemRoots().get(0)
                 if (pureVCSRoot != null) {
-                    vscRootName2ParametersFromDefaultsMap[vcsRootName] = currentVCSRootParametersFromDefault;
+                    vscRootName2ParametersFromDefaultsMap[vcsRootName] = currentVCSRootParametersFromDefault
                     final vcsRoot = pureVCSRoot
                     vcsRoots.add(vcsRoot)
                 }
@@ -339,11 +347,10 @@ class EscrowConfigurationLoader {
         }
         if (vcsRoots.isEmpty() && defaultVCSRoot != null
                 && defaultVCSRoot.isFullyConfigured()) {
-            vcsRoots.add(defaultVCSRoot);
+            vcsRoots.add(defaultVCSRoot)
         }
 
-        List<VersionControlSystemRoot> componentRoots = replaceDefaults(parentVCSSettings, vscRootName2ParametersFromDefaultsMap,
-                defaultVCSRoot, vcsRoots)
+        List<VersionControlSystemRoot> componentRoots = replaceDefaults(parentVCSSettings, vscRootName2ParametersFromDefaultsMap, defaultVCSRoot, vcsRoots)
 
 
         return new VCSSettingsWrapper(vcsSettings: VCSSettings.create(defaultVCSSettings?.externalRegistry, componentRoots),
@@ -413,7 +420,7 @@ class EscrowConfigurationLoader {
     static VCSSettingsWrapper loadVCSSettings(ConfigObject moduleConfigSection, DefaultConfigParameters componentDefaultConfiguration, BuildSystem buildSystem) {
         if (moduleConfigSection.containsKey(VCS_SETTINGS)) {
             return parseVCSSettingsSection(moduleConfigSection.get(VCS_SETTINGS) as ConfigObject,
-                    componentDefaultConfiguration.vcsSettingsWrapper);
+                    componentDefaultConfiguration.vcsSettingsWrapper)
         } else {
             def (defaultVCSSettingsBeforeBS2_0Processing, _) = loadVCSRoot("main", moduleConfigSection,
                     componentDefaultConfiguration?.vcsSettingsWrapper, null)
@@ -460,11 +467,11 @@ class EscrowConfigurationLoader {
 
         def tagDefined = moduleConfigSection.containsKey(TAG)
         String tag = tagDefined ? moduleConfigSection.tag :
-                currentDefault?.tag == null ? defaultVCSParameters?.tag : currentDefault.tag;
+                currentDefault?.tag == null ? defaultVCSParameters?.tag : currentDefault.tag
 
         def vcsUrlDefined = moduleConfigSection.containsKey(VCS_URL)
         String vcsUrl = vcsUrlDefined ? moduleConfigSection.vcsUrl :
-                currentDefault?.vcsPath == null ? defaultVCSParameters?.vcsPath : currentDefault.vcsPath;
+                currentDefault?.vcsPath == null ? defaultVCSParameters?.vcsPath : currentDefault.vcsPath
 
         def branchDefined = moduleConfigSection.containsKey(BRANCH)
         String branch = branchDefined ? moduleConfigSection.branch :
@@ -573,9 +580,9 @@ class EscrowConfigurationLoader {
     @TypeChecked(TypeCheckingMode.SKIP)
     private
     static JiraComponent loadJiraConfiguration(ConfigObject parentConfigObject, JiraComponent defaultJiraParameters) {
-        JiraComponent jiraConfiguration = null;
+        JiraComponent jiraConfiguration = null
         if (parentConfigObject.containsKey("jira")) {
-            jiraConfiguration = parseJiraSection(parentConfigObject.get("jira") as ConfigObject, defaultJiraParameters);
+            jiraConfiguration = parseJiraSection(parentConfigObject.get("jira") as ConfigObject, defaultJiraParameters)
         } else {
             // legacy configuration
             def projectKey = parentConfigObject.containsKey("jiraProjectKey") ? parentConfigObject.jiraProjectKey : defaultJiraParameters?.getProjectKey()
@@ -587,7 +594,7 @@ class EscrowConfigurationLoader {
             def lineVersionFormat = defaultJiraParameters?.componentVersionFormat?.lineVersionFormat
             if (StringUtils.isNotBlank(projectKey)) {
                 jiraConfiguration = new JiraComponent(projectKey, defaultJiraParameters.displayName,
-                        ComponentVersionFormat.create(majorVersionFormat, releaseVersionFormat, buildVersionFormat, lineVersionFormat), defaultJiraParameters.componentInfo, defaultJiraParameters.technical);
+                        ComponentVersionFormat.create(majorVersionFormat, releaseVersionFormat, buildVersionFormat, lineVersionFormat), defaultJiraParameters.componentInfo, defaultJiraParameters.technical)
             }
         }
         jiraConfiguration
@@ -626,6 +633,24 @@ class EscrowConfigurationLoader {
             return parentConfigObject.get("system")
         } else {
             return defaultSystem
+        }
+    }
+
+    @TypeChecked(TypeCheckingMode.SKIP)
+    private static loadComponentClientCode(ConfigObject parentConfigObject, String defaultClientCode){
+        if (parentConfigObject.containsKey("clientCode")) {
+            return parentConfigObject.get("clientCode")
+        } else {
+            return defaultClientCode
+        }
+    }
+
+    @TypeChecked(TypeCheckingMode.SKIP)
+    private static loadComponentParentComponent(ConfigObject parentConfigObject, String defaultParentComponent){
+        if (parentConfigObject.containsKey("parentComponent")) {
+            return parentConfigObject.get("parentComponent")
+        } else {
+            return defaultParentComponent
         }
     }
 
@@ -678,8 +703,8 @@ class EscrowConfigurationLoader {
     private static List<Tool> loadTools(ConfigObject toolsConfigObject, List<Tool> defaultTools) {
         List<Tool> tools = []
         toolsConfigObject.each { String toolName, ConfigObject toolConfiguration ->
-            def escrowEnvironmentVariable = toolConfiguration.get("escrowEnvironmentVariable");
-            def sourceLocation = toolConfiguration.get("sourceLocation");
+            def escrowEnvironmentVariable = toolConfiguration.get("escrowEnvironmentVariable")
+            def sourceLocation = toolConfiguration.get("sourceLocation")
             def targetLocation = toolConfiguration.get("targetLocation")
             def installScript = toolConfiguration.get("installScript")
             tools.add(new Tool(name: toolName, escrowEnvironmentVariable: escrowEnvironmentVariable,
@@ -692,25 +717,24 @@ class EscrowConfigurationLoader {
     @TypeChecked(TypeCheckingMode.SKIP)
     static JiraComponent parseJiraSection(ConfigObject jiraConfigObject, JiraComponent defaultJiraConfiguration) {
         def projectKey = jiraConfigObject.containsKey("projectKey") ? jiraConfigObject.projectKey : defaultJiraConfiguration?.projectKey
-        def displayName = jiraConfigObject.containsKey("displayName") ? jiraConfigObject.get("displayName") : defaultJiraConfiguration?.displayName
-        def technical = (jiraConfigObject.containsKey("technical") ? jiraConfigObject.get("technical") : defaultJiraConfiguration?.technical) ?: false
+        String displayName = jiraConfigObject.containsKey("displayName") ? jiraConfigObject.get("displayName") : defaultJiraConfiguration?.displayName
+        Boolean technical = (jiraConfigObject.containsKey("technical") ? jiraConfigObject.get("technical") : defaultJiraConfiguration?.technical) ?: false
 
         def componentInfo = loadComponentInfo(jiraConfigObject, defaultJiraConfiguration?.componentInfo)
         def majorVersionFormat = jiraConfigObject.containsKey("majorVersionFormat") ? jiraConfigObject.majorVersionFormat : defaultJiraConfiguration?.componentVersionFormat?.majorVersionFormat
         def releaseVersionFormat = jiraConfigObject.containsKey("releaseVersionFormat") ? jiraConfigObject.releaseVersionFormat : defaultJiraConfiguration?.componentVersionFormat?.releaseVersionFormat
         def buildVersionFormat = jiraConfigObject.containsKey("buildVersionFormat") ? jiraConfigObject.buildVersionFormat : defaultJiraConfiguration?.componentVersionFormat?.buildVersionFormat
         def lineVersionFormat = jiraConfigObject.containsKey("lineVersionFormat") ? jiraConfigObject.lineVersionFormat : defaultJiraConfiguration?.componentVersionFormat?.lineVersionFormat
-        return new JiraComponent(projectKey, displayName, ComponentVersionFormat.create(majorVersionFormat, releaseVersionFormat, buildVersionFormat, lineVersionFormat),
-                componentInfo, technical);
+        return new JiraComponent(projectKey, displayName, ComponentVersionFormat.create(majorVersionFormat, releaseVersionFormat, buildVersionFormat, lineVersionFormat), componentInfo, technical)
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
     static Distribution parseDistributionSection(ConfigObject distributionConfigObject, Distribution defaultDistribution) {
         def explicit = distributionConfigObject.containsKey("explicit") ? distributionConfigObject.explicit : defaultDistribution.explicit()
         def external = distributionConfigObject.containsKey("external") ? distributionConfigObject.external : defaultDistribution.external()
-        def GAV = distributionConfigObject.getOrDefault("GAV", defaultDistribution?.GAV())
-        def DEB = distributionConfigObject.getOrDefault("DEB", defaultDistribution?.DEB())
-        def RPM = distributionConfigObject.getOrDefault("RPM", defaultDistribution?.RPM())
+        def GAV = distributionConfigObject.getOrDefault("GAV", defaultDistribution?.GAV()) as String
+        def DEB = distributionConfigObject.getOrDefault("DEB", defaultDistribution?.DEB()) as String
+        def RPM = distributionConfigObject.getOrDefault("RPM", defaultDistribution?.RPM()) as String
         def securityGroup = loadSecurityGroups(distributionConfigObject, defaultDistribution?.securityGroups)
         return new Distribution(explicit, external, GAV, DEB, RPM, securityGroup)
     }
@@ -724,18 +748,18 @@ class EscrowConfigurationLoader {
     @TypeChecked(TypeCheckingMode.SKIP)
     static ComponentInfo loadComponentInfo(ConfigObject parentConfigObject, ComponentInfo defaultComponentInfo) {
         if (parentConfigObject.containsKey("customer")) {
-            return parseComponentInfo(parentConfigObject.get("customer") as ConfigObject, defaultComponentInfo);
+            return parseComponentInfo(parentConfigObject.get("customer") as ConfigObject, defaultComponentInfo)
         }
         if (parentConfigObject.containsKey("component")) {
-            return parseComponentInfo(parentConfigObject.get("component") as ConfigObject, defaultComponentInfo);
+            return parseComponentInfo(parentConfigObject.get("component") as ConfigObject, defaultComponentInfo)
         }
-        return defaultComponentInfo;
+        return defaultComponentInfo
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
     static ComponentInfo parseComponentInfo(ConfigObject componentInfoConfigObject, ComponentInfo defaultComponentInfo) {
-        def versionPrefix = componentInfoConfigObject.containsKey("versionPrefix") ? componentInfoConfigObject.get("versionPrefix") : defaultComponentInfo?.versionPrefix
-        def versionFormat = componentInfoConfigObject.containsKey("versionFormat") ? componentInfoConfigObject.get("versionFormat") : defaultComponentInfo?.versionFormat
+        String versionPrefix = componentInfoConfigObject.containsKey("versionPrefix") ? componentInfoConfigObject.get("versionPrefix") : defaultComponentInfo?.versionPrefix
+        String versionFormat = componentInfoConfigObject.containsKey("versionFormat") ? componentInfoConfigObject.get("versionFormat") : defaultComponentInfo?.versionFormat
         return new ComponentInfo(versionPrefix, versionFormat)
     }
 
@@ -747,7 +771,7 @@ class EscrowConfigurationLoader {
             VersionRange.createFromVersionSpec(versionRangeStr)
             return versionRangeStr
         } catch (InvalidVersionSpecificationException e) {
-            throw new EscrowConfigurationException("Invalid version range $versionRangeStr in configuration of $moduleName", e);
+            throw new EscrowConfigurationException("Invalid version range $versionRangeStr in configuration of $moduleName", e)
         }
     }
 
@@ -758,10 +782,10 @@ class EscrowConfigurationLoader {
             if (moduleName == ReleaseInfoResolver.DEFAULT_SETTINGS) {
                 ConfigObject vcsConfigObject = entry.value as ConfigObject
                 DefaultConfigParameters defaultConfigParameters = loadDefaultConfigurationFromConfigObject(moduleName, vcsConfigObject, new DefaultConfigParameters(), tools, LoaderInheritanceType.DEFAULT)
-                return defaultConfigParameters;
+                return defaultConfigParameters
             }
         }
-        return new DefaultConfigParameters();
+        return new DefaultConfigParameters()
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
@@ -770,7 +794,7 @@ class EscrowConfigurationLoader {
             String moduleName = entry.key as String
             if (moduleName == ReleaseInfoResolver.TOOLS_SETTINGS) {
                 ConfigObject vcsConfigObject = entry.value as ConfigObject
-                List<Tool> tools = loadTools(vcsConfigObject, []);
+                List<Tool> tools = loadTools(vcsConfigObject, [])
                 return tools
             }
         }
@@ -785,10 +809,10 @@ class EscrowConfigurationLoader {
 //        pureComponentDefaults.distribution = defaultConfigParameters.distribution
         String majorVersionFormat = pureComponentDefaults.jiraComponent?.componentVersionFormat?.majorVersionFormat != null ?
                 pureComponentDefaults.jiraComponent?.componentVersionFormat?.majorVersionFormat :
-                defaultConfigParameters.jiraComponent?.componentVersionFormat?.majorVersionFormat;
+                defaultConfigParameters.jiraComponent?.componentVersionFormat?.majorVersionFormat
         String releaseVersionFormat = pureComponentDefaults.jiraComponent?.componentVersionFormat?.releaseVersionFormat != null ?
                 pureComponentDefaults.jiraComponent.componentVersionFormat?.releaseVersionFormat :
-                defaultConfigParameters.jiraComponent?.componentVersionFormat?.releaseVersionFormat;
+                defaultConfigParameters.jiraComponent?.componentVersionFormat?.releaseVersionFormat
         String buildVersionFormat = pureComponentDefaults.jiraComponent?.componentVersionFormat?.buildVersionFormat != null ?
                 pureComponentDefaults.jiraComponent.componentVersionFormat?.buildVersionFormat :
                 defaultConfigParameters.jiraComponent?.componentVersionFormat?.buildVersionFormat
@@ -828,7 +852,7 @@ class EscrowConfigurationLoader {
             String escrowEnvironmentVariable = tool.escrowEnvironmentVariable != null ? tool.escrowEnvironmentVariable : defaultTool?.escrowEnvironmentVariable
             String sourceLocation = tool.sourceLocation != null ? tool.sourceLocation : defaultTool?.sourceLocation
             String targetLocation = tool.targetLocation != null ? tool.targetLocation : defaultTool?.targetLocation
-            String installScript = tool.installScript != null ? tool.installScript : defaultTool?.installScript;
+            String installScript = tool.installScript != null ? tool.installScript : defaultTool?.installScript
             mergedTools.add(new Tool(name: tool.name, escrowEnvironmentVariable: escrowEnvironmentVariable, sourceLocation: sourceLocation,
                     targetLocation: targetLocation, installScript: installScript))
         }
@@ -848,7 +872,7 @@ class EscrowConfigurationLoader {
         List<Tool> tools,
         LoaderInheritanceType inheritanceType
     ) {
-        BuildSystem buildSystem = componentConfigObject.containsKey("buildSystem") ? BuildSystem.valueOf(componentConfigObject.buildSystem.toString()) : defaultConfiguration?.buildSystem;
+        BuildSystem buildSystem = componentConfigObject.containsKey("buildSystem") ? BuildSystem.valueOf(componentConfigObject.buildSystem.toString()) : defaultConfiguration?.buildSystem
         JiraComponent jiraComponent = loadJiraConfiguration(componentConfigObject, defaultConfiguration.jiraComponent)
         BuildParameters buildParameters = loadBuildConfiguration(componentConfigObject, defaultConfiguration.buildParameters, tools)
         Distribution distribution = loadDistribution(componentConfigObject, defaultConfiguration.distribution)
@@ -858,6 +882,8 @@ class EscrowConfigurationLoader {
         final String releaseManager = loadComponentReleaseManager(componentConfigObject, defaultConfiguration.releaseManager)
         final String securityChampion = loadComponentSecurityChampion(componentConfigObject, defaultConfiguration.securityChampion)
         final String system = loadComponentSystem(componentConfigObject,  defaultConfiguration.system)
+        final String clientCode = loadComponentClientCode(componentConfigObject, defaultConfiguration.clientCode)
+        final String parentComponent = loadComponentParentComponent(componentConfigObject, defaultConfiguration.parentComponent)
         final String octopusVersion = loadVersion(componentConfigObject, defaultConfiguration.octopusVersion, inheritanceType.octopusVersionInherit)
 
         def defaultConfigParameters = new DefaultConfigParameters(buildSystem: buildSystem,
@@ -868,6 +894,8 @@ class EscrowConfigurationLoader {
                 releaseManager: releaseManager,
                 securityChampion: securityChampion,
                 system: system,
+                clientCode: clientCode,
+                parentComponent: parentComponent,
                 jiraComponent: jiraComponent,
                 buildParameters: buildParameters,
                 buildFilePath: componentConfigObject.containsKey("buildFilePath") ? componentConfigObject.buildFilePath : null,
