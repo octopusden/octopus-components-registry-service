@@ -2,7 +2,7 @@ import static org.octopusden.octopus.escrow.BuildSystem.*
 
 octopusstreams {
     componentDisplayName = "Streams"
-    componentOwner = "aganin"
+    componentOwner = "user123"
     releaseManager = "user6"
     securityChampion = "user7"
 
@@ -20,16 +20,14 @@ octopusstreams {
     distribution {
         explicit = true
         external = true
-        GAV =   "org.octopusden.octopus.octopusstreams:octopusstreams-prophix," +
-                "org.octopusden.octopus.octopusstreams:octopusstreams-nexto-bw," +
-                "org.octopusden.octopus.octopusstreams:octopusstreams-ifp"
+        GAV =   "org.octopusden.octopus.octopusstreams:octopusstreams-artifact"
     }
 }
 
 "octopusstreams-commons" {
     groupId = "org.octopusden.octopus.octopusstreams"
     artifactId = "octopusstreams-commons,kafka-encryption"
-    componentOwner = "snasibullin"
+    componentOwner = "user234"
     componentDisplayName = "octopus Streams Commons"
     buildSystem = MAVEN
     jira {
