@@ -20,9 +20,7 @@ octopusstreams {
     distribution {
         explicit = true
         external = true
-        GAV =   "org.octopusden.octopus.octopusstreams:octopusstreams-prophix," +
-                "org.octopusden.octopus.octopusstreams:octopusstreams-nexto-bw," +
-                "org.octopusden.octopus.octopusstreams:octopusstreams-ifp"
+        GAV =   "org.octopusden.octopus.octopusstreams:octopusstreams-artifact"
     }
 }
 
