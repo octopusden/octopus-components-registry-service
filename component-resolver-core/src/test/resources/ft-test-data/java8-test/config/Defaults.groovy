@@ -4,6 +4,7 @@ import static org.octopusden.octopus.escrow.RepositoryType.*
 
 Defaults {
     system = "NONE"
+    releasesInDefaultBranch = true
     repositoryType = MERCURIAL
     buildSystem = MAVEN;
     tag = '$module-$version'

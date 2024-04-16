@@ -6,6 +6,7 @@ final ANY_ARTIFACT = /[\w-\.]+/
 
 Defaults {
     system = "NONE"
+    releasesInDefaultBranch = true
     artifactId = ANY_ARTIFACT
     tag = DEFAULT_TAG
     jira {

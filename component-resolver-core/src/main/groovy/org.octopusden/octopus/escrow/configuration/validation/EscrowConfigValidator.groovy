@@ -97,6 +97,7 @@ class EscrowConfigValidator {
                 validateExplicitExternalComponent(moduleConfig, componentName)
                 validateSystem(moduleConfig, componentName)
                 validateClientCode(moduleConfig, componentName)
+                validateReleasesInDefaultBranch(moduleConfig, componentName)
             }
         }
         if (!hasErrors()) {
@@ -391,6 +392,14 @@ class EscrowConfigValidator {
         def clientCode = moduleConfig.getClientCode()
         if (clientCode != null && !CLIENT_CODE_PATTERN.matcher(clientCode).matches()) {
             registerError("clientCode is not matched '${CLIENT_CODE_PATTERN.pattern()}' in '$component'")
+        }
+    }
+
+    def validateReleasesInDefaultBranch(EscrowModuleConfig moduleConfig, String component) {
+        def releasesInDefaultBranch = moduleConfig.getReleasesInDefaultBranch()
+        if (releasesInDefaultBranch == null) {
+            // ToDo uncomment after default value is set
+            // registerError("releasesInDefaultBranch is not specified in component '$component'")
         }
     }
 

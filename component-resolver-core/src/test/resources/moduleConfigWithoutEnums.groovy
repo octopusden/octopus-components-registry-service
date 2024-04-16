@@ -8,6 +8,7 @@ final String ALL_VERSIONS = "(,0),[0,)"
 
 Defaults {
     system = "NONE"
+    releasesInDefaultBranch = true
     repositoryType = MERCURIAL
     buildSystem = MAVEN;
     tag = DEFAULT_TAG;

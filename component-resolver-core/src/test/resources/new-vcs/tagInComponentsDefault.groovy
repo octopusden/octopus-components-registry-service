@@ -7,6 +7,7 @@ final ANY_ARTIFACT = /[\w-\.]+/
 
 Defaults {
     system = "NONE"
+    releasesInDefaultBranch = true
     repositoryType = MERCURIAL
     tag = '$module-$version';
     artifactId = ANY_ARTIFACT

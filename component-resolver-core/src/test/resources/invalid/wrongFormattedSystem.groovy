@@ -5,6 +5,7 @@ final ANY_ARTIFACT = /[\w-\.]+/
 
 Defaults {
     system = "NONE"
+    releasesInDefaultBranch = true
     repositoryType = CVS
     buildSystem = GRADLE
     tag = '$module-$version'

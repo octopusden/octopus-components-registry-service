@@ -12,6 +12,7 @@ enum VCS {
 }
 Defaults {
     system = "NONE"
+    releasesInDefaultBranch = true
     jira {
         majorVersionFormat = '$major.$minor'
         releaseVersionFormat = '$major.$minor.$service'

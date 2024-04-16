@@ -7,6 +7,7 @@ final ANY_ARTIFACT = /[\w-]+/
 
 Defaults {
     system = "NONE"
+    releasesInDefaultBranch = true
     jira {
         majorVersionFormat = '$major.$minor'
         releaseVersionFormat = '$major.$minor.$service'
