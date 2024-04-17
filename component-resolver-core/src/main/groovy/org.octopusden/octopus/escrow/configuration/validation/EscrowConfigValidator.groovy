@@ -398,8 +398,7 @@ class EscrowConfigValidator {
     def validateReleasesInDefaultBranch(EscrowModuleConfig moduleConfig, String component) {
         def releasesInDefaultBranch = moduleConfig.getReleasesInDefaultBranch()
         if (releasesInDefaultBranch == null) {
-            // ToDo uncomment after default value is set
-            // registerError("releasesInDefaultBranch is not specified in component '$component'")
+             registerError("releasesInDefaultBranch is not specified in '$component'")
         }
     }
 

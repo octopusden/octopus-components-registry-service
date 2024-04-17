@@ -515,6 +515,15 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
     }
 
     @Test
+    void testValidationReleasesInDefaultBranch() {
+        def exception = GroovyAssert.shouldFail(EscrowConfigurationException.class, {
+            loadConfiguration("invalid/noReleasesInDefaultBranch.groovy")
+        })
+        assert exception.message == "Validation of module config failed due following errors: \n" +
+                "releasesInDefaultBranch is not specified in 'component1'"
+    }
+
+    @Test
     void testValidationOfJiraSectionWithoutProjectKey() {
         def exception = GroovyAssert.shouldFail(EscrowConfigurationException.class, {
             loadConfiguration("invalid/noProjectKey.groovy")
