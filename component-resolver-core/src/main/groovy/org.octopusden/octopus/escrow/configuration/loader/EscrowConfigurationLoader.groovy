@@ -270,6 +270,7 @@ class EscrowConfigurationLoader {
                 final String system = loadComponentSystem(moduleConfigSection, componentDefaultConfiguration.system)
                 final String clientCode = loadComponentClientCode(moduleConfigSection, componentDefaultConfiguration.clientCode)
                 final String parentComponent = loadComponentParentComponent(moduleConfigSection, componentDefaultConfiguration.parentComponent)
+                final Boolean releasesInDefaultBranch = loadReleasesInDefaultBranch(moduleConfigSection, componentDefaultConfiguration.releasesInDefaultBranch)
                 final String componentDisplayName = loadComponentDisplayName(moduleConfigSection, componentDefaultConfiguration.componentDisplayName)
                 final String octopusVersion = loadVersion(moduleConfigSection, componentDefaultConfiguration.octopusVersion, LoaderInheritanceType.VERSION_RANGE.octopusVersionInherit)
 
@@ -290,6 +291,7 @@ class EscrowConfigurationLoader {
                         securityChampion: securityChampion,
                         system: system,
                         clientCode: clientCode,
+                        releasesInDefaultBranch: releasesInDefaultBranch,
                         parentComponent: parentComponent,
                         jiraConfiguration: jiraConfiguration,
                         buildConfiguration: buildConfiguration?.clone(),
@@ -312,6 +314,7 @@ class EscrowConfigurationLoader {
                         securityChampion: componentDefaultConfiguration.securityChampion,
                         system: componentDefaultConfiguration.system,
                         clientCode: componentDefaultConfiguration.clientCode,
+                        releasesInDefaultBranch: componentDefaultConfiguration.releasesInDefaultBranch,
                         parentComponent: componentDefaultConfiguration.parentComponent,
                         buildFilePath: componentDefaultConfiguration.getBuildFilePath(),
                         jiraConfiguration: componentDefaultConfiguration.jiraComponent,
@@ -646,6 +649,15 @@ class EscrowConfigurationLoader {
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
+    private static loadReleasesInDefaultBranch(ConfigObject parentConfigObject, Boolean defaultReleasesInDefaultBranch){
+        if (parentConfigObject.containsKey("releasesInDefaultBranch")) {
+            return parentConfigObject.get("releasesInDefaultBranch")
+        } else {
+            return defaultReleasesInDefaultBranch
+        }
+    }
+
+    @TypeChecked(TypeCheckingMode.SKIP)
     private static loadComponentParentComponent(ConfigObject parentConfigObject, String defaultParentComponent){
         if (parentConfigObject.containsKey("parentComponent")) {
             return parentConfigObject.get("parentComponent")
@@ -883,6 +895,7 @@ class EscrowConfigurationLoader {
         final String securityChampion = loadComponentSecurityChampion(componentConfigObject, defaultConfiguration.securityChampion)
         final String system = loadComponentSystem(componentConfigObject,  defaultConfiguration.system)
         final String clientCode = loadComponentClientCode(componentConfigObject, defaultConfiguration.clientCode)
+        final Boolean releasesInDefaultBranch = loadReleasesInDefaultBranch(componentConfigObject, defaultConfiguration.releasesInDefaultBranch)
         final String parentComponent = loadComponentParentComponent(componentConfigObject, defaultConfiguration.parentComponent)
         final String octopusVersion = loadVersion(componentConfigObject, defaultConfiguration.octopusVersion, inheritanceType.octopusVersionInherit)
 
@@ -895,6 +908,7 @@ class EscrowConfigurationLoader {
                 securityChampion: securityChampion,
                 system: system,
                 clientCode: clientCode,
+                releasesInDefaultBranch: releasesInDefaultBranch,
                 parentComponent: parentComponent,
                 jiraComponent: jiraComponent,
                 buildParameters: buildParameters,

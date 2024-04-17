@@ -4,6 +4,7 @@ import static org.octopusden.octopus.escrow.RepositoryType.*
 Defaults {
     system = "NONE"
     tag = '$module-$version'
+    releasesInDefaultBranch = true
     distribution {
         securityGroups {
             read = "vfiler1-default#group"
@@ -162,7 +163,8 @@ Defaults {
     groupId = "org.octopusden.octopus.test"
     artifactId = "test2"
     componentDisplayName = "Test ONE display name"
-    clientCode="CLIENT_CODE"
+    clientCode = "CLIENT_CODE"
+    releasesInDefaultBranch = false
     jira {
         projectKey = "TESTONE"
         majorVersionFormat = '$major'

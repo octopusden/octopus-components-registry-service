@@ -3,6 +3,7 @@ package org.octopusden.octopus.components.registry.core.dto
 abstract class Component(val id: String, val name: String?, val componentOwner: String) {
     var system: List<String>? = null
     var clientCode: String? = null
+    var releasesInDefaultBranch: Boolean? = null
     var parentComponent: String? = null
     var securityChampion: String? = null
     var releaseManager: String? = null
@@ -18,6 +19,7 @@ abstract class Component(val id: String, val name: String?, val componentOwner: 
         if (componentOwner != other.componentOwner) return false
         if (system != other.system) return false
         if (clientCode != other.clientCode) return false
+        if (releasesInDefaultBranch != other.releasesInDefaultBranch) return false
         if (parentComponent != other.parentComponent) return false
         if (securityChampion != other.securityChampion) return false
         if (releaseManager != other.releaseManager) return false
@@ -32,6 +34,7 @@ abstract class Component(val id: String, val name: String?, val componentOwner: 
         result = 31 * result + componentOwner.hashCode()
         result = 31 * result + (system?.hashCode() ?: 0)
         result = 31 * result + (clientCode?.hashCode() ?: 0)
+        result = 31 * result + (releasesInDefaultBranch?.hashCode() ?: 0)
         result = 31 * result + (parentComponent?.hashCode() ?: 0)
         result = 31 * result + (securityChampion?.hashCode() ?: 0)
         result = 31 * result + (releaseManager?.hashCode() ?: 0)
@@ -40,6 +43,6 @@ abstract class Component(val id: String, val name: String?, val componentOwner: 
     }
 
     override fun toString(): String {
-        return "Component(id='$id', name=$name, componentOwner='$componentOwner', system=$system, clientCode=$clientCode, parentComponent=$parentComponent, securityChampion=$securityChampion, releaseManager=$releaseManager, distribution=$distribution)"
+        return "Component(id='$id', name=$name, componentOwner='$componentOwner', system=$system, clientCode=$clientCode, releasesInDefaultBranch=$releasesInDefaultBranch, parentComponent=$parentComponent, securityChampion=$securityChampion, releaseManager=$releaseManager, distribution=$distribution)"
     }
 }

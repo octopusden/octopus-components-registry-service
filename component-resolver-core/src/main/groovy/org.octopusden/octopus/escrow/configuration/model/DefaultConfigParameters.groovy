@@ -51,5 +51,7 @@ class DefaultConfigParameters {
     String parentComponent
 
     String octopusVersion
+
+    Boolean releasesInDefaultBranch
 }
 

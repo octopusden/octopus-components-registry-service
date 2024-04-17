@@ -153,6 +153,7 @@ abstract class BaseComponentsRegistryServiceTest {
         expectedComponent.securityChampion = "user"
         expectedComponent.system = listOf("NONE")
         expectedComponent.clientCode = "CLIENT_CODE"
+        expectedComponent.releasesInDefaultBranch = false
         Assertions.assertEquals(expectedComponent, actualComponent)
     }
 
@@ -167,6 +168,7 @@ abstract class BaseComponentsRegistryServiceTest {
         expectedComponent.securityChampion = "user"
         expectedComponent.system = listOf("NONE")
         expectedComponent.clientCode = "CLIENT_CODE"
+        expectedComponent.releasesInDefaultBranch = false
         expectedComponent.parentComponent = "TESTONE"
         Assertions.assertEquals(expectedComponent, actualComponent)
     }

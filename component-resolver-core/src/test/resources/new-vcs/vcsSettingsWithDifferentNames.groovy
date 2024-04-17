@@ -8,6 +8,7 @@ final ANY_ARTIFACT = /[\w-\.]+/
 
 Defaults {
     system = "NONE"
+    releasesInDefaultBranch = true
     tag = '$module-$version';
     artifactId = ANY_ARTIFACT
     jira {

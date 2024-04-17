@@ -2,6 +2,7 @@ import static org.octopusden.octopus.escrow.BuildSystem.PROVIDED
 
 Defaults {
     system = "NONE"
+    releasesInDefaultBranch = true
 }
 
 

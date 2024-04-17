@@ -7,6 +7,7 @@ final ANY_ARTIFACT = /[\w-\.]+/
 
 Defaults {
     system = "NONE"
+    releasesInDefaultBranch = true
     buildSystem = MAVEN
     repositoryType = CVS
     tag = DEFAULT_TAG
