@@ -85,7 +85,7 @@ abstract class BaseComponentsRegistryServiceTest {
     protected abstract fun getDependencyAliasToComponentMapping(): Map<String, String>
 
     protected abstract fun getComponentV1(component: String): ComponentV1
-    protected abstract fun getComponentVersion(component: String, version: String): ComponentV2
+    protected abstract fun getComponent(component: String, version: String): ComponentV2
     protected abstract fun getDetailedComponentVersion(component: String, version: String): DetailedComponentVersion
     protected abstract fun getDetailedComponentVersions(
         component: String,
@@ -180,7 +180,7 @@ abstract class BaseComponentsRegistryServiceTest {
 
     @Test
     fun testGetComponentVersion() {
-        val actualComponent = getComponentVersion("TESTONE", "1")
+        val actualComponent = getComponent("TESTONE", "1")
 
         val expectedComponent = ComponentV2("TESTONE", "Test ONE display name", "adzuba")
         expectedComponent.distribution = DistributionDTO(

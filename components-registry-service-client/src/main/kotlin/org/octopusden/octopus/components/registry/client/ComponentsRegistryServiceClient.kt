@@ -42,7 +42,7 @@ interface ComponentsRegistryServiceClient {
 
     @RequestLine("GET rest/api/2/components/{componentKey}/versions/{version}")
     @Throws(NotFoundException::class)
-    fun getComponentVersion(@Param("componentKey") componentKey: String, @Param("version") version: String): ComponentV2
+    fun getComponent(@Param("componentKey") componentKey: String, @Param("version") version: String): ComponentV2
 
     @RequestLine("GET /rest/api/2/components?vcs-path={vcsPath}&build-system={buildSystem}&systems={systems}", collectionFormat = CollectionFormat.CSV)
     fun getAllComponents(

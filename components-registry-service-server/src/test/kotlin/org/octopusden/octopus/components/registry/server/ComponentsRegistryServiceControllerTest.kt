@@ -91,7 +91,7 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
         .response
         .toObject(ComponentV1::class.java)
 
-    override fun getComponentVersion(component: String, version: String): ComponentV2 =
+    override fun getComponent(component: String, version: String): ComponentV2 =
         mvc.perform(
             MockMvcRequestBuilders.get(
                 "/rest/api/2/components/{component}/versions/{version}",
@@ -351,6 +351,14 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
             BuildSystem.MAVEN,
             setOf("SUB_COMPONENT_TWO", "TEST_COMPONENT")
         )
+    }
+
+    @Test
+    fun testGetNonExistedComponent() {
+        val exception = Assertions.assertThrows(AssertionError::class.java) {
+            getComponent("NOTEXIST", "1")
+        }
+        Assertions.assertEquals("Status expected:<200> but was:<404>", exception.message)
     }
 
     @Test

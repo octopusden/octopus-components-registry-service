@@ -61,8 +61,8 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
 
     override fun getComponentV1(component: String): ComponentV1 = componentsRegistryClient.getById(component)
 
-    override fun getComponentVersion(component: String, version: String) =
-        componentsRegistryClient.getComponentVersion(component, version)
+    override fun getComponent(component: String, version: String) =
+        componentsRegistryClient.getComponent(component, version)
 
     override fun getDetailedComponentVersion(component: String, version: String): DetailedComponentVersion =
         componentsRegistryClient.getDetailedComponentVersion(component, version)
@@ -139,6 +139,13 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
     fun testGetNonExistedComponent() {
         assertFailsWith(NotFoundException::class) {
             componentsRegistryClient.getById("TESTONE-?")
+        }
+    }
+
+    @Test
+    fun testGetNonExistedComponentWithVersion() {
+        assertFailsWith(NotFoundException::class) {
+            componentsRegistryClient.getComponent("TESTONE-?", "1")
         }
     }
 

@@ -91,7 +91,7 @@ abstract class BaseComponentController<T : Component> {
         "{component}/versions/{version}",
         produces = [MediaType.APPLICATION_JSON_VALUE]
     )
-    fun getComponentVersion(
+    fun getComponent(
         @PathVariable("component") component: String,
         @PathVariable("version") version: String
     ): T {
