@@ -16,9 +16,11 @@ import org.junit.jupiter.params.provider.MethodSource
 import org.junit.jupiter.params.provider.ValueSource
 import org.octopusden.octopus.components.registry.core.dto.ArtifactComponentsDTO
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
+import org.octopusden.octopus.components.registry.core.dto.BuildSystem
 import org.octopusden.octopus.components.registry.core.dto.ComponentArtifactConfigurationDTO
 import org.octopusden.octopus.components.registry.core.dto.ComponentRegistryVersion
 import org.octopusden.octopus.components.registry.core.dto.ComponentV1
+import org.octopusden.octopus.components.registry.core.dto.ComponentV2
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersion
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersions
 import org.octopusden.octopus.components.registry.core.dto.DistributionDTO
@@ -83,6 +85,7 @@ abstract class BaseComponentsRegistryServiceTest {
     protected abstract fun getDependencyAliasToComponentMapping(): Map<String, String>
 
     protected abstract fun getComponentV1(component: String): ComponentV1
+    protected abstract fun getComponentVersion(component: String, version: String): ComponentV2
     protected abstract fun getDetailedComponentVersion(component: String, version: String): DetailedComponentVersion
     protected abstract fun getDetailedComponentVersions(
         component: String,
@@ -154,6 +157,7 @@ abstract class BaseComponentsRegistryServiceTest {
         expectedComponent.system = listOf("NONE")
         expectedComponent.clientCode = "CLIENT_CODE"
         expectedComponent.releasesInDefaultBranch = false
+        expectedComponent.buildSystem = BuildSystem.PROVIDED
         Assertions.assertEquals(expectedComponent, actualComponent)
     }
 
@@ -170,6 +174,25 @@ abstract class BaseComponentsRegistryServiceTest {
         expectedComponent.clientCode = "CLIENT_CODE"
         expectedComponent.releasesInDefaultBranch = false
         expectedComponent.parentComponent = "TESTONE"
+        expectedComponent.buildSystem = BuildSystem.PROVIDED
+        Assertions.assertEquals(expectedComponent, actualComponent)
+    }
+
+    @Test
+    fun testGetComponentVersion() {
+        val actualComponent = getComponentVersion("TESTONE", "1")
+
+        val expectedComponent = ComponentV2("TESTONE", "Test ONE display name", "adzuba")
+        expectedComponent.distribution = DistributionDTO(
+            false, false, "org.octopusden.octopus.test:versions-api:jar",
+            securityGroups = SecurityGroupsDTO(listOf("vfiler1-default#group"))
+        )
+        expectedComponent.releaseManager = "user"
+        expectedComponent.securityChampion = "user"
+        expectedComponent.system = listOf("NONE")
+        expectedComponent.clientCode = "CLIENT_CODE"
+        expectedComponent.releasesInDefaultBranch = false
+        expectedComponent.buildSystem = BuildSystem.PROVIDED
         Assertions.assertEquals(expectedComponent, actualComponent)
     }
 

@@ -61,6 +61,9 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
 
     override fun getComponentV1(component: String): ComponentV1 = componentsRegistryClient.getById(component)
 
+    override fun getComponentVersion(component: String, version: String) =
+        componentsRegistryClient.getComponentVersion(component, version)
+
     override fun getDetailedComponentVersion(component: String, version: String): DetailedComponentVersion =
         componentsRegistryClient.getDetailedComponentVersion(component, version)
 

@@ -91,6 +91,20 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
         .response
         .toObject(ComponentV1::class.java)
 
+    override fun getComponentVersion(component: String, version: String): ComponentV2 =
+        mvc.perform(
+            MockMvcRequestBuilders.get(
+                "/rest/api/2/components/{component}/versions/{version}",
+                component,
+                version
+            )
+                .accept(APPLICATION_JSON)
+        )
+            .andExpect(status().isOk)
+            .andReturn()
+            .response
+            .toObject(ComponentV2::class.java)
+
     override fun getDetailedComponentVersion(component: String, version: String): DetailedComponentVersion =
         mvc.perform(
             MockMvcRequestBuilders.get(
@@ -312,6 +326,7 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
         expectedComponent.system = listOf("NONE")
         expectedComponent.clientCode = "CLIENT_CODE"
         expectedComponent.releasesInDefaultBranch = false
+        expectedComponent.buildSystem = BuildSystem.PROVIDED
 
         Assertions.assertEquals(37, components.components.size)
         Assertions.assertTrue(expectedComponent in components.components) {
@@ -363,6 +378,7 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
         expectedComponent.system = listOf("NONE")
         expectedComponent.clientCode = "CLIENT_CODE"
         expectedComponent.releasesInDefaultBranch = false
+        expectedComponent.buildSystem = BuildSystem.PROVIDED
         Assertions.assertEquals(expectedComponent, actualComponent)
     }
 

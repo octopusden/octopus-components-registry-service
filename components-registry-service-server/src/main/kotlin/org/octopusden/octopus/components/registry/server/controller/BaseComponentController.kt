@@ -7,12 +7,14 @@ import org.octopusden.octopus.components.registry.core.dto.DistributionDTO
 import org.octopusden.octopus.components.registry.core.dto.SecurityGroupsDTO
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.server.service.ComponentRegistryResolver
+import org.octopusden.octopus.escrow.BuildSystem as EscrowBuildSystem
 import org.octopusden.octopus.escrow.configuration.model.EscrowModule
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
 import org.octopusden.octopus.escrow.configuration.validation.EscrowConfigValidator
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.http.MediaType
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestParam
@@ -85,6 +87,29 @@ abstract class BaseComponentController<T : Component> {
         )
     }
 
+    @GetMapping(
+        "{component}/versions/{version}",
+        produces = [MediaType.APPLICATION_JSON_VALUE]
+    )
+    fun getComponentVersion(
+        @PathVariable("component") component: String,
+        @PathVariable("version") version: String
+    ): T {
+        logger.info("Get Component: '$component:$version'")
+        return createComponent(
+            component,
+            componentRegistryResolver.getResolvedComponentDefinition(component, version)
+                ?: throw NotFoundException("Component id $component:$version is not found")
+        )
+    }
+
+    private fun createComponent(componentName: String, escrowModuleConfig: EscrowModuleConfig): T {
+        val escrowModule = EscrowModule()
+        escrowModule.moduleName = componentName
+        escrowModule.moduleConfigurations = listOf(escrowModuleConfig)
+        return createComponent(escrowModule)
+    }
+
     private fun createComponent(escrowModule: EscrowModule): T =
         with(createComponentFunc(escrowModule)) {
             val escrowModuleConfig = escrowModule.moduleConfigurations[0]
@@ -95,8 +120,23 @@ abstract class BaseComponentController<T : Component> {
             clientCode = escrowModuleConfig.clientCode
             releasesInDefaultBranch = escrowModuleConfig.releasesInDefaultBranch
             parentComponent = escrowModuleConfig.parentComponent
+            buildSystem = getBuildSystem(escrowModuleConfig.buildSystem)
             this
         }
+
+    private fun getBuildSystem(escrowBuildSystem: EscrowBuildSystem?): BuildSystem? {
+        return when (escrowBuildSystem) {
+            null -> null
+            EscrowBuildSystem.BS2_0 -> BuildSystem.BS2_0
+            EscrowBuildSystem.MAVEN -> BuildSystem.MAVEN
+            EscrowBuildSystem.ECLIPSE_MAVEN -> BuildSystem.ECLIPSE_MAVEN
+            EscrowBuildSystem.GRADLE -> BuildSystem.GRADLE
+            EscrowBuildSystem.WHISKEY -> BuildSystem.WHISKEY
+            EscrowBuildSystem.PROVIDED -> BuildSystem.PROVIDED
+            EscrowBuildSystem.ESCROW_NOT_SUPPORTED -> BuildSystem.NOT_SUPPORTED
+            EscrowBuildSystem.ESCROW_PROVIDED_MANUALLY -> BuildSystem.PROVIDED
+        }
+    }
 
     private fun getDistribution(component: String) =
         (getComponentById(component).distribution ?: throw IllegalStateException("Distribution can not be null"))
