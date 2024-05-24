@@ -155,6 +155,16 @@ Defaults {
     }
 }
 
+"TEST-VERSION" {
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.testver"
+    artifactId = "testver"
+    "[999,)" {}
+    buildSystem = MAVEN
+    repositoryType = MERCURIAL
+    vcsUrl = "ssh://hg@mercurial/test-component"
+}
+
 "TESTONE" {
     componentDisplayName = "Test ONE display name"
     componentOwner = "adzuba"

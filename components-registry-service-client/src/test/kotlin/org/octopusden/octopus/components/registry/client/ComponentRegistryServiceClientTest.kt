@@ -6,11 +6,13 @@ import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.core.dto.BuildSystem
 import org.octopusden.octopus.components.registry.core.dto.ComponentArtifactConfigurationDTO
 import org.octopusden.octopus.components.registry.core.dto.ComponentV1
+import org.octopusden.octopus.components.registry.core.dto.ComponentV2
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersion
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersions
 import org.octopusden.octopus.components.registry.core.dto.DistributionDTO
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionDTO
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionRangeDTO
+import org.octopusden.octopus.components.registry.core.dto.SecurityGroupsDTO
 import org.octopusden.octopus.components.registry.core.dto.ServiceStatusDTO
 import org.octopusden.octopus.components.registry.core.dto.VCSSettingsDTO
 import org.octopusden.octopus.components.registry.core.dto.VersionRequest
@@ -146,6 +148,35 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
     fun testGetNonExistedComponentWithVersion() {
         assertFailsWith(NotFoundException::class) {
             componentsRegistryClient.getComponent("TESTONE-?", "1")
+        }
+    }
+
+    @Test
+    fun testGetComponent() {
+        val actualComponent = componentsRegistryClient.getComponent("TEST-VERSION", "999")
+        val expectedComponent = ComponentV2("TEST-VERSION", null, "user9")
+        with(expectedComponent) {
+            system = listOf("NONE")
+            releasesInDefaultBranch = true
+            distribution = DistributionDTO(
+                explicit = false,
+                external = true,
+                gav = "",
+                deb = null,
+                rpm = null,
+                securityGroups = SecurityGroupsDTO(
+                    read = listOf("vfiler1-default#group")
+                )
+            )
+            buildSystem = BuildSystem.MAVEN
+        }
+        assertEquals(expectedComponent, actualComponent)
+    }
+
+    @Test
+    fun testGetComponentWithNonExistedVersion() {
+        assertFailsWith(NotFoundException::class) {
+            componentsRegistryClient.getComponent("TEST-VERSION", "1")
         }
     }
 
