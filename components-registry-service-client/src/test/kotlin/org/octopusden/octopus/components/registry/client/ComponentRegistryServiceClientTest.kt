@@ -6,7 +6,7 @@ import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.core.dto.BuildSystem
 import org.octopusden.octopus.components.registry.core.dto.ComponentArtifactConfigurationDTO
 import org.octopusden.octopus.components.registry.core.dto.ComponentV1
-import org.octopusden.octopus.components.registry.core.dto.ComponentV2
+import org.octopusden.octopus.components.registry.core.dto.DetailedComponent
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersion
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersions
 import org.octopusden.octopus.components.registry.core.dto.DistributionDTO
@@ -63,8 +63,8 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
 
     override fun getComponentV1(component: String): ComponentV1 = componentsRegistryClient.getById(component)
 
-    override fun getComponent(component: String, version: String) =
-        componentsRegistryClient.getComponent(component, version)
+    override fun getDetailedComponent(component: String, version: String) =
+        componentsRegistryClient.getDetailedComponent(component, version)
 
     override fun getDetailedComponentVersion(component: String, version: String): DetailedComponentVersion =
         componentsRegistryClient.getDetailedComponentVersion(component, version)
@@ -119,12 +119,12 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
 
     @Test
     fun testGetAllComponents() {
-        assertEquals(37, componentsRegistryClient.getAllComponents().components.size)
+        assertEquals(38, componentsRegistryClient.getAllComponents().components.size)
         assertEquals(
             3,
             componentsRegistryClient.getAllComponents("ssh://hg@mercurial/technical", null).components.size
         )
-        assertEquals(2, componentsRegistryClient.getAllComponents(null, BuildSystem.MAVEN).components.size)
+        assertEquals(3, componentsRegistryClient.getAllComponents(null, BuildSystem.MAVEN).components.size)
         assertEquals(
             1,
             componentsRegistryClient.getAllComponents(
@@ -133,8 +133,8 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
             ).components.size
         )
         assertEquals(4, componentsRegistryClient.getAllComponents(systems = listOf("CLASSIC")).components.size)
-        assertEquals(33, componentsRegistryClient.getAllComponents(systems = listOf("NONE")).components.size)
-        assertEquals(37, componentsRegistryClient.getAllComponents(systems = listOf("CLASSIC", "NONE")).components.size)
+        assertEquals(34, componentsRegistryClient.getAllComponents(systems = listOf("NONE")).components.size)
+        assertEquals(38, componentsRegistryClient.getAllComponents(systems = listOf("CLASSIC", "NONE")).components.size)
     }
 
     @Test
@@ -145,16 +145,16 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
     }
 
     @Test
-    fun testGetNonExistedComponentWithVersion() {
+    fun testGetNonExistedDetailedComponentWithVersion() {
         assertFailsWith(NotFoundException::class) {
-            componentsRegistryClient.getComponent("TESTONE-?", "1")
+            componentsRegistryClient.getDetailedComponent("TESTONE-?", "1")
         }
     }
 
     @Test
-    fun testGetComponent() {
-        val actualComponent = componentsRegistryClient.getComponent("TEST-VERSION", "999")
-        val expectedComponent = ComponentV2("TEST-VERSION", null, "user9")
+    fun testGetExistedDetailedComponent() {
+        val actualComponent = componentsRegistryClient.getDetailedComponent("TEST-VERSION", "999")
+        val expectedComponent = DetailedComponent("TEST-VERSION", null, "user9")
         with(expectedComponent) {
             system = listOf("NONE")
             releasesInDefaultBranch = true
@@ -176,7 +176,7 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
     @Test
     fun testGetComponentWithNonExistedVersion() {
         assertFailsWith(NotFoundException::class) {
-            componentsRegistryClient.getComponent("TEST-VERSION", "1")
+            componentsRegistryClient.getDetailedComponent("TEST-VERSION", "1")
         }
     }
 

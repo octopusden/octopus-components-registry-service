@@ -8,6 +8,7 @@ import org.octopusden.octopus.components.registry.core.dto.ComponentV1
 import org.octopusden.octopus.components.registry.core.dto.ComponentV2
 import org.octopusden.octopus.components.registry.core.dto.ComponentV3
 import org.octopusden.octopus.components.registry.core.dto.ComponentsDTO
+import org.octopusden.octopus.components.registry.core.dto.DetailedComponent
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersion
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersions
 import org.octopusden.octopus.components.registry.core.dto.DistributionDTO
@@ -42,7 +43,7 @@ interface ComponentsRegistryServiceClient {
 
     @RequestLine("GET rest/api/2/components/{componentKey}/versions/{version}")
     @Throws(NotFoundException::class)
-    fun getComponent(@Param("componentKey") componentKey: String, @Param("version") version: String): ComponentV2
+    fun getDetailedComponent(@Param("componentKey") componentKey: String, @Param("version") version: String): DetailedComponent
 
     @RequestLine("GET /rest/api/2/components?vcs-path={vcsPath}&build-system={buildSystem}&systems={systems}", collectionFormat = CollectionFormat.CSV)
     fun getAllComponents(

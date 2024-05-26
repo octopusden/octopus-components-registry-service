@@ -18,12 +18,15 @@ import org.octopusden.octopus.components.registry.core.dto.ArtifactComponentsDTO
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.core.dto.BuildSystem
 import org.octopusden.octopus.components.registry.core.dto.ComponentArtifactConfigurationDTO
+import org.octopusden.octopus.components.registry.core.dto.ComponentInfoDTO
 import org.octopusden.octopus.components.registry.core.dto.ComponentRegistryVersion
+import org.octopusden.octopus.components.registry.core.dto.ComponentVersionFormatDTO
 import org.octopusden.octopus.components.registry.core.dto.ComponentV1
-import org.octopusden.octopus.components.registry.core.dto.ComponentV2
+import org.octopusden.octopus.components.registry.core.dto.DetailedComponent
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersion
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersions
 import org.octopusden.octopus.components.registry.core.dto.DistributionDTO
+import org.octopusden.octopus.components.registry.core.dto.JiraComponentDTO
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionDTO
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionRangeDTO
 import org.octopusden.octopus.components.registry.core.dto.RepositoryType
@@ -85,7 +88,7 @@ abstract class BaseComponentsRegistryServiceTest {
     protected abstract fun getDependencyAliasToComponentMapping(): Map<String, String>
 
     protected abstract fun getComponentV1(component: String): ComponentV1
-    protected abstract fun getComponent(component: String, version: String): ComponentV2
+    protected abstract fun getDetailedComponent(component: String, version: String): DetailedComponent
     protected abstract fun getDetailedComponentVersion(component: String, version: String): DetailedComponentVersion
     protected abstract fun getDetailedComponentVersions(
         component: String,
@@ -157,7 +160,6 @@ abstract class BaseComponentsRegistryServiceTest {
         expectedComponent.system = listOf("NONE")
         expectedComponent.clientCode = "CLIENT_CODE"
         expectedComponent.releasesInDefaultBranch = false
-        expectedComponent.buildSystem = BuildSystem.PROVIDED
         Assertions.assertEquals(expectedComponent, actualComponent)
     }
 
@@ -174,15 +176,14 @@ abstract class BaseComponentsRegistryServiceTest {
         expectedComponent.clientCode = "CLIENT_CODE"
         expectedComponent.releasesInDefaultBranch = false
         expectedComponent.parentComponent = "TESTONE"
-        expectedComponent.buildSystem = BuildSystem.PROVIDED
         Assertions.assertEquals(expectedComponent, actualComponent)
     }
 
     @Test
-    fun testGetComponentVersion() {
-        val actualComponent = getComponent("TESTONE", "1")
+    fun testGetDetailedComponent() {
+        val actualComponent = getDetailedComponent("TESTONE", "1")
 
-        val expectedComponent = ComponentV2("TESTONE", "Test ONE display name", "adzuba")
+        val expectedComponent = DetailedComponent("TESTONE", "Test ONE display name", "adzuba")
         expectedComponent.distribution = DistributionDTO(
             false, false, "org.octopusden.octopus.test:versions-api:jar",
             securityGroups = SecurityGroupsDTO(listOf("vfiler1-default#group"))
@@ -193,6 +194,37 @@ abstract class BaseComponentsRegistryServiceTest {
         expectedComponent.clientCode = "CLIENT_CODE"
         expectedComponent.releasesInDefaultBranch = false
         expectedComponent.buildSystem = BuildSystem.PROVIDED
+        expectedComponent.vcsSettings = VCSSettingsDTO(
+            versionControlSystemRoots = listOf(
+                VersionControlSystemRootDTO(
+                    name = "main",
+                    vcsPath = "ssh://hg@mercurial/test-component",
+                    type = RepositoryType.MERCURIAL,
+                    tag = "TESTONE-1.0.0",
+                    branch = "v2"
+                )
+            ),
+            externalRegistry=null
+        )
+        expectedComponent.jiraComponentVersion = JiraComponentVersionDTO(
+            name = "TESTONE",
+            version = "1",
+            component = JiraComponentDTO(
+                projectKey = "TESTONE",
+                displayName = "TESTONE DISPLAY NAME WITH VERSIONS-API",
+                componentVersionFormat = ComponentVersionFormatDTO(
+                    majorVersionFormat = "\$major",
+                    releaseVersionFormat = "\$major.\$minor",
+                    buildVersionFormat = "\$major.\$minor.\$service",
+                    lineVersionFormat= "\$major"
+                ),
+                componentInfo = ComponentInfoDTO(
+                    versionPrefix = "",
+                    versionFormat= "\$versionPrefix-\$baseVersionFormat"
+                ),
+                technical = false
+            )
+        )
         Assertions.assertEquals(expectedComponent, actualComponent)
     }
 
