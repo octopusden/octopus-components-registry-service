@@ -91,7 +91,7 @@ class ComponentControllerV2(
             clientCode = escrowModuleConfig.clientCode
             releasesInDefaultBranch = escrowModuleConfig.releasesInDefaultBranch
             parentComponent = escrowModuleConfig.parentComponent
-            buildSystem = getBuildSystem(escrowModuleConfig.buildSystem)
+            buildSystem = escrowModuleConfig.buildSystem?.let { bs -> getBuildSystem(bs) }
             vcsSettings = try {
                 resolveVCSSettings(componentName, version)
             } catch (_: NotFoundException) { null }
@@ -102,9 +102,8 @@ class ComponentControllerV2(
         }
     }
 
-    private fun getBuildSystem(escrowBuildSystem: org.octopusden.octopus.escrow.BuildSystem?): BuildSystem? {
+    private fun getBuildSystem(escrowBuildSystem: org.octopusden.octopus.escrow.BuildSystem): BuildSystem {
         return when (escrowBuildSystem) {
-            null -> null
             org.octopusden.octopus.escrow.BuildSystem.BS2_0 -> BuildSystem.BS2_0
             org.octopusden.octopus.escrow.BuildSystem.MAVEN -> BuildSystem.MAVEN
             org.octopusden.octopus.escrow.BuildSystem.ECLIPSE_MAVEN -> BuildSystem.ECLIPSE_MAVEN
