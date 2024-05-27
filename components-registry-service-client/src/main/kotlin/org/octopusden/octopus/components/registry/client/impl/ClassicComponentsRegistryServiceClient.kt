@@ -42,6 +42,9 @@ class ClassicComponentsRegistryServiceClient(
 
     override fun getById(componentKey: String) = client.getById(componentKey)
 
+    override fun getDetailedComponent(componentKey: String, version: String) =
+        client.getDetailedComponent(componentKey, version)
+
     override fun getAllComponents(vcsPath: String?, buildSystem: BuildSystem?, systems: List<String>) =
         client.getAllComponents(vcsPath, buildSystem, systems)
 

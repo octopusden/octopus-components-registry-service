@@ -7,12 +7,14 @@ import org.octopusden.octopus.components.registry.core.dto.DistributionDTO
 import org.octopusden.octopus.components.registry.core.dto.SecurityGroupsDTO
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.server.service.ComponentRegistryResolver
+import org.octopusden.octopus.escrow.BuildSystem as EscrowBuildSystem
 import org.octopusden.octopus.escrow.configuration.model.EscrowModule
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
 import org.octopusden.octopus.escrow.configuration.validation.EscrowConfigValidator
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.http.MediaType
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestParam
@@ -102,7 +104,7 @@ abstract class BaseComponentController<T : Component> {
         (getComponentById(component).distribution ?: throw IllegalStateException("Distribution can not be null"))
 
     companion object {
-        private fun getComponentDistribution(escrowModuleConfig: EscrowModuleConfig): DistributionDTO {
+        fun getComponentDistribution(escrowModuleConfig: EscrowModuleConfig): DistributionDTO {
             return with(escrowModuleConfig) {
                 DistributionDTO(
                     distribution != null && distribution.explicit(),

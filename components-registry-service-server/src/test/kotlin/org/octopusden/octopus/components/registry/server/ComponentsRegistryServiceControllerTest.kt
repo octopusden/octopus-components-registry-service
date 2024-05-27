@@ -12,6 +12,7 @@ import org.octopusden.octopus.components.registry.core.dto.BuildSystem
 import org.octopusden.octopus.components.registry.core.dto.ComponentArtifactConfigurationDTO
 import org.octopusden.octopus.components.registry.core.dto.ComponentV1
 import org.octopusden.octopus.components.registry.core.dto.ComponentV2
+import org.octopusden.octopus.components.registry.core.dto.DetailedComponent
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersion
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersions
 import org.octopusden.octopus.components.registry.core.dto.DistributionDTO
@@ -90,6 +91,20 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
         .andReturn()
         .response
         .toObject(ComponentV1::class.java)
+
+    override fun getDetailedComponent(component: String, version: String): DetailedComponent =
+        mvc.perform(
+            MockMvcRequestBuilders.get(
+                "/rest/api/2/components/{component}/versions/{version}",
+                component,
+                version
+            )
+                .accept(APPLICATION_JSON)
+        )
+            .andExpect(status().isOk)
+            .andReturn()
+            .response
+            .toObject(DetailedComponent::class.java)
 
     override fun getDetailedComponentVersion(component: String, version: String): DetailedComponentVersion =
         mvc.perform(
@@ -313,7 +328,7 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
         expectedComponent.clientCode = "CLIENT_CODE"
         expectedComponent.releasesInDefaultBranch = false
 
-        Assertions.assertEquals(37, components.components.size)
+        Assertions.assertEquals(38, components.components.size)
         Assertions.assertTrue(expectedComponent in components.components) {
             components.components.toString()
         }
@@ -334,8 +349,42 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
         getAndCheckComponents(
             null,
             BuildSystem.MAVEN,
-            setOf("SUB_COMPONENT_TWO", "TEST_COMPONENT")
+            setOf("SUB_COMPONENT_TWO", "TEST_COMPONENT", "TEST-VERSION")
         )
+    }
+
+    @Test
+    fun testGetNonExistedComponent() {
+        val exception = Assertions.assertThrows(AssertionError::class.java) {
+            getDetailedComponent("NOTEXIST", "1")
+        }
+        Assertions.assertEquals("Status expected:<200> but was:<404>", exception.message)
+    }
+
+    @Test
+    fun testGetExistedDetailedComponent() {
+        val actualComponent = mvc.perform(
+            MockMvcRequestBuilders.get("/rest/api/2/components/TEST-VERSION/versions/999")
+                .accept(APPLICATION_JSON)
+        )
+            .andExpect(status().isOk)
+            .andReturn()
+            .response
+            .toObject(DetailedComponent::class.java)
+
+        val expectedComponent = DetailedComponent("TEST-VERSION", null, "user9")
+        with(expectedComponent){
+            system = listOf("NONE")
+            releasesInDefaultBranch = true
+            distribution = DistributionDTO(
+                explicit = false,
+                external = true,
+                gav = "",
+                securityGroups = SecurityGroupsDTO(read = listOf("vfiler1-default#group"))
+            )
+            buildSystem = BuildSystem.MAVEN
+        }
+        Assertions.assertEquals(expectedComponent, actualComponent)
     }
 
     @Test
