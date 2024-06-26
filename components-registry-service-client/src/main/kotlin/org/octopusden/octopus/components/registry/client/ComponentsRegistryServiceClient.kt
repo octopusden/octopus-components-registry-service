@@ -49,6 +49,7 @@ interface ComponentsRegistryServiceClient {
     fun getAllComponents(
         @Param("vcsPath") vcsPath: String? = null,
         @Param("buildSystem") buildSystem: BuildSystem? = null,
+        @Param("solution") solution: Boolean? = null,
         @Param("systems") @QueryMap systems: List<String> = emptyList()
     ): ComponentsDTO<ComponentV2>
 
