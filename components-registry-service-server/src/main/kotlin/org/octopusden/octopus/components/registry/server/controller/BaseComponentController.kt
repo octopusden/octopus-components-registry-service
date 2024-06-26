@@ -96,6 +96,7 @@ abstract class BaseComponentController<T : Component> {
             system = escrowModuleConfig.system?.split(EscrowConfigValidator.SPLIT_PATTERN)
             clientCode = escrowModuleConfig.clientCode
             releasesInDefaultBranch = escrowModuleConfig.releasesInDefaultBranch
+            solution = escrowModuleConfig.solution
             parentComponent = escrowModuleConfig.parentComponent
             this
         }

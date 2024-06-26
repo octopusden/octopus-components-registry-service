@@ -98,6 +98,7 @@ class EscrowConfigValidator {
                 validateSystem(moduleConfig, componentName)
                 validateClientCode(moduleConfig, componentName)
                 validateReleasesInDefaultBranch(moduleConfig, componentName)
+                validateSolution(moduleConfig, componentName)
             }
         }
         if (!hasErrors()) {
@@ -400,6 +401,14 @@ class EscrowConfigValidator {
         if (releasesInDefaultBranch == null) {
             // ToDo uncomment after default value is set
             // registerError("releasesInDefaultBranch is not specified in component '$component'")
+        }
+    }
+
+    def validateSolution(EscrowModuleConfig moduleConfig, String component) {
+        def solution = moduleConfig.getSolution()
+        if (solution == null) {
+            // ToDo uncomment after default value is set
+//             registerError("solution is not specified in component '$component'")
         }
     }
 

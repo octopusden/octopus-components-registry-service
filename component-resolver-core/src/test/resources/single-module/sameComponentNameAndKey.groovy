@@ -3,6 +3,7 @@ import static org.octopusden.octopus.escrow.BuildSystem.*
 Defaults {
     system = "NONE"
     releasesInDefaultBranch = true
+    solution = false
 }
 
 Tools {

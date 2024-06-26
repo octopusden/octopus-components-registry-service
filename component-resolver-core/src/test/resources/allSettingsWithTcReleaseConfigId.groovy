@@ -4,6 +4,7 @@ import static org.octopusden.octopus.escrow.RepositoryType.CVS
 Defaults {
     system = "NONE"
     releasesInDefaultBranch = true
+    solution = false
 }
 
 bcomponent {

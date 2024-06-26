@@ -18,6 +18,7 @@ final SOME_VERSION_RANGE = "[1.12.1-151,)"
 Defaults {
     system = "NONE"
     releasesInDefaultBranch = true
+    solution = false
     buildSystem = MAVEN
     repositoryType = CVS
     artifactId = ANY_ARTIFACT

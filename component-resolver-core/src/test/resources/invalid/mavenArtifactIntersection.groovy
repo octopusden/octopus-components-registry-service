@@ -17,6 +17,7 @@ ANY_ARTIFACT = /[\w-\.]+/
 Defaults {
     system = "NONE"
     releasesInDefaultBranch = true
+    solution = false
     repositoryType = MERCURIAL
     buildSystem = MAVEN;
     tag = "$module-$version";

@@ -22,7 +22,7 @@ import org.octopusden.octopus.releng.dto.JiraComponent
 @EqualsAndHashCode(includeFields = true, includes = ["buildSystem", "artifactIdPattern", "groupIdPattern",// "versionRange",
         "buildFilePath", "jiraConfiguration", "buildConfiguration", "deprecated", "vcsSettings",
         "distribution", "componentDisplayName", "componentOwner", "releaseManager", "securityChampion", "system",
-        "clientCode", "releasesInDefaultBranch", "parentComponent", "octopusVersion", "escrow", "productType"])
+        "clientCode", "releasesInDefaultBranch", "solution", "parentComponent", "octopusVersion", "escrow", "productType"])
 @ToString(includeFields = true)
 class EscrowModuleConfig {
     private BuildSystem buildSystem
@@ -58,6 +58,8 @@ class EscrowModuleConfig {
     private String clientCode
 
     private Boolean releasesInDefaultBranch
+
+    private Boolean solution
 
     private String parentComponent
 
@@ -133,6 +135,14 @@ class EscrowModuleConfig {
 
     void setReleasesInDefaultBranch(Boolean releasesInDefaultBranch) {
         this.releasesInDefaultBranch = releasesInDefaultBranch
+    }
+
+    Boolean getSolution() {
+        return solution
+    }
+
+    void setSolution(Boolean solution) {
+        this.solution = solution
     }
 
     String getParentComponent() {

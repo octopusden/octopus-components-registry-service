@@ -4,6 +4,7 @@ import static org.octopusden.octopus.escrow.RepositoryType.MERCURIAL
 Defaults {
     system = "NONE"
     releasesInDefaultBranch = true
+    solution = false
     repositoryType = MERCURIAL
     buildSystem = MAVEN
     tag = DEFAULT_TAG

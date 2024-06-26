@@ -327,6 +327,7 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
         expectedComponent.system = listOf("NONE")
         expectedComponent.clientCode = "CLIENT_CODE"
         expectedComponent.releasesInDefaultBranch = false
+        expectedComponent.solution = true
 
         Assertions.assertEquals(38, components.components.size)
         Assertions.assertTrue(expectedComponent in components.components) {
@@ -412,6 +413,7 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
         expectedComponent.system = listOf("NONE")
         expectedComponent.clientCode = "CLIENT_CODE"
         expectedComponent.releasesInDefaultBranch = false
+        expectedComponent.solution = true
         Assertions.assertEquals(expectedComponent, actualComponent)
     }
 

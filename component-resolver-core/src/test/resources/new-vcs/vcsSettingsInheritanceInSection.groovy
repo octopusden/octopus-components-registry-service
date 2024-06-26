@@ -10,6 +10,7 @@ final ALL_VERSIONS = "(,0),[0,)"
 Defaults {
     system = "NONE"
     releasesInDefaultBranch = true
+    solution = false
     repositoryType = MERCURIAL
     buildSystem = MAVEN
     tag = DEFAULT_TAG
