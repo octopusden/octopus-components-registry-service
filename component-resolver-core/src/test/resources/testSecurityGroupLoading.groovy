@@ -3,6 +3,7 @@ import static org.octopusden.octopus.escrow.BuildSystem.PROVIDED
 Defaults {
     system = "NONE"
     releasesInDefaultBranch = true
+    solution = false
     jira {
         majorVersionFormat = '$major.$minor'
         releaseVersionFormat = '$major.$minor.$service'

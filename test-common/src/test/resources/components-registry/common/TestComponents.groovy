@@ -5,6 +5,7 @@ Defaults {
     system = "NONE"
     tag = '$module-$version'
     releasesInDefaultBranch = true
+    solution = false
     distribution {
         securityGroups {
             read = "vfiler1-default#group"
@@ -175,6 +176,7 @@ Defaults {
     componentDisplayName = "Test ONE display name"
     clientCode = "CLIENT_CODE"
     releasesInDefaultBranch = false
+    solution = true
     jira {
         projectKey = "TESTONE"
         majorVersionFormat = '$major'

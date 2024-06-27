@@ -31,7 +31,8 @@ abstract class BaseComponentController<T : Component> {
     fun getAllComponents(
         @RequestParam("vcs-path", required = false) vcsPath: String?,
         @RequestParam("build-system", required = false) buildSystem: BuildSystem?,
-        @RequestParam("systems", required = false, defaultValue = "") systems: List<String>
+        @RequestParam("systems", required = false, defaultValue = "") systems: List<String>,
+        @RequestParam("solution", required = false) solution: Boolean?
     ): ComponentsDTO<T> {
 
         val components = componentRegistryResolver.getComponents().filter { module ->
@@ -46,7 +47,12 @@ abstract class BaseComponentController<T : Component> {
                 val buildSystemEquals = buildSystem?.let { buildSystemValue ->
                     config.buildSystem == org.octopusden.octopus.escrow.BuildSystem.valueOf(buildSystemValue.name)
                 } ?: true
-                vcsPathEquals && buildSystemEquals
+
+                val solutionEquals = solution?.let { solutionValue ->
+                    config.solution == solutionValue
+                } ?: true
+
+                vcsPathEquals && buildSystemEquals && solutionEquals
             }
         }
             .map {
@@ -96,6 +102,7 @@ abstract class BaseComponentController<T : Component> {
             system = escrowModuleConfig.system?.split(EscrowConfigValidator.SPLIT_PATTERN)
             clientCode = escrowModuleConfig.clientCode
             releasesInDefaultBranch = escrowModuleConfig.releasesInDefaultBranch
+            solution = escrowModuleConfig.solution
             parentComponent = escrowModuleConfig.parentComponent
             this
         }

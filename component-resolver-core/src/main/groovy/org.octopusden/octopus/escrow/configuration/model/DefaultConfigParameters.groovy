@@ -53,5 +53,7 @@ class DefaultConfigParameters {
     String octopusVersion
 
     Boolean releasesInDefaultBranch
+
+    Boolean solution
 }
 

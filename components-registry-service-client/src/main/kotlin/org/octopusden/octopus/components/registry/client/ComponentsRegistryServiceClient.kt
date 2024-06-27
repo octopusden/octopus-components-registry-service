@@ -45,10 +45,11 @@ interface ComponentsRegistryServiceClient {
     @Throws(NotFoundException::class)
     fun getDetailedComponent(@Param("componentKey") componentKey: String, @Param("version") version: String): DetailedComponent
 
-    @RequestLine("GET /rest/api/2/components?vcs-path={vcsPath}&build-system={buildSystem}&systems={systems}", collectionFormat = CollectionFormat.CSV)
+    @RequestLine("GET /rest/api/2/components?vcs-path={vcsPath}&build-system={buildSystem}&systems={systems}&solution={solution}", collectionFormat = CollectionFormat.CSV)
     fun getAllComponents(
         @Param("vcsPath") vcsPath: String? = null,
         @Param("buildSystem") buildSystem: BuildSystem? = null,
+        @Param("solution") solution: Boolean? = null,
         @Param("systems") @QueryMap systems: List<String> = emptyList()
     ): ComponentsDTO<ComponentV2>
 

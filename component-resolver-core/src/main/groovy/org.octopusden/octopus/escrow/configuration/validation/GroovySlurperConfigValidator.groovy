@@ -39,7 +39,7 @@ class GroovySlurperConfigValidator {
                                    'teamcityReleaseConfigId', 'jiraProjectKey', 'jiraMajorVersionFormat', 'jiraReleaseVersionFormat',
                                    'buildFilePath', 'deprecated', BRANCH,
                                    'componentDisplayName', 'componentOwner', 'releaseManager', 'securityChampion', 'system',
-                                   'clientCode', 'releasesInDefaultBranch', 'parentComponent', 'octopusVersion']
+                                   'clientCode', 'releasesInDefaultBranch', 'solution', 'parentComponent', 'octopusVersion']
     static SUPPORTED_JIRA_ATTRIBUTES = ['projectKey', 'lineVersionFormat', 'majorVersionFormat', 'releaseVersionFormat', 'buildVersionFormat', "displayName", 'technical']
 
     static SUPPORTED_BUILD_ATTRIBUTES = ['dependencies', 'javaVersion', 'mavenVersion', 'gradleVersion', 'requiredProject', 'systemProperties', 'projectVersion', 'requiredTools', 'buildTasks']

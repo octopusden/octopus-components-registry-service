@@ -60,6 +60,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 securityChampion: "user",
                 system: "CLASSIC",
                 releasesInDefaultBranch: true,
+                solution: false,
                 buildSystem: BuildSystem.MAVEN,
                 artifactIdPattern: "builder",
                 groupIdPattern: "io.bcomponent",
@@ -161,6 +162,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 buildSystem: MAVEN,
                 system: "NONE",
                 releasesInDefaultBranch: true,
+                solution: false,
                 artifactIdPattern: /[\w-]+/,
                 groupIdPattern: "org.octopusden.octopus.bcomponent",
                 versionRange: "[1.12.1-150,)",
@@ -175,6 +177,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 buildSystem: BuildSystem.BS2_0,
                 system: "NONE",
                 releasesInDefaultBranch: true,
+                solution: false,
                 groupIdPattern: "org.octopusden.octopus.bcomponent",
                 artifactIdPattern: /[\w-]+/,
                 versionRange: "(,1.12.1-150)",
@@ -202,6 +205,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 buildSystem: MAVEN,
                 system: "NONE",
                 releasesInDefaultBranch: true,
+                solution: false,
                 artifactIdPattern: /[\w-]+/,
                 groupIdPattern: "org.octopusden.octopus.bcomponent",
                 versionRange: "[1.12.1-151,)",
@@ -227,6 +231,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 buildSystem: MAVEN,
                 system: "NONE",
                 releasesInDefaultBranch: true,
+                solution: false,
                 artifactIdPattern: "test-cvs-maven-parent,test-cvs-maven-module1",
                 groupIdPattern: "org.octopusden.octopus.bcomponent",
                 versionRange: "(,0),[0,)",
@@ -254,6 +259,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 buildSystem: BuildSystem.MAVEN,
                 system: "NONE",
                 releasesInDefaultBranch: true,
+                solution: false,
                 artifactIdPattern: "test-cvs-maven-parent,test-cvs-maven-module1",
                 groupIdPattern: "org.octopusden.octopus.bcomponent",
                 versionRange: "(,0),[0,)",
@@ -315,7 +321,8 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 releaseManager: "somereleasemanager",
                 securityChampion: "somesecuritychampion",
                 system: "CLASSIC",
-                releasesInDefaultBranch: false
+                releasesInDefaultBranch: false,
+                solution: true,
         )
         assert expectedModuleConfig == modelConfiguration
 
@@ -341,6 +348,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 securityChampion: "somesecuritychampion",
                 system: "CLASSIC",
                 releasesInDefaultBranch: false,
+                solution: true
         )
         assert expectedModuleConfig == modelConfiguration
 
@@ -361,7 +369,8 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 releaseManager: "anotherreleasemanager",
                 securityChampion: "anothersecuritychampion",
                 system: "CLASSIC,ALFA",
-                releasesInDefaultBranch: true
+                releasesInDefaultBranch: true,
+                solution: false
         )
         assert expectedModuleConfig == modelConfiguration
     }

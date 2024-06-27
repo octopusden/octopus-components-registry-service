@@ -10,6 +10,7 @@ Defaults {
     buildSystem = MAVEN;
     system = "NONE"
     releasesInDefaultBranch = true
+    solution = false
     repositoryType = GIT
     tag = '$module-$version';
     artifactId = ANY_ARTIFACT

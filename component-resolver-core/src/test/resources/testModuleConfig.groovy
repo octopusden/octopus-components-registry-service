@@ -18,6 +18,7 @@ enum VCS {
 Defaults {
     system = "NONE"
     releasesInDefaultBranch = true
+    solution = false
     repositoryType = MERCURIAL
     buildSystem = MAVEN;
     tag = DEFAULT_TAG;

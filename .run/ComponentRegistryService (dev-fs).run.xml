@@ -4,11 +4,6 @@
     <additionalParameters>
       <param>
         <option name="enabled" value="true" />
-        <option name="name" value="components-registry.work-dir" />
-        <option name="value" value="${COMPONENTS_REGISTRY_PROJECT_DIR}" />
-      </param>
-      <param>
-        <option name="enabled" value="true" />
         <option name="name" value="spring.config.additional-location" />
         <option name="value" value="components-registry-service-server/dev/" />
       </param>
@@ -23,8 +18,8 @@
       <option name="IS_IGNORE_MISSING_FILES" value="true" />
       <option name="IS_ENABLE_EXPERIMENTAL_INTEGRATIONS" value="true" />
       <ENTRIES>
-        <ENTRY IS_ENABLED="true" PARSER="runconfig" />
-        <ENTRY IS_ENABLED="true" PARSER="env" PATH="$USER_HOME$/dev.env" />
+        <ENTRY IS_ENABLED="true" PARSER="runconfig" IS_EXECUTABLE="false" />
+        <ENTRY IS_ENABLED="true" PARSER="env" IS_EXECUTABLE="false" PATH="$USER_HOME$/dev.env" />
       </ENTRIES>
     </extension>
     <method v="2">
