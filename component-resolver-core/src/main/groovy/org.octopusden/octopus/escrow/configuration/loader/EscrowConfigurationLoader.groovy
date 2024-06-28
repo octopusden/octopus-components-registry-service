@@ -661,7 +661,7 @@ class EscrowConfigurationLoader {
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
-    private static boolean loadSolution(ConfigObject parentConfigObject, Boolean defaultSolution) {
+    private static Boolean loadSolution(ConfigObject parentConfigObject, Boolean defaultSolution) {
         return parentConfigObject.getOrDefault("solution", defaultSolution)
     }
 
