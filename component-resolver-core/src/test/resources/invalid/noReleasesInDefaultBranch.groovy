@@ -9,6 +9,7 @@ Defaults {
     buildSystem = GRADLE
     tag = '$module-$version'
     artifactId = ANY_ARTIFACT
+    solution = true
     jira {
         majorVersionFormat = '$major.$minor'
         releaseVersionFormat = '$major.$minor.$service'
