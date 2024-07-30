@@ -41,6 +41,10 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, classes = [ComponentRegistryServiceApplication::class])
 @ActiveProfiles("common","test")
 class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTest() {
+
+    private val docker = "test/versions-api"
+    private val gav = "org.octopusden.octopus.test:versions-api:jar"
+
     @Autowired
     private lateinit var mvc: MockMvc
 
@@ -315,13 +319,13 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
         expectedComponent.distribution = DistributionDTO(
             false,
             false,
-            GAV,
+            gav,
             null,
             null,
             SecurityGroupsDTO(
                 listOf("vfiler1-default#group")
             ),
-            DOCKER
+            docker
         )
         expectedComponent.releaseManager = "user"
         expectedComponent.securityChampion = "user"
@@ -404,11 +408,11 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
         expectedComponent.distribution = DistributionDTO(
             false,
             false,
-            GAV,
+            gav,
             null,
             null,
             SecurityGroupsDTO(listOf("vfiler1-default#group")),
-            DOCKER
+            docker
         )
         expectedComponent.releaseManager = "user"
         expectedComponent.securityChampion = "user"
@@ -442,10 +446,5 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
 
     private fun <T> MockHttpServletResponse.toObject(typeReference: TypeReference<T>): T {
         return objectMapper.readValue(this.contentAsString, typeReference)
-    }
-
-    companion object {
-        const val DOCKER = "test/versions-api"
-        const val GAV = "org.octopusden.octopus.test:versions-api:jar"
     }
 }

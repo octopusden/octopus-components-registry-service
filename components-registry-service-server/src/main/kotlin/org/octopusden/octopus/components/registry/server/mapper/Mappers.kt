@@ -38,7 +38,7 @@ fun JiraComponentVersionRange.toDTO(): JiraComponentVersionRangeDTO {
 
 fun Distribution.toDTO(): DistributionDTO {
     // TODO: elvis for GAV backward compatibility, remove when all clients are updated to the latest version
-    return DistributionDTO(explicit(), external(), GAV() ?: "", DEB(), RPM(), SecurityGroupsDTO(securityGroups?.read?.split(",")?.toList() ?: emptyList()), DOCKER())
+    return DistributionDTO(explicit(), external(), GAV() ?: "", DEB(), RPM(), SecurityGroupsDTO(securityGroups?.read?.split(",")?.toList() ?: emptyList()), docker())
 }
 
 fun VCSSettings.toDTO(): VCSSettingsDTO {

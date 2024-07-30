@@ -170,7 +170,7 @@ class ComponentRegistryResolverImpl(
                     it.value.find { it.distribution != null }?.distribution?.RPM(),
                     it.value.find { it.distribution != null }?.distribution?.securityGroups
                         ?: SecurityGroups(null),
-                    it.value.find { it.distribution != null }?.distribution?.DOCKER(),
+                    it.value.find { it.distribution != null }?.distribution?.docker(),
                 )
             }
     }

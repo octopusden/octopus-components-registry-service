@@ -98,7 +98,7 @@ public class ComponentConfigDeserializer extends JsonDeserializer<ComponentConfi
             TextNode gav = (TextNode) distributionNode.get("GAV");
             TextNode deb = (TextNode) distributionNode.get("DEB");
             TextNode rpm = (TextNode) distributionNode.get("RPM");
-            TextNode docker = (TextNode) distributionNode.get("DOCKER");
+            TextNode docker = (TextNode) distributionNode.get("docker");
             ObjectNode securityGroups = (ObjectNode) distributionNode.get("securityGroups");
             final JsonNode rdNode = securityGroups.get("read");
 

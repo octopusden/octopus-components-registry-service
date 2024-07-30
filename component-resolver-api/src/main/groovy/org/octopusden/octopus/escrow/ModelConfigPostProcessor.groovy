@@ -59,7 +59,7 @@ class ModelConfigPostProcessor {
                 distribution.DEB(),
                 distribution.RPM(),
                 distribution.securityGroups,
-                distribution.DOCKER()
+                distribution.docker()
         )
     }
 
