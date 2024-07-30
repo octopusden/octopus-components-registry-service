@@ -70,7 +70,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                         BuildParameters.create(null, null, null, false, null, null, null, [new Tool(name: "BuildEnv", escrowEnvironmentVariable: "BUILD_ENV", targetLocation: "tools/BUILD_ENV",
                                 sourceLocation: "env.BUILD_ENV", installScript: "script")], []),
                 deprecated: false,
-                distribution: new Distribution(true, true, "org.octopusden.octopus.bcomponent:builder:war,org.octopusden.octopus.bcomponent:builder:jar", null, null, new SecurityGroups(null)),
+                distribution: new Distribution(true, true, "org.octopusden.octopus.bcomponent:builder:war,org.octopusden.octopus.bcomponent:builder:jar", null, null, new SecurityGroups(null), null),
                 componentDisplayName: "BCOMPONENT Official Name")
         assertEquals(expectedConfig.vcsSettings, escrowModuleConfig.vcsSettings)
         assertEquals(expectedConfig, escrowModuleConfig)
@@ -168,7 +168,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 versionRange: "[1.12.1-150,)",
                 jiraConfiguration: new JiraComponent("BCOMPONENT", null, ComponentVersionFormat.create('$major.$minor', '$major.$minor.$service'), new ComponentInfo(null, '$versionPrefix-$baseVersionFormat'), false),
                 buildConfiguration: EMPTY_BUILD_CONFIG,
-                distribution: new Distribution(false, true, null, null, null, new SecurityGroups(null)),
+                distribution: new Distribution(false, true, null, null, null, new SecurityGroups(null), null),
                 componentDisplayName: "BCOMPONENT DISPLAY NAME"
         )
         def expectedConfig2 = new EscrowModuleConfig(
@@ -316,7 +316,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                         [new Tool(name: "BuildEnv", escrowEnvironmentVariable: "BUILD_ENV", targetLocation: "tools/BUILD_ENV", sourceLocation: "env.BUILD_ENV"),
                         ], []),
                 deprecated: true,
-                distribution: new Distribution(false, true, null, null, null, new SecurityGroups(null)),
+                distribution: new Distribution(false, true, null, null, null, new SecurityGroups(null), null),
                 componentOwner: "someowner",
                 releaseManager: "somereleasemanager",
                 securityChampion: "somesecuritychampion",
@@ -342,7 +342,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 buildConfiguration: BuildParameters.create("1.8", "3.3.9", "2.10", false, null, null, "build",
                         [new Tool(name: "BuildEnv", escrowEnvironmentVariable: "BUILD_ENV", targetLocation: "tools/BUILD_ENV", sourceLocation: "env.BUILD_ENV")], []),
                 deprecated: false,
-                distribution: new Distribution(true, false, null, null, null, new SecurityGroups(null)),
+                distribution: new Distribution(true, false, null, null, null, new SecurityGroups(null), null),
                 componentOwner: "someowner",
                 releaseManager: "somereleasemanager",
                 securityChampion: "somesecuritychampion",
@@ -363,7 +363,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                         '$major.$minor.$service.$fix-$build', '$major'), null, false),
                 buildConfiguration: DEFAULT_BUILD_PARAMETERS,
                 deprecated: false,
-                distribution: new Distribution(false, true, null, null, null, new SecurityGroups(null)),
+                distribution: new Distribution(false, true, null, null, null, new SecurityGroups(null), null),
                 componentDisplayName: "Human readable sub-component-with-defaults name",
                 componentOwner: "Another Owner",
                 releaseManager: "anotherreleasemanager",

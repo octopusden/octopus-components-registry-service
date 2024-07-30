@@ -213,6 +213,7 @@ Defaults {
         explicit = false
         external = false
         GAV = "org.octopusden.octopus.test:versions-api:jar"
+        DOCKER = "test/versions-api"
     }
 }
 

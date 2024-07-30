@@ -98,6 +98,7 @@ public class ComponentConfigDeserializer extends JsonDeserializer<ComponentConfi
             TextNode gav = (TextNode) distributionNode.get("GAV");
             TextNode deb = (TextNode) distributionNode.get("DEB");
             TextNode rpm = (TextNode) distributionNode.get("RPM");
+            TextNode docker = (TextNode) distributionNode.get("DOCKER");
             ObjectNode securityGroups = (ObjectNode) distributionNode.get("securityGroups");
             final JsonNode rdNode = securityGroups.get("read");
 
@@ -108,7 +109,8 @@ public class ComponentConfigDeserializer extends JsonDeserializer<ComponentConfi
                     gav != null ? gav.textValue() : null,
                     deb != null ? deb.textValue() : null,
                     rpm != null ? rpm.textValue() : null,
-                    new SecurityGroups(read)
+                    new SecurityGroups(read),
+                    docker != null ? docker.textValue() : null
             );
         }
         return null;

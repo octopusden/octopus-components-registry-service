@@ -315,12 +315,13 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
         expectedComponent.distribution = DistributionDTO(
             false,
             false,
-            "org.octopusden.octopus.test:versions-api:jar",
+            GAV,
             null,
             null,
             SecurityGroupsDTO(
                 listOf("vfiler1-default#group")
-            )
+            ),
+            DOCKER
         )
         expectedComponent.releaseManager = "user"
         expectedComponent.securityChampion = "user"
@@ -403,10 +404,11 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
         expectedComponent.distribution = DistributionDTO(
             false,
             false,
-            "org.octopusden.octopus.test:versions-api:jar",
+            GAV,
             null,
             null,
-            SecurityGroupsDTO(listOf("vfiler1-default#group"))
+            SecurityGroupsDTO(listOf("vfiler1-default#group")),
+            DOCKER
         )
         expectedComponent.releaseManager = "user"
         expectedComponent.securityChampion = "user"
@@ -440,5 +442,10 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
 
     private fun <T> MockHttpServletResponse.toObject(typeReference: TypeReference<T>): T {
         return objectMapper.readValue(this.contentAsString, typeReference)
+    }
+
+    companion object {
+        const val DOCKER = "test/versions-api"
+        const val GAV = "org.octopusden.octopus.test:versions-api:jar"
     }
 }

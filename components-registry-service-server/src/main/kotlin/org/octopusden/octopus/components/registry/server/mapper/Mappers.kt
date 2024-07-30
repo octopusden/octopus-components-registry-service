@@ -32,13 +32,13 @@ fun JiraComponent.toDTO(): JiraComponentDTO {
 
 fun JiraComponentVersionRange.toDTO(): JiraComponentVersionRangeDTO {
     // TODO: GAV = "" for backward compatibility, remove when all clients are updated to the latest version
-    val distribution = distribution?.toDTO() ?: DistributionDTO(false, false, "", null, null, SecurityGroupsDTO())
+    val distribution = distribution?.toDTO() ?: DistributionDTO(false, false, "", null, null, SecurityGroupsDTO(), null)
     return JiraComponentVersionRangeDTO(componentName, versionRange, component.toDTO(), distribution, vcsSettings.toDTO())
 }
 
 fun Distribution.toDTO(): DistributionDTO {
     // TODO: elvis for GAV backward compatibility, remove when all clients are updated to the latest version
-    return DistributionDTO(explicit(), external(), GAV() ?: "", DEB(), RPM(), SecurityGroupsDTO(securityGroups?.read?.split(",")?.toList() ?: emptyList()))
+    return DistributionDTO(explicit(), external(), GAV() ?: "", DEB(), RPM(), SecurityGroupsDTO(securityGroups?.read?.split(",")?.toList() ?: emptyList()), DOCKER())
 }
 
 fun VCSSettings.toDTO(): VCSSettingsDTO {

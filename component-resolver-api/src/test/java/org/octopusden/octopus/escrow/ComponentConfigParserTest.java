@@ -80,7 +80,7 @@ public class ComponentConfigParserTest {
     private List<JiraComponentVersionRange> getJiraComponentVersionRangeListWithComponentInfo() {
         ComponentInfo componentInfo = new ComponentInfo(CLIENT, "$versionPrefix-$baseVersionFormat");
         return Collections.singletonList(getJiraComponentVersionRange("client", "(,0),[0,)",
-                "CLIENT", COMPONENT_VERSION_FORMAT_1, componentInfo, new Distribution(true, false, null, null, null, new SecurityGroups(null)), VCSSettings.createEmpty(), false));
+                "CLIENT", COMPONENT_VERSION_FORMAT_1, componentInfo, new Distribution(true, false, null, null, null, new SecurityGroups(null), null), VCSSettings.createEmpty(), false));
     }
 
     private JiraComponentVersionRange getJiraComponentVersionRange(String componentName, String versionRange, String projectKey,

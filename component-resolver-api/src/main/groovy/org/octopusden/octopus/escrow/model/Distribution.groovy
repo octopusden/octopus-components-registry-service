@@ -28,13 +28,17 @@ class Distribution {
     @JsonProperty
     private SecurityGroups securityGroups
 
-    Distribution(boolean explicit, boolean external, String GAV, String DEB, String RPM, SecurityGroups securityGroups) {
+    @JsonProperty
+    private final String DOCKER
+
+    Distribution(boolean explicit, boolean external, String GAV, String DEB, String RPM, SecurityGroups securityGroups, String DOCKER) {
         this.explicit = explicit
         this.external = external
         this.GAV = GAV
         this.DEB = DEB
         this.RPM = RPM
         this.securityGroups = securityGroups
+        this.DOCKER = DOCKER
     }
 
     boolean external() {
@@ -61,6 +65,10 @@ class Distribution {
         return securityGroups
     }
 
+    String DOCKER() {
+        return DOCKER
+    }
+
     @Override
     String toString() {
         return "Distribution{" +
@@ -70,6 +78,7 @@ class Distribution {
                 ", DEB='" + (DEB ?: "N/A") + '\'' +
                 ", RPM='" + (RPM ?: "N/A") + '\'' +
                 ", securityGroups='" + securityGroups + '\'' +
+                ", DOCKER='" + (DOCKER ?: "N/A") + '\'' +
                 '}'
     }
 }

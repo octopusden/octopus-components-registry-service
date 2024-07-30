@@ -166,7 +166,8 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
                 rpm = null,
                 securityGroups = SecurityGroupsDTO(
                     read = listOf("vfiler1-default#group")
-                )
+                ),
+                docker = null
             )
             buildSystem = BuildSystem.MAVEN
         }
