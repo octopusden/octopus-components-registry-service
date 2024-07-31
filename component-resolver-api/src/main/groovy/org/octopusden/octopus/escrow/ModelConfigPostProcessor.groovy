@@ -58,8 +58,8 @@ class ModelConfigPostProcessor {
                 distribution.GAV(),
                 distribution.DEB(),
                 distribution.RPM(),
-                distribution.securityGroups,
-                distribution.docker()
+                distribution.docker(),
+                distribution.securityGroups
         )
     }
 

@@ -757,7 +757,7 @@ class EscrowConfigurationLoader {
         def RPM = distributionConfigObject.getOrDefault("RPM", defaultDistribution?.RPM()) as String
         def securityGroup = loadSecurityGroups(distributionConfigObject, defaultDistribution?.securityGroups)
         def docker = distributionConfigObject.getOrDefault("docker", defaultDistribution?.docker()) as String
-        return new Distribution(explicit, external, GAV, DEB, RPM, securityGroup, docker)
+        return new Distribution(explicit, external, GAV, DEB, RPM, docker, securityGroup)
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)

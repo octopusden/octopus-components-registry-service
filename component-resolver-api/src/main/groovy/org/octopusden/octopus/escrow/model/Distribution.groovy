@@ -30,7 +30,7 @@ class Distribution {
     @JsonProperty
     private SecurityGroups securityGroups
 
-    Distribution(boolean explicit, boolean external, String GAV, String DEB, String RPM, SecurityGroups securityGroups, String docker) {
+    Distribution(boolean explicit, boolean external, String GAV, String DEB, String RPM, String docker, SecurityGroups securityGroups) {
         this.explicit = explicit
         this.external = external
         this.GAV = GAV
@@ -76,8 +76,8 @@ class Distribution {
                 ", GAV='" + (GAV ?: "N/A") + '\'' +
                 ", DEB='" + (DEB ?: "N/A") + '\'' +
                 ", RPM='" + (RPM ?: "N/A") + '\'' +
-                ", securityGroups='" + securityGroups + '\'' +
                 ", docker='" + (docker ?: "N/A") + '\'' +
+                ", securityGroups='" + securityGroups + '\'' +
                 '}'
     }
 }

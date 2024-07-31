@@ -109,8 +109,8 @@ public class ComponentConfigDeserializer extends JsonDeserializer<ComponentConfi
                     gav != null ? gav.textValue() : null,
                     deb != null ? deb.textValue() : null,
                     rpm != null ? rpm.textValue() : null,
-                    new SecurityGroups(read),
-                    docker != null ? docker.textValue() : null
+                    docker != null ? docker.textValue() : null,
+                    new SecurityGroups(read)
             );
         }
         return null;
