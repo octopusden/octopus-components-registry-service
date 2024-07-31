@@ -12,5 +12,6 @@ data class DistributionDTO(
         @JsonProperty("GAV") val gav: String? = null,
         @JsonProperty("DEB") val deb: String? = null,
         @JsonProperty("RPM") val rpm: String? = null,
-        @JsonProperty("securityGroups") val securityGroups: SecurityGroupsDTO = SecurityGroupsDTO()
+        @JsonProperty("securityGroups") val securityGroups: SecurityGroupsDTO = SecurityGroupsDTO(),
+        @JsonProperty("docker") val docker: String? = null,
 )

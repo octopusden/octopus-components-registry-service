@@ -153,8 +153,13 @@ abstract class BaseComponentsRegistryServiceTest {
         val actualComponent = getComponentV1("TESTONE")
 
         val expectedComponent = ComponentV1("TESTONE", "Test ONE display name", "adzuba")
-        expectedComponent.distribution = DistributionDTO( false, false, "org.octopusden.octopus.test:versions-api:jar",
-            securityGroups = SecurityGroupsDTO(listOf("vfiler1-default#group")))
+        expectedComponent.distribution = DistributionDTO(
+            false,
+            false,
+            "org.octopusden.octopus.test:versions-api:jar",
+            securityGroups = SecurityGroupsDTO(listOf("vfiler1-default#group")),
+            docker = "test/versions-api"
+        )
         expectedComponent.releaseManager = "user"
         expectedComponent.securityChampion = "user"
         expectedComponent.system = listOf("NONE")
@@ -187,8 +192,11 @@ abstract class BaseComponentsRegistryServiceTest {
 
         val expectedComponent = DetailedComponent("TESTONE", "Test ONE display name", "adzuba")
         expectedComponent.distribution = DistributionDTO(
-            false, false, "org.octopusden.octopus.test:versions-api:jar",
-            securityGroups = SecurityGroupsDTO(listOf("vfiler1-default#group"))
+            false,
+            false,
+            "org.octopusden.octopus.test:versions-api:jar",
+            securityGroups = SecurityGroupsDTO(listOf("vfiler1-default#group")),
+            docker = "test/versions-api"
         )
         expectedComponent.releaseManager = "user"
         expectedComponent.securityChampion = "user"

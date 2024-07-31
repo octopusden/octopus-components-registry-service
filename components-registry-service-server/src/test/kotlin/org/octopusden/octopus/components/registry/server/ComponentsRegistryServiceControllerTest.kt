@@ -41,6 +41,10 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, classes = [ComponentRegistryServiceApplication::class])
 @ActiveProfiles("common","test")
 class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTest() {
+
+    private val docker = "test/versions-api"
+    private val gav = "org.octopusden.octopus.test:versions-api:jar"
+
     @Autowired
     private lateinit var mvc: MockMvc
 
@@ -315,12 +319,13 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
         expectedComponent.distribution = DistributionDTO(
             false,
             false,
-            "org.octopusden.octopus.test:versions-api:jar",
+            gav,
             null,
             null,
             SecurityGroupsDTO(
                 listOf("vfiler1-default#group")
-            )
+            ),
+            docker
         )
         expectedComponent.releaseManager = "user"
         expectedComponent.securityChampion = "user"
@@ -403,10 +408,11 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
         expectedComponent.distribution = DistributionDTO(
             false,
             false,
-            "org.octopusden.octopus.test:versions-api:jar",
+            gav,
             null,
             null,
-            SecurityGroupsDTO(listOf("vfiler1-default#group"))
+            SecurityGroupsDTO(listOf("vfiler1-default#group")),
+            docker
         )
         expectedComponent.releaseManager = "user"
         expectedComponent.securityChampion = "user"

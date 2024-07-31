@@ -73,11 +73,11 @@ class ModelConfigPostProcessorTest extends GroovyTestCase {
 
         BuildParameters buildParameters = BuildParameters.create("1.7", "3", "2.10", true, "03.32", '-Dpkgj_version=$version', "build", [], [])
         ReleaseInfo releaseInfo = ReleaseInfo.create(createTestVCSSettings(), BuildSystem.BS2_0, '/buildFilePath/$module', buildParameters,
-                new Distribution(true, true, null, null, null, new SecurityGroups(null)), true, null)
+                new Distribution(true, true, null, null, null, null, new SecurityGroups(null)), true, null)
 
         BuildParameters formattedBuildParameters = BuildParameters.create("1.7", "3", "2.10", true, "03.32", '-Dpkgj_version=1.2', "build", [], [])
         ReleaseInfo formatted = ReleaseInfo.create(modelConfigPostProcessor.resolveVariables(createTestVCSSettings()), BuildSystem.BS2_0,
-                'buildFilePath/zenit', formattedBuildParameters, new Distribution(true, true, null, null, null, new SecurityGroups(null)), true, null)
+                'buildFilePath/zenit', formattedBuildParameters, new Distribution(true, true, null, null, null, null, new SecurityGroups(null)), true, null)
 
         assert modelConfigPostProcessor.resolveVariables(releaseInfo) == formatted
     }

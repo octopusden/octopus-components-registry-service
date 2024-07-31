@@ -4,7 +4,6 @@ import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonProperty
 import groovy.transform.EqualsAndHashCode
 import groovy.transform.TypeChecked
-import org.octopusden.octopus.escrow.model.SecurityGroups
 
 @TypeChecked
 @EqualsAndHashCode
@@ -26,14 +25,18 @@ class Distribution {
     private final String RPM
 
     @JsonProperty
+    private final String docker
+
+    @JsonProperty
     private SecurityGroups securityGroups
 
-    Distribution(boolean explicit, boolean external, String GAV, String DEB, String RPM, SecurityGroups securityGroups) {
+    Distribution(boolean explicit, boolean external, String GAV, String DEB, String RPM, String docker, SecurityGroups securityGroups) {
         this.explicit = explicit
         this.external = external
         this.GAV = GAV
         this.DEB = DEB
         this.RPM = RPM
+        this.docker = docker
         this.securityGroups = securityGroups
     }
 
@@ -53,6 +56,10 @@ class Distribution {
         return DEB
     }
 
+    String docker() {
+        return docker
+    }
+
     String RPM() {
         return RPM
     }
@@ -69,6 +76,7 @@ class Distribution {
                 ", GAV='" + (GAV ?: "N/A") + '\'' +
                 ", DEB='" + (DEB ?: "N/A") + '\'' +
                 ", RPM='" + (RPM ?: "N/A") + '\'' +
+                ", docker='" + (docker ?: "N/A") + '\'' +
                 ", securityGroups='" + securityGroups + '\'' +
                 '}'
     }
