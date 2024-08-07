@@ -1,6 +1,5 @@
-import static org.octopusden.octopus.escrow.BuildSystem.*
-import static org.octopusden.octopus.escrow.RepositoryType.*
-
+import static org.octopusden.octopus.escrow.BuildSystem.MAVEN
+import static org.octopusden.octopus.escrow.RepositoryType.MERCURIAL
 
 Defaults {
     system = "NONE"
