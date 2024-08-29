@@ -97,7 +97,7 @@ Each Component must be configured in corresponding configuration file according 
             GAV = <MAVEN distribution artifacts> (can be configured using Expression Language)
             DEB = <DEBIAN distribution artifacts> (can be configured using Expression Language)
             RPM = <RPM distribution artifacts> (can be configured using Expression Language)
-            docker = <Docker distribution artifacts>
+            docker = <Docker distribution image> (one image per component)(example: 'test/test-component')
         }
 
     "<version range 1>" {  // configuration of the component for first range of version
@@ -129,7 +129,7 @@ Each Component must be configured in corresponding configuration file according 
             GAV = <MAVEN distribution artifacts> (can be configured using Expression Language)
             DEB = <DEBIAN distribution artifacts> (can be configured using Expression Language)
             RPM = <RPM distribution artifacts> (can be configured using Expression Language)
-            docker = <Docker distribution artifacts>
+            docker = <Docker distribution image> (one image per component)(example: 'test/test-component')
         }
     }
     "<version range 2>" {
@@ -201,7 +201,7 @@ Below is the list of available parameters:
 * *GAV* - comma-separated list of MAVEN distribution artifacts
 * *DEB* - comma-separated list of DEBIAN distribution artifacts
 * *RPM* - comma-separated list of RPM distribution artifacts
-* *docker* - name of Docker distribution image(one image per component)
+* *docker* - name of Docker distribution image(one image per component)(example: 'test/test-component')
 
 *GAV*, *DEB* and *RPM* parameters can be configured using Expression Language with following variables:
 
