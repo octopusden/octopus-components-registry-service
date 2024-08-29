@@ -75,9 +75,9 @@ Each Component must be configured in corresponding configuration file according 
         clientCode           = <client code> // if component is client specific
         solution             = <true|false> // true - meta-component
 
-        componentOwner   = "username of component's owner" //without domain part. For example: salekseev
+        componentOwner   = "username of component's owner" // without domain part
         releaseManager   = "username of component's release manager" 
-        securityChampion = "username of component's security officer" 
+        securityChampion = "username of component's security champion" 
 
         buildSystem = <build tool> // MAVEN, GRADLE etc. (default for all versions)
         system      = <{system_name}>
