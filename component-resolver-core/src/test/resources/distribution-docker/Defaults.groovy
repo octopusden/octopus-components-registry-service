@@ -1,17 +1,12 @@
-/**
- * @author Phil Gorbachev
- * Created at 27.11.2014 15:52
- */
-import static org.octopusden.octopus.escrow.BuildSystem.*
-import static org.octopusden.octopus.escrow.RepositoryType.*
-
+import static org.octopusden.octopus.escrow.BuildSystem.MAVEN
+import static org.octopusden.octopus.escrow.RepositoryType.MERCURIAL
 
 Defaults {
-    buildSystem = MAVEN;
     system = "NONE"
     releasesInDefaultBranch = true
     solution = false
-    repositoryType = GIT
+    repositoryType = MERCURIAL
+    buildSystem = MAVEN;
     tag = '$module-$version';
     artifactId = ANY_ARTIFACT
     jira {
@@ -24,14 +19,11 @@ Defaults {
     build {
         requiredTools = "BuildEnv"
         javaVersion = "1.8"
-        mavenVersion = "3.6.3"
+        mavenVersion = "3.3.9"
         gradleVersion = "LATEST"
     }
     distribution {
         explicit = false
         external = true
-        securityGroups {
-            read = "Production Security"
-        }
     }
 }

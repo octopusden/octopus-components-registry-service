@@ -29,7 +29,8 @@ abstract class BaseComponentController<T : Component> {
     fun getAllComponents(
         @RequestParam("vcs-path", required = false) vcsPath: String?,
         @RequestParam("build-system", required = false) buildSystem: BuildSystem?,
-        @RequestParam("systems", required = false, defaultValue = "") systems: List<String>
+        @RequestParam("systems", required = false, defaultValue = "") systems: List<String>,
+        @RequestParam("solution", required = false) solution: Boolean?
     ): ComponentsDTO<T> {
 
         val components = componentRegistryResolver.getComponents().filter { module ->
@@ -44,7 +45,12 @@ abstract class BaseComponentController<T : Component> {
                 val buildSystemEquals = buildSystem?.let { buildSystemValue ->
                     config.buildSystem == org.octopusden.octopus.escrow.BuildSystem.valueOf(buildSystemValue.name)
                 } ?: true
-                vcsPathEquals && buildSystemEquals
+
+                val solutionEquals = solution?.let { solutionValue ->
+                    config.solution == solutionValue
+                } ?: true
+
+                vcsPathEquals && buildSystemEquals && solutionEquals
             }
         }
             .map {
@@ -94,6 +100,7 @@ abstract class BaseComponentController<T : Component> {
             system = escrowModuleConfig.system?.split(EscrowConfigValidator.SPLIT_PATTERN)
             clientCode = escrowModuleConfig.clientCode
             releasesInDefaultBranch = escrowModuleConfig.releasesInDefaultBranch
+            solution = escrowModuleConfig.solution
             parentComponent = escrowModuleConfig.parentComponent
             this
         }
@@ -102,7 +109,7 @@ abstract class BaseComponentController<T : Component> {
         (getComponentById(component).distribution ?: throw IllegalStateException("Distribution can not be null"))
 
     companion object {
-        private fun getComponentDistribution(escrowModuleConfig: EscrowModuleConfig): DistributionDTO {
+        fun getComponentDistribution(escrowModuleConfig: EscrowModuleConfig): DistributionDTO {
             return with(escrowModuleConfig) {
                 DistributionDTO(
                     distribution != null && distribution.explicit(),
@@ -110,7 +117,8 @@ abstract class BaseComponentController<T : Component> {
                     distribution?.GAV() ?: "", // TODO: elvis for GAV backward compatibility, remove when all clients are updated to the latest version
                     distribution?.DEB(),
                     distribution?.RPM(),
-                    SecurityGroupsDTO(distribution?.securityGroups?.read?.split(",") ?: emptyList())
+                    SecurityGroupsDTO(distribution?.securityGroups?.read?.split(",") ?: emptyList()),
+                    distribution?.docker()
                 )
             }
         }

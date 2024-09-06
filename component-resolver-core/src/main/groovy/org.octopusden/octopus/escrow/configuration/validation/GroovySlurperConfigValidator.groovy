@@ -39,7 +39,7 @@ class GroovySlurperConfigValidator {
                                    'teamcityReleaseConfigId', 'jiraProjectKey', 'jiraMajorVersionFormat', 'jiraReleaseVersionFormat',
                                    'buildFilePath', 'deprecated', BRANCH,
                                    'componentDisplayName', 'componentOwner', 'releaseManager', 'securityChampion', 'system',
-                                   'clientCode', 'releasesInDefaultBranch', 'parentComponent', 'octopusVersion']
+                                   'clientCode', 'releasesInDefaultBranch', 'solution', 'parentComponent', 'octopusVersion']
     static SUPPORTED_JIRA_ATTRIBUTES = ['projectKey', 'lineVersionFormat', 'majorVersionFormat', 'releaseVersionFormat', 'buildVersionFormat', "displayName", 'technical']
 
     static SUPPORTED_BUILD_ATTRIBUTES = ['dependencies', 'javaVersion', 'mavenVersion', 'gradleVersion', 'requiredProject', 'systemProperties', 'projectVersion', 'requiredTools', 'buildTasks']
@@ -50,7 +50,7 @@ class GroovySlurperConfigValidator {
 
     static SUPPORTED_TOOLS_ATTRIBUTES = ['escrowEnvironmentVariable', 'sourceLocation', 'targetLocation', 'installScript']
 
-    static SUPPORTED_DISTRIBUTION_ATTRIBUTES = ['external', 'explicit', 'GAV', 'DEB', 'RPM', 'securityGroups']
+    static SUPPORTED_DISTRIBUTION_ATTRIBUTES = ['external', 'explicit', 'GAV', 'DEB', 'RPM', 'docker', 'securityGroups']
     static SUPPORTED_DEPENDENCIES_ATTRIBUTES = ['autoUpdate']
     static SUPPORTED_SECURITY_GROUPS_ATTRIBUTES = [SECURITY_GROUPS_READ]
 

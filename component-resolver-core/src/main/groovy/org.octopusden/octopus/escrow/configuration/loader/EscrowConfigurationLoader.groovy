@@ -271,6 +271,7 @@ class EscrowConfigurationLoader {
                 final String clientCode = loadComponentClientCode(moduleConfigSection, componentDefaultConfiguration.clientCode)
                 final String parentComponent = loadComponentParentComponent(moduleConfigSection, componentDefaultConfiguration.parentComponent)
                 final Boolean releasesInDefaultBranch = loadReleasesInDefaultBranch(moduleConfigSection, componentDefaultConfiguration.releasesInDefaultBranch)
+                final Boolean solution = loadSolution(moduleConfigSection, componentDefaultConfiguration.solution)
                 final String componentDisplayName = loadComponentDisplayName(moduleConfigSection, componentDefaultConfiguration.componentDisplayName)
                 final String octopusVersion = loadVersion(moduleConfigSection, componentDefaultConfiguration.octopusVersion, LoaderInheritanceType.VERSION_RANGE.octopusVersionInherit)
 
@@ -292,6 +293,7 @@ class EscrowConfigurationLoader {
                         system: system,
                         clientCode: clientCode,
                         releasesInDefaultBranch: releasesInDefaultBranch,
+                        solution: solution,
                         parentComponent: parentComponent,
                         jiraConfiguration: jiraConfiguration,
                         buildConfiguration: buildConfiguration?.clone(),
@@ -315,6 +317,7 @@ class EscrowConfigurationLoader {
                         system: componentDefaultConfiguration.system,
                         clientCode: componentDefaultConfiguration.clientCode,
                         releasesInDefaultBranch: componentDefaultConfiguration.releasesInDefaultBranch,
+                        solution: componentDefaultConfiguration.solution,
                         parentComponent: componentDefaultConfiguration.parentComponent,
                         buildFilePath: componentDefaultConfiguration.getBuildFilePath(),
                         jiraConfiguration: componentDefaultConfiguration.jiraComponent,
@@ -658,6 +661,11 @@ class EscrowConfigurationLoader {
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
+    private static Boolean loadSolution(ConfigObject parentConfigObject, Boolean defaultSolution) {
+        return parentConfigObject.getOrDefault("solution", defaultSolution)
+    }
+
+    @TypeChecked(TypeCheckingMode.SKIP)
     private static loadComponentParentComponent(ConfigObject parentConfigObject, String defaultParentComponent){
         if (parentConfigObject.containsKey("parentComponent")) {
             return parentConfigObject.get("parentComponent")
@@ -748,7 +756,8 @@ class EscrowConfigurationLoader {
         def DEB = distributionConfigObject.getOrDefault("DEB", defaultDistribution?.DEB()) as String
         def RPM = distributionConfigObject.getOrDefault("RPM", defaultDistribution?.RPM()) as String
         def securityGroup = loadSecurityGroups(distributionConfigObject, defaultDistribution?.securityGroups)
-        return new Distribution(explicit, external, GAV, DEB, RPM, securityGroup)
+        def docker = distributionConfigObject.getOrDefault("docker", defaultDistribution?.docker()) as String
+        return new Distribution(explicit, external, GAV, DEB, RPM, docker, securityGroup)
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
@@ -896,6 +905,7 @@ class EscrowConfigurationLoader {
         final String system = loadComponentSystem(componentConfigObject,  defaultConfiguration.system)
         final String clientCode = loadComponentClientCode(componentConfigObject, defaultConfiguration.clientCode)
         final Boolean releasesInDefaultBranch = loadReleasesInDefaultBranch(componentConfigObject, defaultConfiguration.releasesInDefaultBranch)
+        final Boolean solution = loadSolution(componentConfigObject, defaultConfiguration.solution)
         final String parentComponent = loadComponentParentComponent(componentConfigObject, defaultConfiguration.parentComponent)
         final String octopusVersion = loadVersion(componentConfigObject, defaultConfiguration.octopusVersion, inheritanceType.octopusVersionInherit)
 
@@ -909,6 +919,7 @@ class EscrowConfigurationLoader {
                 system: system,
                 clientCode: clientCode,
                 releasesInDefaultBranch: releasesInDefaultBranch,
+                solution: solution,
                 parentComponent: parentComponent,
                 jiraComponent: jiraComponent,
                 buildParameters: buildParameters,

@@ -5,6 +5,7 @@ Defaults {
     system = "NONE"
     tag = '$module-$version'
     releasesInDefaultBranch = true
+    solution = false
     distribution {
         securityGroups {
             read = "vfiler1-default#group"
@@ -155,6 +156,16 @@ Defaults {
     }
 }
 
+"TEST-VERSION" {
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.testver"
+    artifactId = "testver"
+    "[999,)" {}
+    buildSystem = MAVEN
+    repositoryType = MERCURIAL
+    vcsUrl = "ssh://hg@mercurial/test-component"
+}
+
 "TESTONE" {
     componentDisplayName = "Test ONE display name"
     componentOwner = "adzuba"
@@ -165,6 +176,7 @@ Defaults {
     componentDisplayName = "Test ONE display name"
     clientCode = "CLIENT_CODE"
     releasesInDefaultBranch = false
+    solution = true
     jira {
         projectKey = "TESTONE"
         majorVersionFormat = '$major'
@@ -201,6 +213,7 @@ Defaults {
         explicit = false
         external = false
         GAV = "org.octopusden.octopus.test:versions-api:jar"
+        docker = "test/versions-api"
     }
 }
 

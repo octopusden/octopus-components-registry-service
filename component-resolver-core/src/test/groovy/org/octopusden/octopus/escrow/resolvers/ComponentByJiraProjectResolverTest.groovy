@@ -39,7 +39,7 @@ class ComponentByJiraProjectResolverTest extends GroovyTestCase {
     final ComponentVersionFormat MODEL_COMPONENT_VERSION_FORMAT = ComponentVersionFormat.create('Model.$major.$minor.$service', 'Model.$version', 'Model.$version', 'Model.$major.$minor.$service');
     private static
     final ComponentVersionFormat MOJO_COMPONENT_VERSION_FORMAT = ComponentVersionFormat.create('Mojo.$major.$minor', 'Mojo.$major.$minor.$service', 'Mojo.$major.$minor.$service', 'Mojo.$major.$minor');
-    private static final Distribution DISTRIBUTION = new Distribution(true, true, null, null, null, new SecurityGroups(null))
+    private static final Distribution DISTRIBUTION = new Distribution(true, true, null, null, null, null, new SecurityGroups(null))
 
     @Test
     void testGetComponentByJiraProject() {

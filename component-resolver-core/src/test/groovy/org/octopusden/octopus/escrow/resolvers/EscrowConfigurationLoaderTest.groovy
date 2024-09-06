@@ -60,6 +60,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 securityChampion: "user",
                 system: "CLASSIC",
                 releasesInDefaultBranch: true,
+                solution: false,
                 buildSystem: BuildSystem.MAVEN,
                 artifactIdPattern: "builder",
                 groupIdPattern: "io.bcomponent",
@@ -69,7 +70,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                         BuildParameters.create(null, null, null, false, null, null, null, [new Tool(name: "BuildEnv", escrowEnvironmentVariable: "BUILD_ENV", targetLocation: "tools/BUILD_ENV",
                                 sourceLocation: "env.BUILD_ENV", installScript: "script")], []),
                 deprecated: false,
-                distribution: new Distribution(true, true, "org.octopusden.octopus.bcomponent:builder:war,org.octopusden.octopus.bcomponent:builder:jar", null, null, new SecurityGroups(null)),
+                distribution: new Distribution(true, true, "org.octopusden.octopus.bcomponent:builder:war,org.octopusden.octopus.bcomponent:builder:jar", null, null, null, new SecurityGroups(null)),
                 componentDisplayName: "BCOMPONENT Official Name")
         assertEquals(expectedConfig.vcsSettings, escrowModuleConfig.vcsSettings)
         assertEquals(expectedConfig, escrowModuleConfig)
@@ -161,12 +162,13 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 buildSystem: MAVEN,
                 system: "NONE",
                 releasesInDefaultBranch: true,
+                solution: false,
                 artifactIdPattern: /[\w-]+/,
                 groupIdPattern: "org.octopusden.octopus.bcomponent",
                 versionRange: "[1.12.1-150,)",
                 jiraConfiguration: new JiraComponent("BCOMPONENT", null, ComponentVersionFormat.create('$major.$minor', '$major.$minor.$service'), new ComponentInfo(null, '$versionPrefix-$baseVersionFormat'), false),
                 buildConfiguration: EMPTY_BUILD_CONFIG,
-                distribution: new Distribution(false, true, null, null, null, new SecurityGroups(null)),
+                distribution: new Distribution(false, true, null, null, null, null, new SecurityGroups(null)),
                 componentDisplayName: "BCOMPONENT DISPLAY NAME"
         )
         def expectedConfig2 = new EscrowModuleConfig(
@@ -175,6 +177,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 buildSystem: BuildSystem.BS2_0,
                 system: "NONE",
                 releasesInDefaultBranch: true,
+                solution: false,
                 groupIdPattern: "org.octopusden.octopus.bcomponent",
                 artifactIdPattern: /[\w-]+/,
                 versionRange: "(,1.12.1-150)",
@@ -202,6 +205,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 buildSystem: MAVEN,
                 system: "NONE",
                 releasesInDefaultBranch: true,
+                solution: false,
                 artifactIdPattern: /[\w-]+/,
                 groupIdPattern: "org.octopusden.octopus.bcomponent",
                 versionRange: "[1.12.1-151,)",
@@ -227,6 +231,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 buildSystem: MAVEN,
                 system: "NONE",
                 releasesInDefaultBranch: true,
+                solution: false,
                 artifactIdPattern: "test-cvs-maven-parent,test-cvs-maven-module1",
                 groupIdPattern: "org.octopusden.octopus.bcomponent",
                 versionRange: "(,0),[0,)",
@@ -254,6 +259,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 buildSystem: BuildSystem.MAVEN,
                 system: "NONE",
                 releasesInDefaultBranch: true,
+                solution: false,
                 artifactIdPattern: "test-cvs-maven-parent,test-cvs-maven-module1",
                 groupIdPattern: "org.octopusden.octopus.bcomponent",
                 versionRange: "(,0),[0,)",
@@ -310,12 +316,13 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                         [new Tool(name: "BuildEnv", escrowEnvironmentVariable: "BUILD_ENV", targetLocation: "tools/BUILD_ENV", sourceLocation: "env.BUILD_ENV"),
                         ], []),
                 deprecated: true,
-                distribution: new Distribution(false, true, null, null, null, new SecurityGroups(null)),
+                distribution: new Distribution(false, true, null, null, null, null, new SecurityGroups(null)),
                 componentOwner: "someowner",
                 releaseManager: "somereleasemanager",
                 securityChampion: "somesecuritychampion",
                 system: "CLASSIC",
-                releasesInDefaultBranch: false
+                releasesInDefaultBranch: false,
+                solution: true,
         )
         assert expectedModuleConfig == modelConfiguration
 
@@ -335,12 +342,13 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 buildConfiguration: BuildParameters.create("1.8", "3.3.9", "2.10", false, null, null, "build",
                         [new Tool(name: "BuildEnv", escrowEnvironmentVariable: "BUILD_ENV", targetLocation: "tools/BUILD_ENV", sourceLocation: "env.BUILD_ENV")], []),
                 deprecated: false,
-                distribution: new Distribution(true, false, null, null, null, new SecurityGroups(null)),
+                distribution: new Distribution(true, false, null, null, null, null, new SecurityGroups(null)),
                 componentOwner: "someowner",
                 releaseManager: "somereleasemanager",
                 securityChampion: "somesecuritychampion",
                 system: "CLASSIC",
                 releasesInDefaultBranch: false,
+                solution: true
         )
         assert expectedModuleConfig == modelConfiguration
 
@@ -355,13 +363,14 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                         '$major.$minor.$service.$fix-$build', '$major'), null, false),
                 buildConfiguration: DEFAULT_BUILD_PARAMETERS,
                 deprecated: false,
-                distribution: new Distribution(false, true, null, null, null, new SecurityGroups(null)),
+                distribution: new Distribution(false, true, null, null, null, null, new SecurityGroups(null)),
                 componentDisplayName: "Human readable sub-component-with-defaults name",
                 componentOwner: "Another Owner",
                 releaseManager: "anotherreleasemanager",
                 securityChampion: "anothersecuritychampion",
                 system: "CLASSIC,ALFA",
-                releasesInDefaultBranch: true
+                releasesInDefaultBranch: true,
+                solution: false
         )
         assert expectedModuleConfig == modelConfiguration
     }
@@ -512,6 +521,24 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
         })
         assert exception.message == "Validation of module config failed due following errors: \n" +
                 "system is not matched '\\w+(,\\w+)*' in 'component1'"
+    }
+
+    @Test
+    void testValidationReleasesInDefaultBranch() {
+        def exception = GroovyAssert.shouldFail(EscrowConfigurationException.class, {
+            loadConfiguration("invalid/noReleasesInDefaultBranch.groovy")
+        })
+        assert exception.message == "Validation of module config failed due following errors: \n" +
+                "releasesInDefaultBranch is not specified in 'component1'"
+    }
+
+    @Test
+    void testValidationSolution() {
+        def exception = GroovyAssert.shouldFail(EscrowConfigurationException.class, {
+            loadConfiguration("invalid/noSolution.groovy")
+        })
+        assert exception.message == "Validation of module config failed due following errors: \n" +
+                "solution is not specified in 'component1'"
     }
 
     @Test

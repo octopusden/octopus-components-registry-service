@@ -98,6 +98,7 @@ class EscrowConfigValidator {
                 validateSystem(moduleConfig, componentName)
                 validateClientCode(moduleConfig, componentName)
                 validateReleasesInDefaultBranch(moduleConfig, componentName)
+                validateSolution(moduleConfig, componentName)
             }
         }
         if (!hasErrors()) {
@@ -148,7 +149,7 @@ class EscrowConfigValidator {
         List<MavenArtifact> mavenArtifacts = []
         def versionRangeFactory = new VersionRangeFactory(configuration.versionNames)
         configuration.escrowModules.each { key, value ->
-            value.moduleConfigurations.each {moduleConfiguration ->
+            value.moduleConfigurations.each { moduleConfiguration ->
                 moduleConfiguration.artifactIdPattern.split(SPLIT_PATTERN).each { String artifactId ->
                     mavenArtifacts.add(new MavenArtifact(groupId: moduleConfiguration.groupIdPattern,
                             artifactId: artifactId,
@@ -178,7 +179,7 @@ class EscrowConfigValidator {
                     def parentEscrowModule = configuration.escrowModules[moduleConfiguration.parentComponent]
                     if (parentEscrowModule == null) {
                         registerError("parentComponent '${moduleConfiguration.parentComponent}' is not found for '$componentName'")
-                    }  else {
+                    } else {
                         parentEscrowModule.moduleConfigurations.find { parentComponentConfiguration ->
                             parentComponentConfiguration.parentComponent != null
                         }?.with {
@@ -198,7 +199,7 @@ class EscrowConfigValidator {
      */
     def validateArchivedComponents(EscrowConfiguration configuration) {
         configuration.escrowModules.each { componentKey, value ->
-            value.moduleConfigurations.each {config ->
+            value.moduleConfigurations.each { config ->
                 //TODO Use appropriate attribute to check if component is archived
                 if (config?.componentDisplayName?.endsWith("(archived)")) {
                     if (config.distribution.explicit() && config.distribution.external()) {
@@ -327,6 +328,7 @@ class EscrowConfigValidator {
             }
         }
     }
+
     def validateJiraParams(EscrowModuleConfig moduleConfig, String module) {
         def jiraComponentParameters = moduleConfig.getJiraConfiguration()
         if (jiraComponentParameters == null) {
@@ -354,12 +356,12 @@ class EscrowConfigValidator {
         } else {
             def finishedString = Stream.of(
                     new KotlinVersionFormatter(versionNames)
-                    .getPREDEFINED_VARIABLES_LIST()
-                    .stream()
-                    .map({ i -> '$' + ((Pair) i).first })
-                    .sorted { String o1, String o2 -> o2.size() - o1.size() }, [".", "-"].stream())
-                .flatMap({ c -> c })
-                .reduce (versionFormat, (BinaryOperator<String>) { String s1, String s2 -> s1.replace(s2, "") })
+                            .getPREDEFINED_VARIABLES_LIST()
+                            .stream()
+                            .map({ i -> '$' + ((Pair) i).first })
+                            .sorted { String o1, String o2 -> o2.size() - o1.size() }, [".", "-"].stream())
+                    .flatMap({ c -> c })
+                    .reduce(versionFormat, (BinaryOperator<String>) { String s1, String s2 -> s1.replace(s2, "") })
 
             if (finishedString.size() > 0) {
                 registerError("${versionFormatName} has illegal character(s): $finishedString in component $module")
@@ -398,8 +400,14 @@ class EscrowConfigValidator {
     def validateReleasesInDefaultBranch(EscrowModuleConfig moduleConfig, String component) {
         def releasesInDefaultBranch = moduleConfig.getReleasesInDefaultBranch()
         if (releasesInDefaultBranch == null) {
-            // ToDo uncomment after default value is set
-            // registerError("releasesInDefaultBranch is not specified in component '$component'")
+            registerError("releasesInDefaultBranch is not specified in '$component'")
+        }
+    }
+
+    def validateSolution(EscrowModuleConfig moduleConfig, String component) {
+        def solution = moduleConfig.getSolution()
+        if (solution == null) {
+            registerError("solution is not specified in '$component'")
         }
     }
 

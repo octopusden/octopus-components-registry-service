@@ -24,7 +24,7 @@ class JiraComponentVersionRangeTest extends GroovyTestCase {
     void testGetJiraComponentVersion() {
         def jiraComponent = new JiraComponent(JIRA_PROJECT, "My display name", ComponentConfigParserTest.COMPONENT_VERSION_FORMAT_1,
                 new ComponentInfo("MyPrefix", '$versionPrefix-$baseVersionFormat'), true)
-        def distribution = new Distribution(true, true, null, null, null, new SecurityGroups(null))
+        def distribution = new Distribution(true, true, null, null, null, null, new SecurityGroups(null))
 
         def range = JIRA_COMPONENT_VERSION_RANGE_FACTORY.create(
                 TEST_COMPONENT,

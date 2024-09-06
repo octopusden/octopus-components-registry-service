@@ -22,6 +22,7 @@ Tools {
 Defaults {
     system = "NONE"
     releasesInDefaultBranch = true
+    solution = false
     repositoryType = CVS
     buildSystem = GRADLE
     tag = '$module-$version'
@@ -61,6 +62,7 @@ bcomponent {
     securityChampion = "somesecuritychampion"
     system = "CLASSIC"
     releasesInDefaultBranch = false
+    solution = true
 
     distribution {
         explicit = true
@@ -166,6 +168,7 @@ bcomponent {
             securityChampion = "anothersecuritychampion"
             system = "CLASSIC,ALFA"
             releasesInDefaultBranch = true
+            solution = false
             componentDisplayName = "Human readable sub-component-with-defaults name"
             componentOwner = "Another Owner"
             groupId = "org.octopusden.octopus.buildsystem.sub5"
