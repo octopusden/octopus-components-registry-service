@@ -3,7 +3,7 @@ import groovy.json.JsonOutput
 
 buildscript {
     dependencies {
-        classpath "com.avast.gradle:gradle-docker-compose-plugin:0.6.8"
+        classpath "com.avast.gradle:gradle-docker-compose-plugin:0.17.8"
     }
 }
 
