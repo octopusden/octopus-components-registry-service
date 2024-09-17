@@ -171,7 +171,7 @@ Examples of version range:
 WARNING: Version ranges of a component should have no intersections!
 
 === Multiple release branches
-If your component uses multiple release branches (e.g. Cards, Way4Web), then you need to configure a version range for each release branch.
+If your component uses multiple release branches, you need to configure a version range for each release branch. See "Version Ranges".
 
 === Expression Language
 The rules of how to calculate major/release version and some other fields by a build version can be configured using Expression Language.
