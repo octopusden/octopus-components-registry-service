@@ -441,7 +441,9 @@ class EscrowConfigurationLoader {
             List<VersionControlSystemRoot> componentRoots = replaceDefaults(componentDefaultConfiguration?.vcsSettingsWrapper,
                     [:], defaultVCSRoot, defaultVCSRoot?.isFullyConfigured() ? [defaultVCSRoot] : [])
 
-            return new VCSSettingsWrapper(vcsSettings: VCSSettings.create(componentRoots),
+            return new VCSSettingsWrapper(vcsSettings:
+                    VCSSettings.create(
+                            componentDefaultConfiguration?.vcsSettingsWrapper?.vcsSettings?.externalRegistry, componentRoots),
                     defaultVCSSettings: defaultVCSRoot,
                     vscRootName2ParametersFromDefaultsMap: [:])
         }
