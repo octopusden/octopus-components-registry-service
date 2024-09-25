@@ -134,6 +134,12 @@ class RepositoryResolverTest {
         assert "dwh" == component.vcsSettings.externalRegistry
     }
 
+    @Test
+    void testExternalRegistryWithVersionRange() {
+        ReleaseInfo component = withConfigResolver("new-vcs/externalRegistryWithVersionRange").resolveRelease(create("torpedo", "1.0"))
+        assert component.vcsSettings.externalRegistry() : "$component.vcsSettings for version should have external registry"
+        assert component.vcsSettings.notAvailable() : "$component.vcsSettings for version should have external registry"
+    }
 
     @Test
     void testDefaultTag() {
