@@ -20,8 +20,9 @@ import org.octopusden.octopus.components.registry.core.dto.BuildSystem
 import org.octopusden.octopus.components.registry.core.dto.ComponentArtifactConfigurationDTO
 import org.octopusden.octopus.components.registry.core.dto.ComponentInfoDTO
 import org.octopusden.octopus.components.registry.core.dto.ComponentRegistryVersion
-import org.octopusden.octopus.components.registry.core.dto.ComponentVersionFormatDTO
 import org.octopusden.octopus.components.registry.core.dto.ComponentV1
+import org.octopusden.octopus.components.registry.core.dto.ComponentVersionFormatDTO
+import org.octopusden.octopus.components.registry.core.dto.ComponentVersionType
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponent
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersion
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersions
@@ -51,15 +52,14 @@ const val JIRA_RELEASE_VERSION = "$VERSION_PREFIX$RELEASE_VERSION"
 
 val SUB_COMPONENTS = setOf("SUB", "client", "commoncomponent-test", "SUB_WITH_SIMPLE_VERSION_FORMAT").sorted()
 
-val DETAILED_COMPONENT_VERSION = with(DetailedComponentVersion()) {
-    component = "PPROJECT WITH CLIENT COMPONENT"
-    lineVersion = ComponentRegistryVersion(org.octopusden.octopus.components.registry.core.dto.ComponentVersionType.LINE, LINE_VERSION, JIRA_LINE_VERSION)
-    minorVersion = ComponentRegistryVersion(org.octopusden.octopus.components.registry.core.dto.ComponentVersionType.MINOR, MINOR_VERSION, JIRA_MINOR_VERSION)
-    buildVersion = ComponentRegistryVersion(org.octopusden.octopus.components.registry.core.dto.ComponentVersionType.BUILD, BUILD_VERSION, JIRA_BUILD_VERSION)
-    rcVersion = ComponentRegistryVersion(org.octopusden.octopus.components.registry.core.dto.ComponentVersionType.RC, RC_VERSION, JIRA_RC_VERSION)
-    releaseVersion = ComponentRegistryVersion(org.octopusden.octopus.components.registry.core.dto.ComponentVersionType.RELEASE, RELEASE_VERSION, JIRA_RELEASE_VERSION)
-    this
-}
+val DETAILED_COMPONENT_VERSION = DetailedComponentVersion(
+    component = "PPROJECT WITH CLIENT COMPONENT",
+    lineVersion = ComponentRegistryVersion(ComponentVersionType.LINE, LINE_VERSION, JIRA_LINE_VERSION),
+    minorVersion = ComponentRegistryVersion(ComponentVersionType.MINOR, MINOR_VERSION, JIRA_MINOR_VERSION),
+    buildVersion = ComponentRegistryVersion(ComponentVersionType.BUILD, BUILD_VERSION, JIRA_BUILD_VERSION),
+    rcVersion = ComponentRegistryVersion(ComponentVersionType.RC, RC_VERSION, JIRA_RC_VERSION),
+    releaseVersion = ComponentRegistryVersion(ComponentVersionType.RELEASE, RELEASE_VERSION, JIRA_RELEASE_VERSION),
+)
 
 val VCS_SETTINGS = VCSSettingsDTO(
     versionControlSystemRoots = listOf(
@@ -433,13 +433,6 @@ abstract class BaseComponentsRegistryServiceTest {
             Arguments.of("test-release", "expected-data/test-release-artifact.json"),
             Arguments.of("sub-component1", "expected-data/sub-component1-artifact.json"),
             Arguments.of("sub-component2", "expected-data/sub-component2-artifact.json")
-        )
-
-        @JvmStatic
-        fun componentVersionByArtifactDependencies() = Stream.of(
-            Arguments.of(),
-            Arguments.of(),
-            Arguments.of()
         )
 
         @JvmStatic

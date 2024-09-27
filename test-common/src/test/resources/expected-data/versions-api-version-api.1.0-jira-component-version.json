@@ -1,6 +1,6 @@
 {
   "name": "versions-api",
-  "version": "versions-api.1.0",
+  "version": "1.0",
   "component": {
     "projectKey": "TESTONE",
     "displayName": "VERSIONS API COMPONENT",
