@@ -16,34 +16,34 @@ class JiraComponentVersionToDetailedComponentVersionMapper(
 ) : Mapper<JiraComponentVersion, DetailedComponentVersion> {
 
     override fun convert(src: JiraComponentVersion): DetailedComponentVersion {
-        val target = DetailedComponentVersion()
-        target.component = src.component.displayName ?: src.componentVersion.componentName
         val componentVersionFormat = src.component.componentVersionFormat
-        target.lineVersion = ComponentRegistryVersion(
-                ComponentVersionType.LINE,
-                componentVersionFormat.lineVersionFormat.formatVersion(versionNumericVersionFactory, src.version),
-                jiraComponentVersionFormatter.getLineVersion(src)
-        )
-        target.minorVersion = ComponentRegistryVersion(
+        return DetailedComponentVersion(
+            src.component.displayName ?: src.componentVersion.componentName,
+            ComponentRegistryVersion(
                 ComponentVersionType.MINOR,
                 componentVersionFormat.majorVersionFormat.formatVersion(versionNumericVersionFactory, src.version),
                 src.majorVersion
-        )
-        target.buildVersion = ComponentRegistryVersion(
+            ),
+            ComponentRegistryVersion(
+                ComponentVersionType.LINE,
+                componentVersionFormat.lineVersionFormat.formatVersion(versionNumericVersionFactory, src.version),
+                jiraComponentVersionFormatter.getLineVersion(src)
+            ),
+            ComponentRegistryVersion(
                 ComponentVersionType.BUILD,
                 componentVersionFormat.buildVersionFormat.formatVersion(versionNumericVersionFactory, src.version),
                 src.buildVersion
-        )
-        target.rcVersion = ComponentRegistryVersion(
+            ),
+            ComponentRegistryVersion(
                 ComponentVersionType.RC,
                 componentVersionFormat.releaseVersionFormat.formatVersion(versionNumericVersionFactory, src.version) + JiraComponentVersion.RC_SUFFIX,
                 src.rcVersion
-        )
-        target.releaseVersion = ComponentRegistryVersion(
+            ),
+            ComponentRegistryVersion(
                 ComponentVersionType.RELEASE,
                 componentVersionFormat.releaseVersionFormat.formatVersion(versionNumericVersionFactory, src.version),
                 src.releaseVersion
+            )
         )
-        return target
     }
 }

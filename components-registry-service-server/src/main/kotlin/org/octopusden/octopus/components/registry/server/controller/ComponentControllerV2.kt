@@ -78,12 +78,17 @@ class ComponentControllerV2(
         version: String,
         escrowModuleConfig: EscrowModuleConfig
     ): DetailedComponent {
-        var detailedComponent = DetailedComponent(
+        val detailedComponent = DetailedComponent(
             id = componentName,
             name = escrowModuleConfig.componentDisplayName,
             componentOwner = escrowModuleConfig.componentOwner
         )
         return with(detailedComponent) {
+            val jiraComponentVersion = try {
+                componentRegistryResolver.getJiraComponentVersion(componentName, version)
+            } catch (_: NotFoundException) {
+                null
+            }
             releaseManager = escrowModuleConfig.releaseManager
             securityChampion = escrowModuleConfig.securityChampion
             distribution = getComponentDistribution(escrowModuleConfig)
@@ -95,9 +100,8 @@ class ComponentControllerV2(
             vcsSettings = try {
                 resolveVCSSettings(componentName, version)
             } catch (_: NotFoundException) { null }
-            jiraComponentVersion = try {
-                resolveJiraComponentVersion(componentName, version)
-            } catch (_: NotFoundException) { null }
+            this.jiraComponentVersion = jiraComponentVersion?.toDTO()
+            detailedComponentVersion = jiraComponentVersion?.let { detailedComponentVersionMapper.convert(it) }
             this
         }
     }
