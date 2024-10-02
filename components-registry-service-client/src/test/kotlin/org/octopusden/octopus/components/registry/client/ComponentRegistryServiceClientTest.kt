@@ -4,6 +4,7 @@ import org.octopusden.octopus.components.registry.client.impl.ClassicComponentsR
 import org.octopusden.octopus.components.registry.client.impl.ClassicComponentsRegistryServiceClientUrlProvider
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.core.dto.BuildSystem
+import org.octopusden.octopus.components.registry.core.dto.BuildParametersDTO
 import org.octopusden.octopus.components.registry.core.dto.ComponentArtifactConfigurationDTO
 import org.octopusden.octopus.components.registry.core.dto.ComponentV1
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponent
@@ -14,7 +15,9 @@ import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionD
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionRangeDTO
 import org.octopusden.octopus.components.registry.core.dto.SecurityGroupsDTO
 import org.octopusden.octopus.components.registry.core.dto.ServiceStatusDTO
+import org.octopusden.octopus.components.registry.core.dto.ToolDTO
 import org.octopusden.octopus.components.registry.core.dto.VCSSettingsDTO
+import org.octopusden.octopus.components.registry.core.dto.VersionNamesDTO
 import org.octopusden.octopus.components.registry.core.dto.VersionRequest
 import org.octopusden.octopus.components.registry.core.dto.VersionedComponent
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
@@ -26,7 +29,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.parallel.ResourceLock
-import org.octopusden.octopus.components.registry.core.dto.VersionNamesDTO
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.test.context.ActiveProfiles
@@ -170,6 +172,45 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
                 docker = null
             )
             buildSystem = BuildSystem.MAVEN
+        }
+        assertEquals(expectedComponent, actualComponent)
+    }
+
+    @Test
+    fun testGetExistedDetailedComponentWithBuildParameters() {
+        val actualComponent = componentsRegistryClient.getDetailedComponent("TEST_COMPONENT_BUILD_PARAMETERS", "1.0")
+        val expectedComponent = DetailedComponent("TEST_COMPONENT_BUILD_PARAMETERS", null, "user9")
+        with(expectedComponent){
+            system = listOf("NONE")
+            releasesInDefaultBranch = true
+            distribution = DistributionDTO(
+                explicit = false,
+                external = true,
+                gav = "",
+                securityGroups = SecurityGroupsDTO(read = listOf("vfiler1-default#group"))
+            )
+            buildSystem = BuildSystem.PROVIDED
+            buildParameters = BuildParametersDTO(
+                javaVersion = "11",
+                mavenVersion = "3.6.3",
+                gradleVersion = "LATEST",
+                requiredProject = false,
+                buildTasks = "clean build",
+                tools = listOf(
+                    ToolDTO(
+                        name = "BuildEnv",
+                        escrowEnvironmentVariable = "BUILD_ENV",
+                        sourceLocation = "\$env.BUILD_ENV",
+                        targetLocation = "tools/BUILD_ENV"
+                    ),
+                    ToolDTO(
+                        name = "PowerBuilderCompiler170",
+                        escrowEnvironmentVariable = "PBC_BIN",
+                        sourceLocation = "\$env.PBC/170",
+                        targetLocation = "tools/auto_compiler"
+                    )
+                ),
+            )
         }
         assertEquals(expectedComponent, actualComponent)
     }
