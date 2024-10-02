@@ -2,6 +2,7 @@ package org.octopusden.octopus.components.registry.server.controller
 
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.core.dto.BuildSystem
+import org.octopusden.octopus.components.registry.core.dto.BuildParametersDTO
 import org.octopusden.octopus.components.registry.core.dto.ComponentArtifactConfigurationDTO
 import org.octopusden.octopus.components.registry.core.dto.ComponentV2
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponent
@@ -9,6 +10,7 @@ import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVers
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersions
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionDTO
 import org.octopusden.octopus.components.registry.core.dto.RepositoryType
+import org.octopusden.octopus.components.registry.core.dto.ToolDTO
 import org.octopusden.octopus.components.registry.core.dto.VCSSettingsDTO
 import org.octopusden.octopus.components.registry.core.dto.VersionControlSystemRootDTO
 import org.octopusden.octopus.components.registry.core.dto.VersionRequest
@@ -19,6 +21,8 @@ import org.octopusden.octopus.components.registry.server.mapper.toDTO
 import org.octopusden.octopus.escrow.configuration.model.EscrowModule
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
 import org.octopusden.octopus.escrow.configuration.validation.EscrowConfigValidator
+import org.octopusden.octopus.escrow.model.BuildParameters
+import org.octopusden.octopus.escrow.model.Tool
 import org.octopusden.octopus.releng.dto.JiraComponentVersion
 import org.slf4j.LoggerFactory
 import org.springframework.http.MediaType
@@ -97,6 +101,7 @@ class ComponentControllerV2(
             releasesInDefaultBranch = escrowModuleConfig.releasesInDefaultBranch
             parentComponent = escrowModuleConfig.parentComponent
             buildSystem = escrowModuleConfig.buildSystem?.let { bs -> getBuildSystem(bs) }
+            buildParameters = escrowModuleConfig.buildConfiguration?.let { bc -> getBuildParametersDTO(bc) }
             vcsSettings = try {
                 resolveVCSSettings(componentName, version)
             } catch (_: NotFoundException) { null }
@@ -116,6 +121,32 @@ class ComponentControllerV2(
             org.octopusden.octopus.escrow.BuildSystem.PROVIDED -> BuildSystem.PROVIDED
             org.octopusden.octopus.escrow.BuildSystem.ESCROW_NOT_SUPPORTED -> BuildSystem.NOT_SUPPORTED
             org.octopusden.octopus.escrow.BuildSystem.ESCROW_PROVIDED_MANUALLY -> BuildSystem.PROVIDED
+        }
+    }
+
+    private fun getBuildParametersDTO(buildParameters: BuildParameters): BuildParametersDTO {
+        return BuildParametersDTO(
+            buildParameters.javaVersion,
+            buildParameters.mavenVersion,
+            buildParameters.gradleVersion,
+            buildParameters.requiredProject,
+            buildParameters.projectVersion,
+            buildParameters.systemProperties,
+            buildParameters.buildTasks,
+            getToolsDTO(buildParameters.tools),
+            buildParameters.buildTools
+        )
+    }
+
+    private fun getToolsDTO(tools: List<Tool>): List<ToolDTO> {
+        return tools.map { tool ->
+            ToolDTO(
+                name = tool.name,
+                escrowEnvironmentVariable = tool.escrowEnvironmentVariable,
+                sourceLocation = tool.sourceLocation,
+                targetLocation = tool.targetLocation,
+                installScript = tool.installScript
+            )
         }
     }
 

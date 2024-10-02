@@ -13,6 +13,7 @@ class DetailedComponent(
     var vcsSettings: VCSSettingsDTO? = null
     var jiraComponentVersion: JiraComponentVersionDTO? = null
     var detailedComponentVersion: DetailedComponentVersion? = null
+    var buildParameters: BuildParametersDTO? = null
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
