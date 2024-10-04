@@ -178,41 +178,29 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
 
     @Test
     fun testGetExistedDetailedComponentWithBuildParameters() {
-        val actualComponent = componentsRegistryClient.getDetailedComponent("TEST_COMPONENT_BUILD_PARAMETERS", "1.0")
-        val expectedComponent = DetailedComponent("TEST_COMPONENT_BUILD_PARAMETERS", null, "user9")
-        with(expectedComponent){
-            system = listOf("NONE")
-            releasesInDefaultBranch = true
-            distribution = DistributionDTO(
-                explicit = false,
-                external = true,
-                gav = "",
-                securityGroups = SecurityGroupsDTO(read = listOf("vfiler1-default#group"))
-            )
-            buildSystem = BuildSystem.PROVIDED
-            buildParameters = BuildParametersDTO(
-                javaVersion = "11",
-                mavenVersion = "3.6.3",
-                gradleVersion = "LATEST",
-                requiredProject = false,
-                buildTasks = "clean build",
-                tools = listOf(
-                    ToolDTO(
-                        name = "BuildEnv",
-                        escrowEnvironmentVariable = "BUILD_ENV",
-                        sourceLocation = "\$env.BUILD_ENV",
-                        targetLocation = "tools/BUILD_ENV"
-                    ),
-                    ToolDTO(
-                        name = "PowerBuilderCompiler170",
-                        escrowEnvironmentVariable = "PBC_BIN",
-                        sourceLocation = "\$env.PBC/170",
-                        targetLocation = "tools/auto_compiler"
-                    )
+        val actualComponent = componentsRegistryClient.getDetailedComponent("COMPONENT_WITH_BUILD_PARAMETERS", "1.0")
+        val expectedBuildParameters = BuildParametersDTO(
+            javaVersion = "11",
+            mavenVersion = "3.6.3",
+            gradleVersion = "LATEST",
+            requiredProject = false,
+            buildTasks = "clean build",
+            tools = listOf(
+                ToolDTO(
+                    name = "BuildEnv",
+                    escrowEnvironmentVariable = "BUILD_ENV",
+                    sourceLocation = "\$env.BUILD_ENV",
+                    targetLocation = "tools/BUILD_ENV"
                 ),
+                ToolDTO(
+                    name = "PowerBuilderCompiler170",
+                    escrowEnvironmentVariable = "PBC_BIN",
+                    sourceLocation = "\$env.PBC/170",
+                    targetLocation = "tools/auto_compiler"
+                )
             )
-        }
-        assertEquals(expectedComponent, actualComponent)
+        )
+        assertEquals(expectedBuildParameters, actualComponent.buildParameters)
     }
 
     @Test

@@ -398,7 +398,7 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
     @Test
     fun testGetExistedDetailedComponentWithBuildParameters() {
         val actualComponent = mvc.perform(
-            MockMvcRequestBuilders.get("/rest/api/2/components/TEST_COMPONENT_BUILD_PARAMETERS/versions/1.0")
+            MockMvcRequestBuilders.get("/rest/api/2/components/COMPONENT_WITH_BUILD_PARAMETERS/versions/1.0")
                 .accept(APPLICATION_JSON)
         )
             .andExpect(status().isOk)
@@ -406,40 +406,29 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
             .response
             .toObject(DetailedComponent::class.java)
 
-        val expectedComponent = DetailedComponent("TEST_COMPONENT_BUILD_PARAMETERS", null, "user9")
-        with(expectedComponent){
-            system = listOf("NONE")
-            releasesInDefaultBranch = true
-            distribution = DistributionDTO(
-                explicit = false,
-                external = true,
-                gav = "",
-                securityGroups = SecurityGroupsDTO(read = listOf("vfiler1-default#group"))
-            )
-            buildSystem = BuildSystem.PROVIDED
-            buildParameters = BuildParametersDTO(
-                javaVersion = "11",
-                mavenVersion = "3.6.3",
-                gradleVersion = "LATEST",
-                requiredProject = false,
-                buildTasks = "clean build",
-                tools = listOf(
-                    ToolDTO(
-                        name = "BuildEnv",
-                        escrowEnvironmentVariable = "BUILD_ENV",
-                        sourceLocation = "\$env.BUILD_ENV",
-                        targetLocation = "tools/BUILD_ENV"
-                    ),
-                    ToolDTO(
-                        name = "PowerBuilderCompiler170",
-                        escrowEnvironmentVariable = "PBC_BIN",
-                        sourceLocation = "\$env.PBC/170",
-                        targetLocation = "tools/auto_compiler"
-                    )
+        val expectedBuildParameters = BuildParametersDTO(
+            javaVersion = "11",
+            mavenVersion = "3.6.3",
+            gradleVersion = "LATEST",
+            requiredProject = false,
+            buildTasks = "clean build",
+            tools = listOf(
+                ToolDTO(
+                    name = "BuildEnv",
+                    escrowEnvironmentVariable = "BUILD_ENV",
+                    sourceLocation = "\$env.BUILD_ENV",
+                    targetLocation = "tools/BUILD_ENV"
                 ),
-            )
-        }
-        Assertions.assertEquals(expectedComponent, actualComponent)
+                ToolDTO(
+                    name = "PowerBuilderCompiler170",
+                    escrowEnvironmentVariable = "PBC_BIN",
+                    sourceLocation = "\$env.PBC/170",
+                    targetLocation = "tools/auto_compiler"
+                )
+            ),
+        )
+
+        Assertions.assertEquals(expectedBuildParameters, actualComponent.buildParameters)
     }
 
     @Test

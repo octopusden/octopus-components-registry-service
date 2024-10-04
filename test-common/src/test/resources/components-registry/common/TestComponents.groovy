@@ -841,7 +841,7 @@ TEST_COMPONENT4 {
     }
 }
 
-"TEST_COMPONENT_BUILD_PARAMETERS" {
+"COMPONENT_WITH_BUILD_PARAMETERS" {
     componentOwner = "user9"
     groupId = "org.octopusden.octopus.test.build.parameters"
     artifactId = "test-build-parameters"
