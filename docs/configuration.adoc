@@ -175,7 +175,7 @@ If your component uses multiple release branches, you can specify them in the pa
 
 Example:
 ----
-branch = 'master|release\$major.$minor'
+branch = 'master|release/$major.$minor'
 ----
 
 === Expression Language
