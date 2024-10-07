@@ -171,7 +171,8 @@ Examples of version range:
 WARNING: Version ranges of a component should have no intersections!
 
 === Multiple release branches
-If your component uses multiple release branches, you need to configure a version range for each release branch. See "Version Ranges".
+If your component uses multiple release branches, you can specify them in the parameter 'branch' separated by the symbol '|', e.g.:
+branch = 'master|release\$major.$minor'
 
 === Expression Language
 The rules of how to calculate major/release version and some other fields by a build version can be configured using Expression Language.
