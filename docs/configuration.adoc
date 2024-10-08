@@ -1,13 +1,12 @@
 :icons: font
 :header: Components Registry Configuration
-:system_name: Name of system 
 = {header}
 :toc:
 
 IMPORTANT: This page is auto-generated!
 
 == Overview
-Components Registry is a registry of all link:{glossary-component-link}[components] developed in company.
+Components Registry is a registry of all link:{glossary-component-link}[components] developed in the organization.
 It keeps basic parameters of components required for organizing automated release management and Escrow package generation.
 
 WARNING: All components must be registered in link:{components-registry-link}[Components Registry]!
@@ -70,10 +69,10 @@ Components Registry is originally stored as configuration files with ConfigSlurp
 Each Component must be configured in corresponding configuration file according to following format:
 ----
 <component id> {
-        componentDisplayName = "Name of component" //  DMS description
+        componentDisplayName = "Name of component" //  display name of the component, e.g. in DMS
         parentComponent      = <component id> // grouping components in DMS
         clientCode           = <client code> // if component is client specific
-        solution             = <true|false> // true - meta-component
+        solution             = <true|false> // true for solution
 
         componentOwner   = "username of component's owner" // without domain part
         releaseManager   = "username of component's release manager" 
@@ -97,7 +96,7 @@ Each Component must be configured in corresponding configuration file according 
             releaseVersionFormat = <format of release version for registration in JIRA> (can be configured using Expression Language)
 
             component {
-               versionPrefix = "prefix in component versioning" // to simplify choosing component version in Fix Version(s) field of Jira issue
+               versionPrefix = "prefix in component versioning" // to avoid conflicts between different components' versions and to simplify selection of the component version in the "Fix Version(s)" field of the Jira issue
                versionFormat = <format of major version in JIRA> (can be configured using Expression Language) 
             }
          }
@@ -109,7 +108,7 @@ Each Component must be configured in corresponding configuration file according 
 
         distribution { // Distribution parameters (default for all versions)
             explicit = <true|false> // true - self-distributed component
-            external = <true|false> // true - can be published
+            external = <true|false> // true - can be delivered outside the organization
             GAV = <MAVEN distribution artifacts> (can be configured using Expression Language)
             DEB = <DEBIAN distribution artifacts> (can be configured using Expression Language)
             RPM = <RPM distribution artifacts> (can be configured using Expression Language)
