@@ -6,7 +6,7 @@
 IMPORTANT: This page is auto-generated!
 
 == Overview
-Components Registry is a registry of all link:{glossary-component-link}[components] developed in R&D.
+Components Registry is a registry of all link:{glossary-component-link}[components] developed in the organization.
 It keeps basic parameters of components required for organizing automated release management and Escrow package generation.
 
 WARNING: All components must be registered in link:{components-registry-link}[Components Registry]!
@@ -24,7 +24,7 @@ Components Registry stores the following information about Components:
 ** build system (Maven, Gradle etc)
 ** groupId/artifactId of artifacts produced and published in Artifactory at each release (*it's recommended to use unique groupId for the component*)
 ** java version required for build escrow component
-** additional system properties for maven build
+** additional system properties for maven/gradle build
 * Distribution type and distribution artifacts coordinates
 
 == Information to be provided for registration of Component
@@ -68,9 +68,19 @@ Components Registry is originally stored as configuration files with ConfigSlurp
 
 Each Component must be configured in corresponding configuration file according to following format:
 ----
-<component name> {
-        buildSystem = <build tool> // MAVEN, GRADLE etc. (default for all versions)
+<component id> {
+        componentDisplayName = "Name of component" //  display name of the component, e.g. in DMS
+        parentComponent      = <component id> // grouping components in DMS
+        clientCode           = <client code> // if component is client specific
+        solution             = <true|false> // true for solution
 
+        componentOwner   = "username of component's owner" // without domain part
+        releaseManager   = "username of component's release manager" 
+        securityChampion = "username of component's security champion" 
+
+        buildSystem = <build tool> // MAVEN, GRADLE etc. (default for all versions)
+        system      = <{system_name}> // used for differentiation between different corporate policies (license control, etc)
+                                   
         vcsSettings {
            vcsUrl = <vsc url> // Repository url. (default for all versions)
            branch = <branch> // Repository branch. If not specified "master" is used. (default for all versions)
@@ -84,16 +94,21 @@ Each Component must be configured in corresponding configuration file according 
             projectKey = <JIRA project key>
             majorVersionFormat = <format of major version in JIRA> (can be configured using Expression Language)
             releaseVersionFormat = <format of release version for registration in JIRA> (can be configured using Expression Language)
-        }
+
+            component {
+               versionPrefix = "prefix in component versioning" // to avoid conflicts between different components' versions and to simplify selection of the component version in the "Fix Version(s)" field of the Jira issue
+               versionFormat = <format of major version in JIRA> (can be configured using Expression Language) 
+            }
+         }
 
         build { // Parameters related to escrow build (default for all versions)
-            javaVersion = <java version>
+            javaVersion      = <java version>
             systemProperties = <additional properties for maven build>
         }
 
         distribution { // Distribution parameters (default for all versions)
-            explicit = <true|false>
-            external = <true|false>
+            explicit = <true|false> // true - self-distributed component
+            external = <true|false> // true - can be delivered outside the organization
             GAV = <MAVEN distribution artifacts> (can be configured using Expression Language)
             DEB = <DEBIAN distribution artifacts> (can be configured using Expression Language)
             RPM = <RPM distribution artifacts> (can be configured using Expression Language)
