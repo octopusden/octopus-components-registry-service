@@ -79,7 +79,7 @@ Each Component must be configured in corresponding configuration file according 
         securityChampion = "username of component's security champion" 
 
         buildSystem = <build tool> // MAVEN, GRADLE etc. (default for all versions)
-        system      = <{system_name}>
+        system      = <{system_name}> // used for differentiation between different corporate policies (license control, etc)
                                    
         vcsSettings {
            vcsUrl = <vsc url> // Repository url. (default for all versions)
