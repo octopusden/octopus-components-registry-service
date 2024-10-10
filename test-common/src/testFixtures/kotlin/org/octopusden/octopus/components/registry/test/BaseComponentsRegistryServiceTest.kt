@@ -189,8 +189,49 @@ abstract class BaseComponentsRegistryServiceTest {
     @Test
     fun testGetDetailedComponent() {
         val actualComponent = getDetailedComponent("TESTONE", "1")
-
-        val expectedComponent = DetailedComponent("TESTONE", "Test ONE display name", "adzuba")
+        val expectedComponent = DetailedComponent(
+            "TESTONE", "Test ONE display name", "adzuba",
+            BuildSystem.PROVIDED,
+            vcsSettings = VCSSettingsDTO(
+                versionControlSystemRoots = listOf(
+                    VersionControlSystemRootDTO(
+                        name = "main",
+                        vcsPath = "ssh://hg@mercurial/test-component",
+                        type = RepositoryType.MERCURIAL,
+                        tag = "TESTONE-1.0.0",
+                        branch = "v2"
+                    )
+                ),
+                externalRegistry = null
+            ),
+            jiraComponentVersion = JiraComponentVersionDTO(
+                name = "TESTONE",
+                version = "1",
+                component = JiraComponentDTO(
+                    projectKey = "TESTONE",
+                    displayName = "TESTONE DISPLAY NAME WITH VERSIONS-API",
+                    componentVersionFormat = ComponentVersionFormatDTO(
+                        majorVersionFormat = "\$major",
+                        releaseVersionFormat = "\$major.\$minor",
+                        buildVersionFormat = "\$major.\$minor.\$service",
+                        lineVersionFormat = "\$major"
+                    ),
+                    componentInfo = ComponentInfoDTO(
+                        versionPrefix = "",
+                        versionFormat = "\$versionPrefix-\$baseVersionFormat"
+                    ),
+                    technical = false
+                )
+            ),
+            detailedComponentVersion = DetailedComponentVersion(
+                component = "TESTONE DISPLAY NAME WITH VERSIONS-API",
+                minorVersion = ComponentRegistryVersion(ComponentVersionType.MINOR, "1", "1"),
+                lineVersion = ComponentRegistryVersion(ComponentVersionType.LINE, "1", "1"),
+                releaseVersion = ComponentRegistryVersion(ComponentVersionType.RELEASE, "1.0", "1.0"),
+                rcVersion = ComponentRegistryVersion(ComponentVersionType.RC, "1.0_RC", "1.0_RC"),
+                buildVersion = ComponentRegistryVersion(ComponentVersionType.BUILD, "1.0.0", "1.0.0"),
+            )
+        )
         expectedComponent.distribution = DistributionDTO(
             false,
             false,
@@ -203,38 +244,6 @@ abstract class BaseComponentsRegistryServiceTest {
         expectedComponent.system = listOf("NONE")
         expectedComponent.clientCode = "CLIENT_CODE"
         expectedComponent.releasesInDefaultBranch = false
-        expectedComponent.buildSystem = BuildSystem.PROVIDED
-        expectedComponent.vcsSettings = VCSSettingsDTO(
-            versionControlSystemRoots = listOf(
-                VersionControlSystemRootDTO(
-                    name = "main",
-                    vcsPath = "ssh://hg@mercurial/test-component",
-                    type = RepositoryType.MERCURIAL,
-                    tag = "TESTONE-1.0.0",
-                    branch = "v2"
-                )
-            ),
-            externalRegistry=null
-        )
-        expectedComponent.jiraComponentVersion = JiraComponentVersionDTO(
-            name = "TESTONE",
-            version = "1",
-            component = JiraComponentDTO(
-                projectKey = "TESTONE",
-                displayName = "TESTONE DISPLAY NAME WITH VERSIONS-API",
-                componentVersionFormat = ComponentVersionFormatDTO(
-                    majorVersionFormat = "\$major",
-                    releaseVersionFormat = "\$major.\$minor",
-                    buildVersionFormat = "\$major.\$minor.\$service",
-                    lineVersionFormat= "\$major"
-                ),
-                componentInfo = ComponentInfoDTO(
-                    versionPrefix = "",
-                    versionFormat= "\$versionPrefix-\$baseVersionFormat"
-                ),
-                technical = false
-            )
-        )
         Assertions.assertEquals(expectedComponent, actualComponent)
     }
 

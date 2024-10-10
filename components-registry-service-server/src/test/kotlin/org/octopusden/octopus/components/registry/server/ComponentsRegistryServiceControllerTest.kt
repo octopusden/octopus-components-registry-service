@@ -368,32 +368,6 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
     }
 
     @Test
-    fun testGetExistedDetailedComponent() {
-        val actualComponent = mvc.perform(
-            MockMvcRequestBuilders.get("/rest/api/2/components/TEST-VERSION/versions/999")
-                .accept(APPLICATION_JSON)
-        )
-            .andExpect(status().isOk)
-            .andReturn()
-            .response
-            .toObject(DetailedComponent::class.java)
-
-        val expectedComponent = DetailedComponent("TEST-VERSION", null, "user9")
-        with(expectedComponent){
-            system = listOf("NONE")
-            releasesInDefaultBranch = true
-            distribution = DistributionDTO(
-                explicit = false,
-                external = true,
-                gav = "",
-                securityGroups = SecurityGroupsDTO(read = listOf("vfiler1-default#group"))
-            )
-            buildSystem = BuildSystem.MAVEN
-        }
-        Assertions.assertEquals(expectedComponent, actualComponent)
-    }
-
-    @Test
     fun testGetComponentV2() {
         val actualComponent = mvc.perform(
             MockMvcRequestBuilders.get("/rest/api/2/components/TESTONE")

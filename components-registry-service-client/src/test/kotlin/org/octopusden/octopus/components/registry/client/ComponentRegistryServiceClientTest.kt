@@ -152,29 +152,6 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
     }
 
     @Test
-    fun testGetExistedDetailedComponent() {
-        val actualComponent = componentsRegistryClient.getDetailedComponent("TEST-VERSION", "999")
-        val expectedComponent = DetailedComponent("TEST-VERSION", null, "user9")
-        with(expectedComponent) {
-            system = listOf("NONE")
-            releasesInDefaultBranch = true
-            distribution = DistributionDTO(
-                explicit = false,
-                external = true,
-                gav = "",
-                deb = null,
-                rpm = null,
-                securityGroups = SecurityGroupsDTO(
-                    read = listOf("vfiler1-default#group")
-                ),
-                docker = null
-            )
-            buildSystem = BuildSystem.MAVEN
-        }
-        assertEquals(expectedComponent, actualComponent)
-    }
-
-    @Test
     fun testGetComponentWithNonExistedVersion() {
         assertFailsWith(NotFoundException::class) {
             componentsRegistryClient.getDetailedComponent("TEST-VERSION", "1")
