@@ -6,9 +6,9 @@ import com.fasterxml.jackson.annotation.JsonProperty
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class ToolDTO @JsonCreator constructor(
-    @JsonProperty("name") val name: String? = null,
-    @JsonProperty("escrowEnvironmentVariable") val escrowEnvironmentVariable: String? = null,
-    @JsonProperty("sourceLocation") val sourceLocation: String? = null,
-    @JsonProperty("targetLocation") val targetLocation: String? = null,
+    @JsonProperty("name") val name: String,
+    @JsonProperty("escrowEnvironmentVariable") val escrowEnvironmentVariable: String,
+    @JsonProperty("sourceLocation") val sourceLocation: String,
+    @JsonProperty("targetLocation") val targetLocation: String,
     @JsonProperty("installScript") val installScript: String? = null,
 )

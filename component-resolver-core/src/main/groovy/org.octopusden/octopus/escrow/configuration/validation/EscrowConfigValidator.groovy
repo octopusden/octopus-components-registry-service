@@ -99,6 +99,7 @@ class EscrowConfigValidator {
                 validateClientCode(moduleConfig, componentName)
                 validateReleasesInDefaultBranch(moduleConfig, componentName)
                 validateSolution(moduleConfig, componentName)
+                validateBuildConfigurationTools(moduleConfig)
             }
         }
         if (!hasErrors()) {
@@ -408,6 +409,25 @@ class EscrowConfigValidator {
         def solution = moduleConfig.getSolution()
         if (solution == null) {
             registerError("solution is not specified in '$component'")
+        }
+    }
+
+    def validateBuildConfigurationTools(EscrowModuleConfig moduleConfig) {
+        def tools = moduleConfig.getBuildConfiguration()?.getTools()
+        tools?.each { tool ->
+            def toolName = tool.getName()
+            if (toolName== null)  {
+                registerError("tool is not configured correctly")
+            }
+            if (tool.getEscrowEnvironmentVariable() == null) {
+                registerError("tool escrowEnvironmentVariable is not specified in '$toolName'")
+            }
+            if (tool.getSourceLocation() == null) {
+                registerError("tool sourceLocation is not specified in '$toolName'")
+            }
+            if (tool.getTargetLocation() == null) {
+                registerError("tool targetLocation is not specified in '$toolName'")
+            }
         }
     }
 
