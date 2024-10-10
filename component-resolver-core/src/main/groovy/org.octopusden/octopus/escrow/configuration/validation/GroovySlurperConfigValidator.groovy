@@ -283,13 +283,13 @@ class GroovySlurperConfigValidator {
         }
     }
 
-    private void validateJiraParameters(ConfigObject vcsConfigObject, String moduleConfigName, String moduleName) {
-        if (vcsConfigObject.containsKey("jiraProjectKey")
-                || vcsConfigObject.containsKey("jiraMajorVersionFormat")
-                || vcsConfigObject.containsKey("jiraReleaseVersionFormat")) {
+    private void validateJiraParameters(ConfigObject moduleConfigObject, String moduleConfigName, String moduleName) {
+        if (moduleConfigObject.containsKey("jiraProjectKey")
+                || moduleConfigObject.containsKey("jiraMajorVersionFormat")
+                || moduleConfigObject.containsKey("jiraReleaseVersionFormat")) {
             registerError("Ambiguous jira configuration of component '$moduleName' section $moduleConfigName")
         }
-        def jiraSectionValue = vcsConfigObject.get("jira")
+        def jiraSectionValue = moduleConfigObject.get("jira")
         if (jiraSectionValue instanceof ConfigObject) {
             validateJiraSection(jiraSectionValue as ConfigObject, moduleName, moduleConfigName)
         } else {
