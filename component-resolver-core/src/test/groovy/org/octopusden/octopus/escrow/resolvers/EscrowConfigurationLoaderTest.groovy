@@ -581,4 +581,24 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
         assert exception.message.startsWith("Validation of module config failed due to following errors: \n" +
                 "Security Groups is not correctly configured in mudule-dbModel. 'group1 ,' does not match")
     }
+
+    @Test
+    void testInvalidBuildConfTools() {
+        def exception = GroovyAssert.shouldFail(EscrowConfigurationException.class, {
+            loadConfiguration("invalid/invalidBuildConfTools.groovy")
+        })
+        assert exception.message == "Validation of module config failed due following errors: \n" +
+                "tool escrowEnvironmentVariable is not specified in 'TestTool1'\n" +
+                "tool sourceLocation is not specified in 'TestTool2'\n" +
+                "tool targetLocation is not specified in 'TestTool2'\n" +
+                "tool escrowEnvironmentVariable is not specified in 'TestTool3'\n" +
+                "tool sourceLocation is not specified in 'TestTool3'\n" +
+                "tool targetLocation is not specified in 'TestTool3'"
+    }
+
+    @Test
+    void testBuildConfToolsValidation() {
+        EscrowConfiguration configuration = loadConfiguration("testBuildConfToolsValidation.groovy")
+        assert 2 == configuration.escrowModules.size()
+    }
 }

@@ -13,6 +13,7 @@ class DetailedComponent(
     var vcsSettings: VCSSettingsDTO? = null
     var jiraComponentVersion: JiraComponentVersionDTO? = null
     var detailedComponentVersion: DetailedComponentVersion? = null
+    var buildParameters: BuildParametersDTO? = null
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -20,6 +21,7 @@ class DetailedComponent(
         if (buildSystem != other.buildSystem) return false
         if (vcsSettings != other.vcsSettings) return false
         if (jiraComponentVersion != other.jiraComponentVersion) return false
+        if (buildParameters != other.buildParameters) return false
         return super.equals(other)
     }
 
@@ -28,6 +30,7 @@ class DetailedComponent(
         result = 31 * result + (buildSystem?.hashCode() ?: 0)
         result = 31 * result + (vcsSettings?.hashCode() ?: 0)
         result = 31 * result + (jiraComponentVersion?.hashCode() ?: 0)
+        result = 31 * result + (buildParameters?.hashCode() ?: 0)
         return result
     }
 
@@ -35,7 +38,8 @@ class DetailedComponent(
         return super.toString() +
                 ", buildSystem=$buildSystem)" +
                 ", vcsSettings=${vcsSettings}" +
-                ", jiraComponentVersion=${jiraComponentVersion}"
+                ", jiraComponentVersion=${jiraComponentVersion}" +
+                ", buildParameters=${buildParameters}"
     }
 
 }
