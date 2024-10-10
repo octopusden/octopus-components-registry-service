@@ -7,7 +7,7 @@ WORKDIR /app
 
 USER root
 RUN chmod 777 -R /tmp
-RUN adduser jboss
+RUN useradd jboss
 USER jboss
 
 EXPOSE 4567
