@@ -8,28 +8,29 @@ class DetailedComponent(
     @JsonProperty(value = "id") id: String,
     @JsonProperty(value = "name") name: String?,
     @JsonProperty(value = "componentOwner") componentOwner: String,
+    @JsonProperty("buildSystem") val buildSystem: BuildSystem,
+    @JsonProperty("vcsSettings") val vcsSettings: VCSSettingsDTO,
+    @JsonProperty("jiraComponentVersion") val jiraComponentVersion: JiraComponentVersionDTO,
+    @JsonProperty("detailedComponentVersion") val detailedComponentVersion: DetailedComponentVersion
 ) : Component(id, name, componentOwner) {
-    var buildSystem: BuildSystem? = null
-    var vcsSettings: VCSSettingsDTO? = null
-    var jiraComponentVersion: JiraComponentVersionDTO? = null
-    var detailedComponentVersion: DetailedComponentVersion? = null
     var buildParameters: BuildParametersDTO? = null
-
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other !is DetailedComponent) return false
         if (buildSystem != other.buildSystem) return false
         if (vcsSettings != other.vcsSettings) return false
         if (jiraComponentVersion != other.jiraComponentVersion) return false
+        if (detailedComponentVersion != other.detailedComponentVersion) return false
         if (buildParameters != other.buildParameters) return false
         return super.equals(other)
     }
 
     override fun hashCode(): Int {
         var result = super.hashCode()
-        result = 31 * result + (buildSystem?.hashCode() ?: 0)
-        result = 31 * result + (vcsSettings?.hashCode() ?: 0)
-        result = 31 * result + (jiraComponentVersion?.hashCode() ?: 0)
+        result = 31 * result + (buildSystem.hashCode())
+        result = 31 * result + (vcsSettings.hashCode())
+        result = 31 * result + (jiraComponentVersion.hashCode())
+        result = 31 * result + (detailedComponentVersion.hashCode())
         result = 31 * result + (buildParameters?.hashCode() ?: 0)
         return result
     }
@@ -39,6 +40,7 @@ class DetailedComponent(
                 ", buildSystem=$buildSystem)" +
                 ", vcsSettings=${vcsSettings}" +
                 ", jiraComponentVersion=${jiraComponentVersion}" +
+                ", detailedComponentVersion=${detailedComponentVersion}" +
                 ", buildParameters=${buildParameters}"
     }
 

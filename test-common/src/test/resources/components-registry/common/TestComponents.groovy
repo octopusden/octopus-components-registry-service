@@ -185,6 +185,13 @@ Defaults {
         displayName = "TESTONE DISPLAY NAME WITH VERSIONS-API"
     }
 
+    build {
+        requiredTools = "BuildEnv,PowerBuilderCompiler170"
+        javaVersion = "11"
+        mavenVersion = "3.6.3"
+        gradleVersion = "LATEST"
+        buildTasks = "clean build"
+    }
 
     repositoryType = MERCURIAL
     vcsUrl = "ssh://hg@mercurial/test-component"
@@ -838,18 +845,5 @@ TEST_COMPONENT4 {
             releaseVersionFormat = '$major.$minor.$service-$fix'
         }
         tag = 'tdsecure-$version'
-    }
-}
-
-"COMPONENT_WITH_BUILD_PARAMETERS" {
-    componentOwner = "user9"
-    groupId = "org.octopusden.octopus.test.build.parameters"
-    artifactId = "test-build-parameters"
-    build {
-        requiredTools = "BuildEnv,PowerBuilderCompiler170"
-        javaVersion = "11"
-        mavenVersion = "3.6.3"
-        gradleVersion = "LATEST"
-        buildTasks = "clean build"
     }
 }
