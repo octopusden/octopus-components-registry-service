@@ -16,6 +16,7 @@ import org.junit.jupiter.params.provider.MethodSource
 import org.junit.jupiter.params.provider.ValueSource
 import org.octopusden.octopus.components.registry.core.dto.ArtifactComponentsDTO
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
+import org.octopusden.octopus.components.registry.core.dto.BuildParametersDTO
 import org.octopusden.octopus.components.registry.core.dto.BuildSystem
 import org.octopusden.octopus.components.registry.core.dto.ComponentArtifactConfigurationDTO
 import org.octopusden.octopus.components.registry.core.dto.ComponentInfoDTO
@@ -33,6 +34,7 @@ import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionR
 import org.octopusden.octopus.components.registry.core.dto.RepositoryType
 import org.octopusden.octopus.components.registry.core.dto.SecurityGroupsDTO
 import org.octopusden.octopus.components.registry.core.dto.ServiceStatusDTO
+import org.octopusden.octopus.components.registry.core.dto.ToolDTO
 import org.octopusden.octopus.components.registry.core.dto.VCSSettingsDTO
 import org.octopusden.octopus.components.registry.core.dto.VersionControlSystemRootDTO
 import org.octopusden.octopus.components.registry.core.dto.VersionNamesDTO
@@ -244,6 +246,27 @@ abstract class BaseComponentsRegistryServiceTest {
         expectedComponent.system = listOf("NONE")
         expectedComponent.clientCode = "CLIENT_CODE"
         expectedComponent.releasesInDefaultBranch = false
+        expectedComponent.buildParameters = BuildParametersDTO(
+            javaVersion = "11",
+            mavenVersion = "3.6.3",
+            gradleVersion = "LATEST",
+            requiredProject = false,
+            buildTasks = "clean build",
+            tools = listOf(
+                ToolDTO(
+                    name = "BuildEnv",
+                    escrowEnvironmentVariable = "BUILD_ENV",
+                    sourceLocation = "\$env.BUILD_ENV",
+                    targetLocation = "tools/BUILD_ENV"
+                ),
+                ToolDTO(
+                    name = "PowerBuilderCompiler170",
+                    escrowEnvironmentVariable = "PBC_BIN",
+                    sourceLocation = "\$env.PBC/170",
+                    targetLocation = "tools/auto_compiler"
+                )
+            )
+        )
         Assertions.assertEquals(expectedComponent, actualComponent)
     }
 

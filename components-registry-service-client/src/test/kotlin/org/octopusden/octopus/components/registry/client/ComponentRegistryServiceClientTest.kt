@@ -1,21 +1,26 @@
 package org.octopusden.octopus.components.registry.client
 
+import java.util.Date
+import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.TestInstance
+import org.junit.jupiter.api.extension.ExtendWith
+import org.junit.jupiter.api.parallel.ResourceLock
 import org.octopusden.octopus.components.registry.client.impl.ClassicComponentsRegistryServiceClient
 import org.octopusden.octopus.components.registry.client.impl.ClassicComponentsRegistryServiceClientUrlProvider
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.core.dto.BuildSystem
-import org.octopusden.octopus.components.registry.core.dto.BuildParametersDTO
 import org.octopusden.octopus.components.registry.core.dto.ComponentArtifactConfigurationDTO
 import org.octopusden.octopus.components.registry.core.dto.ComponentV1
-import org.octopusden.octopus.components.registry.core.dto.DetailedComponent
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersion
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersions
 import org.octopusden.octopus.components.registry.core.dto.DistributionDTO
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionDTO
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionRangeDTO
-import org.octopusden.octopus.components.registry.core.dto.SecurityGroupsDTO
 import org.octopusden.octopus.components.registry.core.dto.ServiceStatusDTO
-import org.octopusden.octopus.components.registry.core.dto.ToolDTO
 import org.octopusden.octopus.components.registry.core.dto.VCSSettingsDTO
 import org.octopusden.octopus.components.registry.core.dto.VersionNamesDTO
 import org.octopusden.octopus.components.registry.core.dto.VersionRequest
@@ -23,19 +28,10 @@ import org.octopusden.octopus.components.registry.core.dto.VersionedComponent
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
 import org.octopusden.octopus.components.registry.test.BaseComponentsRegistryServiceTest
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.BeforeAll
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.TestInstance
-import org.junit.jupiter.api.extension.ExtendWith
-import org.junit.jupiter.api.parallel.ResourceLock
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.junit.jupiter.SpringExtension
-import java.util.Date
-import kotlin.test.assertFailsWith
-import kotlin.test.assertTrue
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @ExtendWith(SpringExtension::class)
@@ -121,7 +117,7 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
 
     @Test
     fun testGetAllComponents() {
-        assertEquals(39, componentsRegistryClient.getAllComponents().components.size)
+        assertEquals(38, componentsRegistryClient.getAllComponents().components.size)
         assertEquals(
             3,
             componentsRegistryClient.getAllComponents("ssh://hg@mercurial/technical", null).components.size
@@ -135,8 +131,8 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
             ).components.size
         )
         assertEquals(4, componentsRegistryClient.getAllComponents(systems = listOf("CLASSIC")).components.size)
-        assertEquals(35, componentsRegistryClient.getAllComponents(systems = listOf("NONE")).components.size)
-        assertEquals(39, componentsRegistryClient.getAllComponents(systems = listOf("CLASSIC", "NONE")).components.size)
+        assertEquals(34, componentsRegistryClient.getAllComponents(systems = listOf("NONE")).components.size)
+        assertEquals(38, componentsRegistryClient.getAllComponents(systems = listOf("CLASSIC", "NONE")).components.size)
     }
 
     @Test
@@ -151,33 +147,6 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
         assertFailsWith(NotFoundException::class) {
             componentsRegistryClient.getDetailedComponent("TESTONE-?", "1")
         }
-    }
-
-    @Test
-    fun testGetExistedDetailedComponentWithBuildParameters() {
-        val actualComponent = componentsRegistryClient.getDetailedComponent("COMPONENT_WITH_BUILD_PARAMETERS", "1.0")
-        val expectedBuildParameters = BuildParametersDTO(
-            javaVersion = "11",
-            mavenVersion = "3.6.3",
-            gradleVersion = "LATEST",
-            requiredProject = false,
-            buildTasks = "clean build",
-            tools = listOf(
-                ToolDTO(
-                    name = "BuildEnv",
-                    escrowEnvironmentVariable = "BUILD_ENV",
-                    sourceLocation = "\$env.BUILD_ENV",
-                    targetLocation = "tools/BUILD_ENV"
-                ),
-                ToolDTO(
-                    name = "PowerBuilderCompiler170",
-                    escrowEnvironmentVariable = "PBC_BIN",
-                    sourceLocation = "\$env.PBC/170",
-                    targetLocation = "tools/auto_compiler"
-                )
-            )
-        )
-        assertEquals(expectedBuildParameters, actualComponent.buildParameters)
     }
 
     @Test
