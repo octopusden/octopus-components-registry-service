@@ -13,6 +13,7 @@ class DetailedComponent(
     @JsonProperty("jiraComponentVersion") val jiraComponentVersion: JiraComponentVersionDTO,
     @JsonProperty("detailedComponentVersion") val detailedComponentVersion: DetailedComponentVersion
 ) : Component(id, name, componentOwner) {
+    var buildParameters: BuildParametersDTO? = null
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other !is DetailedComponent) return false
@@ -20,6 +21,7 @@ class DetailedComponent(
         if (vcsSettings != other.vcsSettings) return false
         if (jiraComponentVersion != other.jiraComponentVersion) return false
         if (detailedComponentVersion != other.detailedComponentVersion) return false
+        if (buildParameters != other.buildParameters) return false
         return super.equals(other)
     }
 
@@ -29,6 +31,7 @@ class DetailedComponent(
         result = 31 * result + (vcsSettings.hashCode())
         result = 31 * result + (jiraComponentVersion.hashCode())
         result = 31 * result + (detailedComponentVersion.hashCode())
+        result = 31 * result + (buildParameters?.hashCode() ?: 0)
         return result
     }
 
@@ -37,7 +40,8 @@ class DetailedComponent(
                 ", buildSystem=$buildSystem)" +
                 ", vcsSettings=${vcsSettings}" +
                 ", jiraComponentVersion=${jiraComponentVersion}" +
-                ", detailedComponentVersion=${detailedComponentVersion}"
+                ", detailedComponentVersion=${detailedComponentVersion}" +
+                ", buildParameters=${buildParameters}"
     }
 
 }
