@@ -9,6 +9,7 @@ import org.junit.jupiter.api.extension.ExtendWith
 import org.octopusden.octopus.components.registry.core.dto.ArtifactComponentsDTO
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.core.dto.BuildSystem
+import org.octopusden.octopus.components.registry.core.dto.BuildParametersDTO
 import org.octopusden.octopus.components.registry.core.dto.ComponentArtifactConfigurationDTO
 import org.octopusden.octopus.components.registry.core.dto.ComponentV1
 import org.octopusden.octopus.components.registry.core.dto.ComponentV2
@@ -20,6 +21,7 @@ import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionD
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionRangeDTO
 import org.octopusden.octopus.components.registry.core.dto.SecurityGroupsDTO
 import org.octopusden.octopus.components.registry.core.dto.ServiceStatusDTO
+import org.octopusden.octopus.components.registry.core.dto.ToolDTO
 import org.octopusden.octopus.components.registry.core.dto.VCSSettingsDTO
 import org.octopusden.octopus.components.registry.core.dto.VersionNamesDTO
 import org.octopusden.octopus.components.registry.core.dto.VersionRequest
@@ -334,7 +336,7 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
         expectedComponent.releasesInDefaultBranch = false
         expectedComponent.solution = true
 
-        Assertions.assertEquals(38, components.components.size)
+        Assertions.assertEquals(39, components.components.size)
         Assertions.assertTrue(expectedComponent in components.components) {
             components.components.toString()
         }
@@ -391,6 +393,42 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
             buildSystem = BuildSystem.MAVEN
         }
         Assertions.assertEquals(expectedComponent, actualComponent)
+    }
+
+    @Test
+    fun testGetExistedDetailedComponentWithBuildParameters() {
+        val actualComponent = mvc.perform(
+            MockMvcRequestBuilders.get("/rest/api/2/components/COMPONENT_WITH_BUILD_PARAMETERS/versions/1.0")
+                .accept(APPLICATION_JSON)
+        )
+            .andExpect(status().isOk)
+            .andReturn()
+            .response
+            .toObject(DetailedComponent::class.java)
+
+        val expectedBuildParameters = BuildParametersDTO(
+            javaVersion = "11",
+            mavenVersion = "3.6.3",
+            gradleVersion = "LATEST",
+            requiredProject = false,
+            buildTasks = "clean build",
+            tools = listOf(
+                ToolDTO(
+                    name = "BuildEnv",
+                    escrowEnvironmentVariable = "BUILD_ENV",
+                    sourceLocation = "\$env.BUILD_ENV",
+                    targetLocation = "tools/BUILD_ENV"
+                ),
+                ToolDTO(
+                    name = "PowerBuilderCompiler170",
+                    escrowEnvironmentVariable = "PBC_BIN",
+                    sourceLocation = "\$env.PBC/170",
+                    targetLocation = "tools/auto_compiler"
+                )
+            ),
+        )
+
+        Assertions.assertEquals(expectedBuildParameters, actualComponent.buildParameters)
     }
 
     @Test
