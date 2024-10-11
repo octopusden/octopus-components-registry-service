@@ -417,7 +417,7 @@ class EscrowConfigValidator {
         tools?.each { tool ->
             def toolName = tool.getName()
             if (toolName == null)  {
-                registerError("tool is not configured correctly")
+                registerError("tool name is not specified")
             }
             if (tool.getEscrowEnvironmentVariable() == null) {
                 registerError("tool escrowEnvironmentVariable is not specified in '$toolName'")
