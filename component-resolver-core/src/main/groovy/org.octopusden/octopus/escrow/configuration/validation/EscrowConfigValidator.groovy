@@ -416,7 +416,7 @@ class EscrowConfigValidator {
         def tools = moduleConfig.getBuildConfiguration()?.getTools()
         tools?.each { tool ->
             def toolName = tool.getName()
-            if (toolName== null)  {
+            if (toolName == null)  {
                 registerError("tool is not configured correctly")
             }
             if (tool.getEscrowEnvironmentVariable() == null) {
