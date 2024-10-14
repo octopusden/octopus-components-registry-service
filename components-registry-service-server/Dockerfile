@@ -1,4 +1,4 @@
-ARG IMAGE=eclipse-temurin:21-jdk
+ARG IMAGE=eclipse-temurin:17-jdk
 FROM $IMAGE
 
 ARG BUILD_VERSION
