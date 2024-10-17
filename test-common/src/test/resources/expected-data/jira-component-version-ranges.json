@@ -20,7 +20,6 @@
     "distribution": {
       "explicit": false,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -61,7 +60,6 @@
     "distribution": {
       "explicit": false,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -102,7 +100,6 @@
     "distribution": {
       "explicit": false,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -135,7 +132,6 @@
     "distribution": {
       "explicit": false,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -176,7 +172,6 @@
     "distribution": {
       "explicit": true,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -209,7 +204,6 @@
     "distribution": {
       "explicit": false,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -250,7 +244,6 @@
     "distribution": {
       "explicit": false,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -291,7 +284,6 @@
     "distribution": {
       "explicit": true,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -332,7 +324,6 @@
     "distribution": {
       "explicit": false,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -365,7 +356,6 @@
     "distribution": {
       "explicit": true,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -398,7 +388,6 @@
     "distribution": {
       "explicit": false,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -473,7 +462,6 @@
     "distribution": {
       "explicit": false,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -555,7 +543,6 @@
     "distribution": {
       "explicit": false,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -596,7 +583,6 @@
     "distribution": {
       "explicit": false,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -637,7 +623,6 @@
     "distribution": {
       "explicit": false,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -678,7 +663,6 @@
     "distribution": {
       "explicit": false,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -719,7 +703,6 @@
     "distribution": {
       "explicit": false,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -760,7 +743,6 @@
     "distribution": {
       "explicit": false,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -793,7 +775,6 @@
     "distribution": {
       "explicit": false,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -826,7 +807,6 @@
     "distribution": {
       "explicit": false,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -867,7 +847,6 @@
     "distribution": {
       "explicit": false,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -915,7 +894,6 @@
     "distribution": {
       "explicit": false,
       "external": false,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -956,7 +934,6 @@
     "distribution": {
       "explicit": true,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -997,7 +974,6 @@
     "distribution": {
       "explicit": false,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -1030,7 +1006,6 @@
     "distribution": {
       "explicit": false,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -1071,7 +1046,6 @@
     "distribution": {
       "explicit": false,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -1112,7 +1086,6 @@
     "distribution": {
       "explicit": false,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -1145,7 +1118,6 @@
     "distribution": {
       "explicit": false,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -1186,7 +1158,6 @@
     "distribution": {
       "explicit": false,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -1227,7 +1198,6 @@
     "distribution": {
       "explicit": false,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -1301,7 +1271,6 @@
     "distribution": {
       "explicit": false,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -1342,7 +1311,6 @@
     "distribution": {
       "explicit": false,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -1383,7 +1351,6 @@
     "distribution": {
       "explicit": false,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -1424,7 +1391,6 @@
     "distribution": {
       "explicit": false,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -1457,7 +1423,6 @@
     "distribution": {
       "explicit": false,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -1490,7 +1455,6 @@
     "distribution": {
       "explicit": false,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -1523,7 +1487,6 @@
     "distribution": {
       "explicit": false,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
@@ -1564,7 +1527,6 @@
     "distribution": {
       "explicit": false,
       "external": true,
-      "GAV": "",
       "securityGroups": {
         "read": [
           "vfiler1-default#group"
