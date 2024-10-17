@@ -24,22 +24,32 @@ fun JiraComponentVersion.toDTO(): JiraComponentVersionDTO {
 }
 
 fun JiraComponent.toDTO(): JiraComponentDTO {
-    val cvFormat = ComponentVersionFormatDTO(componentVersionFormat.majorVersionFormat, componentVersionFormat.releaseVersionFormat,
-            componentVersionFormat.buildVersionFormat, componentVersionFormat.lineVersionFormat)
+    val cvFormat = ComponentVersionFormatDTO(
+        componentVersionFormat.majorVersionFormat, componentVersionFormat.releaseVersionFormat,
+        componentVersionFormat.buildVersionFormat, componentVersionFormat.lineVersionFormat
+    )
     val componentInfo = componentInfo.let { ComponentInfoDTO(it.versionPrefix ?: "", it.versionFormat ?: "") }
     return JiraComponentDTO(projectKey, displayName, cvFormat, componentInfo, isTechnical)
 }
 
-fun JiraComponentVersionRange.toDTO(): JiraComponentVersionRangeDTO {
-    // TODO: GAV = "" for backward compatibility, remove when all clients are updated to the latest version
-    val distribution = distribution?.toDTO() ?: DistributionDTO(false, false, "", null, null, SecurityGroupsDTO(), null)
-    return JiraComponentVersionRangeDTO(componentName, versionRange, component.toDTO(), distribution, vcsSettings.toDTO())
-}
+fun JiraComponentVersionRange.toDTO() = JiraComponentVersionRangeDTO(
+    componentName,
+    versionRange,
+    component.toDTO(),
+    distribution?.toDTO() ?: DistributionDTO(false, false, securityGroups = SecurityGroupsDTO()),
+    vcsSettings.toDTO()
+)
 
-fun Distribution.toDTO(): DistributionDTO {
-    // TODO: elvis for GAV backward compatibility, remove when all clients are updated to the latest version
-    return DistributionDTO(explicit(), external(), GAV() ?: "", DEB(), RPM(), SecurityGroupsDTO(securityGroups?.read?.split(",")?.toList() ?: emptyList()), docker())
-}
+fun Distribution.toDTO() = DistributionDTO(
+    explicit(),
+    external(),
+    GAV(),
+    DEB(),
+    RPM(),
+    SecurityGroupsDTO(securityGroups?.read?.split(",")?.toList() ?: emptyList()),
+    docker()
+)
+
 
 fun VCSSettings.toDTO(): VCSSettingsDTO {
     val vcsRoots = versionControlSystemRoots.map {
