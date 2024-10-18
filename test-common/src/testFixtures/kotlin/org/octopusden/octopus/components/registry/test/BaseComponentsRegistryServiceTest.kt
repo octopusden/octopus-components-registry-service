@@ -176,7 +176,7 @@ abstract class BaseComponentsRegistryServiceTest {
         val actualComponent = getComponentV1("versions-api")
 
         val expectedComponent = ComponentV1("versions-api", "versions-api", "user9")
-        expectedComponent.distribution = DistributionDTO(false, true, "",
+        expectedComponent.distribution = DistributionDTO(false, true,
             securityGroups = SecurityGroupsDTO(listOf("vfiler1-default#group")))
         expectedComponent.releaseManager = "user"
         expectedComponent.securityChampion = "user"
