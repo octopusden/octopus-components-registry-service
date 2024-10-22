@@ -26,4 +26,12 @@ class GroovySlurperConfigValidatorTest extends GroovyTestCase {
         assert !RPM_PATTERN.matcher("ansible-2.11.6-7.el8.noarch.rpm,file:///dir/file").matches()
         assert !RPM_PATTERN.matcher("ansible-2.11.6+7.el8.noarch.rpm").matches()
     }
+
+    void testDockerPattern() {
+        assert GroovySlurperConfigValidator.DOCKER_PATTERN.matcher("octopusden/octopus").matches()
+        assert GroovySlurperConfigValidator.DOCKER_PATTERN.matcher("octopusden.octopus").matches()
+        assert !GroovySlurperConfigValidator.DOCKER_PATTERN.matcher("octopusden\\octopus").matches()
+        assert !GroovySlurperConfigValidator.DOCKER_PATTERN.matcher("octopusden/octopus,octopusden/octopus-2").matches()
+        assert !GroovySlurperConfigValidator.DOCKER_PATTERN.matcher("octopusden/octopus:builder:1.0").matches()
+    }
 }

@@ -10,6 +10,15 @@ import org.octopusden.releng.versions.VersionNames
 
 class GroovySlurperConfigValidator {
 
+    private static final String FILE_PATTERN = "file:/.+"
+    private static final String PROHIBITED_SYMBOLS = "\\\\\\s:|\\?\\*\"'<>\\+"
+    private static final String GAV_PROHIBITED_SYMBOLS = "/$PROHIBITED_SYMBOLS"
+    private static final String GAV_MAVEN_PATTERN = "[^$GAV_PROHIBITED_SYMBOLS]+(:[^$GAV_PROHIBITED_SYMBOLS]+){1,3}"
+    private static final String GAV_ENTRY_PATTERN = "($FILE_PATTERN)|($GAV_MAVEN_PATTERN)"
+    private static final String DEB_ENTRY_PATTERN = "[^$PROHIBITED_SYMBOLS]+\\.deb"
+    private static final String RPM_ENTRY_PATTERN = "[^$PROHIBITED_SYMBOLS]+\\.rpm"
+    private static final String SG_ENTRY_REGEX = "[\\w-#\\s]+"
+
     public static final String JIRA = 'jira'
     public static final String VCS_SETTINGS = 'vcsSettings'
     public static final String BUILD = 'build'
@@ -20,39 +29,6 @@ class GroovySlurperConfigValidator {
     public static final String DEPENDENCIES = 'dependencies'
     public static final String SECURITY_GROUPS = 'securityGroups'
     public static final String SECURITY_GROUPS_READ = "read"
-    private static final String FILE_PATTERN = "file:/.+"
-    private static final String PROHIBITED_SYMBOLS = "\\\\\\s:|\\?\\*\"'<>\\+"
-    private static final String GAV_PROHIBITED_SYMBOLS = "/$PROHIBITED_SYMBOLS"
-    private static final String GAV_MAVEN_PATTERN = "[^$GAV_PROHIBITED_SYMBOLS]+(:[^$GAV_PROHIBITED_SYMBOLS]+){1,3}"
-    private static final String GAV_ENTRY_PATTERN = "($FILE_PATTERN)|($GAV_MAVEN_PATTERN)"
-    public static final Pattern GAV_PATTERN = Pattern.compile("^($GAV_ENTRY_PATTERN)(,($GAV_ENTRY_PATTERN))*\$")
-    private static final String DEB_ENTRY_PATTERN = "[^$PROHIBITED_SYMBOLS]+\\.deb"
-    public static final Pattern DEB_PATTERN = Pattern.compile("^($DEB_ENTRY_PATTERN)(,($DEB_ENTRY_PATTERN))*\$")
-    private static final String RPM_ENTRY_PATTERN = "[^$PROHIBITED_SYMBOLS]+\\.rpm"
-    public static final Pattern RPM_PATTERN = Pattern.compile("^($RPM_ENTRY_PATTERN)(,($RPM_ENTRY_PATTERN))*\$")
-    private static final String SG_ENTRY_REGEX = "[\\w-#\\s]+"
-    public static final Pattern SECURITY_GROUPS_PATTERN = Pattern.compile("^($SG_ENTRY_REGEX)(,($SG_ENTRY_REGEX))*\$")
-
-    public
-    static SUPPORTED_ATTRIBUTES = ['buildSystem', VCS_URL, REPOSITORY_TYPE, 'groupId', 'artifactId',
-                                   TAG, 'versionRange', 'version', 'module',
-                                   'teamcityReleaseConfigId', 'jiraProjectKey', 'jiraMajorVersionFormat', 'jiraReleaseVersionFormat',
-                                   'buildFilePath', 'deprecated', BRANCH,
-                                   'componentDisplayName', 'componentOwner', 'releaseManager', 'securityChampion', 'system',
-                                   'clientCode', 'releasesInDefaultBranch', 'solution', 'parentComponent', 'octopusVersion']
-    static SUPPORTED_JIRA_ATTRIBUTES = ['projectKey', 'lineVersionFormat', 'majorVersionFormat', 'releaseVersionFormat', 'buildVersionFormat', "displayName", 'technical']
-
-    static SUPPORTED_BUILD_ATTRIBUTES = ['dependencies', 'javaVersion', 'mavenVersion', 'gradleVersion', 'requiredProject', 'systemProperties', 'projectVersion', 'requiredTools', 'buildTasks']
-
-    static SUPPORTED_COMPONENT_ATTRIBUTES = ['versionPrefix', 'versionFormat']
-
-    static SUPPORTED_VCS_ATTRIBUTES = [BRANCH, TAG, REPOSITORY_TYPE, VCS_URL, EXTERNAL_REGISTRY]
-
-    static SUPPORTED_TOOLS_ATTRIBUTES = ['escrowEnvironmentVariable', 'sourceLocation', 'targetLocation', 'installScript']
-
-    static SUPPORTED_DISTRIBUTION_ATTRIBUTES = ['external', 'explicit', 'GAV', 'DEB', 'RPM', 'docker', 'securityGroups']
-    static SUPPORTED_DEPENDENCIES_ATTRIBUTES = ['autoUpdate']
-    static SUPPORTED_SECURITY_GROUPS_ATTRIBUTES = [SECURITY_GROUPS_READ]
 
     public static final String BRANCH = 'branch'
     public static final String TAG = 'tag'
@@ -60,8 +36,30 @@ class GroovySlurperConfigValidator {
     public static final String VCS_URL = 'vcsUrl'
     public static final String EXTERNAL_REGISTRY = "externalRegistry"
 
-    List<String> errors = new ArrayList<>()
+    public static final Pattern GAV_PATTERN = Pattern.compile("^($GAV_ENTRY_PATTERN)(,($GAV_ENTRY_PATTERN))*\$")
+    public static final Pattern DEB_PATTERN = Pattern.compile("^($DEB_ENTRY_PATTERN)(,($DEB_ENTRY_PATTERN))*\$")
+    public static final Pattern RPM_PATTERN = Pattern.compile("^($RPM_ENTRY_PATTERN)(,($RPM_ENTRY_PATTERN))*\$")
+    public static final Pattern SECURITY_GROUPS_PATTERN = Pattern.compile("^($SG_ENTRY_REGEX)(,($SG_ENTRY_REGEX))*\$")
+    public static final Pattern DOCKER_PATTERN = Pattern.compile("^(?:[a-z0-9]+(?:[._-][a-z0-9]+)*/)*[a-z0-9]+(?:[._-][a-z0-9]+)*\$")
+
+    public static SUPPORTED_ATTRIBUTES = ['buildSystem', VCS_URL, REPOSITORY_TYPE, 'groupId', 'artifactId',
+                                          TAG, 'versionRange', 'version', 'module',
+                                          'teamcityReleaseConfigId', 'jiraProjectKey', 'jiraMajorVersionFormat', 'jiraReleaseVersionFormat',
+                                          'buildFilePath', 'deprecated', BRANCH,
+                                          'componentDisplayName', 'componentOwner', 'releaseManager', 'securityChampion', 'system',
+                                          'clientCode', 'releasesInDefaultBranch', 'solution', 'parentComponent', 'octopusVersion']
+
+    static SUPPORTED_JIRA_ATTRIBUTES = ['projectKey', 'lineVersionFormat', 'majorVersionFormat', 'releaseVersionFormat', 'buildVersionFormat', "displayName", 'technical']
+    static SUPPORTED_BUILD_ATTRIBUTES = ['dependencies', 'javaVersion', 'mavenVersion', 'gradleVersion', 'requiredProject', 'systemProperties', 'projectVersion', 'requiredTools', 'buildTasks']
+    static SUPPORTED_COMPONENT_ATTRIBUTES = ['versionPrefix', 'versionFormat']
+    static SUPPORTED_VCS_ATTRIBUTES = [BRANCH, TAG, REPOSITORY_TYPE, VCS_URL, EXTERNAL_REGISTRY]
+    static SUPPORTED_TOOLS_ATTRIBUTES = ['escrowEnvironmentVariable', 'sourceLocation', 'targetLocation', 'installScript']
+    static SUPPORTED_DISTRIBUTION_ATTRIBUTES = ['external', 'explicit', 'GAV', 'DEB', 'RPM', 'docker', 'securityGroups']
+    static SUPPORTED_DEPENDENCIES_ATTRIBUTES = ['autoUpdate']
+    static SUPPORTED_SECURITY_GROUPS_ATTRIBUTES = [SECURITY_GROUPS_READ]
+
     private final VersionNames versionNames
+    List<String> errors = new ArrayList<>()
 
     GroovySlurperConfigValidator(VersionNames versionNames) {
         this.versionNames = versionNames
@@ -93,7 +91,6 @@ class GroovySlurperConfigValidator {
             }
         }
         return hasErrors()
-
     }
 
     private void validateComponent(ConfigObject moduleConfigObject, String componentName) {
@@ -231,38 +228,27 @@ class GroovySlurperConfigValidator {
     def validateDistributionSection(ConfigObject distributionSection, VersionNames versionNames, String moduleName, String moduleConfigName) {
         validateForUnknownAttributes(distributionSection, DISTRIBUTION, SUPPORTED_DISTRIBUTION_ATTRIBUTES, moduleName, moduleConfigName)
         def expressionContext = new EscrowExpressionContext("validation", "1.0", "distribution.zip", new NumericVersionFactory(versionNames))
-        if (distributionSection.containsKey("GAV")) {
-            try {
-                def gavValue = EscrowExpressionParser.getInstance().parseAndEvaluate(distributionSection.get("GAV") as String, expressionContext)
-                if (!GAV_PATTERN.matcher(gavValue as String).matches()) {
-                    registerError("GAV '$gavValue' must match pattern '$GAV_PATTERN'")
-                }
-            } catch (Exception exception) {
-                registerError("GAV expression is not valid: " + exception.getMessage())
-            }
-        }
-        if (distributionSection.containsKey("DEB")) {
-            try {
-                def debValue = EscrowExpressionParser.getInstance().parseAndEvaluate(distributionSection.get("DEB") as String, expressionContext)
-                if (!DEB_PATTERN.matcher(debValue as String).matches()) {
-                    registerError("DEB '$debValue' must match pattern '$DEB_PATTERN'")
-                }
-            } catch (Exception exception) {
-                registerError("DEB expression is not valid: " + exception.getMessage())
-            }
-        }
-        if (distributionSection.containsKey("RPM")) {
-            try {
-                def rpmValue = EscrowExpressionParser.getInstance().parseAndEvaluate(distributionSection.get("RPM") as String, expressionContext)
-                if (!RPM_PATTERN.matcher(rpmValue as String).matches()) {
-                    registerError("RPM '$rpmValue' must match pattern '$RPM_PATTERN'")
-                }
-            } catch (Exception exception) {
-                registerError("RPM expression is not valid: " + exception.getMessage())
-            }
-        }
+
+        validateExpression(distributionSection, "GAV", GAV_PATTERN, expressionContext)
+        validateExpression(distributionSection, "DEB", DEB_PATTERN, expressionContext)
+        validateExpression(distributionSection, "RPM", RPM_PATTERN, expressionContext)
+        validateExpression(distributionSection, "docker", DOCKER_PATTERN, expressionContext)
+
         if (distributionSection.containsKey(SECURITY_GROUPS)) {
             validateSecurityGroupsParameters(distributionSection, SECURITY_GROUPS, moduleName)
+        }
+    }
+
+    private void validateExpression(ConfigObject distributionSection, String key, Pattern pattern, EscrowExpressionContext expressionContext) {
+        if (distributionSection.containsKey(key)) {
+            try {
+                def value = EscrowExpressionParser.getInstance().parseAndEvaluate(distributionSection.get(key) as String, expressionContext)
+                if (!pattern.matcher(value as String).matches()) {
+                    registerError("$key '$value' must match pattern '$pattern'")
+                }
+            } catch (Exception exception) {
+                registerError("$key expression is not valid: " + exception.getMessage())
+            }
         }
     }
 
