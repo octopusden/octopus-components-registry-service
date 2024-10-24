@@ -3,6 +3,7 @@ package org.octopusden.octopus.escrow.configuration.validation
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.DEB_PATTERN
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.GAV_PATTERN
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.RPM_PATTERN
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.DOCKER_PATTERN
 
 class GroovySlurperConfigValidatorTest extends GroovyTestCase {
 
@@ -28,10 +29,10 @@ class GroovySlurperConfigValidatorTest extends GroovyTestCase {
     }
 
     void testDockerPattern() {
-        assert GroovySlurperConfigValidator.DOCKER_PATTERN.matcher("octopusden/octopus").matches()
-        assert GroovySlurperConfigValidator.DOCKER_PATTERN.matcher("octopusden.octopus").matches()
-        assert !GroovySlurperConfigValidator.DOCKER_PATTERN.matcher("octopusden\\octopus").matches()
-        assert !GroovySlurperConfigValidator.DOCKER_PATTERN.matcher("octopusden/octopus,octopusden/octopus-2").matches()
-        assert !GroovySlurperConfigValidator.DOCKER_PATTERN.matcher("octopusden/octopus:builder:1.0").matches()
+        assert DOCKER_PATTERN.matcher("octopusden/octopus").matches()
+        assert DOCKER_PATTERN.matcher("octopusden.octopus").matches()
+        assert !DOCKER_PATTERN.matcher("octopusden\\octopus").matches()
+        assert !DOCKER_PATTERN.matcher("octopusden/octopus,octopusden/octopus-2").matches()
+        assert !DOCKER_PATTERN.matcher("octopusden/octopus:builder:1.0").matches()
     }
 }
