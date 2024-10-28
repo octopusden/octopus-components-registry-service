@@ -232,20 +232,20 @@ class GroovySlurperConfigValidator {
         validateForUnknownAttributes(distributionSection, DISTRIBUTION, SUPPORTED_DISTRIBUTION_ATTRIBUTES, moduleName, moduleConfigName)
         def expressionContext = new EscrowExpressionContext("validation", "1.0", "distribution.zip", new NumericVersionFactory(versionNames))
 
-        validateExpression(distributionSection, "GAV", GAV_PATTERN, expressionContext)
-        validateExpression(distributionSection, "DEB", DEB_PATTERN, expressionContext)
-        validateExpression(distributionSection, "RPM", RPM_PATTERN, expressionContext)
-        validateExpression(distributionSection, "docker", DOCKER_PATTERN, expressionContext)
+        validateValueByPattern(distributionSection, "GAV", GAV_PATTERN, expressionContext)
+        validateValueByPattern(distributionSection, "DEB", DEB_PATTERN, expressionContext)
+        validateValueByPattern(distributionSection, "RPM", RPM_PATTERN, expressionContext)
+        validateValueByPattern(distributionSection, "docker", DOCKER_PATTERN, expressionContext)
 
         if (distributionSection.containsKey(SECURITY_GROUPS)) {
             validateSecurityGroupsParameters(distributionSection, SECURITY_GROUPS, moduleName)
         }
     }
 
-    private void validateExpression(ConfigObject distributionSection, String key, Pattern pattern, EscrowExpressionContext expressionContext) {
-        if (distributionSection.containsKey(key)) {
+    private void validateValueByPattern(Map expressionMap, String key, Pattern pattern, EscrowExpressionContext expressionContext) {
+        if (expressionMap.containsKey(key)) {
             try {
-                def value = EscrowExpressionParser.getInstance().parseAndEvaluate(distributionSection.get(key) as String, expressionContext)
+                def value = EscrowExpressionParser.getInstance().parseAndEvaluate(expressionMap.get(key) as String, expressionContext)
                 if (!pattern.matcher(value as String).matches()) {
                     registerError("$key '$value' must match pattern '$pattern'")
                 }

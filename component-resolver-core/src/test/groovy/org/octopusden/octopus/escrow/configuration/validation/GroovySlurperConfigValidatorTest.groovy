@@ -28,7 +28,12 @@ class GroovySlurperConfigValidatorTest extends GroovyTestCase {
         assert !RPM_PATTERN.matcher("ansible-2.11.6+7.el8.noarch.rpm").matches()
     }
 
+    /*
+     * Docker pattern should contain only one image name without tag
+     */
     void testDockerPattern() {
+        assert DOCKER_PATTERN.matcher("org.octopusden/octopus/image").matches()
+        assert !DOCKER_PATTERN.matcher("org.octopusden/octopus/image:1.0").matches()
         assert DOCKER_PATTERN.matcher("octopusden/octopus").matches()
         assert DOCKER_PATTERN.matcher("octopusden.octopus").matches()
         assert !DOCKER_PATTERN.matcher("octopusden\\octopus").matches()
