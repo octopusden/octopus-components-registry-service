@@ -32,6 +32,7 @@ class GroovySlurperConfigValidator {
     public static final Pattern RPM_PATTERN = Pattern.compile("^($RPM_ENTRY_PATTERN)(,($RPM_ENTRY_PATTERN))*\$")
     private static final String SG_ENTRY_REGEX = "[\\w-#\\s]+"
     public static final Pattern SECURITY_GROUPS_PATTERN = Pattern.compile("^($SG_ENTRY_REGEX)(,($SG_ENTRY_REGEX))*\$")
+    public static final Pattern DOCKER_PATTERN = Pattern.compile("^(?:[a-z0-9]+(?:[._-][a-z0-9]+)*/)*[a-z0-9]+(?:[._-][a-z0-9]+)*\$")
 
     public
     static SUPPORTED_ATTRIBUTES = ['buildSystem', VCS_URL, REPOSITORY_TYPE, 'groupId', 'artifactId',
@@ -93,7 +94,6 @@ class GroovySlurperConfigValidator {
             }
         }
         return hasErrors()
-
     }
 
     private void validateComponent(ConfigObject moduleConfigObject, String componentName) {
@@ -231,38 +231,27 @@ class GroovySlurperConfigValidator {
     def validateDistributionSection(ConfigObject distributionSection, VersionNames versionNames, String moduleName, String moduleConfigName) {
         validateForUnknownAttributes(distributionSection, DISTRIBUTION, SUPPORTED_DISTRIBUTION_ATTRIBUTES, moduleName, moduleConfigName)
         def expressionContext = new EscrowExpressionContext("validation", "1.0", "distribution.zip", new NumericVersionFactory(versionNames))
-        if (distributionSection.containsKey("GAV")) {
-            try {
-                def gavValue = EscrowExpressionParser.getInstance().parseAndEvaluate(distributionSection.get("GAV") as String, expressionContext)
-                if (!GAV_PATTERN.matcher(gavValue as String).matches()) {
-                    registerError("GAV '$gavValue' must match pattern '$GAV_PATTERN'")
-                }
-            } catch (Exception exception) {
-                registerError("GAV expression is not valid: " + exception.getMessage())
-            }
-        }
-        if (distributionSection.containsKey("DEB")) {
-            try {
-                def debValue = EscrowExpressionParser.getInstance().parseAndEvaluate(distributionSection.get("DEB") as String, expressionContext)
-                if (!DEB_PATTERN.matcher(debValue as String).matches()) {
-                    registerError("DEB '$debValue' must match pattern '$DEB_PATTERN'")
-                }
-            } catch (Exception exception) {
-                registerError("DEB expression is not valid: " + exception.getMessage())
-            }
-        }
-        if (distributionSection.containsKey("RPM")) {
-            try {
-                def rpmValue = EscrowExpressionParser.getInstance().parseAndEvaluate(distributionSection.get("RPM") as String, expressionContext)
-                if (!RPM_PATTERN.matcher(rpmValue as String).matches()) {
-                    registerError("RPM '$rpmValue' must match pattern '$RPM_PATTERN'")
-                }
-            } catch (Exception exception) {
-                registerError("RPM expression is not valid: " + exception.getMessage())
-            }
-        }
+
+        validateValueByPattern(distributionSection, "GAV", GAV_PATTERN, expressionContext)
+        validateValueByPattern(distributionSection, "DEB", DEB_PATTERN, expressionContext)
+        validateValueByPattern(distributionSection, "RPM", RPM_PATTERN, expressionContext)
+        validateValueByPattern(distributionSection, "docker", DOCKER_PATTERN, expressionContext)
+
         if (distributionSection.containsKey(SECURITY_GROUPS)) {
             validateSecurityGroupsParameters(distributionSection, SECURITY_GROUPS, moduleName)
+        }
+    }
+
+    private void validateValueByPattern(Map expressionMap, String key, Pattern pattern, EscrowExpressionContext expressionContext) {
+        if (expressionMap.containsKey(key)) {
+            try {
+                def value = EscrowExpressionParser.getInstance().parseAndEvaluate(expressionMap.get(key) as String, expressionContext)
+                if (!pattern.matcher(value as String).matches()) {
+                    registerError("$key '$value' must match pattern '$pattern'")
+                }
+            } catch (Exception exception) {
+                registerError("$key expression is not valid: " + exception.getMessage())
+            }
         }
     }
 

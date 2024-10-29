@@ -3,6 +3,7 @@ package org.octopusden.octopus.escrow.configuration.validation
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.DEB_PATTERN
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.GAV_PATTERN
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.RPM_PATTERN
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.DOCKER_PATTERN
 
 class GroovySlurperConfigValidatorTest extends GroovyTestCase {
 
@@ -25,5 +26,18 @@ class GroovySlurperConfigValidatorTest extends GroovyTestCase {
         assert RPM_PATTERN.matcher("ansible/ansible-2.11.6-7.el8.noarch.rpm,ansible-core-2.11.6-7.el8.noarch.rpm").matches()
         assert !RPM_PATTERN.matcher("ansible-2.11.6-7.el8.noarch.rpm,file:///dir/file").matches()
         assert !RPM_PATTERN.matcher("ansible-2.11.6+7.el8.noarch.rpm").matches()
+    }
+
+    /*
+     * Docker pattern should contain only one image name without tag
+     */
+    void testDockerPattern() {
+        assert DOCKER_PATTERN.matcher("org.octopusden/octopus/image").matches()
+        assert !DOCKER_PATTERN.matcher("org.octopusden/octopus/image:1.0").matches()
+        assert DOCKER_PATTERN.matcher("octopusden/octopus").matches()
+        assert DOCKER_PATTERN.matcher("octopusden.octopus").matches()
+        assert !DOCKER_PATTERN.matcher("octopusden\\octopus").matches()
+        assert !DOCKER_PATTERN.matcher("octopusden/octopus,octopusden/octopus-2").matches()
+        assert !DOCKER_PATTERN.matcher("octopusden/octopus:builder:1.0").matches()
     }
 }
