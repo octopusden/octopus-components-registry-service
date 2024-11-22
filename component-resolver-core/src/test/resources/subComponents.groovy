@@ -161,6 +161,10 @@ bcomponent {
                 explicit = true
                 external = false
             }
+
+            jira {
+                component { versionPrefix = "notJiraComponent"}
+            }
         }
 
         "sub-component-with-defaults" {
@@ -173,6 +177,9 @@ bcomponent {
             componentOwner = "Another Owner"
             groupId = "org.octopusden.octopus.buildsystem.sub5"
             vcsUrl = "OctopusSource/zenit"
+            jira {
+                component { versionPrefix = "sub-component-with-defaults"}
+            }
         }
     }
 }

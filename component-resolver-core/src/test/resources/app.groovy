@@ -48,6 +48,9 @@ app {
                 vcsUrl = "ssh://hg@mercurial//server/jdk"
                 tag = '$module-$version'
             }
+            jira {
+                projectKey = "AS-JDK"
+            }
         }
     }
     jira {

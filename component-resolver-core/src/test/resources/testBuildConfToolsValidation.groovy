@@ -32,6 +32,9 @@ TEST_COMPONENT_1 {
     build {
         requiredTools = "TestTool1"
     }
+    jira {
+        customer { versionPrefix = "1" }
+    }
 }
 
 TEST_COMPONENT_2 {
@@ -42,5 +45,8 @@ TEST_COMPONENT_2 {
     releasesInDefaultBranch = false
     build {
         requiredTools = "TestTool2"
+    }
+    jira {
+        customer { versionPrefix = "2" }
     }
 }

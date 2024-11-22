@@ -44,6 +44,7 @@ component_23 {
     }
     jira {
         projectKey = "SYSTEM"
+        customer { versionPrefix = "23" }
     }
 }
 

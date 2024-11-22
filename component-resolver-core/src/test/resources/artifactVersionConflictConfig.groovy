@@ -45,5 +45,6 @@ commoncomponent {
     vcsUrl = "ssh://hg@mercurial/o2/other/system"
     jira {
         projectKey = "SYSTEM"
+        component { versionPrefix = "common" }
     }
 }

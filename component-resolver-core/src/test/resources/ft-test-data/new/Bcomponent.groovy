@@ -23,6 +23,7 @@ import static org.octopusden.octopus.escrow.RepositoryType.MERCURIAL
     }
     jira {
         projectKey = "SYSTEM"
+        component { versionPrefix = "versionPrefix9" }
     }
 }
 
@@ -38,6 +39,7 @@ import static org.octopusden.octopus.escrow.RepositoryType.MERCURIAL
     }
     jira {
         projectKey = "SYSTEM"
+        component { versionPrefix = "versionPrefix10" }
     }
 }
 
@@ -53,6 +55,7 @@ screenshotter {
     }
     jira {
         projectKey = "SYSTEM"
+        component { versionPrefix = "versionPrefix11" }
     }
 }
 
@@ -68,6 +71,7 @@ screenshotter {
     }
     jira {
         projectKey = "DBSM"
+        component { versionPrefix = "client" }
     }
 }
 
@@ -92,6 +96,7 @@ DBSchemeManager {
     }
     jira {
         projectKey = "SYSTEM"
+        component { versionPrefix = "versionPrefix1" }
     }
 }
 
@@ -104,6 +109,7 @@ osgi {
     }
     jira {
         projectKey = "SYSTEM"
+        component { versionPrefix = "versionPrefix2" }
     }
 }
 
@@ -117,6 +123,7 @@ saxon {
     }
     jira {
         projectKey = "SYSTEM"
+        component { versionPrefix = "versionPrefix3" }
     }
 }
 
@@ -130,6 +137,7 @@ ant {
     }
     jira {
         projectKey = "SYSTEM"
+        component { versionPrefix = "versionPrefix4" }
     }
 }
 
@@ -144,6 +152,7 @@ xmlbeans {
     }
     jira {
         projectKey = "SYSTEM"
+        component { versionPrefix = "versionPrefix5" }
     }
 }
 
@@ -158,6 +167,7 @@ cvsclient {
     }
     jira {
         projectKey = "SYSTEM"
+        component { versionPrefix = "versionPrefix6" }
     }
 }
 
@@ -170,6 +180,7 @@ checkstyle {
     }
     jira {
         projectKey = "SYSTEM"
+        component { versionPrefix = "versionPrefix7" }
     }
 }
 
@@ -182,6 +193,7 @@ checkstyle {
     }
     jira {
         projectKey = "SYSTEM"
+        component { versionPrefix = "versionPrefix8" }
     }
 }
 
@@ -238,6 +250,11 @@ bcomponent {
 
         "buildsystem-mojo-new" {
             componentOwner = "user1"
+            jira {
+                component {
+                    versionPrefix = 'MojoNew'
+                }
+            }
             "[1.3.159]" {
                 groupId = "org.octopusden.octopus.mojo"
                 artifactId = "buildsystem-maven-plugin"

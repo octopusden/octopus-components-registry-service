@@ -42,5 +42,6 @@ external_registry {
     }
     jira {
         projectKey = "TEST_COMPONENT2"
+        component { versionPrefix = "external" }
     }
 }

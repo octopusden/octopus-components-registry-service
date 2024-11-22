@@ -105,6 +105,7 @@ class EscrowConfigValidator {
         if (!hasErrors()) {
             validateVersionConflicts(configuration)
             validateGroupIdAndVersionIdIntersections(configuration)
+            validateJiraProjectKeyAndVersionPrefixIntersections(configuration)
             validateComponentParent(configuration)
             validateArchivedComponents(configuration)
         } else {
@@ -173,8 +174,29 @@ class EscrowConfigValidator {
         }
     }
 
+    def validateJiraProjectKeyAndVersionPrefixIntersections(EscrowConfiguration configuration) {
+        def jiraProjectKeyAndVersionPrefixToComponentNames = new HashMap<Tuple2<String, String>, HashSet<String>>()
+        configuration.escrowModules.each { componentName, escrowModule ->
+            escrowModule.moduleConfigurations.each { moduleConfiguration ->
+                jiraProjectKeyAndVersionPrefixToComponentNames.computeIfAbsent(new Tuple2<>(
+                        moduleConfiguration.jiraConfiguration.projectKey,
+                        moduleConfiguration.jiraConfiguration.componentInfo?.versionPrefix
+                )) { new HashSet<>() }.add(componentName)
+            }
+        }
+        jiraProjectKeyAndVersionPrefixToComponentNames.each { jiraProjectKeyAndVersionPrefix, componentNames ->
+            if (componentNames.size() > 1) {
+                def versionPrefix = "no version prefix"
+                if (jiraProjectKeyAndVersionPrefix.second != null) {
+                    versionPrefix = "the same version prefix '${jiraProjectKeyAndVersionPrefix.second}'"
+                }
+                registerError("Following components have $versionPrefix in Jira project '${jiraProjectKeyAndVersionPrefix.first}': ${componentNames.join(', ')}")
+            }
+        }
+    }
+
     def validateComponentParent(EscrowConfiguration configuration) {
-        configuration.escrowModules.each { String componentName, EscrowModule escrowModule ->
+        configuration.escrowModules.each { componentName, escrowModule ->
             escrowModule.moduleConfigurations.each { moduleConfiguration ->
                 if (moduleConfiguration.parentComponent != null) {
                     def parentEscrowModule = configuration.escrowModules[moduleConfiguration.parentComponent]
@@ -416,7 +438,7 @@ class EscrowConfigValidator {
         def tools = moduleConfig.getBuildConfiguration()?.getTools()
         tools?.each { tool ->
             def toolName = tool.getName()
-            if (toolName == null)  {
+            if (toolName == null) {
                 registerError("tool name is not specified")
             }
             if (tool.getEscrowEnvironmentVariable() == null) {
