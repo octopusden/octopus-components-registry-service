@@ -25,6 +25,7 @@ import org.octopusden.releng.versions.VersionRangeFactory
 
 @TypeChecked
 class EscrowConfigValidator {
+    static final String ARCHIVED_SUFFIX = "(archived)"
 
     static VersionRangeHelper versionRangeHelper = new VersionRangeHelper()
     static MavenArtifactMatcher mavenArtifactMatcher = new MavenArtifactMatcher()
@@ -178,10 +179,12 @@ class EscrowConfigValidator {
         def jiraProjectKeyAndVersionPrefixToComponentNames = new HashMap<Tuple2<String, String>, HashSet<String>>()
         configuration.escrowModules.each { componentName, escrowModule ->
             escrowModule.moduleConfigurations.each { moduleConfiguration ->
-                jiraProjectKeyAndVersionPrefixToComponentNames.computeIfAbsent(new Tuple2<>(
-                        moduleConfiguration.jiraConfiguration.projectKey,
-                        moduleConfiguration.jiraConfiguration.componentInfo?.versionPrefix
-                )) { new HashSet<>() }.add(componentName)
+                if (!moduleConfiguration.componentDisplayName?.endsWith(ARCHIVED_SUFFIX)) {
+                    jiraProjectKeyAndVersionPrefixToComponentNames.computeIfAbsent(new Tuple2<>(
+                            moduleConfiguration.jiraConfiguration.projectKey,
+                            moduleConfiguration.jiraConfiguration.componentInfo?.versionPrefix
+                    )) { new HashSet<>() }.add(componentName)
+                }
             }
         }
         jiraProjectKeyAndVersionPrefixToComponentNames.each { jiraProjectKeyAndVersionPrefix, componentNames ->
@@ -224,7 +227,7 @@ class EscrowConfigValidator {
         configuration.escrowModules.each { componentKey, value ->
             value.moduleConfigurations.each { config ->
                 //TODO Use appropriate attribute to check if component is archived
-                if (config?.componentDisplayName?.endsWith("(archived)")) {
+                if (config?.componentDisplayName?.endsWith(ARCHIVED_SUFFIX)) {
                     if (config.distribution.explicit() && config.distribution.external()) {
                         registerError("Archived component '$componentKey' can't be explicitly distributed. Pls set distribution->explicit=false")
                     }
