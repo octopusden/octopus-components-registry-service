@@ -5,11 +5,6 @@ ARG BUILD_VERSION
 
 WORKDIR /app
 
-USER root
-RUN chmod 777 -R /tmp
-RUN adduser jboss
-USER jboss
-
 EXPOSE 4567
 
 COPY build/libs/components-registry-service-server-${BUILD_VERSION:-1.0-SNAPSHOT}.jar app.jar
