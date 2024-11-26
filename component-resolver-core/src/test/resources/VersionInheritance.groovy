@@ -67,12 +67,18 @@ Defaults {
             groupId = "org.octopusden.octopus.sub-component-one"
             octopusVersion = '03.47'
             vcsUrl = "ssh://hg@mercurial/sub-component-one"
+            jira {
+                component { versionPrefix = "one" }
+            }
         }
 
         "sub-component-two" {//null
             componentOwner = "user1"
             groupId = "org.octopusden.octopus.sub-component-two"
             vcsUrl = "ssh://hg@mercurial/sub-component-two"
+            jira {
+                component { versionPrefix = "two" }
+            }
         }
     }
 }

@@ -1,5 +1,12 @@
 package org.octopusden.octopus.escrow.configuration.validation;
 
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Objects;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -9,16 +16,11 @@ import org.octopusden.octopus.escrow.configuration.loader.ConfigLoader;
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader;
 import org.octopusden.octopus.escrow.exceptions.EscrowConfigurationException;
 
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Objects;
-import java.util.stream.Stream;
-
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
-import static org.octopusden.octopus.escrow.TestConfigUtils.*;
+import static org.octopusden.octopus.escrow.TestConfigUtils.PRODUCT_TYPES;
+import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_GROUP_IDS;
+import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_SYSTEMS;
+import static org.octopusden.octopus.escrow.TestConfigUtils.VERSION_NAMES;
 
 @DisplayName("Components registry component's validator test")
 class ComponentsRegistryValidatorTest {
@@ -26,7 +28,9 @@ class ComponentsRegistryValidatorTest {
     private static Stream<Arguments> crsData() {
         return Stream.of(
                 Arguments.of("CREG-153", Arrays.asList("groupId:artifactId patterns of module octopusstreams has intersection with octopusstreams-commons")),
-                Arguments.of("CREG-182", Arrays.asList("Archived component 'component-integration' can't be explicitly distributed. Pls set distribution->explicit=false"))
+                Arguments.of("CREG-182", Arrays.asList("Archived component 'component-integration' can't be explicitly distributed. Pls set distribution->explicit=false")),
+                Arguments.of("version-prefix-intersection", Arrays.asList("Following components have no version prefix in Jira project 'PROJECT_2': component4, component5",
+                        "Following components have the same version prefix 'versionPrefix' in Jira project 'PROJECT': component1, component3"))
         );
     }
 

@@ -53,5 +53,6 @@ octopusumessage {
     }
     jira {
         projectKey = "SYSTEM"
+        customer { versionPrefix = "octopus" }
     }
 }

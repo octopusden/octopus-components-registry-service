@@ -25,6 +25,7 @@ import org.octopusden.releng.versions.VersionRangeFactory
 
 @TypeChecked
 class EscrowConfigValidator {
+    static final String ARCHIVED_SUFFIX = "(archived)"
 
     static VersionRangeHelper versionRangeHelper = new VersionRangeHelper()
     static MavenArtifactMatcher mavenArtifactMatcher = new MavenArtifactMatcher()
@@ -105,6 +106,7 @@ class EscrowConfigValidator {
         if (!hasErrors()) {
             validateVersionConflicts(configuration)
             validateGroupIdAndVersionIdIntersections(configuration)
+            validateJiraProjectKeyAndVersionPrefixIntersections(configuration)
             validateComponentParent(configuration)
             validateArchivedComponents(configuration)
         } else {
@@ -173,8 +175,31 @@ class EscrowConfigValidator {
         }
     }
 
+    def validateJiraProjectKeyAndVersionPrefixIntersections(EscrowConfiguration configuration) {
+        def jiraProjectKeyAndVersionPrefixToComponentNames = new HashMap<Tuple2<String, String>, HashSet<String>>()
+        configuration.escrowModules.each { componentName, escrowModule ->
+            escrowModule.moduleConfigurations.each { moduleConfiguration ->
+                if (!moduleConfiguration.componentDisplayName?.endsWith(ARCHIVED_SUFFIX)) {
+                    jiraProjectKeyAndVersionPrefixToComponentNames.computeIfAbsent(new Tuple2<>(
+                            moduleConfiguration.jiraConfiguration.projectKey,
+                            moduleConfiguration.jiraConfiguration.componentInfo?.versionPrefix
+                    )) { new HashSet<>() }.add(componentName)
+                }
+            }
+        }
+        jiraProjectKeyAndVersionPrefixToComponentNames.each { jiraProjectKeyAndVersionPrefix, componentNames ->
+            if (componentNames.size() > 1) {
+                def versionPrefix = "no version prefix"
+                if (jiraProjectKeyAndVersionPrefix.second != null) {
+                    versionPrefix = "the same version prefix '${jiraProjectKeyAndVersionPrefix.second}'"
+                }
+                registerError("Following components have $versionPrefix in Jira project '${jiraProjectKeyAndVersionPrefix.first}': ${componentNames.join(', ')}")
+            }
+        }
+    }
+
     def validateComponentParent(EscrowConfiguration configuration) {
-        configuration.escrowModules.each { String componentName, EscrowModule escrowModule ->
+        configuration.escrowModules.each { componentName, escrowModule ->
             escrowModule.moduleConfigurations.each { moduleConfiguration ->
                 if (moduleConfiguration.parentComponent != null) {
                     def parentEscrowModule = configuration.escrowModules[moduleConfiguration.parentComponent]
@@ -202,7 +227,7 @@ class EscrowConfigValidator {
         configuration.escrowModules.each { componentKey, value ->
             value.moduleConfigurations.each { config ->
                 //TODO Use appropriate attribute to check if component is archived
-                if (config?.componentDisplayName?.endsWith("(archived)")) {
+                if (config?.componentDisplayName?.endsWith(ARCHIVED_SUFFIX)) {
                     if (config.distribution.explicit() && config.distribution.external()) {
                         registerError("Archived component '$componentKey' can't be explicitly distributed. Pls set distribution->explicit=false")
                     }
@@ -416,7 +441,7 @@ class EscrowConfigValidator {
         def tools = moduleConfig.getBuildConfiguration()?.getTools()
         tools?.each { tool ->
             def toolName = tool.getName()
-            if (toolName == null)  {
+            if (toolName == null) {
                 registerError("tool name is not specified")
             }
             if (tool.getEscrowEnvironmentVariable() == null) {

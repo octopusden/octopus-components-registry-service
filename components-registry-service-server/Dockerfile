@@ -1,14 +1,9 @@
-ARG IMAGE=openjdk:11
+ARG IMAGE=eclipse-temurin:11-jdk
 FROM $IMAGE
 
 ARG BUILD_VERSION
 
 WORKDIR /app
-
-USER root
-RUN chmod 777 -R /tmp
-RUN adduser jboss
-USER jboss
 
 EXPOSE 4567
 

@@ -30,6 +30,7 @@ Defaults {
     }
     jira {
         projectKey = "DBSM"
+        component { versionPrefix = "client" }
     }
 }
 

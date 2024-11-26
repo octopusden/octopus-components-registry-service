@@ -26,6 +26,7 @@ import static org.octopusden.octopus.escrow.RepositoryType.*
         projectKey = "TEST"
         majorVersionFormat = '$major.$minor'
         releaseVersionFormat = '$major.$minor.$service'
+        component { versionPrefix = "test-git-component" }
     }
 }
 
@@ -80,6 +81,7 @@ test {
     }
     jira {
         projectKey = "TEST"
+        component { versionPrefix = "test-project" }
     }
 
 }
@@ -93,6 +95,7 @@ test {
     }
     jira {
         projectKey = "TEST"
+        component { versionPrefix = "provided-test-dependency" }
     }
 }
 
@@ -105,6 +108,7 @@ test {
     }
     jira {
         projectKey = "TEST"
+        component { versionPrefix = "provided-test-archive" }
     }
 }
 
@@ -117,6 +121,7 @@ test {
     }
     jira {
         projectKey = "TEST"
+        component { versionPrefix = "provided-component-with-dependencies" }
     }
 }
 
@@ -136,6 +141,7 @@ test {
     }
     jira {
         projectKey = "TEST"
+        component { versionPrefix = "test-cvs-maven" }
     }
 }
 
@@ -164,6 +170,7 @@ test {
     }
     jira {
         projectKey = "TEST"
+        component { versionPrefix = "escrow-test-project" }
     }
 }
 
@@ -180,6 +187,7 @@ test {
     }
     jira {
         projectKey = "TEST"
+        component { versionPrefix = "test-bom1" }
     }
 }
 
@@ -196,6 +204,7 @@ test {
     }
     jira {
         projectKey = "TEST"
+        component { versionPrefix = "test-bom2" }
     }
 }
 
@@ -208,6 +217,7 @@ test {
     tag = '$version'
     jira {
         projectKey = "TEST"
+        component { versionPrefix = "escrow-test-multi-module-project" }
     }
 }
 
@@ -228,5 +238,6 @@ test {
     }
     jira {
         projectKey = "TEST"
+        component { versionPrefix = "test-npm-maven" }
     }
 }

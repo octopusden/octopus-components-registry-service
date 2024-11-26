@@ -9,6 +9,7 @@ import static org.octopusden.octopus.escrow.RepositoryType.*
     jira {
         projectKey = "DDD"
         technical = false
+        component { versionPrefix = 'db-api' }
     }
     "[99999,100000]" {
         //fake in order
@@ -43,11 +44,14 @@ import static org.octopusden.octopus.escrow.RepositoryType.*
             componentOwner = "user1"
             groupId = "org.octopusden.octopus.ptkmodel2,org.octopusden.octopus.whiskey.kdb.model,org.octopusden.octopus.pt_k_db"
             "[03.51.29.15,)" {
-                artifactId = "kdb_xmlmanager_metadata,kdb_table,ptkdb_model,kdb-model-parent"
-                repositoryType = CVS
-                vcsUrl = 'OctopusSource/OctopusK/Other/models/KDB'
-                tag = 'K_$major02_$minor02_$service02_$fix02'
-                buildSystem = MAVEN
+            artifactId = "kdb_xmlmanager_metadata,kdb_table,ptkdb_model,kdb-model-parent"
+            repositoryType = CVS
+            vcsUrl = 'OctopusSource/OctopusK/Other/models/KDB'
+            tag = 'K_$major02_$minor02_$service02_$fix02'
+            buildSystem = MAVEN
+            }
+            jira {
+                component { versionPrefix = "ptkdb_api" }
             }
         }
 
@@ -60,10 +64,13 @@ import static org.octopusden.octopus.escrow.RepositoryType.*
             "(,03.51.29.15)" {
                 artifactId = "nothing_see_pt_k_db"
             }
-                repositoryType = CVS
-                vcsUrl = 'OctopusSource/OctopusK/Other/models/PTK'
-                tag = 'K_$major02_$minor02_$service02_$fix02'
-                buildSystem = MAVEN
+            repositoryType = CVS
+            vcsUrl = 'OctopusSource/OctopusK/Other/models/PTK'
+            tag = 'K_$major02_$minor02_$service02_$fix02'
+            buildSystem = MAVEN
+            jira {
+                component { versionPrefix = "pt_k_db_api" }
+            }
         }
 
         k_dbjava_api {
@@ -73,6 +80,9 @@ import static org.octopusden.octopus.escrow.RepositoryType.*
             vcsUrl = 'ssh://hg@mercurial/products/octopusk/DbJava'
             tag = 'K_$major02_$minor02_$service02_$fix02'
             buildSystem = MAVEN
+            jira {
+                component { versionPrefix = "k_dbjava_api" }
+            }
         }
 
 
@@ -85,10 +95,13 @@ import static org.octopusden.octopus.escrow.RepositoryType.*
             "(,03.51.29.15)" {
                 artifactId = "nothing_see_k_db_"
             }
-                repositoryType = CVS
-                vcsUrl = 'OctopusSource/OctopusK/Other/packages'
-                tag = 'K_$major02_$minor02_$service02_$fix02'
-                buildSystem = MAVEN
+            repositoryType = CVS
+            vcsUrl = 'OctopusSource/OctopusK/Other/packages'
+            tag = 'K_$major02_$minor02_$service02_$fix02'
+            buildSystem = MAVEN
+            jira {
+                component { versionPrefix = "pt_k_packages_api" }
+            }
         }
 
         c_db_api {
@@ -100,10 +113,13 @@ import static org.octopusden.octopus.escrow.RepositoryType.*
             "(,03.51.29.15)" {
                 artifactId = "nothing_see_c_db"
             }
-                repositoryType = CVS
-                vcsUrl = 'OctopusSource/Octopus/Other/models/Component'
-                tag = 'TEST_COMPONENT2_$major02_$minor02_$service02_$fix02'
-                buildSystem = MAVEN
+            repositoryType = CVS
+            vcsUrl = 'OctopusSource/Octopus/Other/models/Component'
+            tag = 'TEST_COMPONENT2_$major02_$minor02_$service02_$fix02'
+            buildSystem = MAVEN
+            jira {
+                component { versionPrefix = "c_db_api" }
+            }
         }
 
         component_db {
@@ -113,6 +129,9 @@ import static org.octopusden.octopus.escrow.RepositoryType.*
             vcsUrl = 'ssh://hg@mercurial/products/octopuscomponent/DbJava'
             tag = 'TEST_COMPONENT2_$major02_$minor02_$service02_$fix02'
             buildSystem = MAVEN
+            jira {
+                component { versionPrefix = "component_db" }
+            }
         }
 
         component_packages_api {
@@ -124,10 +143,13 @@ import static org.octopusden.octopus.escrow.RepositoryType.*
             "(,03.51.29.15)" {
                 artifactId = "nothing_see_c_db_"
             }
-                repositoryType = CVS
-                vcsUrl = 'OctopusSource/Octopus/Other/packages'
-                tag = 'TEST_COMPONENT2_$major02_$minor02_$service02_$fix02'
-                buildSystem = MAVEN
+            repositoryType = CVS
+            vcsUrl = 'OctopusSource/Octopus/Other/packages'
+            tag = 'TEST_COMPONENT2_$major02_$minor02_$service02_$fix02'
+            buildSystem = MAVEN
+            jira {
+                component { versionPrefix = "component_packages_api" }
+            }
         }
     }
 }
