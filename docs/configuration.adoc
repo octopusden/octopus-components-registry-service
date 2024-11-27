@@ -186,7 +186,32 @@ Examples of version range:
 WARNING: Version ranges of a component should have no intersections!
 
 === Multiple release branches
-If your component uses multiple release branches, you can specify them in the parameter 'branch' separated by the symbol '|'.
+
+If your component uses multiple release branches, you need to specify different version ranges with a parameter 'branch'.
+
+Example:
+----
+    "[3.0, 4.0)" {
+        vcsSettings {
+            branch = "master"
+        }
+    }
+    "[2.0,3.0)" {
+        vcsSettings {
+            branch = "R-2_0"
+        }
+    }
+    "[1.0,2.0)" {
+        vcsSettings {
+            branch = "R-1_0"
+        }
+    }
+----
+
+:hourglass:
+New implementation will be delivered soon. Wait for the official announcement.
+
+To configure multiple release branches, specify them in the parameter 'branch' separated by the symbol '|'.
 
 Example:
 ----
