@@ -208,8 +208,7 @@ Example:
     }
 ----
 
-:hourglass:
-New implementation will be delivered soon. Wait for the official announcement.
+TIP: New implementation will be delivered soon. Wait for the official announcement.
 
 To configure multiple release branches, specify them in the parameter 'branch' separated by the symbol '|'.
 
