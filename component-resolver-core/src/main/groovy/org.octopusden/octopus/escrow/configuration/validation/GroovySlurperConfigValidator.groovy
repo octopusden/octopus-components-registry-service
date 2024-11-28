@@ -20,6 +20,7 @@ class GroovySlurperConfigValidator {
     public static final String DEPENDENCIES = 'dependencies'
     public static final String SECURITY_GROUPS = 'securityGroups'
     public static final String SECURITY_GROUPS_READ = "read"
+
     private static final String FILE_PATTERN = "file:/.+"
     private static final String PROHIBITED_SYMBOLS = "\\\\\\s:|\\?\\*\"'<>\\+"
     private static final String GAV_PROHIBITED_SYMBOLS = "/$PROHIBITED_SYMBOLS"
@@ -30,17 +31,20 @@ class GroovySlurperConfigValidator {
     public static final Pattern DEB_PATTERN = Pattern.compile("^($DEB_ENTRY_PATTERN)(,($DEB_ENTRY_PATTERN))*\$")
     private static final String RPM_ENTRY_PATTERN = "[^$PROHIBITED_SYMBOLS]+\\.rpm"
     public static final Pattern RPM_PATTERN = Pattern.compile("^($RPM_ENTRY_PATTERN)(,($RPM_ENTRY_PATTERN))*\$")
-    private static final String SG_ENTRY_REGEX = "[\\w-#\\s]+"
-    public static final Pattern SECURITY_GROUPS_PATTERN = Pattern.compile("^($SG_ENTRY_REGEX)(,($SG_ENTRY_REGEX))*\$")
-    public static final Pattern DOCKER_PATTERN = Pattern.compile("^(?:[a-z0-9]+(?:[._-][a-z0-9]+)*/)*[a-z0-9]+(?:[._-][a-z0-9]+)*\$")
+    private static final String SECURITY_GROUPS_ENTRY_PATTERN = "[\\w-#\\s]+"
+    public static final Pattern SECURITY_GROUPS_PATTERN = Pattern.compile("^($SECURITY_GROUPS_ENTRY_PATTERN)(,($SECURITY_GROUPS_ENTRY_PATTERN))*\$")
+    private static final String DOCKER_IMAGE_PATH_PATTERN = "([a-z0-9]+([_.-][a-z0-9]+)*/)*[a-z0-9]+([_.-][a-z0-9]+)*"
+    private static final String DOCKER_IMAGE_TAG_PATTERN = "\\w[\\w.-]{0,127}"
+    private static final String DOCKER_ENTRY_PATTERN = "$DOCKER_IMAGE_PATH_PATTERN:$DOCKER_IMAGE_TAG_PATTERN"
+    public static final Pattern DOCKER_PATTERN = Pattern.compile("^($DOCKER_ENTRY_PATTERN)(,($DOCKER_ENTRY_PATTERN))*\$")
 
-    public
-    static SUPPORTED_ATTRIBUTES = ['buildSystem', VCS_URL, REPOSITORY_TYPE, 'groupId', 'artifactId',
-                                   TAG, 'versionRange', 'version', 'module',
-                                   'teamcityReleaseConfigId', 'jiraProjectKey', 'jiraMajorVersionFormat', 'jiraReleaseVersionFormat',
-                                   'buildFilePath', 'deprecated', BRANCH,
-                                   'componentDisplayName', 'componentOwner', 'releaseManager', 'securityChampion', 'system',
-                                   'clientCode', 'releasesInDefaultBranch', 'solution', 'parentComponent', 'octopusVersion']
+    public static SUPPORTED_ATTRIBUTES = ['buildSystem', VCS_URL, REPOSITORY_TYPE, 'groupId', 'artifactId',
+                                          TAG, 'versionRange', 'version', 'module',
+                                          'teamcityReleaseConfigId', 'jiraProjectKey', 'jiraMajorVersionFormat', 'jiraReleaseVersionFormat',
+                                          'buildFilePath', 'deprecated', BRANCH,
+                                          'componentDisplayName', 'componentOwner', 'releaseManager', 'securityChampion', 'system',
+                                          'clientCode', 'releasesInDefaultBranch', 'solution', 'parentComponent', 'octopusVersion']
+
     static SUPPORTED_JIRA_ATTRIBUTES = ['projectKey', 'lineVersionFormat', 'majorVersionFormat', 'releaseVersionFormat', 'buildVersionFormat', "displayName", 'technical']
 
     static SUPPORTED_BUILD_ATTRIBUTES = ['dependencies', 'javaVersion', 'mavenVersion', 'gradleVersion', 'requiredProject', 'systemProperties', 'projectVersion', 'requiredTools', 'buildTasks']
