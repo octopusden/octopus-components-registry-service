@@ -19,7 +19,7 @@ import static org.octopusden.octopus.escrow.BuildSystem.*
     distribution {
         explicit = true
         external = true
-        docker = "test/test-component"
+        docker = 'test-component/image:${version}-flavour1,test-component/image:${version}-flavour2'
     }
     "[1.0,1.3)" {
         vcsSettings {

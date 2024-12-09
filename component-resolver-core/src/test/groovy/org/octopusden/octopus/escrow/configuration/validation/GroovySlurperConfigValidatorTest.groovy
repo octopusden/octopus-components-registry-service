@@ -32,12 +32,11 @@ class GroovySlurperConfigValidatorTest extends GroovyTestCase {
      * Docker pattern should contain only one image name without tag
      */
     void testDockerPattern() {
-        assert DOCKER_PATTERN.matcher("org.octopusden/octopus/image").matches()
-        assert !DOCKER_PATTERN.matcher("org.octopusden/octopus/image:1.0").matches()
-        assert DOCKER_PATTERN.matcher("octopusden/octopus").matches()
-        assert DOCKER_PATTERN.matcher("octopusden.octopus").matches()
-        assert !DOCKER_PATTERN.matcher("octopusden\\octopus").matches()
-        assert !DOCKER_PATTERN.matcher("octopusden/octopus,octopusden/octopus-2").matches()
-        assert !DOCKER_PATTERN.matcher("octopusden/octopus:builder:1.0").matches()
+        assert DOCKER_PATTERN.matcher("org.octopusden/octopus/image:1.0").matches()
+        assert DOCKER_PATTERN.matcher("org.octopusden/octopus/first-image:1.0,org.octopusden/octopus/second-image:1.0").matches()
+        assert !DOCKER_PATTERN.matcher("org.octopusden/octopus/image").matches()
+        assert !DOCKER_PATTERN.matcher("org.octopusden\\octopus/image:1.0").matches()
+        assert !DOCKER_PATTERN.matcher("org.octopusden/octopus:image:1.0").matches()
+        assert !DOCKER_PATTERN.matcher("org.octopusden/octopus/image:.0").matches()
     }
 }
