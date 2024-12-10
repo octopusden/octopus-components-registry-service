@@ -8,6 +8,7 @@ import kotlin.io.path.inputStream
 import kotlin.io.path.isRegularFile
 import org.apache.maven.artifact.DefaultArtifact
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
+import org.octopusden.octopus.components.registry.core.dto.BuildSystem
 import org.octopusden.octopus.components.registry.core.dto.VersionedComponent
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.server.config.ComponentsRegistryProperties
@@ -33,6 +34,7 @@ import org.octopusden.releng.versions.VersionRangeFactory
 import org.slf4j.LoggerFactory
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.stereotype.Service
+import java.util.EnumMap
 
 @Service
 @EnableConfigurationProperties(ComponentsRegistryProperties::class)
@@ -166,6 +168,19 @@ class ComponentRegistryResolverImpl(
             }
     }
 
+    private fun org.octopusden.octopus.escrow.BuildSystem.toDTO(): BuildSystem {
+        return when (this) {
+            org.octopusden.octopus.escrow.BuildSystem.BS2_0 -> BuildSystem.BS2_0
+            org.octopusden.octopus.escrow.BuildSystem.MAVEN -> BuildSystem.MAVEN
+            org.octopusden.octopus.escrow.BuildSystem.ECLIPSE_MAVEN -> BuildSystem.ECLIPSE_MAVEN
+            org.octopusden.octopus.escrow.BuildSystem.GRADLE -> BuildSystem.GRADLE
+            org.octopusden.octopus.escrow.BuildSystem.WHISKEY -> BuildSystem.WHISKEY
+            org.octopusden.octopus.escrow.BuildSystem.PROVIDED -> BuildSystem.PROVIDED
+            org.octopusden.octopus.escrow.BuildSystem.ESCROW_NOT_SUPPORTED -> BuildSystem.NOT_SUPPORTED
+            org.octopusden.octopus.escrow.BuildSystem.ESCROW_PROVIDED_MANUALLY -> BuildSystem.PROVIDED
+        }
+    }
+
     private fun getProjectJiraComponentVersionRanges(projectKey: String): MutableList<JiraComponentVersionRange> =
         jiraParametersResolver.componentConfig
             .projectKeyToJiraComponentVersionRangeMap[projectKey]
@@ -209,6 +224,21 @@ class ComponentRegistryResolverImpl(
 
     override fun getDependencyMapping(): Map<String, String> {
         return dependencyMapping
+    }
+
+    /**
+     * Get components count by build system
+     */
+    override fun getComponentsCountByBuildSystem(): EnumMap<BuildSystem, Int> {
+        val components = getComponents()
+        val result = EnumMap<BuildSystem, Int>(BuildSystem::class.java)
+        components.forEach { component ->
+            component.moduleConfigurations.forEach { moduleConfig ->
+                val buildSystem = moduleConfig.buildSystem.toDTO()
+                result[buildSystem] = result.getOrDefault(buildSystem, 0) + 1
+            }
+        }
+        return result
     }
 
     private fun findComponentByArtifactOrNull(artifact: ArtifactDependency): VersionedComponent? =
