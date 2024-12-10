@@ -7,5 +7,6 @@ enum class BuildSystem {
     GRADLE,
     WHISKEY,
     PROVIDED,
-    NOT_SUPPORTED
+    NOT_SUPPORTED,
+    GENERIC_IN_CONTAINER
 }
