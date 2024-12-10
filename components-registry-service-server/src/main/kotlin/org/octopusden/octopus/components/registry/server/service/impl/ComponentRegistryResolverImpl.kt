@@ -168,19 +168,6 @@ class ComponentRegistryResolverImpl(
             }
     }
 
-    private fun org.octopusden.octopus.escrow.BuildSystem.toDTO(): BuildSystem {
-        return when (this) {
-            org.octopusden.octopus.escrow.BuildSystem.BS2_0 -> BuildSystem.BS2_0
-            org.octopusden.octopus.escrow.BuildSystem.MAVEN -> BuildSystem.MAVEN
-            org.octopusden.octopus.escrow.BuildSystem.ECLIPSE_MAVEN -> BuildSystem.ECLIPSE_MAVEN
-            org.octopusden.octopus.escrow.BuildSystem.GRADLE -> BuildSystem.GRADLE
-            org.octopusden.octopus.escrow.BuildSystem.WHISKEY -> BuildSystem.WHISKEY
-            org.octopusden.octopus.escrow.BuildSystem.PROVIDED -> BuildSystem.PROVIDED
-            org.octopusden.octopus.escrow.BuildSystem.ESCROW_NOT_SUPPORTED -> BuildSystem.NOT_SUPPORTED
-            org.octopusden.octopus.escrow.BuildSystem.ESCROW_PROVIDED_MANUALLY -> BuildSystem.PROVIDED
-        }
-    }
-
     private fun getProjectJiraComponentVersionRanges(projectKey: String): MutableList<JiraComponentVersionRange> =
         jiraParametersResolver.componentConfig
             .projectKeyToJiraComponentVersionRangeMap[projectKey]
@@ -239,6 +226,19 @@ class ComponentRegistryResolverImpl(
             }
         }
         return result
+    }
+
+    private fun org.octopusden.octopus.escrow.BuildSystem.toDTO(): BuildSystem {
+        return when (this) {
+            org.octopusden.octopus.escrow.BuildSystem.BS2_0 -> BuildSystem.BS2_0
+            org.octopusden.octopus.escrow.BuildSystem.MAVEN -> BuildSystem.MAVEN
+            org.octopusden.octopus.escrow.BuildSystem.ECLIPSE_MAVEN -> BuildSystem.ECLIPSE_MAVEN
+            org.octopusden.octopus.escrow.BuildSystem.GRADLE -> BuildSystem.GRADLE
+            org.octopusden.octopus.escrow.BuildSystem.WHISKEY -> BuildSystem.WHISKEY
+            org.octopusden.octopus.escrow.BuildSystem.PROVIDED -> BuildSystem.PROVIDED
+            org.octopusden.octopus.escrow.BuildSystem.ESCROW_NOT_SUPPORTED -> BuildSystem.NOT_SUPPORTED
+            org.octopusden.octopus.escrow.BuildSystem.ESCROW_PROVIDED_MANUALLY -> BuildSystem.PROVIDED
+        }
     }
 
     private fun findComponentByArtifactOrNull(artifact: ArtifactDependency): VersionedComponent? =
