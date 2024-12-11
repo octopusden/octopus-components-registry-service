@@ -7,5 +7,6 @@ public enum BuildSystemType {
     PROVIDED,
     ESCROW_NOT_SUPPORTED,
     ESCROW_PROVIDED_MANUALLY,
-    BS2_0
+    BS2_0,
+    GOLANG
 }

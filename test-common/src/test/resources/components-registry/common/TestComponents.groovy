@@ -847,3 +847,10 @@ TEST_COMPONENT4 {
         tag = 'tdsecure-$version'
     }
 }
+
+"TEST_COMPONENT_WITH_GOLANG_BUILD_SYSTEM" {
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.test.golang"
+    artifactId = "test-golang"
+    buildSystem = GOLANG
+}
