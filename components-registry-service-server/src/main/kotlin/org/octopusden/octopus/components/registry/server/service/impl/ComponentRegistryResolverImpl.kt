@@ -238,6 +238,7 @@ class ComponentRegistryResolverImpl(
             org.octopusden.octopus.escrow.BuildSystem.PROVIDED -> BuildSystem.PROVIDED
             org.octopusden.octopus.escrow.BuildSystem.ESCROW_NOT_SUPPORTED -> BuildSystem.NOT_SUPPORTED
             org.octopusden.octopus.escrow.BuildSystem.ESCROW_PROVIDED_MANUALLY -> BuildSystem.PROVIDED
+            org.octopusden.octopus.escrow.BuildSystem.GOLANG -> BuildSystem.GOLANG
         }
     }
 
