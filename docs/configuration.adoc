@@ -186,12 +186,32 @@ Examples of version range:
 WARNING: Version ranges of a component should have no intersections!
 
 === Multiple release branches
-If your component uses multiple release branches, you can specify them in the parameter 'branch' separated by the symbol '|'.
+If your component uses multiple release branches, specify them in the `branch` parameter, separated by the `|` symbol.
 
-Example:
-----
-branch = 'master|release/$major.$minor'
-----
+---
+
+**Examples**:
+
+#### Static branches
+Use static branch names when they are predefined:
+```
+vcsSettings {
+    vcsUrl = ...
+    branch = '2024.1|2024.2'
+}
+```
+
+
+---
+
+#### Dynamic version variables
+You can use dynamic version variables, such as `$major`, `$major02`, `$minor`, etc., to generalize branch naming:
+```
+vcsSettings {
+    vcsUrl = ...
+    branch = 'master|release/$major.$minor'
+}
+```
 
 === Expression Language
 The rules of how to calculate major/release version and some other fields by a build version can be configured using Expression Language.
