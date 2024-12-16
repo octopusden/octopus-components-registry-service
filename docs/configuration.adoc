@@ -185,14 +185,14 @@ Examples of version range:
 
 WARNING: Version ranges of a component should have no intersections!
 
-=== Multiple Release Branches
+=== Multiple release branches
 If your component uses multiple release branches, specify them in the `branch` parameter, separated by the `|` symbol.
 
 ---
 
 **Examples**:
 
-#### Static Branches
+#### Static branches
 Use static branch names when they are predefined:
 ```
 vcsSettings {
@@ -204,7 +204,7 @@ vcsSettings {
 
 ---
 
-#### Dynamic Version Variables
+#### Dynamic version variables
 You can use dynamic version variables, such as `$major`, `$major02`, `$minor`, etc., to generalize branch naming:
 ```
 vcsSettings {
