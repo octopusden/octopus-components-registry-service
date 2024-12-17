@@ -204,7 +204,7 @@ class ComponentRegistryResolverImpl(
      * Returns single JiraComponentVersion to JiraComponentVersionRange pair found by Component ID and Version
      *
      * @param component Component Id
-     * @param version   Version (having build/release/major/line format with or without prefix, release candidate suffix is allowed)
+     * @param version   Version (having non-strict build/release/major/line format, i.e. having the same number of significant numeric elements)
      * @return JiraComponentVersion to JiraComponentVersionRange pair
      */
     private fun getJiraComponentVersionToRangeByComponentAndVersion(
@@ -227,7 +227,7 @@ class ComponentRegistryResolverImpl(
      * Returns single JiraComponentVersion to JiraComponentVersionRange pair found by Jira Project Key and Jira Version
      *
      * @param projectKey Jira Project Key
-     * @param version    Jira Version (having build/release/major/line format with prefix if it's configured, release candidate suffix is allowed)
+     * @param version    Jira Version (having strict build/release/major/line format with prefix if it's configured, release candidate suffix is allowed)
      * @return JiraComponentVersion to JiraComponentVersionRange pair
      */
     private fun getJiraComponentVersionToRangeByProjectAndVersion(
@@ -247,53 +247,33 @@ class ComponentRegistryResolverImpl(
     ) = with(numericVersionFactory.create(version)) {
         versionRanges.filter { versionRangeFactory.create(it.versionRange).containsVersion(this) }
             .mapNotNull { versionRange ->
-                version.removeSuffix(RC_SUFFIX).let {
-                    val component = versionRange.jiraComponentVersion.component
-                    var jiraVersion = it
-                    var cleanVersion: String? = null
-                    when {
-                        jiraComponentVersionFormatter.matchesBuildVersionFormat(component, it, strict) -> {
-                            if (!strict) {
-                                jiraVersion = jiraComponentVersionFormatter.formatBuildVersionFormat(component, it)
-                            }
-                            cleanVersion = formatVersion(component.componentVersionFormat.buildVersionFormat)
-                        }
+                val component = versionRange.jiraComponentVersion.component
+                when {
+                    jiraComponentVersionFormatter.matchesBuildVersionFormat(component, version, strict) ->
+                        formatVersion(component.componentVersionFormat.buildVersionFormat)
 
-                        jiraComponentVersionFormatter.matchesReleaseVersionFormat(component, it, strict) -> {
-                            if (!strict) {
-                                jiraVersion = jiraComponentVersionFormatter.formatReleaseVersionFormat(component, it)
-                            }
-                            cleanVersion = formatVersion(component.componentVersionFormat.releaseVersionFormat)
-                        }
+                    jiraComponentVersionFormatter.matchesReleaseVersionFormat(component, version, strict)
+                            || jiraComponentVersionFormatter.matchesRCVersionFormat(component, version, strict) ->
+                        formatVersion(component.componentVersionFormat.releaseVersionFormat)
 
-                        jiraComponentVersionFormatter.matchesMajorVersionFormat(component, it, strict) -> {
-                            if (!strict) {
-                                jiraVersion = jiraComponentVersionFormatter.formatMajorVersionFormat(component, it)
-                            }
-                            cleanVersion = formatVersion(component.componentVersionFormat.majorVersionFormat)
-                        }
+                    jiraComponentVersionFormatter.matchesMajorVersionFormat(component, version, strict) ->
+                        formatVersion(component.componentVersionFormat.majorVersionFormat)
 
-                        jiraComponentVersionFormatter.matchesLineVersionFormat(component, it, strict) -> {
-                            if (!strict) {
-                                jiraVersion = jiraComponentVersionFormatter.formatLineVersionFormat(component, it)
-                            }
-                            cleanVersion = formatVersion(component.componentVersionFormat.lineVersionFormat)
-                        }
-                    }
-                    if (cleanVersion != null && (it == cleanVersion || it == jiraVersion)) {
-                        JiraComponentVersion(
-                            ComponentVersion.create(versionRange.componentName, cleanVersion),
-                            versionRange.component,
-                            jiraComponentVersionFormatter
-                        ) to versionRange
-                    } else null
+                    jiraComponentVersionFormatter.matchesLineVersionFormat(component, version, strict) ->
+                        formatVersion(component.componentVersionFormat.lineVersionFormat)
+
+                    else -> null
+                }?.let { cleanVersion ->
+                    JiraComponentVersion(
+                        ComponentVersion.create(versionRange.componentName, cleanVersion),
+                        versionRange.component,
+                        jiraComponentVersionFormatter
+                    ) to versionRange
                 }
             }
     }
 
     companion object {
         private val LOG = LoggerFactory.getLogger(ComponentRegistryResolverImpl::class.java)
-
-        private const val RC_SUFFIX = "_RC"
     }
 }
