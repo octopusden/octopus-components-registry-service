@@ -204,7 +204,7 @@ class ComponentRegistryResolverImpl(
      * Returns single JiraComponentVersion to JiraComponentVersionRange pair found by Component ID and Version
      *
      * @param component Component Id
-     * @param version   Version (having non-strict build/release/major/line format, i.e. having the same number of significant numeric elements)
+     * @param version   Version (having non-strict build/release/major/line format, i.e. having enough of significant numeric elements)
      * @return JiraComponentVersion to JiraComponentVersionRange pair
      */
     private fun getJiraComponentVersionToRangeByComponentAndVersion(
