@@ -4,7 +4,7 @@ import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
 import org.octopusden.octopus.components.registry.core.dto.BuildSystem
 import org.springframework.stereotype.Service
-import java.util.EnumMap
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Service for collecting metrics about components count by build system
@@ -15,23 +15,18 @@ class BuildSystemMetricsService(
     private val componentRegistryResolver: ComponentRegistryResolver
 ) {
 
-    private var buildSystem = EnumMap<BuildSystem, Int>(BuildSystem::class.java)
+    private val buildSystemMetrics = ConcurrentHashMap<BuildSystem, Int>()
 
     init {
         BuildSystem.values().forEach { buildSystem ->
-            Gauge.builder("build.system.count.${buildSystem.name}") {
-                getComponentCountForBuildSystem(buildSystem)
+            Gauge.builder("build.system.count") {
+                buildSystemMetrics[buildSystem] ?: 0
             }
                 .description("Number of components for build system: $buildSystem")
-                .tags("buildSystem", buildSystem.name)
+                .tag("buildSystem", buildSystem.name)
                 .register(meterRegistry)
         }
     }
-
-    /**
-     * Get component count for build system
-     */
-    private fun getComponentCountForBuildSystem(buildSystem: BuildSystem) = this.buildSystem[buildSystem] ?: 0
 
     /**
      * Update metrics
@@ -40,7 +35,7 @@ class BuildSystemMetricsService(
         val componentCounts = componentRegistryResolver.getComponentsCountByBuildSystem()
 
         BuildSystem.values().forEach { buildSystem ->
-            this.buildSystem[buildSystem] = componentCounts[buildSystem] ?: 0
+            buildSystemMetrics[buildSystem] = componentCounts[buildSystem] ?: 0
         }
     }
 
