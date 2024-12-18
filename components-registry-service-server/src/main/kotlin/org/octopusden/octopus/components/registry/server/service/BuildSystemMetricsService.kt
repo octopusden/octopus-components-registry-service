@@ -22,7 +22,6 @@ class BuildSystemMetricsService(
             Gauge.builder("build.system.count") {
                 buildSystemMetrics[buildSystem] ?: 0
             }
-                .description("Number of components for build system: $buildSystem")
                 .tag("buildSystem", buildSystem.name)
                 .register(meterRegistry)
         }
