@@ -108,15 +108,15 @@ class ComponentRegistryResolverImpl(
     override fun getComponentsDistributionByJiraProject(projectKey: String): Map<String, Distribution> {
         return getJiraComponentVersionRangesByProject(projectKey)
             .groupBy { it.componentName }
-            .mapValues { entry ->
+            .mapValues { (_, versionRange) ->
                 Distribution(
-                    entry.value.any { it.distribution?.explicit() ?: true },
-                    entry.value.any { it.distribution?.external() ?: false },
-                    entry.value.find { it.distribution != null }?.distribution?.GAV(),
-                    entry.value.find { it.distribution != null }?.distribution?.DEB(),
-                    entry.value.find { it.distribution != null }?.distribution?.RPM(),
-                    entry.value.find { it.distribution != null }?.distribution?.docker(),
-                    entry.value.find { it.distribution != null }?.distribution?.securityGroups
+                    versionRange.any { it.distribution?.explicit() ?: true },
+                    versionRange.any { it.distribution?.external() ?: false },
+                    versionRange.find { it.distribution != null }?.distribution?.GAV(),
+                    versionRange.find { it.distribution != null }?.distribution?.DEB(),
+                    versionRange.find { it.distribution != null }?.distribution?.RPM(),
+                    versionRange.find { it.distribution != null }?.distribution?.docker(),
+                    versionRange.find { it.distribution != null }?.distribution?.securityGroups
                         ?: SecurityGroups(null),
                 )
             }
