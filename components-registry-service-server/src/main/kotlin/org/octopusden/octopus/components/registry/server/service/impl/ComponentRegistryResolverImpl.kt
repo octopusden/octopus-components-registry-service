@@ -1,11 +1,5 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
-import java.nio.file.Paths
-import java.util.Properties
-import javax.annotation.Resource
-import kotlin.io.path.exists
-import kotlin.io.path.inputStream
-import kotlin.io.path.isRegularFile
 import org.apache.maven.artifact.DefaultArtifact
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.core.dto.BuildSystem
@@ -18,6 +12,7 @@ import org.octopusden.octopus.escrow.ModelConfigPostProcessor
 import org.octopusden.octopus.escrow.config.JiraComponentVersionRange
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
 import org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration
+import org.octopusden.octopus.escrow.configuration.model.EscrowModule
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
 import org.octopusden.octopus.escrow.dto.ComponentArtifactConfiguration
 import org.octopusden.octopus.escrow.model.Distribution
@@ -34,7 +29,13 @@ import org.octopusden.releng.versions.VersionRangeFactory
 import org.slf4j.LoggerFactory
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.stereotype.Service
+import java.nio.file.Paths
 import java.util.EnumMap
+import java.util.Properties
+import javax.annotation.Resource
+import kotlin.io.path.exists
+import kotlin.io.path.inputStream
+import kotlin.io.path.isRegularFile
 
 @Service
 @EnableConfigurationProperties(ComponentsRegistryProperties::class)
@@ -218,18 +219,22 @@ class ComponentRegistryResolverImpl(
      */
     override fun getComponentsCountByBuildSystem(): EnumMap<BuildSystem, Int> {
         val components = getComponents()
-        val result = EnumMap<BuildSystem, Set<String>>(BuildSystem::class.java)
-        components.forEach { component ->
-            component.moduleConfigurations.forEach { moduleConfig ->
-                if (moduleConfig.componentDisplayName?.endsWith("(archived)") == true) {
-                    return@forEach
+        val result = EnumMap<BuildSystem, Int>(BuildSystem::class.java)
+        components.filterNot { it.isArchived() }
+            .forEach { component ->
+                component.getBuildSystems().forEach { buildSystem ->
+                    result[buildSystem] = result.getOrDefault(buildSystem, 0) + 1
                 }
-                val buildSystem = moduleConfig.buildSystem.toDTO()
-                result[buildSystem] = result.getOrDefault(buildSystem, emptySet()).plus(component.moduleName)
             }
-        }
-        return result.map { (key, value) -> key to value.size }.toMap(EnumMap(BuildSystem::class.java))
+        return result
     }
+
+    private fun EscrowModule.getBuildSystems(): Set<BuildSystem> {
+        return moduleConfigurations.mapTo(mutableSetOf()) { it.buildSystem.toDTO() }
+    }
+
+    private fun EscrowModule.isArchived() = moduleConfigurations.firstOrNull()?.componentDisplayName
+        ?.endsWith("(archived)", ignoreCase = true) == true
 
     private fun org.octopusden.octopus.escrow.BuildSystem.toDTO(): BuildSystem {
         return when (this) {
