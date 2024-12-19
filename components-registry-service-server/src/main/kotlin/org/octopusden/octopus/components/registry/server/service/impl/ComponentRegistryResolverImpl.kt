@@ -7,6 +7,7 @@ import kotlin.io.path.exists
 import kotlin.io.path.inputStream
 import kotlin.io.path.isRegularFile
 import org.apache.maven.artifact.DefaultArtifact
+import org.jetbrains.kotlin.utils.keysToMap
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.core.dto.VersionedComponent
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
@@ -69,127 +70,74 @@ class ComponentRegistryResolverImpl(
         return EscrowConfigurationLoader.getEscrowModuleConfig(configuration, ComponentVersion.create(id, version))
     }
 
-    override fun getJiraComponentVersion(component: String, version: String): JiraComponentVersion {
-        val keyToVersionRanges = jiraParametersResolver.componentConfig.componentNameToJiraComponentVersionRangeMap
-        val range = getJiraComponentVersionRange(component, version, keyToVersionRanges, false)
-        return getJiraComponentVersion(range, version)
-    }
+    override fun getJiraComponentVersion(component: String, version: String) =
+        getJiraComponentVersionToRangeByComponentAndVersion(component, version).first
 
     override fun getJiraComponentVersions(
-        component: String,
-        versions: List<String>
-    ): Map<String, JiraComponentVersion> {
-        val jiraComponentVersionRanges =
-            jiraParametersResolver.componentConfig.componentNameToJiraComponentVersionRangeMap[component]
-                ?: return emptyMap()
-
-        val result = mutableMapOf<String, JiraComponentVersion>()
-
-        val mutableVersionSet = versions.toMutableSet()
-        val factory = VersionRangeFactory(versionNames)
-        for (jiraComponentVersionRange in jiraComponentVersionRanges) {
-
-            val versionRange = factory.create(jiraComponentVersionRange.versionRange)
-
-            val versionIterator = mutableVersionSet.iterator()
-            while (versionIterator.hasNext()) {
-
-                val version = versionIterator.next()
-
-                val numericArtifactVersion = numericVersionFactory.create(version)
-                if (versionRange.containsVersion(numericArtifactVersion)) {
-                    val jiraComponentVersion = getJiraComponentVersion(jiraComponentVersionRange, version)
-                    if (jiraComponentVersionFormatter.matchesAny(jiraComponentVersion, version, false)) {
-                        jiraComponentVersionRange?.let {
-                            result[version] = jiraComponentVersion
-                            versionIterator.remove()
-                        }
-                    }
-                }
-            }
-            if (mutableVersionSet.isEmpty()) {
-                break
-            }
-        }
-        return result
+        component: String, versions: List<String>
+    ) = try {
+        versions.keysToMap { version ->
+            getJiraComponentVersionsToRanges(
+                version, getJiraComponentVersionRangesByComponent(component), false
+            ).map { it.first }
+        }.filterValues { it.isNotEmpty() }.mapValues { it.value.first() }
+    } catch (_: NotFoundException) {
+        emptyMap()
     }
 
     override fun getVCSSettings(component: String, version: String): VCSSettings {
-        return with(getJiraComponentVersion(component, version)) {
-            val buildVersion = this.component.componentVersionFormat.buildVersionFormat.formatVersion(
-                numericVersionFactory,
-                this.version
-            )
-            getJiraComponentVersionRange(component, buildVersion)
-                .let {
-                    ModelConfigPostProcessor(
-                        ComponentVersion.create(
-                            component,
-                            buildVersion
-                        ), versionNames
-                    ).resolveVariables(it.vcsSettings)
-                }
-        }
+        val (jiraComponentVersion, jiraComponentVersionRange) =
+            getJiraComponentVersionToRangeByComponentAndVersion(component, version)
+        val buildVersion = jiraComponentVersion.component.componentVersionFormat.buildVersionFormat.formatVersion(
+            numericVersionFactory, jiraComponentVersion.version
+        )
+        return ModelConfigPostProcessor(ComponentVersion.create(component, buildVersion), versionNames)
+            .resolveVariables(jiraComponentVersionRange.vcsSettings)
     }
 
-    override fun getJiraComponentByProjectAndVersion(projectKey: String, version: String): JiraComponentVersion {
-        val projectKeyToJiraComponentVersionRangeMap =
-            jiraParametersResolver.componentConfig.projectKeyToJiraComponentVersionRangeMap
-        return getJiraComponentVersion(projectKey, version, projectKeyToJiraComponentVersionRangeMap)
-    }
+    override fun getJiraComponentByProjectAndVersion(projectKey: String, version: String) =
+        getJiraComponentVersionToRangeByProjectAndVersion(projectKey, version).first
 
-    override fun getJiraComponentsByProject(projectKey: String): Set<String> {
-        return getProjectJiraComponentVersionRanges(projectKey)
-            .map { it.componentName }
-            .toSet()
-    }
+    override fun getJiraComponentsByProject(projectKey: String) =
+        getJiraComponentVersionRangesByProject(projectKey).map { it.componentName }.toSet()
 
-    override fun getJiraComponentVersionRangesByProject(projectKey: String): Set<JiraComponentVersionRange> {
-        return getProjectJiraComponentVersionRanges(projectKey)
-            .toSet()
-    }
+    override fun getJiraComponentVersionRangesByProject(projectKey: String) =
+        jiraParametersResolver.componentConfig.projectKeyToJiraComponentVersionRangeMap[projectKey]?.toSet()
+            ?: throw NotFoundException("Project '$projectKey' is not found")
 
     override fun getComponentsDistributionByJiraProject(projectKey: String): Map<String, Distribution> {
-        return getProjectJiraComponentVersionRanges(projectKey)
+        return getJiraComponentVersionRangesByProject(projectKey)
             .groupBy { it.componentName }
-            .mapValues {
+            .mapValues { (_, versionRange) ->
                 Distribution(
-                    it.value.any { it.distribution?.explicit() ?: true },
-                    it.value.any { it.distribution?.external() ?: false },
-                    it.value.find { it.distribution != null }?.distribution?.GAV(),
-                    it.value.find { it.distribution != null }?.distribution?.DEB(),
-                    it.value.find { it.distribution != null }?.distribution?.RPM(),
-                    it.value.find { it.distribution != null }?.distribution?.docker(),
-                    it.value.find { it.distribution != null }?.distribution?.securityGroups
+                    versionRange.any { it.distribution?.explicit() ?: true },
+                    versionRange.any { it.distribution?.external() ?: false },
+                    versionRange.find { it.distribution != null }?.distribution?.GAV(),
+                    versionRange.find { it.distribution != null }?.distribution?.DEB(),
+                    versionRange.find { it.distribution != null }?.distribution?.RPM(),
+                    versionRange.find { it.distribution != null }?.distribution?.docker(),
+                    versionRange.find { it.distribution != null }?.distribution?.securityGroups
                         ?: SecurityGroups(null),
                 )
             }
     }
 
-    private fun getProjectJiraComponentVersionRanges(projectKey: String): MutableList<JiraComponentVersionRange> =
-        jiraParametersResolver.componentConfig
-            .projectKeyToJiraComponentVersionRangeMap[projectKey]
-            ?: throw NotFoundException(projectKey)
-
     override fun getVCSSettingForProject(projectKey: String, version: String): VCSSettings {
-        val projectKeyToJiraComponentVersionRangeMap =
-            jiraParametersResolver.componentConfig.projectKeyToJiraComponentVersionRangeMap
-        return getVCSFromMap(projectKey, version, projectKeyToJiraComponentVersionRangeMap)
+        val jiraComponentVersionRange = getJiraComponentVersionToRangeByProjectAndVersion(projectKey, version).second
+        //TODO: should version be transformed to buildVersion in the same way as in getVCSSettings method?
+        return ModelConfigPostProcessor(
+            ComponentVersion.create(
+                jiraComponentVersionRange.componentName,
+                version
+            ), versionNames
+        ).resolveVariables(jiraComponentVersionRange.vcsSettings)
     }
 
-    override fun getDistributionForProject(projectKey: String, version: String): Distribution {
-        val projectKeyToJiraComponentVersionRangeMap = jiraParametersResolver.componentConfig
-            .projectKeyToJiraComponentVersionRangeMap
-        return getDistribution(projectKey, projectKeyToJiraComponentVersionRangeMap, version)
-    }
+    override fun getDistributionForProject(projectKey: String, version: String): Distribution =
+        getJiraComponentVersionToRangeByProjectAndVersion(projectKey, version).second.distribution
 
-    override fun getAllJiraComponentVersionRanges(): Set<JiraComponentVersionRange> {
-        return jiraParametersResolver.componentConfig
-            .projectKeyToJiraComponentVersionRangeMap
-            .values
-            .flatten()
-            .toSet()
-    }
+    override fun getAllJiraComponentVersionRanges() =
+        jiraParametersResolver.componentConfig.projectKeyToJiraComponentVersionRangeMap.values.flatten().toSet()
 
     override fun findComponentByArtifact(artifact: ArtifactDependency): VersionedComponent {
         return findComponentByArtifactOrNull(artifact)
@@ -231,112 +179,6 @@ class ComponentRegistryResolverImpl(
             )
         }
 
-    private fun getJiraComponentVersionRange(
-        key: String, version: String,
-        keyToVersionRanges: Map<String, List<JiraComponentVersionRange>>,
-        strict: Boolean = true
-    ): JiraComponentVersionRange {
-        val jiraComponentVersionRanges =
-            keyToVersionRanges[key] ?: throw NotFoundException("Component id $key is not found")
-        val foundRanges = jiraComponentVersionRanges.mapNotNull { item ->
-            val versionRange = versionRangeFactory.create(item.versionRange)
-            val numericArtifactVersion = numericVersionFactory.create(version)
-            if (versionRange.containsVersion(numericArtifactVersion)) {
-                val jiraComponentVersion = getJiraComponentVersion(item, version)
-                if (jiraComponentVersionFormatter.matchesAny(jiraComponentVersion, version, strict)) {
-                    if (LOG.isTraceEnabled) {
-                        LOG.trace("Found {} component by {}:{}", jiraComponentVersion, key, version)
-                    }
-                    return@mapNotNull item
-                }
-            }
-            return@mapNotNull null
-        }
-        check(foundRanges.size <= 1) { "Found several configurations for $key:$version: ${foundRanges.map { "${it.componentName}:${it.versionRange}" }}" }
-        return foundRanges.firstOrNull() ?: throw NotFoundException("Component id $key:$version is not found")
-    }
-
-    private fun getJiraComponentVersionRange(component: String, version: String): JiraComponentVersionRange {
-        val keyToVersionRanges = jiraParametersResolver.componentConfig.componentNameToJiraComponentVersionRangeMap
-        return getJiraComponentVersionRange(component, version, keyToVersionRanges, false)
-    }
-
-    private fun getJiraComponentVersion(
-        key: String, version: String,
-        keyToVersionRangeMap: Map<String, List<JiraComponentVersionRange>>,
-        strict: Boolean = true
-    ): JiraComponentVersion {
-        val range = getJiraComponentVersionRange(key, version, keyToVersionRangeMap, strict)
-        return getJiraComponentVersion(range, version)
-    }
-
-    private fun getJiraComponentVersion(
-        range: JiraComponentVersionRange,
-        version: String
-    ): JiraComponentVersion {
-        val component = range.jiraComponentVersion.component
-
-        val resultVersion = when {
-            jiraComponentVersionFormatter.matchesBuildVersionFormat(
-                component,
-                version,
-                true
-            ) -> numericVersionFactory.create(version)
-                .formatVersion(component.componentVersionFormat.buildVersionFormat)
-
-            jiraComponentVersionFormatter.matchesReleaseVersionFormat(
-                component,
-                version,
-                true
-            ) -> numericVersionFactory.create(version)
-                .formatVersion(component.componentVersionFormat.releaseVersionFormat)
-
-            jiraComponentVersionFormatter.matchesMajorVersionFormat(
-                component,
-                version,
-                true
-            ) -> numericVersionFactory.create(version)
-                .formatVersion(component.componentVersionFormat.majorVersionFormat)
-
-            jiraComponentVersionFormatter.matchesLineVersionFormat(
-                component,
-                version,
-                true
-            ) -> numericVersionFactory.create(version).formatVersion(component.componentVersionFormat.lineVersionFormat)
-
-            else -> version
-        }
-
-        return JiraComponentVersion(
-            ComponentVersion.create(range.componentName, resultVersion),
-            range.component,
-            jiraComponentVersionFormatter
-        )
-    }
-
-    private fun getDistribution(
-        name: String, map: MutableMap<String, MutableList<JiraComponentVersionRange>>,
-        version: String
-    ): Distribution {
-        return getJiraComponentVersionRange(name, version, map).distribution
-    }
-
-    private fun getVCSFromMap(
-        name: String,
-        version: String,
-        map: MutableMap<String, MutableList<JiraComponentVersionRange>>
-    ): VCSSettings {
-        val jiraComponentVersionRange = getJiraComponentVersionRange(name, version, map)
-        return jiraComponentVersionRange.let {
-            ModelConfigPostProcessor(
-                ComponentVersion.create(
-                    it.componentName,
-                    version
-                ), versionNames
-            ).resolveVariables(it.vcsSettings)
-        }
-    }
-
     private fun loadDependencyMapping() {
         dependencyMapping.clear()
         val mappingProperties = Properties()
@@ -358,7 +200,80 @@ class ComponentRegistryResolverImpl(
         }
     }
 
+    /**
+     * Returns single JiraComponentVersion to JiraComponentVersionRange pair found by Component ID and Version
+     *
+     * @param component Component Id
+     * @param version   Version (having non-strict build/release/major/line format, i.e. having enough of significant numeric elements)
+     * @return JiraComponentVersion to JiraComponentVersionRange pair
+     */
+    private fun getJiraComponentVersionToRangeByComponentAndVersion(
+        component: String, version: String
+    ) = getJiraComponentVersionsToRanges(
+        version, getJiraComponentVersionRangesByComponent(component), false
+    ).let {
+        when (it.size) {
+            1 -> it.first()
+            0 -> throw NotFoundException("Version '$version' for component '$component' is not found")
+            else -> throw IllegalStateException("Found ${it.size} configurations for version '$version' of component $component")
+        }
+    }
+
+    private fun getJiraComponentVersionRangesByComponent(component: String) =
+        jiraParametersResolver.componentConfig.componentNameToJiraComponentVersionRangeMap[component]?.toSet()
+            ?: throw NotFoundException("Component '$component' is not found")
+
+    /**
+     * Returns single JiraComponentVersion to JiraComponentVersionRange pair found by Jira Project Key and Jira Version
+     *
+     * @param projectKey Jira Project Key
+     * @param version    Jira Version (having strict build/release/major/line format with prefix if it's configured, release candidate suffix is allowed)
+     * @return JiraComponentVersion to JiraComponentVersionRange pair
+     */
+    private fun getJiraComponentVersionToRangeByProjectAndVersion(
+        projectKey: String, version: String
+    ) = getJiraComponentVersionsToRanges(
+        version, getJiraComponentVersionRangesByProject(projectKey)
+    ).let {
+        when (it.size) {
+            1 -> it.first()
+            0 -> throw NotFoundException("Version '$version' for project '$projectKey' is not found")
+            else -> throw IllegalStateException("Found ${it.size} configurations for version '$version' of project $projectKey")
+        }
+    }
+
+    private fun getJiraComponentVersionsToRanges(
+        version: String, versionRanges: Set<JiraComponentVersionRange>, strict: Boolean = true
+    ) = with(numericVersionFactory.create(version)) {
+        versionRanges.filter { versionRangeFactory.create(it.versionRange).containsVersion(this) }
+            .mapNotNull { versionRange ->
+                val component = versionRange.jiraComponentVersion.component
+                when {
+                    jiraComponentVersionFormatter.matchesBuildVersionFormat(component, version, strict) ->
+                        formatVersion(component.componentVersionFormat.buildVersionFormat)
+
+                    jiraComponentVersionFormatter.matchesReleaseVersionFormat(component, version, strict)
+                            || jiraComponentVersionFormatter.matchesRCVersionFormat(component, version, strict) ->
+                        formatVersion(component.componentVersionFormat.releaseVersionFormat)
+
+                    jiraComponentVersionFormatter.matchesMajorVersionFormat(component, version, strict) ->
+                        formatVersion(component.componentVersionFormat.majorVersionFormat)
+
+                    jiraComponentVersionFormatter.matchesLineVersionFormat(component, version, strict) ->
+                        formatVersion(component.componentVersionFormat.lineVersionFormat)
+
+                    else -> null
+                }?.let { cleanVersion ->
+                    JiraComponentVersion(
+                        ComponentVersion.create(versionRange.componentName, cleanVersion),
+                        versionRange.component,
+                        jiraComponentVersionFormatter
+                    ) to versionRange
+                }
+            }
+    }
+
     companion object {
-        private val LOG = LoggerFactory.getLogger(ComponentRegistryResolverImpl::class.java)!!
+        private val LOG = LoggerFactory.getLogger(ComponentRegistryResolverImpl::class.java)
     }
 }

@@ -92,12 +92,12 @@ Each Component must be configured in corresponding configuration file according 
 
         jira { // Parameters releated to build/release registration in JIRA and generation of client release notes (default for all versions)
             projectKey = <JIRA project key>
-            majorVersionFormat = <format of major version in JIRA> (can be configured using Expression Language)
-            releaseVersionFormat = <format of release version for registration in JIRA> (can be configured using Expression Language)
+            majorVersionFormat = <format of major version in JIRA> (can be configured using Version Formatter)
+            releaseVersionFormat = <format of release version for registration in JIRA> (can be configured using Version Formatter)
 
             component {
                versionPrefix = "prefix in component versioning" // to avoid conflicts between different components' versions and to simplify selection of the component version in the "Fix Version(s)" field of the Jira issue
-               versionFormat = <format of major version in JIRA> (can be configured using Expression Language) 
+               versionFormat = <format of major version in JIRA> (can be configured using Version Formatter)
             }
          }
 
@@ -129,8 +129,8 @@ Each Component must be configured in corresponding configuration file according 
 
         jira { // Parameters releated to build/release registration in JIRA and generation of client release notes (for specific version range)
             projectKey = <JIRA project key>
-            majorVersionFormat = <format of major version in JIRA> (can be configured using Expression Language)
-            releaseVersionFormat = <format of release version for registration in JIRA> (can be configured using Expression Language)
+            majorVersionFormat = <format of major version in JIRA> (can be configured using Version Formatter)
+            releaseVersionFormat = <format of release version for registration in JIRA> (can be configured using Version Formatter)
         }
 
         build { // Parameters related to escrow build (for specific version range)
@@ -156,6 +156,31 @@ Each Component must be configured in corresponding configuration file according 
     }
 }
 ----
+
+=== Version Formatter
+Base version formats like *majorVersionFormat* and *releaseVersionFormat* could be configured using following parameters:
+
+* *$major* - first item of the build version
+* *$major02* - first item of the build version in format %02d
+* *$minor* - second item of the build version
+* *$minor02* - second item of the build version in format %02d
+* *$service* - third item of the build version
+* *$service02* - third item of the build version in format %02d
+* *$fix* - forth item of the build version
+* *$fix02* - forth item of the build version in format %02d
+* *$fix04* - forth item of the build version in format %04d
+* *$build* - fifth item of the build version
+* *$build02* - fifth item of the build version in format %02d
+* *$build04* - fifth item of the build version in format %04d
+
+Jira version format defined by *versionFormat* is extended version of base format that could be configured using following parameters:
+
+* *$versionPrefix* - version prefix
+* *$baseVersionFormat* - base version format
+
+Usually it has value *$versionPrefix-$baseVersionFormat*
+
+WARNING: One should use single-quoted `String` for version formats. Using of double-quoted `GString` may lead to clash with standard Groovy template engine.
 
 === Version ranges
 Different configurations of component depending on version of its release are supported.
@@ -213,27 +238,6 @@ vcsSettings {
 }
 ```
 
-=== Expression Language
-The rules of how to calculate major/release version and some other fields by a build version can be configured using Expression Language.
-
-Basic variables are:
-
-* *$component* - component name
-* *$version* - component build version
-
-The component build version is parsed and split into the items which can be referred with following variables:
-
-* *$major* - first item of the build version
-* *$minor* - second item of the build version
-* *$service* - third item of the build version
-* *$fix* - forth item of the build version
-* *$major02* - first item of the build version in format %02d
-* *$minor02* - second item of the build version in format %02d
-* *$service02* - third item of the build version in format %02d
-* *$fix02* - forth item of the build version in format %02d
-
-WARNING: One should use single-quoted `String` with Expression Language statements. Using of double-quoted `GString` may lead to clash with standard Groovy template engine.
-
 === Distribution section
 The distribution section of the component configuration describes how the component is distributed.
 
@@ -244,11 +248,11 @@ Below is the list of available parameters:
 * *GAV* - comma-separated list of MAVEN distribution artifacts
 * *DEB* - comma-separated list of DEBIAN distribution artifacts
 * *RPM* - comma-separated list of RPM distribution artifacts
-* *docker* - name of Docker distribution image(one image per component)(example: 'test/test-component')
+* *docker* - comma-separated list of Docker distribution images
 
-*GAV*, *DEB* and *RPM* parameters can be configured using Expression Language with following variables:
+*GAV*, *DEB*, *RPM* and *docker* parameters can be configured using Expression Language.
 
-WARNING: *GAV* and/or *DEB* and/or *RPM* parameter should be defined for *external* *explicit* component!
+WARNING: At least one of *GAV*, *DEB*, *RPM*, *docker* parameters should be defined for *external* *explicit* component!
 
 ==== MAVEN artifacts configuration
 Each artifact can be either:
@@ -262,3 +266,20 @@ Example:
 ----
 GAV='org.company.newcomponent:artifact:jar,file:///target/application-${version}.exe?artifactId=NewComponent'
 ----
+
+=== Expression Language
+The rules of how to calculate distribution coordinates and some other fields by a build version can be configured using Expression Language.
+
+Available variables are:
+
+* *${component}* - component name
+* *${version}* - component build version
+* *${major}* - first item of the build version
+* *${minor}* - second item of the build version
+* *${service}* - third item of the build version
+* *${fix}* - forth item of the build version
+* *${build}* - fifth item of the build version
+* *${env.<NAME>}* - <NAME> environment variable
+* *${baseDir}* - user.dir system property
+
+WARNING: One should use single-quoted `String` with Expression Language statements. Using of double-quoted `GString` may lead to clash with standard Groovy template engine.

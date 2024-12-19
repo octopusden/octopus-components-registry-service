@@ -271,7 +271,7 @@ abstract class BaseComponentsRegistryServiceTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = [RELEASE_VERSION, RC_VERSION, LINE_VERSION, BUILD_VERSION])
+    @ValueSource(strings = [BUILD_VERSION, JIRA_BUILD_VERSION, LINE_VERSION, JIRA_LINE_VERSION, MINOR_VERSION, JIRA_MINOR_VERSION, RC_VERSION, JIRA_RC_VERSION, JIRA_RELEASE_VERSION, RELEASE_VERSION])
     fun testGetDetailedComponentVersion(version: String) {
         val actualComponentVersion = getDetailedComponentVersion("SUB", version)
         Assertions.assertEquals(DETAILED_COMPONENT_VERSION, actualComponentVersion)
@@ -287,7 +287,7 @@ abstract class BaseComponentsRegistryServiceTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = [BUILD_VERSION, JIRA_BUILD_VERSION, LINE_VERSION, JIRA_LINE_VERSION, MINOR_VERSION, JIRA_MINOR_VERSION, RC_VERSION, JIRA_RC_VERSION])
+    @ValueSource(strings = [BUILD_VERSION, JIRA_BUILD_VERSION, LINE_VERSION, JIRA_LINE_VERSION, MINOR_VERSION, JIRA_MINOR_VERSION, RC_VERSION, JIRA_RC_VERSION, JIRA_RELEASE_VERSION, RELEASE_VERSION])
     fun testGetVCSSettings(version: String) {
         Assertions.assertEquals(VCS_SETTINGS, getVcsSettings("SUB", version))
     }
@@ -433,12 +433,61 @@ abstract class BaseComponentsRegistryServiceTest {
         @JvmStatic
         fun jiraComponentVersions(): Stream<Arguments> {
             return Stream.of(
-                Arguments.of("TESTONE", "1.0", "expected-data/testone-1.0-jira-component-version.json"),
+                Arguments.of(
+                    "TESTONE",
+                    "1.0",
+                    "expected-data/testone-1.0-jira-component-version.json"
+                ),
                 Arguments.of(
                     "versions-api",
                     "versions-api.1.0",
                     "expected-data/versions-api-version-api.1.0-jira-component-version.json"
-                )
+                ),
+                Arguments.of(
+                    "versions-api",
+                    "1",
+                    "expected-data/versions-api-1-jira-component-version.json"
+                ),
+                Arguments.of(
+                    "versions-api",
+                    "1.2",
+                    "expected-data/versions-api-1.2-jira-component-version.json"
+                ),
+                Arguments.of(
+                    "versions-api",
+                    "versions-api.1.2",
+                    "expected-data/versions-api-1.2-jira-component-version.json"
+                ),
+                Arguments.of(
+                    "versions-api",
+                    "1.2_RC",
+                    "expected-data/versions-api-1.2-jira-component-version.json"
+                ),
+                Arguments.of(
+                    "versions-api",
+                    "1.2.3",
+                    "expected-data/versions-api-1.2.3-jira-component-version.json"
+                ),
+                Arguments.of(
+                    "versions-api",
+                    "1.2-0003",
+                    "expected-data/versions-api-1.2.3-jira-component-version.json"
+                ),
+                Arguments.of(
+                    "versions-api",
+                    "prefix-1.2.3-suffix",
+                    "expected-data/versions-api-1.2.3-jira-component-version.json"
+                ),
+                Arguments.of(
+                    "versions-api",
+                    "1.2.3.4",
+                    "expected-data/versions-api-1.2.3-jira-component-version.json"
+                ),
+                Arguments.of(
+                    "versions-api",
+                    "prefix-1.2.3.4-suffix",
+                    "expected-data/versions-api-1.2.3-jira-component-version.json"
+                ),
             )
         }
 

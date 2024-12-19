@@ -26,6 +26,7 @@ public class EscrowExpressionContext {
         this(component, version, fileName, componentVersion -> numericVersionFactory.create(componentVersion));
     }
 
+    //TODO: remove? is it used?
     public String getFileName() {
         return fileName;
     }
@@ -65,4 +66,6 @@ public class EscrowExpressionContext {
     public int getBuild() {
         return versionInfo.getBuildNumber();
     }
+
+    //TODO: support major02, minor02, service02, fix02, fix04, build02, build04 etc. (like in org.octopusden.releng.versions.KotlinVersionFormatter.PREDEFINED_COMPONENT_VARIABLES_LIST)
 }
