@@ -218,14 +218,17 @@ class ComponentRegistryResolverImpl(
      */
     override fun getComponentsCountByBuildSystem(): EnumMap<BuildSystem, Int> {
         val components = getComponents()
-        val result = EnumMap<BuildSystem, Int>(BuildSystem::class.java)
+        val result = EnumMap<BuildSystem, Set<String>>(BuildSystem::class.java)
         components.forEach { component ->
             component.moduleConfigurations.forEach { moduleConfig ->
+                if (moduleConfig.componentDisplayName?.endsWith("(archived)") == true) {
+                    return@forEach
+                }
                 val buildSystem = moduleConfig.buildSystem.toDTO()
-                result[buildSystem] = result.getOrDefault(buildSystem, 0) + 1
+                result[buildSystem] = result.getOrDefault(buildSystem, emptySet()).plus(component.moduleName)
             }
         }
-        return result
+        return result.map { (key, value) -> key to value.size }.toMap(EnumMap(BuildSystem::class.java))
     }
 
     private fun org.octopusden.octopus.escrow.BuildSystem.toDTO(): BuildSystem {

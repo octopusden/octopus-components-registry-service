@@ -19,7 +19,7 @@ class BuildSystemMetricsService(
 
     init {
         BuildSystem.values().forEach { buildSystem ->
-            Gauge.builder("components.by.buildsystem.count") {
+            Gauge.builder("components.buildsystem.count") {
                 buildSystemMetrics[buildSystem] ?: 0
             }
                 .tag("buildSystem", buildSystem.name)

@@ -24,3 +24,11 @@ components-registry:
 pathToConfig: file://${components-registry.groovy-path}
 
 eureka.client.enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: metrics
+    loggers:
+      enabled: true
