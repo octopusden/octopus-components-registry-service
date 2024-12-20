@@ -218,13 +218,18 @@ class ComponentRegistryResolverImpl(
     /**
      * Get components count by build system
      */
-    override fun getComponentsCountByBuildSystem(): EnumMap<BuildSystem, Int> = getComponents()
-        .filterNot { it.isArchived() }
-        .fold(EnumMap<BuildSystem, Int>(BuildSystem::class.java)) { acc, component ->
-            val buildSystem = component.getBuildSystem()
-            acc[buildSystem] = acc.getOrDefault(buildSystem, 0) + 1
-            acc
-        }
+    override fun getComponentsCountByBuildSystem(): EnumMap<BuildSystem, Int> {
+        LOG.debug("Get components count by build system")
+        val result = getComponents()
+            .filterNot { it.isArchived() }
+            .fold(EnumMap<BuildSystem, Int>(BuildSystem::class.java)) { acc, component ->
+                val buildSystem = component.getBuildSystem()
+                acc[buildSystem] = acc.getOrDefault(buildSystem, 0) + 1
+                acc
+            }
+        LOG.debug("Components count by build system: {}", result)
+        return result
+    }
 
     private fun EscrowModule.getBuildSystem(): BuildSystem {
         return moduleConfigurations.firstOrNull()?.let { it.buildSystem.toDTO() }
