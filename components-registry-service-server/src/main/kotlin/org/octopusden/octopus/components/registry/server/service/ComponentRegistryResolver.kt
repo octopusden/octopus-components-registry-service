@@ -1,6 +1,7 @@
 package org.octopusden.octopus.components.registry.server.service
 
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
+import org.octopusden.octopus.components.registry.core.dto.BuildSystem
 import org.octopusden.octopus.components.registry.core.dto.VersionedComponent
 import org.octopusden.octopus.escrow.config.JiraComponentVersionRange
 import org.octopusden.octopus.escrow.configuration.model.EscrowModule
@@ -9,6 +10,7 @@ import org.octopusden.octopus.escrow.dto.ComponentArtifactConfiguration
 import org.octopusden.octopus.escrow.model.Distribution
 import org.octopusden.octopus.escrow.model.VCSSettings
 import org.octopusden.octopus.releng.dto.JiraComponentVersion
+import java.util.EnumMap
 
 interface ComponentRegistryResolver {
 
@@ -47,5 +49,7 @@ interface ComponentRegistryResolver {
     fun getMavenArtifactParameters(component: String): Map<String, ComponentArtifactConfiguration>
 
     fun getDependencyMapping(): Map<String, String>
+
+    fun getComponentsCountByBuildSystem(): EnumMap<BuildSystem, Int>
 
 }
