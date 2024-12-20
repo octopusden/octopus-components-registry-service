@@ -222,19 +222,19 @@ class ComponentRegistryResolverImpl(
         val result = EnumMap<BuildSystem, Int>(BuildSystem::class.java)
         components.filterNot { it.isArchived() }
             .forEach { component ->
-                component.getBuildSystems().forEach { buildSystem ->
-                    result[buildSystem] = result.getOrDefault(buildSystem, 0) + 1
-                }
+                val buildSystem = component.getBuildSystem()
+                result[buildSystem] = result.getOrDefault(buildSystem, 0) + 1
             }
         return result
     }
 
-    private fun EscrowModule.getBuildSystems(): Set<BuildSystem> {
-        return moduleConfigurations.mapTo(mutableSetOf()) { it.buildSystem.toDTO() }
+    private fun EscrowModule.getBuildSystem(): BuildSystem {
+        return moduleConfigurations.firstOrNull()?.let { it.buildSystem.toDTO() }
+            ?: throw IllegalStateException("No module configurations available")
     }
 
     private fun EscrowModule.isArchived() = moduleConfigurations.firstOrNull()?.componentDisplayName
-        ?.endsWith("(archived)", ignoreCase = true) == true
+        ?.endsWith("(archived)", ignoreCase = true) ?: false
 
     private fun org.octopusden.octopus.escrow.BuildSystem.toDTO(): BuildSystem {
         return when (this) {
