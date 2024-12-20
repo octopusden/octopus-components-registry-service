@@ -14,6 +14,7 @@ import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoa
 import org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration
 import org.octopusden.octopus.escrow.configuration.model.EscrowModule
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
+import org.octopusden.octopus.escrow.configuration.validation.EscrowConfigValidator
 import org.octopusden.octopus.escrow.dto.ComponentArtifactConfiguration
 import org.octopusden.octopus.escrow.model.Distribution
 import org.octopusden.octopus.escrow.model.SecurityGroups
@@ -231,7 +232,7 @@ class ComponentRegistryResolverImpl(
     }
 
     private fun EscrowModule.isArchived() = moduleConfigurations.firstOrNull()?.componentDisplayName
-        ?.endsWith("(archived)", ignoreCase = true) ?: false
+        ?.endsWith(EscrowConfigValidator.ARCHIVED_SUFFIX, ignoreCase = true) ?: false
 
     private fun org.octopusden.octopus.escrow.BuildSystem.toDTO(): BuildSystem {
         return when (this) {
