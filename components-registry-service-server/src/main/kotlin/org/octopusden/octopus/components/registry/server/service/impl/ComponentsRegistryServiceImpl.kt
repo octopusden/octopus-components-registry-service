@@ -2,13 +2,12 @@ package org.octopusden.octopus.components.registry.server.service.impl
 
 import org.octopusden.octopus.components.registry.core.dto.ServiceStatusDTO
 import org.octopusden.octopus.components.registry.server.model.ServiceStatus
-import org.octopusden.octopus.components.registry.server.service.BuildSystemMetricsService
 import org.octopusden.octopus.components.registry.server.service.ComponentRegistryResolver
 import org.octopusden.octopus.components.registry.server.service.ComponentsRegistryService
 import org.octopusden.octopus.components.registry.server.service.VcsService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
-import java.util.*
+import java.util.Date
 import javax.annotation.PostConstruct
 import kotlin.system.measureTimeMillis
 
@@ -16,8 +15,7 @@ import kotlin.system.measureTimeMillis
 class ComponentsRegistryServiceImpl(
     private val vcsService: VcsService,
     private val componentRegistryResolver: ComponentRegistryResolver,
-    private val serviceStatus: ServiceStatus,
-    private val buildSystemMetricsService: BuildSystemMetricsService
+    private val serviceStatus: ServiceStatus
 ) : ComponentsRegistryService {
 
     override fun updateConfigCache(): Long {
@@ -26,7 +24,6 @@ class ComponentsRegistryServiceImpl(
             serviceStatus.versionControlRevision = vcsService.cloneComponentsRegistry()
             componentRegistryResolver.updateCache()
             serviceStatus.cacheUpdatedAt = Date()
-            buildSystemMetricsService.updateMetrics()
         }
         log.info("Finished update of Component Registry, execution time: ${executionTime}ms")
         return executionTime

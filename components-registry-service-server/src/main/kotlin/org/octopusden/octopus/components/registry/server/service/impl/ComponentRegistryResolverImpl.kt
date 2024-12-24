@@ -1,5 +1,7 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
+import io.micrometer.core.instrument.Gauge
+import io.micrometer.core.instrument.MeterRegistry
 import org.apache.maven.artifact.DefaultArtifact
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.core.dto.BuildSystem
@@ -33,6 +35,7 @@ import org.springframework.stereotype.Service
 import java.nio.file.Paths
 import java.util.EnumMap
 import java.util.Properties
+import java.util.concurrent.ConcurrentHashMap
 import javax.annotation.Resource
 import kotlin.io.path.exists
 import kotlin.io.path.inputStream
@@ -48,6 +51,7 @@ class ComponentRegistryResolverImpl(
     private val componentsRegistryProperties: ComponentsRegistryProperties,
     private val numericVersionFactory: NumericVersionFactory,
     private val versionRangeFactory: VersionRangeFactory,
+    private val meterRegistry: MeterRegistry,
     @Resource(name = "dependencyMapping") private val dependencyMapping: MutableMap<String, String>
 ) : ComponentRegistryResolver {
 
@@ -63,6 +67,7 @@ class ComponentRegistryResolverImpl(
         jiraParametersResolver.setEscrowConfiguration(configuration)
         moduleByArtifactResolver.setEscrowConfiguration(configuration)
         loadDependencyMapping()
+        updateMetrics()
     }
 
     override fun getComponents() = configuration.escrowModules.values
@@ -250,6 +255,23 @@ class ComponentRegistryResolverImpl(
             org.octopusden.octopus.escrow.BuildSystem.ESCROW_NOT_SUPPORTED -> BuildSystem.NOT_SUPPORTED
             org.octopusden.octopus.escrow.BuildSystem.ESCROW_PROVIDED_MANUALLY -> BuildSystem.PROVIDED
             org.octopusden.octopus.escrow.BuildSystem.GOLANG -> BuildSystem.GOLANG
+        }
+    }
+
+    private fun updateMetrics() {
+        LOG.info("Update metrics build system count")
+        val buildSystemMetrics = ConcurrentHashMap<BuildSystem, Int>()
+        BuildSystem.values().forEach { buildSystem ->
+            Gauge.builder("components.buildsystem.count") {
+                buildSystemMetrics[buildSystem] ?: 0
+            }
+                .tag("buildSystem", buildSystem.name)
+                .register(meterRegistry)
+        }
+        val componentCounts = getComponentsCountByBuildSystem()
+
+        BuildSystem.values().forEach { buildSystem ->
+            buildSystemMetrics[buildSystem] = componentCounts[buildSystem] ?: 0
         }
     }
 
