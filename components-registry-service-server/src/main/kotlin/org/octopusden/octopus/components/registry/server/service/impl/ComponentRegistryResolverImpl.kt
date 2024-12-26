@@ -259,6 +259,10 @@ class ComponentRegistryResolverImpl(
     }
 
     private fun updateMetrics() {
+        updateBuildSystemCountMetrics()
+    }
+
+    private fun updateBuildSystemCountMetrics() {
         LOG.info("Update metrics build system count")
         val buildSystemMetrics = ConcurrentHashMap<BuildSystem, Int>()
         BuildSystem.values().forEach { buildSystem ->
