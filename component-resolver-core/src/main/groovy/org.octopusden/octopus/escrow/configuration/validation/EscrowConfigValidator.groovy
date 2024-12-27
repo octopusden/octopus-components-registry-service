@@ -25,7 +25,7 @@ import org.octopusden.releng.versions.VersionRangeFactory
 
 @TypeChecked
 class EscrowConfigValidator {
-    static final String ARCHIVED_SUFFIX = "(archived)"
+    public static final String ARCHIVED_SUFFIX = "(archived)"
 
     static VersionRangeHelper versionRangeHelper = new VersionRangeHelper()
     static MavenArtifactMatcher mavenArtifactMatcher = new MavenArtifactMatcher()

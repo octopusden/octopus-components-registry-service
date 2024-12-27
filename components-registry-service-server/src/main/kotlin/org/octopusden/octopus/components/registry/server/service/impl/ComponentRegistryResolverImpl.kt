@@ -1,14 +1,11 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
-import java.nio.file.Paths
-import java.util.Properties
-import javax.annotation.Resource
-import kotlin.io.path.exists
-import kotlin.io.path.inputStream
-import kotlin.io.path.isRegularFile
+import io.micrometer.core.instrument.Gauge
+import io.micrometer.core.instrument.MeterRegistry
 import org.apache.maven.artifact.DefaultArtifact
 import org.jetbrains.kotlin.utils.keysToMap
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
+import org.octopusden.octopus.components.registry.core.dto.BuildSystem
 import org.octopusden.octopus.components.registry.core.dto.VersionedComponent
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.server.config.ComponentsRegistryProperties
@@ -18,7 +15,9 @@ import org.octopusden.octopus.escrow.ModelConfigPostProcessor
 import org.octopusden.octopus.escrow.config.JiraComponentVersionRange
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
 import org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration
+import org.octopusden.octopus.escrow.configuration.model.EscrowModule
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
+import org.octopusden.octopus.escrow.configuration.validation.EscrowConfigValidator
 import org.octopusden.octopus.escrow.dto.ComponentArtifactConfiguration
 import org.octopusden.octopus.escrow.model.Distribution
 import org.octopusden.octopus.escrow.model.SecurityGroups
@@ -34,6 +33,14 @@ import org.octopusden.releng.versions.VersionRangeFactory
 import org.slf4j.LoggerFactory
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.stereotype.Service
+import java.nio.file.Paths
+import java.util.EnumMap
+import java.util.Properties
+import java.util.concurrent.ConcurrentHashMap
+import javax.annotation.Resource
+import kotlin.io.path.exists
+import kotlin.io.path.inputStream
+import kotlin.io.path.isRegularFile
 
 @Service
 @EnableConfigurationProperties(ComponentsRegistryProperties::class)
@@ -45,6 +52,7 @@ class ComponentRegistryResolverImpl(
     private val componentsRegistryProperties: ComponentsRegistryProperties,
     private val numericVersionFactory: NumericVersionFactory,
     private val versionRangeFactory: VersionRangeFactory,
+    private val meterRegistry: MeterRegistry,
     @Resource(name = "dependencyMapping") private val dependencyMapping: MutableMap<String, String>
 ) : ComponentRegistryResolver {
 
@@ -60,6 +68,7 @@ class ComponentRegistryResolverImpl(
         jiraParametersResolver.setEscrowConfiguration(configuration)
         moduleByArtifactResolver.setEscrowConfiguration(configuration)
         loadDependencyMapping()
+        updateMetrics()
     }
 
     override fun getComponents() = configuration.escrowModules.values
@@ -157,6 +166,65 @@ class ComponentRegistryResolverImpl(
 
     override fun getDependencyMapping(): Map<String, String> {
         return dependencyMapping
+    }
+
+    /**
+     * Get components count by build system
+     */
+    override fun getComponentsCountByBuildSystem(): EnumMap<BuildSystem, Int> {
+        LOG.debug("Get components count by build system")
+        val result = getComponents()
+            .filterNot { it.isArchived() }
+            .fold(EnumMap<BuildSystem, Int>(BuildSystem::class.java)) { acc, component ->
+                val buildSystem = component.getBuildSystem()
+                acc[buildSystem] = acc.getOrDefault(buildSystem, 0) + 1
+                acc
+            }
+        LOG.debug("Components count by build system: {}", result)
+        return result
+    }
+
+    private fun EscrowModule.getBuildSystem(): BuildSystem {
+        return moduleConfigurations.firstOrNull()?.let { it.buildSystem.toDTO() }
+            ?: throw IllegalStateException("No module configurations available")
+    }
+
+    private fun EscrowModule.isArchived() = moduleConfigurations.firstOrNull()?.componentDisplayName
+        ?.endsWith(EscrowConfigValidator.ARCHIVED_SUFFIX, ignoreCase = true) ?: false
+
+    private fun org.octopusden.octopus.escrow.BuildSystem.toDTO(): BuildSystem {
+        return when (this) {
+            org.octopusden.octopus.escrow.BuildSystem.BS2_0 -> BuildSystem.BS2_0
+            org.octopusden.octopus.escrow.BuildSystem.MAVEN -> BuildSystem.MAVEN
+            org.octopusden.octopus.escrow.BuildSystem.ECLIPSE_MAVEN -> BuildSystem.ECLIPSE_MAVEN
+            org.octopusden.octopus.escrow.BuildSystem.GRADLE -> BuildSystem.GRADLE
+            org.octopusden.octopus.escrow.BuildSystem.WHISKEY -> BuildSystem.WHISKEY
+            org.octopusden.octopus.escrow.BuildSystem.PROVIDED -> BuildSystem.PROVIDED
+            org.octopusden.octopus.escrow.BuildSystem.ESCROW_NOT_SUPPORTED -> BuildSystem.NOT_SUPPORTED
+            org.octopusden.octopus.escrow.BuildSystem.ESCROW_PROVIDED_MANUALLY -> BuildSystem.PROVIDED
+            org.octopusden.octopus.escrow.BuildSystem.GOLANG -> BuildSystem.GOLANG
+        }
+    }
+
+    private fun updateMetrics() {
+        updateBuildSystemCountMetrics()
+    }
+
+    private fun updateBuildSystemCountMetrics() {
+        LOG.info("Update metrics build system count")
+        val buildSystemMetrics = ConcurrentHashMap<BuildSystem, Int>()
+        BuildSystem.values().forEach { buildSystem ->
+            Gauge.builder("components.buildsystem.count") {
+                buildSystemMetrics[buildSystem] ?: 0
+            }
+                .tag("buildSystem", buildSystem.name)
+                .register(meterRegistry)
+        }
+        val componentCounts = getComponentsCountByBuildSystem()
+
+        BuildSystem.values().forEach { buildSystem ->
+            buildSystemMetrics[buildSystem] = componentCounts[buildSystem] ?: 0
+        }
     }
 
     private fun findComponentByArtifactOrNull(artifact: ArtifactDependency): VersionedComponent? =
