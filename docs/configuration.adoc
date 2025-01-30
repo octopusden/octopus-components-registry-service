@@ -82,9 +82,9 @@ Each Component must be configured in corresponding configuration file according 
         system      = <{system_name}> // used for differentiation between different corporate policies (license control, etc)
                                    
         vcsSettings {
-           vcsUrl = <vsc url> // Repository url. (default for all versions)
-           branch = <branch> // Repository branch. If not specified "master" is used. (default for all versions)
-           tag = <format of vcs tag> // Tag used for releases labelling. (can be configured using Expression Language) (default for all versions)
+           vcsUrl = <vsc url> // Repository url. (default for all versions, can be configured using Dynamic variables resolution)
+           branch = <branch> // Repository branch. If not specified "master" is used (default for all versions, can be configured using Dynamic variables resolution)
+           tag = <format of vcs tag> // Tag used for releases labelling (default for all versions, can be configured using Dynamic variables resolution)
         }
 
         groupId = <groupId list> // Comma-separated list of groupId of artifacts that belongs to the component. It's recommended to use unique groupId. (default for all versions)
@@ -92,12 +92,12 @@ Each Component must be configured in corresponding configuration file according 
 
         jira { // Parameters releated to build/release registration in JIRA and generation of client release notes (default for all versions)
             projectKey = <JIRA project key>
-            majorVersionFormat = <format of major version in JIRA> (can be configured using Version Formatter)
-            releaseVersionFormat = <format of release version for registration in JIRA> (can be configured using Version Formatter)
+            majorVersionFormat = <format of major version in JIRA> (refer to Version format)
+            releaseVersionFormat = <format of release version for registration in JIRA> (refer to Version format)
 
             component {
                versionPrefix = "prefix in component versioning" // to avoid conflicts between different components' versions and to simplify selection of the component version in the "Fix Version(s)" field of the Jira issue
-               versionFormat = <format of major version in JIRA> (can be configured using Version Formatter)
+               versionFormat = <format of major version in JIRA> (refer to Version format)
             }
          }
 
@@ -119,9 +119,9 @@ Each Component must be configured in corresponding configuration file according 
         buildSystem = <build tool> // MAVEN, GRADLE etc. (for specific version range)
 
         vcsSettings {
-           vcsUrl = <vsc url> // Repository url. (for specific version range)
-           branch = <branch> // Repository branch. If not specified "master" is used. (for specific version range)
-           tag = <format of vcs tag> // Tag used for releases labelling. (can be configured using Expression Language) (for specific version range)
+           vcsUrl = <vsc url> // Repository url (for specific version range, can be configured using Dynamic variables resolution)
+           branch = <branch> // Repository branch. If not specified "master" is used (for specific version range, can be configured using Dynamic variables resolution)
+           tag = <format of vcs tag> // Tag used for releases labelling (for specific version range, can be configured using Dynamic variables resolution)
         }
 
         groupId = <groupId list> // Comma-separated list of groupId of artifacts that belongs to the component. It's recommended to use unique groupId. (for specific version range)
@@ -129,8 +129,8 @@ Each Component must be configured in corresponding configuration file according 
 
         jira { // Parameters releated to build/release registration in JIRA and generation of client release notes (for specific version range)
             projectKey = <JIRA project key>
-            majorVersionFormat = <format of major version in JIRA> (can be configured using Version Formatter)
-            releaseVersionFormat = <format of release version for registration in JIRA> (can be configured using Version Formatter)
+            majorVersionFormat = <format of major version in JIRA> (refer to Version format)
+            releaseVersionFormat = <format of release version for registration in JIRA> (refer to Version format)
         }
 
         build { // Parameters related to escrow build (for specific version range)
@@ -156,31 +156,6 @@ Each Component must be configured in corresponding configuration file according 
     }
 }
 ----
-
-=== Version Formatter
-Base version formats like *majorVersionFormat* and *releaseVersionFormat* could be configured using following parameters:
-
-* *$major* - first item of the build version
-* *$major02* - first item of the build version in format %02d
-* *$minor* - second item of the build version
-* *$minor02* - second item of the build version in format %02d
-* *$service* - third item of the build version
-* *$service02* - third item of the build version in format %02d
-* *$fix* - forth item of the build version
-* *$fix02* - forth item of the build version in format %02d
-* *$fix04* - forth item of the build version in format %04d
-* *$build* - fifth item of the build version
-* *$build02* - fifth item of the build version in format %02d
-* *$build04* - fifth item of the build version in format %04d
-
-Jira version format defined by *versionFormat* is extended version of base format that could be configured using following parameters:
-
-* *$versionPrefix* - version prefix
-* *$baseVersionFormat* - base version format
-
-Usually it has value *$versionPrefix-$baseVersionFormat*
-
-WARNING: One should use single-quoted `String` for version formats. Using of double-quoted `GString` may lead to clash with standard Groovy template engine.
 
 === Version ranges
 Different configurations of component depending on version of its release are supported.
@@ -210,33 +185,59 @@ Examples of version range:
 
 WARNING: Version ranges of a component should have no intersections!
 
+=== Version format
+Base version formats like *majorVersionFormat* and *releaseVersionFormat* are configured using following variables:
+
+* *$major* - first item of the build version
+* *$major02* - first item of the build version in format %02d
+* *$minor* - second item of the build version
+* *$minor02* - second item of the build version in format %02d
+* *$service* - third item of the build version
+* *$service02* - third item of the build version in format %02d
+* *$fix* - forth item of the build version
+* *$fix02* - forth item of the build version in format %02d
+* *$fix04* - forth item of the build version in format %04d
+* *$build* - fifth item of the build version
+* *$build02* - fifth item of the build version in format %02d
+* *$build04* - fifth item of the build version in format %04d
+
+Jira version format defined by *versionFormat* is extended version of base format that is configured using following variables:
+
+* *$versionPrefix* - version prefix
+* *$baseVersionFormat* - base version format
+
+Usually it has value *$versionPrefix-$baseVersionFormat*
+
+=== Dynamic variables resolution
+
+Following parameters support dynamic variables resolution:
+
+* *vcsUrl*
+* *branch*
+* *tag*
+* *buildFilePath*
+* *systemProperties*
+
+Available variables are:
+
+* all base version format variables (refer to Version format, extended version format variables like *$baseVersionFormat* are not supported)
+* *$module* - component name
+* *$version* - component build version
+* *$cvsCompatibleVersion* - the same as *$version* but all dots are replaced with hyphen-minus symbols
+* *$cvsCompatibleUnderscoreVersion* - the same as *$version* but all dots are replaced with underscores
+
+Example:
+----
+tag = '$module-$major02.$minor02.$service02'
+----
+
 === Multiple release branches
 If your component uses multiple release branches, specify them in the `branch` parameter, separated by the `|` symbol.
 
----
-
-**Examples**:
-
-#### Static branches
-Use static branch names when they are predefined:
-```
-vcsSettings {
-    vcsUrl = ...
-    branch = '2024.1|2024.2'
-}
-```
-
-
----
-
-#### Dynamic version variables
-You can use dynamic version variables, such as `$major`, `$major02`, `$minor`, etc., to generalize branch naming:
-```
-vcsSettings {
-    vcsUrl = ...
-    branch = 'master|release/$major.$minor'
-}
-```
+Example:
+----
+branch = 'master|release/$major.$minor'
+----
 
 === Distribution section
 The distribution section of the component configuration describes how the component is distributed.
@@ -245,30 +246,17 @@ Below is the list of available parameters:
 
 * *explicit* - indicates whether component has its own distribution (true/false)
 * *external* - indicates whether component is delivered to external customer or used only internally (true/false)
-* *GAV* - comma-separated list of MAVEN distribution artifacts
-* *DEB* - comma-separated list of DEBIAN distribution artifacts
-* *RPM* - comma-separated list of RPM distribution artifacts
-* *docker* - comma-separated list of Docker distribution images
+* *GAV* - comma-separated list of MAVEN artifact coordinates
+* *DEB* - comma-separated list of DEBIAN artifact coordinates
+* *RPM* - comma-separated list of RPM artifact coordinates
+* *docker* - comma-separated list of Docker image coordinates
 
 *GAV*, *DEB*, *RPM* and *docker* parameters can be configured using Expression Language.
 
 WARNING: At least one of *GAV*, *DEB*, *RPM*, *docker* parameters should be defined for *external* *explicit* component!
 
-==== MAVEN artifacts configuration
-Each artifact can be either:
-
-* loaded from MAVEN storage (then one should specify MAVEN GAV *except version*)
-* taken from local FS on build agent and uploaded to MAVEN storage (then one should specify file URL)
-
-File URL can be extended with query parameters *artifactId* and/or *classifier* (that affects calculation of MAVEN GAV to be used for uploading).
-
-Example:
-----
-GAV='org.company.newcomponent:artifact:jar,file:///target/application-${version}.exe?artifactId=NewComponent'
-----
-
-=== Expression Language
-The rules of how to calculate distribution coordinates and some other fields by a build version can be configured using Expression Language.
+==== Expression Language
+The rules of how to calculate distribution coordinates can be configured using Expression Language.
 
 Available variables are:
 
@@ -282,4 +270,15 @@ Available variables are:
 * *${env.<NAME>}* - <NAME> environment variable
 * *${baseDir}* - user.dir system property
 
-WARNING: One should use single-quoted `String` with Expression Language statements. Using of double-quoted `GString` may lead to clash with standard Groovy template engine.
+==== MAVEN artifacts configuration
+Each artifact can be either:
+
+* loaded from MAVEN storage (then one should specify MAVEN GAV *except version*)
+* taken from local FS on build agent and uploaded to MAVEN storage (then one should specify file URL)
+
+File URL can be extended with query parameters *artifactId* and/or *classifier* (that affects calculation of MAVEN GAV to be used for uploading).
+
+Example:
+----
+GAV='org.company.newcomponent:artifact:jar,file:///target/application-${version}.exe?artifactId=NewComponent'
+----
