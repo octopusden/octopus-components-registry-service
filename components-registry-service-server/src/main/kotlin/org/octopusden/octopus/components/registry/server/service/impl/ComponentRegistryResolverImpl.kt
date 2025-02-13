@@ -37,6 +37,7 @@ import java.nio.file.Paths
 import java.util.EnumMap
 import java.util.Properties
 import java.util.concurrent.ConcurrentHashMap
+import javax.annotation.PostConstruct
 import javax.annotation.Resource
 import kotlin.io.path.exists
 import kotlin.io.path.inputStream
@@ -207,23 +208,26 @@ class ComponentRegistryResolverImpl(
     }
 
     private fun updateMetrics() {
-        updateBuildSystemCountMetrics()
+        LOG.info("Update metrics build system count")
+        val componentCounts = getComponentsCountByBuildSystem()
+
+        BuildSystem.values().forEach { buildSystem ->
+            buildSystemMetrics[buildSystem] = componentCounts[buildSystem] ?: 0
+        }
     }
 
-    private fun updateBuildSystemCountMetrics() {
-        LOG.info("Update metrics build system count")
-        val buildSystemMetrics = ConcurrentHashMap<BuildSystem, Int>()
+    private val buildSystemMetrics = ConcurrentHashMap<BuildSystem, Int>()
+
+    @PostConstruct
+    fun initBuildSystemMetrics() {
         BuildSystem.values().forEach { buildSystem ->
+            buildSystemMetrics[buildSystem] = 0
+
             Gauge.builder("components.buildsystem.count") {
                 buildSystemMetrics[buildSystem] ?: 0
             }
                 .tag("buildSystem", buildSystem.name)
                 .register(meterRegistry)
-        }
-        val componentCounts = getComponentsCountByBuildSystem()
-
-        BuildSystem.values().forEach { buildSystem ->
-            buildSystemMetrics[buildSystem] = componentCounts[buildSystem] ?: 0
         }
     }
 
