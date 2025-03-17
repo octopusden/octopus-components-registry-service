@@ -5,9 +5,9 @@ import org.junit.Test
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.TestConfigUtils
 import org.octopusden.octopus.escrow.configuration.loader.ComponentRegistryInfo
+import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
 import org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
-import org.octopusden.octopus.escrow.configuration.validation.util.VersionRangeHelper
 import org.octopusden.octopus.escrow.exceptions.ComponentResolverException
 import org.octopusden.octopus.escrow.exceptions.EscrowConfigurationException
 import org.octopusden.octopus.escrow.model.BuildParameters
@@ -147,7 +147,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
     void testAllVersions() {
         EscrowConfiguration configuration = loadConfiguration("single-module/noVersionRange.groovy")
         def configurations = configuration.escrowModules.get(TEST_MODULE).moduleConfigurations
-        VersionRangeHelper.ALL_VERSIONS == VERSION_RANGE_FACTORY.create(configurations.get(0).versionRangeString)
+        EscrowConfigurationLoader.ALL_VERSIONS == VERSION_RANGE_FACTORY.create(configurations.get(0).versionRangeString)
     }
 
     @Test
@@ -383,7 +383,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
 
     @Test
     void testVersionRangeEverything() {
-        VersionRange allVersions = VERSION_RANGE_FACTORY.create(VersionRangeHelper.ALL_VERSIONS)
+        VersionRange allVersions = VERSION_RANGE_FACTORY.create(EscrowConfigurationLoader.ALL_VERSIONS)
         assertTrue(allVersions.containsVersion(NUMERIC_VERSION_FACTORY.create("0.0.0")))
         assertTrue(allVersions.containsVersion(NUMERIC_VERSION_FACTORY.create("2.3.50.3")))
         assertTrue(allVersions.containsVersion(NUMERIC_VERSION_FACTORY.create("999.999.0")))
@@ -432,6 +432,17 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
             loadConfiguration("invalid/invalidCustomerComponentConf.groovy")
         }
         assert exception.contains("jira section could not have both customer/component section in  component->(,0),[0,) section of escrow config file")
+    }
+
+    @Test
+    void testVersionConflict() {
+        def message = shouldFail(EscrowConfigurationException.class,
+                {
+                    loadConfiguration("versionConflictConfig.groovy")
+                })
+        assert message == "Validation of module config failed due following errors: \n" +
+                "Intersection of commoncomponent version ranges (,1], [1,2] with [2,3].\n" +
+                "Intersection of commoncomponent version ranges [2,3] with [3,)."
     }
 
     @Test

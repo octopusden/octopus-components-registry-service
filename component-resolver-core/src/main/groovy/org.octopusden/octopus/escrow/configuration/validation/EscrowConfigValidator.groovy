@@ -16,7 +16,6 @@ import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoa
 import org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration
 import org.octopusden.octopus.escrow.configuration.model.EscrowModule
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
-import org.octopusden.octopus.escrow.configuration.validation.util.VersionRangeHelper
 import org.octopusden.octopus.escrow.model.VersionControlSystemRoot
 import org.octopusden.releng.versions.KotlinVersionFormatter
 import org.octopusden.releng.versions.VersionNames
@@ -26,8 +25,6 @@ import org.octopusden.releng.versions.VersionRangeFactory
 @TypeChecked
 class EscrowConfigValidator {
     public static final String ARCHIVED_SUFFIX = "(archived)"
-
-    static VersionRangeHelper versionRangeHelper = new VersionRangeHelper()
     static MavenArtifactMatcher mavenArtifactMatcher = new MavenArtifactMatcher()
 
     private static final Logger LOG = LogManager.getLogger(EscrowConfigValidator.class)
@@ -167,7 +164,7 @@ class EscrowConfigValidator {
             for (int j = i + 1; j < mavenArtifacts.size(); j++) {
                 def mavenArtifact2 = mavenArtifacts[j]
                 if (mavenArtifact1.componentName != mavenArtifact2.componentName &&
-                        versionRangeHelper.hasIntersection(mavenArtifact1.versionRange, mavenArtifact2.versionRange) &&
+                        mavenArtifact1.versionRange.isIntersect(mavenArtifact2.versionRange) &&
                         (mavenArtifactContainsAnother(mavenArtifact1, mavenArtifact2) || mavenArtifactContainsAnother(mavenArtifact2, mavenArtifact1))) {
                     registerError("groupId:artifactId patterns of module $mavenArtifact1.componentName has intersection with $mavenArtifact2.componentName")
                 }
@@ -242,10 +239,19 @@ class EscrowConfigValidator {
     }
 
     def validateVersionConflicts(EscrowConfiguration escrowConfiguration) {
+        def versionRangeFactory = new VersionRangeFactory(escrowConfiguration.versionNames)
         for (escrowModuleEntry in escrowConfiguration.escrowModules) {
             Map.Entry entry = escrowModuleEntry as Map.Entry
             EscrowModule escrowModule = entry.getValue() as EscrowModule
+            def moduleVersionRanges = new ArrayList<String>(escrowModule.moduleConfigurations.size())
             for (moduleConfig in escrowModule.moduleConfigurations) {
+                def versionRange = versionRangeFactory.create(moduleConfig.getVersionRangeString())
+                for(String moduleVersionRange : moduleVersionRanges) {
+                    if (versionRangeFactory.create(moduleVersionRange).isIntersect(versionRange)) {
+                        registerError("Intersection of ${escrowModule.moduleName} version ranges $moduleVersionRange with ${moduleConfig.getVersionRangeString()}.")
+                    }
+                }
+                moduleVersionRanges.add(moduleConfig.getVersionRangeString())
                 def groupIdPattern = moduleConfig.getGroupIdPattern()
                 if (groupIdPattern != null) {
                     def groupIdItems = groupIdPattern.split(",")
@@ -267,7 +273,6 @@ class EscrowConfigValidator {
                 }
             }
         }
-        def versionRangeFactory = new VersionRangeFactory(escrowConfiguration.versionNames)
         map.each { it ->
             List<EscrowModuleConfig> configs = it.value
             if (configs.size() > 1) {
@@ -277,7 +282,7 @@ class EscrowConfigValidator {
                         EscrowModuleConfig config2 = configs[j]
                         def vr1 = versionRangeFactory.create(config1.getVersionRangeString())
                         def vr2 = versionRangeFactory.create(config2.getVersionRangeString())
-                        if (versionRangeHelper.hasIntersection(vr1, vr2)) {
+                        if (vr1.isIntersect(vr2)) {
                             registerError("More than one configuration matches ${it.key}. " +
                                     "Intersection of version ranges ${config1.getVersionRangeString()} with ${config2.getVersionRangeString()}.")
                         }

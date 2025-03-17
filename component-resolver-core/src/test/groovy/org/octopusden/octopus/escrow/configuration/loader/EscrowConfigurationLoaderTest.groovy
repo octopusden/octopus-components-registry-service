@@ -17,7 +17,6 @@ import org.octopusden.octopus.components.registry.api.enums.BuildSystemType
 import org.octopusden.octopus.escrow.RepositoryType
 import org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration
 import org.octopusden.octopus.escrow.configuration.model.EscrowModule
-import org.octopusden.octopus.escrow.configuration.validation.util.VersionRangeHelper
 import org.octopusden.octopus.escrow.resolvers.ModuleByArtifactResolver
 import org.octopusden.octopus.releng.dto.ComponentVersion
 import org.octopusden.releng.versions.NumericVersionFactory
@@ -137,7 +136,7 @@ class EscrowConfigurationLoaderTest {
     @Test
     void testBuildToolsForNonVersioned() {
         EscrowModule escrowModule = getEscrowConfiguration().escrowModules.get("monitoring")
-        def rootModule = escrowModule.moduleConfigurations.find { it.versionRangeString == VersionRangeHelper.ALL_VERSIONS}
+        def rootModule = escrowModule.moduleConfigurations.find { it.versionRangeString == EscrowConfigurationLoader.ALL_VERSIONS}
         assertNotNull(rootModule)
         def oracle = new OracleDatabaseToolBean()
         oracle.version = "11.2"
@@ -155,7 +154,7 @@ class EscrowConfigurationLoaderTest {
     @Test
     void testBuildToolsForVersionRange() {
         EscrowModule escrowModule = getEscrowConfiguration().escrowModules.get("app")
-        def rootModule = escrowModule.moduleConfigurations.find { it.versionRangeString == VersionRangeHelper.ALL_VERSIONS}
+        def rootModule = escrowModule.moduleConfigurations.find { it.versionRangeString == EscrowConfigurationLoader.ALL_VERSIONS}
         assertNull(rootModule)
         escrowModule.moduleConfigurations.forEach { moduleConfiguration ->
             def oracle = new OracleDatabaseToolBean()

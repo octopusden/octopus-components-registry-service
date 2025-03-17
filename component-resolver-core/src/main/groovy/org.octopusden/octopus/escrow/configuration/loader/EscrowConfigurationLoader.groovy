@@ -21,7 +21,6 @@ import org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration
 import org.octopusden.octopus.escrow.configuration.model.EscrowModule
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
 import org.octopusden.octopus.escrow.configuration.validation.EscrowConfigValidator
-import org.octopusden.octopus.escrow.configuration.validation.util.VersionRangeHelper
 import org.octopusden.octopus.escrow.exceptions.ComponentResolverException
 import org.octopusden.octopus.escrow.exceptions.EscrowConfigurationException
 import org.octopusden.octopus.escrow.model.BuildParameters
@@ -54,6 +53,7 @@ import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurp
 class EscrowConfigurationLoader {
     private static final Logger LOG = LogManager.getLogger(EscrowConfigurationLoader.class)
     public static final String FAKE_VCS_URL_FOR_BS20 = "fakeUrl"
+    public static final String ALL_VERSIONS = "(,0),[0,)"
 
     private final IConfigLoader configLoader
     private final List<String> supportedGroupIds
@@ -309,7 +309,7 @@ class EscrowConfigurationLoader {
                         buildSystem: componentDefaultConfiguration.getBuildSystem(),
                         groupIdPattern: componentDefaultConfiguration.groupIdPattern,
                         artifactIdPattern: componentDefaultConfiguration.artifactIdPattern,
-                        versionRange: VersionRangeHelper.ALL_VERSIONS,
+                        versionRange: ALL_VERSIONS,
                         componentDisplayName: componentDefaultConfiguration.componentDisplayName,
                         componentOwner: componentDefaultConfiguration.componentOwner,
                         releaseManager: componentDefaultConfiguration.releaseManager,
