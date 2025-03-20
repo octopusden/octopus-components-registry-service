@@ -73,6 +73,7 @@ dockerCreateDockerfile.doLast {
 
 dockerBuildImage {
     inputDir = file(".")
+    buildArgs.put("DOCKER_REGISTRY", "$dockerRegistry")
     buildArgs.put("BUILD_VERSION", "${project.version}")
     images.set(["$octopusGithubDockerRegistry/octopusden/components-registry-service:${project.version}"])
 }
