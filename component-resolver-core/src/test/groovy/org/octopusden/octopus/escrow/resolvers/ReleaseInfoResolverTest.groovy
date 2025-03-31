@@ -4,10 +4,12 @@ import org.octopusden.octopus.components.registry.api.build.tools.products.PTKPr
 import org.octopusden.octopus.escrow.configuration.loader.ComponentRegistryInfo
 import org.octopusden.octopus.escrow.configuration.loader.ConfigLoader
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
+import org.octopusden.octopus.escrow.exceptions.EscrowConfigurationException
 import org.octopusden.octopus.releng.dto.ComponentVersion
 import org.junit.Test
 import java.nio.file.Paths
 
+import static org.junit.jupiter.api.Assertions.assertThrows
 import static org.octopusden.octopus.escrow.TestConfigUtils.PRODUCT_TYPES
 import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_GROUP_IDS
 import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_SYSTEMS
@@ -18,15 +20,16 @@ import static org.octopusden.octopus.escrow.TestConfigUtils.VERSION_NAMES
 
 class ReleaseInfoResolverTest {
 
-//    @Test
-//    void testResolvedHotfixConfiguration() {
-//        def releaseInfo = getResolver("/hotfix/Aggregator.groovy").resolveRelease(ComponentVersion.create("component_hotfix", "1.0.107.9-9"))
-//
-//        assertTrue(releaseInfo.distribution.explicit())
-////        assertTrue(releaseInfo.distribution.external())
-////        assertEquals('org.octopusden.octopus.test:octopusmpi:war,org.octopusden.octopus.test:octopusacs:war,org.octopusden.octopus.test:demo:war,' +
-////                'file:///${env.CONF_PATH}/NDC_DDC_Configuration_Builder/${major}.${minor}/NDC-DDC-Configuration-Builder-${major}.${minor}.${service}.exe', releaseInfo.distribution.GAV())
-//    }
+    @Test
+    void testResolvedHotfixConfiguration() {
+        def resolver = getResolver("/hotfix/Aggregator.groovy")
+
+        def exception = assertThrows(EscrowConfigurationException, {
+            resolver.resolveRelease(ComponentVersion.create("component_hotfix", "1.0.107.9-9"))
+        })
+
+        assertTrue("Expected error message to contain validation failure details", exception.message.contains("hotfixVersionFormat '\$major.\$minor.\$service-\$build' doesn't start with buildVersionFormat '\$major.\$minor.\$service-\$fix'"))
+    }
 
     @Test
     void testResolvedConfiguration() {
