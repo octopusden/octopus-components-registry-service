@@ -96,7 +96,7 @@ class RepositoryResolverTest {
         def root1 = VersionControlSystemRoot.create("root1", MERCURIAL, "root1-url", "PATCHED_$TEST_TEST_COMPONENT2_VERSION", "patched-root1-branch")
         def notOverriddenRoot = VersionControlSystemRoot.create("not-overridden-root", CVS, "NOT_URL", "PATCHED_$TEST_TEST_COMPONENT2_VERSION", "NOT_BRANCH")
         def newRoot = VersionControlSystemRoot.create("new-root", CVS, "new-root-url", "PATCHED_$TEST_TEST_COMPONENT2_VERSION", "default")
-        def expectedSettings = VCSSettings.create("component_db_NEW", [root1, notOverriddenRoot, newRoot])
+        def expectedSettings = VCSSettings.create("component_db_NEW", [root1, notOverriddenRoot, newRoot], "hotfix_branch")
         assert expectedSettings == component.vcsSettings
     }
 

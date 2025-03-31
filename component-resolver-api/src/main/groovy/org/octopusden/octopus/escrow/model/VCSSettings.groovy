@@ -6,33 +6,36 @@ import org.apache.commons.lang3.StringUtils
 
 class VCSSettings {
 
+    private final String hotfixBranch
+
     private final String externalRegistry
 
     private final Collection<VersionControlSystemRoot> versionControlSystemRoots
 
-    static VCSSettings create(String externalVCSComponentName) {
-        new VCSSettings(externalVCSComponentName, [])
+    static VCSSettings create(String externalVCSComponentName, String hotfixBranch) {
+        new VCSSettings(externalVCSComponentName, [], hotfixBranch)
     }
 
-    static VCSSettings create(String externalVCSComponentName, List<VersionControlSystemRoot> versionControlSystemRoots) {
-        new VCSSettings(externalVCSComponentName, versionControlSystemRoots)
+    static VCSSettings create(String externalVCSComponentName, List<VersionControlSystemRoot> versionControlSystemRoots, String hotfixBranch) {
+        new VCSSettings(externalVCSComponentName, versionControlSystemRoots, hotfixBranch)
     }
 
     static VCSSettings create(List<VersionControlSystemRoot> versionControlSystemRoots) {
-        new VCSSettings(null, versionControlSystemRoots);
+        new VCSSettings(null, versionControlSystemRoots, null);
     }
 
     static VCSSettings createForSingleRoot(VersionControlSystemRoot versionControlSystemRoot) {
-        new VCSSettings(null, [versionControlSystemRoot]);
+        new VCSSettings(null, [versionControlSystemRoot], null);
     }
 
     static VCSSettings createEmpty() {
-        new VCSSettings(null, Collections.emptyList());
+        new VCSSettings(null, Collections.emptyList(), null);
     }
 
-    private VCSSettings(String externalRegistry, List<VersionControlSystemRoot> versionControlSystemRoots) {
+    private VCSSettings(String externalRegistry, List<VersionControlSystemRoot> versionControlSystemRoots, String hotfixBranch) {
         this.externalRegistry = externalRegistry
         this.versionControlSystemRoots = versionControlSystemRoots
+        this.hotfixBranch = hotfixBranch
     }
 
     @JsonIgnore
@@ -54,6 +57,10 @@ class VCSSettings {
         externalRegistry
     }
 
+    String getHotfixBranch() {
+        hotfixBranch
+    }
+
     List<VersionControlSystemRoot> getVersionControlSystemRoots() {
         return versionControlSystemRoots
     }
@@ -72,21 +79,14 @@ class VCSSettings {
     boolean equals(o) {
         if (this.is(o)) return true
         if (getClass() != o.class) return false
-
         VCSSettings that = (VCSSettings) o
-        if (versionControlSystemRoots != that.versionControlSystemRoots) return false
-        if (externalRegistry != that?.externalRegistry) return false
-
-        return true
+        return Objects.equals(versionControlSystemRoots, that.versionControlSystemRoots) &&
+                Objects.equals(externalRegistry, that.externalRegistry) &&
+                Objects.equals(hotfixBranch, that.hotfixBranch)
     }
 
     int hashCode() {
-        int result = 31
-        result = result + 31 * versionControlSystemRoots.hashCode()
-        if (externalRegistry != null) {
-            result = result + 31 * externalRegistry?.hashCode()
-        }
-        return result
+        return Objects.hash(versionControlSystemRoots, externalRegistry, hotfixBranch)
     }
 
     @Override
@@ -94,6 +94,7 @@ class VCSSettings {
         return "VCSSettings{" +
                 "versionControlSystemRoots=" + versionControlSystemRoots +
                 ", externalRegistry=" + externalRegistry +
+                ", hotfixBranch='" + hotfixBranch + "'" +
                 '}';
     }
 }

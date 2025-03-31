@@ -18,6 +18,16 @@ import static org.octopusden.octopus.escrow.TestConfigUtils.VERSION_NAMES
 
 class ReleaseInfoResolverTest {
 
+//    @Test
+//    void testResolvedHotfixConfiguration() {
+//        def releaseInfo = getResolver("/hotfix/Aggregator.groovy").resolveRelease(ComponentVersion.create("component_hotfix", "1.0.107.9-9"))
+//
+//        assertTrue(releaseInfo.distribution.explicit())
+////        assertTrue(releaseInfo.distribution.external())
+////        assertEquals('org.octopusden.octopus.test:octopusmpi:war,org.octopusden.octopus.test:octopusacs:war,org.octopusden.octopus.test:demo:war,' +
+////                'file:///${env.CONF_PATH}/NDC_DDC_Configuration_Builder/${major}.${minor}/NDC-DDC-Configuration-Builder-${major}.${minor}.${service}.exe', releaseInfo.distribution.GAV())
+//    }
+
     @Test
     void testResolvedConfiguration() {
         def releaseInfo = getResolver("/production/Aggregator.groovy").resolveRelease(ComponentVersion.create("TEST_COMPONENT3", "1.0.107"))

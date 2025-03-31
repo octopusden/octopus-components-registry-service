@@ -24,8 +24,9 @@ class VCSSettingsDeserializer {
             return VCSSettings.createEmpty();
         } else {
             JsonNode externalRegistry = vcsSettingsNode.get("externalRegistry");
+            JsonNode hotfixBranch = vcsSettingsNode.get("hotfixBranch");
             ArrayList<VersionControlSystemRoot> vcsRoots = getVersionControlSystemRoots(vcsSettingsNode);
-            return VCSSettings.create(externalRegistry != null ? externalRegistry.textValue() : null, vcsRoots);
+            return VCSSettings.create(externalRegistry != null ? externalRegistry.textValue() : null, vcsRoots, hotfixBranch != null ? hotfixBranch.textValue() : null);
         }
     }
 

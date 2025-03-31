@@ -170,4 +170,15 @@ class ConfigLoaderTest {
             assert e.message.contains("Unknown jira attribute 'unknownAttirubute' in bcomponent->Mercurial section of escrow config file");
         }
     }
+
+    @Test
+    void testHotfixJiraConfigAttribute() {
+//        try {
+            def loader = fromClassPath("hotfixJiraConfigAttribute.groovy");
+            loader.loadModuleConfig()
+//            Assert.fail("${EscrowConfigurationException.class.name} expected")
+//        } catch (EscrowConfigurationException e) {
+//            assert e.message.contains("Unknown jira attribute 'unknownAttirubute' in bcomponent->Mercurial section of escrow config file");
+//        }
+    }
 }

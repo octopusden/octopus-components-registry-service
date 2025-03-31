@@ -15,6 +15,8 @@ Defaults {
     jira {
         majorVersionFormat = '$major.$minor'
         releaseVersionFormat = '$major.$minor.$service'
+        buildVersionFormat = '$major.$minor.$service.$fix'
+        hotfixVersionFormat = '$major.$minor.$service.$fix.$build'
         customer {
             versionFormat = '$versionPrefix-$baseVersionFormat'
         }
@@ -42,6 +44,7 @@ component {
     }
     "(,3.44.99)" {
         vcsSettings {
+            hotfixBranch = 'hotfix_branch'
             externalRegistry = "component_db_NEW"
             tag = 'PATCHED_$version'
             root1 {

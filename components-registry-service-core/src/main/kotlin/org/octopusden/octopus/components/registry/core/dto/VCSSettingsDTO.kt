@@ -7,5 +7,6 @@ import com.fasterxml.jackson.annotation.JsonProperty
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class VCSSettingsDTO @JsonCreator constructor(
     @JsonProperty("versionControlSystemRoots") val versionControlSystemRoots: List<VersionControlSystemRootDTO> = emptyList(),
-    @JsonProperty("externalRegistry") val externalRegistry: String? = null
-)
+    @JsonProperty("externalRegistry") val externalRegistry: String? = null,
+    @JsonProperty("hotfixBranch") val hotfixBranch: String? = null,
+    )

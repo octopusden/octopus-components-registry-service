@@ -69,7 +69,8 @@ class ComponentControllerV2(
                             it.branch
                         )
                     },
-                externalRegistry
+                externalRegistry,
+                hotfixBranch,
             )
         }
     }

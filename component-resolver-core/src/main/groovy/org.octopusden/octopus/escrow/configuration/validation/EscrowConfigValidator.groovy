@@ -98,6 +98,7 @@ class EscrowConfigValidator {
                 validateReleasesInDefaultBranch(moduleConfig, componentName)
                 validateSolution(moduleConfig, componentName)
                 validateBuildConfigurationTools(moduleConfig)
+                validateHotfixVersionFormat(moduleConfig, componentName)
             }
         }
         if (!hasErrors()) {
@@ -458,6 +459,34 @@ class EscrowConfigValidator {
             if (tool.getTargetLocation() == null) {
                 registerError("tool targetLocation is not specified in '$toolName'")
             }
+        }
+    }
+
+    /**
+     * Validate hotfix version format.
+     * Check if hotfixVersionFormat starts with buildVersionFormat and hotfixBranch is not empty.
+     * Register error if hotfixVersionFormat is not specified.
+     * @param moduleConfig
+     * @param componentName
+     */
+    def validateHotfixVersionFormat(EscrowModuleConfig moduleConfig, String componentName) {
+        def hotfixBranch = moduleConfig.getVcsSettings().getHotfixBranch()
+        if (StringUtils.isBlank(hotfixBranch)) {
+            return
+        }
+        def hotfixVersionFormat = moduleConfig.getJiraConfiguration().componentVersionFormat.hotfixVersionFormat
+        boolean hasErrors = false
+        if (StringUtils.isBlank(hotfixVersionFormat)) {
+            hasErrors = true
+            registerError("hotfixVersionFormat is not specified in '$componentName'")
+        }
+        def buildVersionFormat = moduleConfig.getJiraConfiguration().componentVersionFormat.buildVersionFormat
+        if (buildVersionFormat == null) {
+            hasErrors = true
+            registerError("buildVersionFormat is not specified in '$componentName'")
+        }
+        if (!hasErrors && !hotfixVersionFormat.startsWith(buildVersionFormat)) {
+            registerError("hotfixVersionFormat '$hotfixVersionFormat' doesn't start with buildVersionFormat '$buildVersionFormat'")
         }
     }
 

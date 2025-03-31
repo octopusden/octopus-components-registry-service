@@ -8,7 +8,8 @@
       "majorVersionFormat": "$major",
       "releaseVersionFormat": "$major.$minor",
       "buildVersionFormat": "$major.$minor.$service",
-      "lineVersionFormat": "$major"
+      "lineVersionFormat": "$major",
+      "hotfixVersionFormat": "$major.$minor.$service.$fix"
     },
     "componentInfo": {
       "versionPrefix": "",

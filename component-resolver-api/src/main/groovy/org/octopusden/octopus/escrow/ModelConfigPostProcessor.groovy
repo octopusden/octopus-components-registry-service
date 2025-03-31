@@ -76,7 +76,8 @@ class ModelConfigPostProcessor {
                 componentVersionFormat.majorVersionFormat,
                 componentVersionFormat.releaseVersionFormat,
                 componentVersionFormat.buildVersionFormat != null ? componentVersionFormat.buildVersionFormat : componentVersionFormat.releaseVersionFormat,
-                componentVersionFormat.lineVersionFormat != null ? componentVersionFormat.lineVersionFormat : componentVersionFormat.majorVersionFormat
+                componentVersionFormat.lineVersionFormat != null ? componentVersionFormat.lineVersionFormat : componentVersionFormat.majorVersionFormat,
+                componentVersionFormat.hotfixVersionFormat
         )
         return new JiraComponent(jiraComponent.projectKey, jiraComponent.displayName, enrichedComponentVersionFormat, jiraComponent.componentInfo, jiraComponent.technical)
     }
@@ -84,7 +85,7 @@ class ModelConfigPostProcessor {
     org.octopusden.octopus.escrow.model.VCSSettings resolveVariables(org.octopusden.octopus.escrow.model.VCSSettings vcsSettings) {
         return org.octopusden.octopus.escrow.model.VCSSettings.create(vcsSettings.externalRegistry, vcsSettings.versionControlSystemRoots.collect {
             resolveVariables(it)
-        })
+        }, vcsSettings.hotfixBranch)
     }
 
     org.octopusden.octopus.escrow.model.VersionControlSystemRoot resolveVariables(org.octopusden.octopus.escrow.model.VersionControlSystemRoot versionControlSystemRoot) {

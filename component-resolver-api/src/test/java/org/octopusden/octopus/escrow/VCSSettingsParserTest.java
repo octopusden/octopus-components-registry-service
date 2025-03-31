@@ -28,13 +28,14 @@ public class VCSSettingsParserTest {
 
     @Test
     public void testParseVCSSettingsOnlyWithNameShouldBeCorrect() throws IOException {
-        VCSSettings settings = VCSSettings.create("componentc_db");
-        assertEquals(settings, PARSER.parse(serialize(settings)));
+        VCSSettings settings = VCSSettings.create("componentc_db", "hotfix_branch");
+        VCSSettings actual = PARSER.parse(serialize(settings));
+        assertEquals(settings, actual);
     }
 
     @Test
     public void testParseVCSSettingsAndRootsOnlyWithNameShouldBeCorrect() throws IOException {
-        VCSSettings settings = VCSSettings.create("componentc_db", TestHelper.createTestVCSSettings().getVersionControlSystemRoots());
+        VCSSettings settings = VCSSettings.create("componentc_db", TestHelper.createTestVCSSettings().getVersionControlSystemRoots(), "hotfix_branch");
         assertEquals(settings, PARSER.parse(serialize(settings)));
     }
 

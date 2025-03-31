@@ -43,6 +43,11 @@ class JiraComponentVersionToDetailedComponentVersionMapper(
                 ComponentVersionType.RELEASE,
                 componentVersionFormat.releaseVersionFormat.formatVersion(versionNumericVersionFactory, src.version),
                 src.releaseVersion
+            ),
+            ComponentRegistryVersion(
+                ComponentVersionType.HOTFIX,
+                componentVersionFormat.hotfixVersionFormat.formatVersion(versionNumericVersionFactory, src.version),
+                src.hotfixVersion
             )
         )
     }

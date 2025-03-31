@@ -359,7 +359,7 @@ class EscrowConfigurationLoader {
         List<VersionControlSystemRoot> componentRoots = replaceDefaults(parentVCSSettings, vscRootName2ParametersFromDefaultsMap, defaultVCSRoot, vcsRoots)
 
 
-        return new VCSSettingsWrapper(vcsSettings: VCSSettings.create(defaultVCSSettings?.externalRegistry, componentRoots),
+        return new VCSSettingsWrapper(vcsSettings: VCSSettings.create(defaultVCSSettings?.externalRegistry, componentRoots, defaultVCSSettings?.hotfixBranch),
                 defaultVCSSettings: defaultVCSRoot, vscRootName2ParametersFromDefaultsMap: vscRootName2ParametersFromDefaultsMap)
     }
 
@@ -443,7 +443,10 @@ class EscrowConfigurationLoader {
 
             return new VCSSettingsWrapper(vcsSettings:
                     VCSSettings.create(
-                            componentDefaultConfiguration?.vcsSettingsWrapper?.vcsSettings?.externalRegistry, componentRoots),
+                            componentDefaultConfiguration?.vcsSettingsWrapper?.vcsSettings?.externalRegistry,
+                            componentRoots,
+                            componentDefaultConfiguration?.vcsSettingsWrapper?.vcsSettings?.hotfixBranch
+                    ),
                     defaultVCSSettings: defaultVCSRoot,
                     vscRootName2ParametersFromDefaultsMap: [:])
         }
@@ -472,6 +475,8 @@ class EscrowConfigurationLoader {
 
         def externalRegistry = moduleConfigSection.containsKey("externalRegistry") ? moduleConfigSection.externalRegistry?.toString() :
                 defaultVCSSettingsWrapper?.vcsSettings?.externalRegistry
+        def hotfixBranch = moduleConfigSection.containsKey("hotfixBranch") ? moduleConfigSection.hotfixBranch?.toString() :
+                defaultVCSSettingsWrapper?.vcsSettings?.hotfixBranch
 
         def tagDefined = moduleConfigSection.containsKey(TAG)
         String tag = tagDefined ? moduleConfigSection.tag :
@@ -501,9 +506,9 @@ class EscrowConfigurationLoader {
         }
 
         if (name == "main" && repositoryType == null && vcsUrl == null && tag == null && branch == null) {
-            return [VCSSettings.create(externalRegistry, null), []]
+            return [VCSSettings.create(externalRegistry, null, hotfixBranch), []]
         }
-        return [VCSSettings.create(externalRegistry, [VersionControlSystemRoot.create(name, detectRepositoryType(vcsUrl, repositoryType), vcsUrl, tag, branch)]), defaultParameters]
+        return [VCSSettings.create(externalRegistry, [VersionControlSystemRoot.create(name, detectRepositoryType(vcsUrl, repositoryType), vcsUrl, tag, branch)], hotfixBranch), defaultParameters]
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
@@ -600,9 +605,10 @@ class EscrowConfigurationLoader {
                     parentConfigObject.jiraReleaseVersionFormat : defaultJiraParameters?.componentVersionFormat?.releaseVersionFormat
             def buildVersionFormat = defaultJiraParameters?.componentVersionFormat?.buildVersionFormat
             def lineVersionFormat = defaultJiraParameters?.componentVersionFormat?.lineVersionFormat
+            def hotfixVersionFormat = defaultJiraParameters?.componentVersionFormat?.hotfixVersionFormat
             if (StringUtils.isNotBlank(projectKey)) {
                 jiraConfiguration = new JiraComponent(projectKey, defaultJiraParameters.displayName,
-                        ComponentVersionFormat.create(majorVersionFormat, releaseVersionFormat, buildVersionFormat, lineVersionFormat), defaultJiraParameters.componentInfo, defaultJiraParameters.technical)
+                        ComponentVersionFormat.create(majorVersionFormat, releaseVersionFormat, buildVersionFormat, lineVersionFormat, hotfixVersionFormat), defaultJiraParameters.componentInfo, defaultJiraParameters.technical)
             }
         }
         jiraConfiguration
@@ -747,7 +753,8 @@ class EscrowConfigurationLoader {
         def releaseVersionFormat = jiraConfigObject.containsKey("releaseVersionFormat") ? jiraConfigObject.releaseVersionFormat : defaultJiraConfiguration?.componentVersionFormat?.releaseVersionFormat
         def buildVersionFormat = jiraConfigObject.containsKey("buildVersionFormat") ? jiraConfigObject.buildVersionFormat : defaultJiraConfiguration?.componentVersionFormat?.buildVersionFormat
         def lineVersionFormat = jiraConfigObject.containsKey("lineVersionFormat") ? jiraConfigObject.lineVersionFormat : defaultJiraConfiguration?.componentVersionFormat?.lineVersionFormat
-        return new JiraComponent(projectKey, displayName, ComponentVersionFormat.create(majorVersionFormat, releaseVersionFormat, buildVersionFormat, lineVersionFormat), componentInfo, technical)
+        def hotfixVersionFormat = jiraConfigObject.containsKey("hotfixVersionFormat") ? jiraConfigObject.hotfixVersionFormat : defaultJiraConfiguration?.componentVersionFormat?.hotfixVersionFormat
+        return new JiraComponent(projectKey, displayName, ComponentVersionFormat.create(majorVersionFormat, releaseVersionFormat, buildVersionFormat, lineVersionFormat, hotfixVersionFormat), componentInfo, technical)
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
@@ -842,8 +849,11 @@ class EscrowConfigurationLoader {
         String lineVersionFormat = pureComponentDefaults.jiraComponent?.componentVersionFormat?.lineVersionFormat != null ?
                 pureComponentDefaults.jiraComponent.componentVersionFormat?.lineVersionFormat :
                 defaultConfigParameters.jiraComponent?.componentVersionFormat?.lineVersionFormat
+        String hotfixVersionFormat = pureComponentDefaults.jiraComponent?.componentVersionFormat?.hotfixVersionFormat != null ?
+                pureComponentDefaults.jiraComponent.componentVersionFormat?.hotfixVersionFormat :
+                defaultConfigParameters.jiraComponent?.componentVersionFormat?.hotfixVersionFormat
         ComponentVersionFormat componentVersionFormat =
-                majorVersionFormat != null ? ComponentVersionFormat.create(majorVersionFormat, releaseVersionFormat, buildVersionFormat, lineVersionFormat) : null
+                majorVersionFormat != null ? ComponentVersionFormat.create(majorVersionFormat, releaseVersionFormat, buildVersionFormat, lineVersionFormat, hotfixVersionFormat) : null
 
         String versionFormat = pureComponentDefaults.jiraComponent?.componentInfo?.versionFormat != null ?
                 pureComponentDefaults.jiraComponent?.componentInfo?.versionFormat :
