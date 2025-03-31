@@ -34,7 +34,7 @@ import static org.octopusden.octopus.escrow.BuildSystem.*
     "[1.0.336, 1.0.344]" {
         jira {
             buildVersionFormat = '$major.$minor.$service-$fix'
-            hotfixVersionFormat = '$major.$minor.$service-$fix.$build'
+            hotfixVersionFormat = '$major.$minor.$service-$build'
         }
         build {
             gradleVersion = "4.0"
