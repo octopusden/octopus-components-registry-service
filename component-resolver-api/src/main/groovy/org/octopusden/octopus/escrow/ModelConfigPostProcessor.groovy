@@ -85,7 +85,7 @@ class ModelConfigPostProcessor {
     org.octopusden.octopus.escrow.model.VCSSettings resolveVariables(org.octopusden.octopus.escrow.model.VCSSettings vcsSettings) {
         return org.octopusden.octopus.escrow.model.VCSSettings.create(vcsSettings.externalRegistry, vcsSettings.versionControlSystemRoots.collect {
             resolveVariables(it)
-        }, vcsSettings.hotfixBranch)
+        }, resolveVariables(vcsSettings.hotfixBranch))
     }
 
     org.octopusden.octopus.escrow.model.VersionControlSystemRoot resolveVariables(org.octopusden.octopus.escrow.model.VersionControlSystemRoot versionControlSystemRoot) {

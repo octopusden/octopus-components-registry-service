@@ -44,7 +44,7 @@ component {
     }
     "(,3.44.99)" {
         vcsSettings {
-            hotfixBranch = 'hotfix_branch'
+            hotfixBranch = 'hotfixes/$major.$minor.$service'
             externalRegistry = "component_db_NEW"
             tag = 'PATCHED_$version'
             root1 {
