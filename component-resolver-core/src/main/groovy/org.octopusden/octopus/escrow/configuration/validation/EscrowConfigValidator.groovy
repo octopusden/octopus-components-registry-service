@@ -98,7 +98,6 @@ class EscrowConfigValidator {
                 validateReleasesInDefaultBranch(moduleConfig, componentName)
                 validateSolution(moduleConfig, componentName)
                 validateBuildConfigurationTools(moduleConfig)
-                validateHotfixVersionFormat(moduleConfig, componentName)
             }
         }
         if (!hasErrors()) {
@@ -334,6 +333,7 @@ class EscrowConfigValidator {
             if (!(moduleConfig.buildSystem == BuildSystem.BS2_0 || moduleConfig.buildSystem == BuildSystem.PROVIDED || moduleConfig.buildSystem == BuildSystem.ESCROW_PROVIDED_MANUALLY) && StringUtils.isEmpty(vcsRoot.vcsPath)) {
                 registerError("empty vcsUrl is not allowed in configuration of component $component (type=$moduleConfig.buildSystem)")
             }
+            validateHotfixVersionFormat(moduleConfig, component, vcsRoot)
         }
         if (moduleConfig.getBuildSystem() == BuildSystem.BS2_0) {
             if (vcsRoots.size() > 1) {
@@ -469,8 +469,8 @@ class EscrowConfigValidator {
      * @param moduleConfig
      * @param componentName
      */
-    def validateHotfixVersionFormat(EscrowModuleConfig moduleConfig, String componentName) {
-        def hotfixBranch = moduleConfig.getVcsSettings().getHotfixBranch()
+    def validateHotfixVersionFormat(EscrowModuleConfig moduleConfig, String componentName, VersionControlSystemRoot vcsRoot) {
+        def hotfixBranch = vcsRoot.getHotfixBranch()
         if (StringUtils.isBlank(hotfixBranch)) {
             return
         }

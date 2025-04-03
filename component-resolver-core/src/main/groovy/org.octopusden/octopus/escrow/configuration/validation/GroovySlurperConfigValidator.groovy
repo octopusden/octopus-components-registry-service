@@ -309,7 +309,8 @@ class GroovySlurperConfigValidator {
     def validateVCSParameters(ConfigObject moduleConfigObject, String moduleConfigName, String componentName) {
         if (moduleConfigObject.containsKey("vcsUrl")
                 || moduleConfigObject.containsKey("repositoryType")
-                || moduleConfigObject.containsKey("branch")) {
+                || moduleConfigObject.containsKey("branch")
+                || moduleConfigObject.containsKey("hotfixBranch")) {
             registerError("Ambiguous VCS configuration of component '$componentName' section $moduleConfigName")
         }
 

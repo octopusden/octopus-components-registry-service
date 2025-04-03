@@ -12,11 +12,11 @@ class TestHelper {
 
     static VCSSettings createTestVCSSettings() {
         VersionControlSystemRoot root1 = VersionControlSystemRoot.create("cvs1", CVS, "OctopusSource/Octopus/Intranet",
-                "TEST_COMPONENT2_${TEST_TEST_COMPONENT2_VERSION}", "TEST_COMPONENT2_03_38_30");
+                "TEST_COMPONENT2_${TEST_TEST_COMPONENT2_VERSION}", "TEST_COMPONENT2_03_38_30", "hotfix_branch");
         VersionControlSystemRoot root2 = VersionControlSystemRoot.create("mercurial1", MERCURIAL, "ssh://hg@mercurial/zenit",
-                "TEST_COMPONENT2_${TEST_TEST_COMPONENT2_VERSION}", "default");
+                "TEST_COMPONENT2_${TEST_TEST_COMPONENT2_VERSION}", "default", null);
         VersionControlSystemRoot root3 = VersionControlSystemRoot.create("cvs1", CVS, "OctopusSource/Octopus/Intranet",
-                null, "TEST_COMPONENT2_03_38_30");
+                null, "TEST_COMPONENT2_03_38_30", null);
 
         return VCSSettings.create(Arrays.asList(root1, root2, root3));
     }

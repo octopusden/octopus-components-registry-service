@@ -66,11 +66,11 @@ class ComponentControllerV2(
                             it.vcsPath,
                             RepositoryType.valueOf(it.repositoryType.name),
                             it.tag,
-                            it.branch
+                            it.branch,
+                            it.hotfixBranch,
                         )
                     },
                 externalRegistry,
-                hotfixBranch,
             )
         }
     }

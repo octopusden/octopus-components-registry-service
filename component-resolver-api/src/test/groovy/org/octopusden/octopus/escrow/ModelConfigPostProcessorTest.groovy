@@ -55,14 +55,14 @@ class ModelConfigPostProcessorTest extends GroovyTestCase {
         VCSSettings versionControlSystemRoot = createTestVCSSettings()
 
         VCSSettings formatted = VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("cvs1", RepositoryType.CVS, 'vcsPath/zenit',
-                "zenit-1-2", "zenit_01_02"))
+                "zenit-1-2", "zenit_01_02", null))
 
         assert formatted == modelConfigPostProcessor.resolveVariables(versionControlSystemRoot)
     }
 
     private static VCSSettings createTestVCSSettings() {
         def root = VersionControlSystemRoot.create("cvs1", RepositoryType.CVS, 'vcsPath/$module',
-                '$module-$cvsCompatibleVersion', 'zenit_$major02_$minor02')
+                '$module-$cvsCompatibleVersion', 'zenit_$major02_$minor02', null)
         VCSSettings.create([root])
     }
 

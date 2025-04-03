@@ -53,19 +53,19 @@ class ComponentByJiraProjectResolverTest extends GroovyTestCase {
     void testGetVCSRootByJiraProject() {
         def resolver = createJiraParametersResolverFromConfig("componentConfig.groovy")
 
-        def vcsSettings = VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", RepositoryType.MERCURIAL, "component-vcs-url", "component-tag", "component-branch"))
+        def vcsSettings = VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", RepositoryType.MERCURIAL, "component-vcs-url", "component-tag", "component-branch", null))
         assert vcsSettings == resolver.getVersionControlSystemRootsByJiraProject(create("TEST_COMPONENT2", TEST_COMPONENT2_VERSION));
         // BRANCH355
         assert vcsSettings == resolver.getVersionControlSystemRootsByJiraProject(create("TEST_COMPONENT2", TEST_COMPONENT2_BUILD));
 
         assert VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", RepositoryType.MERCURIAL, "ssh://hg@mercurial/o2/other/commoncomponent",
-                "commoncomponent-tag", "default")) ==
+                "commoncomponent-tag", "default", null)) ==
                 resolver.getVersionControlSystemRootsByJiraProject(create("system", SYSTEM_VERSIONS))
         assert resolver.getVersionControlSystemRootsByJiraProject(create("UNKNOWN", SYSTEM_VERSIONS)).hasNoConfiguredVCSRoot()
 
         assert resolver.getVersionControlSystemRootsByJiraProject(create("AS", "1.3")).hasNoConfiguredVCSRoot()
 
-        assert VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", RepositoryType.MERCURIAL, "as-vcs-url", "as-tag", "as-branch")) ==
+        assert VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", RepositoryType.MERCURIAL, "as-vcs-url", "as-tag", "as-branch", null)) ==
                 resolver.getVersionControlSystemRootsByJiraProject(create("AS", "app-1.6"))
     }
 
@@ -122,8 +122,15 @@ class ComponentByJiraProjectResolverTest extends GroovyTestCase {
                 getJiraComponentVersionRange("buildsystem-model", "[1.3,)", COMPONENT, MODEL_COMPONENT_VERSION_FORMAT, null, null,
                         VCSSettings.createEmpty()),
                 getJiraComponentVersionRange("buildsystem-mojo", "(,0),[0,)", COMPONENT, MOJO_COMPONENT_VERSION_FORMAT, null, null,
-                        VCSSettings.create([VersionControlSystemRoot.create("main", RepositoryType.MERCURIAL,
-                                "ssh://hg@mercurial/maven-buildsystem-plugin", 'maven-buildsystem-plugin-$version', null)])))
+                        VCSSettings.create([VersionControlSystemRoot.create(
+                                "main",
+                                RepositoryType.MERCURIAL,
+                                "ssh://hg@mercurial/maven-buildsystem-plugin",
+                                'maven-buildsystem-plugin-$version',
+                                null,
+                                null
+                        )
+                        ])))
     }
 
     private static List<JiraComponentVersionRange> getJiraComponentVersionRangeListByComponentNameWeb() {

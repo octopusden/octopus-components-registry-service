@@ -73,7 +73,8 @@ val VCS_SETTINGS = VCSSettingsDTO(
             name = "main",
             branch = "v2",
             tag = "SUB-3.0.0",
-            type = RepositoryType.MERCURIAL
+            type = RepositoryType.MERCURIAL,
+            hotfixBranch = null
         )
     )
 )
@@ -205,7 +206,8 @@ abstract class BaseComponentsRegistryServiceTest {
                         vcsPath = "ssh://hg@mercurial/test-component",
                         type = RepositoryType.MERCURIAL,
                         tag = "TESTONE-1.0.0",
-                        branch = "v2"
+                        branch = "v2",
+                        hotfixBranch = null
                     )
                 ),
                 externalRegistry = null

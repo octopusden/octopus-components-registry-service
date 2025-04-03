@@ -44,11 +44,11 @@ component {
     }
     "(,3.44.99)" {
         vcsSettings {
-            hotfixBranch = 'hotfixes/$major.$minor.$service'
             externalRegistry = "component_db_NEW"
             tag = 'PATCHED_$version'
             root1 {
                 branch = "patched-root1-branch"
+                hotfixBranch = 'hotfixes/$major.$minor.$service'
             }
             "new-root" {
                 vcsUrl = "new-root-url"

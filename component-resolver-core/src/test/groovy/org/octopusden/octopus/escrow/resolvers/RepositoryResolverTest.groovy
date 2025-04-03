@@ -31,11 +31,11 @@ class RepositoryResolverTest {
     void testSeveralVCSRoots() {
         ReleaseInfo component = withConfigResolver("new-vcs/severalVCSRoots").resolveRelease(create("component", TEST_TEST_COMPONENT2_VERSION))
         def expected = VersionControlSystemRoot.create("cvs1", CVS, "OctopusSource/Octopus/Intranet",
-                "TEST_COMPONENT2_${TEST_TEST_COMPONENT2_VERSION}", "TEST_COMPONENT2_03_38_30")
+                "TEST_COMPONENT2_${TEST_TEST_COMPONENT2_VERSION}", "TEST_COMPONENT2_03_38_30", "hotfix_branch")
         def expected2 = VersionControlSystemRoot.create("cvs2", CVS, "OctopusSource/Octopus/Module2",
-                "TEST_COMPONENT2_${TEST_TEST_COMPONENT2_VERSION}", "TEST_COMPONENT2_03_38_30")
+                "TEST_COMPONENT2_${TEST_TEST_COMPONENT2_VERSION}", "TEST_COMPONENT2_03_38_30", "hotfix_branch")
         def expected3 = VersionControlSystemRoot.create("mercurial1", MERCURIAL, "ssh://hg@mercurial/zenit",
-                "TEST_COMPONENT2_${TEST_TEST_COMPONENT2_VERSION}", "default")
+                "TEST_COMPONENT2_${TEST_TEST_COMPONENT2_VERSION}", "default", "hotfix_branch")
         def real = component?.vcsSettings?.versionControlSystemRoots[0]
         def real2 = component?.vcsSettings?.versionControlSystemRoots[1]
         def real3 = component?.vcsSettings?.versionControlSystemRoots[2]
@@ -52,9 +52,9 @@ class RepositoryResolverTest {
         assert component.vcsSettings.versionControlSystemRoots.size() == 2
 
         def expected = VersionControlSystemRoot.create("cvs1", CVS, "OctopusSource/Octopus/Intranet",
-                "TEST_COMPONENT2_${TEST_TEST_COMPONENT2_VERSION}", "TEST_COMPONENT2_03_38_30")
+                "TEST_COMPONENT2_${TEST_TEST_COMPONENT2_VERSION}", "TEST_COMPONENT2_03_38_30", null)
         def expected2 = VersionControlSystemRoot.create("mercurial1", MERCURIAL, "ssh://hg@mercurial/zenit",
-                "TEST_COMPONENT2_${TEST_TEST_COMPONENT2_VERSION}", "default")
+                "TEST_COMPONENT2_${TEST_TEST_COMPONENT2_VERSION}", "default", null)
         def real = component?.vcsSettings?.versionControlSystemRoots[0]
         def real2 = component?.vcsSettings?.versionControlSystemRoots[1]
         assert expected == real
@@ -65,7 +65,7 @@ class RepositoryResolverTest {
     void testSingleVCSRootInVCSSettingsSection() {
         ReleaseInfo component = withConfigResolver("new-vcs/singleVCSRootInVCSSettings").resolveRelease(create("component", TEST_TEST_COMPONENT2_VERSION))
         def expected = VersionControlSystemRoot.create("main", CVS, "OctopusSource/Octopus/Intranet",
-                "TEST_COMPONENT2_${TEST_TEST_COMPONENT2_VERSION}", "TEST_COMPONENT2_03_38_30")
+                "TEST_COMPONENT2_${TEST_TEST_COMPONENT2_VERSION}", "TEST_COMPONENT2_03_38_30", null)
         def real = component?.vcsSettings?.versionControlSystemRoots[0]
         assert expected == real
     }
@@ -74,10 +74,10 @@ class RepositoryResolverTest {
     void testVCSSettingsMustBeInheritedFromComponentDefaultsToVersionRangeSection() {
         ReleaseInfo component = withConfigResolver("new-vcs/vcsSettingsInheritanceInSection").resolveRelease(create("component", TEST_TEST_COMPONENT2_VERSION))
         def expected1 = VersionControlSystemRoot.create("Crc32Crypt", CVS, "OctopusSource/Octopus/Intranet",
-                "TEST_COMPONENT2_${TEST_TEST_COMPONENT2_VERSION}", "TEST_COMPONENT2_03_38_30")
+                "TEST_COMPONENT2_${TEST_TEST_COMPONENT2_VERSION}", "TEST_COMPONENT2_03_38_30", null)
         def expected2 = VersionControlSystemRoot.create("DbJava", MERCURIAL,
                 "ssh://hg@mercurial/products/octopusk/DbJava",
-                "TEST_COMPONENT2_${TEST_TEST_COMPONENT2_VERSION}", "default")
+                "TEST_COMPONENT2_${TEST_TEST_COMPONENT2_VERSION}", "default", null)
         assert [expected1, expected2] == component?.vcsSettings?.versionControlSystemRoots
     }
 
@@ -85,7 +85,7 @@ class RepositoryResolverTest {
     void testDefaultSettingsForVCSRootsInheritedFromComponentDefaultsShouldBeOverriddenInVersionRangeSection() {
         def component = withConfigResolver("new-vcs/emptyVersionRangeSection").resolveRelease(create("component", TEST_TEST_COMPONENT2_VERSION_45))
         def expected = VersionControlSystemRoot.create("Crc32Crypt", MERCURIAL, "OctopusSource/Octopus/Intranet",
-                "overridden_tag-${TEST_TEST_COMPONENT2_VERSION_45}", "HEAD")
+                "overridden_tag-${TEST_TEST_COMPONENT2_VERSION_45}", "HEAD", null)
         assert expected == component.vcsSettings.versionControlSystemRoots[0]
         assert [expected] == component.vcsSettings.versionControlSystemRoots
     }
@@ -93,10 +93,10 @@ class RepositoryResolverTest {
     @Test
     void testInheritanceRootsWithDifferentNamesShouldBeCorrect() {
         def component = withConfigResolver("new-vcs/vcsSettingsWithDifferentNames").resolveRelease(create("component", TEST_TEST_COMPONENT2_VERSION))
-        def root1 = VersionControlSystemRoot.create("root1", MERCURIAL, "root1-url", "PATCHED_$TEST_TEST_COMPONENT2_VERSION", "patched-root1-branch")
-        def notOverriddenRoot = VersionControlSystemRoot.create("not-overridden-root", CVS, "NOT_URL", "PATCHED_$TEST_TEST_COMPONENT2_VERSION", "NOT_BRANCH")
-        def newRoot = VersionControlSystemRoot.create("new-root", CVS, "new-root-url", "PATCHED_$TEST_TEST_COMPONENT2_VERSION", "default")
-        def expectedSettings = VCSSettings.create("component_db_NEW", [root1, notOverriddenRoot, newRoot], "hotfixes/3.38.30")
+        def root1 = VersionControlSystemRoot.create("root1", MERCURIAL, "root1-url", "PATCHED_$TEST_TEST_COMPONENT2_VERSION", "patched-root1-branch", "hotfixes/3.38.30")
+        def notOverriddenRoot = VersionControlSystemRoot.create("not-overridden-root", CVS, "NOT_URL", "PATCHED_$TEST_TEST_COMPONENT2_VERSION", "NOT_BRANCH", null)
+        def newRoot = VersionControlSystemRoot.create("new-root", CVS, "new-root-url", "PATCHED_$TEST_TEST_COMPONENT2_VERSION", "default", null)
+        def expectedSettings = VCSSettings.create("component_db_NEW", [root1, notOverriddenRoot, newRoot])
         assert expectedSettings == component.vcsSettings
     }
 
@@ -105,7 +105,7 @@ class RepositoryResolverTest {
         def resolver = withConfigResolver("new-vcs/emptyVersionRangeSection")
         ReleaseInfo component = resolver.resolveRelease(create("component", TEST_TEST_COMPONENT2_VERSION))
         def expected1 = VersionControlSystemRoot.create("Crc32Crypt", CVS, "OctopusSource/Octopus/Intranet",
-                "TEST_COMPONENT2_${TEST_TEST_COMPONENT2_VERSION}", "TEST_COMPONENT2_03_38_30")
+                "TEST_COMPONENT2_${TEST_TEST_COMPONENT2_VERSION}", "TEST_COMPONENT2_03_38_30", null)
         assert [expected1] == component?.vcsSettings?.versionControlSystemRoots
     }
 
@@ -114,7 +114,7 @@ class RepositoryResolverTest {
         def resolver = withConfigResolver("new-vcs/tagInComponentsDefault")
         ReleaseInfo component = resolver.resolveRelease(create("component", TEST_TEST_COMPONENT2_VERSION));
         def expected1 = VersionControlSystemRoot.create("main", MERCURIAL, "ssh://hg@mercurial/products/wproject/octopusweb_2_44_3",
-                "octopusweb-${TEST_TEST_COMPONENT2_VERSION}", "default")
+                "octopusweb-${TEST_TEST_COMPONENT2_VERSION}", "default", null)
         assert [expected1] == component?.vcsSettings?.versionControlSystemRoots
     }
 
@@ -145,7 +145,7 @@ class RepositoryResolverTest {
     void testDefaultTag() {
         ReleaseInfo info = withConfigResolver("bcomponent").resolveRelease(create("bcomponent", TEST_VERSION))
         assert info != null
-        def expected = VCSSettings.create([VersionControlSystemRoot.create("main", MERCURIAL, "ssh://hg@mercurial/bcomponent", "bcomponent-$TEST_VERSION", "BCOMPONENT-1.12")])
+        def expected = VCSSettings.create([VersionControlSystemRoot.create("main", MERCURIAL, "ssh://hg@mercurial/bcomponent", "bcomponent-$TEST_VERSION", "BCOMPONENT-1.12", null)])
         assert expected.versionControlSystemRoots == info.getVcsSettings().versionControlSystemRoots
         assert expected == info.getVcsSettings()
         assert BuildSystem.MAVEN == info.buildSystem
@@ -157,12 +157,12 @@ class RepositoryResolverTest {
         def resolver = withConfigResolver("new-vcs/defaultBranchByRepositoryType")
         ReleaseInfo info = resolver.resolveRelease(create("bcomponent", TEST_VERSION))
         assert info != null
-        def expected = VCSSettings.create([VersionControlSystemRoot.create("main", MERCURIAL, "ssh://hg@mercurial/bcomponent", "bcomponent-$TEST_VERSION", "default")])
+        def expected = VCSSettings.create([VersionControlSystemRoot.create("main", MERCURIAL, "ssh://hg@mercurial/bcomponent", "bcomponent-$TEST_VERSION", "default", null)])
         assert expected == info.getVcsSettings()
 
         ReleaseInfo component = resolver.resolveRelease(create("component", TEST_TEST_COMPONENT2_VERSION))
         expected = VersionControlSystemRoot.create("main", CVS, "OctopusSource/Octopus/Intranet",
-                "TEST_COMPONENT2_${TEST_TEST_COMPONENT2_VERSION}", "HEAD")
+                "TEST_COMPONENT2_${TEST_TEST_COMPONENT2_VERSION}", "HEAD", null)
         def real = component?.vcsSettings?.versionControlSystemRoots[0]
         assert expected == real
     }
@@ -198,7 +198,7 @@ class RepositoryResolverTest {
     @Test
     void testDefaultSettingsOfComponent() {
         ReleaseInfo info = withConfigResolver("defaultSettingsOfComponent").resolveRelease(create("component_23", "11.0"))
-        def expectedInfo = ReleaseInfo.create(VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", MERCURIAL, "ssh://hg@mercurial/o2/other/component_23", "component_23-R-11.0", null)),
+        def expectedInfo = ReleaseInfo.create(VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", MERCURIAL, "ssh://hg@mercurial/o2/other/component_23", "component_23-R-11.0",  null, null)),
                 BuildSystem.MAVEN, null, null, new Distribution(true, false, null, null, null, null, new SecurityGroups(null)), false, null)
         assert expectedInfo == info
     }

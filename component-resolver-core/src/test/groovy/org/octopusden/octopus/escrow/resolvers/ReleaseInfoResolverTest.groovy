@@ -9,6 +9,7 @@ import org.octopusden.octopus.releng.dto.ComponentVersion
 import org.junit.Test
 import java.nio.file.Paths
 
+import static org.junit.Assert.assertNotNull
 import static org.junit.jupiter.api.Assertions.assertThrows
 import static org.octopusden.octopus.escrow.TestConfigUtils.PRODUCT_TYPES
 import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_GROUP_IDS
@@ -45,6 +46,9 @@ class ReleaseInfoResolverTest {
         def resolver = getResolver("/production/Aggregator.groovy")
         def releaseInfo162720 = resolver.resolveRelease(ComponentVersion.create("app", "1.6.2720"))
         def releaseInfo173630 = resolver.resolveRelease(ComponentVersion.create("app", "1.7.3630"))
+        def vcsRoot = releaseInfo162720.vcsSettings.versionControlSystemRoots.find { vcsRoot -> vcsRoot.name == "release-script" }
+        assertNotNull(vcsRoot)
+        assertEquals("hotfix:1.6", vcsRoot.hotfixBranch)
         assertTrue(releaseInfo162720.distribution.explicit())
         assertTrue(releaseInfo162720.distribution.external())
         assertEquals('file:///as-1.6', releaseInfo162720.distribution.GAV())
