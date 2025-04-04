@@ -80,6 +80,7 @@ Defaults {
         majorVersionFormat = '$major'
         releaseVersionFormat = '$major.$minor'
         buildVersionFormat = '$major.$minor'
+        hotfixVersionFormat = '$major.$minor.$service'
         displayName = "Subcomponent with simple version format"
         component {
             versionPrefix = 's1mple'
@@ -103,6 +104,7 @@ Defaults {
         majorVersionFormat = '$major'
         releaseVersionFormat = '$major.$minor'
         buildVersionFormat = '$major.$minor.$service'
+        hotfixVersionFormat = '$major.$minor.$service-$build'
         displayName = "PPROJECT WITH CLIENT COMPONENT"
         customer {
             versionPrefix = "sub1k"
@@ -182,6 +184,7 @@ Defaults {
         majorVersionFormat = '$major'
         releaseVersionFormat = '$major.$minor'
         buildVersionFormat = '$major.$minor.$service'
+        hotfixVersionFormat = '$major.$minor.$service.$fix'
         displayName = "TESTONE DISPLAY NAME WITH VERSIONS-API"
     }
 
@@ -209,6 +212,7 @@ Defaults {
                 component {
                     versionPrefix = "versions-api"
                     versionFormat = '$versionPrefix.$baseVersionFormat'
+                    hotfixVersionFormat = '$releaseVersion-$hotfixSuffix'
                 }
             }
             vcsUrl = "ssh://hg@mercurial/versions-api"
@@ -314,6 +318,7 @@ TEST_COMPONENT2 {
         majorVersionFormat = '$major02.$minorC.$serviceC'
         releaseVersionFormat = '$major02.$minor02.$service02.$fix02'
         buildVersionFormat = '$major02.$minor02.$service02.$fix02-$build'
+        hotfixVersionFormat = '$major02.$minor02.$service02.$fix02-$build'
     }
     distribution {
         explicit = true
@@ -336,6 +341,7 @@ TEST_COMPONENT2 {
         majorVersionFormat = '$major02.$minorC.$serviceC'
         releaseVersionFormat = '$major02.$minor02.$service02.$fix02'
         buildVersionFormat = '$major02.$minor02.$service02.$fix02-$build'
+        hotfixVersionFormat = '$major02.$minor02.$service02.$fix02-$build'
         component {
             versionPrefix = 'not-expl'
         }
@@ -395,6 +401,7 @@ TEST_COMPONENT2 {
         majorVersionFormat = '$major02.$minorC.$serviceC'
         releaseVersionFormat = '$major02.$minor02.$service02.$fix02'
         buildVersionFormat = '$major02.$minor02.$service02.$fix02-$build04'
+        hotfixVersionFormat = '$major02.$minor02.$service02.$fix02-$build04'
         customer {
             versionPrefix = 'external-roots'
             versionFormat = '$versionPrefix.$baseVersionFormat'
@@ -463,6 +470,7 @@ TEST_COMPONENT2 {
         majorVersionFormat = '$major02.$minorC.$serviceC'
         releaseVersionFormat = '$major02.$minor02.$service02.$fix02'
         buildVersionFormat = '$major02.$minor02.$service02.$fix02-$build'
+        hotfixVersionFormat = '$major02.$minor02.$service02.$fix02-$build'
         technical = true
         displayName = "TECHNICAL COMPONENT"
         component {
@@ -484,6 +492,7 @@ TEST_COMPONENT2 {
         majorVersionFormat = '$major02.$minorC.$serviceC'
         releaseVersionFormat = '$major02.$minor02.$service02.$fix02'
         buildVersionFormat = '$major02.$minor02.$service02.$fix02-$build'
+        hotfixVersionFormat = '$major02.$minor02.$service02.$fix02-$build'
         technical = true
         displayName = "DOUBLE TECHNICAL COMPONENT"
         component {
@@ -502,6 +511,7 @@ TEST_COMPONENT2 {
         majorVersionFormat = '$major02.$minorC.$serviceC'
         releaseVersionFormat = '$major02.$minor02.$service02.$fix02'
         buildVersionFormat = '$major02.$minor02.$service02.$fix02-$build04'
+        hotfixVersionFormat = '$major02.$minor02.$service02.$fix02-$build04'
         customer {
             versionPrefix = 'external-roots-not-explicit'
             versionFormat = '$versionPrefix.$baseVersionFormat'
@@ -526,6 +536,7 @@ TEST_COMPONENT2 {
         majorVersionFormat = '$major02.$minorC.$serviceC'
         releaseVersionFormat = '$major02.$minor02.$service02.$fix02'
         buildVersionFormat = '$major02.$minor02.$service02.$fix02-$build04'
+        hotfixVersionFormat = '$major02.$minor02.$service02.$fix02-$build04'
         displayName = "DB"
         customer {
             versionPrefix = 'db'
@@ -554,6 +565,7 @@ TEST_COMPONENT2 {
             majorVersionFormat = '$major02.$minorC.$serviceC'
             releaseVersionFormat = '$major02.$minor02.$service02.$fix02'
             buildVersionFormat = '$major02.$minor02.$service02.$fix02-$build04'
+            hotfixVersionFormat = '$major02.$minor02.$service02.$fix02-$build04'
             customer {
                 versionPrefix = 'external-roots-not'
                 versionFormat = '$versionPrefix.$baseVersionFormat'
@@ -579,6 +591,7 @@ TEST_COMPONENT2 {
             majorVersionFormat = '$major02.$minorC.$serviceC'
             releaseVersionFormat = '$major02.$minor02.$service02.$fix02'
             buildVersionFormat = '$major02.$minor02.$service02.$fix02-$build04'
+            hotfixVersionFormat = '$major02.$minor02.$service02.$fix02-$build04'
             customer {
                 versionPrefix = 'test_component5'
                 versionFormat = '$versionPrefix.$baseVersionFormat'
@@ -605,6 +618,7 @@ TEST_COMPONENT2 {
             majorVersionFormat = '$major02.$minorC.$serviceC'
             releaseVersionFormat = '$major02.$minor02.$service02.$fix02'
             buildVersionFormat = '$major02.$minor02.$service02.$fix02-$build'
+            hotfixVersionFormat = '$major02.$minor02.$service02.$fix02-$build'
             component {
                 versionPrefix = 'internal'
             }
@@ -633,6 +647,7 @@ TEST_COMPONENT2 {
         majorVersionFormat = '$major02.$minorC.$serviceC'
         releaseVersionFormat = '$major02.$minor02.$service02.$fix02'
         buildVersionFormat = '$major02.$minor02.$service02.$fix02-$build'
+        hotfixVersionFormat = '$major02.$minor02.$service02.$fix02-$build'
         customer {
             versionPrefix = 'cvs'
         }
@@ -652,6 +667,7 @@ TEST_COMPONENT2 {
         majorVersionFormat = '$major02.$minorC.$serviceC'
         releaseVersionFormat = '$major02.$minor02.$service02.$fix02'
         buildVersionFormat = '$major02.$minor02.$service02.$fix02-$build'
+        hotfixVersionFormat = '$major02.$minor02.$service02.$fix02-$build'
         customer {
             versionPrefix = 'formatted'
         }
@@ -672,6 +688,7 @@ TEST_COMPONENT2 {
         majorVersionFormat = '$major02.$minorC.$serviceC'
         releaseVersionFormat = '$major02.$minor02.$service02.$fix02'
         buildVersionFormat = '$major02.$minor02.$service02.$fix02-$build'
+        hotfixVersionFormat = '$major02.$minor02.$service02.$fix02-$build'
         customer {
             versionPrefix = 'mercurial'
         }
@@ -691,6 +708,7 @@ TEST_COMPONENT2 {
         majorVersionFormat = '$major02.$minorC.$serviceC'
         releaseVersionFormat = '$major02.$minor02.$service02.$fix02'
         buildVersionFormat = '$major02.$minor02.$service02.$fix02-$build'
+        hotfixVersionFormat = '$major02.$minor02.$service02.$fix02-$build'
         customer {
             versionPrefix = 'git'
         }
@@ -707,6 +725,7 @@ TEST_COMPONENT2 {
         majorVersionFormat = '$major02.$minorC.$serviceC'
         releaseVersionFormat = '$major02.$minor02.$service02.$fix02'
         buildVersionFormat = '$major02.$minor02.$service02.$fix02-$build'
+        hotfixVersionFormat = '$major02.$minor02.$service02.$fix02-$build'
         customer {
             versionPrefix = 'several-branches'
         }
@@ -759,6 +778,7 @@ TEST_COMPONENT2 {
         majorVersionFormat = '$major02.$minorC.$serviceC'
         releaseVersionFormat = '$major02.$minor02.$service02.$fix02'
         buildVersionFormat = '$major02.$minor02.$service02.$fix02-$build'
+        hotfixVersionFormat = '$major02.$minor02.$service02.$fix02-$build'
         customer {
             versionPrefix = 'several'
         }
@@ -802,6 +822,7 @@ TEST_COMPONENT4 {
         majorVersionFormat = '$major02.$minorC.$serviceC'
         releaseVersionFormat = '$major02.$minor02.$service02.$fix02'
         buildVersionFormat = '$major02.$minor02.$service02.$fix02-$build'
+        hotfixVersionFormat = '$major02.$minor02.$service02.$fix02-$build'
         technical = true
         displayName = "TECHNICAL COMPONENT"
         component {

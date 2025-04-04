@@ -29,6 +29,7 @@ component {
         externalRegistry = "componentc_db"
 
         branch = 'TEST_COMPONENT2_03_38_30'
+        hotfixBranch = "hotfix_branch"
         tag = 'TEST_COMPONENT2_$version'
         repositoryType = CVS
         cvs1 {
@@ -45,5 +46,7 @@ component {
     }
     jira {
         projectKey = "TEST_COMPONENT2"
+        buildVersionFormat = '$major.$minor.$service'
+        hotfixVersionFormat = '$major.$minor.$service.$fix'
     }
 }

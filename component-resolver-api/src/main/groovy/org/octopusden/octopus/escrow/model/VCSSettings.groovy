@@ -72,21 +72,13 @@ class VCSSettings {
     boolean equals(o) {
         if (this.is(o)) return true
         if (getClass() != o.class) return false
-
         VCSSettings that = (VCSSettings) o
-        if (versionControlSystemRoots != that.versionControlSystemRoots) return false
-        if (externalRegistry != that?.externalRegistry) return false
-
-        return true
+        return Objects.equals(versionControlSystemRoots, that.versionControlSystemRoots) &&
+                Objects.equals(externalRegistry, that.externalRegistry)
     }
 
     int hashCode() {
-        int result = 31
-        result = result + 31 * versionControlSystemRoots.hashCode()
-        if (externalRegistry != null) {
-            result = result + 31 * externalRegistry?.hashCode()
-        }
-        return result
+        return Objects.hash(versionControlSystemRoots, externalRegistry)
     }
 
     @Override

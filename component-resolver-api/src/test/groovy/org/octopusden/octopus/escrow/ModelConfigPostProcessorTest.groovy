@@ -55,14 +55,14 @@ class ModelConfigPostProcessorTest extends GroovyTestCase {
         VCSSettings versionControlSystemRoot = createTestVCSSettings()
 
         VCSSettings formatted = VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("cvs1", RepositoryType.CVS, 'vcsPath/zenit',
-                "zenit-1-2", "zenit_01_02"))
+                "zenit-1-2", "zenit_01_02", null))
 
         assert formatted == modelConfigPostProcessor.resolveVariables(versionControlSystemRoot)
     }
 
     private static VCSSettings createTestVCSSettings() {
         def root = VersionControlSystemRoot.create("cvs1", RepositoryType.CVS, 'vcsPath/$module',
-                '$module-$cvsCompatibleVersion', 'zenit_$major02_$minor02')
+                '$module-$cvsCompatibleVersion', 'zenit_$major02_$minor02', null)
         VCSSettings.create([root])
     }
 
@@ -84,12 +84,42 @@ class ModelConfigPostProcessorTest extends GroovyTestCase {
 
     @TypeChecked
     void testProcessJiraComponent() {
-        def fullFilledJiraComponent = getJiraComponent("KEY", "displayName", '$major.$minor', '$major.$minor.$service.$fix', '$major.$minor.$service.$fix-$build', '$major.$minor.$service', "", "", false)
+        def fullFilledJiraComponent = getJiraComponent(
+                "KEY",
+                "displayName",
+                '$major.$minor',
+                '$major.$minor.$service.$fix',
+                '$major.$minor.$service.$fix-$build',
+                '$major.$minor.$service',
+                '$major.$minor.$service.$fix-$build',
+                "",
+                "",
+                false)
         def postProcessor = getModelConfigProcessor("1.2", VERSION_NAMES)
         def actualFullFilledJiraComponent = postProcessor.resolveJiraConfiguration(fullFilledJiraComponent)
         assert fullFilledJiraComponent == actualFullFilledJiraComponent
-        def semiFilledJiraComponent = getJiraComponent("KEY", "displayName", '$major.$minor', '$major.$minor.$service.$fix', null, null, "", "", false)
-        def expectedSemiFilledJiraComponent = getJiraComponent("KEY", "displayName", '$major.$minor', '$major.$minor.$service.$fix', '$major.$minor.$service.$fix', '$major.$minor', "", "", false)
+        def semiFilledJiraComponent = getJiraComponent(
+                "KEY",
+                "displayName",
+                '$major.$minor',
+                '$major.$minor.$service.$fix',
+                null,
+                null,
+                '$major.$minor.$service.$fix',
+                "",
+                "",
+                false)
+        def expectedSemiFilledJiraComponent = getJiraComponent(
+                "KEY",
+                "displayName",
+                '$major.$minor',
+                '$major.$minor.$service.$fix',
+                '$major.$minor.$service.$fix',
+                '$major.$minor',
+                '$major.$minor.$service.$fix',
+                "",
+                "",
+                false)
         def actualSemiFilledJiraComponent = postProcessor.resolveJiraConfiguration(semiFilledJiraComponent)
         assert expectedSemiFilledJiraComponent == actualSemiFilledJiraComponent
 
@@ -99,7 +129,13 @@ class ModelConfigPostProcessorTest extends GroovyTestCase {
         new ModelConfigPostProcessor(ComponentVersion.create("zenit", version), versionNames)
     }
 
-    private static JiraComponent getJiraComponent(String projectKey, String displayName, String majorVersionFormat, String releaseVersionFormat, String buildVersionFormat, String lineVersionFormat, String versionPrefix, String versionFormat, boolean isTechincal) {
-        new JiraComponent(projectKey, displayName, ComponentVersionFormat.create(majorVersionFormat, releaseVersionFormat, buildVersionFormat, lineVersionFormat), new ComponentInfo(versionPrefix, versionFormat), isTechincal)
+    private static JiraComponent getJiraComponent(String projectKey, String displayName, String majorVersionFormat, String releaseVersionFormat, String buildVersionFormat, String lineVersionFormat, String hotfixVersionFormat, String versionPrefix, String versionFormat, boolean isTechincal) {
+        new JiraComponent(
+                projectKey,
+                displayName,
+                ComponentVersionFormat.create(majorVersionFormat, releaseVersionFormat, buildVersionFormat, lineVersionFormat, hotfixVersionFormat),
+                new ComponentInfo(versionPrefix, versionFormat),
+                isTechincal
+        )
     }
 }

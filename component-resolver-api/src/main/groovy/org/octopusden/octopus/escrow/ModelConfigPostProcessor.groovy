@@ -76,7 +76,8 @@ class ModelConfigPostProcessor {
                 componentVersionFormat.majorVersionFormat,
                 componentVersionFormat.releaseVersionFormat,
                 componentVersionFormat.buildVersionFormat != null ? componentVersionFormat.buildVersionFormat : componentVersionFormat.releaseVersionFormat,
-                componentVersionFormat.lineVersionFormat != null ? componentVersionFormat.lineVersionFormat : componentVersionFormat.majorVersionFormat
+                componentVersionFormat.lineVersionFormat != null ? componentVersionFormat.lineVersionFormat : componentVersionFormat.majorVersionFormat,
+                componentVersionFormat.hotfixVersionFormat
         )
         return new JiraComponent(jiraComponent.projectKey, jiraComponent.displayName, enrichedComponentVersionFormat, jiraComponent.componentInfo, jiraComponent.technical)
     }
@@ -92,7 +93,8 @@ class ModelConfigPostProcessor {
         String tag = resolveVariables(versionControlSystemRoot.tag)
         String vcsPath = resolveVariables(versionControlSystemRoot.vcsPath)
         String branch = resolveVariables(versionControlSystemRoot.branch)
-        org.octopusden.octopus.escrow.model.VersionControlSystemRoot.create(versionControlSystemRoot.name, versionControlSystemRoot.repositoryType, vcsPath, tag, branch)
+        String hotfixBranch = resolveVariables(versionControlSystemRoot.hotfixBranch)
+        org.octopusden.octopus.escrow.model.VersionControlSystemRoot.create(versionControlSystemRoot.name, versionControlSystemRoot.repositoryType, vcsPath, tag, branch, hotfixBranch)
     }
 
     ReleaseInfo resolveVariables(ReleaseInfo releaseInfo) {

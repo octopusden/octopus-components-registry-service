@@ -115,6 +115,8 @@ app {
         projectKey = "AS"
         majorVersionFormat = '$major.$minor'
         releaseVersionFormat = '$major.$minor.$service'
+        buildVersionFormat = '$major.$minor.$service.$fix'
+        hotfixVersionFormat = '$major.$minor.$service.$fix.$build'
         component {
             versionFormat = '$versionPrefix.$baseVersionFormat'
         }
@@ -167,6 +169,7 @@ app {
             "release-script" {
                 vcsUrl = 'ssh://hg@mercurial/server/release'
                 tag = 'server-$version'
+                hotfixBranch = 'hotfix:$major.$minor'
             }
         }
 	    distribution {

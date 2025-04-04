@@ -8,6 +8,7 @@ Defaults {
         majorVersionFormat = '$major.$minor'
         releaseVersionFormat = '$major.$minor.$service'
         buildVersionFormat = '$major.$minor.$service-$fix'
+        hotfixVersionFormat = '$major.$minor.$service-$fix.$build'
         lineVersionFormat = '$major'
         customer {
             versionFormat = '$versionPrefix-$baseVersionFormat'

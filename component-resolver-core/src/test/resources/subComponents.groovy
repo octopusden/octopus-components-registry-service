@@ -98,6 +98,7 @@ bcomponent {
                 majorVersionFormat = '$major.$minor'
                 releaseVersionFormat = '$major.$minor.$service'
                 buildVersionFormat = '$major.$minor.$service.$build'
+                hotfixVersionFormat = '$major.$minor.$service.$build'
                 technical = true
                 component {
                     versionFormat = '$versionPrefix.$baseVersionFormat'
@@ -127,6 +128,7 @@ bcomponent {
             }
 
             branch = "1.6-branch"
+            hotfixBranch = "hotfix:1.6"
             deprecated = true
         }
 

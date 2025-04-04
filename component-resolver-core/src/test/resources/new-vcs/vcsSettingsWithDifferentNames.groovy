@@ -15,6 +15,8 @@ Defaults {
     jira {
         majorVersionFormat = '$major.$minor'
         releaseVersionFormat = '$major.$minor.$service'
+        buildVersionFormat = '$major.$minor.$service.$fix'
+        hotfixVersionFormat = '$major.$minor.$service.$fix.$build'
         customer {
             versionFormat = '$versionPrefix-$baseVersionFormat'
         }
@@ -46,6 +48,7 @@ component {
             tag = 'PATCHED_$version'
             root1 {
                 branch = "patched-root1-branch"
+                hotfixBranch = 'hotfixes/$major.$minor.$service'
             }
             "new-root" {
                 vcsUrl = "new-root-url"

@@ -41,7 +41,15 @@ class AbstractResolver {
         Collection<VersionControlSystemRoot> vcsRootsResolved = new ArrayList<>()
         vcsSettings.getVersionControlSystemRoots().each { VersionControlSystemRoot root ->
             String formattedBranch = versionFormatter.format(root.getBranch(), parsedVersion)
-            vcsRootsResolved.add(VersionControlSystemRoot.create(root.name, root.repositoryType, root.vcsPath, root.tag, formattedBranch == "null" ? null : formattedBranch))
+            String formattedHotfixBranch = root.getHotfixBranch() ? versionFormatter.format(root.getHotfixBranch(), parsedVersion) : null
+            vcsRootsResolved.add(VersionControlSystemRoot.create(
+                    root.name,
+                    root.repositoryType,
+                    root.vcsPath,
+                    root.tag,
+                    formattedBranch == "null" ? null : formattedBranch,
+                    formattedHotfixBranch,
+            ))
         }
         VCSSettings vcsSettingsNew = VCSSettings.create(vcsSettings.externalRegistry, vcsRootsResolved)
         ModelConfigPostProcessor modelConfigPostProcessor = new ModelConfigPostProcessor(ComponentVersion.create(componentName, version), versionNames)

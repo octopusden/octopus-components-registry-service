@@ -10,5 +10,6 @@ data class VersionControlSystemRootDTO @JsonCreator constructor(
     @JsonProperty("vcsPath") val vcsPath: String,
     @JsonProperty("type") val type: RepositoryType,
     @JsonProperty("tag") val tag: String?,
-    @JsonProperty("branch") val branch: String
+    @JsonProperty("branch") val branch: String,
+    @JsonProperty("hotfixBranch") val hotfixBranch: String?,
 )

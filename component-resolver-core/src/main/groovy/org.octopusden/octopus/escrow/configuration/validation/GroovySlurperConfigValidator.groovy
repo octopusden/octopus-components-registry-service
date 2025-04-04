@@ -41,17 +41,17 @@ class GroovySlurperConfigValidator {
     public static SUPPORTED_ATTRIBUTES = ['buildSystem', VCS_URL, REPOSITORY_TYPE, 'groupId', 'artifactId',
                                           TAG, 'versionRange', 'version', 'module',
                                           'teamcityReleaseConfigId', 'jiraProjectKey', 'jiraMajorVersionFormat', 'jiraReleaseVersionFormat',
-                                          'buildFilePath', 'deprecated', BRANCH,
+                                          'buildFilePath', 'deprecated', BRANCH, HOTFIX_BRANCH,
                                           'componentDisplayName', 'componentOwner', 'releaseManager', 'securityChampion', 'system',
                                           'clientCode', 'releasesInDefaultBranch', 'solution', 'parentComponent', 'octopusVersion']
 
-    static SUPPORTED_JIRA_ATTRIBUTES = ['projectKey', 'lineVersionFormat', 'majorVersionFormat', 'releaseVersionFormat', 'buildVersionFormat', "displayName", 'technical']
+    static SUPPORTED_JIRA_ATTRIBUTES = ['projectKey', 'lineVersionFormat', 'majorVersionFormat', 'releaseVersionFormat', 'buildVersionFormat', 'hotfixVersionFormat', "displayName", 'technical']
 
     static SUPPORTED_BUILD_ATTRIBUTES = ['dependencies', 'javaVersion', 'mavenVersion', 'gradleVersion', 'requiredProject', 'systemProperties', 'projectVersion', 'requiredTools', 'buildTasks']
 
     static SUPPORTED_COMPONENT_ATTRIBUTES = ['versionPrefix', 'versionFormat']
 
-    static SUPPORTED_VCS_ATTRIBUTES = [BRANCH, TAG, REPOSITORY_TYPE, VCS_URL, EXTERNAL_REGISTRY]
+    static SUPPORTED_VCS_ATTRIBUTES = [BRANCH, HOTFIX_BRANCH, TAG, REPOSITORY_TYPE, VCS_URL, EXTERNAL_REGISTRY]
 
     static SUPPORTED_TOOLS_ATTRIBUTES = ['escrowEnvironmentVariable', 'sourceLocation', 'targetLocation', 'installScript']
 
@@ -60,6 +60,7 @@ class GroovySlurperConfigValidator {
     static SUPPORTED_SECURITY_GROUPS_ATTRIBUTES = [SECURITY_GROUPS_READ]
 
     public static final String BRANCH = 'branch'
+    public static final String HOTFIX_BRANCH = 'hotfixBranch'
     public static final String TAG = 'tag'
     public static final String REPOSITORY_TYPE = 'repositoryType'
     public static final String VCS_URL = 'vcsUrl'
@@ -308,7 +309,8 @@ class GroovySlurperConfigValidator {
     def validateVCSParameters(ConfigObject moduleConfigObject, String moduleConfigName, String componentName) {
         if (moduleConfigObject.containsKey("vcsUrl")
                 || moduleConfigObject.containsKey("repositoryType")
-                || moduleConfigObject.containsKey("branch")) {
+                || moduleConfigObject.containsKey("branch")
+                || moduleConfigObject.containsKey("hotfixBranch")) {
             registerError("Ambiguous VCS configuration of component '$componentName' section $moduleConfigName")
         }
 

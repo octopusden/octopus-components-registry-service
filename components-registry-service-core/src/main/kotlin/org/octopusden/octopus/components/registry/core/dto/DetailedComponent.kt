@@ -2,6 +2,7 @@ package org.octopusden.octopus.components.registry.core.dto
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonProperty
+import java.util.Objects
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 class DetailedComponent(
@@ -17,22 +18,23 @@ class DetailedComponent(
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other !is DetailedComponent) return false
-        if (buildSystem != other.buildSystem) return false
-        if (vcsSettings != other.vcsSettings) return false
-        if (jiraComponentVersion != other.jiraComponentVersion) return false
-        if (detailedComponentVersion != other.detailedComponentVersion) return false
-        if (buildParameters != other.buildParameters) return false
-        return super.equals(other)
+        return buildSystem == other.buildSystem &&
+                vcsSettings == other.vcsSettings &&
+                jiraComponentVersion == other.jiraComponentVersion &&
+                detailedComponentVersion == other.detailedComponentVersion &&
+                buildParameters == other.buildParameters &&
+                super.equals(other)
     }
 
     override fun hashCode(): Int {
-        var result = super.hashCode()
-        result = 31 * result + (buildSystem.hashCode())
-        result = 31 * result + (vcsSettings.hashCode())
-        result = 31 * result + (jiraComponentVersion.hashCode())
-        result = 31 * result + (detailedComponentVersion.hashCode())
-        result = 31 * result + (buildParameters?.hashCode() ?: 0)
-        return result
+        return Objects.hash(
+            super.hashCode(),
+            buildSystem,
+            vcsSettings,
+            jiraComponentVersion,
+            detailedComponentVersion,
+            buildParameters
+        )
     }
 
     override fun toString(): String {

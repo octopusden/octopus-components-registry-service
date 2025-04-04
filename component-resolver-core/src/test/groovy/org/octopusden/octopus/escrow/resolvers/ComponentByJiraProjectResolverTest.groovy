@@ -32,13 +32,13 @@ class ComponentByJiraProjectResolverTest extends GroovyTestCase {
     public static final JiraComponentVersionRangeFactory JIRA_COMPONENT_VERSION_RANGE_FACTORY = new JiraComponentVersionRangeFactory(VERSION_NAMES)
 
     private static
-    final ComponentVersionFormat COMPONENT_VERSION_FORMAT_1 = ComponentVersionFormat.create('$major.$minor.$service', '$major.$minor.$service-$fix', '$major.$minor.$service-$fix', '$major.$minor.$service');
+    final ComponentVersionFormat COMPONENT_VERSION_FORMAT_1 = ComponentVersionFormat.create('$major.$minor.$service', '$major.$minor.$service-$fix', '$major.$minor.$service-$fix', '$major.$minor.$service', '$major.$minor.$service-$fix.$build');
     private static
-    final ComponentVersionFormat COMPONENT_VERSION_FORMAT_2 = ComponentVersionFormat.create('$major.$minor', '$major.$minor.$service', '$major.$minor.$service', '$major.$minor');
+    final ComponentVersionFormat COMPONENT_VERSION_FORMAT_2 = ComponentVersionFormat.create('$major.$minor', '$major.$minor.$service', '$major.$minor.$service', '$major.$minor', null);
     private static
-    final ComponentVersionFormat MODEL_COMPONENT_VERSION_FORMAT = ComponentVersionFormat.create('Model.$major.$minor.$service', 'Model.$version', 'Model.$version', 'Model.$major.$minor.$service');
+    final ComponentVersionFormat MODEL_COMPONENT_VERSION_FORMAT = ComponentVersionFormat.create('Model.$major.$minor.$service', 'Model.$version', 'Model.$version', 'Model.$major.$minor.$service', null);
     private static
-    final ComponentVersionFormat MOJO_COMPONENT_VERSION_FORMAT = ComponentVersionFormat.create('Mojo.$major.$minor', 'Mojo.$major.$minor.$service', 'Mojo.$major.$minor.$service', 'Mojo.$major.$minor');
+    final ComponentVersionFormat MOJO_COMPONENT_VERSION_FORMAT = ComponentVersionFormat.create('Mojo.$major.$minor', 'Mojo.$major.$minor.$service', 'Mojo.$major.$minor.$service', 'Mojo.$major.$minor', null);
     private static final Distribution DISTRIBUTION = new Distribution(true, true, null, null, null, null, new SecurityGroups(null))
 
     @Test
@@ -53,19 +53,19 @@ class ComponentByJiraProjectResolverTest extends GroovyTestCase {
     void testGetVCSRootByJiraProject() {
         def resolver = createJiraParametersResolverFromConfig("componentConfig.groovy")
 
-        def vcsSettings = VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", RepositoryType.MERCURIAL, "component-vcs-url", "component-tag", "component-branch"))
+        def vcsSettings = VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", RepositoryType.MERCURIAL, "component-vcs-url", "component-tag", "component-branch", null))
         assert vcsSettings == resolver.getVersionControlSystemRootsByJiraProject(create("TEST_COMPONENT2", TEST_COMPONENT2_VERSION));
         // BRANCH355
         assert vcsSettings == resolver.getVersionControlSystemRootsByJiraProject(create("TEST_COMPONENT2", TEST_COMPONENT2_BUILD));
 
         assert VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", RepositoryType.MERCURIAL, "ssh://hg@mercurial/o2/other/commoncomponent",
-                "commoncomponent-tag", "default")) ==
+                "commoncomponent-tag", "default", null)) ==
                 resolver.getVersionControlSystemRootsByJiraProject(create("system", SYSTEM_VERSIONS))
         assert resolver.getVersionControlSystemRootsByJiraProject(create("UNKNOWN", SYSTEM_VERSIONS)).hasNoConfiguredVCSRoot()
 
         assert resolver.getVersionControlSystemRootsByJiraProject(create("AS", "1.3")).hasNoConfiguredVCSRoot()
 
-        assert VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", RepositoryType.MERCURIAL, "as-vcs-url", "as-tag", "as-branch")) ==
+        assert VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", RepositoryType.MERCURIAL, "as-vcs-url", "as-tag", "as-branch", null)) ==
                 resolver.getVersionControlSystemRootsByJiraProject(create("AS", "app-1.6"))
     }
 
@@ -95,7 +95,9 @@ class ComponentByJiraProjectResolverTest extends GroovyTestCase {
         def resolver = createJiraParametersResolverFromConfig("componentVersionFormatConfig.groovy")
         ComponentConfig componentConfig = resolver.getComponentConfig()
         assert componentConfig.projectKeyToJiraComponentVersionRangeMap.size() == 3
-        assertEquals getJiraComponentVersionRangeListByProjectKey(), componentConfig.getProjectKeyToJiraComponentVersionRangeMap()."$COMPONENT"
+        def expected = getJiraComponentVersionRangeListByProjectKey()
+        def actual = componentConfig.getProjectKeyToJiraComponentVersionRangeMap()."$COMPONENT"
+        assertEquals expected, actual
 
         assert componentConfig.componentNameToJiraComponentVersionRangeMap.size() == 5
         assertEquals getJiraComponentVersionRangeListByComponentNameWeb(), componentConfig.getComponentNameToJiraComponentVersionRangeMap()."octopusweb"
@@ -120,8 +122,15 @@ class ComponentByJiraProjectResolverTest extends GroovyTestCase {
                 getJiraComponentVersionRange("buildsystem-model", "[1.3,)", COMPONENT, MODEL_COMPONENT_VERSION_FORMAT, null, null,
                         VCSSettings.createEmpty()),
                 getJiraComponentVersionRange("buildsystem-mojo", "(,0),[0,)", COMPONENT, MOJO_COMPONENT_VERSION_FORMAT, null, null,
-                        VCSSettings.create([VersionControlSystemRoot.create("main", RepositoryType.MERCURIAL,
-                                "ssh://hg@mercurial/maven-buildsystem-plugin", 'maven-buildsystem-plugin-$version', null)])))
+                        VCSSettings.create([VersionControlSystemRoot.create(
+                                "main",
+                                RepositoryType.MERCURIAL,
+                                "ssh://hg@mercurial/maven-buildsystem-plugin",
+                                'maven-buildsystem-plugin-$version',
+                                null,
+                                null
+                        )
+                        ])))
     }
 
     private static List<JiraComponentVersionRange> getJiraComponentVersionRangeListByComponentNameWeb() {

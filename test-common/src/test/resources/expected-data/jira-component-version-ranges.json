@@ -9,6 +9,7 @@
         "majorVersionFormat": "$major02.$minorC.$serviceC",
         "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
         "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
+        "hotfixVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
         "lineVersionFormat": "$major02.$minorC"
       },
       "componentInfo": {
@@ -49,6 +50,7 @@
         "majorVersionFormat": "$major02.$minorC.$serviceC",
         "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
         "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
+        "hotfixVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
         "lineVersionFormat": "$major"
       },
       "componentInfo": {
@@ -89,6 +91,7 @@
         "majorVersionFormat": "$major.$minor",
         "releaseVersionFormat": "$major.$minor.$service",
         "buildVersionFormat": "$major.$minor.$service-$fix",
+        "hotfixVersionFormat": "$major.$minor.$service-$fix.$build",
         "lineVersionFormat": "$major"
       },
       "componentInfo": {
@@ -121,6 +124,7 @@
         "majorVersionFormat": "$major.$minor",
         "releaseVersionFormat": "$major.$minor.$service-$fix",
         "buildVersionFormat": "$major.$minor.$service-$fix",
+        "hotfixVersionFormat": "$major.$minor.$service-$fix.$build",
         "lineVersionFormat": "$major"
       },
       "componentInfo": {
@@ -161,6 +165,7 @@
         "majorVersionFormat": "$major02.$minorC.$serviceC",
         "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
         "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build04",
+        "hotfixVersionFormat": "$major02.$minor02.$service02.$fix02-$build04",
         "lineVersionFormat": "$major"
       },
       "componentInfo": {
@@ -193,6 +198,7 @@
         "majorVersionFormat": "$major02.$minorC.$serviceC",
         "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
         "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
+        "hotfixVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
         "lineVersionFormat": "$major02.$minorC"
       },
       "componentInfo": {
@@ -233,6 +239,7 @@
         "majorVersionFormat": "$major.$minor",
         "releaseVersionFormat": "$major.$minor.$service",
         "buildVersionFormat": "$major.$minor.$service-$fix",
+        "hotfixVersionFormat": "$major.$minor.$service-$fix.$build",
         "lineVersionFormat": "$major"
       },
       "componentInfo": {
@@ -273,6 +280,7 @@
         "majorVersionFormat": "$major02.$minorC.$serviceC",
         "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
         "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
+        "hotfixVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
         "lineVersionFormat": "$major"
       },
       "componentInfo": {
@@ -313,6 +321,7 @@
         "majorVersionFormat": "$major02.$minorC.$serviceC",
         "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
         "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build04",
+        "hotfixVersionFormat": "$major02.$minor02.$service02.$fix02-$build04",
         "lineVersionFormat": "$major02.$minorC"
       },
       "componentInfo": {
@@ -345,6 +354,7 @@
         "majorVersionFormat": "$major02.$minorC.$serviceC",
         "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
         "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build04",
+        "hotfixVersionFormat": "$major02.$minor02.$service02.$fix02-$build04",
         "lineVersionFormat": "$major02.$minorC"
       },
       "componentInfo": {
@@ -377,6 +387,7 @@
         "majorVersionFormat": "$major.$minor",
         "releaseVersionFormat": "$major.$minor.$service",
         "buildVersionFormat": "$major.$minor.$service-$fix",
+        "hotfixVersionFormat": "$major.$minor.$service-$fix.$build",
         "lineVersionFormat": "$major"
       },
       "componentInfo": {
@@ -409,6 +420,7 @@
         "majorVersionFormat": "$major",
         "releaseVersionFormat": "$major.$minor",
         "buildVersionFormat": "$major.$minor.$service",
+        "hotfixVersionFormat": "$major.$minor.$service.$fix",
         "lineVersionFormat": "$major"
       },
       "componentInfo": {
@@ -451,7 +463,8 @@
         "majorVersionFormat": "$major",
         "releaseVersionFormat": "$major.$minor",
         "buildVersionFormat": "$major.$minor.$service",
-        "lineVersionFormat": "$major"
+        "lineVersionFormat": "$major",
+        "hotfixVersionFormat": "$major.$minor.$service-$build"
       },
       "componentInfo": {
         "versionPrefix": "sub1k",
@@ -491,6 +504,7 @@
         "majorVersionFormat": "$major.$minor",
         "releaseVersionFormat": "$major.$minor.$service-$fix",
         "buildVersionFormat": "$major.$minor.$service-$fix",
+        "hotfixVersionFormat": "$major.$minor.$service-$fix.$build",
         "lineVersionFormat": "$major"
       },
       "componentInfo": {
@@ -532,6 +546,7 @@
         "majorVersionFormat": "$major",
         "releaseVersionFormat": "$major.$minor",
         "buildVersionFormat": "$major.$minor.$service",
+        "hotfixVersionFormat": "$major.$minor.$service.$fix",
         "lineVersionFormat": "$major"
       },
       "componentInfo": {
@@ -572,6 +587,7 @@
         "majorVersionFormat": "$major02.$minorC.$serviceC",
         "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
         "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
+        "hotfixVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
         "lineVersionFormat": "$major02.$minorC"
       },
       "componentInfo": {
@@ -612,6 +628,7 @@
         "majorVersionFormat": "$major",
         "releaseVersionFormat": "$major.$minor",
         "buildVersionFormat": "$major.$minor",
+        "hotfixVersionFormat": "$major.$minor.$service",
         "lineVersionFormat": "$major"
       },
       "componentInfo": {
@@ -652,6 +669,7 @@
         "majorVersionFormat": "$major02.$minorC.$serviceC",
         "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
         "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
+        "hotfixVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
         "lineVersionFormat": "$major02.$minorC"
       },
       "componentInfo": {
@@ -692,6 +710,7 @@
         "majorVersionFormat": "$major02.$minorC.$serviceC",
         "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
         "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
+        "hotfixVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
         "lineVersionFormat": "$major02.$minorC"
       },
       "componentInfo": {
@@ -732,6 +751,7 @@
         "majorVersionFormat": "$major.$minor",
         "releaseVersionFormat": "$major.$minor.$service",
         "buildVersionFormat": "$major.$minor.$service-$fix",
+        "hotfixVersionFormat": "$major.$minor.$service-$fix.$build",
         "lineVersionFormat": "$major"
       },
       "componentInfo": {
@@ -764,6 +784,7 @@
         "majorVersionFormat": "$major02.$minorC.$serviceC",
         "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
         "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build04",
+        "hotfixVersionFormat": "$major02.$minor02.$service02.$fix02-$build04",
         "lineVersionFormat": "$major"
       },
       "componentInfo": {
@@ -796,6 +817,7 @@
         "majorVersionFormat": "$major02.$minorC.$serviceC",
         "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
         "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
+        "hotfixVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
         "lineVersionFormat": "$major"
       },
       "componentInfo": {
@@ -836,6 +858,7 @@
         "majorVersionFormat": "$major02.$minorC.$serviceC",
         "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
         "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
+        "hotfixVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
         "lineVersionFormat": "$major"
       },
       "componentInfo": {
@@ -883,6 +906,7 @@
         "majorVersionFormat": "$major02.$minorC.$serviceC",
         "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
         "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
+        "hotfixVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
         "lineVersionFormat": "$major"
       },
       "componentInfo": {
@@ -923,6 +947,7 @@
         "majorVersionFormat": "$major",
         "releaseVersionFormat": "$major.$minor",
         "buildVersionFormat": "$major.$minor.$service",
+        "hotfixVersionFormat": "$major.$minor.$service-$build",
         "lineVersionFormat": "$major"
       },
       "componentInfo": {
@@ -963,6 +988,7 @@
         "majorVersionFormat": "$major02.$minorC.$serviceC",
         "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
         "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build04",
+        "hotfixVersionFormat": "$major02.$minor02.$service02.$fix02-$build04",
         "lineVersionFormat": "$major02.$minorC"
       },
       "componentInfo": {
@@ -995,6 +1021,7 @@
         "majorVersionFormat": "$major.$minor",
         "releaseVersionFormat": "$major.$minor.$service",
         "buildVersionFormat": "$major.$minor.$service-$fix",
+        "hotfixVersionFormat": "$major.$minor.$service-$fix.$build",
         "lineVersionFormat": "$major"
       },
       "componentInfo": {
@@ -1035,6 +1062,7 @@
         "majorVersionFormat": "$major.$minor",
         "releaseVersionFormat": "$major.$minor.$service",
         "buildVersionFormat": "$major.$minor.$service-$fix",
+        "hotfixVersionFormat": "$major.$minor.$service-$fix.$build",
         "lineVersionFormat": "$major"
       },
       "componentInfo": {
@@ -1075,6 +1103,7 @@
         "majorVersionFormat": "$major.$minor",
         "releaseVersionFormat": "$major.$minor.$service",
         "buildVersionFormat": "$major.$minor.$service-$fix",
+        "hotfixVersionFormat": "$major.$minor.$service-$fix.$build",
         "lineVersionFormat": "$major"
       },
       "componentInfo": {
@@ -1107,6 +1136,7 @@
         "majorVersionFormat": "$major02.$minorC.$serviceC",
         "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
         "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
+        "hotfixVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
         "lineVersionFormat": "$major02.$minorC"
       },
       "componentInfo": {
@@ -1147,6 +1177,7 @@
         "majorVersionFormat": "$major02.$minorC.$serviceC",
         "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
         "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
+        "hotfixVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
         "lineVersionFormat": "$major02.$minorC"
       },
       "componentInfo": {
@@ -1187,6 +1218,7 @@
         "majorVersionFormat": "$major",
         "releaseVersionFormat": "$major.$minor",
         "buildVersionFormat": "$major.$minor.$service-$fix",
+        "hotfixVersionFormat": "$major.$minor.$service-$fix.$build",
         "lineVersionFormat": "$major"
       },
       "componentInfo": {
@@ -1219,6 +1251,7 @@
         "majorVersionFormat": "$major.$minor",
         "releaseVersionFormat": "$major.$minor.$service",
         "buildVersionFormat": "$major.$minor.$service-$fix",
+        "hotfixVersionFormat": "$major.$minor.$service-$fix.$build",
         "lineVersionFormat": "$major"
       },
       "componentInfo": {
@@ -1260,6 +1293,7 @@
         "majorVersionFormat": "$major.$minor",
         "releaseVersionFormat": "$major.$minor.$service",
         "buildVersionFormat": "$major.$minor.$service-$fix",
+        "hotfixVersionFormat": "$major.$minor.$service-$fix.$build",
         "lineVersionFormat": "$major.$minor"
       },
       "componentInfo": {
@@ -1300,6 +1334,7 @@
         "majorVersionFormat": "$major02.$minorC.$serviceC",
         "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
         "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
+        "hotfixVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
         "lineVersionFormat": "$major02.$minorC"
       },
       "componentInfo": {
@@ -1340,6 +1375,7 @@
         "majorVersionFormat": "$major02.$minorC.$serviceC",
         "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
         "buildVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
+        "hotfixVersionFormat": "$major02.$minor02.$service02.$fix02-$build",
         "lineVersionFormat": "$major"
       },
       "componentInfo": {
@@ -1380,6 +1416,7 @@
         "majorVersionFormat": "$major.$minor",
         "releaseVersionFormat": "$major.$minor.$service",
         "buildVersionFormat": "$major.$minor.$service-$fix",
+        "hotfixVersionFormat": "$major.$minor.$service-$fix.$build",
         "lineVersionFormat": "$major"
       },
       "componentInfo": {
@@ -1412,6 +1449,7 @@
         "majorVersionFormat": "$major",
         "releaseVersionFormat": "$major.$minor",
         "buildVersionFormat": "$major.$minor.$service-$fix",
+        "hotfixVersionFormat": "$major.$minor.$service-$fix.$build",
         "lineVersionFormat": "$major"
       },
       "componentInfo": {
@@ -1444,6 +1482,7 @@
         "majorVersionFormat": "$major.$minor",
         "releaseVersionFormat": "$major.$minor.$service",
         "buildVersionFormat": "$major.$minor.$service-$fix",
+        "hotfixVersionFormat": "$major.$minor.$service-$fix.$build",
         "lineVersionFormat": "$major"
       },
       "componentInfo": {
@@ -1476,6 +1515,7 @@
         "majorVersionFormat": "$major02.$minorC.$serviceC",
         "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
         "buildVersionFormat": "$major.$minor.$service-$fix",
+        "hotfixVersionFormat": "$major.$minor.$service-$fix.$build",
         "lineVersionFormat": "$major"
       },
       "componentInfo": {
@@ -1516,6 +1556,7 @@
         "majorVersionFormat": "$major.$minor",
         "releaseVersionFormat": "$major.$minor.$service",
         "buildVersionFormat": "$major.$minor.$service-$fix",
+        "hotfixVersionFormat": "$major.$minor.$service-$fix.$build",
         "lineVersionFormat": "$major"
       },
       "componentInfo": {

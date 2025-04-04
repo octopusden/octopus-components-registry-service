@@ -26,6 +26,7 @@ octopusweb {
         jira {
             majorVersionFormat = '$major.$minor.$service'
             releaseVersionFormat = '$major.$minor.$service-$fix'
+            hotfixVersionFormat = '$major.$minor.$service-$fix.$build'
             customer {
                 versionPrefix = "WCOMPONENTBB"
                 versionFormat = '$versionPrefix-$baseVersionFormat'

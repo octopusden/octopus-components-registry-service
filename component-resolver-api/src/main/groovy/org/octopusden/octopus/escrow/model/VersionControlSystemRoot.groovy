@@ -12,22 +12,23 @@ class VersionControlSystemRoot {
     private final String tag
     private final String vcsPath
     private final String rawBranch
-
+    private final String hotfixBranch
 
     static VersionControlSystemRoot create(String name = "main", RepositoryType repositoryType, String vcsPath,
-                                           String tag, String branch) {
+                                           String tag, String branch, String hotfixBranch) {
         def vcsBranch = branch
         return new VersionControlSystemRoot(name, repositoryType,
                 (repositoryType?.isCaseSensitive() == false) ? vcsPath?.toLowerCase() : vcsPath,
-                tag, vcsBranch)
+                tag, vcsBranch, hotfixBranch)
     }
 
-    private VersionControlSystemRoot(String name, RepositoryType repositoryType, String vcsPath, String tag, String branch) {
+    private VersionControlSystemRoot(String name, RepositoryType repositoryType, String vcsPath, String tag, String branch, String hotfixBranch) {
         this.name = name
         this.repositoryType = repositoryType
         this.vcsPath = vcsPath
         this.tag = tag
         this.rawBranch = branch
+        this.hotfixBranch = hotfixBranch
     }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -44,6 +45,11 @@ class VersionControlSystemRoot {
         return StringUtils.isNotBlank(rawBranch) ?
                 rawBranch :
                 repositoryType != null ? repositoryType.defaultBranch : null
+    }
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    String getHotfixBranch() {
+        return hotfixBranch
     }
 
     String getRawBranch() {
@@ -74,6 +80,7 @@ class VersionControlSystemRoot {
                 ", tag='" + tag + '\'' +
                 ", vcsPath='" + vcsPath + '\'' +
                 ", branch='" + branch + '\'' +
+                ", hotfixBranch='" + hotfixBranch + '\'' +
                 '}'
     }
 
@@ -83,22 +90,15 @@ class VersionControlSystemRoot {
 
         VersionControlSystemRoot that = (VersionControlSystemRoot) o
 
-        if (branch != that.branch) return false
-        if (repositoryType != that.repositoryType) return false
-        if (tag != that.tag) return false
-        if (vcsPath != that.vcsPath) return false
-        if (name != that.name) return false
-
-        return true
+        return Objects.equals(hotfixBranch, that.hotfixBranch) &&
+                Objects.equals(branch, that.branch) &&
+                Objects.equals(repositoryType, that.repositoryType) &&
+                Objects.equals(vcsPath, that.vcsPath) &&
+                Objects.equals(tag, that.tag) &&
+                Objects.equals(name, that.name)
     }
 
     int hashCode() {
-        int result
-        result = (repositoryType != null ? repositoryType.hashCode() : 0)
-        result = 31 * result + (tag != null ? tag.hashCode() : 0)
-        result = 31 * result + (vcsPath != null ? vcsPath.hashCode() : 0)
-        result = 31 * result + (name != null ? name.hashCode() : 0)
-        result = 31 * result + (branch != null ? branch.hashCode() : 0)
-        return result
+        return Objects.hash(name, repositoryType, tag, vcsPath, branch, hotfixBranch)
     }
 }

@@ -10,5 +10,6 @@ data class DetailedComponentVersion (
     @JsonProperty("lineVersion") val lineVersion: ComponentRegistryVersion,
     @JsonProperty("buildVersion") val buildVersion: ComponentRegistryVersion,
     @JsonProperty("rcVersion") val rcVersion: ComponentRegistryVersion,
-    @JsonProperty("releaseVersion") val releaseVersion: ComponentRegistryVersion
+    @JsonProperty("releaseVersion") val releaseVersion: ComponentRegistryVersion,
+    @JsonProperty("hotfixVersion") val hotfixVersion: ComponentRegistryVersion
 )
