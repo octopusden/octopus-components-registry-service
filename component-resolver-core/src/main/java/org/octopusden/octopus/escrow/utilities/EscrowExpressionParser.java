@@ -1,6 +1,6 @@
 package org.octopusden.octopus.escrow.utilities;
 
-import org.octopusden.octopus.escrow.dto.EscrowExpressionContext;
+import org.octopusden.octopus.escrow.dto.SimpleExpressionContext;
 import org.springframework.context.expression.EnvironmentAccessor;
 import org.springframework.expression.EvaluationContext;
 import org.springframework.expression.Expression;
@@ -22,7 +22,7 @@ public final class EscrowExpressionParser {
         return ESCROW_EXPRESSION_PARSER;
     }
 
-    public Object parseAndEvaluate(final String spelExpression, final EscrowExpressionContext expressionContext) {
+    public Object parseAndEvaluate(final String spelExpression, final SimpleExpressionContext expressionContext, boolean allowEnvironment) {
         if (!spelExpression.contains("$")) {
             return spelExpression;
         }
@@ -30,7 +30,9 @@ public final class EscrowExpressionParser {
         final Expression expression = expressionParser.parseExpression(spelExpression, new TemplateParserContext());
         final StandardEvaluationContext evaluationContext = new StandardEvaluationContext(expressionContext);
         evaluationContext.addPropertyAccessor(new EscrowMapAccessor());
-        evaluationContext.addPropertyAccessor(new EnvironmentAccessor());
+        if (allowEnvironment) {
+            evaluationContext.addPropertyAccessor(new EnvironmentAccessor());
+        }
         return expression.getValue(evaluationContext);
     }
 

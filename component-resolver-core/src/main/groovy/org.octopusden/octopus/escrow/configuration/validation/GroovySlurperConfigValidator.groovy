@@ -1,12 +1,14 @@
 package org.octopusden.octopus.escrow.configuration.validation
 
-import java.util.regex.Pattern
 import org.octopusden.octopus.escrow.dto.EscrowExpressionContext
+import org.octopusden.octopus.escrow.dto.SimpleExpressionContext
 import org.octopusden.octopus.escrow.exceptions.EscrowConfigurationException
 import org.octopusden.octopus.escrow.resolvers.ReleaseInfoResolver
 import org.octopusden.octopus.escrow.utilities.EscrowExpressionParser
 import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionNames
+
+import java.util.regex.Pattern
 
 class GroovySlurperConfigValidator {
 
@@ -235,21 +237,22 @@ class GroovySlurperConfigValidator {
     def validateDistributionSection(ConfigObject distributionSection, VersionNames versionNames, String moduleName, String moduleConfigName) {
         validateForUnknownAttributes(distributionSection, DISTRIBUTION, SUPPORTED_DISTRIBUTION_ATTRIBUTES, moduleName, moduleConfigName)
         def expressionContext = new EscrowExpressionContext("validation", "1.0", "distribution.zip", new NumericVersionFactory(versionNames))
+        def versionContext = new SimpleExpressionContext("validation", "1.0",  new NumericVersionFactory(versionNames))
 
         validateValueByPattern(distributionSection, "GAV", GAV_PATTERN, expressionContext)
         validateValueByPattern(distributionSection, "DEB", DEB_PATTERN, expressionContext)
         validateValueByPattern(distributionSection, "RPM", RPM_PATTERN, expressionContext)
-        validateValueByPattern(distributionSection, "docker", DOCKER_PATTERN, expressionContext)
+        validateValueByPattern(distributionSection, "docker", DOCKER_PATTERN, versionContext, false)
 
         if (distributionSection.containsKey(SECURITY_GROUPS)) {
             validateSecurityGroupsParameters(distributionSection, SECURITY_GROUPS, moduleName)
         }
     }
 
-    private void validateValueByPattern(Map expressionMap, String key, Pattern pattern, EscrowExpressionContext expressionContext) {
+    private void validateValueByPattern(Map expressionMap, String key, Pattern pattern, SimpleExpressionContext expressionContext, boolean allowEnvironment = true) {
         if (expressionMap.containsKey(key)) {
             try {
-                def value = EscrowExpressionParser.getInstance().parseAndEvaluate(expressionMap.get(key) as String, expressionContext)
+                def value = EscrowExpressionParser.getInstance().parseAndEvaluate(expressionMap.get(key) as String, expressionContext, allowEnvironment)
                 if (!pattern.matcher(value as String).matches()) {
                     registerError("$key '$value' must match pattern '$pattern'")
                 }
