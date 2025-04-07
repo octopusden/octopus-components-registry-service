@@ -44,18 +44,16 @@ class GroovySlurperConfigValidatorTest extends GroovyTestCase {
 
 
     void testDockerField() {
-        def vn = new VersionNames("serviceCBranch", "serviceC", "minorC")
-        def validator = new GroovySlurperConfigValidator(vn)
-        def distributionSection = '''
-        distribution {
-            explicit = true
-            external = true
-            docker = 'test/test-component:${version}'
-        }
-        '''
-        def ds = new ConfigSlurper().parse(distributionSection)
-        validator.validateDistributionSection(ds, vn, "tst", "tst")
+        def verNames = new VersionNames("serviceCBranch", "serviceC", "minorC")
+        def validator = new GroovySlurperConfigValidator(verNames)
+
+        def dsCorrect = new ConfigSlurper().parse("docker = 'test/test-component:\${version},test/path-element/test-component2:11.22'")
+        validator.validateDistributionSection(dsCorrect, verNames, "tst", "tst")
         assert !validator.hasErrors()
+
+        def dsIncorrect = new ConfigSlurper().parse("docker = 'test/test-component:\${version},by-\${env.USER}/test/test-component2:1.0'")
+        validator.validateDistributionSection(dsIncorrect, verNames, "tst", "tst")
+        assert validator.hasErrors()
     }
 
 }
