@@ -45,15 +45,28 @@ class GroovySlurperConfigValidatorTest extends GroovyTestCase {
 
     void testDockerField() {
         def verNames = new VersionNames("serviceCBranch", "serviceC", "minorC")
-        def validator = new GroovySlurperConfigValidator(verNames)
 
-        def dsCorrect = new ConfigSlurper().parse("docker = 'test/test-component:\${version},test/path-element/test-component2:11.22'")
-        validator.validateDistributionSection(dsCorrect, verNames, "tst", "tst")
-        assert !validator.hasErrors()
+        def correctDockerStrings = ["docker = 'test/test-component:\${version},test/path-element/test-component2:11.22'",
+                                    "docker = 'test/\${major}/\${minor}/test-component3:\${version}'",
+                                    "docker = 'test-component4:11.22'"]
 
-        def dsIncorrect = new ConfigSlurper().parse("docker = 'test/test-component:\${version},by-\${env.USER}/test/test-component2:1.0'")
-        validator.validateDistributionSection(dsIncorrect, verNames, "tst", "tst")
-        assert validator.hasErrors()
+        def incorrectDockerStrings = ["docker = 'test/test-component:\${version},by-\${env.USER}/test/test-component2:1.0'",
+                                      "docker = 'test/\${baseDir}/test-component:1.0'",
+                                      "docker = 'test/\${abrakadabra}/test-component:1.0'"]
+
+        correctDockerStrings.forEach {
+            def correct = new ConfigSlurper().parse(it)
+            def validator = new GroovySlurperConfigValidator(verNames)
+            validator.validateDistributionSection(correct, verNames, "tst", "tst")
+            assert !validator.hasErrors()
+        }
+
+        incorrectDockerStrings.forEach {
+            def inCorrect = new ConfigSlurper().parse(it)
+            def validator = new GroovySlurperConfigValidator(verNames)
+            validator.validateDistributionSection(inCorrect, verNames, "tst", "tst")
+            assert validator.hasErrors()
+        }
     }
 
 }
