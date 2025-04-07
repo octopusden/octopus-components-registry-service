@@ -237,7 +237,8 @@ class GroovySlurperConfigValidator {
     def validateDistributionSection(ConfigObject distributionSection, VersionNames versionNames, String moduleName, String moduleConfigName) {
         validateForUnknownAttributes(distributionSection, DISTRIBUTION, SUPPORTED_DISTRIBUTION_ATTRIBUTES, moduleName, moduleConfigName)
         def expressionContext = new EscrowExpressionContext("validation", "1.0", "distribution.zip", new NumericVersionFactory(versionNames))
-        def versionContext = new SimpleExpressionContext("validation", "1.0",  new NumericVersionFactory(versionNames))
+        def factory = new NumericVersionFactory(versionNames)
+        def versionContext = new SimpleExpressionContext("validation", "1.0",  {name -> factory.create(name)})
 
         validateValueByPattern(distributionSection, "GAV", GAV_PATTERN, expressionContext)
         validateValueByPattern(distributionSection, "DEB", DEB_PATTERN, expressionContext)

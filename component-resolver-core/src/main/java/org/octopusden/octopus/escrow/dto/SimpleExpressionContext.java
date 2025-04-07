@@ -9,6 +9,7 @@ public class SimpleExpressionContext {
     private final String component;
     private final IVersionInfo versionInfo;
 
+
     public SimpleExpressionContext(String component, String version, Function<String, IVersionInfo> versionItemExtractor) {
         this.component = component;
         this.version = version;
