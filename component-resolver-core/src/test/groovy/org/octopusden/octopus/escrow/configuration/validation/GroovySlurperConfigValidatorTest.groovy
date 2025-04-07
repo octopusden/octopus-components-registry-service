@@ -1,5 +1,7 @@
 package org.octopusden.octopus.escrow.configuration.validation
 
+import org.octopusden.releng.versions.VersionNames
+
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.DEB_PATTERN
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.GAV_PATTERN
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.RPM_PATTERN
@@ -39,4 +41,21 @@ class GroovySlurperConfigValidatorTest extends GroovyTestCase {
         assert !DOCKER_PATTERN.matcher("org.octopusden/octopus:image:1.0").matches()
         assert !DOCKER_PATTERN.matcher("org.octopusden/octopus/image:.0").matches()
     }
+
+
+    void testDockerField() {
+        def vn = new VersionNames("serviceCBranch", "serviceC", "minorC")
+        def validator = new GroovySlurperConfigValidator(vn)
+        def distributionSection = """
+        distribution {
+            explicit = true
+            external = true
+            docker = 'test/test-component:${version}'
+        }
+        """
+        def ds = new ConfigSlurper().parse(distributionSection)
+        validator.validateDistributionSection(ds, vn, "tst", "tst")
+        assert !validator.hasErrors()
+    }
+
 }
