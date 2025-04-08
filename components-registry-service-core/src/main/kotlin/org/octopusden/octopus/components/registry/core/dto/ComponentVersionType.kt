@@ -5,5 +5,6 @@ enum class ComponentVersionType {
     MINOR,
     BUILD,
     RELEASE,
-    RC
+    RC,
+    HOTFIX,
 }

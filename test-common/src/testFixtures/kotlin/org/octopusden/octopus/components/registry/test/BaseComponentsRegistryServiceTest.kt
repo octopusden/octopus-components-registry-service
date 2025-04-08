@@ -43,6 +43,7 @@ import org.octopusden.octopus.components.registry.core.dto.VersionedComponent
 const val LINE_VERSION = "3"
 const val MINOR_VERSION = "3"
 const val BUILD_VERSION = "3.0.0"
+const val HOTFIX_VERSION = "3.0.0-0"
 const val RC_VERSION = "3.0_RC"
 const val RELEASE_VERSION = "3.0"
 const val VERSION_PREFIX = "sub1k-"
@@ -51,6 +52,7 @@ const val JIRA_MINOR_VERSION = "$VERSION_PREFIX$MINOR_VERSION"
 const val JIRA_BUILD_VERSION = "$VERSION_PREFIX$BUILD_VERSION"
 const val JIRA_RC_VERSION = "$VERSION_PREFIX$RC_VERSION"
 const val JIRA_RELEASE_VERSION = "$VERSION_PREFIX$RELEASE_VERSION"
+const val JIRA_HOTFIX_VERSION = "$VERSION_PREFIX$HOTFIX_VERSION"
 
 val SUB_COMPONENTS = setOf("SUB", "client", "commoncomponent-test", "SUB_WITH_SIMPLE_VERSION_FORMAT").sorted()
 
@@ -61,6 +63,7 @@ val DETAILED_COMPONENT_VERSION = DetailedComponentVersion(
     buildVersion = ComponentRegistryVersion(ComponentVersionType.BUILD, BUILD_VERSION, JIRA_BUILD_VERSION),
     rcVersion = ComponentRegistryVersion(ComponentVersionType.RC, RC_VERSION, JIRA_RC_VERSION),
     releaseVersion = ComponentRegistryVersion(ComponentVersionType.RELEASE, RELEASE_VERSION, JIRA_RELEASE_VERSION),
+    hotfixVersion = ComponentRegistryVersion(ComponentVersionType.HOTFIX, HOTFIX_VERSION, JIRA_HOTFIX_VERSION)
 )
 
 val VCS_SETTINGS = VCSSettingsDTO(
@@ -70,7 +73,8 @@ val VCS_SETTINGS = VCSSettingsDTO(
             name = "main",
             branch = "v2",
             tag = "SUB-3.0.0",
-            type = RepositoryType.MERCURIAL
+            type = RepositoryType.MERCURIAL,
+            hotfixBranch = null
         )
     )
 )
@@ -127,6 +131,7 @@ abstract class BaseComponentsRegistryServiceTest {
             .collect(Collectors.toList())
         Assertions.assertTrue(expected.containsAll(actual))
         Assertions.assertTrue(actual.containsAll(expected))
+        Assertions.assertIterableEquals(expected, actual)
     }
 
     @Test
@@ -201,7 +206,8 @@ abstract class BaseComponentsRegistryServiceTest {
                         vcsPath = "ssh://hg@mercurial/test-component",
                         type = RepositoryType.MERCURIAL,
                         tag = "TESTONE-1.0.0",
-                        branch = "v2"
+                        branch = "v2",
+                        hotfixBranch = null
                     )
                 ),
                 externalRegistry = null
@@ -216,7 +222,8 @@ abstract class BaseComponentsRegistryServiceTest {
                         majorVersionFormat = "\$major",
                         releaseVersionFormat = "\$major.\$minor",
                         buildVersionFormat = "\$major.\$minor.\$service",
-                        lineVersionFormat = "\$major"
+                        lineVersionFormat = "\$major",
+                        hotfixVersionFormat = "\$major.\$minor.\$service.\$fix"
                     ),
                     componentInfo = ComponentInfoDTO(
                         versionPrefix = "",
@@ -232,6 +239,7 @@ abstract class BaseComponentsRegistryServiceTest {
                 releaseVersion = ComponentRegistryVersion(ComponentVersionType.RELEASE, "1.0", "1.0"),
                 rcVersion = ComponentRegistryVersion(ComponentVersionType.RC, "1.0_RC", "1.0_RC"),
                 buildVersion = ComponentRegistryVersion(ComponentVersionType.BUILD, "1.0.0", "1.0.0"),
+                hotfixVersion = ComponentRegistryVersion(ComponentVersionType.HOTFIX, "1.0.0.0", "1.0.0.0")
             )
         )
         expectedComponent.distribution = DistributionDTO(
@@ -271,7 +279,8 @@ abstract class BaseComponentsRegistryServiceTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = [BUILD_VERSION, JIRA_BUILD_VERSION, LINE_VERSION, JIRA_LINE_VERSION, MINOR_VERSION, JIRA_MINOR_VERSION, RC_VERSION, JIRA_RC_VERSION, JIRA_RELEASE_VERSION, RELEASE_VERSION])
+    @ValueSource(strings = [
+        BUILD_VERSION, JIRA_BUILD_VERSION, LINE_VERSION, JIRA_LINE_VERSION, MINOR_VERSION, JIRA_MINOR_VERSION, RC_VERSION, JIRA_RC_VERSION, JIRA_RELEASE_VERSION, RELEASE_VERSION, HOTFIX_VERSION])
     fun testGetDetailedComponentVersion(version: String) {
         val actualComponentVersion = getDetailedComponentVersion("SUB", version)
         Assertions.assertEquals(DETAILED_COMPONENT_VERSION, actualComponentVersion)
@@ -287,7 +296,7 @@ abstract class BaseComponentsRegistryServiceTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = [BUILD_VERSION, JIRA_BUILD_VERSION, LINE_VERSION, JIRA_LINE_VERSION, MINOR_VERSION, JIRA_MINOR_VERSION, RC_VERSION, JIRA_RC_VERSION, JIRA_RELEASE_VERSION, RELEASE_VERSION])
+    @ValueSource(strings = [BUILD_VERSION, JIRA_BUILD_VERSION, LINE_VERSION, JIRA_LINE_VERSION, MINOR_VERSION, JIRA_MINOR_VERSION, RC_VERSION, JIRA_RC_VERSION, JIRA_RELEASE_VERSION, RELEASE_VERSION, HOTFIX_VERSION])
     fun testGetVCSSettings(version: String) {
         Assertions.assertEquals(VCS_SETTINGS, getVcsSettings("SUB", version))
     }

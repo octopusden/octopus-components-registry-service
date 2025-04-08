@@ -21,6 +21,7 @@ bcomponent {
         majorVersionFormat = '$major'
         releaseVersionFormat = '$major.$minor'
         buildVersionFormat = '$major.$minor.$build'
+        hotfixVersionFormat = '$major.$minor.$build'
         lineVersionFormat = '$major'
         technical = true
     }
@@ -35,6 +36,7 @@ bcomponent {
         buildTasks = "assemble"
     }
 
+    hotfixBranch = "hotfix-branch"
     branch = "bcomponent-branch"
 
     deprecated = true

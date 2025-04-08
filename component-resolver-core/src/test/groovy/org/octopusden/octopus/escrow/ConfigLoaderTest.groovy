@@ -26,7 +26,8 @@ class ConfigLoaderTest {
             put(ProductTypes.PT_K, "PT_K");
             put(ProductTypes.PT_D, "PT_D");
             put(ProductTypes.PT_D_DB, "PT_D_DB");
-        }};
+        }
+    };
 
     @Test
     void testLoad() {
@@ -169,5 +170,17 @@ class ConfigLoaderTest {
         } catch (EscrowConfigurationException e) {
             assert e.message.contains("Unknown jira attribute 'unknownAttirubute' in bcomponent->Mercurial section of escrow config file");
         }
+    }
+
+    /**
+     * Test that hotfixBranch and hotfixVersionFormat attributes are correctly loaded from the config file
+     */
+    @Test
+    void testHotfixJiraConfigAttribute() {
+        def loader = fromClassPath("hotfixJiraConfigAttribute.groovy");
+        def config = loader.loadModuleConfig()
+        def module = config."hf-omponent-2"
+        Assert.assertEquals("hotfix", module["vcsSettings"]["hotfixBranch"])
+        Assert.assertEquals("\$major.\$minor.\$fix.\$build", module["jira"]["hotfixVersionFormat"])
     }
 }

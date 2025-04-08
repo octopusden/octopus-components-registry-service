@@ -41,6 +41,7 @@ import org.octopusden.releng.versions.VersionRangeFactory
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.BRANCH
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.BUILD
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.DISTRIBUTION
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.HOTFIX_BRANCH
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.JIRA
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.REPOSITORY_TYPE
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.SECURITY_GROUPS_READ
@@ -386,13 +387,15 @@ class EscrowConfigurationLoader {
             if (vcsRoots.every { root -> root.name != parentRoot.name }) {
                 String newBranch = parentVCSSettings.vscRootName2ParametersFromDefaultsMap[parentRoot.name]?.contains(BRANCH) ?
                         currentDefaultVCSParameters.branch : parentRoot.branch
+                String newHotfixBranch = parentVCSSettings.vscRootName2ParametersFromDefaultsMap[parentRoot.name]?.contains(HOTFIX_BRANCH) ?
+                        currentDefaultVCSParameters.hotfixBranch : parentRoot.hotfixBranch
                 String newTag = parentVCSSettings.vscRootName2ParametersFromDefaultsMap[parentRoot.name]?.contains(TAG) ?
                         currentDefaultVCSParameters.tag : parentRoot.tag
                 String newUrl = parentVCSSettings.vscRootName2ParametersFromDefaultsMap[parentRoot.name]?.contains(VCS_URL) ?
                         currentDefaultVCSParameters.vcsPath : parentRoot.vcsPath
                 RepositoryType newRepositoryType = parentVCSSettings.vscRootName2ParametersFromDefaultsMap[parentRoot.name]?.contains(REPOSITORY_TYPE) ?
                         currentDefaultVCSParameters.repositoryType : parentRoot.repositoryType
-                VersionControlSystemRoot.create(parentRoot.name, detectRepositoryType(newUrl, newRepositoryType), newUrl, newTag, newBranch)
+                VersionControlSystemRoot.create(parentRoot.name, detectRepositoryType(newUrl, newRepositoryType), newUrl, newTag, newBranch, newHotfixBranch)
             } else {
                 def root = vcsRoots.find { parentRoot.name == it.name }
                 // branch
@@ -400,6 +403,11 @@ class EscrowConfigurationLoader {
                         (parentVCSSettings.vscRootName2ParametersFromDefaultsMap[root.name]?.contains(BRANCH) ?
                                 currentDefaultVCSParameters.branch : parentRoot.branch) :
                         root.branch
+                // hotfix branch
+                String newHotfixBranch = vcsRootName2ParametersFromDefaultMap[root.name]?.contains(HOTFIX_BRANCH) ?
+                        (parentVCSSettings.vscRootName2ParametersFromDefaultsMap[root.name]?.contains(HOTFIX_BRANCH) ?
+                                currentDefaultVCSParameters.hotfixBranch : parentRoot.hotfixBranch) :
+                        root.hotfixBranch
                 // tag
                 String newTag = vcsRootName2ParametersFromDefaultMap[root.name]?.contains(TAG) ?
                         (parentVCSSettings.vscRootName2ParametersFromDefaultsMap[root.name]?.contains(TAG) ?
@@ -415,7 +423,7 @@ class EscrowConfigurationLoader {
                         (parentVCSSettings.vscRootName2ParametersFromDefaultsMap[root.name]?.contains(REPOSITORY_TYPE) ?
                                 currentDefaultVCSParameters.repositoryType : parentRoot.repositoryType) :
                         root.repositoryType
-                VersionControlSystemRoot.create(parentRoot.name, detectRepositoryType(newUrl, newRepositoryType), newUrl, newTag, newBranch)
+                VersionControlSystemRoot.create(parentRoot.name, detectRepositoryType(newUrl, newRepositoryType), newUrl, newTag, newBranch, newHotfixBranch)
             }
         }
         roots + vcsRoots.findAll { root -> parentVCSRoots.every { parentRoot -> parentRoot.name != root.name } }
@@ -436,14 +444,17 @@ class EscrowConfigurationLoader {
                             RepositoryType.CVS,
                             FAKE_VCS_URL_FOR_BS20,
                             defaultVCSRootBeforeBS2_0Processing.tag,
-                            defaultVCSRootBeforeBS2_0Processing.branch)
+                            defaultVCSRootBeforeBS2_0Processing.branch,
+                            defaultVCSRootBeforeBS2_0Processing.hotfixBranch)
                     : defaultVCSRootBeforeBS2_0Processing
             List<VersionControlSystemRoot> componentRoots = replaceDefaults(componentDefaultConfiguration?.vcsSettingsWrapper,
                     [:], defaultVCSRoot, defaultVCSRoot?.isFullyConfigured() ? [defaultVCSRoot] : [])
 
             return new VCSSettingsWrapper(vcsSettings:
                     VCSSettings.create(
-                            componentDefaultConfiguration?.vcsSettingsWrapper?.vcsSettings?.externalRegistry, componentRoots),
+                            componentDefaultConfiguration?.vcsSettingsWrapper?.vcsSettings?.externalRegistry,
+                            componentRoots
+                    ),
                     defaultVCSSettings: defaultVCSRoot,
                     vscRootName2ParametersFromDefaultsMap: [:])
         }
@@ -485,6 +496,10 @@ class EscrowConfigurationLoader {
         String branch = branchDefined ? moduleConfigSection.branch :
                 currentDefault?.rawBranch == null ? defaultVCSParameters?.rawBranch : currentDefault.rawBranch
 
+        def hotfixBranchDefined = moduleConfigSection.containsKey("hotfixBranch")
+        String hotfixBranch = hotfixBranchDefined ? moduleConfigSection.hotfixBranch :
+                currentDefault?.hotfixBranch == null ? defaultVCSParameters?.hotfixBranch : currentDefault.hotfixBranch
+
         def defaultParameters = []
         if (!repositoryTypeDefined) {
             defaultParameters << REPOSITORY_TYPE
@@ -495,15 +510,18 @@ class EscrowConfigurationLoader {
         if (!branchDefined) {
             defaultParameters << BRANCH
         }
+        if (!hotfixBranchDefined) {
+            defaultParameters << HOTFIX_BRANCH
+        }
 
         if (!vcsUrlDefined) {
             defaultParameters << VCS_URL
         }
 
-        if (name == "main" && repositoryType == null && vcsUrl == null && tag == null && branch == null) {
+        if (name == "main" && repositoryType == null && vcsUrl == null && tag == null && branch == null && hotfixBranch == null) {
             return [VCSSettings.create(externalRegistry, null), []]
         }
-        return [VCSSettings.create(externalRegistry, [VersionControlSystemRoot.create(name, detectRepositoryType(vcsUrl, repositoryType), vcsUrl, tag, branch)]), defaultParameters]
+        return [VCSSettings.create(externalRegistry, [VersionControlSystemRoot.create(name, detectRepositoryType(vcsUrl, repositoryType), vcsUrl, tag, branch, hotfixBranch)]), defaultParameters]
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
@@ -600,9 +618,10 @@ class EscrowConfigurationLoader {
                     parentConfigObject.jiraReleaseVersionFormat : defaultJiraParameters?.componentVersionFormat?.releaseVersionFormat
             def buildVersionFormat = defaultJiraParameters?.componentVersionFormat?.buildVersionFormat
             def lineVersionFormat = defaultJiraParameters?.componentVersionFormat?.lineVersionFormat
+            def hotfixVersionFormat = defaultJiraParameters?.componentVersionFormat?.hotfixVersionFormat
             if (StringUtils.isNotBlank(projectKey)) {
                 jiraConfiguration = new JiraComponent(projectKey, defaultJiraParameters.displayName,
-                        ComponentVersionFormat.create(majorVersionFormat, releaseVersionFormat, buildVersionFormat, lineVersionFormat), defaultJiraParameters.componentInfo, defaultJiraParameters.technical)
+                        ComponentVersionFormat.create(majorVersionFormat, releaseVersionFormat, buildVersionFormat, lineVersionFormat, hotfixVersionFormat), defaultJiraParameters.componentInfo, defaultJiraParameters.technical)
             }
         }
         jiraConfiguration
@@ -747,7 +766,8 @@ class EscrowConfigurationLoader {
         def releaseVersionFormat = jiraConfigObject.containsKey("releaseVersionFormat") ? jiraConfigObject.releaseVersionFormat : defaultJiraConfiguration?.componentVersionFormat?.releaseVersionFormat
         def buildVersionFormat = jiraConfigObject.containsKey("buildVersionFormat") ? jiraConfigObject.buildVersionFormat : defaultJiraConfiguration?.componentVersionFormat?.buildVersionFormat
         def lineVersionFormat = jiraConfigObject.containsKey("lineVersionFormat") ? jiraConfigObject.lineVersionFormat : defaultJiraConfiguration?.componentVersionFormat?.lineVersionFormat
-        return new JiraComponent(projectKey, displayName, ComponentVersionFormat.create(majorVersionFormat, releaseVersionFormat, buildVersionFormat, lineVersionFormat), componentInfo, technical)
+        def hotfixVersionFormat = jiraConfigObject.containsKey("hotfixVersionFormat") ? jiraConfigObject.hotfixVersionFormat : defaultJiraConfiguration?.componentVersionFormat?.hotfixVersionFormat
+        return new JiraComponent(projectKey, displayName, ComponentVersionFormat.create(majorVersionFormat, releaseVersionFormat, buildVersionFormat, lineVersionFormat, hotfixVersionFormat), componentInfo, technical)
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
@@ -842,8 +862,11 @@ class EscrowConfigurationLoader {
         String lineVersionFormat = pureComponentDefaults.jiraComponent?.componentVersionFormat?.lineVersionFormat != null ?
                 pureComponentDefaults.jiraComponent.componentVersionFormat?.lineVersionFormat :
                 defaultConfigParameters.jiraComponent?.componentVersionFormat?.lineVersionFormat
+        String hotfixVersionFormat = pureComponentDefaults.jiraComponent?.componentVersionFormat?.hotfixVersionFormat != null ?
+                pureComponentDefaults.jiraComponent.componentVersionFormat?.hotfixVersionFormat :
+                defaultConfigParameters.jiraComponent?.componentVersionFormat?.hotfixVersionFormat
         ComponentVersionFormat componentVersionFormat =
-                majorVersionFormat != null ? ComponentVersionFormat.create(majorVersionFormat, releaseVersionFormat, buildVersionFormat, lineVersionFormat) : null
+                majorVersionFormat != null ? ComponentVersionFormat.create(majorVersionFormat, releaseVersionFormat, buildVersionFormat, lineVersionFormat, hotfixVersionFormat) : null
 
         String versionFormat = pureComponentDefaults.jiraComponent?.componentInfo?.versionFormat != null ?
                 pureComponentDefaults.jiraComponent?.componentInfo?.versionFormat :

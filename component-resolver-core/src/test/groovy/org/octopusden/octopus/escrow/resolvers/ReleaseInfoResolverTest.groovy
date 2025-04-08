@@ -4,10 +4,13 @@ import org.octopusden.octopus.components.registry.api.build.tools.products.PTKPr
 import org.octopusden.octopus.escrow.configuration.loader.ComponentRegistryInfo
 import org.octopusden.octopus.escrow.configuration.loader.ConfigLoader
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
+import org.octopusden.octopus.escrow.exceptions.EscrowConfigurationException
 import org.octopusden.octopus.releng.dto.ComponentVersion
 import org.junit.Test
 import java.nio.file.Paths
 
+import static org.junit.Assert.assertNotNull
+import static org.junit.jupiter.api.Assertions.assertThrows
 import static org.octopusden.octopus.escrow.TestConfigUtils.PRODUCT_TYPES
 import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_GROUP_IDS
 import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_SYSTEMS
@@ -17,6 +20,17 @@ import static org.junit.Assert.assertTrue
 import static org.octopusden.octopus.escrow.TestConfigUtils.VERSION_NAMES
 
 class ReleaseInfoResolverTest {
+
+    @Test
+    void testResolvedHotfixConfiguration() {
+        def resolver = getResolver("/hotfix/Aggregator.groovy")
+
+        def exception = assertThrows(EscrowConfigurationException, {
+            resolver.resolveRelease(ComponentVersion.create("component_hotfix", "1.0.107.9-9"))
+        })
+
+        assertTrue("Expected error message to contain validation failure details", exception.message.contains("hotfixVersionFormat '\$major.\$minor.\$service-\$build' doesn't start with buildVersionFormat '\$major.\$minor.\$service-\$fix'"))
+    }
 
     @Test
     void testResolvedConfiguration() {
@@ -32,6 +46,9 @@ class ReleaseInfoResolverTest {
         def resolver = getResolver("/production/Aggregator.groovy")
         def releaseInfo162720 = resolver.resolveRelease(ComponentVersion.create("app", "1.6.2720"))
         def releaseInfo173630 = resolver.resolveRelease(ComponentVersion.create("app", "1.7.3630"))
+        def vcsRoot = releaseInfo162720.vcsSettings.versionControlSystemRoots.find { vcsRoot -> vcsRoot.name == "release-script" }
+        assertNotNull(vcsRoot)
+        assertEquals("hotfix:1.6", vcsRoot.hotfixBranch)
         assertTrue(releaseInfo162720.distribution.explicit())
         assertTrue(releaseInfo162720.distribution.external())
         assertEquals('file:///as-1.6', releaseInfo162720.distribution.GAV())

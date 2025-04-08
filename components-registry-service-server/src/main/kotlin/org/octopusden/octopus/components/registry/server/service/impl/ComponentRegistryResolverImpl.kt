@@ -334,6 +334,9 @@ class ComponentRegistryResolverImpl(
                     jiraComponentVersionFormatter.matchesLineVersionFormat(component, version, strict) ->
                         formatVersion(component.componentVersionFormat.lineVersionFormat)
 
+                    jiraComponentVersionFormatter.matchesHotfixVersionFormat(component, version, strict) ->
+                        formatVersion(component.componentVersionFormat.hotfixVersionFormat)
+
                     else -> null
                 }?.let { cleanVersion ->
                     JiraComponentVersion(

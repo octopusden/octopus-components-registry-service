@@ -26,7 +26,8 @@ fun JiraComponentVersion.toDTO(): JiraComponentVersionDTO {
 fun JiraComponent.toDTO(): JiraComponentDTO {
     val cvFormat = ComponentVersionFormatDTO(
         componentVersionFormat.majorVersionFormat, componentVersionFormat.releaseVersionFormat,
-        componentVersionFormat.buildVersionFormat, componentVersionFormat.lineVersionFormat
+        componentVersionFormat.buildVersionFormat, componentVersionFormat.lineVersionFormat,
+        componentVersionFormat.hotfixVersionFormat
     )
     val componentInfo = componentInfo.let { ComponentInfoDTO(it.versionPrefix ?: "", it.versionFormat ?: "") }
     return JiraComponentDTO(projectKey, displayName, cvFormat, componentInfo, isTechnical)
@@ -59,7 +60,7 @@ fun VCSSettings.toDTO(): VCSSettingsDTO {
 }
 
 fun VersionControlSystemRoot.toDTO(): VersionControlSystemRootDTO {
-    return VersionControlSystemRootDTO(name, vcsPath, RepositoryType.valueOf(repositoryType.name), tag, branch)
+    return VersionControlSystemRootDTO(name, vcsPath, RepositoryType.valueOf(repositoryType.name), tag, branch, hotfixBranch)
 }
 
 fun ComponentArtifactConfiguration.toDTO(): ComponentArtifactConfigurationDTO =
