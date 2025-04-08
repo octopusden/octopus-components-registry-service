@@ -1,7 +1,7 @@
 package org.octopusden.octopus.escrow.configuration.validation
 
 import org.octopusden.octopus.escrow.dto.EscrowExpressionContext
-import org.octopusden.octopus.escrow.dto.SimpleExpressionContext
+import org.octopusden.octopus.escrow.dto.VersionExpressionContext
 import org.octopusden.octopus.escrow.exceptions.EscrowConfigurationException
 import org.octopusden.octopus.escrow.resolvers.ReleaseInfoResolver
 import org.octopusden.octopus.escrow.utilities.EscrowExpressionParser
@@ -237,8 +237,7 @@ class GroovySlurperConfigValidator {
     def validateDistributionSection(ConfigObject distributionSection, VersionNames versionNames, String moduleName, String moduleConfigName) {
         validateForUnknownAttributes(distributionSection, DISTRIBUTION, SUPPORTED_DISTRIBUTION_ATTRIBUTES, moduleName, moduleConfigName)
         def expressionContext = new EscrowExpressionContext("validation", "1.0", "distribution.zip", new NumericVersionFactory(versionNames))
-        def factory = new NumericVersionFactory(versionNames)
-        def versionContext = new SimpleExpressionContext("validation", "1.0",  {name -> factory.create(name)})
+        def versionContext = new VersionExpressionContext("1.0")
 
         validateValueByPattern(distributionSection, "GAV", GAV_PATTERN, expressionContext)
         validateValueByPattern(distributionSection, "DEB", DEB_PATTERN, expressionContext)
@@ -250,7 +249,7 @@ class GroovySlurperConfigValidator {
         }
     }
 
-    private void validateValueByPattern(Map expressionMap, String key, Pattern pattern, SimpleExpressionContext expressionContext, boolean allowEnvironment = true) {
+    private void validateValueByPattern(Map expressionMap, String key, Pattern pattern, VersionExpressionContext expressionContext, boolean allowEnvironment = true) {
         if (expressionMap.containsKey(key)) {
             try {
                 def value = EscrowExpressionParser.getInstance().parseAndEvaluate(expressionMap.get(key) as String, expressionContext, allowEnvironment)

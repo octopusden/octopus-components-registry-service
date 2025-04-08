@@ -47,10 +47,10 @@ class GroovySlurperConfigValidatorTest extends GroovyTestCase {
         def verNames = new VersionNames("serviceCBranch", "serviceC", "minorC")
 
         def correctDockerStrings = ["docker = 'test/test-component:\${version},test/path-element/test-component2:11.22'",
-                                    "docker = 'test/\${major}/\${minor}/test-component3:\${version}'",
                                     "docker = 'test-component4:11.22'"]
 
         def incorrectDockerStrings = ["docker = 'test/test-component:\${version},by-\${env.USER}/test/test-component2:1.0'",
+                                      "docker = 'test/\${major}/\${minor}/test-component3:\${version}'",
                                       "docker = 'test/\${baseDir}/test-component:1.0'",
                                       "docker = 'test/\${abrakadabra}/test-component:1.0'"]
 
