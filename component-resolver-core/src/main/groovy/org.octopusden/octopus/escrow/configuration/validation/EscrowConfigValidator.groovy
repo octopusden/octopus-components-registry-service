@@ -475,7 +475,7 @@ class EscrowConfigValidator {
                         docker.split(SPLIT_PATTERN).each { String image ->
                             def imageName = image.split(':')[0]
                             if (dockerNames.contains(imageName)) {
-                                registerError("Docker name '$imageName' is not unique")
+                                registerError("Docker name '$imageName' in component '$componentName' is not unique")
                             } else {
                                 // allow duplicates in the same component with different tags
                                 thisComponentImages.add(imageName)
