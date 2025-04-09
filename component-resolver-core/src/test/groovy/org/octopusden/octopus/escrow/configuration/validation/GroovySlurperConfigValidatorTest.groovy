@@ -1,5 +1,7 @@
 package org.octopusden.octopus.escrow.configuration.validation
 
+import org.octopusden.releng.versions.VersionNames
+
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.DEB_PATTERN
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.GAV_PATTERN
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.RPM_PATTERN
