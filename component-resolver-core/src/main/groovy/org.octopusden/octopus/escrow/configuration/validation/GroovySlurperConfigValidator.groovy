@@ -240,7 +240,7 @@ class GroovySlurperConfigValidator {
         validateValueByPattern(distributionSection, "GAV", GAV_PATTERN, expressionContext)
         validateValueByPattern(distributionSection, "DEB", DEB_PATTERN, expressionContext)
         validateValueByPattern(distributionSection, "RPM", RPM_PATTERN, expressionContext)
-        validateValueByPattern(distributionSection, "docker", DOCKER_PATTERN, expressionContext)
+         validateValueByPattern(distributionSection, "docker", DOCKER_PATTERN, expressionContext)
 
         if (distributionSection.containsKey(SECURITY_GROUPS)) {
             validateSecurityGroupsParameters(distributionSection, SECURITY_GROUPS, moduleName)
