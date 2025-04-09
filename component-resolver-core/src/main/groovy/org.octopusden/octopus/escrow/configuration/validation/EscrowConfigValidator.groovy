@@ -470,7 +470,7 @@ class EscrowConfigValidator {
                 def distribution = moduleConfiguration.getDistribution()
                 if (distribution != null) {
                     def docker = distribution.docker()
-                    if (docker == null) {
+                    if (docker) {
                         docker.split(SPLIT_PATTERN).each { String image ->
                             def imageName = image.split(':')[0]
                             if (!dockerNames.add(imageName)) {
