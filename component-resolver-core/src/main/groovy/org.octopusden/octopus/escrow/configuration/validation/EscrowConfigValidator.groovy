@@ -466,6 +466,7 @@ class EscrowConfigValidator {
     void validateDockerUniqueNames(EscrowConfiguration moduleConfig) {
         def dockerNames = new HashSet<String>()
         moduleConfig.escrowModules.each { componentName, escrowModule ->
+            def thisComponentImages = []
             escrowModule.moduleConfigurations.each { moduleConfiguration ->
                 def distribution = moduleConfiguration.getDistribution()
                 if (distribution != null) {
@@ -473,13 +474,17 @@ class EscrowConfigValidator {
                     if (docker) {
                         docker.split(SPLIT_PATTERN).each { String image ->
                             def imageName = image.split(':')[0]
-                            if (!dockerNames.add(imageName)) {
+                            if (!dockerNames.contains(imageName)) {
                                 registerError("Docker name '$imageName' is not unique")
+                            } else {
+                                // allow duplicates in the same component with different tags
+                                thisComponentImages.add(imageName)
                             }
                         }
                     }
                 }
             }
+            dockerNames.addAll(thisComponentImages)
         }
     }
 
