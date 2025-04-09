@@ -41,4 +41,39 @@ class GroovySlurperConfigValidatorTest extends GroovyTestCase {
         assert !DOCKER_PATTERN.matcher("org.octopusden/octopus:image:1.0").matches()
         assert !DOCKER_PATTERN.matcher("org.octopusden/octopus/image:.0").matches()
     }
+
+
+    void testDockerField() {
+        def verNames = new VersionNames("serviceCBranch", "serviceC", "minorC")
+
+        def correctDockerStrings = ["docker = 'test/test-component:\${version},test/path-element/test-component2:11.22'",
+                                    "docker = 'test-component4:11.22'",
+                                    "docker = 'test-component4:\${version},test-component5:\${version}-jdk11,test-component5:\${minor}-jdk7'",
+        ]
+
+        def incorrectDockerStrings = ["docker = 'test/test-component:\${version},by-\${env.USER}/test/test-component2:1.0'",
+                                      "docker = 'test/\${major}/\${minor}/test-component3:\${version}'",
+                                      "docker = 'test-component\${version}:11.22'",
+                                      "docker = 'test/\${baseDir}/test-component:1.0'",
+                                      "docker = 'test/\${abrakadabra}/test-component:1.0'"]
+
+        correctDockerStrings.forEach {
+            def correct = new ConfigSlurper().parse(it)
+            def validator = new GroovySlurperConfigValidator(verNames)
+            validator.validateDistributionSection(correct, verNames, "testModule", "testConfig")
+            assert !validator.hasErrors()
+        }
+
+        int errorCount = 0
+        incorrectDockerStrings.forEach {
+            def inCorrect = new ConfigSlurper().parse(it)
+            def validator = new GroovySlurperConfigValidator(verNames)
+            validator.validateDistributionSection(inCorrect, verNames, "testModule", "testConfig")
+            if (validator.hasErrors()) {
+                errorCount++
+            }
+        }
+        assert errorCount == incorrectDockerStrings.size()
+    }
+
 }
