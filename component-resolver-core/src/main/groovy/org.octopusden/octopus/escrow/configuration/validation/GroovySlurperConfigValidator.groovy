@@ -240,7 +240,7 @@ class GroovySlurperConfigValidator {
         validateValueByPattern(distributionSection, "GAV", GAV_PATTERN, expressionContext)
         validateValueByPattern(distributionSection, "DEB", DEB_PATTERN, expressionContext)
         validateValueByPattern(distributionSection, "RPM", RPM_PATTERN, expressionContext)
-        validateDockerImgList(distributionSection["docker"] as String)
+        validateDockerImgList(distributionSection)
         validateValueByPattern(distributionSection, "docker", DOCKER_PATTERN, expressionContext)
 
         if (distributionSection.containsKey(SECURITY_GROUPS)) {
@@ -261,9 +261,10 @@ class GroovySlurperConfigValidator {
         }
     }
 
-    void validateDockerImgList(String dockerString) {
-
-        if (dockerString) {
+    void validateDockerImgList(Map expressionMap) {
+        String key = "docker"
+        if (expressionMap.containsKey(key)) {
+            def dockerString = expressionMap.get(key) as String
             def imagesWithTags = dockerString.split(",")
             def imageTagPairs = imagesWithTags.collect { it.split(":", 2) }
 
@@ -273,9 +274,7 @@ class GroovySlurperConfigValidator {
                 }
             }
         }
-
     }
-
 
     def validateDependenciesSection(ConfigObject distributionSection, String moduleName, String moduleConfigName) {
         validateForUnknownAttributes(distributionSection, DEPENDENCIES, SUPPORTED_DEPENDENCIES_ATTRIBUTES, moduleName, moduleConfigName)
