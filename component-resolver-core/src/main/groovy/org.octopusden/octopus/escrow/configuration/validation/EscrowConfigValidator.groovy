@@ -106,6 +106,7 @@ class EscrowConfigValidator {
             validateJiraProjectKeyAndVersionPrefixIntersections(configuration)
             validateComponentParent(configuration)
             validateArchivedComponents(configuration)
+            validateDockerUniqueNames(configuration)
         } else {
             LOG.warn("Composite validations are skipped due to the previous errors")
         }
@@ -461,6 +462,32 @@ class EscrowConfigValidator {
             }
         }
     }
+
+    void validateDockerUniqueNames(EscrowConfiguration moduleConfig) {
+        def dockerNames = new HashSet<String>()
+        moduleConfig.escrowModules.each { componentName, escrowModule ->
+            def thisComponentImages = []
+            escrowModule.moduleConfigurations.each { moduleConfiguration ->
+                def distribution = moduleConfiguration.getDistribution()
+                if (distribution != null) {
+                    def docker = distribution.docker()
+                    if (docker) {
+                        docker.split(SPLIT_PATTERN).each { String image ->
+                            def imageName = image.split(':')[0]
+                            if (dockerNames.contains(imageName)) {
+                                registerError("Docker name '$imageName' in component '$componentName' is not unique")
+                            } else {
+                                // allow duplicates in the same component with different tags
+                                thisComponentImages.add(imageName)
+                            }
+                        }
+                    }
+                }
+            }
+            dockerNames.addAll(thisComponentImages)
+        }
+    }
+
 
     /**
      * Validate hotfix version format.

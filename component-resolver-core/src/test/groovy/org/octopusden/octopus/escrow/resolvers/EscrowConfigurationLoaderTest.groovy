@@ -637,4 +637,28 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
         EscrowConfiguration configuration = loadConfiguration("testBuildConfToolsValidation.groovy")
         assert 2 == configuration.escrowModules.size()
     }
+
+
+    @Test
+    void testDuplicatedDockerImage() {
+        def exception = GroovyAssert.shouldFail(EscrowConfigurationException.class, {
+            loadConfiguration("invalid/duplicatedDocker.groovy")
+        })
+        assert exception.message == "Validation of module config failed due following errors: \n" +
+                "Docker name 'test-component/image' in component 'component2' is not unique"
+    }
+
+    @Test
+    void testDistributionInRanges() {
+        EscrowConfiguration configuration = loadConfiguration("distributionsInRangesDocker.groovy")
+        assert 2 == configuration.escrowModules.size()
+        def exception = GroovyAssert.shouldFail(EscrowConfigurationException.class, {
+            EscrowConfiguration configurationInvalid = loadConfiguration("invalid/distributionsInRangesDocker.groovy")
+        })
+        assert exception.message == "Validation of module config failed due following errors: \n" +
+                "Docker name 'myimage2' in component 'component2' is not unique\n" +
+                "Docker name 'myimage2' in component 'component2' is not unique"
+    }
+
+
 }

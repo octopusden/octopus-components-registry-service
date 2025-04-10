@@ -241,6 +241,7 @@ class GroovySlurperConfigValidator {
         validateValueByPattern(distributionSection, "DEB", DEB_PATTERN, expressionContext)
         validateValueByPattern(distributionSection, "RPM", RPM_PATTERN, expressionContext)
         validateValueByPattern(distributionSection, "docker", DOCKER_PATTERN, expressionContext)
+        validateNoExpressionInImageName(distributionSection)
 
         if (distributionSection.containsKey(SECURITY_GROUPS)) {
             validateSecurityGroupsParameters(distributionSection, SECURITY_GROUPS, moduleName)
@@ -256,6 +257,21 @@ class GroovySlurperConfigValidator {
                 }
             } catch (Exception exception) {
                 registerError("$key expression is not valid: " + exception.getMessage())
+            }
+        }
+    }
+
+    void validateNoExpressionInImageName(Map expressionMap) {
+        String key = "docker"
+        if (expressionMap.containsKey(key)) {
+            def dockerString = expressionMap.get(key) as String
+            def imagesWithTags = dockerString.split(",")
+            def imageTagPairs = imagesWithTags.collect { it.split(":", 2) }
+
+            imageTagPairs.each { image ->
+                if (image[0].contains('$')) {
+                    registerError("Docker image name '$image[0]' contains an expression. ")
+                }
             }
         }
     }
