@@ -40,7 +40,7 @@ class VersionControlSystemRoot {
         return vcsPath
     }
 
-    //TODO: JsonIgnore?
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     String getBranch() {
         return StringUtils.isNotBlank(rawBranch) ?
                 rawBranch :
