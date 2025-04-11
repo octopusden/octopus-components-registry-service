@@ -14,7 +14,7 @@ class VCSSettingsDeserializer {
         RepositoryType repositoryType = RepositoryType.valueOf(node.get("repositoryType").asText());
         String vcsPath = node.get("vcsPath").asText();
         String tag = node.has("tag") ? node.get("tag").asText() : null;
-        String branch = node.get("branch").asText();
+        String branch = node.has("branch") ? node.get("branch").asText() : null;
         String hotfixBranch = node.has("hotfixBranch") ? node.get("hotfixBranch").asText() : null;
         String name = node.get("name").asText();
         return VersionControlSystemRoot.create(name, repositoryType, vcsPath, tag, branch, hotfixBranch);
