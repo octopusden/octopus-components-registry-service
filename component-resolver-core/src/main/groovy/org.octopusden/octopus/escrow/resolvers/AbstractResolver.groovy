@@ -40,14 +40,15 @@ class AbstractResolver {
         def parsedVersion = new NumericVersionFactory(versionNames).create(version)
         Collection<VersionControlSystemRoot> vcsRootsResolved = new ArrayList<>()
         vcsSettings.getVersionControlSystemRoots().each { VersionControlSystemRoot root ->
-            String formattedBranch = versionFormatter.format(root.getBranch(), parsedVersion)
+            String branch = root.getBranch()
+            String formattedBranch = branch ? versionFormatter.format(branch, parsedVersion) : null
             String formattedHotfixBranch = root.getHotfixBranch() ? versionFormatter.format(root.getHotfixBranch(), parsedVersion) : null
             vcsRootsResolved.add(VersionControlSystemRoot.create(
                     root.name,
                     root.repositoryType,
                     root.vcsPath,
                     root.tag,
-                    formattedBranch == "null" ? null : formattedBranch,
+                    formattedBranch,
                     formattedHotfixBranch,
             ))
         }
