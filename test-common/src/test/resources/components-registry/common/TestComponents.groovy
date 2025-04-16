@@ -875,3 +875,44 @@ TEST_COMPONENT4 {
     artifactId = "test-golang"
     buildSystem = GOLANG
 }
+
+
+"TEST_COMPONENT_WITH_DOCKER_1" {
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.test.docker"
+    distribution {
+        explicit = false
+        external = true
+        docker = 'test-docker-1:${version}'
+    }
+}
+
+"TEST_COMPONENT_WITH_DOCKER_2" {
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.test.docker"
+
+    distribution {
+        explicit = false
+        external = true
+    }
+
+    "(,1.0.0]" {
+        distribution {
+            docker = 'test-docker-first:${version}'
+        }
+    }
+
+    "(1.0.0, 2.0.0)" {
+        distribution {
+            docker = 'test-docker-second:${version}'
+        }
+    }
+    "(2.0.0,)" {
+        distribution {
+            docker = 'test-docker-third:${version}'
+        }
+    }
+
+
+
+}

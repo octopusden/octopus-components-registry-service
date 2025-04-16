@@ -54,6 +54,6 @@ interface ComponentRegistryResolver {
 
     fun getComponentsCountByBuildSystem(): EnumMap<BuildSystem, Int>
 
-    fun findComponentsByDockerImages(images: Set<Image>): Map<String, ComponentImage>
+    fun findComponentsByDockerImages(images: Set<Image>): Set<ComponentImage>
 
 }

@@ -41,7 +41,7 @@ interface ComponentsRegistryServiceClient {
 
     @RequestLine("POST rest/api/3/components/find-by-docker-images")
     @Headers("Content-Type: application/json")
-    fun findComponentsByDockerImages(images: Set<Image>): Map<String, ComponentImage>
+    fun findComponentsByDockerImages(images: Set<Image>): Set<ComponentImage>
 
     @RequestLine("GET /rest/api/1/components/{componentKey}")
     @Throws(NotFoundException::class)

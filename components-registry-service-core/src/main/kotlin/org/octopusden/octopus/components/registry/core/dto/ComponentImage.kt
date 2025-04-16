@@ -6,7 +6,7 @@ import com.fasterxml.jackson.annotation.JsonProperty
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class ComponentImage @JsonCreator constructor(
-    @JsonProperty val componentId: String,
-    @JsonProperty val componentVersion: String,
-    @JsonProperty val image: Image
+    @JsonProperty("componentId") val componentId: String,
+    @JsonProperty("componentVersion") val componentVersion: String,
+    @JsonProperty("image") val image: Image
 )

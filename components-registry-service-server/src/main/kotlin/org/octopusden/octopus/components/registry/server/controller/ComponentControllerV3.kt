@@ -56,7 +56,7 @@ class ComponentControllerV3(
         consumes = [MediaType.APPLICATION_JSON_VALUE],
         produces = [MediaType.APPLICATION_JSON_VALUE]
     )
-    fun findComponentsByDockerImages(@RequestBody images: Set<Image>): Map<String, ComponentImage> {
+    fun findComponentsByDockerImages(@RequestBody images: Set<Image>): Set<ComponentImage> {
         return componentRegistryResolver.findComponentsByDockerImages(images)
     }
 

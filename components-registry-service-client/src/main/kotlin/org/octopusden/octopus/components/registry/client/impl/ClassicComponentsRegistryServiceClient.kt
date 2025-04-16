@@ -42,7 +42,7 @@ class ClassicComponentsRegistryServiceClient(
     override fun findArtifactComponentsByArtifacts(artifacts: Set<ArtifactDependency>) =
         client.findArtifactComponentsByArtifacts(artifacts)
 
-    override fun findComponentsByDockerImages(images: Set<Image>): Map<String, ComponentImage> =
+    override fun findComponentsByDockerImages(images: Set<Image>): Set<ComponentImage> =
         client.findComponentsByDockerImages(images)
 
     override fun getById(componentKey: String) = client.getById(componentKey)

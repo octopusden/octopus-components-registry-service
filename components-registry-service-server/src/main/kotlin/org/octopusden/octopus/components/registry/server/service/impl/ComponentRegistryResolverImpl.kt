@@ -191,27 +191,17 @@ class ComponentRegistryResolverImpl(
         return result
     }
 
-    override fun findComponentsByDockerImages(images: Set<Image>): Map<String, ComponentImage> {
+    override fun findComponentsByDockerImages(images: Set<Image>): Set<ComponentImage> {
         dockerCacheLock.readLock().lock()
-        try {
-            val result = HashMap<String, ComponentImage>()
-            val imageNames = images.map { image -> image.name }
-            imageToComponentMap.filterKeys(imageNames::contains).forEach { (imgName, componentId) ->
-                val requiredImage = images.find { it.name == imgName }
-                if (requiredImage != null) {
-                    val emc = findConfigurationByImage(imgName, requiredImage.tag, componentId)
-                    if (emc != null) {
-                        result[imgName] = ComponentImage(
-                            componentId, requiredImage.tag,
-                            Image(
-                                imgName,
-                                requiredImage.tag
-                            )
-                        )
+        return try {
+            val imageNames = images.map { it.name }.toSet()
+            imageToComponentMap.filterKeys(imageNames::contains).mapNotNull { (imgName, componentId) ->
+                images.find { it.name == imgName }?.let { requiredImage ->
+                    findConfigurationByImage(imgName, requiredImage.tag, componentId)?.let {
+                        ComponentImage(componentId, requiredImage.tag, Image(imgName, requiredImage.tag))
                     }
                 }
-            }
-            return result
+            }.toSet()
         } finally {
             dockerCacheLock.readLock().unlock()
         }
