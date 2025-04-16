@@ -3,8 +3,10 @@ package org.octopusden.octopus.components.registry.server.controller
 import org.octopusden.octopus.components.registry.core.dto.ArtifactComponentDTO
 import org.octopusden.octopus.components.registry.core.dto.ArtifactComponentsDTO
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
+import org.octopusden.octopus.components.registry.core.dto.ComponentImage
 import org.octopusden.octopus.components.registry.core.dto.ComponentV2
 import org.octopusden.octopus.components.registry.core.dto.ComponentV3
+import org.octopusden.octopus.components.registry.core.dto.Image
 import org.octopusden.octopus.components.registry.server.service.ComponentRegistryResolver
 import org.springframework.http.MediaType
 import org.springframework.web.bind.annotation.GetMapping
@@ -48,4 +50,15 @@ class ComponentControllerV3(
             .toSet()
         return ArtifactComponentsDTO(artifactComponents)
     }
+
+    @PostMapping(
+        "find-by-docker-images",
+        consumes = [MediaType.APPLICATION_JSON_VALUE],
+        produces = [MediaType.APPLICATION_JSON_VALUE]
+    )
+    fun findComponentsByDockerImages(@RequestBody images: Set<Image>): Map<String, ComponentImage> {
+        return componentRegistryResolver.findComponentsByDockerImages(images)
+    }
+
+
 }

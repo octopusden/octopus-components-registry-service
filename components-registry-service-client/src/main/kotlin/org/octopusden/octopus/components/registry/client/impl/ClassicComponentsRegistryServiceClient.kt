@@ -15,7 +15,9 @@ import org.octopusden.octopus.components.registry.client.ComponentsRegistryServi
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.core.dto.BuildSystem
 import org.octopusden.octopus.components.registry.core.dto.ComponentArtifactConfigurationDTO
+import org.octopusden.octopus.components.registry.core.dto.ComponentImage
 import org.octopusden.octopus.components.registry.core.dto.DistributionDTO
+import org.octopusden.octopus.components.registry.core.dto.Image
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionDTO
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionRangeDTO
 import org.octopusden.octopus.components.registry.core.dto.ServiceStatusDTO
@@ -39,6 +41,9 @@ class ClassicComponentsRegistryServiceClient(
 
     override fun findArtifactComponentsByArtifacts(artifacts: Set<ArtifactDependency>) =
         client.findArtifactComponentsByArtifacts(artifacts)
+
+    override fun findComponentsByDockerImages(images: Set<Image>): Map<String, ComponentImage> =
+        client.findComponentsByDockerImages(images)
 
     override fun getById(componentKey: String) = client.getById(componentKey)
 

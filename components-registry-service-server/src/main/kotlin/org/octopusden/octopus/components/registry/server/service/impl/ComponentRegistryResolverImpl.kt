@@ -6,6 +6,8 @@ import org.apache.maven.artifact.DefaultArtifact
 import org.jetbrains.kotlin.utils.keysToMap
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.core.dto.BuildSystem
+import org.octopusden.octopus.components.registry.core.dto.ComponentImage
+import org.octopusden.octopus.components.registry.core.dto.Image
 import org.octopusden.octopus.components.registry.core.dto.VersionedComponent
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.server.config.ComponentsRegistryProperties
@@ -37,6 +39,7 @@ import java.nio.file.Paths
 import java.util.EnumMap
 import java.util.Properties
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.locks.ReentrantReadWriteLock
 import javax.annotation.PostConstruct
 import javax.annotation.Resource
 import kotlin.io.path.exists
@@ -54,7 +57,9 @@ class ComponentRegistryResolverImpl(
     private val numericVersionFactory: NumericVersionFactory,
     private val versionRangeFactory: VersionRangeFactory,
     private val meterRegistry: MeterRegistry,
-    @Resource(name = "dependencyMapping") private val dependencyMapping: MutableMap<String, String>
+    @Resource(name = "dependencyMapping") private val dependencyMapping: MutableMap<String, String>,
+    private var imageToComponentMap: Map<String, String>,
+    private val dockerCacheLock: ReentrantReadWriteLock = ReentrantReadWriteLock()
 ) : ComponentRegistryResolver {
 
     private lateinit var configuration: EscrowConfiguration
@@ -70,6 +75,7 @@ class ComponentRegistryResolverImpl(
         moduleByArtifactResolver.setEscrowConfiguration(configuration)
         loadDependencyMapping()
         updateMetrics()
+        loadImageToComponentMap()
     }
 
     override fun getComponents() = configuration.escrowModules.values
@@ -185,6 +191,56 @@ class ComponentRegistryResolverImpl(
         return result
     }
 
+    override fun findComponentsByDockerImages(images: Set<Image>): Map<String, ComponentImage> {
+        dockerCacheLock.readLock().lock()
+        try {
+            val result = HashMap<String, ComponentImage>()
+            val imageNames = images.map { image -> image.name }
+            imageToComponentMap.filterKeys(imageNames::contains).forEach { (imgName, componentId) ->
+                val requiredImage = images.find { it.name == imgName }
+                if (requiredImage != null) {
+                    val emc = findConfigurationByImage(imgName, requiredImage.tag, componentId)
+                    if (emc != null) {
+                        result[imgName] = ComponentImage(
+                            componentId, requiredImage.tag,
+                            Image(
+                                imgName,
+                                requiredImage.tag
+                            )
+                        )
+                    }
+                }
+            }
+            return result
+        } finally {
+            dockerCacheLock.readLock().unlock()
+        }
+    }
+
+    private fun findConfigurationByImage(imageName: String, version: String, compId: String): EscrowModuleConfig? {
+        val emc = getResolvedComponentDefinition(compId, version) ?: return null
+        val dockerString = emc.distribution?.docker() ?: return null
+        return emc.takeIf { imageName in dockerStringToList(dockerString) }
+    }
+
+    private fun dockerStringToList(dockerString: String): List<String> {
+        return dockerString.split(",").map { it.substringBefore(":") }
+    }
+
+    private fun buildImageToComponentMap(): Map<String, String> {
+        val component2DockerMap = mutableMapOf<String, String>()
+        getComponents().forEach { comp ->
+            comp.moduleConfigurations.forEach { moduleConfig ->
+                moduleConfig.distribution?.docker()?.let { dockersString ->
+                    dockerStringToList(dockersString).forEach { dockerImgName ->
+                        component2DockerMap[dockerImgName] = comp.moduleName
+                    }
+                }
+            }
+        }
+        return component2DockerMap
+    }
+
     private fun EscrowModule.getBuildSystem(): BuildSystem {
         return moduleConfigurations.firstOrNull()?.let { it.buildSystem.toDTO() }
             ?: throw IllegalStateException("No module configurations available")
@@ -213,6 +269,16 @@ class ComponentRegistryResolverImpl(
 
         BuildSystem.values().forEach { buildSystem ->
             buildSystemMetrics[buildSystem] = componentCounts[buildSystem] ?: 0
+        }
+    }
+
+    private fun loadImageToComponentMap() {
+        LOG.info("Update dockerImageMapping")
+        dockerCacheLock.writeLock().lock()
+        try {
+            imageToComponentMap = buildImageToComponentMap()
+        } finally {
+            dockerCacheLock.writeLock().unlock()
         }
     }
 
