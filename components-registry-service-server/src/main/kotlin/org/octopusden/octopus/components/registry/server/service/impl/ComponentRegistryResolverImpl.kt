@@ -195,10 +195,10 @@ class ComponentRegistryResolverImpl(
         dockerCacheLock.readLock().lock()
         return try {
             val imageNames = images.map { it.name }.toSet()
-            imageToComponentMap.filterKeys(imageNames::contains).mapNotNull { (imgName, componentId) ->
+            imageToComponentMap.filterKeys(imageNames::contains).mapNotNull { (imgName, component) ->
                 images.find { it.name == imgName }?.let { requiredImage ->
-                    findConfigurationByImage(imgName, requiredImage.tag, componentId)?.let {
-                        ComponentImage(componentId, requiredImage.tag, Image(imgName, requiredImage.tag))
+                    findConfigurationByImage(imgName, requiredImage.tag, component)?.let {
+                        ComponentImage(component, requiredImage.tag, Image(imgName, requiredImage.tag))
                     }
                 }
             }.toSet()

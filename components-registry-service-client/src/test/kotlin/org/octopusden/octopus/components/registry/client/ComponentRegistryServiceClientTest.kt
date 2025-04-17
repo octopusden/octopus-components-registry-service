@@ -199,8 +199,8 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
             )
         )
         assertEquals(2, components.size)
-        assert(components.any { it.image.name == "test-docker-1" && it.componentId == "TEST_COMPONENT_WITH_DOCKER_1" && it.componentVersion == "0.1" })
-        assert(components.any { it.image.name == "test/versions-api" && it.componentId == "TESTONE" && it.componentVersion == "10.1" })
+        assert(components.any { it.image.name == "test-docker-1" && it.component == "TEST_COMPONENT_WITH_DOCKER_1" && it.version == "0.1" })
+        assert(components.any { it.image.name == "test/versions-api" && it.component == "TESTONE" && it.version == "10.1" })
         assert(components.none { it.image.name == "not-found" })
     }
 
@@ -213,8 +213,8 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
             )
         )
         assertEquals(1, components.size)
-        assert(components.none { it.image.name == "test-docker-first" && it.componentId == "TEST_COMPONENT_WITH_DOCKER_2" && it.componentVersion == "1.0.5" })
-        assert(components.any { it.image.name == "test-docker-second" && it.componentId == "TEST_COMPONENT_WITH_DOCKER_2" && it.componentVersion == "1.0.5" })
+        assert(components.none { it.image.name == "test-docker-first" && it.component == "TEST_COMPONENT_WITH_DOCKER_2" && it.version == "1.0.5" })
+        assert(components.any { it.image.name == "test-docker-second" && it.component == "TEST_COMPONENT_WITH_DOCKER_2" && it.version == "1.0.5" })
 
         components = componentsRegistryClient.findComponentsByDockerImages(
             setOf(
@@ -223,8 +223,8 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
             )
         )
         assertEquals(1, components.size)
-        assert(components.any { it.image.name == "test-docker-first" && it.componentId == "TEST_COMPONENT_WITH_DOCKER_2" && it.componentVersion == "0.0.5" })
-        assert(components.none { it.image.name == "test-docker-second" && it.componentId == "TEST_COMPONENT_WITH_DOCKER_2" && it.componentVersion == "0.0.5" })
+        assert(components.any { it.image.name == "test-docker-first" && it.component == "TEST_COMPONENT_WITH_DOCKER_2" && it.version == "0.0.5" })
+        assert(components.none { it.image.name == "test-docker-second" && it.component == "TEST_COMPONENT_WITH_DOCKER_2" && it.version == "0.0.5" })
 
         components = componentsRegistryClient.findComponentsByDockerImages(
             setOf(
@@ -234,9 +234,9 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
             )
         )
         assertEquals(3, components.size)
-        assert(components.any { it.image.name == "test-docker-first" && it.componentId == "TEST_COMPONENT_WITH_DOCKER_2" && it.componentVersion == "0.0.5" })
-        assert(components.any { it.image.name == "test-docker-second" && it.componentId == "TEST_COMPONENT_WITH_DOCKER_2" && it.componentVersion == "1.0.5" })
-        assert(components.any { it.image.name == "test-docker-third" && it.componentId == "TEST_COMPONENT_WITH_DOCKER_2" && it.componentVersion == "2.0.5" })
+        assert(components.any { it.image.name == "test-docker-first" && it.component == "TEST_COMPONENT_WITH_DOCKER_2" && it.version == "0.0.5" })
+        assert(components.any { it.image.name == "test-docker-second" && it.component == "TEST_COMPONENT_WITH_DOCKER_2" && it.version == "1.0.5" })
+        assert(components.any { it.image.name == "test-docker-third" && it.component == "TEST_COMPONENT_WITH_DOCKER_2" && it.version == "2.0.5" })
 
     }
 
