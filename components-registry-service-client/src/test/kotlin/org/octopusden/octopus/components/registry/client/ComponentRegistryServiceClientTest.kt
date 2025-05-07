@@ -122,7 +122,7 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
 
     @Test
     fun testGetAllComponents() {
-        assertEquals(41, componentsRegistryClient.getAllComponents().components.size)
+        assertEquals(43, componentsRegistryClient.getAllComponents().components.size)
         assertEquals(
             3,
             componentsRegistryClient.getAllComponents("ssh://hg@mercurial/technical", null).components.size
@@ -136,8 +136,8 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
             ).components.size
         )
         assertEquals(4, componentsRegistryClient.getAllComponents(systems = listOf("CLASSIC")).components.size)
-        assertEquals(37, componentsRegistryClient.getAllComponents(systems = listOf("NONE")).components.size)
-        assertEquals(41, componentsRegistryClient.getAllComponents(systems = listOf("CLASSIC", "NONE")).components.size)
+        assertEquals(39, componentsRegistryClient.getAllComponents(systems = listOf("NONE")).components.size)
+        assertEquals(43, componentsRegistryClient.getAllComponents(systems = listOf("CLASSIC", "NONE")).components.size)
     }
 
     @Test
