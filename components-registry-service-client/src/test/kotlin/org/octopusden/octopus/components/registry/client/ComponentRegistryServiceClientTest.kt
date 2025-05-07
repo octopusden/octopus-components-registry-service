@@ -213,7 +213,6 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
                 Image("not-found", "0.1")
             )
         )
-        println(components)
         assertEquals(2, components.size)
         assert(components.any { it.image.name == "test-docker-1_1" && it.component == "TEST_COMPONENT_WITH_DOCKER_1_1" && it.version == "0.1" })
         assert(components.any { it.image.name == "test-docker-1_2" && it.component == "TEST_COMPONENT_WITH_DOCKER_1_2" && it.version == "0.1.1.2" })

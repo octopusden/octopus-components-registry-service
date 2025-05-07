@@ -903,7 +903,7 @@ TEST_COMPONENT4 {
     distribution {
         explicit = false
         external = true
-        docker = 'test-docker-1_2:jdk1.1'
+        docker = 'test-docker-1_2:jdk11'
     }
 }
 
