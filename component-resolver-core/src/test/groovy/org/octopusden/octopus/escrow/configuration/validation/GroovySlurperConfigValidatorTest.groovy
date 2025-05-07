@@ -36,7 +36,7 @@ class GroovySlurperConfigValidatorTest extends GroovyTestCase {
     void testDockerPattern() {
         assert DOCKER_PATTERN.matcher("org.octopusden/octopus/image:1.0").matches()
         assert DOCKER_PATTERN.matcher("org.octopusden/octopus/first-image:1.0,org.octopusden/octopus/second-image:1.0").matches()
-        assert !DOCKER_PATTERN.matcher("org.octopusden/octopus/image").matches()
+        assert DOCKER_PATTERN.matcher("org.octopusden/octopus/image").matches()
         assert !DOCKER_PATTERN.matcher("org.octopusden\\octopus/image:1.0").matches()
         assert !DOCKER_PATTERN.matcher("org.octopusden/octopus:image:1.0").matches()
         assert !DOCKER_PATTERN.matcher("org.octopusden/octopus/image:.0").matches()

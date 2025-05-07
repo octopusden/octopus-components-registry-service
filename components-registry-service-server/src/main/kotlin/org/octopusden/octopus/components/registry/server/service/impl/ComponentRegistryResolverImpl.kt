@@ -86,6 +86,11 @@ class ComponentRegistryResolverImpl(
         return EscrowConfigurationLoader.getEscrowModuleConfig(configuration, ComponentVersion.create(id, version))
     }
 
+    override fun getResolvedComponentDefinitionByImage(id: String, tagWithVersion: String): EscrowModuleConfig? {
+        // to implement
+        return null
+    }
+
     override fun getJiraComponentVersion(component: String, version: String) =
         getJiraComponentVersionToRangeByComponentAndVersion(component, version).first
 
@@ -207,8 +212,9 @@ class ComponentRegistryResolverImpl(
         }
     }
 
-    private fun findConfigurationByImage(imageName: String, version: String, compId: String): EscrowModuleConfig? {
-        val emc = getResolvedComponentDefinition(compId, version) ?: return null
+    private fun findConfigurationByImage(imageName: String, tagWithVersion: String, compId: String): EscrowModuleConfig? {
+
+        val emc = getResolvedComponentDefinitionByImage(compId, tagWithVersion) ?: return null
         val dockerString = emc.distribution?.docker() ?: return null
         return emc.takeIf { imageName in dockerStringToList(dockerString) }
     }

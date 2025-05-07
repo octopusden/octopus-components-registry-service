@@ -35,7 +35,7 @@ class GroovySlurperConfigValidator {
     public static final Pattern SECURITY_GROUPS_PATTERN = Pattern.compile("^($SECURITY_GROUPS_ENTRY_PATTERN)(,($SECURITY_GROUPS_ENTRY_PATTERN))*\$")
     private static final String DOCKER_IMAGE_PATH_PATTERN = "([a-z0-9]+([_.-][a-z0-9]+)*/)*[a-z0-9]+([_.-][a-z0-9]+)*"
     private static final String DOCKER_IMAGE_TAG_PATTERN = "\\w[\\w.-]{0,127}"
-    private static final String DOCKER_ENTRY_PATTERN = "$DOCKER_IMAGE_PATH_PATTERN:$DOCKER_IMAGE_TAG_PATTERN"
+    private static final String DOCKER_ENTRY_PATTERN = "$DOCKER_IMAGE_PATH_PATTERN(:$DOCKER_IMAGE_TAG_PATTERN)?"
     public static final Pattern DOCKER_PATTERN = Pattern.compile("^($DOCKER_ENTRY_PATTERN)(,($DOCKER_ENTRY_PATTERN))*\$")
 
     public static SUPPORTED_ATTRIBUTES = ['buildSystem', VCS_URL, REPOSITORY_TYPE, 'groupId', 'artifactId',
@@ -240,7 +240,10 @@ class GroovySlurperConfigValidator {
         validateValueByPattern(distributionSection, "GAV", GAV_PATTERN, expressionContext)
         validateValueByPattern(distributionSection, "DEB", DEB_PATTERN, expressionContext)
         validateValueByPattern(distributionSection, "RPM", RPM_PATTERN, expressionContext)
+
+        // to change in phase 2
         validateValueByPattern(distributionSection, "docker", DOCKER_PATTERN, expressionContext)
+        // to change in phase 2
         validateNoExpressionInImageName(distributionSection)
 
         if (distributionSection.containsKey(SECURITY_GROUPS)) {
