@@ -230,22 +230,30 @@ class ComponentRegistryResolverImpl(
     }
 
     private fun findConfigurationByImage(imageName: String, imageTag: String, compId: String): ComponentImage? {
-            val versionString = reconstructVerstionString(imageTag)
-            val tagSuffix = extractSuffix(versionString, imageTag)
-            val ecl = EscrowConfigurationLoader.getEscrowModuleConfig(configuration, ComponentVersion.create(compId, versionString))
+        val versionString = reconstructVerstionString(imageTag)
+        val tagSuffix = extractSuffix(versionString, imageTag)
+        val ecl = EscrowConfigurationLoader.getEscrowModuleConfig(
+            configuration,
+            ComponentVersion.create(compId, versionString)
+        )
 
 
-            if (ecl?.distribution?.docker() != null) {
-                val dockerString = ecl.distribution?.docker() ?: return null
-                // add check for tag suffix if any vs dockerString
-                if ( imageName in dockerStringToList(dockerString) ) {
-                    val declToCheck = imageName + (tagSuffix?.let { ":$it" } ?: "")
-                    if (dockerString.split(',').contains(declToCheck)) {
-                        return ComponentImage(compId, versionString, Image(imageName, imageTag))
-                    }
+        if (ecl?.distribution?.docker() != null) {
+            var dockerString = ecl.distribution?.docker() ?: return null
+            if (imageName in dockerStringToList(dockerString)) {
+                // remove this later
+                dockerString = dockerString
+                val declToCheck = imageName + (tagSuffix?.let { ":$it" } ?: "")
+                if (dockerString.split(',')
+                        // change this later
+                        .map { it.removeSuffix("\${version}").removeSuffix(":") }
+                        .contains(declToCheck)) {
+                    return ComponentImage(compId, versionString, Image(imageName, imageTag))
                 }
+
             }
-            return null
+        }
+        return null
     }
 
     private fun dockerStringToList(dockerString: String): List<String> {
