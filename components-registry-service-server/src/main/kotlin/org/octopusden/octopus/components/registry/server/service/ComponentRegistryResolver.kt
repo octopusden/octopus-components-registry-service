@@ -24,8 +24,6 @@ interface ComponentRegistryResolver {
 
     fun getResolvedComponentDefinition(id: String, version: String): EscrowModuleConfig?
 
-    fun getResolvedComponentDefinitionByImage(id: String, tagWithVersion: String): EscrowModuleConfig?
-
     fun getJiraComponentVersion(component: String, version: String): JiraComponentVersion
 
     fun getJiraComponentVersions(component: String, versions: List<String>): Map<String, JiraComponentVersion>

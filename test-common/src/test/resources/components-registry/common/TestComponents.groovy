@@ -887,6 +887,29 @@ TEST_COMPONENT4 {
     }
 }
 
+"TEST_COMPONENT_WITH_DOCKER_1_1" {
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.test.docker"
+    distribution {
+        explicit = false
+        external = true
+        docker = 'test-docker-1_1'
+    }
+}
+
+"TEST_COMPONENT_WITH_DOCKER_1_2" {
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.test.docker"
+    distribution {
+        explicit = false
+        external = true
+        docker = 'test-docker-1_2:jdk1.1'
+    }
+}
+
+
+
+
 "TEST_COMPONENT_WITH_DOCKER_2" {
     componentOwner = "user9"
     groupId = "org.octopusden.octopus.test.docker"

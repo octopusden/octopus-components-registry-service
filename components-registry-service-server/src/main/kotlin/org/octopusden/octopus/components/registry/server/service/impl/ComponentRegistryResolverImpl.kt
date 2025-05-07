@@ -86,20 +86,7 @@ class ComponentRegistryResolverImpl(
         return EscrowConfigurationLoader.getEscrowModuleConfig(configuration, ComponentVersion.create(id, version))
     }
 
-    override fun getResolvedComponentDefinitionByImage(id: String, imageTag: String): EscrowModuleConfig? {
-        val versionString = reconstructVestionString(imageTag)
-        val tagSuffix = extractSuffix(versionString, imageTag)
-        val ecl = EscrowConfigurationLoader.getEscrowModuleConfig(configuration, ComponentVersion.create(id, versionString))
-
-        if (ecl?.distribution?.docker() != null) {
-            // add check for tag suffix if any
-            return ecl
-        }
-
-        return null
-    }
-
-    private fun reconstructVestionString(imageTag : String): String {
+    private fun reconstructVerstionString(imageTag : String): String {
         val numericVersionFactory = NumericVersionFactory(versionNames)
         val version = numericVersionFactory.create(imageTag)
         val originalDelimeters = imageTag.filter { it == '.' || it == '-' || it == '_' }
@@ -116,6 +103,7 @@ class ComponentRegistryResolverImpl(
     private fun extractSuffix(versionString: String, tagWithVersion: String): String? {
         return if (tagWithVersion.startsWith(versionString)) {
             val suffix = tagWithVersion.removePrefix(versionString)
+                .removePrefix(".").removePrefix("-").removePrefix("_")
             suffix.ifEmpty { null }
         } else {
             null
@@ -233,9 +221,7 @@ class ComponentRegistryResolverImpl(
             val imageNames = images.map { it.name }.toSet()
             imageToComponentMap.filterKeys(imageNames::contains).mapNotNull { (imgName, component) ->
                 images.find { it.name == imgName }?.let { requiredImage ->
-                    findConfigurationByImage(imgName, requiredImage.tag, component)?.let {
-                        ComponentImage(component, requiredImage.tag, Image(imgName, requiredImage.tag))
-                    }
+                    findConfigurationByImage(imgName, requiredImage.tag, component)
                 }
             }.toSet()
         } finally {
@@ -243,11 +229,22 @@ class ComponentRegistryResolverImpl(
         }
     }
 
-    private fun findConfigurationByImage(imageName: String, tagWithVersion: String, compId: String): EscrowModuleConfig? {
+    private fun findConfigurationByImage(imageName: String, imageTag: String, compId: String): ComponentImage? {
+            val versionString = reconstructVerstionString(imageTag)
+            val tagSuffix = extractSuffix(versionString, imageTag)
+            val ecl = EscrowConfigurationLoader.getEscrowModuleConfig(configuration, ComponentVersion.create(compId, versionString))
 
-        val emc = getResolvedComponentDefinitionByImage(compId, tagWithVersion) ?: return null
-        val dockerString = emc.distribution?.docker() ?: return null
-        return emc.takeIf { imageName in dockerStringToList(dockerString) }
+            println("tag $imageTag was reconstructed to version $versionString and suffix $tagSuffix")
+
+            if (ecl?.distribution?.docker() != null) {
+                val dockerString = ecl.distribution?.docker() ?: return null
+                // add check for tag suffix if any vs dockerString
+
+                if ( imageName in dockerStringToList(dockerString) ) {
+                    return ComponentImage(compId, versionString, Image(imageName, imageTag))
+                }
+            }
+            return null
     }
 
     private fun dockerStringToList(dockerString: String): List<String> {
