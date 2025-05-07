@@ -86,9 +86,40 @@ class ComponentRegistryResolverImpl(
         return EscrowConfigurationLoader.getEscrowModuleConfig(configuration, ComponentVersion.create(id, version))
     }
 
-    override fun getResolvedComponentDefinitionByImage(id: String, tagWithVersion: String): EscrowModuleConfig? {
-        // to implement
+    override fun getResolvedComponentDefinitionByImage(id: String, imageTag: String): EscrowModuleConfig? {
+        val versionString = reconstructVestionString(imageTag)
+        val tagSuffix = extractSuffix(versionString, imageTag)
+        val ecl = EscrowConfigurationLoader.getEscrowModuleConfig(configuration, ComponentVersion.create(id, versionString))
+
+        if (ecl?.distribution?.docker() != null) {
+            // add check for tag suffix if any
+            return ecl
+        }
+
         return null
+    }
+
+    private fun reconstructVestionString(imageTag : String): String {
+        val numericVersionFactory = NumericVersionFactory(versionNames)
+        val version = numericVersionFactory.create(imageTag)
+        val originalDelimeters = imageTag.filter { it == '.' || it == '-' || it == '_' }
+        var versionString = ""
+        for (i in 0 until version.itemsCount) {
+            versionString += version.getItem(i).toString()
+            if (i < (version.itemsCount - 1)) {
+                versionString += (originalDelimeters.getOrNull(i) ?: originalDelimeters.firstOrNull() ?: ".")
+            }
+        }
+        return versionString
+    }
+
+    private fun extractSuffix(versionString: String, tagWithVersion: String): String? {
+        return if (tagWithVersion.startsWith(versionString)) {
+            val suffix = tagWithVersion.removePrefix(versionString)
+            suffix.ifEmpty { null }
+        } else {
+            null
+        }
     }
 
     override fun getJiraComponentVersion(component: String, version: String) =
