@@ -226,7 +226,7 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
         var components = componentsRegistryClient.findComponentsByDockerImages(
             setOf(
                 Image("test-docker-first", "1.0.5"),
-                Image("test-docker-second", "1.0.5")
+                Image("test-docker-second", "1.0.5-amd64"),
             )
         )
         assertEquals(1, components.size)
@@ -246,8 +246,8 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
         components = componentsRegistryClient.findComponentsByDockerImages(
             setOf(
                 Image("test-docker-first", "0.0.5"),
-                Image("test-docker-second", "1.0.5"),
-                Image("test-docker-third", "2.0.5")
+                Image("test-docker-second", "1.0.5-amd64"),
+                Image("test-docker-third", "2.0.5-arm64")
             )
         )
         assertEquals(3, components.size)

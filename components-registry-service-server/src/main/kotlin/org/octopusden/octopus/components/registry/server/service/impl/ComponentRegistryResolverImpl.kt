@@ -234,14 +234,15 @@ class ComponentRegistryResolverImpl(
             val tagSuffix = extractSuffix(versionString, imageTag)
             val ecl = EscrowConfigurationLoader.getEscrowModuleConfig(configuration, ComponentVersion.create(compId, versionString))
 
-            println("tag $imageTag was reconstructed to version $versionString and suffix $tagSuffix")
 
             if (ecl?.distribution?.docker() != null) {
                 val dockerString = ecl.distribution?.docker() ?: return null
                 // add check for tag suffix if any vs dockerString
-
                 if ( imageName in dockerStringToList(dockerString) ) {
-                    return ComponentImage(compId, versionString, Image(imageName, imageTag))
+                    val declToCheck = imageName + (tagSuffix?.let { ":$it" } ?: "")
+                    if (dockerString.split(',').contains(declToCheck)) {
+                        return ComponentImage(compId, versionString, Image(imageName, imageTag))
+                    }
                 }
             }
             return null

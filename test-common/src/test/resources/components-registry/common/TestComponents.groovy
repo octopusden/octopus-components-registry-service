@@ -921,21 +921,18 @@ TEST_COMPONENT4 {
 
     "(,1.0.0]" {
         distribution {
-            docker = 'test-docker-first:${version}'
+            docker = 'test-docker-first'
         }
     }
 
     "(1.0.0, 2.0.0)" {
         distribution {
-            docker = 'test-docker-second:${version}'
+            docker = 'test-docker-second:amd64'
         }
     }
     "(2.0.0,)" {
         distribution {
-            docker = 'test-docker-third:${version}'
+            docker = 'test-docker-third:arm64'
         }
     }
-
-
-
 }
