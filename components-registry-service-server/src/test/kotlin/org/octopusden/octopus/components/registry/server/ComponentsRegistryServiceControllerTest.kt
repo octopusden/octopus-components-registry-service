@@ -334,7 +334,7 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
         expectedComponent.releasesInDefaultBranch = false
         expectedComponent.solution = true
 
-        Assertions.assertEquals(41, components.components.size)
+        Assertions.assertEquals(43, components.components.size)
         Assertions.assertTrue(expectedComponent in components.components) {
             components.components.toString()
         }
