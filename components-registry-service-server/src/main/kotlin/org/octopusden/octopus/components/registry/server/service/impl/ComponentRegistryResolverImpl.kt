@@ -44,7 +44,6 @@ import javax.annotation.Resource
 import kotlin.io.path.exists
 import kotlin.io.path.inputStream
 import kotlin.io.path.isRegularFile
-import kotlin.system.measureTimeMillis
 
 
 @Service
@@ -59,7 +58,6 @@ class ComponentRegistryResolverImpl(
     private val versionRangeFactory: VersionRangeFactory,
     private val meterRegistry: MeterRegistry,
     @Resource(name = "dependencyMapping") private val dependencyMapping: MutableMap<String, String>,
-    @Volatile private var imageToComponentMap: Map<String, String> = emptyMap(),
 ) : ComponentRegistryResolver {
 
     private lateinit var configuration: EscrowConfiguration
@@ -75,7 +73,6 @@ class ComponentRegistryResolverImpl(
         moduleByArtifactResolver.setEscrowConfiguration(configuration)
         loadDependencyMapping()
         updateMetrics()
-        loadImageToComponentMap()
     }
 
     override fun getComponents() = configuration.escrowModules.values
@@ -217,7 +214,7 @@ class ComponentRegistryResolverImpl(
 
     override fun findComponentsByDockerImages(images: Set<Image>): Set<ComponentImage> {
         val imageNames = images.map { it.name }.toSet()
-        return imageToComponentMap.filterKeys(imageNames::contains).mapNotNull { (imgName, component) ->
+        return buildImageToComponentMap().filterKeys(imageNames::contains).mapNotNull { (imgName, component) ->
             images.find { it.name == imgName }?.let { requiredImage ->
                 findConfigurationByImage(imgName, requiredImage.tag, component)
             }
@@ -298,15 +295,6 @@ class ComponentRegistryResolverImpl(
         BuildSystem.values().forEach { buildSystem ->
             buildSystemMetrics[buildSystem] = componentCounts[buildSystem] ?: 0
         }
-    }
-
-    private fun loadImageToComponentMap() {
-        LOG.info("Update dockerImageMapping")
-        val timeTaken = measureTimeMillis {
-            imageToComponentMap = buildImageToComponentMap()
-        }
-        LOG.info("Time taken to build imageToComponentMap: {} ms", timeTaken)
-        LOG.info("Read {} docker images", imageToComponentMap.size)
     }
 
     private val buildSystemMetrics = ConcurrentHashMap<BuildSystem, Int>()
