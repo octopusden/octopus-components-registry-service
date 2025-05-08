@@ -58,8 +58,7 @@ class ComponentRegistryResolverImpl(
     private val versionRangeFactory: VersionRangeFactory,
     private val meterRegistry: MeterRegistry,
     @Resource(name = "dependencyMapping") private val dependencyMapping: MutableMap<String, String>,
-    private var imageToComponentMap: Map<String, String>,
-    private val dockerCacheLock: ReentrantReadWriteLock = ReentrantReadWriteLock()
+    @Volatile private var imageToComponentMap: Map<String, String> = emptyMap(),
 ) : ComponentRegistryResolver {
 
     private lateinit var configuration: EscrowConfiguration
@@ -216,17 +215,12 @@ class ComponentRegistryResolverImpl(
     }
 
     override fun findComponentsByDockerImages(images: Set<Image>): Set<ComponentImage> {
-        dockerCacheLock.readLock().lock()
-        return try {
-            val imageNames = images.map { it.name }.toSet()
-            imageToComponentMap.filterKeys(imageNames::contains).mapNotNull { (imgName, component) ->
-                images.find { it.name == imgName }?.let { requiredImage ->
-                    findConfigurationByImage(imgName, requiredImage.tag, component)
-                }
-            }.toSet()
-        } finally {
-            dockerCacheLock.readLock().unlock()
-        }
+        val imageNames = images.map { it.name }.toSet()
+        return imageToComponentMap.filterKeys(imageNames::contains).mapNotNull { (imgName, component) ->
+            images.find { it.name == imgName }?.let { requiredImage ->
+                findConfigurationByImage(imgName, requiredImage.tag, component)
+            }
+        }.toSet()
     }
 
     private fun findConfigurationByImage(imageName: String, imageTag: String, compId: String): ComponentImage? {
@@ -307,12 +301,7 @@ class ComponentRegistryResolverImpl(
 
     private fun loadImageToComponentMap() {
         LOG.info("Update dockerImageMapping")
-        dockerCacheLock.writeLock().lock()
-        try {
-            imageToComponentMap = buildImageToComponentMap()
-        } finally {
-            dockerCacheLock.writeLock().unlock()
-        }
+        imageToComponentMap = buildImageToComponentMap()
     }
 
     private val buildSystemMetrics = ConcurrentHashMap<BuildSystem, Int>()
