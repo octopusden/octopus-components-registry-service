@@ -44,6 +44,8 @@ import javax.annotation.Resource
 import kotlin.io.path.exists
 import kotlin.io.path.inputStream
 import kotlin.io.path.isRegularFile
+import kotlin.system.measureTimeMillis
+
 
 @Service
 @EnableConfigurationProperties(ComponentsRegistryProperties::class)
@@ -300,7 +302,10 @@ class ComponentRegistryResolverImpl(
 
     private fun loadImageToComponentMap() {
         LOG.info("Update dockerImageMapping")
-        imageToComponentMap = buildImageToComponentMap()
+        val timeTaken = measureTimeMillis {
+            imageToComponentMap = buildImageToComponentMap()
+        }
+        LOG.info("Time taken to build imageToComponentMap: {} ms", timeTaken)
     }
 
     private val buildSystemMetrics = ConcurrentHashMap<BuildSystem, Int>()
