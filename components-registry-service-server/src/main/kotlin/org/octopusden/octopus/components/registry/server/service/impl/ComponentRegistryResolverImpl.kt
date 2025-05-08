@@ -306,6 +306,7 @@ class ComponentRegistryResolverImpl(
             imageToComponentMap = buildImageToComponentMap()
         }
         LOG.info("Time taken to build imageToComponentMap: {} ms", timeTaken)
+        LOG.info("Read {} docker images", imageToComponentMap.size)
     }
 
     private val buildSystemMetrics = ConcurrentHashMap<BuildSystem, Int>()
