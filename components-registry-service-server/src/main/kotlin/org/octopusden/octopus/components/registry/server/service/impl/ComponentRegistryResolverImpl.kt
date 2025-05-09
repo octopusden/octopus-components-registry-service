@@ -44,6 +44,7 @@ import javax.annotation.Resource
 import kotlin.io.path.exists
 import kotlin.io.path.inputStream
 import kotlin.io.path.isRegularFile
+import kotlin.system.measureTimeMillis
 
 
 @Service
@@ -83,15 +84,15 @@ class ComponentRegistryResolverImpl(
         return EscrowConfigurationLoader.getEscrowModuleConfig(configuration, ComponentVersion.create(id, version))
     }
 
-    private fun reconstructVerstionString(imageTag : String): String {
+    private fun reconstructVersionString(imageTag : String): String {
         val numericVersionFactory = NumericVersionFactory(versionNames)
         val version = numericVersionFactory.create(imageTag)
-        val originalDelimeters = imageTag.filter { it == '.' || it == '-' || it == '_' }
+        val originalDelimiters = imageTag.filter { it == '.' || it == '-' || it == '_' }
         var versionString = ""
         for (i in 0 until version.itemsCount) {
             versionString += version.getItem(i).toString()
             if (i < (version.itemsCount - 1)) {
-                versionString += (originalDelimeters.getOrNull(i) ?: originalDelimeters.firstOrNull() ?: ".")
+                versionString += (originalDelimiters.getOrNull(i) ?: originalDelimiters.firstOrNull() ?: ".")
             }
         }
         return versionString
@@ -222,7 +223,7 @@ class ComponentRegistryResolverImpl(
     }
 
     private fun findConfigurationByImage(imageName: String, imageTag: String, compId: String): ComponentImage? {
-        val versionString = reconstructVerstionString(imageTag)
+        val versionString = reconstructVersionString(imageTag)
         val tagSuffix = extractSuffix(versionString, imageTag)
         val ecl = EscrowConfigurationLoader.getEscrowModuleConfig(
             configuration,
@@ -234,7 +235,6 @@ class ComponentRegistryResolverImpl(
             var dockerString = ecl.distribution?.docker() ?: return null
             if (imageName in dockerStringToList(dockerString)) {
                 // remove this later
-                dockerString = dockerString
                 val declToCheck = imageName + (tagSuffix?.let { ":$it" } ?: "")
                 if (dockerString.split(',')
                         // change this later
@@ -253,17 +253,21 @@ class ComponentRegistryResolverImpl(
     }
 
     private fun buildImageToComponentMap(): Map<String, String> {
-        val component2DockerMap = mutableMapOf<String, String>()
-        getComponents().forEach { comp ->
-            comp.moduleConfigurations.forEach { moduleConfig ->
-                moduleConfig.distribution?.docker()?.let { dockersString ->
-                    dockerStringToList(dockersString).forEach { dockerImgName ->
-                        component2DockerMap[dockerImgName] = comp.moduleName
+        val dockerImageName2ComponentMap = mutableMapOf<String, String>()
+        val timeTaken = measureTimeMillis {
+            getComponents().forEach { comp ->
+                comp.moduleConfigurations.forEach { moduleConfig ->
+                    moduleConfig.distribution?.docker()?.let { dockersString ->
+                        dockerStringToList(dockersString).forEach { dockerImgName ->
+                            dockerImageName2ComponentMap[dockerImgName] = comp.moduleName
+                        }
                     }
                 }
             }
         }
-        return component2DockerMap
+        LOG.info("Time taken to buildImageToComponentMap {} ms, read {} images", timeTaken, dockerImageName2ComponentMap.size)
+
+        return dockerImageName2ComponentMap
     }
 
     private fun EscrowModule.getBuildSystem(): BuildSystem {
