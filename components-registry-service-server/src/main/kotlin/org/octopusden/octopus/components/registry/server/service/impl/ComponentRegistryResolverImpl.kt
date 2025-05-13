@@ -85,7 +85,7 @@ class ComponentRegistryResolverImpl(
         return EscrowConfigurationLoader.getEscrowModuleConfig(configuration, ComponentVersion.create(id, version))
     }
 
-    private fun reconstructVersionString(imageTag : String): String {
+    private fun reconstructVersionString(imageTag : String, compId: String): String {
         val numericVersionFactory = NumericVersionFactory(versionNames)
         val version = numericVersionFactory.create(imageTag)
         val originalDelimiters = imageTag.filter { it == '.' || it == '-' || it == '_' }
@@ -96,6 +96,9 @@ class ComponentRegistryResolverImpl(
                 versionString += (originalDelimiters.getOrNull(i) ?: originalDelimiters.firstOrNull() ?: ".")
             }
         }
+
+        // normalize version for particular component
+
         return versionString
     }
 
@@ -224,7 +227,7 @@ class ComponentRegistryResolverImpl(
     }
 
     private fun findConfigurationByImage(imageName: String, imageTag: String, compId: String): ComponentImage? {
-        val versionString = reconstructVersionString(imageTag)
+        val versionString = reconstructVersionString(imageTag, compId)
         val tagSuffix = extractSuffix(versionString, imageTag)
         val ecl = EscrowConfigurationLoader.getEscrowModuleConfig(
             configuration,
