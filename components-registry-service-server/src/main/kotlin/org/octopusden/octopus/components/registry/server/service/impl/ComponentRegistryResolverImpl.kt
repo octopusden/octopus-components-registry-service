@@ -45,6 +45,7 @@ import kotlin.io.path.exists
 import kotlin.io.path.inputStream
 import kotlin.io.path.isRegularFile
 import kotlin.system.measureTimeMillis
+import kotlin.text.replace
 
 
 @Service
@@ -238,11 +239,12 @@ class ComponentRegistryResolverImpl(
                 val declToCheck = imageName + (tagSuffix?.let { ":$it" } ?: "")
                 if (dockerString.split(',')
                         // change this later
-                        .map { it.removeSuffix("\${version}").removeSuffix(":") }
+                        .map {
+                            it.replace("\${version}-", "").replace("\${version}", "").removeSuffix(":")
+                        }
                         .contains(declToCheck)) {
                     return ComponentImage(compId, versionString, Image(imageName, imageTag))
                 }
-
             }
         }
         return null

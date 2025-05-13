@@ -907,9 +907,6 @@ TEST_COMPONENT4 {
     }
 }
 
-
-
-
 "TEST_COMPONENT_WITH_DOCKER_2" {
     componentOwner = "user9"
     groupId = "org.octopusden.octopus.test.docker"
@@ -936,3 +933,41 @@ TEST_COMPONENT4 {
         }
     }
 }
+
+"TEST_COMPONENT_WITH_DOCKER_3" {
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.test.docker"
+    distribution {
+        explicit = false
+        external = true
+        docker = 'test-docker-3:${version}-amd64'
+    }
+}
+
+"TEST_COMPONENT_WITH_DOCKER_4" {
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.test.docker"
+
+    distribution {
+        explicit = false
+        external = true
+    }
+
+    "(,1.0.0]" {
+        distribution {
+            docker = 'test-docker-4:${version}'
+        }
+    }
+
+    "(1.0.0, 2.0.0)" {
+        distribution {
+            docker = 'test-docker-4:${version}-amd64'
+        }
+    }
+    "(2.0.0,)" {
+        distribution {
+            docker = 'test-docker-4:${version}-arm64'
+        }
+    }
+}
+
