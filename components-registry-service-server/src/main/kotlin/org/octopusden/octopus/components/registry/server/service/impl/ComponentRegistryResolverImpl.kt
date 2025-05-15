@@ -237,10 +237,9 @@ class ComponentRegistryResolverImpl(
         if (ecl?.distribution?.docker() != null) {
             val dockerString = ecl.distribution?.docker() ?: return null
             if (imageName in dockerStringToList(dockerString)) {
-                // remove this later
                 val declToCheck = imageName + (tagSuffix?.let { ":$it" } ?: "")
                 if (dockerString.split(',')
-                        // change this later
+                        // -- DOCKER -- to be removed
                         .map {
                             it.replace("\${version}-", "").replace("\${version}", "").removeSuffix(":")
                         }
