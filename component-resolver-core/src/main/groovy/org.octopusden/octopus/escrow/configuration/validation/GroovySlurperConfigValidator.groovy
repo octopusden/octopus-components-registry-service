@@ -257,7 +257,7 @@ class GroovySlurperConfigValidator {
         }
     }
 
-    static void validateValueDocker(Map distributionSection, EscrowExpressionContext expressionContext) {
+    private void validateValueDocker(Map distributionSection, EscrowExpressionContext expressionContext) {
         String key = "docker"
         if (distributionSection.containsKey(key)) {
             def value = distributionSection.get(key) as String
