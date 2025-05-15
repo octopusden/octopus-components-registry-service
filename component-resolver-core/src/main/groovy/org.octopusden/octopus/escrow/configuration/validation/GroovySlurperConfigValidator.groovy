@@ -248,22 +248,12 @@ class GroovySlurperConfigValidator {
         validateValueByPattern(distributionSection, "DEB", DEB_PATTERN, expressionContext)
         validateValueByPattern(distributionSection, "RPM", RPM_PATTERN, expressionContext)
 
-
+        // -- DOCKER -- to be changed
         validateValueByPattern(distributionSection, "docker", DOCKER_PATTERN_OLD, expressionContext)
         validateNoExpressionInImageName(distributionSection)
 
         if (distributionSection.containsKey(SECURITY_GROUPS)) {
             validateSecurityGroupsParameters(distributionSection, SECURITY_GROUPS, moduleName)
-        }
-    }
-
-    private void validateValueDocker(Map distributionSection, EscrowExpressionContext expressionContext) {
-        String key = "docker"
-        if (distributionSection.containsKey(key)) {
-            def value = distributionSection.get(key) as String
-
-            // -- DOCKER -- to be changed
-            validateValueByPattern(distributionSection, "docker", DOCKER_PATTERN_OLD, expressionContext)
         }
     }
 

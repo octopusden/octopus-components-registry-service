@@ -227,6 +227,11 @@ class ComponentRegistryResolverImpl(
     }
 
     private fun findConfigurationByImage(imageName: String, imageTag: String, compId: String): ComponentImage? {
+
+        val a2 = getJiraComponentVersionToRangeByComponentAndVersion(compId, imageTag)
+        print("*** *** *** ***")
+        print(a2)
+
         val versionString = reconstructVersionString(imageTag)
         val tagSuffix = extractSuffix(versionString, imageTag)
         val ecl = EscrowConfigurationLoader.getEscrowModuleConfig(
