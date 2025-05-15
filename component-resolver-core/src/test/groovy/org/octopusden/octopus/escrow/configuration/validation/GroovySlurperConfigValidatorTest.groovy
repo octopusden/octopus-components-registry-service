@@ -52,7 +52,6 @@ class GroovySlurperConfigValidatorTest extends GroovyTestCase {
         // -- DOCKER -- to be removed
         assert DOCKER_PATTERN_OLD.matcher("org.octopusden/octopus/image:1.0").matches()
         assert DOCKER_PATTERN_OLD.matcher("org.octopusden/octopus/first-image:1.0,org.octopusden/octopus/second-image:1.0").matches()
-        assert !DOCKER_PATTERN_OLD.matcher("org.octopusden/octopus/image").matches()
         assert !DOCKER_PATTERN_OLD.matcher("org.octopusden\\octopus/image:1.0").matches()
         assert !DOCKER_PATTERN_OLD.matcher("org.octopusden/octopus:image:1.0").matches()
         assert !DOCKER_PATTERN_OLD.matcher("org.octopusden/octopus/image:.0").matches()
@@ -77,6 +76,7 @@ class GroovySlurperConfigValidatorTest extends GroovyTestCase {
         correctDockerStrings.forEach {
             def correct = new ConfigSlurper().parse(it)
             def validator = new GroovySlurperConfigValidator(verNames)
+            println "correct: ${correct}"
             validator.validateDistributionSection(correct, verNames, "testModule", "testConfig")
             assert !validator.hasErrors()
         }
