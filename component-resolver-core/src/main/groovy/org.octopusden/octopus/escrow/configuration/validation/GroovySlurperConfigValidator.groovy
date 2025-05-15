@@ -34,9 +34,16 @@ class GroovySlurperConfigValidator {
     private static final String SECURITY_GROUPS_ENTRY_PATTERN = "[\\w-#\\s]+"
     public static final Pattern SECURITY_GROUPS_PATTERN = Pattern.compile("^($SECURITY_GROUPS_ENTRY_PATTERN)(,($SECURITY_GROUPS_ENTRY_PATTERN))*\$")
     private static final String DOCKER_IMAGE_PATH_PATTERN = "([a-z0-9]+([_.-][a-z0-9]+)*/)*[a-z0-9]+([_.-][a-z0-9]+)*"
-    private static final String DOCKER_IMAGE_TAG_PATTERN = "\\w[\\w.-]{0,127}"
-    private static final String DOCKER_ENTRY_PATTERN = "$DOCKER_IMAGE_PATH_PATTERN(:$DOCKER_IMAGE_TAG_PATTERN)?"
-    public static final Pattern DOCKER_PATTERN = Pattern.compile("^($DOCKER_ENTRY_PATTERN)(,($DOCKER_ENTRY_PATTERN))*\$")
+
+    private static final String DOCKER_IMAGE_TAG_PATTERN_NEW = "[a-zA-Z0-9]{1,127}"
+    private static final String DOCKER_ENTRY_PATTERN_NEW = "$DOCKER_IMAGE_PATH_PATTERN(:$DOCKER_IMAGE_TAG_PATTERN_NEW)?"
+    public static final Pattern DOCKER_PATTERN_NEW = Pattern.compile("^($DOCKER_ENTRY_PATTERN_NEW)(,($DOCKER_ENTRY_PATTERN_NEW))*\$")
+
+    // -- DOCKER -- to be removed
+    private static final String DOCKER_IMAGE_TAG_PATTERN_OLD = "\\w[\\w.-]{0,127}"
+    private static final String DOCKER_ENTRY_PATTERN_OLD = "$DOCKER_IMAGE_PATH_PATTERN:$DOCKER_IMAGE_TAG_PATTERN_OLD"
+    public static final Pattern DOCKER_PATTERN_OLD = Pattern.compile("^($DOCKER_ENTRY_PATTERN_OLD)(,($DOCKER_ENTRY_PATTERN_OLD))*\$")
+    // -- DOCKER -- to be removed
 
     public static SUPPORTED_ATTRIBUTES = ['buildSystem', VCS_URL, REPOSITORY_TYPE, 'groupId', 'artifactId',
                                           TAG, 'versionRange', 'version', 'module',
@@ -241,13 +248,22 @@ class GroovySlurperConfigValidator {
         validateValueByPattern(distributionSection, "DEB", DEB_PATTERN, expressionContext)
         validateValueByPattern(distributionSection, "RPM", RPM_PATTERN, expressionContext)
 
-        // to change in phase 2
-        validateValueByPattern(distributionSection, "docker", DOCKER_PATTERN, expressionContext)
-        // to change in phase 2
+        validateValueDocker(distributionSection, expressionContext)
+
         validateNoExpressionInImageName(distributionSection)
 
         if (distributionSection.containsKey(SECURITY_GROUPS)) {
             validateSecurityGroupsParameters(distributionSection, SECURITY_GROUPS, moduleName)
+        }
+    }
+
+    static void validateValueDocker(Map distributionSection, EscrowExpressionContext expressionContext) {
+        String key = "docker"
+        if (distributionSection.containsKey(key)) {
+            def value = distributionSection.get(key) as String
+            def oldStyleMode = value.contains('$')
+            // -- DOCKER -- to be changed
+            validateValueByPattern(distributionSection, "docker", oldStyleMode ? DOCKER_PATTERN_OLD : DOCKER_PATTERN_NEW, expressionContext)
         }
     }
 

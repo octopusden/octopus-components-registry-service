@@ -85,7 +85,7 @@ class ComponentRegistryResolverImpl(
         return EscrowConfigurationLoader.getEscrowModuleConfig(configuration, ComponentVersion.create(id, version))
     }
 
-    private fun reconstructVersionString(imageTag : String, compId: String): String {
+    private fun reconstructVersionString(imageTag : String): String {
         val numericVersionFactory = NumericVersionFactory(versionNames)
         val version = numericVersionFactory.create(imageTag)
         val originalDelimiters = imageTag.filter { it == '.' || it == '-' || it == '_' }
@@ -227,16 +227,15 @@ class ComponentRegistryResolverImpl(
     }
 
     private fun findConfigurationByImage(imageName: String, imageTag: String, compId: String): ComponentImage? {
-        val versionString = reconstructVersionString(imageTag, compId)
+        val versionString = reconstructVersionString(imageTag)
         val tagSuffix = extractSuffix(versionString, imageTag)
         val ecl = EscrowConfigurationLoader.getEscrowModuleConfig(
             configuration,
             ComponentVersion.create(compId, versionString)
         )
 
-
         if (ecl?.distribution?.docker() != null) {
-            var dockerString = ecl.distribution?.docker() ?: return null
+            val dockerString = ecl.distribution?.docker() ?: return null
             if (imageName in dockerStringToList(dockerString)) {
                 // remove this later
                 val declToCheck = imageName + (tagSuffix?.let { ":$it" } ?: "")
@@ -276,7 +275,7 @@ class ComponentRegistryResolverImpl(
     }
 
     private fun EscrowModule.getBuildSystem(): BuildSystem {
-        return moduleConfigurations.firstOrNull()?.let { it.buildSystem.toDTO() }
+        return moduleConfigurations.firstOrNull()?.buildSystem?.toDTO()
             ?: throw IllegalStateException("No module configurations available")
     }
 
