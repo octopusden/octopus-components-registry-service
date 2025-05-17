@@ -35,7 +35,7 @@ class GroovySlurperConfigValidator {
     public static final Pattern SECURITY_GROUPS_PATTERN = Pattern.compile("^($SECURITY_GROUPS_ENTRY_PATTERN)(,($SECURITY_GROUPS_ENTRY_PATTERN))*\$")
     private static final String DOCKER_IMAGE_PATH_PATTERN = "([a-z0-9]+([_.-][a-z0-9]+)*/)*[a-z0-9]+([_.-][a-z0-9]+)*"
 
-    private static final String DOCKER_IMAGE_TAG_PATTERN_NEW = "[a-zA-Z0-9]+"
+    public static final String DOCKER_IMAGE_TAG_PATTERN_NEW = "[a-zA-Z][a-zA-Z0-9]*"
     private static final String DOCKER_ENTRY_PATTERN_NEW = "$DOCKER_IMAGE_PATH_PATTERN(:$DOCKER_IMAGE_TAG_PATTERN_NEW)?"
     public static final Pattern DOCKER_PATTERN_NEW = Pattern.compile("^($DOCKER_ENTRY_PATTERN_NEW)(,($DOCKER_ENTRY_PATTERN_NEW))*\$")
 
