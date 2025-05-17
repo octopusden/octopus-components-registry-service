@@ -26,6 +26,8 @@ abstract class BaseComponentController<T : Component> {
     protected abstract val createComponentFunc: (escrowModule: EscrowModule) -> T
 
     @GetMapping
+    // todo - consider removing the whole endpoint or just version specific fields, like docker,
+    //  because version is not provided in this context
     fun getAllComponents(
         @RequestParam("vcs-path", required = false) vcsPath: String?,
         @RequestParam("build-system", required = false) buildSystem: BuildSystem?,
@@ -70,6 +72,8 @@ abstract class BaseComponentController<T : Component> {
     }
 
     @GetMapping("{component}")
+    // todo - consider removing the whole endpoint or just version specific fields, like docker,
+    //  because version is not provided in this context
     fun getComponentById(@PathVariable("component") component: String): T {
         val escrowModule = componentRegistryResolver.getComponentById(component)
             ?: throw NotFoundException("Component id $component is not found")
@@ -77,10 +81,13 @@ abstract class BaseComponentController<T : Component> {
     }
 
     @GetMapping("{component}/distribution")
+    // todo - consider removing the whole endpoint or just version specific fields, like docker,
+    //  because version is not provided in this context
     fun getComponentDistribution(@PathVariable("component") component: String): DistributionDTO =
         getDistribution(component)
 
     @GetMapping("{component}/versions/{version}/distribution")
+    // todo - recalc docker with component
     fun getComponentVersionDistribution(
         @PathVariable("component") component: String,
         @PathVariable("version") version: String

@@ -24,6 +24,9 @@ class ComponentControllerV3(
      * Get all components.
      */
     @GetMapping(produces = [MediaType.APPLICATION_JSON_VALUE])
+    // todo - consider removing the whole endpoint or just version specific fields, like docker,
+    //  because version is not provided in this context
+
     fun getAllComponents(): Collection<ComponentV3> {
         return componentRegistryResolver.getComponents().map { escrowModule ->
             //TODO Check/Discuss if display name and owner should be in escrowModule (not versioned part of Component)
@@ -48,6 +51,7 @@ class ComponentControllerV3(
             .entries
             .map { (artifact, component) -> ArtifactComponentDTO(artifact, component) }
             .toSet()
+        // todo - recalc docker with component
         return ArtifactComponentsDTO(artifactComponents)
     }
 
