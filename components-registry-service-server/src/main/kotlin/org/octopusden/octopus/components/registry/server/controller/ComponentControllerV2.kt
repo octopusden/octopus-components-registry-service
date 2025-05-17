@@ -43,7 +43,6 @@ class ComponentControllerV2(
         "{component}/versions/{version}",
         produces = [MediaType.APPLICATION_JSON_VALUE]
     )
-    // todo - recalc docker with component
     fun getDetailedComponent(
         @PathVariable("component") component: String,
         @PathVariable("version") version: String
@@ -207,7 +206,8 @@ class ComponentControllerV2(
     }
 
     @PostMapping("find-by-artifact")
-    // todo - recalc docker with component
+    // todo - consider removing the whole endpoint or just version specific fields, like docker,
+    //  because version is not provided in this context
     fun findComponentByArtifact(@RequestBody artifact: ArtifactDependency): VersionedComponent =
         componentRegistryResolver.findComponentByArtifact(artifact)
 
@@ -216,7 +216,8 @@ class ComponentControllerV2(
         consumes = [MediaType.APPLICATION_JSON_VALUE],
         produces = [MediaType.APPLICATION_JSON_VALUE]
     )
-    // todo - recalc docker with component
+    // todo - consider removing the whole endpoint or just version specific fields, like docker,
+    //  because version is not provided in this context
     fun findComponentByArtifact(@RequestBody artifacts: Collection<ArtifactDependency>): Collection<VersionedComponent> =
         componentRegistryResolver.findComponentsByArtifact(artifacts.toSet())
             .values

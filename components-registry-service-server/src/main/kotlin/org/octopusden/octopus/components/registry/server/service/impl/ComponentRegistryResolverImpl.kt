@@ -227,16 +227,12 @@ class ComponentRegistryResolverImpl(
             ComponentVersion.create(compId, versionString)
         )
 
-        System.out.println("1 - " + versionString)
         versionString = normalizeVersion(versionString, ecl)
-        System.out.println("2 - " + versionString)
 
         if (ecl?.distribution?.docker() != null) {
             val dockerString = ecl.distribution?.docker() ?: return null
             if (imageName in dockerStringToList(dockerString)) {
                 val declToCheck = imageName + (tagSuffix?.let { ":$it" } ?: "")
-                System.out.println("declToCheck - " + declToCheck)
-                System.out.println("dockerString - " + dockerString)
                 if (dockerString.split(',')
                         // -- DOCKER -- to be removed
                         .map {

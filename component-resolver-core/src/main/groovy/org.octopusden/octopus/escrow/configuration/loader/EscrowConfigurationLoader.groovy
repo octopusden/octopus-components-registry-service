@@ -111,9 +111,40 @@ class EscrowConfigurationLoader {
         def config = modules[0]
         def escrowModuleConfig = config.clone()
         def postProcessor = new ModelConfigPostProcessor(ComponentVersion.create(componentKey, componentVersion), escrowConfiguration.versionNames)
-        escrowModuleConfig.distribution = postProcessor.resolveDistribution(config.distribution)
+        escrowModuleConfig.distribution = recalculateDockerWithVersion(postProcessor.resolveDistribution(config.distribution), componentVersion)
+
         escrowModuleConfig.jiraConfiguration = postProcessor.resolveJiraConfiguration(config.jiraConfiguration)
         escrowModuleConfig
+    }
+
+    static Distribution recalculateDockerWithVersion(Distribution distribution, String version) {
+        if (distribution == null || distribution.docker() == null) {
+            return null
+        }
+
+        def docker = distribution.docker()
+
+        // -- DOCKER -- to be removed
+        if (docker.contains("\${version}")) {
+            docker = docker.replaceAll("\${version}", version)
+        } else {
+            docker = docker.split(',').collect {img ->
+                def parts = img.split(":")
+                def base = parts[0]
+                def suffix = parts.size() > 1 ? "-${parts[1]}" : ""
+                return "${base}:${version}${suffix}"
+            }.join(",")
+        }
+
+        return Distribution(
+                explicit: distribution.explicit(),
+                external: distribution.external(),
+                GAV: distribution.GAV(),
+                DEB: distribution.DEB(),
+                RPM: distribution.RPM(),
+                docker: docker,
+                securityGroups: new SecurityGroups(distribution.securityGroups?.read)
+        )
     }
 
     EscrowConfiguration loadFullConfiguration(Map<String, String> params) {

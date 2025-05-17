@@ -87,7 +87,6 @@ abstract class BaseComponentController<T : Component> {
         getDistribution(component)
 
     @GetMapping("{component}/versions/{version}/distribution")
-    // todo - recalc docker with component
     fun getComponentVersionDistribution(
         @PathVariable("component") component: String,
         @PathVariable("version") version: String
