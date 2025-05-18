@@ -76,7 +76,6 @@ class GroovySlurperConfigValidatorTest extends GroovyTestCase {
         correctDockerStrings.forEach {
             def correct = new ConfigSlurper().parse(it)
             def validator = new GroovySlurperConfigValidator(verNames)
-            println "correct: ${correct}"
             validator.validateDistributionSection(correct, verNames, "testModule", "testConfig")
             assert !validator.hasErrors()
         }

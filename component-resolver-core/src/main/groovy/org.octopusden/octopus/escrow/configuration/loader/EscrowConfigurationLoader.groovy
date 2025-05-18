@@ -119,14 +119,16 @@ class EscrowConfigurationLoader {
 
     static Distribution recalculateDockerWithVersion(Distribution distribution, String version) {
         if (distribution == null || distribution.docker() == null) {
-            return null
+            return distribution
         }
+
+        println "Distribution in : ${distribution}"
 
         def docker = distribution.docker()
 
         // -- DOCKER -- to be removed
         if (docker.contains("\${version}")) {
-            docker = docker.replaceAll("\${version}", version)
+            docker = docker.replaceAll("${version}", version)
         } else {
             docker = docker.split(',').collect {img ->
                 def parts = img.split(":")
@@ -136,15 +138,16 @@ class EscrowConfigurationLoader {
             }.join(",")
         }
 
-        return Distribution(
-                explicit: distribution.explicit(),
-                external: distribution.external(),
-                GAV: distribution.GAV(),
-                DEB: distribution.DEB(),
-                RPM: distribution.RPM(),
-                docker: docker,
-                securityGroups: new SecurityGroups(distribution.securityGroups?.read)
+        return new Distribution(
+                distribution.explicit(),
+                distribution.external(),
+                distribution.GAV(),
+                distribution.DEB(),
+                distribution.RPM(),
+                docker,
+                new SecurityGroups(distribution.securityGroups?.read)
         )
+
     }
 
     EscrowConfiguration loadFullConfiguration(Map<String, String> params) {
