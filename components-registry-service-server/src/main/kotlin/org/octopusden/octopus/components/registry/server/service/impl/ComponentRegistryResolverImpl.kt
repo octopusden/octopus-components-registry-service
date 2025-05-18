@@ -232,11 +232,11 @@ class ComponentRegistryResolverImpl(
         if (ecl?.distribution?.docker() != null) {
             val dockerString = ecl.distribution?.docker() ?: return null
             if (imageName in dockerStringToList(dockerString)) {
-                val declToCheck = imageName + (tagSuffix?.let { ":$it" } ?: "")
+                val declToCheck = imageName + ":$versionString" + (tagSuffix?.let { "-$it" } ?: "")
                 if (dockerString.split(',')
                         // -- DOCKER -- to be removed
                         .map {
-                            it.replace("\${version}-", "").replace("\${version}", "").removeSuffix(":")
+                            it.replace("\${version}-", versionString + "-").replace("\${version}", versionString).removeSuffix(":")
                         }
                         .contains(declToCheck)) {
                     return ComponentImage(compId, versionString, Image(imageName, imageTag))

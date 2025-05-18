@@ -122,8 +122,6 @@ class EscrowConfigurationLoader {
             return distribution
         }
 
-        println "Distribution in : ${distribution}"
-
         def docker = distribution.docker()
 
         // -- DOCKER -- to be removed
