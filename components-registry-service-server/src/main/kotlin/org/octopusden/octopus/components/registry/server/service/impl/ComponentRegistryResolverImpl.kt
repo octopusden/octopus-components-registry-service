@@ -105,6 +105,18 @@ class ComponentRegistryResolverImpl(
             ?.groups?.get("tag")?.value
     }
 
+    fun recalculateDockerWithVersion(docker: String, version: String): String {
+        return if ("\${version}" in docker) {
+            // -- DOCKER -- to be removed
+            docker.replace("\${version}", version)
+        } else {
+            docker.split(",").joinToString(",") { img ->
+                val (base, suffix) = img.split(":").let { it[0] to it.getOrNull(1)?.let { "-$it" }.orEmpty() }
+                "$base:$version$suffix"
+            }
+        }
+    }
+
     override fun getJiraComponentVersion(component: String, version: String) =
         getJiraComponentVersionToRangeByComponentAndVersion(component, version).first
 
@@ -348,12 +360,19 @@ class ComponentRegistryResolverImpl(
                 null
             )
         )?.let { resolvedComponent ->
-            VersionedComponent(
+            val component = VersionedComponent(
                 resolvedComponent.componentName,
                 null,
                 resolvedComponent.version,
-                ""
+                "",
             )
+
+            component.distribution?.docker?.let { docker ->
+                component.distribution = component.distribution.copy(
+                    docker = recalculateDockerWithVersion(docker, component.version)
+                )
+            }
+            component
         }
 
     private fun loadDependencyMapping() {
