@@ -121,7 +121,7 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
 
     @Test
     fun testGetAllComponents() {
-        assertEquals(45, componentsRegistryClient.getAllComponents().components.size)
+        assertEquals(46, componentsRegistryClient.getAllComponents().components.size)
         assertEquals(
             3,
             componentsRegistryClient.getAllComponents("ssh://hg@mercurial/technical", null).components.size
@@ -135,8 +135,8 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
             ).components.size
         )
         assertEquals(4, componentsRegistryClient.getAllComponents(systems = listOf("CLASSIC")).components.size)
-        assertEquals(41, componentsRegistryClient.getAllComponents(systems = listOf("NONE")).components.size)
-        assertEquals(45, componentsRegistryClient.getAllComponents(systems = listOf("CLASSIC", "NONE")).components.size)
+        assertEquals(42, componentsRegistryClient.getAllComponents(systems = listOf("NONE")).components.size)
+        assertEquals(46, componentsRegistryClient.getAllComponents(systems = listOf("CLASSIC", "NONE")).components.size)
     }
 
     @Test
@@ -255,7 +255,6 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
                 Image("not-found", "0.1")
             )
         )
-        System.out.println("components = $components")
         assertEquals(2, components.size)
         assert(components.any { it.image.name == "test-docker-1_1" && it.component == "TEST_COMPONENT_WITH_DOCKER_1_1" && it.version == "0.1" })
         assert(components.any { it.image.name == "test-docker-1_2" && it.component == "TEST_COMPONENT_WITH_DOCKER_1_2" && it.version == "0.1.2.3" })
@@ -299,5 +298,11 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
 
     }
 
+    @Test
+    fun dockerImagesVersionResolver() {
+        assertEquals(getDistribution("TEST_COMPONENT_WITH_DOCKER_4", "1.2.3").docker, "test-docker-4:1.2.3-amd64")
+        assertEquals(getDistribution("TEST_COMPONENT_WITH_DOCKER_2", "1.2.3").docker, "test-docker-second:1.2.3-amd64")
+        assertEquals(getDistribution("TEST_COMPONENT_WITH_DOCKER_5", "7.6.5").docker, "test-docker-5:7.6.5-amd64,test-docker-5:7.6.5-arm64")
+    }
 
 }

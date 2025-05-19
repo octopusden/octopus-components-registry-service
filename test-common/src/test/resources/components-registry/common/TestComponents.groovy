@@ -974,3 +974,12 @@ TEST_COMPONENT4 {
     }
 }
 
+"TEST_COMPONENT_WITH_DOCKER_5" {
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.test.docker"
+    distribution {
+        explicit = false
+        external = true
+        docker = 'test-docker-5:amd64,test-docker-5:arm64'
+    }
+}

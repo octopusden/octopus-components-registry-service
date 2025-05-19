@@ -126,7 +126,7 @@ class EscrowConfigurationLoader {
 
         // -- DOCKER -- to be removed
         if (docker.contains("\${version}")) {
-            docker = docker.replaceAll("${version}", version)
+            docker = docker.replaceAll("\\\$\\{version}", version)
         } else {
             docker = docker.split(',').collect {img ->
                 def parts = img.split(":")
