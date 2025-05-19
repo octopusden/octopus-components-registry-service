@@ -239,15 +239,11 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
 
     @Test
     fun findComponentsByDockerImagesNormalizeVersion() {
-
         var components =
             componentsRegistryClient.findComponentsByDockerImages(setOf(Image("test-docker-3", "10.1-amd64")))
         assertEquals(1, components.size)
         assert(components.any { it.image.name == "test-docker-3" && it.component == "TEST_COMPONENT_WITH_DOCKER_3" && it.version == "10.1" })
-
-
     }
-
 
 
     @Test
