@@ -367,12 +367,16 @@ class ComponentRegistryResolverImpl(
                 "",
             )
 
-            component.distribution?.docker?.let { docker ->
-                component.distribution = component.distribution.copy(
-                    docker = recalculateDockerWithVersion(docker, component.version)
+            val distribution = component.distribution
+            if (distribution != null && distribution.docker != null) {
+                val updatedDistribution = distribution.copy(
+                    docker = recalculateDockerWithVersion(distribution.docker!!, component.version)
                 )
+                component.distribution = updatedDistribution
             }
+
             component
+
         }
 
     private fun loadDependencyMapping() {
