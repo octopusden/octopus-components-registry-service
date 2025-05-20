@@ -20,7 +20,7 @@ import org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration
 import org.octopusden.octopus.escrow.configuration.model.EscrowModule
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
 import org.octopusden.octopus.escrow.configuration.validation.EscrowConfigValidator
-import org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.DOCKER_IMAGE_TAG_PATTERN_NEW
+import org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.DOCKER_IMAGE_TAG_SUFFIX_PATTERN_NEW
 import org.octopusden.octopus.escrow.dto.ComponentArtifactConfiguration
 import org.octopusden.octopus.escrow.model.Distribution
 import org.octopusden.octopus.escrow.model.SecurityGroups
@@ -100,7 +100,7 @@ class ComponentRegistryResolverImpl(
     }
 
     private fun extractSuffix(versionString: String, tagWithVersion: String): String? {
-        return Regex("(?<tag>${DOCKER_IMAGE_TAG_PATTERN_NEW})$")
+        return Regex("(?<tag>${DOCKER_IMAGE_TAG_SUFFIX_PATTERN_NEW})$")
             .find(tagWithVersion)
             ?.groups?.get("tag")?.value
     }
@@ -234,7 +234,7 @@ class ComponentRegistryResolverImpl(
             if (imageName in dockerStringToList(dockerString)) {
                 val declToCheck = imageName + ":$versionString" + (tagSuffix?.let { "-$it" } ?: "")
                 if (dockerString.split(',')
-                        // -- DOCKER -- to be removed
+                        // TODO -- DOCKER -- to be removed
                         .map {
                             it.replace("\${version}-", versionString + "-").replace("\${version}", versionString).removeSuffix(":")
                         }

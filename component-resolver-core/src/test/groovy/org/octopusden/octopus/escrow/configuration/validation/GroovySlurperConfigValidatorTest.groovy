@@ -6,7 +6,7 @@ import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurp
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.DOCKER_PATTERN_NEW
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.GAV_PATTERN
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.RPM_PATTERN
-// -- DOCKER -- to be removed
+// TODO -- DOCKER -- to be removed
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.DOCKER_PATTERN_OLD
 
 class GroovySlurperConfigValidatorTest extends GroovyTestCase {
@@ -49,7 +49,7 @@ class GroovySlurperConfigValidatorTest extends GroovyTestCase {
         assert !DOCKER_PATTERN_NEW.matcher("org.octopusden/octopus:image:t10").matches()
         assert !DOCKER_PATTERN_NEW.matcher("org.octopusden/octopus/image:").matches()
 
-        // -- DOCKER -- to be removed
+        // TODO -- DOCKER -- to be removed
         assert DOCKER_PATTERN_OLD.matcher("org.octopusden/octopus/image:1.0").matches()
         assert DOCKER_PATTERN_OLD.matcher("org.octopusden/octopus/first-image:1.0,org.octopusden/octopus/second-image:1.0").matches()
         assert !DOCKER_PATTERN_OLD.matcher("org.octopusden\\octopus/image:1.0").matches()

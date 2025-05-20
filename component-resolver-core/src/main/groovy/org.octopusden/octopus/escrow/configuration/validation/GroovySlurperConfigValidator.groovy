@@ -35,15 +35,15 @@ class GroovySlurperConfigValidator {
     public static final Pattern SECURITY_GROUPS_PATTERN = Pattern.compile("^($SECURITY_GROUPS_ENTRY_PATTERN)(,($SECURITY_GROUPS_ENTRY_PATTERN))*\$")
     private static final String DOCKER_IMAGE_PATH_PATTERN = "([a-z0-9]+([_.-][a-z0-9]+)*/)*[a-z0-9]+([_.-][a-z0-9]+)*"
 
-    public static final String DOCKER_IMAGE_TAG_PATTERN_NEW = "[a-zA-Z][a-zA-Z0-9]*"
-    private static final String DOCKER_ENTRY_PATTERN_NEW = "$DOCKER_IMAGE_PATH_PATTERN(:$DOCKER_IMAGE_TAG_PATTERN_NEW)?"
+    public static final String DOCKER_IMAGE_TAG_SUFFIX_PATTERN_NEW = "[a-zA-Z][a-zA-Z0-9]*"
+    private static final String DOCKER_ENTRY_PATTERN_NEW = "$DOCKER_IMAGE_PATH_PATTERN(:$DOCKER_IMAGE_TAG_SUFFIX_PATTERN_NEW)?"
     public static final Pattern DOCKER_PATTERN_NEW = Pattern.compile("^($DOCKER_ENTRY_PATTERN_NEW)(,($DOCKER_ENTRY_PATTERN_NEW))*\$")
 
-    // -- DOCKER -- to be removed
-    private static final String DOCKER_IMAGE_TAG_PATTERN_OLD = "\\w[\\w.-]{0,64}"
-    private static final String DOCKER_ENTRY_PATTERN_OLD = "$DOCKER_IMAGE_PATH_PATTERN(:$DOCKER_IMAGE_TAG_PATTERN_OLD)?"
+    // TODO -- DOCKER -- to be removed
+    private static final String DOCKER_IMAGE_TAG_SUFFIX_PATTERN_OLD = "\\w[\\w.-]{0,64}"
+    private static final String DOCKER_ENTRY_PATTERN_OLD = "$DOCKER_IMAGE_PATH_PATTERN(:$DOCKER_IMAGE_TAG_SUFFIX_PATTERN_OLD)?"
     public static final Pattern DOCKER_PATTERN_OLD = Pattern.compile("^($DOCKER_ENTRY_PATTERN_OLD)(,($DOCKER_ENTRY_PATTERN_OLD))*\$")
-    // -- DOCKER -- to be removed
+    // TODO -- DOCKER -- to be removed
 
     public static SUPPORTED_ATTRIBUTES = ['buildSystem', VCS_URL, REPOSITORY_TYPE, 'groupId', 'artifactId',
                                           TAG, 'versionRange', 'version', 'module',
@@ -248,7 +248,7 @@ class GroovySlurperConfigValidator {
         validateValueByPattern(distributionSection, "DEB", DEB_PATTERN, expressionContext)
         validateValueByPattern(distributionSection, "RPM", RPM_PATTERN, expressionContext)
 
-        // -- DOCKER -- to be changed
+        // TODO -- DOCKER -- to be changed
         validateValueByPattern(distributionSection, "docker", DOCKER_PATTERN_OLD, expressionContext)
         validateNoExpressionInImageName(distributionSection)
 

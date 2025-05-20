@@ -111,20 +111,21 @@ class EscrowConfigurationLoader {
         def config = modules[0]
         def escrowModuleConfig = config.clone()
         def postProcessor = new ModelConfigPostProcessor(ComponentVersion.create(componentKey, componentVersion), escrowConfiguration.versionNames)
-        escrowModuleConfig.distribution = recalculateDockerWithVersion(postProcessor.resolveDistribution(config.distribution), componentVersion)
+        escrowModuleConfig.distribution = calculateDistribution(postProcessor.resolveDistribution(config.distribution), componentVersion)
 
         escrowModuleConfig.jiraConfiguration = postProcessor.resolveJiraConfiguration(config.jiraConfiguration)
         escrowModuleConfig
     }
 
-    static Distribution recalculateDockerWithVersion(Distribution distribution, String version) {
+    static Distribution calculateDistribution(Distribution distribution, String version) {
         if (distribution == null || distribution.docker() == null) {
             return distribution
         }
 
         def docker = distribution.docker()
 
-        // -- DOCKER -- to be removed
+        // TODO -- DOCKER -- to be removed
+        // the only "else" block will remain
         if (docker.contains("\${version}")) {
             docker = docker.replaceAll("\\\$\\{version}", version)
         } else {
