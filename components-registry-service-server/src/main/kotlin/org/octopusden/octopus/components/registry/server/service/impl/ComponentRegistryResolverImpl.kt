@@ -86,23 +86,12 @@ class ComponentRegistryResolverImpl(
         return EscrowConfigurationLoader.getEscrowModuleConfig(configuration, ComponentVersion.create(id, version))
     }
 
-    private fun reconstructVersionString(imageTag : String): String {
-        val numericVersionFactory = NumericVersionFactory(versionNames)
-        val version = numericVersionFactory.create(imageTag)
-        var versionString = ""
-        for (i in 0 until version.itemsCount) {
-            versionString += version.getItem(i).toString()
-            if (i < (version.itemsCount - 1)) {
-                versionString += "."
-            }
-        }
-        return versionString
-    }
-
-    private fun extractSuffix(versionString: String, tagWithVersion: String): String? {
-        return Regex("(?<tag>${DOCKER_IMAGE_TAG_SUFFIX_PATTERN_NEW})$")
-            .find(tagWithVersion)
-            ?.groups?.get("tag")?.value
+    fun extractVersionAndSuffix(tagWithVersion: String): Pair<String, String?> {
+        val regex = Regex("^(?<version>.*?)(?:-(?<suffix>${DOCKER_IMAGE_TAG_SUFFIX_PATTERN_NEW}))?$")
+        val matchResult = regex.matchEntire(tagWithVersion)
+        val version = matchResult?.groups?.get("version")?.value?.replace(Regex("[-_]"), ".")  ?: tagWithVersion
+        val suffix = matchResult?.groups?.get("suffix")?.value
+        return version to suffix
     }
 
     override fun getJiraComponentVersion(component: String, version: String) =
@@ -220,14 +209,19 @@ class ComponentRegistryResolverImpl(
     }
 
     private fun findConfigurationByImage(imageName: String, imageTag: String, compId: String): ComponentImage? {
-        var versionString = reconstructVersionString(imageTag)
-        val tagSuffix = extractSuffix(versionString, imageTag)
+
+        var (versionString, tagSuffix) = extractVersionAndSuffix(imageTag)
+
+        System.out.println("**************************************************************************")
+        System.out.println("imageTag: $imageTag, versionString: $versionString, tagSuffix: $tagSuffix")
+
         val ecl = EscrowConfigurationLoader.getEscrowModuleConfig(
             configuration,
             ComponentVersion.create(compId, versionString)
         )
 
         versionString = normalizeVersion(versionString, ecl)
+        System.out.println("Normalized versionString: $versionString")
 
         if (ecl?.distribution?.docker() != null) {
             val dockerString = ecl.distribution?.docker() ?: return null
