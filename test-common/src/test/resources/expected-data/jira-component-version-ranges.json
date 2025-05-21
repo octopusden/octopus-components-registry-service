@@ -1604,7 +1604,7 @@
           "vfiler1-default#group"
         ]
       },
-      "docker": "docker=test-docker-1_2:jdk11"
+      "docker": "test-docker-1_2:jdk11"
     },
     "vcsSettings": {
       "versionControlSystemRoots": [],
