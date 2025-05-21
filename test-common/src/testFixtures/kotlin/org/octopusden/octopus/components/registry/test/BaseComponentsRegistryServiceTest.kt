@@ -140,6 +140,12 @@ abstract class BaseComponentsRegistryServiceTest {
         }
 
 
+        val missingInActual = expected - actual
+        val extraInActual = actual - expected
+
+        println("Missing in actual: $missingInActual")
+        println("Extra in actual: $extraInActual")
+
         Assertions.assertTrue(expected.containsAll(actual))
         Assertions.assertTrue(actual.containsAll(expected))
         Assertions.assertIterableEquals(expected, actual)
