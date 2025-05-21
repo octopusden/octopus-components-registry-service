@@ -89,7 +89,7 @@ class ComponentRegistryResolverImpl(
     fun extractVersionAndSuffix(tagWithVersion: String): Pair<String, String?> {
         val regex = Regex("^(?<version>.*?)(?:-(?<suffix>${DOCKER_IMAGE_TAG_SUFFIX_PATTERN_NEW}))?$")
         val matchResult = regex.matchEntire(tagWithVersion)
-        val version = matchResult?.groups?.get("version")?.value?.replace(Regex("[-_]"), ".")  ?: tagWithVersion
+        val version = matchResult?.groups?.get("version")?.value  ?: tagWithVersion
         val suffix = matchResult?.groups?.get("suffix")?.value
         return version to suffix
     }
@@ -211,12 +211,17 @@ class ComponentRegistryResolverImpl(
     private fun findConfigurationByImage(imageName: String, imageTag: String, compId: String): ComponentImage? {
 
         var (versionString, tagSuffix) = extractVersionAndSuffix(imageTag)
+
+        try {
+            versionString = getJiraComponentVersion(compId, versionString).version
+        } catch (e: NotFoundException) {
+            LOG.debug("Component $compId with version $versionString not found, possible no Jira section defined. It's ok for test data")
+        }
+
         val ecl = EscrowConfigurationLoader.getEscrowModuleConfig(
             configuration,
             ComponentVersion.create(compId, versionString)
         )
-
-        versionString = getJiraComponentVersion(compId, versionString).version
 
         if (ecl?.distribution?.docker() != null) {
             val dockerString = ecl.distribution?.docker() ?: return null
