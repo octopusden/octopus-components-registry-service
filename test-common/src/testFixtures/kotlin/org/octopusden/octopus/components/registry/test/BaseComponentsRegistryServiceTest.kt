@@ -129,23 +129,6 @@ abstract class BaseComponentsRegistryServiceTest {
         val actual = getAllJiraComponentVersionRanges().stream()
             .sorted { o1, o2 -> (o1.componentName + o1.versionRange).compareTo(o2.componentName + o2.versionRange)}
             .collect(Collectors.toList())
-
-
-        for (i in expected) {
-            println("expected: $i")
-        }
-
-        for (i in actual) {
-            println("actual: $i")
-        }
-
-
-        val missingInActual = expected - actual
-        val extraInActual = actual - expected
-
-        println("Missing in actual: $missingInActual")
-        println("Extra in actual: $extraInActual")
-
         Assertions.assertTrue(expected.containsAll(actual))
         Assertions.assertTrue(actual.containsAll(expected))
         Assertions.assertIterableEquals(expected, actual)
