@@ -1590,11 +1590,11 @@
         "buildVersionFormat": "$major.$minor.$service-$fix",
         "hotfixVersionFormat": "$major.$minor.$service-$fix.$build",
         "lineVersionFormat": "$major"
+      },
+      "componentInfo": {
+        "versionPrefix": "",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
       }
-    },
-    "componentInfo": {
-      "versionPrefix": "",
-      "versionFormat": "$versionPrefix-$baseVersionFormat"
     },
     "distribution": {
       "explicit": false,
