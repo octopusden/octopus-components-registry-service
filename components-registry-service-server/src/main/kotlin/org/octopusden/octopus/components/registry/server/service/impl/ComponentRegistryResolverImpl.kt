@@ -211,17 +211,12 @@ class ComponentRegistryResolverImpl(
     private fun findConfigurationByImage(imageName: String, imageTag: String, compId: String): ComponentImage? {
 
         var (versionString, tagSuffix) = extractVersionAndSuffix(imageTag)
-
-        System.out.println("**************************************************************************")
-        System.out.println("imageTag: $imageTag, versionString: $versionString, tagSuffix: $tagSuffix")
-
         val ecl = EscrowConfigurationLoader.getEscrowModuleConfig(
             configuration,
             ComponentVersion.create(compId, versionString)
         )
 
-        versionString = normalizeVersion(versionString, ecl)
-        System.out.println("Normalized versionString: $versionString")
+        versionString = getJiraComponentVersion(compId, versionString).version
 
         if (ecl?.distribution?.docker() != null) {
             val dockerString = ecl.distribution?.docker() ?: return null
@@ -238,28 +233,6 @@ class ComponentRegistryResolverImpl(
             }
         }
         return null
-    }
-
-    private fun normalizeVersion(versionString: String, ecl: EscrowModuleConfig): String {
-        val numVer = NumericVersionFactory(versionNames).create(versionString)
-        if ( ecl.jiraConfiguration != null) {
-            val formats = ecl.jiraConfiguration.componentVersionFormat
-            return when {
-                jiraComponentVersionFormatter.matchesBuildVersionFormat(ecl.jiraConfiguration, versionString, true) ->
-                    numVer.formatVersion(formats.buildVersionFormat)
-                jiraComponentVersionFormatter.matchesReleaseVersionFormat(ecl.jiraConfiguration, versionString, true) ->
-                    numVer.formatVersion(formats.releaseVersionFormat)
-                jiraComponentVersionFormatter.matchesMajorVersionFormat(ecl.jiraConfiguration, versionString, true) ->
-                    numVer.formatVersion(formats.majorVersionFormat)
-                jiraComponentVersionFormatter.matchesLineVersionFormat(ecl.jiraConfiguration, versionString, true) ->
-                    numVer.formatVersion(formats.lineVersionFormat)
-                jiraComponentVersionFormatter.matchesHotfixVersionFormat(ecl.jiraConfiguration, versionString, true) ->
-                    numVer.formatVersion(formats.hotfixVersionFormat)
-                else -> versionString
-            }
-        } else {  // can be null in case test data
-            return versionString
-        }
     }
 
     private fun dockerStringToList(dockerString: String): List<String> {
