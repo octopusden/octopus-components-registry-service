@@ -1578,5 +1578,34 @@
       "versionControlSystemRoots": [],
       "externalRegistry": null
     }
+  },
+  {
+    "componentName": "TEST_COMPONENT_WITH_DOCKER_1_2",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "TEST",
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major.$minor",
+        "releaseVersionFormat": "$major.$minor.$service",
+        "buildVersionFormat": "$major.$minor.$service-$fix",
+        "hotfixVersionFormat": "$major.$minor.$service-$fix.$build",
+        "lineVersionFormat": "$major"
+      },
+      "componentInfo": {
+        "versionPrefix": "",
+        "versionFormat": "$versionPrefix-$baseVersionFormat",
+        "technical": false
+      },
+      "distribution": {
+        "explicit": false,
+        "external": true,
+        "securityGroups": {
+          "read": [
+            "vfiler1-default#group"
+          ]
+        },
+        "docker": "docker=test-docker-1_2:jdk11"
+      }
+    }
   }
 ]
