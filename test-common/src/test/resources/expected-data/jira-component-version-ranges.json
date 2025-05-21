@@ -1583,7 +1583,7 @@
     "componentName": "TEST_COMPONENT_WITH_DOCKER_1_2",
     "versionRange": "(,0),[0,)",
     "component": {
-      "projectKey": "TEST",
+      "projectKey": "TEST-D",
       "componentVersionFormat": {
         "majorVersionFormat": "$major.$minor",
         "releaseVersionFormat": "$major.$minor.$service",

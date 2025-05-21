@@ -901,7 +901,7 @@ TEST_COMPONENT4 {
     componentOwner = "user9"
     groupId = "org.octopusden.octopus.test.docker"
     jira {
-        projectKey = "TEST"
+        projectKey = "TEST-D"
     }
     distribution {
         explicit = false
