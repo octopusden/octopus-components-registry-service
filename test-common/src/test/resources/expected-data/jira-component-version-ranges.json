@@ -1605,6 +1605,10 @@
         ]
       },
       "docker": "docker=test-docker-1_2:jdk11"
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [],
+      "externalRegistry": null
     }
   }
 ]
