@@ -20,7 +20,6 @@ import org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration
 import org.octopusden.octopus.escrow.configuration.model.EscrowModule
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
 import org.octopusden.octopus.escrow.configuration.validation.EscrowConfigValidator
-import org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.DOCKER_IMAGE_TAG_SUFFIX_PATTERN_NEW
 import org.octopusden.octopus.escrow.dto.ComponentArtifactConfiguration
 import org.octopusden.octopus.escrow.model.Distribution
 import org.octopusden.octopus.escrow.model.SecurityGroups
@@ -84,14 +83,6 @@ class ComponentRegistryResolverImpl(
 
     override fun getResolvedComponentDefinition(id: String, version: String): EscrowModuleConfig? {
         return EscrowConfigurationLoader.getEscrowModuleConfig(configuration, ComponentVersion.create(id, version))
-    }
-
-    fun extractVersionAndSuffix(tagWithVersion: String): Pair<String, String?> {
-        val regex = Regex("^(?<version>.*?)(?:-(?<suffix>${DOCKER_IMAGE_TAG_SUFFIX_PATTERN_NEW}))?$")
-        val matchResult = regex.matchEntire(tagWithVersion)
-        val version = matchResult?.groups?.get("version")?.value  ?: tagWithVersion
-        val suffix = matchResult?.groups?.get("suffix")?.value
-        return version to suffix
     }
 
     override fun getJiraComponentVersion(component: String, version: String) =
@@ -210,34 +201,20 @@ class ComponentRegistryResolverImpl(
 
     private fun findConfigurationByImage(imageName: String, imageTag: String, compId: String): ComponentImage? {
 
-        var (versionString, tagSuffix) = extractVersionAndSuffix(imageTag)
-
-        try {
-            versionString = getJiraComponentVersion(compId, versionString).version
-        } catch (e: NotFoundException) {
-            LOG.debug("Component $compId with version $versionString not found, possible no Jira section defined. It's ok for test data")
+        val versionString = try {
+            getJiraComponentVersion(compId, imageTag).version
+        } catch (_: NotFoundException) {
+            return null
         }
 
-        val ecl = EscrowConfigurationLoader.getEscrowModuleConfig(
+        return EscrowConfigurationLoader.getEscrowModuleConfig(
             configuration,
             ComponentVersion.create(compId, versionString)
-        )
-
-        if (ecl?.distribution?.docker() != null) {
-            val dockerString = ecl.distribution?.docker() ?: return null
-            if (imageName in dockerStringToList(dockerString)) {
-                val declToCheck = imageName + ":$versionString" + (tagSuffix?.let { "-$it" } ?: "")
-                if (dockerString.split(',')
-                        // TODO -- DOCKER -- to be removed
-                        .map {
-                            it.replace("\${version}-", versionString + "-").replace("\${version}", versionString).removeSuffix(":")
-                        }
-                        .contains(declToCheck)) {
-                    return ComponentImage(compId, versionString, Image(imageName, imageTag))
-                }
-            }
+        )?.distribution?.let {
+            if (it.docker()?.split(',')?.contains("$imageName:$imageTag") == true) {
+                ComponentImage(compId, versionString, Image(imageName, imageTag))
+            } else null
         }
-        return null
     }
 
     private fun dockerStringToList(dockerString: String): List<String> {

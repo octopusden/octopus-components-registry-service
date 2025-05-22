@@ -880,6 +880,9 @@ TEST_COMPONENT4 {
 "TEST_COMPONENT_WITH_DOCKER_1" {
     componentOwner = "user9"
     groupId = "org.octopusden.octopus.test.docker"
+    jira {
+        projectKey = "TEST_DOCKER"
+    }
     distribution {
         explicit = false
         external = true
@@ -890,6 +893,9 @@ TEST_COMPONENT4 {
 "TEST_COMPONENT_WITH_DOCKER_1_1" {
     componentOwner = "user9"
     groupId = "org.octopusden.octopus.test.docker"
+    jira {
+        projectKey = "TEST_DOCKER"
+    }
     distribution {
         explicit = false
         external = true
@@ -913,6 +919,10 @@ TEST_COMPONENT4 {
 "TEST_COMPONENT_WITH_DOCKER_2" {
     componentOwner = "user9"
     groupId = "org.octopusden.octopus.test.docker"
+
+    jira {
+        projectKey = "TEST_DOCKER"
+    }
 
     distribution {
         explicit = false
@@ -954,6 +964,10 @@ TEST_COMPONENT4 {
     componentOwner = "user9"
     groupId = "org.octopusden.octopus.test.docker"
 
+    jira {
+        projectKey = "TEST_DOCKER"
+    }
+
     distribution {
         explicit = false
         external = true
@@ -978,6 +992,11 @@ TEST_COMPONENT4 {
 }
 
 "TEST_COMPONENT_WITH_DOCKER_5" {
+
+    jira {
+        projectKey = "TEST_DOCKER"
+    }
+
     componentOwner = "user9"
     groupId = "org.octopusden.octopus.test.docker"
     distribution {
