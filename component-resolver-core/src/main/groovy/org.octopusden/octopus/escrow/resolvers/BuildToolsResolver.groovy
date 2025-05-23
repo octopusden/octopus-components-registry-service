@@ -10,18 +10,37 @@ import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.components.registry.dsl.jackson.JacksonFactory
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
 import org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration
+import org.octopusden.octopus.escrow.configuration.validation.EscrowModuleConfigMatcher
 import org.octopusden.octopus.escrow.dto.DistributionEntity
 import org.octopusden.octopus.escrow.utilities.DistributionUtilities
 import org.octopusden.octopus.releng.dto.ComponentVersion
+import org.octopusden.releng.versions.NumericVersionFactory
+import org.octopusden.releng.versions.VersionNames
+import org.octopusden.releng.versions.VersionRangeFactory
 
 @TypeChecked
 @Slf4j
 class BuildToolsResolver implements IBuildToolsResolver {
-    private final EscrowConfiguration configuration
+    private EscrowConfiguration escrowConfiguration
+    private final EscrowModuleConfigMatcher escrowModuleConfigMatcher
 
-    private final EscrowConfiguration escrowConfiguration
+    private VersionRangeFactory versionRangeFactory
+    private NumericVersionFactory numericVersionFactory
+    private final VersionNames versionNames
+
+    BuildToolsResolver(VersionNames versionNames) {
+        this.versionNames = versionNames
+        versionRangeFactory = new VersionRangeFactory(versionNames)
+        numericVersionFactory = new NumericVersionFactory(versionNames)
+        escrowModuleConfigMatcher = new EscrowModuleConfigMatcher(versionRangeFactory, numericVersionFactory)
+    }
 
     BuildToolsResolver(final EscrowConfiguration escrowConfiguration) {
+        this(escrowConfiguration.versionNames)
+        this.escrowConfiguration = escrowConfiguration
+    }
+
+    void setEscrowConfiguration(EscrowConfiguration escrowConfiguration) {
         this.escrowConfiguration = escrowConfiguration
     }
 

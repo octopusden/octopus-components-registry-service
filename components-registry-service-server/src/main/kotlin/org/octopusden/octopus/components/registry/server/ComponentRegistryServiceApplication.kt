@@ -7,6 +7,7 @@ import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoa
 import org.octopusden.octopus.escrow.resolvers.JiraParametersResolver
 import org.octopusden.octopus.escrow.resolvers.ModuleByArtifactResolver
 import org.apache.commons.lang3.Validate
+import org.octopusden.octopus.escrow.resolvers.BuildToolsResolver
 import org.octopusden.octopus.releng.JiraComponentVersionFormatter
 import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionNames
@@ -81,6 +82,9 @@ class ComponentRegistryServiceApplication {
     @Bean
     fun moduleByArtifactResolver(versionNames: VersionNames) =
         ModuleByArtifactResolver(versionNames)
+
+    @Bean
+    fun buildToolsResolver(versionNames: VersionNames) = BuildToolsResolver(versionNames)
 
     @Bean
     fun versionNames(configHelper: ConfigHelper) = VersionNames(

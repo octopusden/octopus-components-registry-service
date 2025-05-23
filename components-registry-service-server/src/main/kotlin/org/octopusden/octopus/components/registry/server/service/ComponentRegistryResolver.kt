@@ -1,5 +1,8 @@
 package org.octopusden.octopus.components.registry.server.service
 
+import org.octopusden.octopus.components.registry.api.build.tools.BuildTool
+import org.octopusden.octopus.components.registry.api.distribution.DistributionEntity
+import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.core.dto.BuildSystem
 import org.octopusden.octopus.components.registry.core.dto.VersionedComponent
@@ -52,4 +55,9 @@ interface ComponentRegistryResolver {
 
     fun getComponentsCountByBuildSystem(): EnumMap<BuildSystem, Int>
 
+    fun getComponentVersionBuildTools(component: String, version: String, ignoreRequired: Boolean): List<BuildTool>
+
+    fun getComponentVersionDistributionEntities(component: String, version: String): List<DistributionEntity>
+
+    fun getComponentProductMapping(): Map<String, ProductTypes>
 }

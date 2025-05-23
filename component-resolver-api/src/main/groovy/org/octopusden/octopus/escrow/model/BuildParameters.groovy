@@ -85,6 +85,7 @@ class BuildParameters {
                 ", systemProperties: " + systemProperties +
                 ", buildTasks: " + buildTasks +
                 ", tools:'" + tools + '\'' +
+                ", buildTools:'" + buildTools + '\'' +
                 '}';
     }
 
@@ -102,6 +103,7 @@ class BuildParameters {
         if (systemProperties != that.systemProperties) return false
         if (buildTasks != that.buildTasks) return false
         if (tools != null ? tools != that.tools : that.tools != null) return false
+        if (buildTools != null ? buildTools != that.buildTools : that.buildTools != null) return false
 
 
         return true
@@ -115,6 +117,7 @@ class BuildParameters {
         result = 31 * result + (systemProperties != null ? systemProperties.hashCode() : 0)
         result = 31 * result + (buildTasks != null ? buildTasks.hashCode() : 0)
         result = 31 * result + (tools != null ? tools.hashCode() : 0)
+        result = 31 * result + (buildTools != null ? buildTools.hashCode() : 0)
 
         return result
     }
