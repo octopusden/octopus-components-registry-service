@@ -40,6 +40,11 @@ class GroovySlurperConfigValidatorTest extends GroovyTestCase {
         assert DOCKER_PATTERN_NEW.matcher("org.octopusden/octopus/image:arm64").matches()
         assert DOCKER_PATTERN_NEW.matcher("org.octopusden/octopus/image,org.octopusden/octopus/image:arm64").matches()
         assert DOCKER_PATTERN_NEW.matcher("org.octopusden/octopus/first-image:amd64,org.octopusden/octopus/second-image:amd64").matches()
+
+        assert DOCKER_PATTERN_NEW.matcher("org.octopusden/octopus/image:arm64-r2.d2").matches()
+        assert DOCKER_PATTERN_NEW.matcher("org.octopusden/octopus/image,org.octopusden/octopus/image:arm64,org.octopusden/octopus/image:arm64-r2_d2").matches()
+        assert !DOCKER_PATTERN_NEW.matcher("org.octopusden/octopus/image:arm64-v2.1").matches()
+
         assert !DOCKER_PATTERN_NEW.matcher("org.octopusden/octopus/first-image:-amd64").matches()
         assert !DOCKER_PATTERN_NEW.matcher("org.octopusden/octopus/first-image:1.1-amd64").matches()
         assert !DOCKER_PATTERN_NEW.matcher("org.octopusden/octopus/image:\${version}").matches()
