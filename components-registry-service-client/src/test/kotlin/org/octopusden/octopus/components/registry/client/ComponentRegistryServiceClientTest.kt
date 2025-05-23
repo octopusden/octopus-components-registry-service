@@ -251,7 +251,7 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
         val components = componentsRegistryClient.findComponentsByDockerImages(
             setOf(
                 Image("test-docker-1_1", "0.1"),
-                Image("test-docker-1_2", "0.1.2-3-jdk11"),
+                Image("test-docker-1_2", "0.1-2-3-jdk11"),
                 Image("not-found", "0.1")
             )
         )
