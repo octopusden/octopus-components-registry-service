@@ -45,7 +45,6 @@ import kotlin.io.path.exists
 import kotlin.io.path.inputStream
 import kotlin.io.path.isRegularFile
 import kotlin.system.measureTimeMillis
-import kotlin.text.replace
 
 
 @Service
@@ -217,24 +216,24 @@ class ComponentRegistryResolverImpl(
         }
     }
 
-    private fun dockerStringToList(dockerString: String): List<String> {
-        return dockerString.split(",").map { it.substringBefore(":") }
-    }
-
     private fun buildImageToComponentMap(): Map<String, String> {
         val dockerImageName2ComponentMap = mutableMapOf<String, String>()
         val timeTaken = measureTimeMillis {
             getComponents().forEach { comp ->
                 comp.moduleConfigurations.forEach { moduleConfig ->
                     moduleConfig.distribution?.docker()?.let { dockersString ->
-                        dockerStringToList(dockersString).forEach { dockerImgName ->
+                        dockersString.split(",").map { it.substringBefore(":") }.forEach { dockerImgName ->
                             dockerImageName2ComponentMap[dockerImgName] = comp.moduleName
                         }
                     }
                 }
             }
         }
-        LOG.info("Time taken to buildImageToComponentMap {} ms, read {} images", timeTaken, dockerImageName2ComponentMap.size)
+        LOG.info(
+            "Time taken to buildImageToComponentMap {} ms, read {} images",
+            timeTaken,
+            dockerImageName2ComponentMap.size
+        )
 
         return dockerImageName2ComponentMap
     }
