@@ -2,7 +2,6 @@ package org.octopusden.octopus.escrow.configuration.loader
 
 import groovy.transform.TypeChecked
 import groovy.transform.TypeCheckingMode
-import java.util.stream.Collectors
 import org.apache.commons.lang3.StringUtils
 import org.apache.commons.lang3.Validate
 import org.apache.logging.log4j.LogManager
@@ -30,6 +29,7 @@ import org.octopusden.octopus.escrow.model.Tool
 import org.octopusden.octopus.escrow.model.VCSSettings
 import org.octopusden.octopus.escrow.model.VersionControlSystemRoot
 import org.octopusden.octopus.escrow.resolvers.ReleaseInfoResolver
+import org.octopusden.octopus.releng.JiraComponentVersionFormatter
 import org.octopusden.octopus.releng.dto.ComponentInfo
 import org.octopusden.octopus.releng.dto.ComponentVersion
 import org.octopusden.octopus.releng.dto.JiraComponent
@@ -37,19 +37,9 @@ import org.octopusden.releng.versions.ComponentVersionFormat
 import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRangeFactory
+import java.util.stream.Collectors
 
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.BRANCH
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.BUILD
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.DISTRIBUTION
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.HOTFIX_BRANCH
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.JIRA
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.REPOSITORY_TYPE
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.SECURITY_GROUPS_READ
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.SUPPORTED_ATTRIBUTES
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.TAG
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.TOOLS
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.VCS_SETTINGS
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.VCS_URL
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.*
 
 class EscrowConfigurationLoader {
     private static final Logger LOG = LogManager.getLogger(EscrowConfigurationLoader.class)
@@ -98,7 +88,7 @@ class EscrowConfigurationLoader {
         def numericVersionFactory = new NumericVersionFactory(escrowConfiguration.versionNames)
         def version = numericVersionFactory.create(componentVersion)
         def versionRangeFactory = new VersionRangeFactory(escrowConfiguration.versionNames)
-        def modules = escrowConfiguration.escrowModules.get(componentKey)?.moduleConfigurations?.stream()?.filter{
+        def modules = escrowConfiguration.escrowModules.get(componentKey)?.moduleConfigurations?.stream()?.filter {
             moduleConfiguration -> versionRangeFactory.create(moduleConfiguration.versionRangeString).containsVersion(version)
         }?.collect(Collectors.toList())
         if (modules == null || modules.isEmpty()) {
@@ -109,13 +99,52 @@ class EscrowConfigurationLoader {
             throw new ComponentResolverException("Too many component $componentKey:$componentVersion modules")
         }
         def config = modules[0]
+
+        def normalizedVersion = normalizeVersion(componentVersion, config.jiraConfiguration, escrowConfiguration.versionNames, false) ?: componentVersion
         def escrowModuleConfig = config.clone()
-        def postProcessor = new ModelConfigPostProcessor(ComponentVersion.create(componentKey, componentVersion), escrowConfiguration.versionNames)
-        escrowModuleConfig.distribution = calculateDistribution(postProcessor.resolveDistribution(config.distribution), componentVersion)
+        def postProcessor = new ModelConfigPostProcessor(ComponentVersion.create(componentKey, normalizedVersion), escrowConfiguration.versionNames)
+        escrowModuleConfig.distribution = calculateDistribution(postProcessor.resolveDistribution(config.distribution), normalizedVersion)
 
         escrowModuleConfig.jiraConfiguration = postProcessor.resolveJiraConfiguration(config.jiraConfiguration)
         escrowModuleConfig
     }
+
+    static String normalizeVersion(String version, JiraComponent component, VersionNames versionNames,
+                                   boolean strict) {
+
+        if (component?.getComponentInfo()?.getVersionFormat() == null) {
+            return null
+        }
+
+        def jiraComponentVersionFormatter = new JiraComponentVersionFormatter(versionNames)
+        def numericVersion = new NumericVersionFactory(versionNames).create(version)
+
+        def formatters = [
+                jiraComponentVersionFormatter.&matchesBuildVersionFormat,
+                jiraComponentVersionFormatter.&matchesReleaseVersionFormat,
+                jiraComponentVersionFormatter.&matchesMajorVersionFormat,
+                jiraComponentVersionFormatter.&matchesLineVersionFormat,
+                jiraComponentVersionFormatter.&matchesHotfixVersionFormat
+        ]
+        def formatStr= [
+                component.componentVersionFormat.buildVersionFormat,
+                component.componentVersionFormat.releaseVersionFormat,
+                component.componentVersionFormat.majorVersionFormat,
+                component.componentVersionFormat.lineVersionFormat,
+                component.componentVersionFormat.hotfixVersionFormat
+        ]
+
+        for (int i = 0; i < formatters.size(); i++) {
+            if (formatters[i](component, version, strict)) {
+                if (formatStr[i] != null) {
+                    return numericVersion.formatVersion(formatStr[i])
+                }
+            }
+        }
+
+        return null
+    }
+
 
     static Distribution calculateDistribution(Distribution distribution, String version) {
         if (distribution == null || distribution.docker() == null) {
@@ -129,7 +158,7 @@ class EscrowConfigurationLoader {
         if (docker.contains("\${version}")) {
             docker = docker.replaceAll("\\\$\\{version}", version)
         } else {
-            docker = docker.split(',').collect {img ->
+            docker = docker.split(',').collect { img ->
                 def parts = img.split(":")
                 def base = parts[0]
                 def suffix = parts.size() > 1 ? "-${parts[1]}" : ""
@@ -197,7 +226,7 @@ class EscrowConfigurationLoader {
             }
         }
         //Verify that VersionComponent could be requested
-        fullConfig.getEscrowModules().values().forEach {escrowModule -> escrowModule.moduleConfigurations.forEach { it.toVersionedComponent() } }
+        fullConfig.getEscrowModules().values().forEach { escrowModule -> escrowModule.moduleConfigurations.forEach { it.toVersionedComponent() } }
         return fullConfig
     }
 
@@ -215,8 +244,8 @@ class EscrowConfigurationLoader {
     void mergeGroovyAndDslSubComponent(SubComponent dslComponent, EscrowConfiguration escrowConfiguration) {
         def moduleConfigurations = escrowConfiguration.escrowModules.get(dslComponent.name).moduleConfigurations
         moduleConfigurations.forEach { moduleConfiguration -> mergeComponents(dslComponent, moduleConfiguration) }
-        dslComponent.versions.forEach { dslVersionRange,  dslVersionedComponent ->
-            def versionedEscrowModule = moduleConfigurations.find {moduleConfiguration -> moduleConfiguration.versionRangeString == dslVersionRange }
+        dslComponent.versions.forEach { dslVersionRange, dslVersionedComponent ->
+            def versionedEscrowModule = moduleConfigurations.find { moduleConfiguration -> moduleConfiguration.versionRangeString == dslVersionRange }
             if (!versionedEscrowModule) {
                 throw new EscrowConfigurationException("The DSL version range $dslVersionRange is missed in groovy configuration of the component ${dslComponent.name}")
             }
@@ -409,6 +438,7 @@ class EscrowConfigurationLoader {
         }
         return defaultRepositoryType
     }
+
     static List<VersionControlSystemRoot> replaceDefaults(VCSSettingsWrapper parentVCSSettings,
                                                           Map<String, List<String>> vcsRootName2ParametersFromDefaultMap,
                                                           VersionControlSystemRoot currentDefaultVCSParameters,
@@ -688,7 +718,7 @@ class EscrowConfigurationLoader {
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
-    private static loadComponentSystem(ConfigObject parentConfigObject, String defaultSystem){
+    private static loadComponentSystem(ConfigObject parentConfigObject, String defaultSystem) {
         if (parentConfigObject.containsKey("system")) {
             return parentConfigObject.get("system")
         } else {
@@ -697,7 +727,7 @@ class EscrowConfigurationLoader {
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
-    private static loadComponentClientCode(ConfigObject parentConfigObject, String defaultClientCode){
+    private static loadComponentClientCode(ConfigObject parentConfigObject, String defaultClientCode) {
         if (parentConfigObject.containsKey("clientCode")) {
             return parentConfigObject.get("clientCode")
         } else {
@@ -706,7 +736,7 @@ class EscrowConfigurationLoader {
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
-    private static loadReleasesInDefaultBranch(ConfigObject parentConfigObject, Boolean defaultReleasesInDefaultBranch){
+    private static loadReleasesInDefaultBranch(ConfigObject parentConfigObject, Boolean defaultReleasesInDefaultBranch) {
         if (parentConfigObject.containsKey("releasesInDefaultBranch")) {
             return parentConfigObject.get("releasesInDefaultBranch")
         } else {
@@ -720,7 +750,7 @@ class EscrowConfigurationLoader {
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
-    private static loadComponentParentComponent(ConfigObject parentConfigObject, String defaultParentComponent){
+    private static loadComponentParentComponent(ConfigObject parentConfigObject, String defaultParentComponent) {
         if (parentConfigObject.containsKey("parentComponent")) {
             return parentConfigObject.get("parentComponent")
         } else {
@@ -945,11 +975,11 @@ class EscrowConfigurationLoader {
     }
 
     private static DefaultConfigParameters loadDefaultConfigurationFromConfigObject(
-        String moduleName,
-        ConfigObject componentConfigObject,
-        DefaultConfigParameters defaultConfiguration,
-        List<Tool> tools,
-        LoaderInheritanceType inheritanceType
+            String moduleName,
+            ConfigObject componentConfigObject,
+            DefaultConfigParameters defaultConfiguration,
+            List<Tool> tools,
+            LoaderInheritanceType inheritanceType
     ) {
         BuildSystem buildSystem = componentConfigObject.containsKey("buildSystem") ? BuildSystem.valueOf(componentConfigObject.buildSystem.toString()) : defaultConfiguration?.buildSystem
         JiraComponent jiraComponent = loadJiraConfiguration(componentConfigObject, defaultConfiguration.jiraComponent)
@@ -960,7 +990,7 @@ class EscrowConfigurationLoader {
         String componentOwner = loadComponentOwner(componentConfigObject, defaultConfiguration.componentOwner)
         final String releaseManager = loadComponentReleaseManager(componentConfigObject, defaultConfiguration.releaseManager)
         final String securityChampion = loadComponentSecurityChampion(componentConfigObject, defaultConfiguration.securityChampion)
-        final String system = loadComponentSystem(componentConfigObject,  defaultConfiguration.system)
+        final String system = loadComponentSystem(componentConfigObject, defaultConfiguration.system)
         final String clientCode = loadComponentClientCode(componentConfigObject, defaultConfiguration.clientCode)
         final Boolean releasesInDefaultBranch = loadReleasesInDefaultBranch(componentConfigObject, defaultConfiguration.releasesInDefaultBranch)
         final Boolean solution = loadSolution(componentConfigObject, defaultConfiguration.solution)

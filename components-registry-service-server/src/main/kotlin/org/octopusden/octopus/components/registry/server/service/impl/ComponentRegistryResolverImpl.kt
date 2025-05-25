@@ -16,6 +16,7 @@ import org.octopusden.octopus.components.registry.server.util.formatVersion
 import org.octopusden.octopus.escrow.ModelConfigPostProcessor
 import org.octopusden.octopus.escrow.config.JiraComponentVersionRange
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
+import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader.normalizeVersion
 import org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration
 import org.octopusden.octopus.escrow.configuration.model.EscrowModule
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
@@ -45,7 +46,6 @@ import kotlin.io.path.exists
 import kotlin.io.path.inputStream
 import kotlin.io.path.isRegularFile
 import kotlin.system.measureTimeMillis
-import kotlin.text.replace
 
 
 @Service
@@ -235,7 +235,11 @@ class ComponentRegistryResolverImpl(
                 }
             }
         }
-        LOG.info("Time taken to buildImageToComponentMap {} ms, read {} images", timeTaken, dockerImageName2ComponentMap.size)
+        LOG.info(
+            "Time taken to buildImageToComponentMap {} ms, read {} images",
+            timeTaken,
+            dockerImageName2ComponentMap.size
+        )
 
         return dockerImageName2ComponentMap
     }
@@ -362,6 +366,8 @@ class ComponentRegistryResolverImpl(
     ) = getJiraComponentVersionsToRanges(
         version, getJiraComponentVersionRangesByProject(projectKey)
     ).let {
+        println("getJiraComponentVersionToRangeByProjectAndVersion: $projectKey:$version, found ${it.size} versions")
+        println(it)
         when (it.size) {
             1 -> it.first()
             0 -> throw NotFoundException("Version '$version' for project '$projectKey' is not found")
@@ -375,31 +381,14 @@ class ComponentRegistryResolverImpl(
         versionRanges.filter { versionRangeFactory.create(it.versionRange).containsVersion(this) }
             .mapNotNull { versionRange ->
                 val component = versionRange.jiraComponentVersion.component
-                when {
-                    jiraComponentVersionFormatter.matchesBuildVersionFormat(component, version, strict) ->
-                        formatVersion(component.componentVersionFormat.buildVersionFormat)
-
-                    jiraComponentVersionFormatter.matchesReleaseVersionFormat(component, version, strict)
-                            || jiraComponentVersionFormatter.matchesRCVersionFormat(component, version, strict) ->
-                        formatVersion(component.componentVersionFormat.releaseVersionFormat)
-
-                    jiraComponentVersionFormatter.matchesMajorVersionFormat(component, version, strict) ->
-                        formatVersion(component.componentVersionFormat.majorVersionFormat)
-
-                    jiraComponentVersionFormatter.matchesLineVersionFormat(component, version, strict) ->
-                        formatVersion(component.componentVersionFormat.lineVersionFormat)
-
-                    jiraComponentVersionFormatter.matchesHotfixVersionFormat(component, version, strict) ->
-                        formatVersion(component.componentVersionFormat.hotfixVersionFormat)
-
-                    else -> null
-                }?.let { cleanVersion ->
-                    JiraComponentVersion(
-                        ComponentVersion.create(versionRange.componentName, cleanVersion),
-                        versionRange.component,
-                        jiraComponentVersionFormatter
-                    ) to versionRange
-                }
+                normalizeVersion(version, component, versionNames, strict)
+                    ?.let { cleanVersion ->
+                        JiraComponentVersion(
+                            ComponentVersion.create(versionRange.componentName, cleanVersion),
+                            versionRange.component,
+                            jiraComponentVersionFormatter
+                        ) to versionRange
+                    }
             }
     }
 
