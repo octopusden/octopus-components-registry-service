@@ -2,6 +2,7 @@ package org.octopusden.octopus.escrow.configuration.loader
 
 import groovy.transform.TypeChecked
 import groovy.transform.TypeCheckingMode
+import java.util.stream.Collectors
 import org.apache.commons.lang3.StringUtils
 import org.apache.commons.lang3.Validate
 import org.apache.logging.log4j.LogManager
@@ -37,9 +38,19 @@ import org.octopusden.releng.versions.ComponentVersionFormat
 import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRangeFactory
-import java.util.stream.Collectors
 
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.*
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.BRANCH
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.BUILD
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.DISTRIBUTION
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.HOTFIX_BRANCH
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.JIRA
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.REPOSITORY_TYPE
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.SECURITY_GROUPS_READ
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.SUPPORTED_ATTRIBUTES
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.TAG
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.TOOLS
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.VCS_SETTINGS
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.VCS_URL
 
 class EscrowConfigurationLoader {
     private static final Logger LOG = LogManager.getLogger(EscrowConfigurationLoader.class)
@@ -438,7 +449,6 @@ class EscrowConfigurationLoader {
         }
         return defaultRepositoryType
     }
-
     static List<VersionControlSystemRoot> replaceDefaults(VCSSettingsWrapper parentVCSSettings,
                                                           Map<String, List<String>> vcsRootName2ParametersFromDefaultMap,
                                                           VersionControlSystemRoot currentDefaultVCSParameters,
@@ -718,7 +728,7 @@ class EscrowConfigurationLoader {
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
-    private static loadComponentSystem(ConfigObject parentConfigObject, String defaultSystem) {
+    private static loadComponentSystem(ConfigObject parentConfigObject, String defaultSystem){
         if (parentConfigObject.containsKey("system")) {
             return parentConfigObject.get("system")
         } else {
@@ -727,7 +737,7 @@ class EscrowConfigurationLoader {
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
-    private static loadComponentClientCode(ConfigObject parentConfigObject, String defaultClientCode) {
+    private static loadComponentClientCode(ConfigObject parentConfigObject, String defaultClientCode){
         if (parentConfigObject.containsKey("clientCode")) {
             return parentConfigObject.get("clientCode")
         } else {
@@ -736,7 +746,7 @@ class EscrowConfigurationLoader {
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
-    private static loadReleasesInDefaultBranch(ConfigObject parentConfigObject, Boolean defaultReleasesInDefaultBranch) {
+    private static loadReleasesInDefaultBranch(ConfigObject parentConfigObject, Boolean defaultReleasesInDefaultBranch){
         if (parentConfigObject.containsKey("releasesInDefaultBranch")) {
             return parentConfigObject.get("releasesInDefaultBranch")
         } else {
@@ -750,7 +760,7 @@ class EscrowConfigurationLoader {
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
-    private static loadComponentParentComponent(ConfigObject parentConfigObject, String defaultParentComponent) {
+    private static loadComponentParentComponent(ConfigObject parentConfigObject, String defaultParentComponent){
         if (parentConfigObject.containsKey("parentComponent")) {
             return parentConfigObject.get("parentComponent")
         } else {
@@ -975,11 +985,11 @@ class EscrowConfigurationLoader {
     }
 
     private static DefaultConfigParameters loadDefaultConfigurationFromConfigObject(
-            String moduleName,
-            ConfigObject componentConfigObject,
-            DefaultConfigParameters defaultConfiguration,
-            List<Tool> tools,
-            LoaderInheritanceType inheritanceType
+        String moduleName,
+        ConfigObject componentConfigObject,
+        DefaultConfigParameters defaultConfiguration,
+        List<Tool> tools,
+        LoaderInheritanceType inheritanceType
     ) {
         BuildSystem buildSystem = componentConfigObject.containsKey("buildSystem") ? BuildSystem.valueOf(componentConfigObject.buildSystem.toString()) : defaultConfiguration?.buildSystem
         JiraComponent jiraComponent = loadJiraConfiguration(componentConfigObject, defaultConfiguration.jiraComponent)
@@ -990,7 +1000,7 @@ class EscrowConfigurationLoader {
         String componentOwner = loadComponentOwner(componentConfigObject, defaultConfiguration.componentOwner)
         final String releaseManager = loadComponentReleaseManager(componentConfigObject, defaultConfiguration.releaseManager)
         final String securityChampion = loadComponentSecurityChampion(componentConfigObject, defaultConfiguration.securityChampion)
-        final String system = loadComponentSystem(componentConfigObject, defaultConfiguration.system)
+        final String system = loadComponentSystem(componentConfigObject,  defaultConfiguration.system)
         final String clientCode = loadComponentClientCode(componentConfigObject, defaultConfiguration.clientCode)
         final Boolean releasesInDefaultBranch = loadReleasesInDefaultBranch(componentConfigObject, defaultConfiguration.releasesInDefaultBranch)
         final Boolean solution = loadSolution(componentConfigObject, defaultConfiguration.solution)

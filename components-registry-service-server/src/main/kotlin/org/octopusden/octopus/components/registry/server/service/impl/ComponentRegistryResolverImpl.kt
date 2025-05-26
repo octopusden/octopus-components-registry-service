@@ -218,17 +218,13 @@ class ComponentRegistryResolverImpl(
         }
     }
 
-    private fun dockerStringToList(dockerString: String): List<String> {
-        return dockerString.split(",").map { it.substringBefore(":") }
-    }
-
     private fun buildImageToComponentMap(): Map<String, String> {
         val dockerImageName2ComponentMap = mutableMapOf<String, String>()
         val timeTaken = measureTimeMillis {
             getComponents().forEach { comp ->
                 comp.moduleConfigurations.forEach { moduleConfig ->
                     moduleConfig.distribution?.docker()?.let { dockersString ->
-                        dockerStringToList(dockersString).forEach { dockerImgName ->
+                        dockersString.split(",").map { it.substringBefore(":") }.forEach { dockerImgName ->
                             dockerImageName2ComponentMap[dockerImgName] = comp.moduleName
                         }
                     }
@@ -366,8 +362,6 @@ class ComponentRegistryResolverImpl(
     ) = getJiraComponentVersionsToRanges(
         version, getJiraComponentVersionRangesByProject(projectKey)
     ).let {
-        println("getJiraComponentVersionToRangeByProjectAndVersion: $projectKey:$version, found ${it.size} versions")
-        println(it)
         when (it.size) {
             1 -> it.first()
             0 -> throw NotFoundException("Version '$version' for project '$projectKey' is not found")
