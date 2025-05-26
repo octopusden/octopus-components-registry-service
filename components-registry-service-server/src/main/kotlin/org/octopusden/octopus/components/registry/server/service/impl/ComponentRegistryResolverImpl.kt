@@ -16,6 +16,7 @@ import org.octopusden.octopus.components.registry.server.util.formatVersion
 import org.octopusden.octopus.escrow.ModelConfigPostProcessor
 import org.octopusden.octopus.escrow.config.JiraComponentVersionRange
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
+import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader.normalizeVersion
 import org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration
 import org.octopusden.octopus.escrow.configuration.model.EscrowModule
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
@@ -210,7 +211,8 @@ class ComponentRegistryResolverImpl(
             configuration,
             ComponentVersion.create(compId, versionString)
         )?.distribution?.let {
-            if (it.docker()?.split(',')?.contains("$imageName:$imageTag") == true) {
+            val normalizedTag = versionString + imageTag.substring(versionString.length)
+            if (it.docker()?.split(',')?.contains("$imageName:$normalizedTag") == true) {
                 ComponentImage(compId, versionString, Image(imageName, imageTag))
             } else null
         }
@@ -373,31 +375,14 @@ class ComponentRegistryResolverImpl(
         versionRanges.filter { versionRangeFactory.create(it.versionRange).containsVersion(this) }
             .mapNotNull { versionRange ->
                 val component = versionRange.jiraComponentVersion.component
-                when {
-                    jiraComponentVersionFormatter.matchesBuildVersionFormat(component, version, strict) ->
-                        formatVersion(component.componentVersionFormat.buildVersionFormat)
-
-                    jiraComponentVersionFormatter.matchesReleaseVersionFormat(component, version, strict)
-                            || jiraComponentVersionFormatter.matchesRCVersionFormat(component, version, strict) ->
-                        formatVersion(component.componentVersionFormat.releaseVersionFormat)
-
-                    jiraComponentVersionFormatter.matchesMajorVersionFormat(component, version, strict) ->
-                        formatVersion(component.componentVersionFormat.majorVersionFormat)
-
-                    jiraComponentVersionFormatter.matchesLineVersionFormat(component, version, strict) ->
-                        formatVersion(component.componentVersionFormat.lineVersionFormat)
-
-                    jiraComponentVersionFormatter.matchesHotfixVersionFormat(component, version, strict) ->
-                        formatVersion(component.componentVersionFormat.hotfixVersionFormat)
-
-                    else -> null
-                }?.let { cleanVersion ->
-                    JiraComponentVersion(
-                        ComponentVersion.create(versionRange.componentName, cleanVersion),
-                        versionRange.component,
-                        jiraComponentVersionFormatter
-                    ) to versionRange
-                }
+                normalizeVersion(version, component, versionNames, strict)
+                    ?.let { cleanVersion ->
+                        JiraComponentVersion(
+                            ComponentVersion.create(versionRange.componentName, cleanVersion),
+                            versionRange.component,
+                            jiraComponentVersionFormatter
+                        ) to versionRange
+                    }
             }
     }
 
