@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.controller
 
+import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionRangeDTO
 import org.octopusden.octopus.components.registry.core.dto.VersionNamesDTO
 import org.octopusden.octopus.components.registry.server.mapper.toDTO
@@ -36,6 +37,11 @@ class CommonControllerV2(
     @GetMapping("supported-groups", produces = [MediaType.APPLICATION_JSON_VALUE])
     fun getSupportedGroupIds(): Set<String> {
         return configHelper.supportedGroupIds().toSet()
+    }
+
+    @GetMapping("component-product-mapping", produces = [MediaType.APPLICATION_JSON_VALUE])
+    fun getComponentProductMapping(): Map<String, ProductTypes> {
+        return componentRegistryResolver.getComponentProductMapping()
     }
 
     @Deprecated( replaceWith = ReplaceWith("getVersionNamesV2()"), message = "Use getVersionNamesV2() instead")

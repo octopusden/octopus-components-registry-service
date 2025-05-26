@@ -4,6 +4,9 @@ import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
 import org.apache.maven.artifact.DefaultArtifact
 import org.jetbrains.kotlin.utils.keysToMap
+import org.octopusden.octopus.components.registry.api.build.tools.BuildTool
+import org.octopusden.octopus.components.registry.api.distribution.DistributionEntity
+import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.core.dto.BuildSystem
 import org.octopusden.octopus.components.registry.core.dto.VersionedComponent
@@ -22,6 +25,7 @@ import org.octopusden.octopus.escrow.dto.ComponentArtifactConfiguration
 import org.octopusden.octopus.escrow.model.Distribution
 import org.octopusden.octopus.escrow.model.SecurityGroups
 import org.octopusden.octopus.escrow.model.VCSSettings
+import org.octopusden.octopus.escrow.resolvers.BuildToolsResolver
 import org.octopusden.octopus.escrow.resolvers.JiraParametersResolver
 import org.octopusden.octopus.escrow.resolvers.ModuleByArtifactResolver
 import org.octopusden.octopus.releng.JiraComponentVersionFormatter
@@ -50,6 +54,7 @@ class ComponentRegistryResolverImpl(
     private val jiraParametersResolver: JiraParametersResolver,
     private val jiraComponentVersionFormatter: JiraComponentVersionFormatter,
     private val moduleByArtifactResolver: ModuleByArtifactResolver,
+    private val buildToolsResolver: BuildToolsResolver,
     private val componentsRegistryProperties: ComponentsRegistryProperties,
     private val numericVersionFactory: NumericVersionFactory,
     private val versionRangeFactory: VersionRangeFactory,
@@ -68,6 +73,7 @@ class ComponentRegistryResolverImpl(
         configuration = configurationLoader.loadFullConfigurationWithoutValidationForUnknownAttributes(emptyMap())
         jiraParametersResolver.setEscrowConfiguration(configuration)
         moduleByArtifactResolver.setEscrowConfiguration(configuration)
+        buildToolsResolver.setEscrowConfiguration(configuration)
         loadDependencyMapping()
         updateMetrics()
     }
@@ -103,6 +109,14 @@ class ComponentRegistryResolverImpl(
         )
         return ModelConfigPostProcessor(ComponentVersion.create(component, buildVersion), versionNames)
             .resolveVariables(jiraComponentVersionRange.vcsSettings)
+    }
+
+    override fun getBuildTools(component: String, version: String, ignoreRequired: Boolean?): List<BuildTool> {
+        return buildToolsResolver.getComponentBuildTools(ComponentVersion.create(component, version), null, ignoreRequired ?: false).toList()
+    }
+
+    override fun getDistributionEntities(component: String, version: String): List<DistributionEntity> {
+        return buildToolsResolver.getDistributionEntities(ComponentVersion.create(component, version)).toList()
     }
 
     override fun getJiraComponentByProjectAndVersion(projectKey: String, version: String) =
@@ -183,6 +197,10 @@ class ComponentRegistryResolverImpl(
             }
         LOG.debug("Components count by build system: {}", result)
         return result
+    }
+
+    override fun getComponentProductMapping(): Map<String, ProductTypes> {
+        return buildToolsResolver.componentProductMapping
     }
 
     private fun EscrowModule.getBuildSystem(): BuildSystem {
