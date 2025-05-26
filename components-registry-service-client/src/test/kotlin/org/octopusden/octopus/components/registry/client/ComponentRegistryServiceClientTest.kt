@@ -80,10 +80,10 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
         componentsRegistryClient.getComponentDistribution(component, version)
 
     override fun getBuildTools(component: String, version: String): List<BuildTool> =
-        componentsRegistryClient.getComponentVersionBuildTools(component, version)
+        componentsRegistryClient.getBuildTools(component, version)
 
     override fun getDistributionEntities(component: String, version: String): List<DistributionEntity> =
-        componentsRegistryClient.getComponentVersionDistributionEntities(component, version)
+        componentsRegistryClient.getDistributionEntities(component, version)
 
     override fun getJiraComponentVersion(component: String, version: String): JiraComponentVersionDTO =
         componentsRegistryClient.getJiraComponentForComponentAndVersion(component, version)
@@ -143,8 +143,8 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
             ).components.size
         )
         assertEquals(4, componentsRegistryClient.getAllComponents(systems = listOf("CLASSIC")).components.size)
-        assertEquals(35, componentsRegistryClient.getAllComponents(systems = listOf("NONE")).components.size)
-        assertEquals(39, componentsRegistryClient.getAllComponents(systems = listOf("CLASSIC", "NONE")).components.size)
+        assertEquals(38, componentsRegistryClient.getAllComponents(systems = listOf("NONE")).components.size)
+        assertEquals(42, componentsRegistryClient.getAllComponents(systems = listOf("CLASSIC", "NONE")).components.size)
     }
 
     @Test

@@ -111,6 +111,14 @@ class ComponentRegistryResolverImpl(
             .resolveVariables(jiraComponentVersionRange.vcsSettings)
     }
 
+    override fun getBuildTools(component: String, version: String, ignoreRequired: Boolean): List<BuildTool> {
+        return buildToolsResolver.getComponentBuildTools(ComponentVersion.create(component, version), null, ignoreRequired).toList()
+    }
+
+    override fun getDistributionEntities(component: String, version: String): List<DistributionEntity> {
+        return buildToolsResolver.getDistributionEntities(ComponentVersion.create(component, version)).toList()
+    }
+
     override fun getJiraComponentByProjectAndVersion(projectKey: String, version: String) =
         getJiraComponentVersionToRangeByProjectAndVersion(projectKey, version).first
 
@@ -189,14 +197,6 @@ class ComponentRegistryResolverImpl(
             }
         LOG.debug("Components count by build system: {}", result)
         return result
-    }
-
-    override fun getComponentVersionBuildTools(component: String, version: String, ignoreRequired: Boolean): List<BuildTool> {
-        return buildToolsResolver.getComponentBuildTools(ComponentVersion.create(component, version)).toList()
-    }
-
-    override fun getComponentVersionDistributionEntities(component: String, version: String): List<DistributionEntity> {
-        return buildToolsResolver.getDistributionEntities(ComponentVersion.create(component, version)).toList()
     }
 
     override fun getComponentProductMapping(): Map<String, ProductTypes> {

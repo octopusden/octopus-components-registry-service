@@ -31,6 +31,10 @@ interface ComponentRegistryResolver {
 
     fun getVCSSettings(component: String, version: String): VCSSettings
 
+    fun getBuildTools(component: String, version: String, ignoreRequired: Boolean): List<BuildTool>
+
+    fun getDistributionEntities(component: String, version: String): List<DistributionEntity>
+
     fun getJiraComponentByProjectAndVersion(projectKey: String, version: String): JiraComponentVersion
 
     fun getJiraComponentsByProject(projectKey: String): Set<String>
@@ -54,10 +58,6 @@ interface ComponentRegistryResolver {
     fun getDependencyMapping(): Map<String, String>
 
     fun getComponentsCountByBuildSystem(): EnumMap<BuildSystem, Int>
-
-    fun getComponentVersionBuildTools(component: String, version: String, ignoreRequired: Boolean): List<BuildTool>
-
-    fun getComponentVersionDistributionEntities(component: String, version: String): List<DistributionEntity>
 
     fun getComponentProductMapping(): Map<String, ProductTypes>
 }

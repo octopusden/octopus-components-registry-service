@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.module.SimpleModule
 import feign.Feign
 import feign.Logger
+import feign.Param
 import feign.httpclient.ApacheHttpClient
 import feign.jackson.JacksonDecoder
 import feign.jackson.JacksonEncoder
@@ -69,6 +70,16 @@ class ClassicComponentsRegistryServiceClient(
 
     override fun getVCSSetting(componentKey: String, version: String) = client.getVCSSetting(componentKey, version)
 
+    override fun getBuildTools(
+        @Param(value = "componentKey") componentKey: String,
+        @Param(value = "version") version: String,
+        @Param(value = "ignoreRequired") ignoreRequired: Boolean?
+    ): List<BuildTool> =
+        client.getBuildTools(componentKey, version)
+
+    override fun getDistributionEntities(componentKey: String, version: String): List<DistributionEntity> =
+        client.getDistributionEntities(componentKey, version)
+
     override fun getJiraComponentForComponentAndVersion(
         componentKey: String,
         version: String
@@ -92,12 +103,6 @@ class ClassicComponentsRegistryServiceClient(
 
     override fun getDistributionForProject(projectKey: String, version: String): DistributionDTO =
         client.getDistributionForProject(projectKey, version)
-
-    override fun getComponentVersionBuildTools(componentKey: String, version: String): List<BuildTool> =
-        client.getComponentVersionBuildTools(componentKey, version)
-
-    override fun getComponentVersionDistributionEntities(componentKey: String, version: String): List<DistributionEntity> =
-        client.getComponentVersionDistributionEntities(componentKey, version)
 
     override fun getAllJiraComponentVersionRanges(): Set<JiraComponentVersionRangeDTO> =
         client.getAllJiraComponentVersionRanges()

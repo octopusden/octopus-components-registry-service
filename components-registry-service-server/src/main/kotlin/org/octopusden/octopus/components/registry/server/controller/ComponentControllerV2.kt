@@ -35,6 +35,7 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 
 @RestController
@@ -189,6 +190,23 @@ class ComponentControllerV2(
         return resolveVCSSettings(component, version)
     }
 
+    @GetMapping("{component}/versions/{version}/build-tools", produces = [MediaType.APPLICATION_JSON_VALUE])
+    fun getBuildTools(
+        @PathVariable("component") component: String,
+        @PathVariable("version") version: String,
+        @RequestParam(name = "ignore-required", required = false, defaultValue = "false") ignoreRequired: Boolean
+    ): List<BuildTool> {
+        return componentRegistryResolver.getBuildTools(component, version, ignoreRequired)
+    }
+
+    @GetMapping("{component}/versions/{version}/distribution-entities", produces = [MediaType.APPLICATION_JSON_VALUE])
+    fun getDistributionEntities(
+        @PathVariable("component") component: String,
+        @PathVariable("version") version: String
+    ): List<DistributionEntity> {
+        return componentRegistryResolver.getDistributionEntities(component, version)
+    }
+
     @PostMapping(
         "{component}/detailed-versions",
         consumes = [MediaType.APPLICATION_JSON_VALUE],
@@ -237,22 +255,6 @@ class ComponentControllerV2(
         val moduleName = escrowModule.moduleName
         val escrowModuleConfig = escrowModule.moduleConfigurations[0]
         ComponentV2(moduleName, escrowModuleConfig.componentDisplayName, escrowModuleConfig.componentOwner)
-    }
-
-    @GetMapping("{component}/versions/{version}/build-tools", produces = [MediaType.APPLICATION_JSON_VALUE])
-    fun getComponentVersionBuildTools(
-        @PathVariable("component") component: String,
-        @PathVariable("version") version: String
-    ): List<BuildTool> {
-        return componentRegistryResolver.getComponentVersionBuildTools(component, version, false)
-    }
-
-    @GetMapping("{component}/versions/{version}/distribution-entities", produces = [MediaType.APPLICATION_JSON_VALUE])
-    fun getComponentVersionDistributionEntities(
-        @PathVariable("component") component: String,
-        @PathVariable("version") version: String
-    ): List<DistributionEntity> {
-        return componentRegistryResolver.getComponentVersionDistributionEntities(component, version)
     }
 
     companion object {

@@ -75,6 +75,16 @@ interface ComponentsRegistryServiceClient {
     @Throws(NotFoundException::class)
     fun getVCSSetting(@Param("componentKey") componentKey: String, @Param("version") version: String): VCSSettingsDTO
 
+    @RequestLine("GET rest/api/2/components/{componentKey}/versions/{version}/build-tools?ignore-required={ignoreRequired}")
+    fun getBuildTools(
+        @Param("componentKey") componentKey: String,
+        @Param("version") version: String,
+        @Param("ignoreRequired") ignoreRequired: Boolean? = false
+    ): List<BuildTool>
+
+    @RequestLine("GET rest/api/2/components/{componentKey}/versions/{version}/distribution-entities")
+    fun getDistributionEntities(@Param("componentKey") componentKey: String, @Param("version") version: String): List<DistributionEntity>
+
     @RequestLine("GET rest/api/2/components/{componentKey}/versions/{version}/jira-component")
     fun getJiraComponentForComponentAndVersion(@Param("componentKey") componentKey: String, @Param("version") version: String): JiraComponentVersionDTO
 
@@ -95,12 +105,6 @@ interface ComponentsRegistryServiceClient {
 
     @RequestLine("GET rest/api/2/projects/{projectKey}/versions/{version}/distribution")
     fun getDistributionForProject(@Param("projectKey") projectKey: String, @Param("version") version: String): DistributionDTO
-
-    @RequestLine("GET rest/api/2/components/{componentKey}/versions/{version}/build-tools")
-    fun getComponentVersionBuildTools(@Param("componentKey") componentKey: String, @Param("version") version: String): List<BuildTool>
-
-    @RequestLine("GET rest/api/2/components/{componentKey}/versions/{version}/distribution-entities")
-    fun getComponentVersionDistributionEntities(@Param("componentKey") componentKey: String, @Param("version") version: String): List<DistributionEntity>
 
     @RequestLine("GET rest/api/2/common/jira-component-version-ranges")
     fun getAllJiraComponentVersionRanges(): Set<JiraComponentVersionRangeDTO>
