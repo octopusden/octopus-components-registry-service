@@ -2,7 +2,7 @@
   "explicit": false,
   "external": false,
   "GAV": "org.octopusden.octopus.test:versions-api:jar",
-  "docker": "test/versions-api",
+  "docker": "test/versions-api:1.0",
   "securityGroups": {
     "read": [
       "vfiler1-default#group"

@@ -16,6 +16,7 @@ import org.octopusden.octopus.components.registry.server.util.formatVersion
 import org.octopusden.octopus.escrow.ModelConfigPostProcessor
 import org.octopusden.octopus.escrow.config.JiraComponentVersionRange
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
+import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader.calculateDistribution
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader.normalizeVersion
 import org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration
 import org.octopusden.octopus.escrow.configuration.model.EscrowModule
@@ -148,8 +149,10 @@ class ComponentRegistryResolverImpl(
         ).resolveVariables(jiraComponentVersionRange.vcsSettings)
     }
 
-    override fun getDistributionForProject(projectKey: String, version: String): Distribution =
-        getJiraComponentVersionToRangeByProjectAndVersion(projectKey, version).second.distribution
+    override fun getDistributionForProject(projectKey: String, version: String): Distribution {
+        val found = getJiraComponentVersionToRangeByProjectAndVersion(projectKey, version)
+        return calculateDistribution(found.second.distribution, found.first.version)
+    }
 
     override fun getAllJiraComponentVersionRanges() =
         jiraParametersResolver.componentConfig.projectKeyToJiraComponentVersionRangeMap.values.flatten().toSet()
