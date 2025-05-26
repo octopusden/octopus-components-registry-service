@@ -111,8 +111,8 @@ class ComponentRegistryResolverImpl(
             .resolveVariables(jiraComponentVersionRange.vcsSettings)
     }
 
-    override fun getBuildTools(component: String, version: String, ignoreRequired: Boolean): List<BuildTool> {
-        return buildToolsResolver.getComponentBuildTools(ComponentVersion.create(component, version), null, ignoreRequired).toList()
+    override fun getBuildTools(component: String, version: String, ignoreRequired: Boolean?): List<BuildTool> {
+        return buildToolsResolver.getComponentBuildTools(ComponentVersion.create(component, version), null, ignoreRequired ?: false).toList()
     }
 
     override fun getDistributionEntities(component: String, version: String): List<DistributionEntity> {

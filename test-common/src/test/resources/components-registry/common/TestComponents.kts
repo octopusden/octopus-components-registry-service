@@ -1,6 +1,6 @@
 import org.octopusden.octopus.components.registry.dsl.*
 
-component("pt_k_db") {
+component("TEST_PT_K_DB") {
     productType = "PT_K"
 }
 

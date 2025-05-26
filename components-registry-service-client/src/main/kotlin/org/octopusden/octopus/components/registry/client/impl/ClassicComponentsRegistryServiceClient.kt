@@ -75,7 +75,7 @@ class ClassicComponentsRegistryServiceClient(
         @Param(value = "version") version: String,
         @Param(value = "ignoreRequired") ignoreRequired: Boolean?
     ): List<BuildTool> =
-        client.getBuildTools(componentKey, version)
+        client.getBuildTools(componentKey, version, ignoreRequired)
 
     override fun getDistributionEntities(componentKey: String, version: String): List<DistributionEntity> =
         client.getDistributionEntities(componentKey, version)

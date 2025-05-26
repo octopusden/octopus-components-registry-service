@@ -31,7 +31,7 @@ interface ComponentRegistryResolver {
 
     fun getVCSSettings(component: String, version: String): VCSSettings
 
-    fun getBuildTools(component: String, version: String, ignoreRequired: Boolean): List<BuildTool>
+    fun getBuildTools(component: String, version: String, ignoreRequired: Boolean?): List<BuildTool>
 
     fun getDistributionEntities(component: String, version: String): List<DistributionEntity>
 

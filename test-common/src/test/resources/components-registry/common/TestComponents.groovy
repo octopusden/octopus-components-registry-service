@@ -896,7 +896,7 @@ TEST_COMPONENT4 {
     }
 }
 
-"pt_k_db" {
+"TEST_PT_K_DB" {
     componentOwner = "user9"
     groupId = "org.octopusden.octopus.test"
     artifactId = "pt-k-db"

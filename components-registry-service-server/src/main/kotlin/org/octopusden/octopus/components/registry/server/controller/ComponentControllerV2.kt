@@ -194,7 +194,7 @@ class ComponentControllerV2(
     fun getBuildTools(
         @PathVariable("component") component: String,
         @PathVariable("version") version: String,
-        @RequestParam(name = "ignore-required", required = false, defaultValue = "false") ignoreRequired: Boolean
+        @RequestParam(name = "ignore-required", required = false, defaultValue = "false") ignoreRequired: Boolean?
     ): List<BuildTool> {
         return componentRegistryResolver.getBuildTools(component, version, ignoreRequired)
     }

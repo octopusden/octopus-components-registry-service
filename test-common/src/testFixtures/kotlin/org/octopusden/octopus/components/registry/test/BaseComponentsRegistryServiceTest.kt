@@ -152,7 +152,7 @@ abstract class BaseComponentsRegistryServiceTest {
     @Test
     fun testGetComponentProductMapping() {
         Assertions.assertEquals(
-            mapOf("pt_k_db" to ProductTypes.PT_K),
+            mapOf("TEST_PT_K_DB" to ProductTypes.PT_K),
             getComponentProductMapping()
         )
     }

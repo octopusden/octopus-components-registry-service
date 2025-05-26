@@ -84,7 +84,7 @@ class ComponentRegistryServiceApplication {
         ModuleByArtifactResolver(versionNames)
 
     @Bean
-    fun buildToolsResolver(versionNames: VersionNames) = BuildToolsResolver(versionNames)
+    fun buildToolsResolver() = BuildToolsResolver()
 
     @Bean
     fun versionNames(configHelper: ConfigHelper) = VersionNames(
