@@ -10,6 +10,9 @@ import feign.jackson.JacksonEncoder
 import feign.slf4j.Slf4jLogger
 import org.octopusden.octopus.components.registry.api.VersionedComponentConfiguration
 import org.octopusden.octopus.components.registry.api.beans.VersionedComponentConfigurationBean
+import org.octopusden.octopus.components.registry.api.build.tools.BuildTool
+import org.octopusden.octopus.components.registry.api.distribution.DistributionEntity
+import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.components.registry.client.ComponentsRegistryServiceClient
 import org.octopusden.octopus.components.registry.client.ComponentsRegistryServiceErrorDecoder
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
@@ -90,6 +93,12 @@ class ClassicComponentsRegistryServiceClient(
     override fun getDistributionForProject(projectKey: String, version: String): DistributionDTO =
         client.getDistributionForProject(projectKey, version)
 
+    override fun getComponentVersionBuildTools(componentKey: String, version: String): List<BuildTool> =
+        client.getComponentVersionBuildTools(componentKey, version)
+
+    override fun getComponentVersionDistributionEntities(componentKey: String, version: String): List<DistributionEntity> =
+        client.getComponentVersionDistributionEntities(componentKey, version)
+
     override fun getAllJiraComponentVersionRanges(): Set<JiraComponentVersionRangeDTO> =
         client.getAllJiraComponentVersionRanges()
 
@@ -98,6 +107,9 @@ class ClassicComponentsRegistryServiceClient(
 
     override fun getSupportedGroupIds(): Set<String> =
         client.getSupportedGroupIds()
+
+    override fun getComponentProductMapping(): Map<String, ProductTypes> =
+        client.getComponentProductMapping()
 
     override fun getVersionNames(): VersionNamesDTO =
         client.getVersionNames()

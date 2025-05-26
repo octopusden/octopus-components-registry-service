@@ -1,5 +1,8 @@
 package org.octopusden.octopus.components.registry.client
 
+import org.octopusden.octopus.components.registry.api.build.tools.BuildTool
+import org.octopusden.octopus.components.registry.api.distribution.DistributionEntity
+import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.components.registry.core.dto.ArtifactComponentsDTO
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.core.dto.BuildSystem
@@ -93,6 +96,12 @@ interface ComponentsRegistryServiceClient {
     @RequestLine("GET rest/api/2/projects/{projectKey}/versions/{version}/distribution")
     fun getDistributionForProject(@Param("projectKey") projectKey: String, @Param("version") version: String): DistributionDTO
 
+    @RequestLine("GET rest/api/2/components/{componentKey}/versions/{version}/build-tools")
+    fun getComponentVersionBuildTools(@Param("componentKey") componentKey: String, @Param("version") version: String): List<BuildTool>
+
+    @RequestLine("GET rest/api/2/components/{componentKey}/versions/{version}/distribution-entities")
+    fun getComponentVersionDistributionEntities(@Param("componentKey") componentKey: String, @Param("version") version: String): List<DistributionEntity>
+
     @RequestLine("GET rest/api/2/common/jira-component-version-ranges")
     fun getAllJiraComponentVersionRanges(): Set<JiraComponentVersionRangeDTO>
 
@@ -101,6 +110,9 @@ interface ComponentsRegistryServiceClient {
 
     @RequestLine("GET rest/api/2/common/supported-groups")
     fun getSupportedGroupIds(): Set<String>
+
+    @RequestLine("GET rest/api/2/common/component-product-mapping")
+    fun getComponentProductMapping(): Map<String, ProductTypes>
 
     @RequestLine("GET rest/api/2/common/version-names")
     fun getVersionNames(): VersionNamesDTO

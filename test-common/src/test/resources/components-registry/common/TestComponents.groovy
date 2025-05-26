@@ -226,6 +226,8 @@ Defaults {
         GAV = "org.octopusden.octopus.test:versions-api:jar"
         docker = "test/versions-api"
     }
+
+    buildFilePath = "build"
 }
 
 
@@ -874,4 +876,28 @@ TEST_COMPONENT4 {
     groupId = "org.octopusden.octopus.test.golang"
     artifactId = "test-golang"
     buildSystem = GOLANG
+}
+
+"TEST_COMPONENT_BUILD_TOOLS" {
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.test.build.tools"
+    artifactId = "test-build-tools"
+    build { }
+}
+
+"TEST_COMPONENT_DISTRIBUTION_ENTITIES" {
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.test.distribution.entities"
+    artifactId = "test-distribution-entities"
+    distribution {
+        explicit = true
+        external = true
+        GAV = "org.octopusden.octopus.distribution.server:app:zip:aix7_1,org.octopusden.octopus.distribution.server:app:zip:aix7_2,org.octopusden.octopus.distribution.server:app:zip:rhel6-linux-i386-nojdk,org.octopusden.octopus.distribution.server:app:zip:rhel6-linux-x64-nojdk,org.octopusden.octopus.distribution.server:app:zip:rhel7-linux-x64-nojdk,org.octopusden.octopus.distribution.server:app:zip:rhel8-linux-x64-nojdk,org.octopusden.octopus.distribution.server:app:zip:solaris11-sparc-nojdk,org.octopusden.octopus.distribution.server:app:zip:windows-x64-nojdk"
+    }
+}
+
+"pt_k_db" {
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.test"
+    artifactId = "pt-k-db"
 }
