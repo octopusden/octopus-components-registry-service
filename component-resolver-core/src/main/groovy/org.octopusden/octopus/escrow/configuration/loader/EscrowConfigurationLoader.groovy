@@ -111,7 +111,12 @@ class EscrowConfigurationLoader {
         }
         def config = modules[0]
 
-        def normalizedVersion = normalizeVersion(componentVersion, config.jiraConfiguration, escrowConfiguration.versionNames, false) ?: componentVersion
+        def normalizedVersion = normalizeVersion(componentVersion, config.jiraConfiguration, escrowConfiguration.versionNames, false)
+        if (normalizedVersion == null) {
+            LOG.warn("Version of component {}:{} is incorrect", componentKey, componentVersion)
+            return null
+        }
+
         def escrowModuleConfig = config.clone()
         def postProcessor = new ModelConfigPostProcessor(ComponentVersion.create(componentKey, normalizedVersion), escrowConfiguration.versionNames)
         escrowModuleConfig.distribution = calculateDistribution(postProcessor.resolveDistribution(config.distribution), normalizedVersion)
@@ -123,7 +128,7 @@ class EscrowConfigurationLoader {
     static String normalizeVersion(String version, JiraComponent component, VersionNames versionNames,
                                    boolean strict) {
 
-        if (component?.getComponentInfo()?.getVersionFormat() == null) {
+        if (component?.componentVersionFormat == null) {
             return null
         }
 
