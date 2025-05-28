@@ -214,8 +214,7 @@ class ComponentRegistryResolverImpl(
             configuration,
             ComponentVersion.create(compId, versionString)
         )?.distribution?.let {
-            val normalizedTag = versionString + imageTag.substring(versionString.length)
-            if (it.docker()?.split(',')?.contains("$imageName:$normalizedTag") == true) {
+            if (it.docker()?.split(',')?.contains("$imageName:$imageTag") == true) {
                 ComponentImage(compId, versionString, Image(imageName, imageTag))
             } else null
         }
