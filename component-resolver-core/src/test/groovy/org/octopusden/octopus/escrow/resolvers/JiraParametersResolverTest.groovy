@@ -125,7 +125,7 @@ class JiraParametersResolverTest extends GroovyTestCase {
         IJiraParametersResolver jiraParametersResolver = createJiraParametersResolverFromConfig("componentConfig.groovy")
         def version = ComponentVersion.create("component", "0.1");
         def versionBad = ComponentVersion.create("component1", "0.1")
-        def sysVersion = ComponentVersion.create("commoncomponent", "12")
+        def sysVersion = ComponentVersion.create("commoncomponent", "12.1")
         def sysWrongVersion = ComponentVersion.create("commoncomponent", "1")
         def componentVersion = ComponentVersion.create("sms_component", "5")
 

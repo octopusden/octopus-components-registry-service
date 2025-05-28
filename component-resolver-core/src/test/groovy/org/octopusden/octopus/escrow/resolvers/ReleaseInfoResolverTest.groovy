@@ -64,8 +64,8 @@ class ReleaseInfoResolverTest {
     @Test
     void testReleaseInfoResolverDebRpm() {
         def resolver = getResolver("/deb-rpm/Aggregator.groovy")
-        def releaseInfo3 = resolver.resolveRelease(ComponentVersion.create("logcomp", "3.0"))
-        def releaseInfo4 = resolver.resolveRelease(ComponentVersion.create("logcomp", "4.0"))
+        def releaseInfo3 = resolver.resolveRelease(ComponentVersion.create("logcomp", "3.0.1"))
+        def releaseInfo4 = resolver.resolveRelease(ComponentVersion.create("logcomp", "4.0.1"))
         assertEquals('org.octopusden.octopus.logcomp:logcomp', releaseInfo3.distribution.GAV())
         assertEquals('logcomp_${version}-1_amd64.deb', releaseInfo3.distribution.DEB())
         assertNull(releaseInfo3.distribution.RPM())
