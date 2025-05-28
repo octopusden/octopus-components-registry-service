@@ -1,8 +1,5 @@
 package org.octopusden.octopus.components.registry.client
 
-import java.util.Date
-import kotlin.test.assertFailsWith
-import kotlin.test.assertTrue
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
@@ -18,6 +15,7 @@ import org.octopusden.octopus.components.registry.core.dto.ComponentV1
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersion
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersions
 import org.octopusden.octopus.components.registry.core.dto.DistributionDTO
+import org.octopusden.octopus.components.registry.core.dto.Image
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionDTO
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionRangeDTO
 import org.octopusden.octopus.components.registry.core.dto.ServiceStatusDTO
@@ -32,10 +30,16 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.junit.jupiter.SpringExtension
+import java.util.Date
+import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @ExtendWith(SpringExtension::class)
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, classes = [ComponentRegistryServiceApplication::class])
+@SpringBootTest(
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    classes = [ComponentRegistryServiceApplication::class]
+)
 @ActiveProfiles("common", "test")
 @ResourceLock(value = "SYSTEM_PROPERTIES")
 class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
@@ -117,7 +121,7 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
 
     @Test
     fun testGetAllComponents() {
-        assertEquals(39, componentsRegistryClient.getAllComponents().components.size)
+        assertEquals(46, componentsRegistryClient.getAllComponents().components.size)
         assertEquals(
             3,
             componentsRegistryClient.getAllComponents("ssh://hg@mercurial/technical", null).components.size
@@ -131,8 +135,8 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
             ).components.size
         )
         assertEquals(4, componentsRegistryClient.getAllComponents(systems = listOf("CLASSIC")).components.size)
-        assertEquals(35, componentsRegistryClient.getAllComponents(systems = listOf("NONE")).components.size)
-        assertEquals(39, componentsRegistryClient.getAllComponents(systems = listOf("CLASSIC", "NONE")).components.size)
+        assertEquals(42, componentsRegistryClient.getAllComponents(systems = listOf("NONE")).components.size)
+        assertEquals(46, componentsRegistryClient.getAllComponents(systems = listOf("CLASSIC", "NONE")).components.size)
     }
 
     @Test
@@ -184,4 +188,121 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
                 .isEmpty()
         )
     }
+
+    @Test
+    fun findComponentsByDockerImagesOldStyle() {
+        val components = componentsRegistryClient.findComponentsByDockerImages(
+            setOf(
+                Image("test/versions-api", "10.1"),
+                Image("test-docker-1", "0.1"),
+                Image("not-found", "0.1")
+            )
+        )
+        assertEquals(2, components.size)
+        assert(components.any { it.image.name == "test-docker-1" && it.component == "TEST_COMPONENT_WITH_DOCKER_1" && it.version == "0.1" })
+        assert(components.any { it.image.name == "test/versions-api" && it.component == "TESTONE" && it.version == "10.1" })
+        assert(components.none { it.image.name == "not-found" })
+    }
+
+
+    @Test
+    fun findComponentsByDockerImagesOldStyle2() {
+
+        var components =
+            componentsRegistryClient.findComponentsByDockerImages(setOf(Image("test-docker-3", "10.1-amd64")))
+        assertEquals(1, components.size)
+        assert(components.any { it.image.name == "test-docker-3" && it.component == "TEST_COMPONENT_WITH_DOCKER_3" && it.version == "10.1" })
+
+        components = componentsRegistryClient.findComponentsByDockerImages(setOf(Image("test-docker-4", "0.1.345")))
+        assertEquals(1, components.size)
+        assert(components.any { it.image.name == "test-docker-4" && it.component == "TEST_COMPONENT_WITH_DOCKER_4" && it.version == "0.1.345" })
+
+        components = componentsRegistryClient.findComponentsByDockerImages(setOf(Image("test-docker-4", "1.2.345")))
+        assertEquals(0, components.size)
+
+        components =
+            componentsRegistryClient.findComponentsByDockerImages(setOf(Image("test-docker-4", "1.2.345-arm64")))
+        assertEquals(0, components.size)
+
+        components =
+            componentsRegistryClient.findComponentsByDockerImages(setOf(Image("test-docker-4", "1.2.345-amd64")))
+        assertEquals(1, components.size)
+        assert(components.any { it.image.name == "test-docker-4" && it.component == "TEST_COMPONENT_WITH_DOCKER_4" && it.version == "1.2.345" })
+
+        components =
+            componentsRegistryClient.findComponentsByDockerImages(setOf(Image("test-docker-4", "2.34.567-arm64")))
+        assertEquals(1, components.size)
+        assert(components.any { it.image.name == "test-docker-4" && it.component == "TEST_COMPONENT_WITH_DOCKER_4" && it.version == "2.34.567" })
+
+    }
+
+
+    @Test
+    fun findComponentsByDockerImagesNormalizeVersion() {
+        var components =
+            componentsRegistryClient.findComponentsByDockerImages(setOf(Image("test-docker-3", "10.1-amd64")))
+        assertEquals(1, components.size)
+        assert(components.any { it.image.name == "test-docker-3" && it.component == "TEST_COMPONENT_WITH_DOCKER_3" && it.version == "10.1" })
+    }
+
+
+    @Test
+    fun findComponentsByDockerImagesNewStyle() {
+        val components = componentsRegistryClient.findComponentsByDockerImages(
+            setOf(
+                Image("test-docker-1_1", "0.1"),
+                Image("test-docker-1_2", "0.1.2-3-jdk11"),
+                Image("not-found", "0.1")
+            )
+        )
+        assertEquals(2, components.size)
+        assert(components.any { it.image.name == "test-docker-1_1" && it.component == "TEST_COMPONENT_WITH_DOCKER_1_1" && it.version == "0.1" })
+        assert(components.any { it.image.name == "test-docker-1_2" && it.component == "TEST_COMPONENT_WITH_DOCKER_1_2" && it.version == "0.1.2-3" })
+        assert(components.none { it.image.name == "not-found" })
+    }
+
+
+    @Test
+    fun findComponentsByDockerImagesWithRanges() {
+        var components = componentsRegistryClient.findComponentsByDockerImages(
+            setOf(
+                Image("test-docker-first", "1.0.5"),
+                Image("test-docker-second", "1.0.5-amd64"),
+            )
+        )
+        assertEquals(1, components.size)
+        assert(components.none { it.image.name == "test-docker-first" && it.component == "TEST_COMPONENT_WITH_DOCKER_2" && it.version == "1.0.5" })
+        assert(components.any { it.image.name == "test-docker-second" && it.component == "TEST_COMPONENT_WITH_DOCKER_2" && it.version == "1.0.5" })
+
+        components = componentsRegistryClient.findComponentsByDockerImages(
+            setOf(
+                Image("test-docker-first", "0.0.5"),
+                Image("test-docker-second", "0.0.5")
+            )
+        )
+        assertEquals(1, components.size)
+        assert(components.any { it.image.name == "test-docker-first" && it.component == "TEST_COMPONENT_WITH_DOCKER_2" && it.version == "0.0.5" })
+        assert(components.none { it.image.name == "test-docker-second" && it.component == "TEST_COMPONENT_WITH_DOCKER_2" && it.version == "0.0.5" })
+
+        components = componentsRegistryClient.findComponentsByDockerImages(
+            setOf(
+                Image("test-docker-first", "0.0.5"),
+                Image("test-docker-second", "1.0.5-amd64"),
+                Image("test-docker-third", "2.0.5-arm64")
+            )
+        )
+        assertEquals(3, components.size)
+        assert(components.any { it.image.name == "test-docker-first" && it.component == "TEST_COMPONENT_WITH_DOCKER_2" && it.version == "0.0.5" })
+        assert(components.any { it.image.name == "test-docker-second" && it.component == "TEST_COMPONENT_WITH_DOCKER_2" && it.version == "1.0.5" })
+        assert(components.any { it.image.name == "test-docker-third" && it.component == "TEST_COMPONENT_WITH_DOCKER_2" && it.version == "2.0.5" })
+
+    }
+
+    @Test
+    fun dockerImagesVersionResolver() {
+        assertEquals(getDistribution("TEST_COMPONENT_WITH_DOCKER_4", "1.2.3").docker, "test-docker-4:1.2.3-amd64")
+        assertEquals(getDistribution("TEST_COMPONENT_WITH_DOCKER_2", "1.2.3").docker, "test-docker-second:1.2.3-amd64")
+        assertEquals(getDistribution("TEST_COMPONENT_WITH_DOCKER_5", "7.6.5").docker, "test-docker-5:7.6.5-amd64,test-docker-5:7.6.5-arm64")
+    }
+
 }

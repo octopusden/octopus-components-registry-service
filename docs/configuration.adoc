@@ -249,9 +249,9 @@ Below is the list of available parameters:
 * *GAV* - comma-separated list of MAVEN artifact coordinates
 * *DEB* - comma-separated list of DEBIAN artifact coordinates
 * *RPM* - comma-separated list of RPM artifact coordinates
-* *docker* - comma-separated list of Docker image coordinates
+* *docker* - comma-separated list of Docker image coordinates where image tag implicitly starts with a component version and optionally ends with a specified suffix (e.g. `:arm64` after evaluation with version  `:1.2.3` will become `:1.2.3-arm64`)
 
-*GAV*, *DEB*, *RPM* and *docker* parameters can be configured using Expression Language.
+*GAV*, *DEB*, and *RPM* parameters can be configured using Expression Language.
 
 WARNING: At least one of *GAV*, *DEB*, *RPM*, *docker* parameters should be defined for *external* *explicit* component!
 

@@ -6,6 +6,8 @@ import org.apache.maven.artifact.DefaultArtifact
 import org.jetbrains.kotlin.utils.keysToMap
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.core.dto.BuildSystem
+import org.octopusden.octopus.components.registry.core.dto.ComponentImage
+import org.octopusden.octopus.components.registry.core.dto.Image
 import org.octopusden.octopus.components.registry.core.dto.VersionedComponent
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.server.config.ComponentsRegistryProperties
@@ -14,6 +16,8 @@ import org.octopusden.octopus.components.registry.server.util.formatVersion
 import org.octopusden.octopus.escrow.ModelConfigPostProcessor
 import org.octopusden.octopus.escrow.config.JiraComponentVersionRange
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
+import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader.calculateDistribution
+import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader.normalizeVersion
 import org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration
 import org.octopusden.octopus.escrow.configuration.model.EscrowModule
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
@@ -42,6 +46,8 @@ import javax.annotation.Resource
 import kotlin.io.path.exists
 import kotlin.io.path.inputStream
 import kotlin.io.path.isRegularFile
+import kotlin.system.measureTimeMillis
+
 
 @Service
 @EnableConfigurationProperties(ComponentsRegistryProperties::class)
@@ -54,7 +60,7 @@ class ComponentRegistryResolverImpl(
     private val numericVersionFactory: NumericVersionFactory,
     private val versionRangeFactory: VersionRangeFactory,
     private val meterRegistry: MeterRegistry,
-    @Resource(name = "dependencyMapping") private val dependencyMapping: MutableMap<String, String>
+    @Resource(name = "dependencyMapping") private val dependencyMapping: MutableMap<String, String>,
 ) : ComponentRegistryResolver {
 
     private lateinit var configuration: EscrowConfiguration
@@ -143,8 +149,11 @@ class ComponentRegistryResolverImpl(
         ).resolveVariables(jiraComponentVersionRange.vcsSettings)
     }
 
-    override fun getDistributionForProject(projectKey: String, version: String): Distribution =
-        getJiraComponentVersionToRangeByProjectAndVersion(projectKey, version).second.distribution
+    override fun getDistributionForProject(projectKey: String, version: String): Distribution {
+        LOG.info("Get distribution for project: {} version: {}", projectKey, version)
+        val found = getJiraComponentVersionToRangeByProjectAndVersion(projectKey, version)
+        return calculateDistribution(found.second.distribution, found.first.version)
+    }
 
     override fun getAllJiraComponentVersionRanges() =
         jiraParametersResolver.componentConfig.projectKeyToJiraComponentVersionRangeMap.values.flatten().toSet()
@@ -185,8 +194,57 @@ class ComponentRegistryResolverImpl(
         return result
     }
 
+    override fun findComponentsByDockerImages(images: Set<Image>): Set<ComponentImage> {
+        val imageNames = images.map { it.name }.toSet()
+        return buildImageToComponentMap().filterKeys(imageNames::contains).mapNotNull { (imgName, component) ->
+            images.find { it.name == imgName }?.let { requiredImage ->
+                findConfigurationByImage(imgName, requiredImage.tag, component)
+            }
+        }.toSet()
+    }
+
+    private fun findConfigurationByImage(imageName: String, imageTag: String, compId: String): ComponentImage? {
+
+        val versionString = try {
+            getJiraComponentVersion(compId, imageTag).version
+        } catch (_: NotFoundException) {
+            return null
+        }
+
+        return EscrowConfigurationLoader.getEscrowModuleConfig(
+            configuration,
+            ComponentVersion.create(compId, versionString)
+        )?.distribution?.let {
+            if (it.docker()?.split(',')?.contains("$imageName:$imageTag") == true) {
+                ComponentImage(compId, versionString, Image(imageName, imageTag))
+            } else null
+        }
+    }
+
+    private fun buildImageToComponentMap(): Map<String, String> {
+        val dockerImageName2ComponentMap = mutableMapOf<String, String>()
+        val timeTaken = measureTimeMillis {
+            getComponents().forEach { comp ->
+                comp.moduleConfigurations.forEach { moduleConfig ->
+                    moduleConfig.distribution?.docker()?.let { dockersString ->
+                        dockersString.split(",").map { it.substringBefore(":") }.forEach { dockerImgName ->
+                            dockerImageName2ComponentMap[dockerImgName] = comp.moduleName
+                        }
+                    }
+                }
+            }
+        }
+        LOG.info(
+            "Time taken to buildImageToComponentMap {} ms, read {} images",
+            timeTaken,
+            dockerImageName2ComponentMap.size
+        )
+
+        return dockerImageName2ComponentMap
+    }
+
     private fun EscrowModule.getBuildSystem(): BuildSystem {
-        return moduleConfigurations.firstOrNull()?.let { it.buildSystem.toDTO() }
+        return moduleConfigurations.firstOrNull()?.buildSystem?.toDTO()
             ?: throw IllegalStateException("No module configurations available")
     }
 
@@ -320,31 +378,14 @@ class ComponentRegistryResolverImpl(
         versionRanges.filter { versionRangeFactory.create(it.versionRange).containsVersion(this) }
             .mapNotNull { versionRange ->
                 val component = versionRange.jiraComponentVersion.component
-                when {
-                    jiraComponentVersionFormatter.matchesBuildVersionFormat(component, version, strict) ->
-                        formatVersion(component.componentVersionFormat.buildVersionFormat)
-
-                    jiraComponentVersionFormatter.matchesReleaseVersionFormat(component, version, strict)
-                            || jiraComponentVersionFormatter.matchesRCVersionFormat(component, version, strict) ->
-                        formatVersion(component.componentVersionFormat.releaseVersionFormat)
-
-                    jiraComponentVersionFormatter.matchesMajorVersionFormat(component, version, strict) ->
-                        formatVersion(component.componentVersionFormat.majorVersionFormat)
-
-                    jiraComponentVersionFormatter.matchesLineVersionFormat(component, version, strict) ->
-                        formatVersion(component.componentVersionFormat.lineVersionFormat)
-
-                    jiraComponentVersionFormatter.matchesHotfixVersionFormat(component, version, strict) ->
-                        formatVersion(component.componentVersionFormat.hotfixVersionFormat)
-
-                    else -> null
-                }?.let { cleanVersion ->
-                    JiraComponentVersion(
-                        ComponentVersion.create(versionRange.componentName, cleanVersion),
-                        versionRange.component,
-                        jiraComponentVersionFormatter
-                    ) to versionRange
-                }
+                normalizeVersion(version, component, versionNames, strict)
+                    ?.let { cleanVersion ->
+                        JiraComponentVersion(
+                            ComponentVersion.create(versionRange.componentName, cleanVersion),
+                            versionRange.component,
+                            jiraComponentVersionFormatter
+                        ) to versionRange
+                    }
             }
     }
 

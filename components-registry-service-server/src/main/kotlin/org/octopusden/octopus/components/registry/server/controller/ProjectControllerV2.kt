@@ -33,6 +33,8 @@ class ProjectControllerV2(
     }
 
     @GetMapping("{projectKey}/jira-component-version-ranges", produces = [MediaType.APPLICATION_JSON_VALUE])
+    // todo - consider removing the whole endpoint or just version specific fields, like docker,
+    //  because version is not provided in this context
     fun getJiraComponentVersionRangesByProject(@PathVariable("projectKey") projectKey: String): Set<JiraComponentVersionRangeDTO> {
         LOG.info("Get Jira Component Version Ranges: '$projectKey'")
         return componentRegistryResolver.getJiraComponentVersionRangesByProject(projectKey)
@@ -41,6 +43,8 @@ class ProjectControllerV2(
     }
 
     @GetMapping("{projectKey}/component-distributions", produces = [MediaType.APPLICATION_JSON_VALUE])
+    // todo - consider removing the whole endpoint or just version specific fields, like docker,
+    //  because version is not provided in this context
     fun getComponentsDistributionByJiraProject(@PathVariable("projectKey") projectKey: String): Map<String, DistributionDTO> {
         LOG.info("Get distributions: '$projectKey'")
         return componentRegistryResolver.getComponentsDistributionByJiraProject(projectKey)
@@ -56,6 +60,7 @@ class ProjectControllerV2(
     }
 
     @GetMapping("{projectKey}/versions/{version}/distribution", produces = [MediaType.APPLICATION_JSON_VALUE])
+    // todo - recalc docker with component
     fun getDistributionForProject(@PathVariable("projectKey") projectKey: String,
                                   @PathVariable("version") version: String): DistributionDTO {
         LOG.info("Get distribution: '$projectKey:$version'")

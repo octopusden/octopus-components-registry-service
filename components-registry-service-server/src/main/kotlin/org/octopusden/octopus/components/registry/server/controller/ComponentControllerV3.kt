@@ -3,8 +3,10 @@ package org.octopusden.octopus.components.registry.server.controller
 import org.octopusden.octopus.components.registry.core.dto.ArtifactComponentDTO
 import org.octopusden.octopus.components.registry.core.dto.ArtifactComponentsDTO
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
+import org.octopusden.octopus.components.registry.core.dto.ComponentImage
 import org.octopusden.octopus.components.registry.core.dto.ComponentV2
 import org.octopusden.octopus.components.registry.core.dto.ComponentV3
+import org.octopusden.octopus.components.registry.core.dto.Image
 import org.octopusden.octopus.components.registry.server.service.ComponentRegistryResolver
 import org.springframework.http.MediaType
 import org.springframework.web.bind.annotation.GetMapping
@@ -22,6 +24,9 @@ class ComponentControllerV3(
      * Get all components.
      */
     @GetMapping(produces = [MediaType.APPLICATION_JSON_VALUE])
+    // todo - consider removing the whole endpoint or just version specific fields, like docker,
+    //  because version is not provided in this context
+
     fun getAllComponents(): Collection<ComponentV3> {
         return componentRegistryResolver.getComponents().map { escrowModule ->
             //TODO Check/Discuss if display name and owner should be in escrowModule (not versioned part of Component)
@@ -46,6 +51,18 @@ class ComponentControllerV3(
             .entries
             .map { (artifact, component) -> ArtifactComponentDTO(artifact, component) }
             .toSet()
+        // todo - recalc docker with component
         return ArtifactComponentsDTO(artifactComponents)
     }
+
+    @PostMapping(
+        "find-by-docker-images",
+        consumes = [MediaType.APPLICATION_JSON_VALUE],
+        produces = [MediaType.APPLICATION_JSON_VALUE]
+    )
+    fun findComponentsByDockerImages(@RequestBody images: Set<Image>): Set<ComponentImage> {
+        return componentRegistryResolver.findComponentsByDockerImages(images)
+    }
+
+
 }

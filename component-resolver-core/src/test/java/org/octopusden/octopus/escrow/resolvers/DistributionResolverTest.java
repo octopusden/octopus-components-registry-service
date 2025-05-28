@@ -50,7 +50,7 @@ public class DistributionResolverTest {
     void testDockerOfTestComponent() {
         Distribution distribution = distributionResolver.resolveDistribution(ComponentVersion.create("test-component", "1.3.49"));
         assertNotNull(distribution);
-        assertEquals("test-component/image:${version}-flavour1,test-component/image:${version}-flavour2", distribution.docker());
+        assertEquals("test-component/image:1.3.49-flavour1,test-component/image:1.3.49-flavour2", distribution.docker());
     }
 
 }

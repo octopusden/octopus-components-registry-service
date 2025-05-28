@@ -247,7 +247,7 @@ abstract class BaseComponentsRegistryServiceTest {
             false,
             "org.octopusden.octopus.test:versions-api:jar",
             securityGroups = SecurityGroupsDTO(listOf("vfiler1-default#group")),
-            docker = "test/versions-api"
+            docker = "test/versions-api:1"
         )
         expectedComponent.releaseManager = "user"
         expectedComponent.securityChampion = "user"
