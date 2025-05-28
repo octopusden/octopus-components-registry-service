@@ -130,25 +130,24 @@ class EscrowConfigurationLoader {
         def jiraComponentVersionFormatter = new JiraComponentVersionFormatter(versionNames)
         def numericVersion = new NumericVersionFactory(versionNames).create(version)
 
-        def formatters = [
-                jiraComponentVersionFormatter.&matchesBuildVersionFormat,
-                jiraComponentVersionFormatter.&matchesReleaseVersionFormat,
-                jiraComponentVersionFormatter.&matchesMajorVersionFormat,
-                jiraComponentVersionFormatter.&matchesLineVersionFormat,
-                jiraComponentVersionFormatter.&matchesHotfixVersionFormat
-        ]
-        def formatStr= [
-                component.componentVersionFormat.buildVersionFormat,
-                component.componentVersionFormat.releaseVersionFormat,
-                component.componentVersionFormat.majorVersionFormat,
-                component.componentVersionFormat.lineVersionFormat,
-                component.componentVersionFormat.hotfixVersionFormat
+        def formats = [
+
+                // todo - order must be changed
+                // it should be from more many component to less many component
+                // Hot fix - build - release - major - line
+                // see the issue #87
+
+                [jiraComponentVersionFormatter.&matchesBuildVersionFormat, component.componentVersionFormat.buildVersionFormat],
+                [jiraComponentVersionFormatter.&matchesReleaseVersionFormat, component.componentVersionFormat.releaseVersionFormat],
+                [jiraComponentVersionFormatter.&matchesMajorVersionFormat, component.componentVersionFormat.majorVersionFormat],
+                [jiraComponentVersionFormatter.&matchesLineVersionFormat, component.componentVersionFormat.lineVersionFormat],
+                [jiraComponentVersionFormatter.&matchesHotfixVersionFormat, component.componentVersionFormat.hotfixVersionFormat]
         ]
 
-        for (int i = 0; i < formatters.size(); i++) {
-            if (formatters[i](component, version, strict)) {
-                if (formatStr[i] != null) {
-                    return numericVersion.formatVersion(formatStr[i])
+        for (def format in formats) {
+            if (format[0](component, version, strict)) {
+                if (format[1] != null) {
+                    return numericVersion.formatVersion(format[1])
                 }
             }
         }
