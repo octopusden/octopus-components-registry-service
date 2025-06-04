@@ -136,24 +136,16 @@ class EscrowConfigurationLoader {
         def numericVersion = new NumericVersionFactory(versionNames).create(version)
 
         def formats = [
-
-                // todo - order must be changed
-                // it should be from more many component to less many component
-                // Hot fix - build - release - major - line
-                // see the issue #87
-
+                [jiraComponentVersionFormatter.&matchesHotfixVersionFormat, component.componentVersionFormat.hotfixVersionFormat],
                 [jiraComponentVersionFormatter.&matchesBuildVersionFormat, component.componentVersionFormat.buildVersionFormat],
                 [jiraComponentVersionFormatter.&matchesReleaseVersionFormat, component.componentVersionFormat.releaseVersionFormat],
                 [jiraComponentVersionFormatter.&matchesMajorVersionFormat, component.componentVersionFormat.majorVersionFormat],
                 [jiraComponentVersionFormatter.&matchesLineVersionFormat, component.componentVersionFormat.lineVersionFormat],
-                [jiraComponentVersionFormatter.&matchesHotfixVersionFormat, component.componentVersionFormat.hotfixVersionFormat]
         ]
 
         for (def format in formats) {
-            if (format[0](component, version, strict)) {
-                if (format[1] != null) {
+            if (format[0](component, version, strict) && format[1] != null) {
                     return numericVersion.formatVersion(format[1])
-                }
             }
         }
 
