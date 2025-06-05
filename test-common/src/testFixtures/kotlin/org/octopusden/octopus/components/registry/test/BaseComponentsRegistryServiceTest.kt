@@ -490,12 +490,12 @@ abstract class BaseComponentsRegistryServiceTest {
                 Arguments.of(
                     "versions-api",
                     "1.2.3.4",
-                    "expected-data/versions-api-1.2.3-jira-component-version.json"
+                    "expected-data/versions-api-1.2.3.4-jira-component-version.json"
                 ),
                 Arguments.of(
                     "versions-api",
                     "prefix-1.2.3.4-suffix",
-                    "expected-data/versions-api-1.2.3-jira-component-version.json"
+                    "expected-data/versions-api-1.2.3.4-jira-component-version.json"
                 ),
             )
         }
