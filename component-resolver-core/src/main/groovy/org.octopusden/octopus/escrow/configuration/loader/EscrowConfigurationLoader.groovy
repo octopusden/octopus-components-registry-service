@@ -141,11 +141,13 @@ class EscrowConfigurationLoader {
                 [jiraComponentVersionFormatter.&matchesReleaseVersionFormat, component.componentVersionFormat.releaseVersionFormat],
                 [jiraComponentVersionFormatter.&matchesMajorVersionFormat, component.componentVersionFormat.majorVersionFormat],
                 [jiraComponentVersionFormatter.&matchesLineVersionFormat, component.componentVersionFormat.lineVersionFormat],
-        ]
+        ].findAll {
+            it[1] !=  null
+        }
 
         for (def format in formats) {
             if (format[0](component, version, strict)) {
-                return numericVersion.formatVersion(format[1])
+                return numericVersion.formatVersion(format[1] as String)
             }
         }
 
