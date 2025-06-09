@@ -901,3 +901,133 @@ TEST_COMPONENT4 {
     groupId = "org.octopusden.octopus.test"
     artifactId = "pt-k-db"
 }
+
+
+"TEST_COMPONENT_WITH_DOCKER_1" {
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.test.docker"
+    jira {
+        projectKey = "TEST_DOCKER"
+    }
+    distribution {
+        explicit = false
+        external = true
+        docker = 'test-docker-1:${version}'
+    }
+}
+
+"TEST_COMPONENT_WITH_DOCKER_1_1" {
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.test.docker"
+    jira {
+        projectKey = "TEST_DOCKER"
+    }
+    distribution {
+        explicit = false
+        external = true
+        docker = 'test-docker-1_1'
+    }
+}
+
+"TEST_COMPONENT_WITH_DOCKER_1_2" {
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.test.docker"
+    jira {
+        projectKey = "TEST-D"
+    }
+    distribution {
+        explicit = false
+        external = true
+        docker = 'test-docker-1_2:jdk11'
+    }
+}
+
+"TEST_COMPONENT_WITH_DOCKER_2" {
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.test.docker"
+
+    jira {
+        projectKey = "TEST_DOCKER"
+    }
+
+    distribution {
+        explicit = false
+        external = true
+    }
+
+    "(,1.0.0]" {
+        distribution {
+            docker = 'test-docker-first'
+        }
+    }
+
+    "(1.0.0, 2.0.0)" {
+        distribution {
+            docker = 'test-docker-second:amd64'
+        }
+    }
+    "(2.0.0,)" {
+        distribution {
+            docker = 'test-docker-third:arm64'
+        }
+    }
+}
+
+"TEST_COMPONENT_WITH_DOCKER_3" {
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.test.docker"
+    jira {
+        projectKey = "TEST"
+    }
+    distribution {
+        explicit = false
+        external = true
+        docker = 'test-docker-3:${version}-amd64'
+    }
+}
+
+"TEST_COMPONENT_WITH_DOCKER_4" {
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.test.docker"
+
+    jira {
+        projectKey = "TEST_DOCKER"
+    }
+
+    distribution {
+        explicit = false
+        external = true
+    }
+
+    "(,1.0.0]" {
+        distribution {
+            docker = 'test-docker-4:${version}'
+        }
+    }
+
+    "(1.0.0, 2.0.0)" {
+        distribution {
+            docker = 'test-docker-4:${version}-amd64'
+        }
+    }
+    "(2.0.0,)" {
+        distribution {
+            docker = 'test-docker-4:${version}-arm64'
+        }
+    }
+}
+
+"TEST_COMPONENT_WITH_DOCKER_5" {
+
+    jira {
+        projectKey = "TEST_DOCKER"
+    }
+
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.test.docker"
+    distribution {
+        explicit = false
+        external = true
+        docker = 'test-docker-5:amd64,test-docker-5:arm64'
+    }
+}

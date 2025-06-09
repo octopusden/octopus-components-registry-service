@@ -25,6 +25,8 @@ class CommonControllerV2(
         ConfigHelper(this.environment)
 
     @GetMapping("jira-component-version-ranges", produces = [MediaType.APPLICATION_JSON_VALUE])
+    // todo - consider removing the whole endpoint or just version specific fields, like docker,
+    //  because version is not provided in this context
     fun getAllJiraComponentVersionRanges(): Set<JiraComponentVersionRangeDTO> {
         return componentRegistryResolver.getAllJiraComponentVersionRanges()
             .map { it.toDTO() }

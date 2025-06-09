@@ -28,6 +28,8 @@ import feign.Headers
 import feign.Param
 import feign.QueryMap
 import feign.RequestLine
+import org.octopusden.octopus.components.registry.core.dto.ComponentImage
+import org.octopusden.octopus.components.registry.core.dto.Image
 
 interface ComponentsRegistryServiceClient {
     /**
@@ -39,6 +41,10 @@ interface ComponentsRegistryServiceClient {
     @RequestLine("POST rest/api/3/components/find-by-artifacts")
     @Headers("Content-Type: application/json")
     fun findArtifactComponentsByArtifacts(artifacts: Set<ArtifactDependency>): ArtifactComponentsDTO
+
+    @RequestLine("POST rest/api/3/components/find-by-docker-images")
+    @Headers("Content-Type: application/json")
+    fun findComponentsByDockerImages(images: Set<Image>): Set<ComponentImage>
 
     @RequestLine("GET /rest/api/1/components/{componentKey}")
     @Throws(NotFoundException::class)

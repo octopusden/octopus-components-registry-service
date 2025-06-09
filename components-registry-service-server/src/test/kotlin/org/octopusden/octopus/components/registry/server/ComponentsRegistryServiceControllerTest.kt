@@ -313,7 +313,6 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
             .response
             .toObject(object : TypeReference<Map<String, ComponentArtifactConfigurationDTO>>() {})
 
-
     @Test
     fun testPing() {
         val response = mvc.perform(MockMvcRequestBuilders.get("/rest/api/2/components-registry/service/ping"))
@@ -369,7 +368,7 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
         expectedComponent.releasesInDefaultBranch = false
         expectedComponent.solution = true
 
-        Assertions.assertEquals(42, components.components.size)
+        Assertions.assertEquals(49, components.components.size)
         Assertions.assertTrue(expectedComponent in components.components) {
             components.components.toString()
         }

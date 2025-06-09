@@ -30,6 +30,7 @@ import org.octopusden.octopus.escrow.model.Tool
 import org.octopusden.octopus.escrow.model.VCSSettings
 import org.octopusden.octopus.escrow.model.VersionControlSystemRoot
 import org.octopusden.octopus.escrow.resolvers.ReleaseInfoResolver
+import org.octopusden.octopus.releng.JiraComponentVersionFormatter
 import org.octopusden.octopus.releng.dto.ComponentInfo
 import org.octopusden.octopus.releng.dto.ComponentVersion
 import org.octopusden.octopus.releng.dto.JiraComponent
@@ -98,7 +99,7 @@ class EscrowConfigurationLoader {
         def numericVersionFactory = new NumericVersionFactory(escrowConfiguration.versionNames)
         def version = numericVersionFactory.create(componentVersion)
         def versionRangeFactory = new VersionRangeFactory(escrowConfiguration.versionNames)
-        def modules = escrowConfiguration.escrowModules.get(componentKey)?.moduleConfigurations?.stream()?.filter{
+        def modules = escrowConfiguration.escrowModules.get(componentKey)?.moduleConfigurations?.stream()?.filter {
             moduleConfiguration -> versionRangeFactory.create(moduleConfiguration.versionRangeString).containsVersion(version)
         }?.collect(Collectors.toList())
         if (modules == null || modules.isEmpty()) {
@@ -109,11 +110,87 @@ class EscrowConfigurationLoader {
             throw new ComponentResolverException("Too many component $componentKey:$componentVersion modules")
         }
         def config = modules[0]
+
+        def normalizedVersion = normalizeVersion(componentVersion, config.jiraConfiguration, escrowConfiguration.versionNames, false)
+        if (normalizedVersion == null) {
+            LOG.warn("Version of component {}:{} is incorrect", componentKey, componentVersion)
+            return null
+        }
+
         def escrowModuleConfig = config.clone()
-        def postProcessor = new ModelConfigPostProcessor(ComponentVersion.create(componentKey, componentVersion), escrowConfiguration.versionNames)
-        escrowModuleConfig.distribution = postProcessor.resolveDistribution(config.distribution)
+        def postProcessor = new ModelConfigPostProcessor(ComponentVersion.create(componentKey, normalizedVersion), escrowConfiguration.versionNames)
+        escrowModuleConfig.distribution = calculateDistribution(postProcessor.resolveDistribution(config.distribution), normalizedVersion)
+
         escrowModuleConfig.jiraConfiguration = postProcessor.resolveJiraConfiguration(config.jiraConfiguration)
         escrowModuleConfig
+    }
+
+    static String normalizeVersion(String version, JiraComponent component, VersionNames versionNames,
+                                   boolean strict) {
+
+        if (component?.componentVersionFormat == null) {
+            return null
+        }
+
+        def jiraComponentVersionFormatter = new JiraComponentVersionFormatter(versionNames)
+        def numericVersion = new NumericVersionFactory(versionNames).create(version)
+
+        def formats = [
+
+                // todo - order must be changed
+                // it should be from more many component to less many component
+                // Hot fix - build - release - major - line
+                // see the issue #87
+
+                [jiraComponentVersionFormatter.&matchesBuildVersionFormat, component.componentVersionFormat.buildVersionFormat],
+                [jiraComponentVersionFormatter.&matchesReleaseVersionFormat, component.componentVersionFormat.releaseVersionFormat],
+                [jiraComponentVersionFormatter.&matchesMajorVersionFormat, component.componentVersionFormat.majorVersionFormat],
+                [jiraComponentVersionFormatter.&matchesLineVersionFormat, component.componentVersionFormat.lineVersionFormat],
+                [jiraComponentVersionFormatter.&matchesHotfixVersionFormat, component.componentVersionFormat.hotfixVersionFormat]
+        ]
+
+        for (def format in formats) {
+            if (format[0](component, version, strict)) {
+                if (format[1] != null) {
+                    return numericVersion.formatVersion(format[1])
+                }
+            }
+        }
+
+        return null
+    }
+
+
+    static Distribution calculateDistribution(Distribution distribution, String version) {
+        if (distribution == null || distribution.docker() == null) {
+            return distribution
+        }
+
+        def docker = distribution.docker()
+
+        // TODO -- DOCKER -- to be removed
+        // the only "else" block will remain
+        if (docker.contains("\${version}")) {
+            docker = docker.replaceAll("\\\$\\{version}", version)
+        } else {
+            docker = docker.split(',').collect { img ->
+                def parts = img.split(":")
+                def base = parts[0]
+                def suffix = parts.size() > 1 ? "-${parts[1]}" : ""
+                return "${base}:${version}${suffix}"
+            }.join(",")
+        }
+
+        return new Distribution(
+                distribution.explicit(),
+                distribution.external(),
+                distribution.GAV(),
+                distribution.DEB(),
+                distribution.RPM(),
+                docker,
+                new SecurityGroups(distribution.securityGroups?.read)
+        )
+
     }
 
     EscrowConfiguration loadFullConfiguration(Map<String, String> params) {
@@ -164,7 +241,7 @@ class EscrowConfigurationLoader {
             }
         }
         //Verify that VersionComponent could be requested
-        fullConfig.getEscrowModules().values().forEach {escrowModule -> escrowModule.moduleConfigurations.forEach { it.toVersionedComponent() } }
+        fullConfig.getEscrowModules().values().forEach { escrowModule -> escrowModule.moduleConfigurations.forEach { it.toVersionedComponent() } }
         return fullConfig
     }
 
@@ -182,8 +259,8 @@ class EscrowConfigurationLoader {
     void mergeGroovyAndDslSubComponent(SubComponent dslComponent, EscrowConfiguration escrowConfiguration) {
         def moduleConfigurations = escrowConfiguration.escrowModules.get(dslComponent.name).moduleConfigurations
         moduleConfigurations.forEach { moduleConfiguration -> mergeComponents(dslComponent, moduleConfiguration) }
-        dslComponent.versions.forEach { dslVersionRange,  dslVersionedComponent ->
-            def versionedEscrowModule = moduleConfigurations.find {moduleConfiguration -> moduleConfiguration.versionRangeString == dslVersionRange }
+        dslComponent.versions.forEach { dslVersionRange, dslVersionedComponent ->
+            def versionedEscrowModule = moduleConfigurations.find { moduleConfiguration -> moduleConfiguration.versionRangeString == dslVersionRange }
             if (!versionedEscrowModule) {
                 throw new EscrowConfigurationException("The DSL version range $dslVersionRange is missed in groovy configuration of the component ${dslComponent.name}")
             }

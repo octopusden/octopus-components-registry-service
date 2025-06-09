@@ -5,6 +5,8 @@ import org.octopusden.octopus.components.registry.api.distribution.DistributionE
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.core.dto.BuildSystem
+import org.octopusden.octopus.components.registry.core.dto.ComponentImage
+import org.octopusden.octopus.components.registry.core.dto.Image
 import org.octopusden.octopus.components.registry.core.dto.VersionedComponent
 import org.octopusden.octopus.escrow.config.JiraComponentVersionRange
 import org.octopusden.octopus.escrow.configuration.model.EscrowModule
@@ -60,4 +62,7 @@ interface ComponentRegistryResolver {
     fun getComponentsCountByBuildSystem(): EnumMap<BuildSystem, Int>
 
     fun getComponentProductMapping(): Map<String, ProductTypes>
+
+    fun findComponentsByDockerImages(images: Set<Image>): Set<ComponentImage>
+
 }
