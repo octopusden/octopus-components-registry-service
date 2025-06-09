@@ -11,6 +11,7 @@ component("TESTONE") {
             "spa/.gradle",
             "spa/node_modules"
         )
+        reusable = false
     }
 }
 

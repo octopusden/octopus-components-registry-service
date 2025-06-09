@@ -145,7 +145,8 @@ class ComponentControllerV2(
         return EscrowDTO(
             escrow.providedDependencies.toList(),
             escrow.diskSpaceRequirement.orElse(null),
-            escrow.additionalSources.toList()
+            escrow.additionalSources.toList(),
+            escrow.isReusable
         )
     }
 

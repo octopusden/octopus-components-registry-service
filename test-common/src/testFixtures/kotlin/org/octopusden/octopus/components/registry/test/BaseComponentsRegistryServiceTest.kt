@@ -296,11 +296,12 @@ abstract class BaseComponentsRegistryServiceTest {
         )
         expectedComponent.escrow = EscrowDTO(
             providedDependencies = listOf("test:test:1.1"),
-            diskSpaceRequirements = null,
+            diskSpaceRequirement = null,
             additionalSources = listOf(
                 "spa/.gradle",
                 "spa/node_modules"
-            )
+            ),
+            isReusable = false
         )
         Assertions.assertEquals(expectedComponent, actualComponent)
     }
