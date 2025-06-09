@@ -144,8 +144,8 @@ class EscrowConfigurationLoader {
         ]
 
         for (def format in formats) {
-            if (format[0](component, version, strict) && format[1] != null) {
-                    return numericVersion.formatVersion(format[1])
+            if (format[0](component, version, strict)) {
+                return numericVersion.formatVersion(format[1])
             }
         }
 
