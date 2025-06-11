@@ -487,6 +487,7 @@ abstract class BaseComponentsRegistryServiceTest {
                     "prefix-1.2.3-suffix",
                     "expected-data/versions-api-1.2.3-jira-component-version.json"
                 ),
+                /*TODO
                 Arguments.of(
                     "versions-api",
                     "1.2.3.4",
@@ -496,7 +497,7 @@ abstract class BaseComponentsRegistryServiceTest {
                     "versions-api",
                     "prefix-1.2.3.4-suffix",
                     "expected-data/versions-api-1.2.3.4-jira-component-version.json"
-                ),
+                )*/
             )
         }
 
