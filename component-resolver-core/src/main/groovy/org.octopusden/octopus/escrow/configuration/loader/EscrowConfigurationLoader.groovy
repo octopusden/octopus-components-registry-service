@@ -136,11 +136,12 @@ class EscrowConfigurationLoader {
         def numericVersion = new NumericVersionFactory(versionNames).create(version)
 
         def formats = [
-                [jiraComponentVersionFormatter.&matchesHotfixVersionFormat, jiraComponentVersionFormatter.getHotfixVersionFormat(component)],
+                //TODO: [jiraComponentVersionFormatter.&matchesHotfixVersionFormat, jiraComponentVersionFormatter.hotfixVersionFormat],
                 [jiraComponentVersionFormatter.&matchesBuildVersionFormat, jiraComponentVersionFormatter.getBuildVersionFormat(component)],
+                [jiraComponentVersionFormatter.&matchesRCVersionFormat, component.componentVersionFormat.releaseVersionFormat],
                 [jiraComponentVersionFormatter.&matchesReleaseVersionFormat, component.componentVersionFormat.releaseVersionFormat],
                 [jiraComponentVersionFormatter.&matchesMajorVersionFormat, component.componentVersionFormat.majorVersionFormat],
-                [jiraComponentVersionFormatter.&matchesLineVersionFormat, jiraComponentVersionFormatter.getLineVersionFormat(component)],
+                [jiraComponentVersionFormatter.&matchesLineVersionFormat, jiraComponentVersionFormatter.getLineVersionFormat(component)]
         ]
 
         for (def format in formats) {
