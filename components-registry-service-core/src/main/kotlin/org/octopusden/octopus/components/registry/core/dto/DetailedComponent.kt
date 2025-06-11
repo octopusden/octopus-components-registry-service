@@ -12,9 +12,11 @@ class DetailedComponent(
     @JsonProperty("buildSystem") val buildSystem: BuildSystem,
     @JsonProperty("vcsSettings") val vcsSettings: VCSSettingsDTO,
     @JsonProperty("jiraComponentVersion") val jiraComponentVersion: JiraComponentVersionDTO,
-    @JsonProperty("detailedComponentVersion") val detailedComponentVersion: DetailedComponentVersion
+    @JsonProperty("detailedComponentVersion") val detailedComponentVersion: DetailedComponentVersion,
+    @JsonProperty("buildFilePath") val buildFilePath: String?
 ) : Component(id, name, componentOwner) {
     var buildParameters: BuildParametersDTO? = null
+    var escrow: EscrowDTO? = null
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other !is DetailedComponent) return false
@@ -23,6 +25,8 @@ class DetailedComponent(
                 jiraComponentVersion == other.jiraComponentVersion &&
                 detailedComponentVersion == other.detailedComponentVersion &&
                 buildParameters == other.buildParameters &&
+                buildFilePath == other.buildFilePath &&
+                escrow == other.escrow &&
                 super.equals(other)
     }
 
@@ -33,7 +37,9 @@ class DetailedComponent(
             vcsSettings,
             jiraComponentVersion,
             detailedComponentVersion,
-            buildParameters
+            buildParameters,
+            buildFilePath,
+            escrow
         )
     }
 
@@ -43,7 +49,9 @@ class DetailedComponent(
                 ", vcsSettings=${vcsSettings}" +
                 ", jiraComponentVersion=${jiraComponentVersion}" +
                 ", detailedComponentVersion=${detailedComponentVersion}" +
-                ", buildParameters=${buildParameters}"
+                ", buildParameters=${buildParameters}" +
+                ", buildFilePath=${buildFilePath}" +
+                ", escrow=${escrow}"
     }
 
 }
