@@ -1638,7 +1638,7 @@
           "vfiler1-default#group"
         ]
       },
-      "docker": "test-docker-4:${version}"
+      "docker": "test-docker-4"
     },
     "vcsSettings": {
       "versionControlSystemRoots": [],
@@ -1672,7 +1672,7 @@
           "vfiler1-default#group"
         ]
       },
-      "docker": "test-docker-4:${version}-amd64"
+      "docker": "test-docker-4:amd64"
     },
     "vcsSettings": {
       "versionControlSystemRoots": [],
@@ -1706,7 +1706,7 @@
           "vfiler1-default#group"
         ]
       },
-      "docker": "test-docker-4:${version}-arm64"
+      "docker": "test-docker-4:arm64"
     },
     "vcsSettings": {
       "versionControlSystemRoots": [],

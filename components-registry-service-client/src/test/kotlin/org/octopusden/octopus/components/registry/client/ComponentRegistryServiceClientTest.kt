@@ -204,39 +204,6 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
         assert(components.none { it.image.name == "not-found" })
     }
 
-
-    @Test
-    fun findComponentsByDockerImagesOldStyle2() {
-
-        var components =
-            componentsRegistryClient.findComponentsByDockerImages(setOf(Image("test-docker-3", "10.1-amd64")))
-        assertEquals(1, components.size)
-        assert(components.any { it.image.name == "test-docker-3" && it.component == "TEST_COMPONENT_WITH_DOCKER_3" && it.version == "10.1" })
-
-        components = componentsRegistryClient.findComponentsByDockerImages(setOf(Image("test-docker-4", "0.1.345")))
-        assertEquals(1, components.size)
-        assert(components.any { it.image.name == "test-docker-4" && it.component == "TEST_COMPONENT_WITH_DOCKER_4" && it.version == "0.1.345" })
-
-        components = componentsRegistryClient.findComponentsByDockerImages(setOf(Image("test-docker-4", "1.2.345")))
-        assertEquals(0, components.size)
-
-        components =
-            componentsRegistryClient.findComponentsByDockerImages(setOf(Image("test-docker-4", "1.2.345-arm64")))
-        assertEquals(0, components.size)
-
-        components =
-            componentsRegistryClient.findComponentsByDockerImages(setOf(Image("test-docker-4", "1.2.345-amd64")))
-        assertEquals(1, components.size)
-        assert(components.any { it.image.name == "test-docker-4" && it.component == "TEST_COMPONENT_WITH_DOCKER_4" && it.version == "1.2.345" })
-
-        components =
-            componentsRegistryClient.findComponentsByDockerImages(setOf(Image("test-docker-4", "2.34.567-arm64")))
-        assertEquals(1, components.size)
-        assert(components.any { it.image.name == "test-docker-4" && it.component == "TEST_COMPONENT_WITH_DOCKER_4" && it.version == "2.34.567" })
-
-    }
-
-
     @Test
     fun findComponentsByDockerImagesNormalizeVersion() {
         var components =
