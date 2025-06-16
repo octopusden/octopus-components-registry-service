@@ -505,6 +505,8 @@ abstract class BaseComponentsRegistryServiceTest {
         fun vcsSettings(): Stream<Arguments> {
             return Stream.of(
                 Arguments.of("SUB", "sub1k-1.0.0", "expected-data/sub-sub1k-1.0.0-vcs-settings.json"),
+                Arguments.of("SUB", "hlk-1.0", "expected-data/sub-hlk-1.0-vcs-settings.json"),
+                Arguments.of("SUB", "hlk-1.0_RC", "expected-data/sub-hlk-1.0_RC-vcs-settings.json"),
                 Arguments.of("SUB", "hlk-1.0.0", "expected-data/sub-hlk-1.0.0-vcs-settings.json")
             )
         }
@@ -514,6 +516,7 @@ abstract class BaseComponentsRegistryServiceTest {
             return Stream.of(
                 Arguments.of("SUB", "hlk-1.0.0", "expected-data/sub-hlk-1.0.0-distribution.json"),
                 Arguments.of("TESTONE", "1.0", "expected-data/testone-1.0-distribution.json"),
+                Arguments.of("TESTONE", "1.0_RC", "expected-data/testone-1.0-distribution.json"),
                 Arguments.of("TESTONE", "versions-api.1.0", "expected-data/testone-versions-api.1.0-distribution.json")
 
             )
@@ -530,11 +533,8 @@ abstract class BaseComponentsRegistryServiceTest {
         fun jiraComponentVersionsByProject(): Stream<Arguments> {
             return Stream.of(
                 Arguments.of("TESTONE", "1.0", "expected-data/testone-1.0-jira-component-version.json"),
-                Arguments.of(
-                    "TESTONE",
-                    "versions-api.1.0",
-                    "expected-data/versions-api-version-api.1.0-jira-component-version.json"
-                )
+                Arguments.of("TESTONE", "versions-api.1.0_RC", "expected-data/versions-api-version-api.1.0-jira-component-version.json"),
+                Arguments.of("TESTONE", "versions-api.1.0", "expected-data/versions-api-version-api.1.0-jira-component-version.json")
             )
         }
     }
