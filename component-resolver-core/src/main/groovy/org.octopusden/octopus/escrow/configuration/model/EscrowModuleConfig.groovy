@@ -17,6 +17,8 @@ import org.octopusden.octopus.escrow.model.Distribution
 import org.octopusden.octopus.escrow.model.VCSSettings
 import org.octopusden.octopus.releng.dto.JiraComponent
 
+import static org.octopusden.octopus.escrow.configuration.validation.EscrowConfigValidator.SPLIT_PATTERN
+
 @TupleConstructor
 @AutoClone(style = AutoCloneStyle.CLONE)
 @EqualsAndHashCode(includeFields = true, includes = ["buildSystem", "artifactIdPattern", "groupIdPattern",// "versionRange",
@@ -123,6 +125,18 @@ class EscrowModuleConfig {
 
     String getSystem() {
         return system
+    }
+
+    Set<String> getSystemSet() {
+        Set<String> systemSet = new HashSet<>()
+        if (system != null) {
+            for(String s : system.split(SPLIT_PATTERN)) {
+                if (!s.isEmpty()) {
+                    systemSet.add(s)
+                }
+            }
+        }
+        return systemSet
     }
 
     String getClientCode() {

@@ -1,7 +1,7 @@
 package org.octopusden.octopus.components.registry.core.dto
 
 abstract class Component(val id: String, val name: String?, val componentOwner: String) {
-    var system: List<String>? = null
+    var system: Set<String> = emptySet()
     var clientCode: String? = null
     var releasesInDefaultBranch: Boolean? = null
     var solution: Boolean? = null
@@ -34,7 +34,7 @@ abstract class Component(val id: String, val name: String?, val componentOwner: 
         var result = id.hashCode()
         result = 31 * result + (name?.hashCode() ?: 0)
         result = 31 * result + componentOwner.hashCode()
-        result = 31 * result + (system?.hashCode() ?: 0)
+        result = 31 * result + system.hashCode()
         result = 31 * result + (clientCode?.hashCode() ?: 0)
         result = 31 * result + (releasesInDefaultBranch?.hashCode() ?: 0)
         result = 31 * result + (solution?.hashCode() ?: 0)
