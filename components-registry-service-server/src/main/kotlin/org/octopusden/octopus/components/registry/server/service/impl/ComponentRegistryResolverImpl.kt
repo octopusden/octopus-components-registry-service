@@ -379,7 +379,8 @@ class ComponentRegistryResolverImpl(
         versionRanges.filter { versionRangeFactory.create(it.versionRange).containsVersion(this) }
             .mapNotNull { versionRange ->
                 val component = versionRange.jiraComponentVersion.component
-                normalizeVersion(version, component, versionNames, strict)
+                val vcsSettings = versionRange.vcsSettings
+                normalizeVersion(version, component, vcsSettings, versionNames, strict)
                     ?.let { cleanVersion ->
                         JiraComponentVersion(
                             ComponentVersion.create(versionRange.componentName, cleanVersion),

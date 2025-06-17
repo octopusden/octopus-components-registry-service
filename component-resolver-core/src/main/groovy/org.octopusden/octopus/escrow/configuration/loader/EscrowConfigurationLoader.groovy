@@ -111,7 +111,7 @@ class EscrowConfigurationLoader {
         }
         def config = modules[0]
 
-        def normalizedVersion = normalizeVersion(componentVersion, config.jiraConfiguration, escrowConfiguration.versionNames, false)
+        def normalizedVersion = normalizeVersion(componentVersion, config.jiraConfiguration, config.vcsSettings, escrowConfiguration.versionNames, false)
         if (normalizedVersion == null) {
             LOG.warn("Version of component {}:{} is incorrect", componentKey, componentVersion)
             return null
@@ -125,7 +125,7 @@ class EscrowConfigurationLoader {
         escrowModuleConfig
     }
 
-    static String normalizeVersion(String version, JiraComponent component, VersionNames versionNames,
+    static String normalizeVersion(String version, JiraComponent component, VCSSettings vcsSettings, VersionNames versionNames,
                                    boolean strict) {
 
         if (component?.componentVersionFormat == null) {
@@ -135,8 +135,14 @@ class EscrowConfigurationLoader {
         def jiraComponentVersionFormatter = new JiraComponentVersionFormatter(versionNames)
         def numericVersion = new NumericVersionFactory(versionNames).create(version)
 
-        def formats = [
-                //TODO: [jiraComponentVersionFormatter.&matchesHotfixVersionFormat, jiraComponentVersionFormatter.hotfixVersionFormat],
+        def isHotfixEnabled = vcsSettings?.getVersionControlSystemRoots()?.any { it.hotfixBranch?.isEmpty() == false }
+
+        def formats = []
+
+        if (isHotfixEnabled) {
+            formats << [jiraComponentVersionFormatter.&matchesHotfixVersionFormat, jiraComponentVersionFormatter.getHotfixVersionFormat(component)]
+        }
+        formats += [
                 [jiraComponentVersionFormatter.&matchesBuildVersionFormat, jiraComponentVersionFormatter.getBuildVersionFormat(component)],
                 [jiraComponentVersionFormatter.&matchesRCVersionFormat, component.componentVersionFormat.releaseVersionFormat],
                 [jiraComponentVersionFormatter.&matchesReleaseVersionFormat, component.componentVersionFormat.releaseVersionFormat],
