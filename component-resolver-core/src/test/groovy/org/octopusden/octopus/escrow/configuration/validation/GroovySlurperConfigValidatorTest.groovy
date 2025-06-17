@@ -3,11 +3,9 @@ package org.octopusden.octopus.escrow.configuration.validation
 import org.octopusden.releng.versions.VersionNames
 
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.DEB_PATTERN
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.DOCKER_PATTERN_NEW
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.DOCKER_PATTERN_V2
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.GAV_PATTERN
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.RPM_PATTERN
-// TODO -- DOCKER -- to be removed
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.DOCKER_PATTERN_OLD
 
 class GroovySlurperConfigValidatorTest extends GroovyTestCase {
 
@@ -36,44 +34,36 @@ class GroovySlurperConfigValidatorTest extends GroovyTestCase {
      * Docker pattern should contain only one image name without tag
      */
     void testDockerPattern() {
-        assert DOCKER_PATTERN_NEW.matcher("org.octopusden/octopus/image").matches()
-        assert DOCKER_PATTERN_NEW.matcher("org.octopusden/octopus/image:arm64").matches()
-        assert DOCKER_PATTERN_NEW.matcher("org.octopusden/octopus/image,org.octopusden/octopus/image:arm64").matches()
-        assert DOCKER_PATTERN_NEW.matcher("org.octopusden/octopus/first-image:amd64,org.octopusden/octopus/second-image:amd64").matches()
+        assert DOCKER_PATTERN_V2.matcher("org.octopusden/octopus/image").matches()
+        assert DOCKER_PATTERN_V2.matcher("org.octopusden/octopus/image:arm64").matches()
+        assert DOCKER_PATTERN_V2.matcher("org.octopusden/octopus/image,org.octopusden/octopus/image:arm64").matches()
+        assert DOCKER_PATTERN_V2.matcher("org.octopusden/octopus/first-image:amd64,org.octopusden/octopus/second-image:amd64").matches()
 
-        assert DOCKER_PATTERN_NEW.matcher("org.octopusden/octopus/image:arm64-r2.d2").matches()
-        assert DOCKER_PATTERN_NEW.matcher("org.octopusden/octopus/image,org.octopusden/octopus/image:arm64,org.octopusden/octopus/image:arm64-r2_d2").matches()
-        assert !DOCKER_PATTERN_NEW.matcher("org.octopusden/octopus/image:arm64-v2.1").matches()
+        assert DOCKER_PATTERN_V2.matcher("org.octopusden/octopus/image:arm64-r2.d2").matches()
+        assert DOCKER_PATTERN_V2.matcher("org.octopusden/octopus/image,org.octopusden/octopus/image:arm64,org.octopusden/octopus/image:arm64-r2_d2").matches()
+        assert !DOCKER_PATTERN_V2.matcher("org.octopusden/octopus/image:arm64-v2.1").matches()
 
-        assert !DOCKER_PATTERN_NEW.matcher("org.octopusden/octopus/first-image:-amd64").matches()
-        assert !DOCKER_PATTERN_NEW.matcher("org.octopusden/octopus/first-image:1.1-amd64").matches()
-        assert !DOCKER_PATTERN_NEW.matcher("org.octopusden/octopus/image:\${version}").matches()
-        assert !DOCKER_PATTERN_NEW.matcher("org.octopusden/octopus/image:\${version}-jdk1").matches()
-        assert !DOCKER_PATTERN_NEW.matcher("org.octopusden/octopus/first-image:1.0,org.octopusden/octopus/second-image:1.0").matches()
-        assert !DOCKER_PATTERN_NEW.matcher("org.octopusden\\octopus/image:t10").matches()
-        assert !DOCKER_PATTERN_NEW.matcher("org.octopusden/octopus:image:t10").matches()
-        assert !DOCKER_PATTERN_NEW.matcher("org.octopusden/octopus/image:").matches()
-
-        // TODO -- DOCKER -- to be removed
-        assert DOCKER_PATTERN_OLD.matcher("org.octopusden/octopus/image:1.0").matches()
-        assert DOCKER_PATTERN_OLD.matcher("org.octopusden/octopus/first-image:1.0,org.octopusden/octopus/second-image:1.0").matches()
-        assert !DOCKER_PATTERN_OLD.matcher("org.octopusden\\octopus/image:1.0").matches()
-        assert !DOCKER_PATTERN_OLD.matcher("org.octopusden/octopus:image:1.0").matches()
-        assert !DOCKER_PATTERN_OLD.matcher("org.octopusden/octopus/image:.0").matches()
+        assert !DOCKER_PATTERN_V2.matcher("org.octopusden/octopus/first-image:-amd64").matches()
+        assert !DOCKER_PATTERN_V2.matcher("org.octopusden/octopus/first-image:1.1-amd64").matches()
+        assert !DOCKER_PATTERN_V2.matcher("org.octopusden/octopus/image:\${version}").matches()
+        assert !DOCKER_PATTERN_V2.matcher("org.octopusden/octopus/image:\${version}-jdk1").matches()
+        assert !DOCKER_PATTERN_V2.matcher("org.octopusden/octopus/first-image:1.0,org.octopusden/octopus/second-image:1.0").matches()
+        assert !DOCKER_PATTERN_V2.matcher("org.octopusden\\octopus/image:t10").matches()
+        assert !DOCKER_PATTERN_V2.matcher("org.octopusden/octopus:image:t10").matches()
+        assert !DOCKER_PATTERN_V2.matcher("org.octopusden/octopus/image:").matches()
 
     }
-
 
     void testDockerField() {
         def verNames = new VersionNames("serviceCBranch", "serviceC", "minorC")
 
-        def correctDockerStrings = ["docker = 'test/test-component:\${version},test/path-element/test-component2:11.22'",
-                                    "docker = 'test-component4:11.22'",
-                                    "docker = 'test-component4:\${version},test-component5:\${version}-jdk11,test-component5:\${minor}-jdk7'",
+        def correctDockerStrings = ["docker = 'test/test-component,test/path-element/test-component2:amd64'",
+                                    "docker = 'test-component4,test-component5:jdk11,test-component5:jdk7_v11'",
         ]
 
         def incorrectDockerStrings = ["docker = 'test/test-component:\${version},by-\${env.USER}/test/test-component2:1.0'",
                                       "docker = 'test/\${major}/\${minor}/test-component3:\${version}'",
+                                      "docker = 'test-component:\${version}'",
                                       "docker = 'test-component\${version}:11.22'",
                                       "docker = 'test/\${baseDir}/test-component:1.0'",
                                       "docker = 'test/\${abrakadabra}/test-component:1.0'"]

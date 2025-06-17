@@ -32,7 +32,7 @@ component1 {
     distribution {
         explicit = true
         external = true
-        docker = "myimage:1"
+        docker = "myimage"
     }
 }
 
@@ -54,13 +54,13 @@ component2 {
     }
     "[1.0]" {
         distribution  {
-            docker = "myimage2:1-a"
+            docker = "myimage2:a"
         }
     }
 
     "[2.0]" {
         distribution  {
-            docker = "myimage2:1-b"
+            docker = "myimage2:b"
         }
     }
 }
