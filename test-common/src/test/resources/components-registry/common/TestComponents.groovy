@@ -176,6 +176,7 @@ Defaults {
     groupId = "org.octopusden.octopus.test"
     artifactId = "test2"
     componentDisplayName = "Test ONE display name"
+    system = "CLASSIC,ALFA"
     clientCode = "CLIENT_CODE"
     releasesInDefaultBranch = false
     solution = true

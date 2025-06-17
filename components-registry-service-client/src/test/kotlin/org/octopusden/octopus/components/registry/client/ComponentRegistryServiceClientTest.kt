@@ -134,9 +134,13 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
                 BuildSystem.MAVEN
             ).components.size
         )
-        assertEquals(4, componentsRegistryClient.getAllComponents(systems = listOf("CLASSIC")).components.size)
-        assertEquals(42, componentsRegistryClient.getAllComponents(systems = listOf("NONE")).components.size)
+        assertEquals(2, componentsRegistryClient.getAllComponents(systems = listOf("ALFA")).components.size)
+        assertEquals(6, componentsRegistryClient.getAllComponents(systems = listOf("CLASSIC")).components.size)
+        assertEquals(40, componentsRegistryClient.getAllComponents(systems = listOf("NONE")).components.size)
+        assertEquals(6, componentsRegistryClient.getAllComponents(systems = listOf("ALFA", "CLASSIC")).components.size)
+        assertEquals(42, componentsRegistryClient.getAllComponents(systems = listOf("ALFA", "NONE")).components.size)
         assertEquals(46, componentsRegistryClient.getAllComponents(systems = listOf("CLASSIC", "NONE")).components.size)
+        assertEquals(46, componentsRegistryClient.getAllComponents(systems = listOf("ALFA", "CLASSIC", "NONE", "TEST")).components.size)
     }
 
     @Test
@@ -239,7 +243,7 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
 
     @Test
     fun findComponentsByDockerImagesNormalizeVersion() {
-        var components =
+        val components =
             componentsRegistryClient.findComponentsByDockerImages(setOf(Image("test-docker-3", "10.1-amd64")))
         assertEquals(1, components.size)
         assert(components.any { it.image.name == "test-docker-3" && it.component == "TEST_COMPONENT_WITH_DOCKER_3" && it.version == "10.1" })

@@ -169,7 +169,7 @@ abstract class BaseComponentsRegistryServiceTest {
         )
         expectedComponent.releaseManager = "user"
         expectedComponent.securityChampion = "user"
-        expectedComponent.system = listOf("NONE")
+        expectedComponent.system = setOf("ALFA", "CLASSIC")
         expectedComponent.clientCode = "CLIENT_CODE"
         expectedComponent.releasesInDefaultBranch = false
         expectedComponent.solution = true
@@ -185,7 +185,7 @@ abstract class BaseComponentsRegistryServiceTest {
             securityGroups = SecurityGroupsDTO(listOf("vfiler1-default#group")))
         expectedComponent.releaseManager = "user"
         expectedComponent.securityChampion = "user"
-        expectedComponent.system = listOf("NONE")
+        expectedComponent.system = setOf("ALFA", "CLASSIC")
         expectedComponent.clientCode = "CLIENT_CODE"
         expectedComponent.releasesInDefaultBranch = false
         expectedComponent.solution = true
@@ -251,7 +251,7 @@ abstract class BaseComponentsRegistryServiceTest {
         )
         expectedComponent.releaseManager = "user"
         expectedComponent.securityChampion = "user"
-        expectedComponent.system = listOf("NONE")
+        expectedComponent.system = setOf("ALFA", "CLASSIC")
         expectedComponent.clientCode = "CLIENT_CODE"
         expectedComponent.releasesInDefaultBranch = false
         expectedComponent.buildParameters = BuildParametersDTO(
