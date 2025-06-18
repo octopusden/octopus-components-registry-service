@@ -215,8 +215,12 @@ Defaults {
                     hotfixVersionFormat = '$releaseVersion-$hotfixSuffix'
                 }
             }
-            vcsUrl = "ssh://hg@mercurial/versions-api"
-            branch = "default"
+
+            vcsSettings {
+                vcsUrl = "ssh://hg@mercurial/test-component"
+                hotfixBranch = 'hotfix/$major.$minor.$service'
+            }
+
         }
     }
 

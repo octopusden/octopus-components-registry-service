@@ -129,6 +129,9 @@ abstract class BaseComponentsRegistryServiceTest {
         val actual = getAllJiraComponentVersionRanges().stream()
             .sorted { o1, o2 -> (o1.componentName + o1.versionRange).compareTo(o2.componentName + o2.versionRange)}
             .collect(Collectors.toList())
+
+        println("Diff: " + (expected - actual) + " | " + (actual - expected))
+
         Assertions.assertTrue(expected.containsAll(actual))
         Assertions.assertTrue(actual.containsAll(expected))
         Assertions.assertIterableEquals(expected, actual)
@@ -487,7 +490,6 @@ abstract class BaseComponentsRegistryServiceTest {
                     "prefix-1.2.3-suffix",
                     "expected-data/versions-api-1.2.3-jira-component-version.json"
                 ),
-                /*TODO
                 Arguments.of(
                     "versions-api",
                     "1.2.3.4",
@@ -497,7 +499,7 @@ abstract class BaseComponentsRegistryServiceTest {
                     "versions-api",
                     "prefix-1.2.3.4-suffix",
                     "expected-data/versions-api-1.2.3.4-jira-component-version.json"
-                )*/
+                )
             )
         }
 
