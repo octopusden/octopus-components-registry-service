@@ -130,8 +130,6 @@ abstract class BaseComponentsRegistryServiceTest {
             .sorted { o1, o2 -> (o1.componentName + o1.versionRange).compareTo(o2.componentName + o2.versionRange)}
             .collect(Collectors.toList())
 
-        println("Diff: " + (expected - actual) + " | " + (actual - expected))
-
         Assertions.assertTrue(expected.containsAll(actual))
         Assertions.assertTrue(actual.containsAll(expected))
         Assertions.assertIterableEquals(expected, actual)
