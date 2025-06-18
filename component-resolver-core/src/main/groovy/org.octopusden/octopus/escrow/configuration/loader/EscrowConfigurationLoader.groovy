@@ -135,13 +135,12 @@ class EscrowConfigurationLoader {
         def jiraComponentVersionFormatter = new JiraComponentVersionFormatter(versionNames)
         def numericVersion = new NumericVersionFactory(versionNames).create(version)
 
-        def isHotfixEnabled = vcsSettings?.getVersionControlSystemRoots()?.any { it.hotfixBranch?.isEmpty() == false }
-
         def formats = []
 
-        if (isHotfixEnabled) {
+        if (LoaderHelper.isHotFixEnabled(vcsSettings)) {
             formats << [jiraComponentVersionFormatter.&matchesHotfixVersionFormat, jiraComponentVersionFormatter.getHotfixVersionFormat(component)]
         }
+
         formats += [
                 [jiraComponentVersionFormatter.&matchesBuildVersionFormat, jiraComponentVersionFormatter.getBuildVersionFormat(component)],
                 [jiraComponentVersionFormatter.&matchesRCVersionFormat, component.componentVersionFormat.releaseVersionFormat],
