@@ -2,6 +2,8 @@ package org.octopusden.octopus.escrow.configuration.validation
 
 import groovy.transform.TupleConstructor
 import groovy.transform.TypeChecked
+import org.octopusden.octopus.escrow.configuration.loader.ComponentHotfixSupportResolver
+
 import java.util.function.BinaryOperator
 import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
@@ -497,8 +499,9 @@ class EscrowConfigValidator {
      * @param componentName
      */
     def validateHotfixVersionFormat(EscrowModuleConfig moduleConfig, String componentName, VersionControlSystemRoot vcsRoot) {
-        def hotfixBranch = vcsRoot.getHotfixBranch()
-        if (StringUtils.isBlank(hotfixBranch)) {
+
+        ComponentHotfixSupportResolver componentHotfixSupportResolver = new ComponentHotfixSupportResolver()
+        if (!componentHotfixSupportResolver.isHotFixEnabled(moduleConfig.vcsSettings)) {
             return
         }
         def hotfixVersionFormat = moduleConfig.getJiraConfiguration().componentVersionFormat.hotfixVersionFormat

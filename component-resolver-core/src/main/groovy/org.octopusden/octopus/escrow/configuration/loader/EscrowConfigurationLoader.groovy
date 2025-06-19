@@ -137,7 +137,8 @@ class EscrowConfigurationLoader {
 
         def formats = []
 
-        if (LoaderHelper.isHotFixEnabled(vcsSettings)) {
+        ComponentHotfixSupportResolver componentHotfixSupportResolver = new ComponentHotfixSupportResolver()
+        if (componentHotfixSupportResolver.isHotFixEnabled(vcsSettings)) {
             formats << [jiraComponentVersionFormatter.&matchesHotfixVersionFormat, jiraComponentVersionFormatter.getHotfixVersionFormat(component)]
         }
 
