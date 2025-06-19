@@ -148,11 +148,11 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
         )
         assertEquals(2, componentsRegistryClient.getAllComponents(systems = listOf("ALFA")).components.size)
         assertEquals(6, componentsRegistryClient.getAllComponents(systems = listOf("CLASSIC")).components.size)
-        assertEquals(40, componentsRegistryClient.getAllComponents(systems = listOf("NONE")).components.size)
+        assertEquals(43, componentsRegistryClient.getAllComponents(systems = listOf("NONE")).components.size)
         assertEquals(6, componentsRegistryClient.getAllComponents(systems = listOf("ALFA", "CLASSIC")).components.size)
-        assertEquals(42, componentsRegistryClient.getAllComponents(systems = listOf("ALFA", "NONE")).components.size)
-        assertEquals(46, componentsRegistryClient.getAllComponents(systems = listOf("CLASSIC", "NONE")).components.size)
-        assertEquals(46, componentsRegistryClient.getAllComponents(systems = listOf("ALFA", "CLASSIC", "NONE", "TEST")).components.size)
+        assertEquals(45, componentsRegistryClient.getAllComponents(systems = listOf("ALFA", "NONE")).components.size)
+        assertEquals(49, componentsRegistryClient.getAllComponents(systems = listOf("CLASSIC", "NONE")).components.size)
+        assertEquals(49, componentsRegistryClient.getAllComponents(systems = listOf("ALFA", "CLASSIC", "NONE", "TEST")).components.size)
     }
 
     @Test
