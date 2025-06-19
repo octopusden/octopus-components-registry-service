@@ -363,7 +363,7 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
         )
         expectedComponent.releaseManager = "user"
         expectedComponent.securityChampion = "user"
-        expectedComponent.system = listOf("NONE")
+        expectedComponent.system = setOf("ALFA", "CLASSIC")
         expectedComponent.clientCode = "CLIENT_CODE"
         expectedComponent.releasesInDefaultBranch = false
         expectedComponent.solution = true
@@ -424,7 +424,7 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
         )
         expectedComponent.releaseManager = "user"
         expectedComponent.securityChampion = "user"
-        expectedComponent.system = listOf("NONE")
+        expectedComponent.system = setOf("ALFA", "CLASSIC")
         expectedComponent.clientCode = "CLIENT_CODE"
         expectedComponent.releasesInDefaultBranch = false
         expectedComponent.solution = true

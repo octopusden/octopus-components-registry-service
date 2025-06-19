@@ -112,7 +112,7 @@ class ComponentRegistryResolverImpl(
             getJiraComponentVersionToRangeByComponentAndVersion(component, version)
         val buildVersion = jiraComponentVersion.component.componentVersionFormat.buildVersionFormat.formatVersion(
             numericVersionFactory, jiraComponentVersion.version
-        )
+        ) //TODO: What about hotfix version? Is it better to check version format and allow build/hotfix version only?
         return ModelConfigPostProcessor(ComponentVersion.create(component, buildVersion), versionNames)
             .resolveVariables(jiraComponentVersionRange.vcsSettings)
     }
@@ -154,7 +154,8 @@ class ComponentRegistryResolverImpl(
 
     override fun getVCSSettingForProject(projectKey: String, version: String): VCSSettings {
         val jiraComponentVersionRange = getJiraComponentVersionToRangeByProjectAndVersion(projectKey, version).second
-        //TODO: should version be transformed to buildVersion in the same way as in getVCSSettings method?
+        //TODO: should version be transformed to build/hotfix format in the same way as in getVCSSettings method?
+        // Usage of rc/release version may lead to invalid variables resolution (tag/branch/etc.)
         return ModelConfigPostProcessor(
             ComponentVersion.create(
                 jiraComponentVersionRange.componentName,

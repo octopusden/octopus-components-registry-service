@@ -24,7 +24,6 @@ import org.octopusden.octopus.components.registry.server.mapper.Mapper
 import org.octopusden.octopus.components.registry.server.mapper.toDTO
 import org.octopusden.octopus.escrow.configuration.model.EscrowModule
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
-import org.octopusden.octopus.escrow.configuration.validation.EscrowConfigValidator
 import org.octopusden.octopus.escrow.model.BuildParameters
 import org.octopusden.octopus.escrow.model.Tool
 import org.octopusden.octopus.releng.dto.JiraComponentVersion
@@ -103,7 +102,7 @@ class ComponentControllerV2(
             releaseManager = escrowModuleConfig.releaseManager
             securityChampion = escrowModuleConfig.securityChampion
             distribution = getComponentDistribution(escrowModuleConfig)
-            system = escrowModuleConfig.system?.split(EscrowConfigValidator.SPLIT_PATTERN)
+            system = escrowModuleConfig.systemSet
             clientCode = escrowModuleConfig.clientCode
             releasesInDefaultBranch = escrowModuleConfig.releasesInDefaultBranch
             parentComponent = escrowModuleConfig.parentComponent

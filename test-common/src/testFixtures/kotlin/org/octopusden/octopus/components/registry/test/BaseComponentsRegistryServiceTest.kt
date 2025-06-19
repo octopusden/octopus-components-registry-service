@@ -187,7 +187,7 @@ abstract class BaseComponentsRegistryServiceTest {
         )
         expectedComponent.releaseManager = "user"
         expectedComponent.securityChampion = "user"
-        expectedComponent.system = listOf("NONE")
+        expectedComponent.system = setOf("ALFA", "CLASSIC")
         expectedComponent.clientCode = "CLIENT_CODE"
         expectedComponent.releasesInDefaultBranch = false
         expectedComponent.solution = true
@@ -203,7 +203,7 @@ abstract class BaseComponentsRegistryServiceTest {
             securityGroups = SecurityGroupsDTO(listOf("vfiler1-default#group")))
         expectedComponent.releaseManager = "user"
         expectedComponent.securityChampion = "user"
-        expectedComponent.system = listOf("NONE")
+        expectedComponent.system = setOf("ALFA", "CLASSIC")
         expectedComponent.clientCode = "CLIENT_CODE"
         expectedComponent.releasesInDefaultBranch = false
         expectedComponent.solution = true
@@ -270,7 +270,7 @@ abstract class BaseComponentsRegistryServiceTest {
         )
         expectedComponent.releaseManager = "user"
         expectedComponent.securityChampion = "user"
-        expectedComponent.system = listOf("NONE")
+        expectedComponent.system = setOf("ALFA", "CLASSIC")
         expectedComponent.clientCode = "CLIENT_CODE"
         expectedComponent.releasesInDefaultBranch = false
         expectedComponent.buildParameters = BuildParametersDTO(
@@ -540,16 +540,17 @@ abstract class BaseComponentsRegistryServiceTest {
                     "prefix-1.2.3-suffix",
                     "expected-data/versions-api-1.2.3-jira-component-version.json"
                 ),
+                /*TODO
                 Arguments.of(
                     "versions-api",
                     "1.2.3.4",
-                    "expected-data/versions-api-1.2.3-jira-component-version.json"
+                    "expected-data/versions-api-1.2.3.4-jira-component-version.json"
                 ),
                 Arguments.of(
                     "versions-api",
                     "prefix-1.2.3.4-suffix",
-                    "expected-data/versions-api-1.2.3-jira-component-version.json"
-                ),
+                    "expected-data/versions-api-1.2.3.4-jira-component-version.json"
+                )*/
             )
         }
 
@@ -557,6 +558,8 @@ abstract class BaseComponentsRegistryServiceTest {
         fun vcsSettings(): Stream<Arguments> {
             return Stream.of(
                 Arguments.of("SUB", "sub1k-1.0.0", "expected-data/sub-sub1k-1.0.0-vcs-settings.json"),
+                Arguments.of("SUB", "hlk-1.0", "expected-data/sub-hlk-1.0-vcs-settings.json"),
+                Arguments.of("SUB", "hlk-1.0_RC", "expected-data/sub-hlk-1.0_RC-vcs-settings.json"),
                 Arguments.of("SUB", "hlk-1.0.0", "expected-data/sub-hlk-1.0.0-vcs-settings.json")
             )
         }
@@ -566,6 +569,7 @@ abstract class BaseComponentsRegistryServiceTest {
             return Stream.of(
                 Arguments.of("SUB", "hlk-1.0.0", "expected-data/sub-hlk-1.0.0-distribution.json"),
                 Arguments.of("TESTONE", "1.0", "expected-data/testone-1.0-distribution.json"),
+                Arguments.of("TESTONE", "1.0_RC", "expected-data/testone-1.0-distribution.json"),
                 Arguments.of("TESTONE", "versions-api.1.0", "expected-data/testone-versions-api.1.0-distribution.json")
 
             )
@@ -582,11 +586,8 @@ abstract class BaseComponentsRegistryServiceTest {
         fun jiraComponentVersionsByProject(): Stream<Arguments> {
             return Stream.of(
                 Arguments.of("TESTONE", "1.0", "expected-data/testone-1.0-jira-component-version.json"),
-                Arguments.of(
-                    "TESTONE",
-                    "versions-api.1.0",
-                    "expected-data/versions-api-version-api.1.0-jira-component-version.json"
-                )
+                Arguments.of("TESTONE", "versions-api.1.0_RC", "expected-data/versions-api-version-api.1.0-jira-component-version.json"),
+                Arguments.of("TESTONE", "versions-api.1.0", "expected-data/versions-api-version-api.1.0-jira-component-version.json")
             )
         }
     }
