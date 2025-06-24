@@ -1,7 +1,6 @@
 package org.octopusden.octopus.components.registry.server.service
 
 import org.octopusden.octopus.components.registry.api.build.tools.BuildTool
-import org.octopusden.octopus.components.registry.api.distribution.DistributionEntity
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.core.dto.BuildSystem
@@ -34,8 +33,6 @@ interface ComponentRegistryResolver {
     fun getVCSSettings(component: String, version: String): VCSSettings
 
     fun getBuildTools(component: String, version: String, ignoreRequired: Boolean?): List<BuildTool>
-
-    fun getDistributionEntities(component: String, version: String): List<DistributionEntity>
 
     fun getJiraComponentByProjectAndVersion(projectKey: String, version: String): JiraComponentVersion
 

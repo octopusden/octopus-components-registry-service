@@ -1,7 +1,6 @@
 package org.octopusden.octopus.components.registry.server.controller
 
 import org.octopusden.octopus.components.registry.api.build.tools.BuildTool
-import org.octopusden.octopus.components.registry.api.distribution.DistributionEntity
 import org.octopusden.octopus.components.registry.api.escrow.Escrow
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.core.dto.BuildSystem
@@ -197,14 +196,6 @@ class ComponentControllerV2(
         @RequestParam(name = "ignore-required", required = false, defaultValue = "false") ignoreRequired: Boolean?
     ): List<BuildTool> {
         return componentRegistryResolver.getBuildTools(component, version, ignoreRequired)
-    }
-
-    @GetMapping("{component}/versions/{version}/distribution-entities", produces = [MediaType.APPLICATION_JSON_VALUE])
-    fun getDistributionEntities(
-        @PathVariable("component") component: String,
-        @PathVariable("version") version: String
-    ): List<DistributionEntity> {
-        return componentRegistryResolver.getDistributionEntities(component, version)
     }
 
     @PostMapping(

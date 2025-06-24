@@ -886,17 +886,6 @@ TEST_COMPONENT4 {
     build { }
 }
 
-"TEST_COMPONENT_DISTRIBUTION_ENTITIES" {
-    componentOwner = "user9"
-    groupId = "org.octopusden.octopus.test.distribution.entities"
-    artifactId = "test-distribution-entities"
-    distribution {
-        explicit = true
-        external = true
-        GAV = "org.octopusden.octopus.distribution.server:app:zip:aix7_1,org.octopusden.octopus.distribution.server:app:zip:aix7_2,org.octopusden.octopus.distribution.server:app:zip:rhel6-linux-i386-nojdk,org.octopusden.octopus.distribution.server:app:zip:rhel6-linux-x64-nojdk,org.octopusden.octopus.distribution.server:app:zip:rhel7-linux-x64-nojdk,org.octopusden.octopus.distribution.server:app:zip:rhel8-linux-x64-nojdk,org.octopusden.octopus.distribution.server:app:zip:solaris11-sparc-nojdk,org.octopusden.octopus.distribution.server:app:zip:windows-x64-nojdk"
-    }
-}
-
 "TEST_PT_K_DB" {
     componentOwner = "user9"
     groupId = "org.octopusden.octopus.test"

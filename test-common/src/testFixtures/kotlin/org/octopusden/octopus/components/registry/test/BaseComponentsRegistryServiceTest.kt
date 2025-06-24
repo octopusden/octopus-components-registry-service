@@ -17,8 +17,6 @@ import org.junit.jupiter.params.provider.ValueSource
 import org.octopusden.octopus.components.registry.api.beans.OracleDatabaseToolBean
 import org.octopusden.octopus.components.registry.api.beans.PTKProductToolBean
 import org.octopusden.octopus.components.registry.api.build.tools.BuildTool
-import org.octopusden.octopus.components.registry.api.distribution.DistributionEntity
-import org.octopusden.octopus.components.registry.api.distribution.entities.MavenArtifactDistributionEntity
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.components.registry.core.dto.ArtifactComponentsDTO
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
@@ -112,7 +110,6 @@ abstract class BaseComponentsRegistryServiceTest {
     protected abstract fun getVcsSettings(component: String, version: String): VCSSettingsDTO
     protected abstract fun getDistribution(component: String, version: String): DistributionDTO
     protected abstract fun getBuildTools(component: String, version: String): List<BuildTool>
-    protected abstract fun getDistributionEntities(component: String, version: String): List<DistributionEntity>
     protected abstract fun getJiraComponentVersion(component: String, version: String): JiraComponentVersionDTO
     protected abstract fun getJiraComponentByProjectAndVersion(
         component: String,
@@ -351,20 +348,6 @@ abstract class BaseComponentsRegistryServiceTest {
         ptk.version = "03.49"
         Assertions.assertTrue(buildTools.contains(oracle))
         Assertions.assertTrue(buildTools.contains(ptk))
-    }
-
-    @Test
-    fun testGetDistributionEntities() {
-        val entities = getDistributionEntities("TEST_COMPONENT_DISTRIBUTION_ENTITIES", "1.0.0")
-        Assertions.assertFalse(entities.isEmpty())
-        entities.forEach {
-            Assertions.assertTrue(it is MavenArtifactDistributionEntity)
-            it as MavenArtifactDistributionEntity
-            Assertions.assertEquals("org.octopusden.octopus.distribution.server", it.groupId)
-            Assertions.assertEquals("app", it.artifactId)
-            Assertions.assertEquals("zip", it.extension.orElseThrow { IllegalStateException() })
-        }
-        Assertions.assertNotNull(entities.find { "windows-x64-nojdk" == (it as MavenArtifactDistributionEntity).classifier.orElseThrow { IllegalStateException() } })
     }
 
     @ParameterizedTest

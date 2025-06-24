@@ -10,7 +10,6 @@ import org.junit.jupiter.api.TestInstance
 import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.parallel.ResourceLock
 import org.octopusden.octopus.components.registry.api.build.tools.BuildTool
-import org.octopusden.octopus.components.registry.api.distribution.DistributionEntity
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.components.registry.client.impl.ClassicComponentsRegistryServiceClient
 import org.octopusden.octopus.components.registry.client.impl.ClassicComponentsRegistryServiceClientUrlProvider
@@ -86,9 +85,6 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
     override fun getBuildTools(component: String, version: String): List<BuildTool> =
         componentsRegistryClient.getBuildTools(component, version)
 
-    override fun getDistributionEntities(component: String, version: String): List<DistributionEntity> =
-        componentsRegistryClient.getDistributionEntities(component, version)
-
     override fun getJiraComponentVersion(component: String, version: String): JiraComponentVersionDTO =
         componentsRegistryClient.getJiraComponentForComponentAndVersion(component, version)
 
@@ -133,7 +129,7 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
 
     @Test
     fun testGetAllComponents() {
-        assertEquals(49, componentsRegistryClient.getAllComponents().components.size)
+        assertEquals(48, componentsRegistryClient.getAllComponents().components.size)
         assertEquals(
             3,
             componentsRegistryClient.getAllComponents("ssh://hg@mercurial/technical", null).components.size
@@ -148,11 +144,11 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
         )
         assertEquals(2, componentsRegistryClient.getAllComponents(systems = listOf("ALFA")).components.size)
         assertEquals(6, componentsRegistryClient.getAllComponents(systems = listOf("CLASSIC")).components.size)
-        assertEquals(43, componentsRegistryClient.getAllComponents(systems = listOf("NONE")).components.size)
+        assertEquals(42, componentsRegistryClient.getAllComponents(systems = listOf("NONE")).components.size)
         assertEquals(6, componentsRegistryClient.getAllComponents(systems = listOf("ALFA", "CLASSIC")).components.size)
-        assertEquals(45, componentsRegistryClient.getAllComponents(systems = listOf("ALFA", "NONE")).components.size)
-        assertEquals(49, componentsRegistryClient.getAllComponents(systems = listOf("CLASSIC", "NONE")).components.size)
-        assertEquals(49, componentsRegistryClient.getAllComponents(systems = listOf("ALFA", "CLASSIC", "NONE", "TEST")).components.size)
+        assertEquals(44, componentsRegistryClient.getAllComponents(systems = listOf("ALFA", "NONE")).components.size)
+        assertEquals(48, componentsRegistryClient.getAllComponents(systems = listOf("CLASSIC", "NONE")).components.size)
+        assertEquals(48, componentsRegistryClient.getAllComponents(systems = listOf("ALFA", "CLASSIC", "NONE", "TEST")).components.size)
     }
 
     @Test

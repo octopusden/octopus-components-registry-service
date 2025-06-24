@@ -38,7 +38,7 @@ class MetricsTest {
             .andExpect(MockMvcResultMatchers.status().isOk)
             .andExpect(MockMvcResultMatchers.jsonPath("$.name").value("components.buildsystem.count"))
             .andExpect(MockMvcResultMatchers.jsonPath("$.measurements[0].statistic").value("VALUE"))
-            .andExpect(MockMvcResultMatchers.jsonPath("$.measurements[0].value").value(49.0))
+            .andExpect(MockMvcResultMatchers.jsonPath("$.measurements[0].value").value(48.0))
             .andExpect(MockMvcResultMatchers.jsonPath("$.availableTags[0].tag").value("buildSystem"))
             .andExpect(MockMvcResultMatchers.jsonPath("$.availableTags[0].values").isArray)
             .andExpect(

@@ -1,7 +1,6 @@
 package org.octopusden.octopus.components.registry.client
 
 import org.octopusden.octopus.components.registry.api.build.tools.BuildTool
-import org.octopusden.octopus.components.registry.api.distribution.DistributionEntity
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.components.registry.core.dto.ArtifactComponentsDTO
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
@@ -87,9 +86,6 @@ interface ComponentsRegistryServiceClient {
         @Param("version") version: String,
         @Param("ignoreRequired") ignoreRequired: Boolean? = false
     ): List<BuildTool>
-
-    @RequestLine("GET rest/api/2/components/{componentKey}/versions/{version}/distribution-entities")
-    fun getDistributionEntities(@Param("componentKey") componentKey: String, @Param("version") version: String): List<DistributionEntity>
 
     @RequestLine("GET rest/api/2/components/{componentKey}/versions/{version}/jira-component")
     fun getJiraComponentForComponentAndVersion(@Param("componentKey") componentKey: String, @Param("version") version: String): JiraComponentVersionDTO

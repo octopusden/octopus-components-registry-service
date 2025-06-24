@@ -12,7 +12,6 @@ import feign.slf4j.Slf4jLogger
 import org.octopusden.octopus.components.registry.api.VersionedComponentConfiguration
 import org.octopusden.octopus.components.registry.api.beans.VersionedComponentConfigurationBean
 import org.octopusden.octopus.components.registry.api.build.tools.BuildTool
-import org.octopusden.octopus.components.registry.api.distribution.DistributionEntity
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.components.registry.client.ComponentsRegistryServiceClient
 import org.octopusden.octopus.components.registry.client.ComponentsRegistryServiceErrorDecoder
@@ -81,9 +80,6 @@ class ClassicComponentsRegistryServiceClient(
         @Param(value = "ignoreRequired") ignoreRequired: Boolean?
     ): List<BuildTool> =
         client.getBuildTools(componentKey, version, ignoreRequired)
-
-    override fun getDistributionEntities(componentKey: String, version: String): List<DistributionEntity> =
-        client.getDistributionEntities(componentKey, version)
 
     override fun getJiraComponentForComponentAndVersion(
         componentKey: String,

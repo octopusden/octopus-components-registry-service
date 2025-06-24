@@ -5,7 +5,6 @@ import io.micrometer.core.instrument.MeterRegistry
 import org.apache.maven.artifact.DefaultArtifact
 import org.jetbrains.kotlin.utils.keysToMap
 import org.octopusden.octopus.components.registry.api.build.tools.BuildTool
-import org.octopusden.octopus.components.registry.api.distribution.DistributionEntity
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.core.dto.BuildSystem
@@ -119,10 +118,6 @@ class ComponentRegistryResolverImpl(
 
     override fun getBuildTools(component: String, version: String, ignoreRequired: Boolean?): List<BuildTool> {
         return buildToolsResolver.getComponentBuildTools(ComponentVersion.create(component, version), null, ignoreRequired ?: false).toList()
-    }
-
-    override fun getDistributionEntities(component: String, version: String): List<DistributionEntity> {
-        return buildToolsResolver.getDistributionEntities(ComponentVersion.create(component, version)).toList()
     }
 
     override fun getJiraComponentByProjectAndVersion(projectKey: String, version: String) =
