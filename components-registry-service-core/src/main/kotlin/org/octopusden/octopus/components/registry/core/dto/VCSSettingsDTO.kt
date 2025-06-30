@@ -8,4 +8,4 @@ import com.fasterxml.jackson.annotation.JsonProperty
 data class VCSSettingsDTO @JsonCreator constructor(
     @JsonProperty("versionControlSystemRoots") val versionControlSystemRoots: List<VersionControlSystemRootDTO> = emptyList(),
     @JsonProperty("externalRegistry") val externalRegistry: String? = null,
-    )
+)

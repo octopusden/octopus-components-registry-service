@@ -1,11 +1,16 @@
 package org.octopusden.octopus.components.registry.client
 
+import java.util.Date
+import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.parallel.ResourceLock
+import org.octopusden.octopus.components.registry.api.build.tools.BuildTool
+import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.components.registry.client.impl.ClassicComponentsRegistryServiceClient
 import org.octopusden.octopus.components.registry.client.impl.ClassicComponentsRegistryServiceClientUrlProvider
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
@@ -30,9 +35,6 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.junit.jupiter.SpringExtension
-import java.util.Date
-import kotlin.test.assertFailsWith
-import kotlin.test.assertTrue
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @ExtendWith(SpringExtension::class)
@@ -80,6 +82,9 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
     override fun getDistribution(component: String, version: String): DistributionDTO =
         componentsRegistryClient.getComponentDistribution(component, version)
 
+    override fun getBuildTools(component: String, version: String): List<BuildTool> =
+        componentsRegistryClient.getBuildTools(component, version)
+
     override fun getJiraComponentVersion(component: String, version: String): JiraComponentVersionDTO =
         componentsRegistryClient.getJiraComponentForComponentAndVersion(component, version)
 
@@ -117,11 +122,14 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
     override fun getDependencyAliasToComponentMapping(): Map<String, String> =
         componentsRegistryClient.getDependencyAliasToComponentMapping()
 
+    override fun getComponentProductMapping(): Map<String, ProductTypes> =
+        componentsRegistryClient.getComponentProductMapping()
+
     override fun getServiceStatus(): ServiceStatusDTO = componentsRegistryClient.getServiceStatus()
 
     @Test
     fun testGetAllComponents() {
-        assertEquals(46, componentsRegistryClient.getAllComponents().components.size)
+        assertEquals(48, componentsRegistryClient.getAllComponents().components.size)
         assertEquals(
             3,
             componentsRegistryClient.getAllComponents("ssh://hg@mercurial/technical", null).components.size
@@ -136,11 +144,11 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
         )
         assertEquals(2, componentsRegistryClient.getAllComponents(systems = listOf("ALFA")).components.size)
         assertEquals(6, componentsRegistryClient.getAllComponents(systems = listOf("CLASSIC")).components.size)
-        assertEquals(40, componentsRegistryClient.getAllComponents(systems = listOf("NONE")).components.size)
+        assertEquals(42, componentsRegistryClient.getAllComponents(systems = listOf("NONE")).components.size)
         assertEquals(6, componentsRegistryClient.getAllComponents(systems = listOf("ALFA", "CLASSIC")).components.size)
-        assertEquals(42, componentsRegistryClient.getAllComponents(systems = listOf("ALFA", "NONE")).components.size)
-        assertEquals(46, componentsRegistryClient.getAllComponents(systems = listOf("CLASSIC", "NONE")).components.size)
-        assertEquals(46, componentsRegistryClient.getAllComponents(systems = listOf("ALFA", "CLASSIC", "NONE", "TEST")).components.size)
+        assertEquals(44, componentsRegistryClient.getAllComponents(systems = listOf("ALFA", "NONE")).components.size)
+        assertEquals(48, componentsRegistryClient.getAllComponents(systems = listOf("CLASSIC", "NONE")).components.size)
+        assertEquals(48, componentsRegistryClient.getAllComponents(systems = listOf("ALFA", "CLASSIC", "NONE", "TEST")).components.size)
     }
 
     @Test

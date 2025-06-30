@@ -6,6 +6,8 @@ import java.util.Date
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
+import org.octopusden.octopus.components.registry.api.build.tools.BuildTool
+import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.components.registry.core.dto.ArtifactComponentsDTO
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.core.dto.BuildSystem
@@ -35,6 +37,7 @@ import org.springframework.test.context.junit.jupiter.SpringExtension
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import java.util.SimpleTimeZone
 
 @AutoConfigureMockMvc
 @ExtendWith(SpringExtension::class)
@@ -86,6 +89,16 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
             .andReturn()
             .response
             .toObject(object : TypeReference<Map<String, String>>() {})
+
+    override fun getComponentProductMapping(): Map<String, ProductTypes> =
+        mvc.perform(
+            MockMvcRequestBuilders.get(URI.create("/rest/api/2/common/component-product-mapping"))
+                .accept(APPLICATION_JSON)
+        )
+            .andExpect(status().isOk)
+            .andReturn()
+            .response
+            .toObject(object : TypeReference<Map<String, ProductTypes>>() {})
 
     override fun getComponentV1(component: String): ComponentV1 = mvc.perform(
         MockMvcRequestBuilders.get("/rest/api/1/components/$component")
@@ -161,6 +174,16 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
         .andReturn()
         .response
         .toObject(DistributionDTO::class.java)
+
+    override fun getBuildTools(component: String, version: String): List<BuildTool> =
+        mvc.perform(
+            MockMvcRequestBuilders.get("/rest/api/2/components/{component}/versions/{version}/build-tools", component, version)
+                .accept(APPLICATION_JSON)
+        )
+            .andExpect(status().isOk)
+            .andReturn()
+            .response
+            .toObject(object: TypeReference<List<BuildTool>>() {})
 
     override fun getJiraComponentVersion(component: String, version: String): JiraComponentVersionDTO =
         mvc.perform(
@@ -334,7 +357,7 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
         expectedComponent.releasesInDefaultBranch = false
         expectedComponent.solution = true
 
-        Assertions.assertEquals(46, components.components.size)
+        Assertions.assertEquals(48, components.components.size)
         Assertions.assertTrue(expectedComponent in components.components) {
             components.components.toString()
         }

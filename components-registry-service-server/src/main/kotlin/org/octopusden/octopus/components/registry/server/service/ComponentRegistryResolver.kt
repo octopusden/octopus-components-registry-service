@@ -1,5 +1,7 @@
 package org.octopusden.octopus.components.registry.server.service
 
+import org.octopusden.octopus.components.registry.api.build.tools.BuildTool
+import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.core.dto.BuildSystem
 import org.octopusden.octopus.components.registry.core.dto.ComponentImage
@@ -30,6 +32,8 @@ interface ComponentRegistryResolver {
 
     fun getVCSSettings(component: String, version: String): VCSSettings
 
+    fun getBuildTools(component: String, version: String, ignoreRequired: Boolean?): List<BuildTool>
+
     fun getJiraComponentByProjectAndVersion(projectKey: String, version: String): JiraComponentVersion
 
     fun getJiraComponentsByProject(projectKey: String): Set<String>
@@ -53,6 +57,8 @@ interface ComponentRegistryResolver {
     fun getDependencyMapping(): Map<String, String>
 
     fun getComponentsCountByBuildSystem(): EnumMap<BuildSystem, Int>
+
+    fun getComponentProductMapping(): Map<String, ProductTypes>
 
     fun findComponentsByDockerImages(images: Set<Image>): Set<ComponentImage>
 

@@ -227,6 +227,8 @@ Defaults {
         GAV = "org.octopusden.octopus.test:versions-api:jar"
         docker = "test/versions-api"
     }
+
+    buildFilePath = "build"
 }
 
 
@@ -875,6 +877,19 @@ TEST_COMPONENT4 {
     groupId = "org.octopusden.octopus.test.golang"
     artifactId = "test-golang"
     buildSystem = GOLANG
+}
+
+"TEST_COMPONENT_BUILD_TOOLS" {
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.test.build.tools"
+    artifactId = "test-build-tools"
+    build { }
+}
+
+"TEST_PT_K_DB" {
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.test"
+    artifactId = "pt-k-db"
 }
 
 
