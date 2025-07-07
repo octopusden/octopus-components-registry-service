@@ -107,6 +107,7 @@ class ComponentControllerV2(
             parentComponent = escrowModuleConfig.parentComponent
             buildParameters = escrowModuleConfig.buildConfiguration?.let { bc -> getBuildParametersDTO(bc) }
             escrow = escrowModuleConfig.escrow?.let { escrow -> getEscrowDTO(escrow) }
+            solution = escrowModuleConfig.solution
             this
         }
     }
