@@ -300,6 +300,7 @@ abstract class BaseComponentsRegistryServiceTest {
             ),
             isReusable = false
         )
+        expectedComponent.solution = true
         Assertions.assertEquals(expectedComponent, actualComponent)
     }
 
