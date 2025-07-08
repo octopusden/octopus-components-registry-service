@@ -1,5 +1,7 @@
 package org.octopusden.octopus.components.registry.server.controller
 
+import org.octopusden.octopus.components.registry.api.build.tools.BuildTool
+import org.octopusden.octopus.components.registry.api.escrow.Escrow
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.core.dto.BuildSystem
 import org.octopusden.octopus.components.registry.core.dto.BuildParametersDTO
@@ -8,6 +10,7 @@ import org.octopusden.octopus.components.registry.core.dto.ComponentV2
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponent
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersion
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersions
+import org.octopusden.octopus.components.registry.core.dto.EscrowDTO
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionDTO
 import org.octopusden.octopus.components.registry.core.dto.RepositoryType
 import org.octopusden.octopus.components.registry.core.dto.ToolDTO
@@ -20,7 +23,6 @@ import org.octopusden.octopus.components.registry.server.mapper.Mapper
 import org.octopusden.octopus.components.registry.server.mapper.toDTO
 import org.octopusden.octopus.escrow.configuration.model.EscrowModule
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
-import org.octopusden.octopus.escrow.configuration.validation.EscrowConfigValidator
 import org.octopusden.octopus.escrow.model.BuildParameters
 import org.octopusden.octopus.escrow.model.Tool
 import org.octopusden.octopus.releng.dto.JiraComponentVersion
@@ -31,6 +33,7 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 
 @RestController
@@ -91,17 +94,20 @@ class ComponentControllerV2(
             buildSystem = getBuildSystem(escrowModuleConfig.buildSystem),
             vcsSettings = resolveVCSSettings(componentName, version),
             jiraComponentVersion = jiraComponentVersion.toDTO(),
-            detailedComponentVersion = detailedComponentVersionMapper.convert(jiraComponentVersion)
+            detailedComponentVersion = detailedComponentVersionMapper.convert(jiraComponentVersion),
+            buildFilePath = escrowModuleConfig.buildFilePath
         )
         return with(detailedComponent) {
             releaseManager = escrowModuleConfig.releaseManager
             securityChampion = escrowModuleConfig.securityChampion
             distribution = getComponentDistribution(escrowModuleConfig)
-            system = escrowModuleConfig.system?.split(EscrowConfigValidator.SPLIT_PATTERN)
+            system = escrowModuleConfig.systemSet
             clientCode = escrowModuleConfig.clientCode
             releasesInDefaultBranch = escrowModuleConfig.releasesInDefaultBranch
             parentComponent = escrowModuleConfig.parentComponent
             buildParameters = escrowModuleConfig.buildConfiguration?.let { bc -> getBuildParametersDTO(bc) }
+            escrow = escrowModuleConfig.escrow?.let { escrow -> getEscrowDTO(escrow) }
+            solution = escrowModuleConfig.solution
             this
         }
     }
@@ -131,6 +137,15 @@ class ComponentControllerV2(
             buildParameters.buildTasks,
             getToolsDTO(buildParameters.tools),
             buildParameters.buildTools
+        )
+    }
+
+    private fun getEscrowDTO(escrow: Escrow): EscrowDTO {
+        return EscrowDTO(
+            escrow.providedDependencies.toList(),
+            escrow.diskSpaceRequirement.orElse(null),
+            escrow.additionalSources.toList(),
+            escrow.isReusable
         )
     }
 
@@ -173,6 +188,15 @@ class ComponentControllerV2(
     ): VCSSettingsDTO {
         LOG.info("Get VCS Settings: '$component:$version'")
         return resolveVCSSettings(component, version)
+    }
+
+    @GetMapping("{component}/versions/{version}/build-tools", produces = [MediaType.APPLICATION_JSON_VALUE])
+    fun getBuildTools(
+        @PathVariable("component") component: String,
+        @PathVariable("version") version: String,
+        @RequestParam(name = "ignore-required", required = false, defaultValue = "false") ignoreRequired: Boolean?
+    ): List<BuildTool> {
+        return componentRegistryResolver.getBuildTools(component, version, ignoreRequired)
     }
 
     @PostMapping(

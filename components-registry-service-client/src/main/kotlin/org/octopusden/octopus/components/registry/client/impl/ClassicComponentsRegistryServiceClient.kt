@@ -4,12 +4,15 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.module.SimpleModule
 import feign.Feign
 import feign.Logger
+import feign.Param
 import feign.httpclient.ApacheHttpClient
 import feign.jackson.JacksonDecoder
 import feign.jackson.JacksonEncoder
 import feign.slf4j.Slf4jLogger
 import org.octopusden.octopus.components.registry.api.VersionedComponentConfiguration
 import org.octopusden.octopus.components.registry.api.beans.VersionedComponentConfigurationBean
+import org.octopusden.octopus.components.registry.api.build.tools.BuildTool
+import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.components.registry.client.ComponentsRegistryServiceClient
 import org.octopusden.octopus.components.registry.client.ComponentsRegistryServiceErrorDecoder
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
@@ -71,6 +74,13 @@ class ClassicComponentsRegistryServiceClient(
 
     override fun getVCSSetting(componentKey: String, version: String) = client.getVCSSetting(componentKey, version)
 
+    override fun getBuildTools(
+        @Param(value = "componentKey") componentKey: String,
+        @Param(value = "version") version: String,
+        @Param(value = "ignoreRequired") ignoreRequired: Boolean?
+    ): List<BuildTool> =
+        client.getBuildTools(componentKey, version, ignoreRequired)
+
     override fun getJiraComponentForComponentAndVersion(
         componentKey: String,
         version: String
@@ -103,6 +113,9 @@ class ClassicComponentsRegistryServiceClient(
 
     override fun getSupportedGroupIds(): Set<String> =
         client.getSupportedGroupIds()
+
+    override fun getComponentProductMapping(): Map<String, ProductTypes> =
+        client.getComponentProductMapping()
 
     override fun getVersionNames(): VersionNamesDTO =
         client.getVersionNames()

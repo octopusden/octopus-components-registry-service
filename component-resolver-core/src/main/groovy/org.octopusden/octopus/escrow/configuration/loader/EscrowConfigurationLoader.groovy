@@ -167,18 +167,12 @@ class EscrowConfigurationLoader {
 
         def docker = distribution.docker()
 
-        // TODO -- DOCKER -- to be removed
-        // the only "else" block will remain
-        if (docker.contains("\${version}")) {
-            docker = docker.replaceAll("\\\$\\{version}", version)
-        } else {
-            docker = docker.split(',').collect { img ->
-                def parts = img.split(":")
-                def base = parts[0]
-                def suffix = parts.size() > 1 ? "-${parts[1]}" : ""
-                return "${base}:${version}${suffix}"
-            }.join(",")
-        }
+        docker = docker.split(',').collect { img ->
+            def parts = img.split(":")
+            def base = parts[0]
+            def suffix = parts.size() > 1 ? "-${parts[1]}" : ""
+            return "${base}:${version}${suffix}"
+        }.join(",")
 
         return new Distribution(
                 distribution.explicit(),

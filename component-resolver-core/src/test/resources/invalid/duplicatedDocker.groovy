@@ -32,7 +32,7 @@ component1 {
     distribution {
         explicit = true
         external = true
-        docker = 'test-component/image:${version}-amd64'
+        docker = 'test-component/image:amd64'
     }
 
 }
@@ -52,6 +52,6 @@ component2 {
     distribution {
         explicit = true
         external = true
-        docker = 'test-component/image:${version}-flavour1'
+        docker = 'test-component/image:flavour1'
     }
 }

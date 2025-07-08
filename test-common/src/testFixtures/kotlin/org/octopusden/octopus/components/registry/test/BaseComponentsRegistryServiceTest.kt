@@ -14,6 +14,10 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
 import org.junit.jupiter.params.provider.ValueSource
+import org.octopusden.octopus.components.registry.api.beans.OracleDatabaseToolBean
+import org.octopusden.octopus.components.registry.api.beans.PTKProductToolBean
+import org.octopusden.octopus.components.registry.api.build.tools.BuildTool
+import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.components.registry.core.dto.ArtifactComponentsDTO
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.core.dto.BuildParametersDTO
@@ -28,6 +32,7 @@ import org.octopusden.octopus.components.registry.core.dto.DetailedComponent
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersion
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersions
 import org.octopusden.octopus.components.registry.core.dto.DistributionDTO
+import org.octopusden.octopus.components.registry.core.dto.EscrowDTO
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentDTO
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionDTO
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionRangeDTO
@@ -92,6 +97,7 @@ abstract class BaseComponentsRegistryServiceTest {
     protected abstract fun getSupportedGroupIds(): Set<String>
     abstract fun getVersionNames(): VersionNamesDTO
     protected abstract fun getDependencyAliasToComponentMapping(): Map<String, String>
+    protected abstract fun getComponentProductMapping(): Map<String, ProductTypes>
 
     protected abstract fun getComponentV1(component: String): ComponentV1
     protected abstract fun getDetailedComponent(component: String, version: String): DetailedComponent
@@ -103,6 +109,7 @@ abstract class BaseComponentsRegistryServiceTest {
 
     protected abstract fun getVcsSettings(component: String, version: String): VCSSettingsDTO
     protected abstract fun getDistribution(component: String, version: String): DistributionDTO
+    protected abstract fun getBuildTools(component: String, version: String): List<BuildTool>
     protected abstract fun getJiraComponentVersion(component: String, version: String): JiraComponentVersionDTO
     protected abstract fun getJiraComponentByProjectAndVersion(
         component: String,
@@ -141,6 +148,14 @@ abstract class BaseComponentsRegistryServiceTest {
     }
 
     @Test
+    fun testGetComponentProductMapping() {
+        Assertions.assertEquals(
+            mapOf("TEST_PT_K_DB" to ProductTypes.PT_K),
+            getComponentProductMapping()
+        )
+    }
+
+    @Test
     fun testVersionNames() {
         val value = getVersionNames()
         Assertions.assertEquals("serviceCBranch", value.serviceBranch)
@@ -170,7 +185,7 @@ abstract class BaseComponentsRegistryServiceTest {
         )
         expectedComponent.releaseManager = "user"
         expectedComponent.securityChampion = "user"
-        expectedComponent.system = listOf("NONE")
+        expectedComponent.system = setOf("ALFA", "CLASSIC")
         expectedComponent.clientCode = "CLIENT_CODE"
         expectedComponent.releasesInDefaultBranch = false
         expectedComponent.solution = true
@@ -186,7 +201,7 @@ abstract class BaseComponentsRegistryServiceTest {
             securityGroups = SecurityGroupsDTO(listOf("vfiler1-default#group")))
         expectedComponent.releaseManager = "user"
         expectedComponent.securityChampion = "user"
-        expectedComponent.system = listOf("NONE")
+        expectedComponent.system = setOf("ALFA", "CLASSIC")
         expectedComponent.clientCode = "CLIENT_CODE"
         expectedComponent.releasesInDefaultBranch = false
         expectedComponent.solution = true
@@ -241,7 +256,8 @@ abstract class BaseComponentsRegistryServiceTest {
                 rcVersion = ComponentRegistryVersion(ComponentVersionType.RC, "1.0_RC", "1.0_RC"),
                 buildVersion = ComponentRegistryVersion(ComponentVersionType.BUILD, "1.0.0", "1.0.0"),
                 hotfixVersion = ComponentRegistryVersion(ComponentVersionType.HOTFIX, "1.0.0.0", "1.0.0.0")
-            )
+            ),
+            buildFilePath = "build"
         )
         expectedComponent.distribution = DistributionDTO(
             false,
@@ -252,7 +268,7 @@ abstract class BaseComponentsRegistryServiceTest {
         )
         expectedComponent.releaseManager = "user"
         expectedComponent.securityChampion = "user"
-        expectedComponent.system = listOf("NONE")
+        expectedComponent.system = setOf("ALFA", "CLASSIC")
         expectedComponent.clientCode = "CLIENT_CODE"
         expectedComponent.releasesInDefaultBranch = false
         expectedComponent.buildParameters = BuildParametersDTO(
@@ -276,6 +292,16 @@ abstract class BaseComponentsRegistryServiceTest {
                 )
             )
         )
+        expectedComponent.escrow = EscrowDTO(
+            providedDependencies = listOf("test:test:1.1"),
+            diskSpaceRequirement = null,
+            additionalSources = listOf(
+                "spa/.gradle",
+                "spa/node_modules"
+            ),
+            isReusable = false
+        )
+        expectedComponent.solution = true
         Assertions.assertEquals(expectedComponent, actualComponent)
     }
 
@@ -313,6 +339,17 @@ abstract class BaseComponentsRegistryServiceTest {
             actualDistribution.gav,
             "Was returned distribution as is to perform expression evaluation on client side"
         )
+    }
+
+    @Test
+    fun testGetBuildTools() {
+        val buildTools = getBuildTools("TEST_COMPONENT_BUILD_TOOLS", "1.0.0")
+        val oracle = OracleDatabaseToolBean()
+        oracle.version = "11.2"
+        val ptk = PTKProductToolBean()
+        ptk.version = "03.49"
+        Assertions.assertTrue(buildTools.contains(oracle))
+        Assertions.assertTrue(buildTools.contains(ptk))
     }
 
     @ParameterizedTest

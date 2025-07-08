@@ -9,7 +9,6 @@ import org.octopusden.octopus.components.registry.core.exceptions.NotFoundExcept
 import org.octopusden.octopus.components.registry.server.service.ComponentRegistryResolver
 import org.octopusden.octopus.escrow.configuration.model.EscrowModule
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
-import org.octopusden.octopus.escrow.configuration.validation.EscrowConfigValidator
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
@@ -62,9 +61,9 @@ abstract class BaseComponentController<T : Component> {
                 if (systems.isEmpty()) {
                     true
                 } else {
-                    c.system?.any { s ->
-                        systems.contains(s)
-                    } ?: false
+                    systems.any {
+                        c.system.contains(it)
+                    }
                 }
             }
 
@@ -103,7 +102,7 @@ abstract class BaseComponentController<T : Component> {
             releaseManager = escrowModuleConfig.releaseManager
             securityChampion = escrowModuleConfig.securityChampion
             distribution = getComponentDistribution(escrowModuleConfig)
-            system = escrowModuleConfig.system?.split(EscrowConfigValidator.SPLIT_PATTERN)
+            system = escrowModuleConfig.systemSet
             clientCode = escrowModuleConfig.clientCode
             releasesInDefaultBranch = escrowModuleConfig.releasesInDefaultBranch
             solution = escrowModuleConfig.solution

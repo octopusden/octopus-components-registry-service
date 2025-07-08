@@ -17,11 +17,15 @@ import org.octopusden.octopus.releng.dto.ComponentVersion
 @TypeChecked
 @Slf4j
 class BuildToolsResolver implements IBuildToolsResolver {
-    private final EscrowConfiguration configuration
+    private EscrowConfiguration escrowConfiguration
 
-    private final EscrowConfiguration escrowConfiguration
+    BuildToolsResolver() {}
 
     BuildToolsResolver(final EscrowConfiguration escrowConfiguration) {
+        this.escrowConfiguration = escrowConfiguration
+    }
+
+    void setEscrowConfiguration(EscrowConfiguration escrowConfiguration) {
         this.escrowConfiguration = escrowConfiguration
     }
 

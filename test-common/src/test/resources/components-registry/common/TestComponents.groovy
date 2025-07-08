@@ -176,6 +176,7 @@ Defaults {
     groupId = "org.octopusden.octopus.test"
     artifactId = "test2"
     componentDisplayName = "Test ONE display name"
+    system = "CLASSIC,ALFA"
     clientCode = "CLIENT_CODE"
     releasesInDefaultBranch = false
     solution = true
@@ -230,6 +231,8 @@ Defaults {
         GAV = "org.octopusden.octopus.test:versions-api:jar"
         docker = "test/versions-api"
     }
+
+    buildFilePath = "build"
 }
 
 
@@ -880,6 +883,19 @@ TEST_COMPONENT4 {
     buildSystem = GOLANG
 }
 
+"TEST_COMPONENT_BUILD_TOOLS" {
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.test.build.tools"
+    artifactId = "test-build-tools"
+    build { }
+}
+
+"TEST_PT_K_DB" {
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.test"
+    artifactId = "pt-k-db"
+}
+
 
 "TEST_COMPONENT_WITH_DOCKER_1" {
     componentOwner = "user9"
@@ -890,7 +906,7 @@ TEST_COMPONENT4 {
     distribution {
         explicit = false
         external = true
-        docker = 'test-docker-1:${version}'
+        docker = 'test-docker-1'
     }
 }
 
@@ -960,7 +976,7 @@ TEST_COMPONENT4 {
     distribution {
         explicit = false
         external = true
-        docker = 'test-docker-3:${version}-amd64'
+        docker = 'test-docker-3:amd64'
     }
 }
 
@@ -979,18 +995,18 @@ TEST_COMPONENT4 {
 
     "(,1.0.0]" {
         distribution {
-            docker = 'test-docker-4:${version}'
+            docker = 'test-docker-4'
         }
     }
 
     "(1.0.0, 2.0.0)" {
         distribution {
-            docker = 'test-docker-4:${version}-amd64'
+            docker = 'test-docker-4:amd64'
         }
     }
     "(2.0.0,)" {
         distribution {
-            docker = 'test-docker-4:${version}-arm64'
+            docker = 'test-docker-4:arm64'
         }
     }
 }
