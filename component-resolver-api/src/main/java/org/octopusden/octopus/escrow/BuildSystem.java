@@ -9,5 +9,6 @@ public enum BuildSystem {
     PROVIDED,
     ESCROW_NOT_SUPPORTED,
     ESCROW_PROVIDED_MANUALLY,
-    GOLANG
+    GOLANG,
+    IN_CONTAINER
 }
