@@ -7,6 +7,7 @@ import org.octopusden.octopus.releng.dto.ComponentVersion;
 import org.octopusden.octopus.releng.dto.JiraComponent;
 import org.octopusden.octopus.releng.dto.JiraComponentVersion;
 import org.octopusden.releng.versions.VersionNames;
+import org.octopusden.octopus.escrow.resolvers.ComponentHotfixSupportResolver;
 
 public class JiraComponentVersionRangeFactory {
 
@@ -24,10 +25,13 @@ public class JiraComponentVersionRangeFactory {
             VCSSettings vcsSettings
     ) {
         JiraComponentVersionFormatter jiraComponentVersionFormatter = new JiraComponentVersionFormatter(versionNames);
+        ComponentHotfixSupportResolver componentHotfixSupportResolver = new ComponentHotfixSupportResolver();
+
         JiraComponentVersion jiraComponentVersion = new JiraComponentVersion(
                 ComponentVersion.create(componentName, versionRange),
                 jiraComponent,
-                jiraComponentVersionFormatter
+                jiraComponentVersionFormatter,
+                componentHotfixSupportResolver.isHotFixEnabled(vcsSettings)
         );
 
         return new JiraComponentVersionRange(

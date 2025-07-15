@@ -2,12 +2,6 @@ package org.octopusden.octopus.escrow.configuration.validation
 
 import groovy.transform.TupleConstructor
 import groovy.transform.TypeChecked
-import org.octopusden.octopus.escrow.configuration.loader.ComponentHotfixSupportResolver
-
-import java.util.function.BinaryOperator
-import java.util.regex.Pattern
-import java.util.regex.PatternSyntaxException
-import java.util.stream.Stream
 import kotlin.Pair
 import org.apache.commons.lang3.StringUtils
 import org.apache.logging.log4j.LogManager
@@ -19,10 +13,16 @@ import org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration
 import org.octopusden.octopus.escrow.configuration.model.EscrowModule
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
 import org.octopusden.octopus.escrow.model.VersionControlSystemRoot
+import org.octopusden.octopus.escrow.resolvers.ComponentHotfixSupportResolver
 import org.octopusden.releng.versions.KotlinVersionFormatter
 import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRange
 import org.octopusden.releng.versions.VersionRangeFactory
+
+import java.util.function.BinaryOperator
+import java.util.regex.Pattern
+import java.util.regex.PatternSyntaxException
+import java.util.stream.Stream
 
 @TypeChecked
 class EscrowConfigValidator {

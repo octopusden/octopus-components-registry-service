@@ -1,5 +1,4 @@
-package org.octopusden.octopus.escrow.configuration.loader
-
+package org.octopusden.octopus.escrow.resolvers
 
 import org.octopusden.octopus.escrow.model.VCSSettings
 

@@ -2,7 +2,6 @@ package org.octopusden.octopus.escrow.configuration.loader
 
 import groovy.transform.TypeChecked
 import groovy.transform.TypeCheckingMode
-import java.util.stream.Collectors
 import org.apache.commons.lang3.StringUtils
 import org.apache.commons.lang3.Validate
 import org.apache.logging.log4j.LogManager
@@ -23,12 +22,8 @@ import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
 import org.octopusden.octopus.escrow.configuration.validation.EscrowConfigValidator
 import org.octopusden.octopus.escrow.exceptions.ComponentResolverException
 import org.octopusden.octopus.escrow.exceptions.EscrowConfigurationException
-import org.octopusden.octopus.escrow.model.BuildParameters
-import org.octopusden.octopus.escrow.model.Distribution
-import org.octopusden.octopus.escrow.model.SecurityGroups
-import org.octopusden.octopus.escrow.model.Tool
-import org.octopusden.octopus.escrow.model.VCSSettings
-import org.octopusden.octopus.escrow.model.VersionControlSystemRoot
+import org.octopusden.octopus.escrow.model.*
+import org.octopusden.octopus.escrow.resolvers.ComponentHotfixSupportResolver
 import org.octopusden.octopus.escrow.resolvers.ReleaseInfoResolver
 import org.octopusden.octopus.releng.JiraComponentVersionFormatter
 import org.octopusden.octopus.releng.dto.ComponentInfo
@@ -38,6 +33,8 @@ import org.octopusden.releng.versions.ComponentVersionFormat
 import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRangeFactory
+
+import java.util.stream.Collectors
 
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.BRANCH
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.BUILD

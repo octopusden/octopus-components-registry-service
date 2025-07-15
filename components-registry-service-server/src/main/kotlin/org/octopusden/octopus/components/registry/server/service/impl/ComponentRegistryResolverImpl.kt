@@ -29,6 +29,7 @@ import org.octopusden.octopus.escrow.model.Distribution
 import org.octopusden.octopus.escrow.model.SecurityGroups
 import org.octopusden.octopus.escrow.model.VCSSettings
 import org.octopusden.octopus.escrow.resolvers.BuildToolsResolver
+import org.octopusden.octopus.escrow.resolvers.ComponentHotfixSupportResolver
 import org.octopusden.octopus.escrow.resolvers.JiraParametersResolver
 import org.octopusden.octopus.escrow.resolvers.ModuleByArtifactResolver
 import org.octopusden.octopus.releng.JiraComponentVersionFormatter
@@ -393,12 +394,14 @@ class ComponentRegistryResolverImpl(
             .mapNotNull { versionRange ->
                 val component = versionRange.jiraComponentVersion.component
                 val vcsSettings = versionRange.vcsSettings
+                val componentHotfixSupportResolver = ComponentHotfixSupportResolver()
                 normalizeVersion(version, component, vcsSettings, versionNames, strict)
                     ?.let { cleanVersion ->
                         JiraComponentVersion(
                             ComponentVersion.create(versionRange.componentName, cleanVersion),
                             versionRange.component,
-                            jiraComponentVersionFormatter
+                            jiraComponentVersionFormatter,
+                            componentHotfixSupportResolver.isHotFixEnabled(vcsSettings)
                         ) to versionRange
                     }
             }
