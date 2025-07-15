@@ -9,5 +9,5 @@ enum class BuildSystem {
     PROVIDED,
     NOT_SUPPORTED,
     GOLANG,
-    PROVIDED_MANUALLY
+    ESCROW_PROVIDED_MANUALLY
 }

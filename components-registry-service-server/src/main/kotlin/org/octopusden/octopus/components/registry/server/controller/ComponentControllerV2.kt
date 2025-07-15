@@ -122,7 +122,7 @@ class ComponentControllerV2(
             org.octopusden.octopus.escrow.BuildSystem.WHISKEY -> BuildSystem.WHISKEY
             org.octopusden.octopus.escrow.BuildSystem.PROVIDED -> BuildSystem.PROVIDED
             org.octopusden.octopus.escrow.BuildSystem.ESCROW_NOT_SUPPORTED -> BuildSystem.NOT_SUPPORTED
-            org.octopusden.octopus.escrow.BuildSystem.ESCROW_PROVIDED_MANUALLY -> BuildSystem.PROVIDED_MANUALLY
+            org.octopusden.octopus.escrow.BuildSystem.ESCROW_PROVIDED_MANUALLY -> BuildSystem.ESCROW_PROVIDED_MANUALLY
             org.octopusden.octopus.escrow.BuildSystem.GOLANG -> BuildSystem.GOLANG
         }
     }
