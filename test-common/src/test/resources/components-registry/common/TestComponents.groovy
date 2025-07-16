@@ -879,6 +879,13 @@ TEST_COMPONENT4 {
     buildSystem = GOLANG
 }
 
+"TEST_COMPONENT_WITH_IN_CONTAINER_BUILD_SYSTEM" {
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.test"
+    artifactId = "in-container"
+    buildSystem = IN_CONTAINER
+}
+
 "TEST_COMPONENT_BUILD_TOOLS" {
     componentOwner = "user9"
     groupId = "org.octopusden.octopus.test.build.tools"
