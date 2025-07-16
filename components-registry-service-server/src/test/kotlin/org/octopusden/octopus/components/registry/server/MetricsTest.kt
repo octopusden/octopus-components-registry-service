@@ -50,6 +50,7 @@ class MetricsTest {
                         "GOLANG",
                         "BS2_0",
                         "PROVIDED",
+                        "ESCROW_PROVIDED_MANUALLY",
                         "ECLIPSE_MAVEN",
                         "GRADLE"
                     )

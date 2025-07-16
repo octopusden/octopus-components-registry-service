@@ -8,5 +8,6 @@ enum class BuildSystem {
     WHISKEY,
     PROVIDED,
     NOT_SUPPORTED,
-    GOLANG
+    GOLANG,
+    ESCROW_PROVIDED_MANUALLY
 }

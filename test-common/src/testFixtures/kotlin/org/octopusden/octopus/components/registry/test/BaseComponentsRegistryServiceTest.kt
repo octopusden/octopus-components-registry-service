@@ -256,7 +256,8 @@ abstract class BaseComponentsRegistryServiceTest {
                 buildVersion = ComponentRegistryVersion(ComponentVersionType.BUILD, "1.0.0", "1.0.0"),
                 hotfixVersion = ComponentRegistryVersion(ComponentVersionType.HOTFIX, "1.0.0.0", "1.0.0.0")
             ),
-            buildFilePath = "build"
+            buildFilePath = "build",
+            deprecated = false
         )
         expectedComponent.distribution = DistributionDTO(
             false,
@@ -292,6 +293,7 @@ abstract class BaseComponentsRegistryServiceTest {
             )
         )
         expectedComponent.escrow = EscrowDTO(
+            buildTask = "clean build -x test",
             providedDependencies = listOf("test:test:1.1"),
             diskSpaceRequirement = null,
             additionalSources = listOf(

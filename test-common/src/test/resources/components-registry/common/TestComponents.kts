@@ -6,6 +6,7 @@ component("TEST_PT_K_DB") {
 
 component("TESTONE") {
     escrow {
+        buildTask = "clean build -x test"
         providedDependencies = listOf("test:test:1.1")
         additionalSources = listOf(
             "spa/.gradle",
