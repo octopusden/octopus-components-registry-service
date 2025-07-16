@@ -13,7 +13,8 @@ class DetailedComponent(
     @JsonProperty("vcsSettings") val vcsSettings: VCSSettingsDTO,
     @JsonProperty("jiraComponentVersion") val jiraComponentVersion: JiraComponentVersionDTO,
     @JsonProperty("detailedComponentVersion") val detailedComponentVersion: DetailedComponentVersion,
-    @JsonProperty("buildFilePath") val buildFilePath: String?
+    @JsonProperty("deprecated") val deprecated: Boolean,
+    @JsonProperty("buildFilePath") val buildFilePath: String?,
 ) : Component(id, name, componentOwner) {
     var buildParameters: BuildParametersDTO? = null
     var escrow: EscrowDTO? = null
@@ -24,6 +25,7 @@ class DetailedComponent(
                 vcsSettings == other.vcsSettings &&
                 jiraComponentVersion == other.jiraComponentVersion &&
                 detailedComponentVersion == other.detailedComponentVersion &&
+                deprecated == other.deprecated &&
                 buildParameters == other.buildParameters &&
                 buildFilePath == other.buildFilePath &&
                 escrow == other.escrow &&
@@ -38,6 +40,7 @@ class DetailedComponent(
             jiraComponentVersion,
             detailedComponentVersion,
             buildParameters,
+            deprecated,
             buildFilePath,
             escrow
         )
@@ -50,6 +53,7 @@ class DetailedComponent(
                 ", jiraComponentVersion=${jiraComponentVersion}" +
                 ", detailedComponentVersion=${detailedComponentVersion}" +
                 ", buildParameters=${buildParameters}" +
+                ", deprecated=${deprecated}" +
                 ", buildFilePath=${buildFilePath}" +
                 ", escrow=${escrow}"
     }
