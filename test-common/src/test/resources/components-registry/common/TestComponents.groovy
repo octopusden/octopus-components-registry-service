@@ -91,6 +91,7 @@ Defaults {
     repositoryType = MERCURIAL
     vcsUrl = "ssh://hg@mercurial/sub"
     branch = "v2"
+    hotfixBranch = 'hotfix/$major.$minor.$service'
 
 }
 
@@ -114,7 +115,7 @@ Defaults {
     repositoryType = MERCURIAL
     vcsUrl = "ssh://hg@mercurial/sub"
     branch = "v2"
-
+    hotfixBranch = 'hotfix/$major.$minor.$service'
 
     components {
         "client" {
@@ -200,6 +201,7 @@ Defaults {
     repositoryType = MERCURIAL
     vcsUrl = "ssh://hg@mercurial/test-component"
     branch = "v2"
+    hotfixBranch = 'hotfix/$major.$minor.$service'
 
     components {
         "versions-api" {

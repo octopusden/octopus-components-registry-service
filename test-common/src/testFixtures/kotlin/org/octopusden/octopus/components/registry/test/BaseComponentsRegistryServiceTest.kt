@@ -79,7 +79,7 @@ val VCS_SETTINGS = VCSSettingsDTO(
             branch = "v2",
             tag = "SUB-3.0.0",
             type = RepositoryType.MERCURIAL,
-            hotfixBranch = null
+            hotfixBranch = "hotfix/3.0.0"
         )
     )
 )
@@ -223,7 +223,7 @@ abstract class BaseComponentsRegistryServiceTest {
                         type = RepositoryType.MERCURIAL,
                         tag = "TESTONE-1.0.0",
                         branch = "v2",
-                        hotfixBranch = null
+                        hotfixBranch = "hotfix/1.0.0"
                     )
                 ),
                 externalRegistry = null
