@@ -125,22 +125,14 @@ class EscrowConfigurationLoader {
         escrowModuleConfig
     }
 
-
-    static String normalizeVersion(String version, ComponentVersion componentV, JiraComponent jiraComponent, VCSSettings vcsSettings, VersionNames versionNames,
+     static String normalizeVersion(String version, ComponentVersion componentV, JiraComponent jiraComponent, VCSSettings vcsSettings, VersionNames versionNames,
                                    boolean strict) {
         def jiraComponentVersionFormatter = new JiraComponentVersionFormatter(versionNames)
         def componentHotfixSupportResolver = new ComponentHotfixSupportResolver()
         def jiraCV = new JiraComponentVersion(componentV, jiraComponent, jiraComponentVersionFormatter,
                 componentHotfixSupportResolver.isHotFixEnabled(vcsSettings))
-        return normalizeVersion(version, jiraCV, versionNames, strict)
+        return jiraCV.normalizeVersion(version, versionNames, strict)
     }
-
-
-    static String normalizeVersion(String version, JiraComponentVersion componentVersion, VersionNames versionNames,
-                                   boolean strict) {
-        return componentVersion.normalizeVersion(version, versionNames, strict)
-    }
-
 
     static Distribution calculateDistribution(Distribution distribution, String version) {
         if (distribution == null || distribution.docker() == null) {

@@ -19,7 +19,6 @@ import org.octopusden.octopus.escrow.ModelConfigPostProcessor
 import org.octopusden.octopus.escrow.config.JiraComponentVersionRange
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader.calculateDistribution
-import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader.normalizeVersion
 import org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration
 import org.octopusden.octopus.escrow.configuration.model.EscrowModule
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
@@ -395,7 +394,8 @@ class ComponentRegistryResolverImpl(
                 val component = versionRange.jiraComponentVersion.component
                 val vcsSettings = versionRange.vcsSettings
                 val componentHotfixSupportResolver = ComponentHotfixSupportResolver()
-                normalizeVersion(version, versionRange.jiraComponentVersion,  versionNames, strict)
+
+                versionRange.jiraComponentVersion.normalizeVersion(version, versionNames, strict)
                     ?.let { cleanVersion ->
                         JiraComponentVersion(
                             ComponentVersion.create(versionRange.componentName, cleanVersion),
