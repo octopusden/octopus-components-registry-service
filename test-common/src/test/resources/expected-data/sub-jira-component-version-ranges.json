@@ -108,7 +108,7 @@
           "vcsPath": "ssh://hg@mercurial/client",
           "type": "MERCURIAL",
           "tag": "$module-$version",
-          "branch": "default"
+          "branch": "v2"
         }
       ],
       "externalRegistry": null
