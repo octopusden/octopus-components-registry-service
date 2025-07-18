@@ -569,9 +569,10 @@
         {
           "name": "main",
           "type": "MERCURIAL",
-          "vcsPath": "ssh://hg@mercurial/versions-api",
+          "vcsPath": "ssh://hg@mercurial/test-component",
           "tag": "$module-$version",
-          "branch": "default"
+          "branch": "default",
+          "hotfixBranch": "hotfix/$major.$minor.$service"
         }
       ],
       "externalRegistry": null
