@@ -246,7 +246,7 @@ abstract class BaseComponentsRegistryServiceTest {
                         versionFormat = "\$versionPrefix-\$baseVersionFormat"
                     ),
                     technical = false
-                )
+                ), true
             ),
             detailedComponentVersion = DetailedComponentVersion(
                 component = "TESTONE DISPLAY NAME WITH VERSIONS-API",
