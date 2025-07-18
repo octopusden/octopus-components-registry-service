@@ -36,7 +36,7 @@ class JiraComponentVersionRangeTest extends GroovyTestCase {
         def expectedComponent = new JiraComponentVersion(
                 ComponentVersion.create(TEST_COMPONENT, TEST_VERSION),
                 jiraComponent,
-                new JiraComponentVersionFormatter(VERSION_NAMES)
+                new JiraComponentVersionFormatter(VERSION_NAMES), false
         )
 
         assert expectedComponent == range.jiraComponentVersion

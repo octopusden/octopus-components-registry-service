@@ -16,5 +16,6 @@
       "versionFormat": "$versionPrefix-$baseVersionFormat"
     },
     "technical": false
-  }
+  },
+  "isHotfixEnabled" : true
 }

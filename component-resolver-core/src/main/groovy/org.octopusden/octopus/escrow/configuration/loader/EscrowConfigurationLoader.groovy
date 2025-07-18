@@ -1,8 +1,8 @@
 package org.octopusden.octopus.escrow.configuration.loader
 
+import com.fasterxml.jackson.annotation.JsonProperty
 import groovy.transform.TypeChecked
 import groovy.transform.TypeCheckingMode
-import java.util.stream.Collectors
 import org.apache.commons.lang3.StringUtils
 import org.apache.commons.lang3.Validate
 import org.apache.logging.log4j.LogManager
@@ -23,21 +23,20 @@ import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
 import org.octopusden.octopus.escrow.configuration.validation.EscrowConfigValidator
 import org.octopusden.octopus.escrow.exceptions.ComponentResolverException
 import org.octopusden.octopus.escrow.exceptions.EscrowConfigurationException
-import org.octopusden.octopus.escrow.model.BuildParameters
-import org.octopusden.octopus.escrow.model.Distribution
-import org.octopusden.octopus.escrow.model.SecurityGroups
-import org.octopusden.octopus.escrow.model.Tool
-import org.octopusden.octopus.escrow.model.VCSSettings
-import org.octopusden.octopus.escrow.model.VersionControlSystemRoot
+import org.octopusden.octopus.escrow.model.*
+import org.octopusden.octopus.escrow.resolvers.ComponentHotfixSupportResolver
 import org.octopusden.octopus.escrow.resolvers.ReleaseInfoResolver
 import org.octopusden.octopus.releng.JiraComponentVersionFormatter
 import org.octopusden.octopus.releng.dto.ComponentInfo
 import org.octopusden.octopus.releng.dto.ComponentVersion
 import org.octopusden.octopus.releng.dto.JiraComponent
+import org.octopusden.octopus.releng.dto.JiraComponentVersion
 import org.octopusden.releng.versions.ComponentVersionFormat
 import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRangeFactory
+
+import java.util.stream.Collectors
 
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.BRANCH
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.BUILD
@@ -85,7 +84,7 @@ class EscrowConfigurationLoader {
     }
 
     static EscrowModuleConfig getEscrowModuleConfig(EscrowConfiguration configuration, ComponentVersion componentRelease) {
-        resolveComponentConfiguration(configuration, componentRelease.getComponentName(), componentRelease.version)
+        resolveComponentConfiguration(configuration, componentRelease, componentRelease.version)
     }
 
     /**
@@ -95,7 +94,8 @@ class EscrowConfigurationLoader {
      * @param componentVersion component version, e.g. 03.48.30.45
      * @return resolved component configuration
      */
-    static EscrowModuleConfig resolveComponentConfiguration(EscrowConfiguration escrowConfiguration, String componentKey, String componentVersion) {
+    static EscrowModuleConfig resolveComponentConfiguration(EscrowConfiguration escrowConfiguration, ComponentVersion componentV, String componentVersion) {
+        def componentKey = componentV.componentName
         def numericVersionFactory = new NumericVersionFactory(escrowConfiguration.versionNames)
         def version = numericVersionFactory.create(componentVersion)
         def versionRangeFactory = new VersionRangeFactory(escrowConfiguration.versionNames)
@@ -111,7 +111,7 @@ class EscrowConfigurationLoader {
         }
         def config = modules[0]
 
-        def normalizedVersion = normalizeVersion(componentVersion, config.jiraConfiguration, escrowConfiguration.versionNames, false)
+        def normalizedVersion = normalizeVersion(componentVersion, componentV, config.jiraConfiguration, config.vcsSettings, escrowConfiguration.versionNames, false)
         if (normalizedVersion == null) {
             LOG.warn("Version of component {}:{} is incorrect", componentKey, componentVersion)
             return null
@@ -125,34 +125,13 @@ class EscrowConfigurationLoader {
         escrowModuleConfig
     }
 
-    static String normalizeVersion(String version, JiraComponent component, VersionNames versionNames,
+     static String normalizeVersion(String version, ComponentVersion componentV, JiraComponent jiraComponent, VCSSettings vcsSettings, VersionNames versionNames,
                                    boolean strict) {
-
-        if (component?.componentVersionFormat == null) {
-            return null
-        }
-
-        def jiraComponentVersionFormatter = new JiraComponentVersionFormatter(versionNames)
-        def numericVersion = new NumericVersionFactory(versionNames).create(version)
-
-        def formats = [
-                //TODO: [jiraComponentVersionFormatter.&matchesHotfixVersionFormat, jiraComponentVersionFormatter.hotfixVersionFormat],
-                [jiraComponentVersionFormatter.&matchesBuildVersionFormat, jiraComponentVersionFormatter.getBuildVersionFormat(component)],
-                [jiraComponentVersionFormatter.&matchesRCVersionFormat, component.componentVersionFormat.releaseVersionFormat],
-                [jiraComponentVersionFormatter.&matchesReleaseVersionFormat, component.componentVersionFormat.releaseVersionFormat],
-                [jiraComponentVersionFormatter.&matchesMajorVersionFormat, component.componentVersionFormat.majorVersionFormat],
-                [jiraComponentVersionFormatter.&matchesLineVersionFormat, jiraComponentVersionFormatter.getLineVersionFormat(component)]
-        ]
-
-        for (def format in formats) {
-            if (format[0](component, version, strict)) {
-                return numericVersion.formatVersion(format[1] as String)
-            }
-        }
-
-        return null
+         def componentHotfixSupportResolver = new ComponentHotfixSupportResolver()
+         def jiraComponentVersionFormatter = new JiraComponentVersionFormatter(versionNames)
+         return jiraComponentVersionFormatter.normalizeVersion(jiraComponent, version, versionNames,
+                 componentHotfixSupportResolver.isHotFixEnabled(vcsSettings), strict )
     }
-
 
     static Distribution calculateDistribution(Distribution distribution, String version) {
         if (distribution == null || distribution.docker() == null) {
