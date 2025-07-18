@@ -317,6 +317,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
         getAndAssertConfiguration(configuration, "buildsystem-mojo")
         def modelConfiguration = getAndAssertConfiguration(configuration, "buildsystem-model")
 
+        def parentBranch = getAndAssertConfiguration(configuration, TEST_MODULE).vcsSettings.versionControlSystemRoots[0].branch
 
         def expectedModuleConfig = new EscrowModuleConfig(
                 vcsSettings: VCSSettings.createForSingleRoot(
@@ -355,7 +356,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 vcsSettings: VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", MERCURIAL,
                         "ssh://hg@mercurial//not-jira-component",
                         '$module-$version',
-                        MERCURIAL.getDefaultBranch(),
+                        parentBranch,
                         null,
                     )),
                 buildSystem: BuildSystem.GRADLE,
@@ -379,7 +380,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
 
         modelConfiguration = getAndAssertConfiguration(configuration, "sub-component-with-defaults")
         expectedModuleConfig = new EscrowModuleConfig(
-                vcsSettings: VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", CVS, "OctopusSource/zenit", '$module-$version', CVS.getDefaultBranch(), null)),
+                vcsSettings: VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", CVS, "OctopusSource/zenit", '$module-$version', parentBranch, null)),
                 buildSystem: BuildSystem.GRADLE,
                 artifactIdPattern: /[\w-\.]+/,
                 groupIdPattern: "org.octopusden.octopus.buildsystem.sub5",
@@ -660,5 +661,22 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 "Docker name 'myimage2' in component 'component2' is not unique"
     }
 
+    @Test
+    void testBranchInheritanceSubComponents() {
+        EscrowConfiguration configuration = loadConfiguration("new-vcs/branchInheritance.groovy")
+        EscrowModuleConfig parent = getAndAssertConfiguration(configuration, "component")
+        def parentRoot = parent.vcsSettings.versionControlSystemRoots[0]
+        assert "TEST_COMPONENT_\$major.\$minor.\$service" == parentRoot.branch
+        assert "TEST_COMPONENT_\$version" == parentRoot.tag
 
+        EscrowModuleConfig sub1 = getAndAssertConfiguration(configuration, "sub-component-1")
+        def sub1Root = sub1.vcsSettings.versionControlSystemRoots[0]
+        assert parentRoot.branch == sub1Root.branch
+        assert "\$module-\$version" == sub1Root.tag
+
+        EscrowModuleConfig sub2 = getAndAssertConfiguration(configuration, "sub-component-2")
+        def sub2Root = sub2.vcsSettings.versionControlSystemRoots[0]
+        assert "master" == sub2Root.branch
+        assert "\$module-\$version" == sub2Root.tag
+    }
 }

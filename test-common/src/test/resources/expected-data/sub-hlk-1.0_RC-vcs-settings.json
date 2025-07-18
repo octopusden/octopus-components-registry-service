@@ -5,7 +5,7 @@
       "vcsPath": "ssh://hg@mercurial/client",
       "type": "MERCURIAL",
       "tag": "client-hlk-1.0_RC",
-      "branch": "default"
+      "branch": "v2"
     }
   ],
   "externalRegistry": null
