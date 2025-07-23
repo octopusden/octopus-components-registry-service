@@ -125,7 +125,7 @@ class EscrowConfigurationLoader {
         escrowModuleConfig
     }
 
-     static String normalizeVersion(String version, ComponentVersion componentV, JiraComponent jiraComponent, VCSSettings vcsSettings, VersionNames versionNames,
+    static String normalizeVersion(String version, ComponentVersion componentV, JiraComponent jiraComponent, VCSSettings vcsSettings, VersionNames versionNames,
                                    boolean strict) {
          def componentHotfixSupportResolver = new ComponentHotfixSupportResolver()
          def jiraComponentVersionFormatter = new JiraComponentVersionFormatter(versionNames)
