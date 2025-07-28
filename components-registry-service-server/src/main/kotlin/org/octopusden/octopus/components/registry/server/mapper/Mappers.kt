@@ -20,7 +20,7 @@ import org.octopusden.octopus.releng.dto.JiraComponent
 import org.octopusden.octopus.releng.dto.JiraComponentVersion
 
 fun JiraComponentVersion.toDTO(): JiraComponentVersionDTO {
-    return JiraComponentVersionDTO(componentVersion.componentName, componentVersion.version, component.toDTO(), isHotfixEnabled )
+    return JiraComponentVersionDTO(componentVersion.componentName, componentVersion.version, component.toDTO())
 }
 
 fun JiraComponent.toDTO(): JiraComponentDTO {

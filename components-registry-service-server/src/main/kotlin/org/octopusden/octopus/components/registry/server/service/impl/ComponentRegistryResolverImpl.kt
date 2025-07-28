@@ -404,8 +404,7 @@ class ComponentRegistryResolverImpl(
                         JiraComponentVersion(
                             ComponentVersion.create(versionRange.componentName, cleanVersion),
                             versionRange.component,
-                            jiraComponentVersionFormatter,
-                            componentHotfixSupportResolver.isHotFixEnabled(vcsSettings)
+                            jiraComponentVersionFormatter
                         ) to versionRange
                     }
             }

@@ -30,8 +30,7 @@ public class JiraComponentVersionRangeFactory {
         JiraComponentVersion jiraComponentVersion = new JiraComponentVersion(
                 ComponentVersion.create(componentName, versionRange),
                 jiraComponent,
-                jiraComponentVersionFormatter,
-                componentHotfixSupportResolver.isHotFixEnabled(vcsSettings)
+                jiraComponentVersionFormatter
         );
 
         return new JiraComponentVersionRange(

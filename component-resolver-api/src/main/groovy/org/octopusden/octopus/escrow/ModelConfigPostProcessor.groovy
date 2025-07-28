@@ -79,7 +79,8 @@ class ModelConfigPostProcessor {
                 componentVersionFormat.lineVersionFormat != null ? componentVersionFormat.lineVersionFormat : componentVersionFormat.majorVersionFormat,
                 componentVersionFormat.hotfixVersionFormat
         )
-        return new JiraComponent(jiraComponent.projectKey, jiraComponent.displayName, enrichedComponentVersionFormat, jiraComponent.componentInfo, jiraComponent.technical)
+        return new JiraComponent(jiraComponent.projectKey, jiraComponent.displayName, enrichedComponentVersionFormat,
+                jiraComponent.componentInfo, jiraComponent.technical, jiraComponent.isHotfixEnabled())
     }
 
     org.octopusden.octopus.escrow.model.VCSSettings resolveVariables(org.octopusden.octopus.escrow.model.VCSSettings vcsSettings) {

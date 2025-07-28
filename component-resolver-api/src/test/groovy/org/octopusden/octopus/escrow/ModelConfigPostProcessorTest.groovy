@@ -94,7 +94,8 @@ class ModelConfigPostProcessorTest extends GroovyTestCase {
                 '$major.$minor.$service.$fix-$build',
                 "",
                 "",
-                false)
+                false,
+                true)
         def postProcessor = getModelConfigProcessor("1.2", VERSION_NAMES)
         def actualFullFilledJiraComponent = postProcessor.resolveJiraConfiguration(fullFilledJiraComponent)
         assert fullFilledJiraComponent == actualFullFilledJiraComponent
@@ -108,7 +109,8 @@ class ModelConfigPostProcessorTest extends GroovyTestCase {
                 '$major.$minor.$service.$fix',
                 "",
                 "",
-                false)
+                false,
+                true)
         def expectedSemiFilledJiraComponent = getJiraComponent(
                 "KEY",
                 "displayName",
@@ -119,7 +121,8 @@ class ModelConfigPostProcessorTest extends GroovyTestCase {
                 '$major.$minor.$service.$fix',
                 "",
                 "",
-                false)
+                false,
+                true)
         def actualSemiFilledJiraComponent = postProcessor.resolveJiraConfiguration(semiFilledJiraComponent)
         assert expectedSemiFilledJiraComponent == actualSemiFilledJiraComponent
 
@@ -129,13 +132,17 @@ class ModelConfigPostProcessorTest extends GroovyTestCase {
         new ModelConfigPostProcessor(ComponentVersion.create("zenit", version), versionNames)
     }
 
-    private static JiraComponent getJiraComponent(String projectKey, String displayName, String majorVersionFormat, String releaseVersionFormat, String buildVersionFormat, String lineVersionFormat, String hotfixVersionFormat, String versionPrefix, String versionFormat, boolean isTechincal) {
+    private static JiraComponent getJiraComponent(String projectKey, String displayName, String majorVersionFormat,
+                                                  String releaseVersionFormat, String buildVersionFormat, String lineVersionFormat,
+                                                  String hotfixVersionFormat, String versionPrefix, String versionFormat,
+                                                  boolean isTechincal, boolean isHotfixEnabled) {
         new JiraComponent(
                 projectKey,
                 displayName,
                 ComponentVersionFormat.create(majorVersionFormat, releaseVersionFormat, buildVersionFormat, lineVersionFormat, hotfixVersionFormat),
                 new ComponentInfo(versionPrefix, versionFormat),
-                isTechincal
+                isTechincal,
+                isHotfixEnabled
         )
     }
 }

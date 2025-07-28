@@ -278,6 +278,8 @@ class EscrowConfigurationLoader {
         LOG.debug("Loading configuration of $moduleName")
         def escrowModule = new EscrowModule(moduleName: moduleName)
         ConfigObject moduleConfigObject = rootObject."$moduleName" as ConfigObject
+        ComponentHotfixSupportResolver componentHotfixSupportResolver = new ComponentHotfixSupportResolver()
+
         DefaultConfigParameters componentDefaultConfiguration = loadDefaultComponentConfiguration(moduleName, moduleConfigObject, defaultConfiguration, tools)
         def components = loadSubComponents(componentDefaultConfiguration, defaultConfiguration, tools, moduleConfigObject, ignoreUnknownAttributes)
 
@@ -305,7 +307,11 @@ class EscrowConfigurationLoader {
                 def buildSystem = moduleConfigSection.containsKey("buildSystem") ? BuildSystem.valueOf(moduleConfigSection.buildSystem.toString()) :
                         componentDefaultConfiguration.buildSystem
 
-                JiraComponent jiraConfiguration = loadJiraConfiguration(moduleConfigSection, componentDefaultConfiguration.jiraComponent)
+                def vcsSettingsWrapper = loadVCSSettings(moduleConfigSection, componentDefaultConfiguration, buildSystem)
+                boolean isHotfixEnabled = componentHotfixSupportResolver.isHotFixEnabled(vcsSettingsWrapper.vcsSettings)
+
+
+                JiraComponent jiraConfiguration = loadJiraConfiguration(moduleConfigSection, componentDefaultConfiguration.jiraComponent, isHotfixEnabled)
                 BuildParameters buildConfiguration = loadBuildConfiguration(moduleConfigSection, componentDefaultConfiguration.buildParameters, tools)
                 Distribution distributionConfiguration = loadDistribution(moduleConfigSection, componentDefaultConfiguration.distribution)
                 String componentOwner = loadComponentOwner(moduleConfigSection, componentDefaultConfiguration.componentOwner)
@@ -323,7 +329,6 @@ class EscrowConfigurationLoader {
                 def buildFileLocation = moduleConfigSection.containsKey("buildFilePath") ? moduleConfigSection.buildFilePath.toString() :
                         componentDefaultConfiguration.buildFilePath
 
-                def vcsSettingsWrapper = loadVCSSettings(moduleConfigSection, componentDefaultConfiguration, buildSystem)
                 def escrowModuleConfiguration = new EscrowModuleConfig(buildSystem: buildSystem,
                         groupIdPattern: moduleConfigSection.containsKey("groupId") ? moduleConfigSection.groupId : componentDefaultConfiguration.groupIdPattern,
                         artifactIdPattern: moduleConfigSection.containsKey("artifactId") ? moduleConfigSection.artifactId.toString().trim() :
@@ -648,10 +653,10 @@ class EscrowConfigurationLoader {
 
     @TypeChecked(TypeCheckingMode.SKIP)
     private
-    static JiraComponent loadJiraConfiguration(ConfigObject parentConfigObject, JiraComponent defaultJiraParameters) {
+    static JiraComponent loadJiraConfiguration(ConfigObject parentConfigObject, JiraComponent defaultJiraParameters, boolean isHotfixEnabled) {
         JiraComponent jiraConfiguration = null
         if (parentConfigObject.containsKey("jira")) {
-            jiraConfiguration = parseJiraSection(parentConfigObject.get("jira") as ConfigObject, defaultJiraParameters)
+            jiraConfiguration = parseJiraSection(parentConfigObject.get("jira") as ConfigObject, defaultJiraParameters, isHotfixEnabled)
         } else {
             // legacy configuration
             def projectKey = parentConfigObject.containsKey("jiraProjectKey") ? parentConfigObject.jiraProjectKey : defaultJiraParameters?.getProjectKey()
@@ -664,7 +669,8 @@ class EscrowConfigurationLoader {
             def hotfixVersionFormat = defaultJiraParameters?.componentVersionFormat?.hotfixVersionFormat
             if (StringUtils.isNotBlank(projectKey)) {
                 jiraConfiguration = new JiraComponent(projectKey, defaultJiraParameters.displayName,
-                        ComponentVersionFormat.create(majorVersionFormat, releaseVersionFormat, buildVersionFormat, lineVersionFormat, hotfixVersionFormat), defaultJiraParameters.componentInfo, defaultJiraParameters.technical)
+                        ComponentVersionFormat.create(majorVersionFormat, releaseVersionFormat, buildVersionFormat, lineVersionFormat, hotfixVersionFormat),
+                        defaultJiraParameters.componentInfo, defaultJiraParameters.technical, isHotfixEnabled)
             }
         }
         jiraConfiguration
@@ -799,7 +805,7 @@ class EscrowConfigurationLoader {
 
 
     @TypeChecked(TypeCheckingMode.SKIP)
-    static JiraComponent parseJiraSection(ConfigObject jiraConfigObject, JiraComponent defaultJiraConfiguration) {
+    static JiraComponent parseJiraSection(ConfigObject jiraConfigObject, JiraComponent defaultJiraConfiguration, boolean isHotFixEnabled ) {
         def projectKey = jiraConfigObject.containsKey("projectKey") ? jiraConfigObject.projectKey : defaultJiraConfiguration?.projectKey
         String displayName = jiraConfigObject.containsKey("displayName") ? jiraConfigObject.get("displayName") : defaultJiraConfiguration?.displayName
         Boolean technical = (jiraConfigObject.containsKey("technical") ? jiraConfigObject.get("technical") : defaultJiraConfiguration?.technical) ?: false
@@ -810,7 +816,8 @@ class EscrowConfigurationLoader {
         def buildVersionFormat = jiraConfigObject.containsKey("buildVersionFormat") ? jiraConfigObject.buildVersionFormat : defaultJiraConfiguration?.componentVersionFormat?.buildVersionFormat
         def lineVersionFormat = jiraConfigObject.containsKey("lineVersionFormat") ? jiraConfigObject.lineVersionFormat : defaultJiraConfiguration?.componentVersionFormat?.lineVersionFormat
         def hotfixVersionFormat = jiraConfigObject.containsKey("hotfixVersionFormat") ? jiraConfigObject.hotfixVersionFormat : defaultJiraConfiguration?.componentVersionFormat?.hotfixVersionFormat
-        return new JiraComponent(projectKey, displayName, ComponentVersionFormat.create(majorVersionFormat, releaseVersionFormat, buildVersionFormat, lineVersionFormat, hotfixVersionFormat), componentInfo, technical)
+        return new JiraComponent(projectKey, displayName, ComponentVersionFormat.create(majorVersionFormat, releaseVersionFormat, buildVersionFormat, lineVersionFormat, hotfixVersionFormat),
+                componentInfo, technical, isHotFixEnabled)
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
@@ -892,6 +899,12 @@ class EscrowConfigurationLoader {
                                                                      DefaultConfigParameters defaultConfigParameters,
                                                                      List<Tool> tools) {
         def pureComponentDefaults = loadDefaultConfigurationFromConfigObject(moduleName, moduleConfigObject, defaultConfigParameters, tools, LoaderInheritanceType.COMPONENT)
+
+
+
+        ComponentHotfixSupportResolver componentHotfixSupportResolver = new ComponentHotfixSupportResolver()
+        boolean isHotfixEnabled = componentHotfixSupportResolver.isHotFixEnabled(pureComponentDefaults.vcsSettingsWrapper.vcsSettings)
+
 //        pureComponentDefaults.distribution = defaultConfigParameters.distribution
         String majorVersionFormat = pureComponentDefaults.jiraComponent?.componentVersionFormat?.majorVersionFormat != null ?
                 pureComponentDefaults.jiraComponent?.componentVersionFormat?.majorVersionFormat :
@@ -929,7 +942,9 @@ class EscrowConfigurationLoader {
         }
 
         pureComponentDefaults.jiraComponent =
-                new JiraComponent(pureComponentDefaults?.jiraComponent?.projectKey, displayName, componentVersionFormat, componentInfo, pureComponentDefaults?.jiraComponent?.technical ?: false)
+                new JiraComponent(pureComponentDefaults?.jiraComponent?.projectKey, displayName, componentVersionFormat,
+                        componentInfo, pureComponentDefaults?.jiraComponent?.technical ?: false, isHotfixEnabled)
+
         return pureComponentDefaults
     }
 
@@ -962,10 +977,14 @@ class EscrowConfigurationLoader {
         LoaderInheritanceType inheritanceType
     ) {
         BuildSystem buildSystem = componentConfigObject.containsKey("buildSystem") ? BuildSystem.valueOf(componentConfigObject.buildSystem.toString()) : defaultConfiguration?.buildSystem
-        JiraComponent jiraComponent = loadJiraConfiguration(componentConfigObject, defaultConfiguration.jiraComponent)
+        VCSSettingsWrapper vcsSettingsWrapper = loadVCSSettings(componentConfigObject, defaultConfiguration, buildSystem)
+
+        ComponentHotfixSupportResolver componentHotfixSupportResolver = new ComponentHotfixSupportResolver()
+        boolean isHotfixEnabled = componentHotfixSupportResolver.isHotFixEnabled(vcsSettingsWrapper.vcsSettings)
+
+        JiraComponent jiraComponent = loadJiraConfiguration(componentConfigObject, defaultConfiguration.jiraComponent, isHotfixEnabled)
         BuildParameters buildParameters = loadBuildConfiguration(componentConfigObject, defaultConfiguration.buildParameters, tools)
         Distribution distribution = loadDistribution(componentConfigObject, defaultConfiguration.distribution)
-        VCSSettingsWrapper vcsSettingsWrapper = loadVCSSettings(componentConfigObject, defaultConfiguration, buildSystem)
         String componentDisplayName = loadComponentDisplayName(componentConfigObject, null)
         String componentOwner = loadComponentOwner(componentConfigObject, defaultConfiguration.componentOwner)
         final String releaseManager = loadComponentReleaseManager(componentConfigObject, defaultConfiguration.releaseManager)

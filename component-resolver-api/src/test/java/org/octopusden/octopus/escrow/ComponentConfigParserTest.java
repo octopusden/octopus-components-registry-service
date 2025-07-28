@@ -71,23 +71,25 @@ public class ComponentConfigParserTest {
 
     private List<JiraComponentVersionRange> getJiraComponentVersionRangeList() throws InvalidVersionSpecificationException {
         return Arrays.asList(getJiraComponentVersionRange("octopusweb", "[2.1,)", COMPONENT, COMPONENT_VERSION_FORMAT_1, null, null,
-                        VCSSettings.createEmpty(), false),
+                        VCSSettings.createEmpty(), false, false),
                 getJiraComponentVersionRange("octopusweb", "[,2.1)", COMPONENT, COMPONENT_VERSION_FORMAT_2, null, null,
-                        TestHelper.createTestVCSSettings(), false));
+                        TestHelper.createTestVCSSettings(), false, true));
     }
 
 
     private List<JiraComponentVersionRange> getJiraComponentVersionRangeListWithComponentInfo() {
         ComponentInfo componentInfo = new ComponentInfo(CLIENT, "$versionPrefix-$baseVersionFormat");
         return Collections.singletonList(getJiraComponentVersionRange("client", "(,0),[0,)",
-                "CLIENT", COMPONENT_VERSION_FORMAT_1, componentInfo, new Distribution(true, false, null, null, null, null, new SecurityGroups(null)), VCSSettings.createEmpty(), false));
+                "CLIENT", COMPONENT_VERSION_FORMAT_1, componentInfo, new Distribution(true,
+                        false, null, null, null, null, new SecurityGroups(null)),
+                VCSSettings.createEmpty(), false, false));
     }
 
     private JiraComponentVersionRange getJiraComponentVersionRange(String componentName, String versionRange, String projectKey,
                                                                    ComponentVersionFormat componentVersionFormat,
                                                                    ComponentInfo componentInfo, Distribution distribution,
-                                                                   VCSSettings vcsSettings, boolean technical) {
-        JiraComponent jiraComponent = getJiraComponent(projectKey, componentVersionFormat, componentInfo, technical);
+                                                                   VCSSettings vcsSettings, boolean technical, boolean isHotfixEnabled) {
+        JiraComponent jiraComponent = getJiraComponent(projectKey, componentVersionFormat, componentInfo, technical, isHotfixEnabled);
         return JIRA_COMPONENT_VERSION_RANGE_FACTORY.create(
                 componentName,
                 versionRange,
@@ -97,7 +99,8 @@ public class ComponentConfigParserTest {
         );
     }
 
-    private JiraComponent getJiraComponent(String projectKey, ComponentVersionFormat componentVersionFormat, ComponentInfo componentInfo, boolean technical) {
-        return new JiraComponent(projectKey, projectKey, componentVersionFormat, componentInfo, technical);
+    private JiraComponent getJiraComponent(String projectKey, ComponentVersionFormat componentVersionFormat,
+                                           ComponentInfo componentInfo, boolean technical, boolean isHotfixEnabled) {
+        return new JiraComponent(projectKey, projectKey, componentVersionFormat, componentInfo, technical, isHotfixEnabled);
     }
 }
