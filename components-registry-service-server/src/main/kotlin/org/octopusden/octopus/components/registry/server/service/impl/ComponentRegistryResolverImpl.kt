@@ -397,7 +397,7 @@ class ComponentRegistryResolverImpl(
 
                 val jiraComponentVersionFormatter = JiraComponentVersionFormatter(versionNames)
                 jiraComponentVersionFormatter.normalizeVersion(
-                    component, version, versionNames,
+                    component, version,
                     componentHotfixSupportResolver.isHotFixEnabled(vcsSettings), strict
                 )
                     ?.let { cleanVersion ->

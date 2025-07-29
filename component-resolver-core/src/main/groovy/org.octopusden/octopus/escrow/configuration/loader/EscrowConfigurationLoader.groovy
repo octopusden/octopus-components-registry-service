@@ -111,7 +111,7 @@ class EscrowConfigurationLoader {
         }
         def config = modules[0]
 
-        def normalizedVersion = normalizeVersion(componentVersion, componentV, config.jiraConfiguration, config.vcsSettings, escrowConfiguration.versionNames, false)
+        def normalizedVersion = normalizeVersion(componentVersion, config.jiraConfiguration, config.vcsSettings, escrowConfiguration.versionNames, false)
         if (normalizedVersion == null) {
             LOG.warn("Version of component {}:{} is incorrect", componentKey, componentVersion)
             return null
@@ -125,11 +125,11 @@ class EscrowConfigurationLoader {
         escrowModuleConfig
     }
 
-    static String normalizeVersion(String version, ComponentVersion componentV, JiraComponent jiraComponent, VCSSettings vcsSettings, VersionNames versionNames,
+    static String normalizeVersion(String version, JiraComponent jiraComponent, VCSSettings vcsSettings, VersionNames versionNames,
                                    boolean strict) {
          def componentHotfixSupportResolver = new ComponentHotfixSupportResolver()
          def jiraComponentVersionFormatter = new JiraComponentVersionFormatter(versionNames)
-         return jiraComponentVersionFormatter.normalizeVersion(jiraComponent, version, versionNames,
+         return jiraComponentVersionFormatter.normalizeVersion(jiraComponent, version,
                  componentHotfixSupportResolver.isHotFixEnabled(vcsSettings), strict )
     }
 
