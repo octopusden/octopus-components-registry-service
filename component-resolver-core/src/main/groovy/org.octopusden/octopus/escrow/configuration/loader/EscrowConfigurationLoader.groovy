@@ -129,8 +129,8 @@ class EscrowConfigurationLoader {
                                    boolean strict) {
          def componentHotfixSupportResolver = new ComponentHotfixSupportResolver()
          def jiraComponentVersionFormatter = new JiraComponentVersionFormatter(versionNames)
-         return jiraComponentVersionFormatter.normalizeVersion(jiraComponent, version,
-                 componentHotfixSupportResolver.isHotFixEnabled(vcsSettings), strict )
+         return jiraComponentVersionFormatter.normalizeVersion(jiraComponent, version, strict,
+                 componentHotfixSupportResolver.isHotFixEnabled(vcsSettings)  )
     }
 
     static Distribution calculateDistribution(Distribution distribution, String version) {

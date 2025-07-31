@@ -1,6 +1,0 @@
-#NOTE: This is a Maven Resolver internal implementation file, its format can be changed without prior notice.
-#Tue Jul 29 18:41:12 EEST 2025
-releng-lib-1.0-SNAPSHOT.pom>=
-releng-lib-1.0-SNAPSHOT-javadoc.jar>=
-releng-lib-1.0-SNAPSHOT-sources.jar>=
-releng-lib-1.0-SNAPSHOT.jar>=
