@@ -92,29 +92,29 @@ class EscrowConfigurationLoader {
      * Resolve component configuration (substitute variable, resolve configuration and etc).
      * @param escrowConfiguration escrow configuration
      * @param componentKey component key
-     * @param componentVersion component version, e.g. 03.48.30.45
+     * @param version component version, e.g. 03.48.30.45
      * @return resolved component configuration
      */
-    static EscrowModuleConfig resolveComponentConfiguration(EscrowConfiguration escrowConfiguration, ComponentVersion componentV, String componentVersion) {
+    static EscrowModuleConfig resolveComponentConfiguration(EscrowConfiguration escrowConfiguration, ComponentVersion componentV, String version) {
         def componentKey = componentV.componentName
         def numericVersionFactory = new NumericVersionFactory(escrowConfiguration.versionNames)
-        def version = numericVersionFactory.create(componentVersion)
+        def versionInfo = numericVersionFactory.create(version)
         def versionRangeFactory = new VersionRangeFactory(escrowConfiguration.versionNames)
         def modules = escrowConfiguration.escrowModules.get(componentKey)?.moduleConfigurations?.stream()?.filter {
-            moduleConfiguration -> versionRangeFactory.create(moduleConfiguration.versionRangeString).containsVersion(version)
+            moduleConfiguration -> versionRangeFactory.create(moduleConfiguration.versionRangeString).containsVersion(versionInfo)
         }?.collect(Collectors.toList())
         if (modules == null || modules.isEmpty()) {
-            LOG.warn("There is no component {}:{} module", componentKey, componentVersion)
+            LOG.warn("There is no component {}:{} module", componentKey, version)
             return null
         }
         if (modules.size() > 1) {
-            throw new ComponentResolverException("Too many component $componentKey:$componentVersion modules")
+            throw new ComponentResolverException("Too many component $componentKey:$version modules")
         }
         def config = modules[0]
 
-        def normalizedVersion = normalizeVersion(componentVersion, config.jiraConfiguration, config.vcsSettings, escrowConfiguration.versionNames, false)
+        def normalizedVersion = normalizeVersion(version, config.jiraConfiguration, config.vcsSettings, escrowConfiguration.versionNames, false)
         if (normalizedVersion == null) {
-            LOG.warn("Version of component {}:{} is incorrect", componentKey, componentVersion)
+            LOG.warn("Version of component {}:{} is incorrect", componentKey, version)
             return null
         }
 
