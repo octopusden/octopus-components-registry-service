@@ -390,13 +390,13 @@ class ComponentRegistryResolverImpl(
     private fun getJiraComponentVersionsToRanges(
         version: String, versionRanges: Set<JiraComponentVersionRange>, strict: Boolean = true
     ) = with(numericVersionFactory.create(version)) {
+        val componentHotfixSupportResolver = ComponentHotfixSupportResolver()
+
         versionRanges.filter { versionRangeFactory.create(it.versionRange).containsVersion(this) }
             .mapNotNull { versionRange ->
                 val component = versionRange.jiraComponentVersion.component
                 val vcsSettings = versionRange.vcsSettings
-                val componentHotfixSupportResolver = ComponentHotfixSupportResolver()
 
-                val jiraComponentVersionFormatter = JiraComponentVersionFormatter(versionNames)
                 jiraComponentVersionFormatter.normalizeVersion(
                     component, version, strict,
                     componentHotfixSupportResolver.isHotFixEnabled(vcsSettings)

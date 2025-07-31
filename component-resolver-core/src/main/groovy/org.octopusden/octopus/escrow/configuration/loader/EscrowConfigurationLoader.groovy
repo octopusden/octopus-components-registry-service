@@ -53,6 +53,7 @@ import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurp
 
 class EscrowConfigurationLoader {
     private static final Logger LOG = LogManager.getLogger(EscrowConfigurationLoader.class)
+    private static final ComponentHotfixSupportResolver COMPONENT_HOTFIX_SUPPORT_RESOLVER = new ComponentHotfixSupportResolver()
     public static final String FAKE_VCS_URL_FOR_BS20 = "fakeUrl"
     public static final String ALL_VERSIONS = "(,0),[0,)"
 
@@ -127,10 +128,9 @@ class EscrowConfigurationLoader {
 
     static String normalizeVersion(String version, JiraComponent jiraComponent, VCSSettings vcsSettings, VersionNames versionNames,
                                    boolean strict) {
-         def componentHotfixSupportResolver = new ComponentHotfixSupportResolver()
          def jiraComponentVersionFormatter = new JiraComponentVersionFormatter(versionNames)
          return jiraComponentVersionFormatter.normalizeVersion(jiraComponent, version, strict,
-                 componentHotfixSupportResolver.isHotFixEnabled(vcsSettings)  )
+                 COMPONENT_HOTFIX_SUPPORT_RESOLVER.isHotFixEnabled(vcsSettings)  )
     }
 
     static Distribution calculateDistribution(Distribution distribution, String version) {
@@ -278,7 +278,6 @@ class EscrowConfigurationLoader {
         LOG.debug("Loading configuration of $moduleName")
         def escrowModule = new EscrowModule(moduleName: moduleName)
         ConfigObject moduleConfigObject = rootObject."$moduleName" as ConfigObject
-        ComponentHotfixSupportResolver componentHotfixSupportResolver = new ComponentHotfixSupportResolver()
 
         DefaultConfigParameters componentDefaultConfiguration = loadDefaultComponentConfiguration(moduleName, moduleConfigObject, defaultConfiguration, tools)
         def components = loadSubComponents(componentDefaultConfiguration, defaultConfiguration, tools, moduleConfigObject, ignoreUnknownAttributes)
@@ -308,7 +307,7 @@ class EscrowConfigurationLoader {
                         componentDefaultConfiguration.buildSystem
 
                 def vcsSettingsWrapper = loadVCSSettings(moduleConfigSection, componentDefaultConfiguration, buildSystem)
-                boolean isHotfixEnabled = componentHotfixSupportResolver.isHotFixEnabled(vcsSettingsWrapper.vcsSettings)
+                boolean isHotfixEnabled = COMPONENT_HOTFIX_SUPPORT_RESOLVER.isHotFixEnabled(vcsSettingsWrapper.vcsSettings)
 
 
                 JiraComponent jiraConfiguration = loadJiraConfiguration(moduleConfigSection, componentDefaultConfiguration.jiraComponent, isHotfixEnabled)
@@ -946,8 +945,7 @@ class EscrowConfigurationLoader {
 
 
 
-        ComponentHotfixSupportResolver componentHotfixSupportResolver = new ComponentHotfixSupportResolver()
-        boolean isHotfixEnabled = componentHotfixSupportResolver.isHotFixEnabled(pureComponentDefaults.vcsSettingsWrapper.vcsSettings)
+        boolean isHotfixEnabled = COMPONENT_HOTFIX_SUPPORT_RESOLVER.isHotFixEnabled(pureComponentDefaults.vcsSettingsWrapper.vcsSettings)
 
 //        pureComponentDefaults.distribution = defaultConfigParameters.distribution
         String majorVersionFormat = pureComponentDefaults.jiraComponent?.componentVersionFormat?.majorVersionFormat != null ?
@@ -1023,8 +1021,7 @@ class EscrowConfigurationLoader {
         BuildSystem buildSystem = componentConfigObject.containsKey("buildSystem") ? BuildSystem.valueOf(componentConfigObject.buildSystem.toString()) : defaultConfiguration?.buildSystem
         VCSSettingsWrapper vcsSettingsWrapper = loadVCSSettings(componentConfigObject, defaultConfiguration, buildSystem)
 
-        ComponentHotfixSupportResolver componentHotfixSupportResolver = new ComponentHotfixSupportResolver()
-        boolean isHotfixEnabled = componentHotfixSupportResolver.isHotFixEnabled(vcsSettingsWrapper.vcsSettings)
+        boolean isHotfixEnabled = COMPONENT_HOTFIX_SUPPORT_RESOLVER.isHotFixEnabled(vcsSettingsWrapper.vcsSettings)
 
         JiraComponent jiraComponent = loadJiraConfiguration(componentConfigObject, defaultConfiguration.jiraComponent, isHotfixEnabled)
         BuildParameters buildParameters = loadBuildConfiguration(componentConfigObject, defaultConfiguration.buildParameters, tools)
