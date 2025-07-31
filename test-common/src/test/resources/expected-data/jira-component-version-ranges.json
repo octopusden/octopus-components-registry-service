@@ -573,7 +573,7 @@
           "type": "MERCURIAL",
           "vcsPath": "ssh://hg@mercurial/test-component",
           "tag": "$module-$version",
-          "branch": "default",
+          "branch": "v2",
           "hotfixBranch": "hotfix/$major.$minor.$service"
         }
       ],
