@@ -8,5 +8,6 @@ public enum BuildSystemType {
     ESCROW_NOT_SUPPORTED,
     ESCROW_PROVIDED_MANUALLY,
     BS2_0,
-    GOLANG
+    GOLANG,
+    IN_CONTAINER
 }

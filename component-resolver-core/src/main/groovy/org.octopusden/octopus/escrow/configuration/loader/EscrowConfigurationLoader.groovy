@@ -592,7 +592,7 @@ class EscrowConfigurationLoader {
         DefaultConfigParameters defaultSubComponentsParameters = defaultConfigParameters.clone() as DefaultConfigParameters
         defaultSubComponentsParameters.buildSystem = commonDefaults.buildSystem
         defaultSubComponentsParameters.componentDisplayName = commonDefaults.componentDisplayName
-        defaultSubComponentsParameters.vcsSettingsWrapper = commonDefaults.vcsSettingsWrapper
+        defaultSubComponentsParameters.vcsSettingsWrapper = buildBranchInheritedWrapper(defaultConfigParameters.vcsSettingsWrapper, commonDefaults.vcsSettingsWrapper)
         defaultSubComponentsParameters.artifactIdPattern = commonDefaults.artifactIdPattern
         def originalDeps = defaultSubComponentsParameters?.buildParameters?.dependencies
         defaultSubComponentsParameters.buildParameters = commonDefaults.clone().buildParameters
@@ -601,6 +601,50 @@ class EscrowConfigurationLoader {
         }
         defaultSubComponentsParameters.distribution = commonDefaults.distribution
         defaultSubComponentsParameters
+    }
+
+    /**
+     * Builds a new {@link VCSSettingsWrapper} for a 'sub-component' whose VCS branch should be inherited from its parent component
+     */
+    private static VCSSettingsWrapper buildBranchInheritedWrapper(
+            VCSSettingsWrapper parentWrapper,
+            VCSSettingsWrapper baseWrapper
+    ) {
+        def parentRoot = parentWrapper?.defaultVCSSettings
+        if (parentRoot == null || parentRoot.branch == null) {
+            return baseWrapper
+        }
+        List<VersionControlSystemRoot> newRoots =
+                baseWrapper?.vcsSettings?.versionControlSystemRoots?.collect { r ->
+                    VersionControlSystemRoot.create(
+                            r.name,
+                            r.repositoryType,
+                            r.vcsPath,
+                            r.tag,
+                            parentRoot.branch,
+                            r.hotfixBranch
+                    )
+                } ?: Collections.emptyList() as List<VersionControlSystemRoot>
+
+        def baseDefault = baseWrapper?.defaultVCSSettings
+        VersionControlSystemRoot newDefault = baseDefault == null ? null :
+                VersionControlSystemRoot.create(
+                        baseDefault.name,
+                        baseDefault.repositoryType,
+                        baseDefault.vcsPath,
+                        baseDefault.tag,
+                        parentRoot.branch,
+                        baseDefault.hotfixBranch
+                )
+        def newVcsSettings = VCSSettings.create(
+                baseWrapper?.vcsSettings?.externalRegistry,
+                newRoots
+        )
+        return new VCSSettingsWrapper(
+                vcsSettings: newVcsSettings,
+                defaultVCSSettings: newDefault,
+                vscRootName2ParametersFromDefaultsMap: baseWrapper?.vscRootName2ParametersFromDefaultsMap ?: [:]
+        )
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)

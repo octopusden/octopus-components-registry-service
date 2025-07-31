@@ -976,7 +976,7 @@
           "vcsPath": "ssh://hg@mercurial/client",
           "type": "MERCURIAL",
           "tag": "$module-$version",
-          "branch": "default"
+          "branch": "v2"
         }
       ],
       "externalRegistry": null
@@ -1584,6 +1584,40 @@
     }
   },
   {
+    "componentName": "TEST_COMPONENT_WITH_DOCKER_1_1",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "TEST_DOCKER",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major.$minor",
+        "releaseVersionFormat": "$major.$minor.$service",
+        "buildVersionFormat": "$major.$minor.$service-$fix",
+        "lineVersionFormat": "$major",
+        "hotfixVersionFormat": "$major.$minor.$service-$fix.$build"
+      },
+      "componentInfo": {
+        "versionPrefix": "",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      },
+      "docker": "test-docker-1_1"
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [],
+      "externalRegistry": null
+    }
+  },
+  {
     "componentName": "TEST_COMPONENT_WITH_DOCKER_1_2",
     "versionRange": "(,0),[0,)",
     "component": {
@@ -1711,40 +1745,6 @@
         ]
       },
       "docker": "test-docker-4:arm64"
-    },
-    "vcsSettings": {
-      "versionControlSystemRoots": [],
-      "externalRegistry": null
-    }
-  },
-  {
-    "componentName": "TEST_COMPONENT_WITH_DOCKER_5",
-    "versionRange": "(,0),[0,)",
-    "component": {
-      "projectKey": "TEST_DOCKER",
-      "displayName": null,
-      "componentVersionFormat": {
-        "majorVersionFormat": "$major.$minor",
-        "releaseVersionFormat": "$major.$minor.$service",
-        "buildVersionFormat": "$major.$minor.$service-$fix",
-        "lineVersionFormat": "$major",
-        "hotfixVersionFormat": "$major.$minor.$service-$fix.$build"
-      },
-      "componentInfo": {
-        "versionPrefix": "",
-        "versionFormat": "$versionPrefix-$baseVersionFormat"
-      },
-      "technical": false
-    },
-    "distribution": {
-      "explicit": false,
-      "external": true,
-      "securityGroups": {
-        "read": [
-          "vfiler1-default#group"
-        ]
-      },
-      "docker": "test-docker-5:amd64,test-docker-5:arm64"
     },
     "vcsSettings": {
       "versionControlSystemRoots": [],
