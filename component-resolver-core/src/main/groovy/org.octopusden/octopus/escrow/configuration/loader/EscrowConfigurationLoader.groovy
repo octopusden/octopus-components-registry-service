@@ -1,6 +1,5 @@
 package org.octopusden.octopus.escrow.configuration.loader
 
-import com.fasterxml.jackson.annotation.JsonProperty
 import groovy.transform.TypeChecked
 import groovy.transform.TypeCheckingMode
 import org.apache.commons.lang3.StringUtils
@@ -23,14 +22,18 @@ import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
 import org.octopusden.octopus.escrow.configuration.validation.EscrowConfigValidator
 import org.octopusden.octopus.escrow.exceptions.ComponentResolverException
 import org.octopusden.octopus.escrow.exceptions.EscrowConfigurationException
-import org.octopusden.octopus.escrow.model.*
+import org.octopusden.octopus.escrow.model.BuildParameters
+import org.octopusden.octopus.escrow.model.Distribution
+import org.octopusden.octopus.escrow.model.SecurityGroups
+import org.octopusden.octopus.escrow.model.VCSSettings
+import org.octopusden.octopus.escrow.model.VersionControlSystemRoot
+import org.octopusden.octopus.escrow.model.Tool
 import org.octopusden.octopus.escrow.resolvers.ComponentHotfixSupportResolver
 import org.octopusden.octopus.escrow.resolvers.ReleaseInfoResolver
 import org.octopusden.octopus.releng.JiraComponentVersionFormatter
 import org.octopusden.octopus.releng.dto.ComponentInfo
 import org.octopusden.octopus.releng.dto.ComponentVersion
 import org.octopusden.octopus.releng.dto.JiraComponent
-import org.octopusden.octopus.releng.dto.JiraComponentVersion
 import org.octopusden.releng.versions.ComponentVersionFormat
 import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionNames
@@ -38,18 +41,7 @@ import org.octopusden.releng.versions.VersionRangeFactory
 
 import java.util.stream.Collectors
 
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.BRANCH
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.BUILD
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.DISTRIBUTION
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.HOTFIX_BRANCH
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.JIRA
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.REPOSITORY_TYPE
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.SECURITY_GROUPS_READ
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.SUPPORTED_ATTRIBUTES
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.TAG
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.TOOLS
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.VCS_SETTINGS
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.VCS_URL
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.*
 
 class EscrowConfigurationLoader {
     private static final Logger LOG = LogManager.getLogger(EscrowConfigurationLoader.class)
