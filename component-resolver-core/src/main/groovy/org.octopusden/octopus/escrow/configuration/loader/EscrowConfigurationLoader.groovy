@@ -48,6 +48,12 @@ import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurp
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.BRANCH
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.HOTFIX_BRANCH
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.SECURITY_GROUPS_READ
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.SUPPORTED_ATTRIBUTES
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.JIRA
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.BUILD
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.TOOLS
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.DISTRIBUTION
+
 
 
 class EscrowConfigurationLoader {
