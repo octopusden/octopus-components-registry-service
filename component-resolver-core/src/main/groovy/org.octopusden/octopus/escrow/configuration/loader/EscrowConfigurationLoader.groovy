@@ -77,17 +77,17 @@ class EscrowConfigurationLoader {
     }
 
     static EscrowModuleConfig getEscrowModuleConfig(EscrowConfiguration configuration, ComponentVersion componentRelease) {
-        resolveComponentConfiguration(configuration, componentRelease, componentRelease.version)
+        resolveComponentConfiguration(configuration, componentRelease)
     }
 
     /**
      * Resolve component configuration (substitute variable, resolve configuration and etc).
      * @param escrowConfiguration escrow configuration
      * @param componentKey component key
-     * @param version component version, e.g. 03.48.30.45
      * @return resolved component configuration
      */
-    static EscrowModuleConfig resolveComponentConfiguration(EscrowConfiguration escrowConfiguration, ComponentVersion componentV, String version) {
+    static EscrowModuleConfig resolveComponentConfiguration(EscrowConfiguration escrowConfiguration, ComponentVersion componentV) {
+        def version = componentV.version
         def componentKey = componentV.componentName
         def numericVersionFactory = new NumericVersionFactory(escrowConfiguration.versionNames)
         def versionInfo = numericVersionFactory.create(version)
