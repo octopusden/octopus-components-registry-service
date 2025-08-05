@@ -19,7 +19,6 @@ import org.octopusden.octopus.escrow.ModelConfigPostProcessor
 import org.octopusden.octopus.escrow.config.JiraComponentVersionRange
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader.calculateDistribution
-import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader.normalizeVersion
 import org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration
 import org.octopusden.octopus.escrow.configuration.model.EscrowModule
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
@@ -29,6 +28,7 @@ import org.octopusden.octopus.escrow.model.Distribution
 import org.octopusden.octopus.escrow.model.SecurityGroups
 import org.octopusden.octopus.escrow.model.VCSSettings
 import org.octopusden.octopus.escrow.resolvers.BuildToolsResolver
+import org.octopusden.octopus.escrow.resolvers.ComponentHotfixSupportResolver
 import org.octopusden.octopus.escrow.resolvers.JiraParametersResolver
 import org.octopusden.octopus.escrow.resolvers.ModuleByArtifactResolver
 import org.octopusden.octopus.releng.JiraComponentVersionFormatter
@@ -390,10 +390,17 @@ class ComponentRegistryResolverImpl(
     private fun getJiraComponentVersionsToRanges(
         version: String, versionRanges: Set<JiraComponentVersionRange>, strict: Boolean = true
     ) = with(numericVersionFactory.create(version)) {
+        val componentHotfixSupportResolver = ComponentHotfixSupportResolver()
+
         versionRanges.filter { versionRangeFactory.create(it.versionRange).containsVersion(this) }
             .mapNotNull { versionRange ->
                 val component = versionRange.jiraComponentVersion.component
-                normalizeVersion(version, component, versionNames, strict)
+                val vcsSettings = versionRange.vcsSettings
+
+                jiraComponentVersionFormatter.normalizeVersion(
+                    component, version, strict,
+                    componentHotfixSupportResolver.isHotFixEnabled(vcsSettings)
+                )
                     ?.let { cleanVersion ->
                         JiraComponentVersion(
                             ComponentVersion.create(versionRange.componentName, cleanVersion),

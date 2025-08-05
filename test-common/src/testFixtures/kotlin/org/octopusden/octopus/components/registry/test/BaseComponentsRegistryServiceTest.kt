@@ -79,7 +79,7 @@ val VCS_SETTINGS = VCSSettingsDTO(
             branch = "v2",
             tag = "SUB-3.0.0",
             type = RepositoryType.MERCURIAL,
-            hotfixBranch = null
+            hotfixBranch = "hotfix/3.0.0"
         )
     )
 )
@@ -136,6 +136,7 @@ abstract class BaseComponentsRegistryServiceTest {
         val actual = getAllJiraComponentVersionRanges().stream()
             .sorted { o1, o2 -> (o1.componentName + o1.versionRange).compareTo(o2.componentName + o2.versionRange)}
             .collect(Collectors.toList())
+
         Assertions.assertTrue(expected.containsAll(actual))
         Assertions.assertTrue(actual.containsAll(expected))
         Assertions.assertIterableEquals(expected, actual)
@@ -222,7 +223,7 @@ abstract class BaseComponentsRegistryServiceTest {
                         type = RepositoryType.MERCURIAL,
                         tag = "TESTONE-1.0.0",
                         branch = "v2",
-                        hotfixBranch = null
+                        hotfixBranch = "hotfix/1.0.0"
                     )
                 ),
                 externalRegistry = null
@@ -526,7 +527,6 @@ abstract class BaseComponentsRegistryServiceTest {
                     "prefix-1.2.3-suffix",
                     "expected-data/versions-api-1.2.3-jira-component-version.json"
                 ),
-                /*TODO
                 Arguments.of(
                     "versions-api",
                     "1.2.3.4",
@@ -536,7 +536,7 @@ abstract class BaseComponentsRegistryServiceTest {
                     "versions-api",
                     "prefix-1.2.3.4-suffix",
                     "expected-data/versions-api-1.2.3.4-jira-component-version.json"
-                )*/
+                )
             )
         }
 

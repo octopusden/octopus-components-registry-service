@@ -152,7 +152,9 @@ class ComponentByJiraProjectResolverTest extends GroovyTestCase {
                                                                           Distribution distribution = null,
                                                                           VCSSettings vcsSettings = VCSSettings.createEmpty(),
                                                                           boolean technical = false) {
-        JiraComponent jiraComponent = getJiraComponent(projectKey, componentVersionFormat, componentInfo, technical)
+        ComponentHotfixSupportResolver componentHotfixSupportResolver = new ComponentHotfixSupportResolver()
+        boolean isHotfixEnabled = componentHotfixSupportResolver.isHotFixEnabled(vcsSettings)
+        JiraComponent jiraComponent = getJiraComponent(projectKey, componentVersionFormat, componentInfo, technical, isHotfixEnabled)
         return JIRA_COMPONENT_VERSION_RANGE_FACTORY.create(
                 componentName,
                 versionRange,
@@ -163,7 +165,7 @@ class ComponentByJiraProjectResolverTest extends GroovyTestCase {
     }
 
     private
-    static JiraComponent getJiraComponent(String projectKey, ComponentVersionFormat componentVersionFormat, ComponentInfo componentInfo, boolean technical) {
-        return new JiraComponent(projectKey, projectKey, componentVersionFormat, componentInfo, technical);
+    static JiraComponent getJiraComponent(String projectKey, ComponentVersionFormat componentVersionFormat, ComponentInfo componentInfo, boolean technical, boolean isHotfixEnabled) {
+        return new JiraComponent(projectKey, projectKey, componentVersionFormat, componentInfo, technical, isHotfixEnabled);
     }
 }
