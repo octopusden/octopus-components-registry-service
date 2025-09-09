@@ -139,6 +139,12 @@ class EscrowConfigValidator {
             } else {
                 registerError("securityChampion is not set in '$component'")
             }
+            if ([moduleConfig.distribution?.GAV(),
+                 moduleConfig.distribution?.DEB(),
+                 moduleConfig.distribution?.RPM(),
+                 moduleConfig.distribution?.docker()].every {StringUtils.isBlank(it) }) {
+                registerError("At least one distribution type (GAV, DEB, RPM, docker) must be set in '${component}'")
+            }
         }
     }
 

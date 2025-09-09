@@ -546,6 +546,15 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
     }
 
     @Test
+    void testValidationOfExplicitlyDistributedComponentWithoutGavOrDockerOrRpmOrDeb() {
+        def exception = GroovyAssert.shouldFail(EscrowConfigurationException.class, {
+            loadConfiguration("invalid/noGAVorDockerOrDebOrRPMInExplicitDistributed.groovy")
+        })
+        assert exception.message == "Validation of module config failed due following errors: \n" +
+                "At least one distribution type (GAV, DEB, RPM, docker) must be set in 'component'"
+    }
+
+    @Test
     void testValidationUnsupportedSystem() {
         def exception = GroovyAssert.shouldFail(EscrowConfigurationException.class, {
             loadConfiguration("invalid/invalidSystem.groovy")
