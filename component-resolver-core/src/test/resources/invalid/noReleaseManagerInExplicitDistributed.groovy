@@ -49,6 +49,6 @@ component2 {
     distribution {
         explicit = true
         external = true
-        GAV = "org.octopusden.octopus.component1:component1"
+        GAV = "org.octopusden.octopus.component2:component2"
     }
 }

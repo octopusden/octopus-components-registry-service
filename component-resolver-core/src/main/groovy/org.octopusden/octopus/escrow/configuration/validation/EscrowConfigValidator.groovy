@@ -142,8 +142,8 @@ class EscrowConfigValidator {
             if ([moduleConfig.distribution?.GAV(),
                  moduleConfig.distribution?.DEB(),
                  moduleConfig.distribution?.RPM(),
-                 moduleConfig.distribution?.docker()].every {StringUtils.isBlank(it) }) {
-                registerError("At least one distribution type (GAV, DEB, RPM, docker) must be set in '${component}'")
+                 moduleConfig.distribution?.docker()].every { StringUtils.isBlank(it) }) {
+                registerError("External explicitly distributed components must define at least one distribution coordinate (distribution->GAV, DEB, RPM, or Docker) in '${component}'.")
             }
         }
     }
