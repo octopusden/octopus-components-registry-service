@@ -77,6 +77,7 @@ test {
         distribution {
             explicit = true
             external = true
+            GAV = "org.octopusden.octopus.test:test-project"
         }
     }
     jira {

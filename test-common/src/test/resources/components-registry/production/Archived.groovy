@@ -25,5 +25,6 @@ import static org.octopusden.octopus.escrow.BuildSystem.*
     distribution {
         explicit = false
         external = false
+        GAV = "org.octopusden.octopus.gradle.plugin:gradle-staging-plugin"
     }
 }
