@@ -139,10 +139,15 @@ class EscrowConfigValidator {
             } else {
                 registerError("securityChampion is not set in '$component'")
             }
-            if ([moduleConfig.distribution?.GAV(),
-                 moduleConfig.distribution?.DEB(),
-                 moduleConfig.distribution?.RPM(),
-                 moduleConfig.distribution?.docker()].every { StringUtils.isBlank(it) }) {
+
+            def distributions = [
+                    moduleConfig.distribution?.GAV(),
+                    moduleConfig.distribution?.DEB(),
+                    moduleConfig.distribution?.RPM(),
+                    moduleConfig.distribution?.docker()
+            ]
+            if ((!moduleConfig.vcsSettings.externalRegistry() || moduleConfig.vcsSettings.notAvailable()) &&
+                    distributions.every { StringUtils.isBlank(it) }) {
                 registerError("External explicitly distributed components must define at least one distribution coordinate (distribution->GAV, DEB, RPM, or Docker) in '${component}'.")
             }
         }
