@@ -5,6 +5,10 @@ import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -15,6 +19,7 @@ public class ConfigHelper {
     public static final String DEFAULT_MAIN_CONFIG_FILE = "Aggregator.groovy";
     public static final String PATH_TO_CONFIG = "pathToConfig";
     private static final String SUPPORTED_GROUP_IDS = "components-registry.supportedGroupIds";
+    private static final String EXCLUDE_COMPONENTS_FILE = "exclude.txt";
     private static final String SUPPORTED_SYSTEMS = "components-registry.supportedSystems";
 
     private static final String VERSION_NAME_SERVICE_BRANCH = "components-registry.version-name.service-branch";
@@ -37,6 +42,27 @@ public class ConfigHelper {
         }
         return environment.getRequiredProperty(PATH_TO_CONFIG) + File.separator
                 + environment.getProperty("mainConfigFile", DEFAULT_MAIN_CONFIG_FILE);
+    }
+
+    /**
+     * Reads the excluded components from the exclude.txt file located in the configuration directory.
+     *
+     * @return A list of excluded component names. If the file does not exist, returns an empty list.
+     */
+    public List<String> excludedComponents() {
+        try {
+            final String excludeFilePath = environment.getRequiredProperty(PATH_TO_CONFIG) + File.separator + EXCLUDE_COMPONENTS_FILE;
+            final Path excludeFile = Paths.get(excludeFilePath);
+            if (!Files.exists(excludeFile)) {
+                return Collections.emptyList();
+            }
+            return Files.lines(excludeFile)
+                    .map(String::trim)
+                    .filter(line -> !line.isEmpty() && !line.startsWith("#"))
+                    .collect(Collectors.toList());
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to read excluded components file", e);
+        }
     }
 
     public String moduleConfigUrl() {

@@ -11,6 +11,8 @@ interface IConfigLoader {
     ConfigObject loadModuleConfigWithoutValidationForUnknownAttributes(Map<String, String> params)
 
     Collection<Component> loadDslDefinedComponents()
+
+    List<String> loadValidationExcludedComponents()
 }
 
 

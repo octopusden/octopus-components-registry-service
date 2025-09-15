@@ -41,4 +41,9 @@ Run `adocPublishToWiki` gradle task
 | wiki.space-key                           | Confluence space key.                                     |               | +                   |
 | wiki.page-id                             | Confluence page id.                                       |               | +                   |
 
+### Excluded Components Configuration
+
+In the `Component-Registry` project, there must be a file named `excludedComponents.txt`. This file should contain a list of components for which the validation of the presence of GAV, DEB, RPM, or Docker will be disabled.
+
+Each component should be listed on a new line. Lines starting with `#` will be treated as comments and ignored.
 

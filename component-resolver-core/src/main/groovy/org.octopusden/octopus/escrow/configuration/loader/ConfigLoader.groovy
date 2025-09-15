@@ -95,6 +95,27 @@ class ConfigLoader implements IConfigLoader {
         return ComponentsRegistryScriptRunner.INSTANCE.loadDSL(Paths.get(componentRegistryInfo.basePath), products)
     }
 
+    /**
+     * Load list of components excluded from validation
+     * @return
+     */
+    @Override
+    List<String> loadValidationExcludedComponents() {
+        def excludedComponents = []
+        def path = Paths.get(componentRegistryInfo.basePath, componentRegistryInfo.validationExcludedComponentsFileName)
+        LOG.info("Loading excluded components from file: $path")
+        if (path.toFile().exists()) {
+            LOG.info("File $path exists. Loading excluded components")
+            path.toFile().eachLine { line ->
+                def trimmed = line.trim()
+                if (!trimmed.startsWith("#") && !trimmed.isEmpty()) {
+                    excludedComponents << trimmed
+                }
+            }
+        }
+        return excludedComponents
+    }
+
     def static validateConfig(ConfigObject configObject, VersionNames versionNames) {
         def validator = new GroovySlurperConfigValidator(versionNames)
         validator.validateConfig(configObject)
