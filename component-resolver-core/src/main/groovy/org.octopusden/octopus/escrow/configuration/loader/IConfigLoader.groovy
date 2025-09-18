@@ -12,7 +12,7 @@ interface IConfigLoader {
 
     Collection<Component> loadDslDefinedComponents()
 
-    List<String> loadValidationExcludedComponents()
+    List<String> loadDistributionValidationExcludedComponents()
 }
 
 

@@ -100,9 +100,9 @@ class ConfigLoader implements IConfigLoader {
      * @return
      */
     @Override
-    List<String> loadValidationExcludedComponents() {
+    List<String> loadDistributionValidationExcludedComponents() {
         def excludedComponents = []
-        def path = Paths.get(componentRegistryInfo.basePath, componentRegistryInfo.validationExcludedComponentsFileName)
+        def path = Paths.get(componentRegistryInfo.basePath, componentRegistryInfo.distributionValidationExclusionsFile)
         LOG.info("Loading excluded components from file: $path")
         if (path.toFile().exists()) {
             LOG.info("File $path exists. Loading excluded components")

@@ -35,7 +35,7 @@ class ComponentRegistryInfo {
 
     private boolean fromClassPath = false;
 
-    private final String validationExcludedComponentsFileName = "excludedComponents.txt"
+    private final String distributionValidationExclusionsFile = "validation-exclusions/distribution.txt"
 
     String getBasePath() {
         return basePath
@@ -49,8 +49,8 @@ class ComponentRegistryInfo {
         return fromClassPath
     }
 
-    String getValidationExcludedComponentsFileName() {
-        return validationExcludedComponentsFileName
+    String getDistributionValidationExclusionsFile() {
+        return distributionValidationExclusionsFile
     }
 
 }
