@@ -56,6 +56,21 @@ class ReleaseInfoResolverTest {
     }
 
     @Test
+    void testExcludedDistributionValidationConfigurationValid() {
+        def resolver = getResolver("/validation/valid/Aggregator.groovy")
+        resolver.resolveRelease(ComponentVersion.create("component_test", "1.2.3630"))
+    }
+
+    @Test
+    void testExcludedDistributionValidationConfigurationInvalid() {
+        def resolver = getResolver("/validation/invalid/Aggregator.groovy")
+        def exception = assertThrows(EscrowConfigurationException, {
+            resolver.resolveRelease(ComponentVersion.create("component_test", "1.2.3630"))
+        })
+        assertTrue(exception.message.contains("External explicitly distributed components must define at least one distribution coordinate (distribution->GAV, DEB, RPM, or Docker) in 'component_test'."))
+    }
+
+    @Test
     void testResolvedBuildTools() {
         def plCommonReleaseInfo = getResolver("/production/Aggregator.groovy").resolveRelease(ComponentVersion.create("component_commons", "1.2.3630"))
         assertTrue(plCommonReleaseInfo.buildParameters.buildTools.any { buildTool -> buildTool instanceof PTKProductTool })
