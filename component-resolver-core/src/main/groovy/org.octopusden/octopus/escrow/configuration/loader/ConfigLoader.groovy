@@ -12,6 +12,7 @@ import groovy.transform.TypeChecked
 import org.apache.logging.log4j.LogManager
 import org.apache.logging.log4j.Logger
 import org.octopusden.releng.versions.VersionNames
+import org.yaml.snakeyaml.Yaml
 
 import java.nio.file.Paths
 
@@ -102,16 +103,34 @@ class ConfigLoader implements IConfigLoader {
     @Override
     List<String> loadDistributionValidationExcludedComponents() {
         def excludedComponents = []
-        def path = Paths.get(componentRegistryInfo.basePath, componentRegistryInfo.distributionValidationExclusionsFile)
-        LOG.info("Loading excluded components from file: $path")
-        if (path.toFile().exists()) {
-            LOG.info("File $path exists. Loading excluded components")
-            path.toFile().eachLine { line ->
-                def trimmed = line.trim()
-                if (!trimmed.startsWith("#") && !trimmed.isEmpty()) {
-                    excludedComponents << trimmed
+        def path = Paths.get(componentRegistryInfo.basePath, componentRegistryInfo.validationConfigFile)
+        LOG.info("Loading excluded components from YAML file: $path")
+
+        def file = path.toFile()
+        if (file.exists()) {
+            LOG.info("File $path exists. Loading excluded components from YAML")
+            try {
+                def yamlContent = new Yaml().loadAs(file.text, Map.class)
+
+                def excludeList = yamlContent['distribution'] as Map
+                excludeList = excludeList?excludeList['ee'] as Map:null
+                excludeList = excludeList?excludeList['exclude']:null
+
+                if (excludeList) {
+                    if (excludeList instanceof List) {
+                        excludedComponents.addAll(excludeList)
+                    } else {
+                        excludedComponents << excludeList.toString()
+                    }
+                    LOG.info("Found ${excludedComponents.size()} excluded components in YAML")
+                } else {
+                    LOG.warn("No distribution.ee.exclude section found in YAML file")
                 }
+            } catch (Exception e) {
+                LOG.error("Error parsing YAML file: ${e.message}", e)
             }
+        } else {
+            LOG.warn("YAML file $path does not exist")
         }
         return excludedComponents
     }
