@@ -8,6 +8,6 @@ EXPOSE 4567
 
 ARG BUILD_VERSION
 
-COPY build/libs/components-registry-service-server-$BUILD_VERSION.jar app.jar
+COPY libs/components-registry-service-server-$BUILD_VERSION.jar app.jar
 
 CMD ["sh", "-c", "java $JAVA_OPTS -jar /app/app.jar"]
