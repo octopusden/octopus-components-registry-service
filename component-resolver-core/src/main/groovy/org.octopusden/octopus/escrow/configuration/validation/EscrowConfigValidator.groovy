@@ -36,7 +36,7 @@ class EscrowConfigValidator {
     private List<String> supportedGroupIds
     private List<String> supportedSystems
     private VersionNames versionNames
-    private List<String> validationExcludedComponents
+    private final List<String> validationExcludedComponents
 
     @TupleConstructor
     static class MavenArtifact {
@@ -79,7 +79,9 @@ class EscrowConfigValidator {
         this.supportedGroupIds = supportedGroupIds
         this.supportedSystems = supportedSystems
         this.versionNames = versionNames
-        this.validationExcludedComponents = validationExcludedComponents
+        this.validationExcludedComponents = (validationExcludedComponents != null) ?
+                Collections.unmodifiableList(validationExcludedComponents)
+                : Collections.emptyList() as List<String>
     }
 
     List<String> errors = new ArrayList<>()
