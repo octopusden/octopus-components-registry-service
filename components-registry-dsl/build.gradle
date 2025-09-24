@@ -10,15 +10,13 @@ dependencies {
     api "com.fasterxml.jackson.datatype:jackson-datatype-jsr310"
     api "com.fasterxml.jackson.module:jackson-module-kotlin"
     api "org.jetbrains.kotlin:kotlin-reflect"
-    api "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
-    api group: 'org.jetbrains.kotlin', name: 'kotlin-script-runtime'
-    api group: 'org.jetbrains.kotlin', name: 'kotlin-stdlib'
-    api group: 'org.jetbrains.kotlin', name: 'kotlin-script-util'
-    api group: 'org.jetbrains.kotlin', name: 'kotlin-compiler-embeddable'
-    api group: 'org.jetbrains.kotlin', name: 'kotlin-scripting-compiler-embeddable'
-    api group: 'org.jetbrains.kotlin', name: 'kotlin-scripting-jsr223'
+    api "org.jetbrains.kotlin:kotlin-script-runtime"
+    api "org.jetbrains.kotlin:kotlin-stdlib"
+    api "org.jetbrains.kotlin:kotlin-compiler-embeddable"
+    api "org.jetbrains.kotlin:kotlin-scripting-compiler-embeddable"
+    api "org.jetbrains.kotlin:kotlin-scripting-jsr223"
 
-    testImplementation group: 'org.assertj', name: 'assertj-core', version: project['assertj.version']
+    testImplementation "org.assertj:assertj-core:${project['assertj.version']}"
 }
 
 task storeDslLibraryDependencies {

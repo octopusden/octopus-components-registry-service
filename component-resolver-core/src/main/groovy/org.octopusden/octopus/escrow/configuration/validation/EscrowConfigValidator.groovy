@@ -468,7 +468,7 @@ class EscrowConfigValidator {
     void validateDockerUniqueNames(EscrowConfiguration moduleConfig) {
         def dockerNames = new HashSet<String>()
         moduleConfig.escrowModules.each { componentName, escrowModule ->
-            def thisComponentImages = []
+            List<String> thisComponentImages = new ArrayList<>()
             escrowModule.moduleConfigurations.each { moduleConfiguration ->
                 def distribution = moduleConfiguration.getDistribution()
                 if (distribution != null) {

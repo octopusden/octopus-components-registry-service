@@ -101,7 +101,6 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
         assert 'module1/my-pom.xml' == escrowModuleConfig.buildFilePath
     }
 
-
     @Test
     void testInvalidVersionRange() {
         try {

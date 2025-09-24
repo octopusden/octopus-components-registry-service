@@ -7,6 +7,6 @@ jobs:
     uses: octopusden/octopus-base/.github/workflows/common-java-gradle-build.yml@v2.1.7
     with:
       flow-type: hybrid
-      java-version: '11'
+      java-version: '21'
       docker-image: components-registry-service
       skip-tests: false

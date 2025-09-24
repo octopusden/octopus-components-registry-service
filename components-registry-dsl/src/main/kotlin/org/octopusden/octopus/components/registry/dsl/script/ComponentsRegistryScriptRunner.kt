@@ -1,7 +1,6 @@
 package org.octopusden.octopus.components.registry.dsl.script
 
 import org.jetbrains.kotlin.cli.common.environment.setIdeaIoUseFallback
-import org.jetbrains.kotlin.script.jsr223.KotlinJsr223JvmLocalScriptEngineFactory
 import org.octopusden.octopus.components.registry.api.Component
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import java.nio.file.Files
@@ -9,7 +8,6 @@ import java.nio.file.Path
 import java.util.logging.Logger
 import java.util.stream.Collectors
 import kotlin.script.experimental.jsr223.KotlinJsr223DefaultScriptEngineFactory
-import kotlin.streams.toList
 
 object ComponentsRegistryScriptRunner {
     private val logger = Logger.getLogger(ComponentsRegistryScriptRunner::class.java.canonicalName)
@@ -46,12 +44,7 @@ object ComponentsRegistryScriptRunner {
         if (productTypeMap.isEmpty()) {
             products.forEach { k, v -> productTypeMap[v] = k }
         }
-        val engine = try {
-            KotlinJsr223DefaultScriptEngineFactory().scriptEngine
-        } catch (e: Exception) {
-            logger.info("Unable to get default kotlin script engine, fallback to local script engine")
-            KotlinJsr223JvmLocalScriptEngineFactory().scriptEngine
-        }
+        val engine = KotlinJsr223DefaultScriptEngineFactory().scriptEngine
         currentRegistry.clear()
         Files.newBufferedReader(dslFilePath).use { reader ->
             logger.info("Loading $dslFilePath")

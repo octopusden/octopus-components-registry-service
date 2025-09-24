@@ -135,15 +135,15 @@ configure(subprojects) {
     }
 
     compileKotlin {
-        kotlinOptions.jvmTarget = "1.8"
+        kotlinOptions.jvmTarget = "21"
     }
 
     compileTestKotlin {
-        kotlinOptions.jvmTarget = "1.8"
+        kotlinOptions.jvmTarget = "21"
     }
 
-    sourceCompatibility = 1.8
-    targetCompatibility = 1.8
+    sourceCompatibility = 21
+    targetCompatibility = 21
 
     test {
         useJUnitPlatform()
@@ -152,6 +152,8 @@ configure(subprojects) {
                 // can fail sporadically on GH
             'junit.jupiter.execution.parallel.enabled': false
         ]
+        jvmArgs('--add-opens=java.base/java.lang=ALL-UNNAMED')
+        jvmArgs('--add-opens=java.base/java.util=ALL-UNNAMED')
     }
 
     java {

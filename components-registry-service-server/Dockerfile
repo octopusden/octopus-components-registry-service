@@ -1,6 +1,6 @@
 ARG DOCKER_REGISTRY
 
-FROM $DOCKER_REGISTRY/eclipse-temurin:11-jdk
+FROM $DOCKER_REGISTRY/eclipse-temurin:21-jdk
 
 WORKDIR /app
 

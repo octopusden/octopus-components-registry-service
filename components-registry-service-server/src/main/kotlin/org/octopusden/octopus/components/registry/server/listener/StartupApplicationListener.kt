@@ -11,7 +11,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.*
-import javax.annotation.PreDestroy
+import jakarta.annotation.PreDestroy
 import kotlin.collections.ArrayList
 import kotlin.streams.toList
 
@@ -40,7 +40,7 @@ class StartupApplicationListener: ApplicationListener<ApplicationStartingEvent> 
             LOG.debug("Spring boot jar running mode detected")
             temporaryLibraryPath = Files.createTempDirectory("components-registry-dsl-" + UUID.randomUUID())
             val dslLibraryClassPath = StringBuffer()
-            FileSystems.newFileSystem(Paths.get(System.getProperty("java.class.path")), null).use { fs ->
+            FileSystems.newFileSystem(Paths.get(System.getProperty("java.class.path"))).use { fs ->
                 val libraryFiles = ArrayList<Path>()
                 Files.walk(fs.getPath("/BOOT-INF/lib")).use { filePath ->
                     libraryFiles.addAll(filePath.filter { it.toString().endsWith(".jar") }.toList())

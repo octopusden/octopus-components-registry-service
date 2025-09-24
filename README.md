@@ -1,6 +1,6 @@
 ## Dockerfile
 
-By default, Dockerfile uses `eclipse-temurin:11-jdk` image.
+By default, Dockerfile uses `eclipse-temurin:21-jdk` image.
 To build with custom image use `--build-arg` option.
 
 ## Parameters
