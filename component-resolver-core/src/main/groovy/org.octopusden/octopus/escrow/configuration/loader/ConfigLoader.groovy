@@ -14,6 +14,7 @@ import org.apache.logging.log4j.Logger
 import org.octopusden.releng.versions.VersionNames
 import org.yaml.snakeyaml.Yaml
 
+import java.nio.file.Path
 import java.nio.file.Paths
 
 @TupleConstructor
@@ -26,10 +27,13 @@ class ConfigLoader implements IConfigLoader {
     private final ComponentRegistryInfo componentRegistryInfo
     private final Map<ProductTypes, String> products
 
+    private final Path validationConfigPath
+
     ConfigLoader(ComponentRegistryInfo componentRegistryInfo, VersionNames versionNames, Map<ProductTypes, String> products) {
         this.componentRegistryInfo = componentRegistryInfo
         this.versionNames = versionNames
         this.products = products
+        this.validationConfigPath = Paths.get(componentRegistryInfo.basePath, "validation-config.yaml")
     }
 
     @Override
@@ -103,12 +107,11 @@ class ConfigLoader implements IConfigLoader {
     @Override
     List<String> loadDistributionValidationExcludedComponents() {
         def excludedComponents = []
-        def path = Paths.get(componentRegistryInfo.basePath, componentRegistryInfo.validationConfigFile)
-        LOG.info("Loading excluded components from YAML file: $path")
+        LOG.info("Loading excluded components from YAML file: $validationConfigPath")
 
-        def file = path.toFile()
+        def file = validationConfigPath.toFile()
         if (file.exists()) {
-            LOG.info("File $path exists. Loading excluded components from YAML")
+            LOG.info("File $validationConfigPath exists. Loading excluded components from YAML")
             try {
                 def yamlContent = new Yaml().loadAs(file.text, Map.class)
 
@@ -130,7 +133,7 @@ class ConfigLoader implements IConfigLoader {
                 LOG.error("Error parsing YAML file: ${e.message}", e)
             }
         } else {
-            LOG.warn("YAML file $path does not exist")
+            LOG.warn("YAML file $validationConfigPath does not exist")
         }
         return excludedComponents
     }

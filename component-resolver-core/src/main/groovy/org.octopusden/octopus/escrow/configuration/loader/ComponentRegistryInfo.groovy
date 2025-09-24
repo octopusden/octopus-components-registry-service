@@ -35,8 +35,6 @@ class ComponentRegistryInfo {
 
     private boolean fromClassPath = false;
 
-    private final String ValidationConfigFile = "validation-config.yaml"
-
     String getBasePath() {
         return basePath
     }
@@ -47,10 +45,6 @@ class ComponentRegistryInfo {
 
     boolean getFromClassPath() {
         return fromClassPath
-    }
-
-    String getValidationConfigFile() {
-        return ValidationConfigFile
     }
 
 }
