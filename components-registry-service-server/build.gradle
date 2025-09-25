@@ -72,8 +72,9 @@ dockerCreateDockerfile.doLast {
 }
 
 tasks.named('dockerSyncBuildContext') {
-    from(layout.buildDirectory.dir("libs")) {
-        into("build/libs")
+    def bootJarArchive = tasks.named('bootJar').flatMap { it.archiveFile }
+    from(bootJarArchive) {
+        into('build/libs')
     }
     dependsOn bootJar
 }
