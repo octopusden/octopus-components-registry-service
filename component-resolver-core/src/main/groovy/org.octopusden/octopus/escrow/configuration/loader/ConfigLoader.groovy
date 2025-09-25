@@ -131,6 +131,7 @@ class ConfigLoader implements IConfigLoader {
                 }
             } catch (Exception e) {
                 LOG.error("Error parsing YAML file: ${e.message}", e)
+                throw e
             }
         } else {
             LOG.warn("YAML file $validationConfigPath does not exist")
