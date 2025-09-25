@@ -80,6 +80,11 @@ dockerBuildImage {
     dependsOn bootJar
     dependsOn resolveMainClassName
     dependsOn javadoc
+    dependsOn javadocJar  // Добавляем для javadocJar
     dependsOn sourcesJar
+    dependsOn compileTestFixturesJava
+    dependsOn compileTestKotlin
+    dependsOn compileTestFixturesKotlin
+    dependsOn testFixturesJar
 }
 
