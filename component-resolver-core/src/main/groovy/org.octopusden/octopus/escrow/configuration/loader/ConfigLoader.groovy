@@ -127,7 +127,7 @@ class ConfigLoader implements IConfigLoader {
                     }
                     LOG.info("Found ${excludedComponents.size()} excluded components in YAML")
                 } else {
-                    LOG.warn("No distribution.ee.exclude section found in YAML file")
+                    LOG.info("No distribution.ee.exclude section found in YAML file")
                 }
             } catch (Exception e) {
                 LOG.error("Error parsing YAML file: ${e.message}", e)

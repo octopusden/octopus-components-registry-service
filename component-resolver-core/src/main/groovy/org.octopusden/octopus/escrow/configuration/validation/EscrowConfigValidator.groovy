@@ -155,7 +155,7 @@ class EscrowConfigValidator {
                 moduleConfig.distribution?.docker()
         ]
         if (distributions.every { StringUtils.isBlank(it) }) {
-            registerError("External explicitly distributed components must define at least one distribution coordinate (distribution->GAV, DEB, RPM, or Docker) in '${component}'.")
+            registerError("External explicitly distributed components for version range '${moduleConfig.versionRangeString}' must define at least one distribution coordinate (distribution->GAV, DEB, RPM, or Docker) in '${component}'.")
         }
     }
 

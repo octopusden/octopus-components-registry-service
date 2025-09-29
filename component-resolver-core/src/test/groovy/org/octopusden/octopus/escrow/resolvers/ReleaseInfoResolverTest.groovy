@@ -67,7 +67,7 @@ class ReleaseInfoResolverTest {
         def exception = assertThrows(EscrowConfigurationException, {
             resolver.resolveRelease(ComponentVersion.create("component_test", "1.2.3630"))
         })
-        assertTrue(exception.message.contains("External explicitly distributed components must define at least one distribution coordinate (distribution->GAV, DEB, RPM, or Docker) in 'component_test'."))
+        assertTrue("Expected validation error message was not found.", exception.message.contains("External explicitly distributed components for version range '(,0),[0,)' must define at least one distribution coordinate (distribution->GAV, DEB, RPM, or Docker) in 'component_test'."))
     }
 
     @Test
