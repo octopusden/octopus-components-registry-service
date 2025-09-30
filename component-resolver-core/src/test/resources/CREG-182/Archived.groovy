@@ -14,6 +14,7 @@
     distribution {
         explicit = true
         external = true
+        GAV = "org.octopusden.octopus.componentgroup:component-integration"
     }
 }
 
