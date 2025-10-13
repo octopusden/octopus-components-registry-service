@@ -67,6 +67,7 @@ bcomponent {
     distribution {
         explicit = true
         external = true
+        GAV = "org.octopusden.octopus.bcomponent:bcomponent"
     }
 
     build {

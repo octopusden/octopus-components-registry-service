@@ -12,7 +12,9 @@ import groovy.transform.TypeChecked
 import org.apache.logging.log4j.LogManager
 import org.apache.logging.log4j.Logger
 import org.octopusden.releng.versions.VersionNames
+import org.yaml.snakeyaml.Yaml
 
+import java.nio.file.Path
 import java.nio.file.Paths
 
 @TupleConstructor
@@ -25,10 +27,13 @@ class ConfigLoader implements IConfigLoader {
     private final ComponentRegistryInfo componentRegistryInfo
     private final Map<ProductTypes, String> products
 
+    private final Path validationConfigPath
+
     ConfigLoader(ComponentRegistryInfo componentRegistryInfo, VersionNames versionNames, Map<ProductTypes, String> products) {
         this.componentRegistryInfo = componentRegistryInfo
         this.versionNames = versionNames
         this.products = products
+        this.validationConfigPath = Paths.get(componentRegistryInfo.basePath, "validation-config.yaml")
     }
 
     @Override
@@ -93,6 +98,45 @@ class ConfigLoader implements IConfigLoader {
     @Override
     Collection<Component> loadDslDefinedComponents() {
         return ComponentsRegistryScriptRunner.INSTANCE.loadDSL(Paths.get(componentRegistryInfo.basePath), products)
+    }
+
+    /**
+     * Load list of components excluded from validation
+     * @return
+     */
+    @Override
+    List<String> loadDistributionValidationExcludedComponents() {
+        def excludedComponents = []
+        LOG.info("Loading excluded components from YAML file: $validationConfigPath")
+
+        def file = validationConfigPath.toFile()
+        if (file.exists()) {
+            LOG.info("File $validationConfigPath exists. Loading excluded components from YAML")
+            try {
+                def yamlContent = new Yaml().loadAs(file.text, Map.class)
+
+                def excludeList = yamlContent['distribution'] as Map
+                excludeList = excludeList?excludeList['ee'] as Map:null
+                excludeList = excludeList?excludeList['exclude']:null
+
+                if (excludeList) {
+                    if (excludeList instanceof List) {
+                        excludedComponents.addAll(excludeList)
+                    } else {
+                        excludedComponents << excludeList.toString()
+                    }
+                    LOG.info("Found ${excludedComponents.size()} excluded components in YAML")
+                } else {
+                    LOG.info("No distribution.ee.exclude section found in YAML file")
+                }
+            } catch (Exception e) {
+                LOG.error("Error parsing YAML file: ${e.message}", e)
+                throw e
+            }
+        } else {
+            LOG.warn("YAML file $validationConfigPath does not exist")
+        }
+        return excludedComponents
     }
 
     def static validateConfig(ConfigObject configObject, VersionNames versionNames) {

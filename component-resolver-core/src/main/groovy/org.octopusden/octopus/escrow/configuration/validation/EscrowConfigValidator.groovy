@@ -36,6 +36,7 @@ class EscrowConfigValidator {
     private List<String> supportedGroupIds
     private List<String> supportedSystems
     private VersionNames versionNames
+    private final List<String> validationExcludedComponents
 
     @TupleConstructor
     static class MavenArtifact {
@@ -71,10 +72,16 @@ class EscrowConfigValidator {
 
     Map<MavenArtifact, List<EscrowModuleConfig>> map = new HashMap<>()
 
-    EscrowConfigValidator(List<String> supportedGroupIds, List<String> supportedSystems, VersionNames versionNames) {
+    EscrowConfigValidator(List<String> supportedGroupIds,
+                          List<String> supportedSystems,
+                          VersionNames versionNames,
+                          List<String> validationExcludedComponents) {
         this.supportedGroupIds = supportedGroupIds
         this.supportedSystems = supportedSystems
         this.versionNames = versionNames
+        this.validationExcludedComponents = (validationExcludedComponents != null) ?
+                Collections.unmodifiableList(validationExcludedComponents)
+                : Collections.emptyList() as List<String>
     }
 
     List<String> errors = new ArrayList<>()
@@ -122,6 +129,36 @@ class EscrowConfigValidator {
         }
     }
 
+    /**
+     * Checks whether the component should be excluded from validation
+     * @param component name of the component
+     * @return true if the component is listed in the exclusions
+     */
+    private boolean isExcludedComponent(String component) {
+        return validationExcludedComponents.contains(component)
+    }
+
+    /**
+     * Validate distributions section of the component.
+     * At least one distribution coordinate (distribution->GAV, DEB, RPM, or Docker) must be defined.
+     * @param moduleConfig
+     * @param component
+     */
+    private void validateDistributions(EscrowModuleConfig moduleConfig, String component) {
+        if(isExcludedComponent(component)) {
+            return
+        }
+        def distributions = [
+                moduleConfig.distribution?.GAV(),
+                moduleConfig.distribution?.DEB(),
+                moduleConfig.distribution?.RPM(),
+                moduleConfig.distribution?.docker()
+        ]
+        if (distributions.every { StringUtils.isBlank(it) }) {
+            registerError("External explicitly distributed components for version range '${moduleConfig.versionRangeString}' must define at least one distribution coordinate (distribution->GAV, DEB, RPM, or Docker) in '${component}'.")
+        }
+    }
+
     private void validateExplicitExternalComponent(EscrowModuleConfig moduleConfig, String component) {
         if (moduleConfig.distribution?.explicit() && moduleConfig.distribution?.external()) {
             if (StringUtils.isBlank(moduleConfig.componentDisplayName)) {
@@ -139,6 +176,7 @@ class EscrowConfigValidator {
             } else {
                 registerError("securityChampion is not set in '$component'")
             }
+            validateDistributions(moduleConfig, component)
         }
     }
 
@@ -249,7 +287,7 @@ class EscrowConfigValidator {
             def moduleVersionRanges = new ArrayList<String>(escrowModule.moduleConfigurations.size())
             for (moduleConfig in escrowModule.moduleConfigurations) {
                 def versionRange = versionRangeFactory.create(moduleConfig.getVersionRangeString())
-                for(String moduleVersionRange : moduleVersionRanges) {
+                for (String moduleVersionRange : moduleVersionRanges) {
                     if (versionRangeFactory.create(moduleVersionRange).isIntersect(versionRange)) {
                         registerError("Intersection of ${escrowModule.moduleName} version ranges $moduleVersionRange with ${moduleConfig.getVersionRangeString()}.")
                     }

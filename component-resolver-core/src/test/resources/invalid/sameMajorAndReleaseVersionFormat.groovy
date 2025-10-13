@@ -44,5 +44,6 @@ bcomponent {
     distribution {
         explicit = true
         external = true
+        GAV = "org.octopusden.octopus.octopus:zenit"
     }
 }

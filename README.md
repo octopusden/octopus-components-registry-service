@@ -41,4 +41,3 @@ Run `adocPublishToWiki` gradle task
 | wiki.space-key                           | Confluence space key.                                     |               | +                   |
 | wiki.page-id                             | Confluence page id.                                       |               | +                   |
 
-

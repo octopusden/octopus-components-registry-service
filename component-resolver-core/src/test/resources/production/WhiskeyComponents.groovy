@@ -340,6 +340,7 @@ COMPONENT_C {
     distribution {
         explicit = true
         external = true
+        GAV = "org.octopusden.octopus.componentc:componentc"
     }
 }
 
@@ -388,6 +389,7 @@ sa_component {
     distribution {
         explicit = true
         external = true
+        GAV = "org.octopusden.octopus.sa_component:sa_component"
     }
 }
 
@@ -453,5 +455,6 @@ DM {
     distribution {
         explicit = true
         external = true
+        GAV = "org.octopusden.octopus.dwh:dwh"
     }
 }

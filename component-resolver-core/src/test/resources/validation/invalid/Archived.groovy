@@ -1,3 +1,5 @@
+package validation.invalid
+
 import static org.octopusden.octopus.escrow.BuildSystem.*
 
 "gradle-staging-plugin" {
