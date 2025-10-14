@@ -50,11 +50,25 @@ object ComponentsRegistryScriptRunner {
         }
         
         val scriptClasspath = System.getProperty("kotlin.script.classpath")
-        if (!scriptClasspath.isNullOrBlank()) {
+        val scriptEngine = if (!scriptClasspath.isNullOrBlank()) {
             logger.info("Using kotlin.script.classpath: $scriptClasspath")
+            val urls = scriptClasspath.split(File.pathSeparatorChar)
+                .filter { it.isNotBlank() }
+                .map { File(it).toURI().toURL() }
+                .toTypedArray()
+            val scriptClassLoader = URLClassLoader(urls, Thread.currentThread().contextClassLoader)
+            val oldContextClassLoader = Thread.currentThread().contextClassLoader
+            try {
+                Thread.currentThread().contextClassLoader = scriptClassLoader
+                KotlinJsr223DefaultScriptEngineFactory().scriptEngine
+            } finally {
+                Thread.currentThread().contextClassLoader = oldContextClassLoader
+            }
+        } else {
+            logger.info("Using default script engine")
+            KotlinJsr223DefaultScriptEngineFactory().scriptEngine
         }
         
-        val scriptEngine = KotlinJsr223DefaultScriptEngineFactory().scriptEngine
         currentRegistry.clear()
         Files.newBufferedReader(dslFilePath).use { reader ->
             logger.info("Loading $dslFilePath")
