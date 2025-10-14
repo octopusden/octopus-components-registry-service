@@ -3,6 +3,8 @@ package org.octopusden.octopus.components.registry.dsl.script
 import org.jetbrains.kotlin.cli.common.environment.setIdeaIoUseFallback
 import org.octopusden.octopus.components.registry.api.Component
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes
+import java.io.File
+import java.net.URLClassLoader
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.logging.Logger
@@ -44,11 +46,44 @@ object ComponentsRegistryScriptRunner {
         if (productTypeMap.isEmpty()) {
             products.forEach { k, v -> productTypeMap[v] = k }
         }
-        val engine = KotlinJsr223DefaultScriptEngineFactory().scriptEngine
+        val previousContextClassLoader = Thread.currentThread().contextClassLoader
+        val scriptClasspath = System.getProperty("kotlin.script.classpath")
+        val scriptEngine = if (!scriptClasspath.isNullOrBlank()) {
+            val urls = scriptClasspath.split(File.pathSeparatorChar)
+                .filter { it.isNotBlank() }
+                .map { File(it).toURI().toURL() }
+                .toTypedArray()
+            val scriptClassLoader = URLClassLoader(urls, previousContextClassLoader)
+            try {
+                Thread.currentThread().contextClassLoader = scriptClassLoader
+                KotlinJsr223DefaultScriptEngineFactory().scriptEngine
+            } finally {
+                Thread.currentThread().contextClassLoader = previousContextClassLoader
+            }
+        } else {
+            KotlinJsr223DefaultScriptEngineFactory().scriptEngine
+        }
+
         currentRegistry.clear()
         Files.newBufferedReader(dslFilePath).use { reader ->
             logger.info("Loading $dslFilePath")
-            engine.eval(reader)
+            // Switch context to the same classloader used to create the engine while evaluating
+            if (!scriptClasspath.isNullOrBlank()) {
+                val urls = scriptClasspath.split(File.pathSeparatorChar)
+                    .filter { it.isNotBlank() }
+                    .map { File(it).toURI().toURL() }
+                    .toTypedArray()
+                val scriptClassLoader = URLClassLoader(urls, previousContextClassLoader)
+                val oldCl = Thread.currentThread().contextClassLoader
+                try {
+                    Thread.currentThread().contextClassLoader = scriptClassLoader
+                    scriptEngine.eval(reader)
+                } finally {
+                    Thread.currentThread().contextClassLoader = oldCl
+                }
+            } else {
+                scriptEngine.eval(reader)
+            }
         }
         return ArrayList(currentRegistry)
     }
