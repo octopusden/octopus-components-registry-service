@@ -50,20 +50,11 @@ object ComponentsRegistryScriptRunner {
         }
         
         val scriptClasspath = System.getProperty("kotlin.script.classpath")
-        val scriptEngine = if (!scriptClasspath.isNullOrBlank()) {
-            logger.info("Using custom classpath for script engine: $scriptClasspath")
-            val urls = scriptClasspath.split(File.pathSeparatorChar)
-                .filter { it.isNotBlank() }
-                .map { File(it).toURI().toURL() }
-                .toTypedArray()
-            val scriptClassLoader = URLClassLoader(urls, ClassLoader.getPlatformClassLoader())
-            val manager = ScriptEngineManager(scriptClassLoader)
-            manager.getEngineByExtension("kts") ?: throw IllegalStateException("Kotlin script engine not found")
-        } else {
-            logger.info("Using default script engine")
-            KotlinJsr223DefaultScriptEngineFactory().scriptEngine
+        if (!scriptClasspath.isNullOrBlank()) {
+            logger.info("Using kotlin.script.classpath: $scriptClasspath")
         }
-
+        
+        val scriptEngine = KotlinJsr223DefaultScriptEngineFactory().scriptEngine
         currentRegistry.clear()
         Files.newBufferedReader(dslFilePath).use { reader ->
             logger.info("Loading $dslFilePath")
