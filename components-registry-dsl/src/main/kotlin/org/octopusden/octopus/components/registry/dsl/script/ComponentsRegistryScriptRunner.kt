@@ -57,13 +57,8 @@ object ComponentsRegistryScriptRunner {
                 .map { File(it).toURI().toURL() }
                 .toTypedArray()
             val scriptClassLoader = URLClassLoader(urls, Thread.currentThread().contextClassLoader)
-            val oldContextClassLoader = Thread.currentThread().contextClassLoader
-            try {
-                Thread.currentThread().contextClassLoader = scriptClassLoader
-                KotlinJsr223DefaultScriptEngineFactory().scriptEngine
-            } finally {
-                Thread.currentThread().contextClassLoader = oldContextClassLoader
-            }
+            val manager = ScriptEngineManager(scriptClassLoader)
+            manager.getEngineByExtension("kts") ?: throw IllegalStateException("Kotlin script engine not found")
         } else {
             logger.info("Using default script engine")
             KotlinJsr223DefaultScriptEngineFactory().scriptEngine
