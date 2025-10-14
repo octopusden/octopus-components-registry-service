@@ -9,6 +9,8 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.util.logging.Logger
 import java.util.stream.Collectors
+import javax.script.ScriptEngine
+import javax.script.ScriptEngineManager
 import kotlin.script.experimental.jsr223.KotlinJsr223DefaultScriptEngineFactory
 
 object ComponentsRegistryScriptRunner {
@@ -46,44 +48,26 @@ object ComponentsRegistryScriptRunner {
         if (productTypeMap.isEmpty()) {
             products.forEach { k, v -> productTypeMap[v] = k }
         }
-        val previousContextClassLoader = Thread.currentThread().contextClassLoader
+        
         val scriptClasspath = System.getProperty("kotlin.script.classpath")
         val scriptEngine = if (!scriptClasspath.isNullOrBlank()) {
+            logger.info("Using custom classpath for script engine: $scriptClasspath")
             val urls = scriptClasspath.split(File.pathSeparatorChar)
                 .filter { it.isNotBlank() }
                 .map { File(it).toURI().toURL() }
                 .toTypedArray()
-            val scriptClassLoader = URLClassLoader(urls, previousContextClassLoader)
-            try {
-                Thread.currentThread().contextClassLoader = scriptClassLoader
-                KotlinJsr223DefaultScriptEngineFactory().scriptEngine
-            } finally {
-                Thread.currentThread().contextClassLoader = previousContextClassLoader
-            }
+            val scriptClassLoader = URLClassLoader(urls, ClassLoader.getPlatformClassLoader())
+            val manager = ScriptEngineManager(scriptClassLoader)
+            manager.getEngineByExtension("kts") ?: throw IllegalStateException("Kotlin script engine not found")
         } else {
+            logger.info("Using default script engine")
             KotlinJsr223DefaultScriptEngineFactory().scriptEngine
         }
 
         currentRegistry.clear()
         Files.newBufferedReader(dslFilePath).use { reader ->
             logger.info("Loading $dslFilePath")
-            // Switch context to the same classloader used to create the engine while evaluating
-            if (!scriptClasspath.isNullOrBlank()) {
-                val urls = scriptClasspath.split(File.pathSeparatorChar)
-                    .filter { it.isNotBlank() }
-                    .map { File(it).toURI().toURL() }
-                    .toTypedArray()
-                val scriptClassLoader = URLClassLoader(urls, previousContextClassLoader)
-                val oldCl = Thread.currentThread().contextClassLoader
-                try {
-                    Thread.currentThread().contextClassLoader = scriptClassLoader
-                    scriptEngine.eval(reader)
-                } finally {
-                    Thread.currentThread().contextClassLoader = oldCl
-                }
-            } else {
-                scriptEngine.eval(reader)
-            }
+            scriptEngine.eval(reader)
         }
         return ArrayList(currentRegistry)
     }
