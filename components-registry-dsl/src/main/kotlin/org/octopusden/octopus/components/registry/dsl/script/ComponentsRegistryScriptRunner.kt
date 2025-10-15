@@ -3,14 +3,10 @@ package org.octopusden.octopus.components.registry.dsl.script
 import org.jetbrains.kotlin.cli.common.environment.setIdeaIoUseFallback
 import org.octopusden.octopus.components.registry.api.Component
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes
-import java.io.File
-import java.net.URLClassLoader
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.logging.Logger
 import java.util.stream.Collectors
-import javax.script.ScriptEngine
-import javax.script.ScriptEngineManager
 import kotlin.script.experimental.jsr223.KotlinJsr223DefaultScriptEngineFactory
 
 object ComponentsRegistryScriptRunner {
@@ -48,26 +44,11 @@ object ComponentsRegistryScriptRunner {
         if (productTypeMap.isEmpty()) {
             products.forEach { k, v -> productTypeMap[v] = k }
         }
-        
-        val scriptClasspath = System.getProperty("kotlin.script.classpath")
-        val scriptEngine = if (!scriptClasspath.isNullOrBlank()) {
-            logger.info("Using kotlin.script.classpath: $scriptClasspath")
-            val urls = scriptClasspath.split(File.pathSeparatorChar)
-                .filter { it.isNotBlank() }
-                .map { File(it).toURI().toURL() }
-                .toTypedArray()
-            val scriptClassLoader = URLClassLoader(urls, Thread.currentThread().contextClassLoader)
-            val manager = ScriptEngineManager(scriptClassLoader)
-            manager.getEngineByExtension("kts") ?: throw IllegalStateException("Kotlin script engine not found")
-        } else {
-            logger.info("Using default script engine")
-            KotlinJsr223DefaultScriptEngineFactory().scriptEngine
-        }
-        
+        val engine = KotlinJsr223DefaultScriptEngineFactory().scriptEngine
         currentRegistry.clear()
         Files.newBufferedReader(dslFilePath).use { reader ->
             logger.info("Loading $dslFilePath")
-            scriptEngine.eval(reader)
+            engine.eval(reader)
         }
         return ArrayList(currentRegistry)
     }
