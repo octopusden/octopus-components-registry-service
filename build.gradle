@@ -125,6 +125,7 @@ configure(subprojects) {
     dependencies {
         api "org.jetbrains.kotlin:kotlin-stdlib"
         implementation "org.jetbrains.kotlin:kotlin-reflect"
+        implementation platform("org.jetbrains.kotlin:kotlin-bom:${project['kotlin.version']}")
         implementation platform("com.fasterxml.jackson:jackson-bom:${project['jackson.version']}")
         testImplementation enforcedPlatform("org.junit:junit-bom:${project.'junit-jupiter.version'}")
         testImplementation "org.jetbrains.kotlin:kotlin-test-junit5"
