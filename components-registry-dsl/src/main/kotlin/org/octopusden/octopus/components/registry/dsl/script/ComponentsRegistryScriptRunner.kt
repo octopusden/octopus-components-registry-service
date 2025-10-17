@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.dsl.script
 
+import javax.script.ScriptEngineManager
 import org.jetbrains.kotlin.cli.common.environment.setIdeaIoUseFallback
 import org.octopusden.octopus.components.registry.api.Component
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes
@@ -44,7 +45,15 @@ object ComponentsRegistryScriptRunner {
         if (productTypeMap.isEmpty()) {
             products.forEach { k, v -> productTypeMap[v] = k }
         }
-        val engine = KotlinJsr223DefaultScriptEngineFactory().scriptEngine
+        val engine = try {
+            KotlinJsr223DefaultScriptEngineFactory().scriptEngine
+        } catch (e: Exception) {
+            logger.warning("Unable to get default kotlin script engine, fallback to ScriptEngineManager")
+            val manager = ScriptEngineManager(ComponentsRegistryScriptRunner::class.java.classLoader)
+            manager.getEngineByExtension("kts")
+                ?: manager.getEngineByName("kotlin")
+                ?: throw IllegalStateException("No script engine found", e)
+        }
         currentRegistry.clear()
         Files.newBufferedReader(dslFilePath).use { reader ->
             logger.info("Loading $dslFilePath")
