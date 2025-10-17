@@ -5,7 +5,9 @@ plugins {
 dependencies {
     testFixturesImplementation(project(":components-registry-service-core"))
     testFixturesImplementation(project(":component-resolver-core"))
+
     testFixturesImplementation("com.fasterxml.jackson.core:jackson-databind:${project.properties["jackson.version"]}")
+
     testFixturesImplementation(platform("org.junit:junit-bom:${project.properties["junit-jupiter.version"]}"))
     testFixturesImplementation("org.junit.jupiter:junit-jupiter-api")
     testFixturesImplementation("org.junit.jupiter:junit-jupiter-engine")

@@ -29,7 +29,7 @@ dependencies {
     implementation 'io.micrometer:micrometer-registry-prometheus:1.2.1'
     implementation "io.github.microutils:kotlin-logging:1.6.22"
 
-    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:${project.properties["springdoc.version"]}")
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:${project.properties["openapi.version"]}")
 
     implementation("org.eclipse.jgit:org.eclipse.jgit:5.13.0.202109080827-r")
 
