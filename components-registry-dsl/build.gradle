@@ -12,8 +12,11 @@ dependencies {
     api "com.fasterxml.jackson.module:jackson-module-kotlin"
 
     implementation "org.jetbrains.kotlin:kotlin-stdlib:${project.properties["kotlin.version"]}"
+    implementation "org.jetbrains.kotlin:kotlin-main-kts:${project.properties["kotlin.version"]}"
     implementation "org.jetbrains.kotlin:kotlin-scripting-jsr223:${project.properties["kotlin.version"]}"
     implementation "org.jetbrains.kotlin:kotlin-scripting-common:${project.properties["kotlin.version"]}"
+    implementation "org.jetbrains.kotlin:kotlin-scripting-jvm:${project.properties["kotlin.version"]}"
+    implementation "org.jetbrains.kotlin:kotlin-scripting-jvm-host:${project.properties["kotlin.version"]}"
     implementation "org.jetbrains.kotlin:kotlin-scripting-compiler-embeddable:${project.properties["kotlin.version"]}"
     api "org.jetbrains.kotlin:kotlin-compiler-embeddable:${project.properties["kotlin.version"]}"
     implementation "org.jetbrains.kotlin:kotlin-reflect:${project.properties["kotlin.version"]}"

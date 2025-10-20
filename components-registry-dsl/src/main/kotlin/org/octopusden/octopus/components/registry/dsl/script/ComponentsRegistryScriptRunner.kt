@@ -1,6 +1,5 @@
 package org.octopusden.octopus.components.registry.dsl.script
 
-import javax.script.ScriptEngineManager
 import org.jetbrains.kotlin.cli.common.environment.setIdeaIoUseFallback
 import org.octopusden.octopus.components.registry.api.Component
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes
@@ -19,8 +18,18 @@ object ComponentsRegistryScriptRunner {
         setIdeaIoUseFallback()
         if (System.getProperty("kotlin.script.classpath").isNullOrEmpty()) {
             logger.info("cr.dsl.class.path = ${System.getProperty("cr.dsl.class.path")}")
-            logger.info("Setting kotlin.script.classpath= ${System.getProperty("cr.dsl.class.path", System.getProperty("java.class.path"))}")
-            System.setProperty("kotlin.script.classpath", System.getProperty("cr.dsl.class.path", System.getProperty("java.class.path")))
+            logger.info(
+                "Setting kotlin.script.classpath= ${
+                    System.getProperty(
+                        "cr.dsl.class.path",
+                        System.getProperty("java.class.path")
+                    )
+                }"
+            )
+            System.setProperty(
+                "kotlin.script.classpath",
+                System.getProperty("cr.dsl.class.path", System.getProperty("java.class.path"))
+            )
         }
     }
 
@@ -49,10 +58,7 @@ object ComponentsRegistryScriptRunner {
             KotlinJsr223DefaultScriptEngineFactory().scriptEngine
         } catch (e: Exception) {
             logger.warning("Unable to get default kotlin script engine, fallback to ScriptEngineManager")
-            val manager = ScriptEngineManager(ComponentsRegistryScriptRunner::class.java.classLoader)
-            manager.getEngineByExtension("kts")
-                ?: manager.getEngineByName("kotlin")
-                ?: throw IllegalStateException("No script engine found", e)
+            LocalKotlinEngineFactory().scriptEngine
         }
         currentRegistry.clear()
         Files.newBufferedReader(dslFilePath).use { reader ->
@@ -75,5 +81,5 @@ object ComponentsRegistryScriptRunner {
         } ?: throw IllegalArgumentException("Unknown product type $type")
 
     fun getCurrentRegistry() = currentRegistry
-    fun getProductTypeMap()  = productTypeMap
+    fun getProductTypeMap() = productTypeMap
 }
