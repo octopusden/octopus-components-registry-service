@@ -122,6 +122,12 @@ configure(subprojects) {
     apply plugin: 'org.jetbrains.kotlin.jvm'
     apply plugin: 'maven-publish'
 
+    configurations.matching { cfg ->
+        cfg?.name?.toLowerCase()?.contains('test')
+    }.all { cfg ->
+        cfg.exclude group: 'org.jetbrains.kotlin', module: 'kotlin-main-kts'
+    }
+
     dependencies {
         api "org.jetbrains.kotlin:kotlin-stdlib"
         implementation "org.jetbrains.kotlin:kotlin-reflect"
