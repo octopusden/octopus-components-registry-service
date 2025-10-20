@@ -45,6 +45,19 @@ object ComponentsRegistryScriptRunner {
 
     fun loadDSLFile(dslFilePath: Path, products: Map<ProductTypes, String>): Collection<Component> {
         logger.info("loadDSLFile $dslFilePath")
+
+        val cl = Thread.currentThread().contextClassLoader
+        logger.info("Context classloader = $cl")
+        logger.info("Classloader URLs:")
+
+        (cl as? java.net.URLClassLoader)?.urLs?.forEach { logger.info(" -> $it") }
+        try {
+            cl.loadClass("org.jetbrains.kotlin.mainKts.MainKtsScript")
+            logger.info("org.jetbrains.kotlin.mainKts.MainKtsScript доступен в ClassLoader-е!")
+        } catch (e: ClassNotFoundException) {
+            logger.warning("org.jetbrains.kotlin.mainKts.MainKtsScript не найден в $cl")
+        }
+
         if (productTypeMap.isEmpty()) {
             products.forEach { k, v -> productTypeMap[v] = k }
         }
