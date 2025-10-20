@@ -19,6 +19,7 @@ compileTestKotlin {
 configurations {
     [testCompileClasspath, testRuntimeClasspath].each { cfg ->
         cfg?.attributes?.attribute(org.gradle.api.attributes.java.TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE, 21)
+        cfg?.exclude group: 'org.jetbrains.kotlin', module: 'kotlin-main-kts'
     }
 }
 
@@ -32,14 +33,18 @@ dependencies {
     implementation("io.github.openfeign:feign-slf4j")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
 
-    testImplementation project(":components-registry-service-server")
+    testImplementation(project(":components-registry-service-server")) {
+        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-main-kts'
+    }
     testImplementation testFixtures(project(":test-common"))
-    testImplementation "org.octopusden.octopus.infrastructure:components-registry-service-server:${project.version}"
+    testImplementation("org.octopusden.octopus.infrastructure:components-registry-service-server:${project.version}") {
+        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-main-kts'
+    }
     testImplementation platform("org.springframework.boot:spring-boot-dependencies:${project['spring-boot.version']}")
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
 
-    testImplementation group: 'org.assertj', name: 'assertj-core', version: '3.21.0'
-    testImplementation group: 'ch.qos.logback', name: 'logback-classic', version: '1.2.7'
+    testImplementation("org.assertj:assertj-core:3.21.0")
+    testImplementation("ch.qos.logback:logback-classic:1.2.7")
 }
 
 bootJar {
