@@ -16,20 +16,14 @@ object ComponentsRegistryScriptRunner {
 
     init {
         setIdeaIoUseFallback()
-        if (System.getProperty("kotlin.script.classpath").isNullOrEmpty()) {
-            logger.info("cr.dsl.class.path = ${System.getProperty("cr.dsl.class.path")}")
-            logger.info(
-                "Setting kotlin.script.classpath= ${
-                    System.getProperty(
-                        "cr.dsl.class.path",
-                        System.getProperty("java.class.path")
-                    )
-                }"
-            )
-            System.setProperty(
-                "kotlin.script.classpath",
-                System.getProperty("cr.dsl.class.path", System.getProperty("java.class.path"))
-            )
+        val existing = System.getProperty("kotlin.script.classpath")
+        logger.info("kotlin.script.classpath at init = $existing")
+        if (existing.isNullOrEmpty()) {
+            val custom = System.getProperty("cr.dsl.class.path", System.getProperty("java.class.path"))
+            System.setProperty("kotlin.script.classpath", custom)
+            logger.info("Setting kotlin.script.classpath manually = $custom")
+        } else {
+            logger.info("Using existing kotlin.script.classpath = $existing")
         }
     }
 
@@ -55,10 +49,15 @@ object ComponentsRegistryScriptRunner {
             products.forEach { k, v -> productTypeMap[v] = k }
         }
         val engine = try {
-            KotlinJsr223DefaultScriptEngineFactory().scriptEngine
-        } catch (e: Exception) {
-            logger.warning("Unable to get default kotlin script engine, fallback to ScriptEngineManager")
-            LocalKotlinEngineFactory().scriptEngine
+            logger.info("Trying KotlinJsr223DefaultScriptEngineFactory...")
+            KotlinJsr223DefaultScriptEngineFactory().scriptEngine.also {
+                logger.info("Using KotlinJsr223DefaultScriptEngineFactory")
+            }
+        } catch (e: Throwable) {
+            logger.warning("Default engine failed: ${e.message}, switching to LocalKotlinEngineFactory")
+            LocalKotlinEngineFactory().scriptEngine.also {
+                logger.info("Using LocalKotlinEngineFactory")
+            }
         }
         currentRegistry.clear()
         Files.newBufferedReader(dslFilePath).use { reader ->

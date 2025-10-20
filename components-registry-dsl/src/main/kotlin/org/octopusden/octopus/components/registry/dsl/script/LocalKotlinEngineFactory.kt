@@ -37,6 +37,7 @@ class LocalKotlinEngineFactory : ScriptEngineFactory {
 
     override fun getScriptEngine(): ScriptEngine {
         setIdeaIoUseFallback()
+        println("[LocalKotlinEngineFactory] Initializing KotlinJsr223MainKtsScriptEngineFactory")
         return KotlinJsr223MainKtsScriptEngineFactory().getScriptEngine()
     }
 }
