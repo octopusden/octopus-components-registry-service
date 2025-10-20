@@ -46,31 +46,30 @@ object ComponentsRegistryScriptRunner {
     fun loadDSLFile(dslFilePath: Path, products: Map<ProductTypes, String>): Collection<Component> {
         logger.info("loadDSLFile $dslFilePath")
 
-        val cl = Thread.currentThread().contextClassLoader
-        logger.info("Context classloader = $cl")
-        logger.info("Classloader URLs:")
-
-        (cl as? java.net.URLClassLoader)?.urLs?.forEach { logger.info(" -> $it") }
-        try {
-            cl.loadClass("org.jetbrains.kotlin.mainKts.MainKtsScript")
-            logger.info("org.jetbrains.kotlin.mainKts.MainKtsScript доступен в ClassLoader-е!")
-        } catch (e: ClassNotFoundException) {
-            logger.warning("org.jetbrains.kotlin.mainKts.MainKtsScript не найден в $cl")
-        }
-
         if (productTypeMap.isEmpty()) {
             products.forEach { k, v -> productTypeMap[v] = k }
         }
         val engine = try {
+            val currentCl = Thread.currentThread().contextClassLoader
+            logger.info("Current context classloader = $currentCl")
+
+            val resource = currentCl.getResource("org/jetbrains/kotlin/mainKts/MainKtsScript.class")
+            logger.info("MainKtsScript resource = $resource")
+
+            if (resource == null) {
+                val properCl = this::class.java.classLoader
+                logger.info("Switching context classloader to $properCl")
+                Thread.currentThread().contextClassLoader = properCl
+            }
+
             logger.info("Trying KotlinJsr223DefaultScriptEngineFactory...")
             KotlinJsr223DefaultScriptEngineFactory().scriptEngine.also {
                 logger.info("Using KotlinJsr223DefaultScriptEngineFactory")
             }
         } catch (e: Throwable) {
-            logger.warning("Default engine failed: ${e.message}, switching to LocalKotlinEngineFactory")
-            LocalKotlinEngineFactory().scriptEngine.also {
-                logger.info("Using LocalKotlinEngineFactory")
-            }
+            logger.warning("Default engine failed: ${e::class.java.simpleName}: ${e.message}, switching to LocalKotlinEngineFactory")
+            e.printStackTrace()
+            LocalKotlinEngineFactory().scriptEngine
         }
         currentRegistry.clear()
         Files.newBufferedReader(dslFilePath).use { reader ->
