@@ -79,7 +79,7 @@ object ComponentsRegistryScriptRunner {
             }
             logger.info("Successfully loaded DSL from $dslFilePath")
         } catch (e: Throwable) {
-            logger.severe("DSL evaluation failed for $dslFilePath: ${e::class.java.simpleName}: ${evalEx.message}")
+            logger.severe("DSL evaluation failed for $dslFilePath: ${e::class.java.simpleName}: ${e.message}")
             e.printStackTrace()
             throw e
         }
