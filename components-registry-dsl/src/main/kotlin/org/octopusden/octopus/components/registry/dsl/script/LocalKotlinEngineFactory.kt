@@ -4,6 +4,7 @@ import javax.script.ScriptEngine
 import javax.script.ScriptEngineFactory
 import org.jetbrains.kotlin.cli.common.environment.setIdeaIoUseFallback
 import org.jetbrains.kotlin.mainKts.jsr223.KotlinJsr223MainKtsScriptEngineFactory
+import java.util.logging.Logger
 
 class LocalKotlinEngineFactory : ScriptEngineFactory {
     override fun getEngineName(): String? = "kotlin-local"
@@ -38,6 +39,18 @@ class LocalKotlinEngineFactory : ScriptEngineFactory {
     override fun getScriptEngine(): ScriptEngine {
         setIdeaIoUseFallback()
         println("[LocalKotlinEngineFactory] Initializing KotlinJsr223MainKtsScriptEngineFactory")
+        logger.info("kotlin.script.classpath one more time = ${System.getProperty("kotlin.script.classpath")}")
+
+        val currentCl = Thread.currentThread().contextClassLoader
+        logger.info("Current context classloader = $currentCl")
+
+        val resource = currentCl.getResource("org/jetbrains/kotlin/mainKts/MainKtsScript.class")
+        logger.info("MainKtsScript resource = $resource")
+
         return KotlinJsr223MainKtsScriptEngineFactory().getScriptEngine()
+    }
+
+    companion object {
+        val logger = Logger.getLogger(ComponentsRegistryScriptRunner::class.java.canonicalName)
     }
 }
