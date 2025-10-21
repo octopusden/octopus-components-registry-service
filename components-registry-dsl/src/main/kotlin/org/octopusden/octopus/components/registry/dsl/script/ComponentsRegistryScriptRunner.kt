@@ -72,9 +72,16 @@ object ComponentsRegistryScriptRunner {
             LocalKotlinEngineFactory().scriptEngine
         }
         currentRegistry.clear()
-        Files.newBufferedReader(dslFilePath).use { reader ->
-            logger.info("Loading $dslFilePath")
-            engine.eval(reader)
+        try {
+            Files.newBufferedReader(dslFilePath).use { reader ->
+                logger.info("Loading $dslFilePath")
+                engine.eval(reader)
+            }
+            logger.info("Successfully loaded DSL from $dslFilePath")
+        } catch (e: Throwable) {
+            logger.severe("DSL evaluation failed for $dslFilePath: ${e::class.java.simpleName}: ${evalEx.message}")
+            e.printStackTrace()
+            throw e
         }
         return ArrayList(currentRegistry)
     }
