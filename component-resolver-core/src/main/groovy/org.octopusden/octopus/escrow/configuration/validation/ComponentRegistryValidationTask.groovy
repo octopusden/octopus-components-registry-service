@@ -103,10 +103,12 @@ class ComponentRegistryValidationTask extends DefaultTask {
                             def componentOwner = moduleConfiguration.componentOwner
                             def releaseManager = moduleConfiguration.releaseManager
                             def securityChampions = moduleConfiguration.securityChampion
+                            def copyright = moduleConfiguration.copyright
                             getLogger().info("Add to employee validation '$componentName'," +
                                     " componentOwner '$componentOwner'," +
                                     " releaseManager '$releaseManager'," +
                                     " securityChampions '$securityChampions'," +
+                                    " copyright '$copyright'," +
                                     " displayName: '$moduleConfiguration.componentDisplayName'")
 
                             ownerComponents.computeIfAbsent(componentOwner, { _ -> new HashSet<>() })

@@ -27,6 +27,7 @@ import feign.Headers
 import feign.Param
 import feign.QueryMap
 import feign.RequestLine
+import feign.Response
 import org.octopusden.octopus.components.registry.core.dto.ComponentImage
 import org.octopusden.octopus.components.registry.core.dto.Image
 
@@ -134,4 +135,8 @@ interface ComponentsRegistryServiceClient {
     @RequestLine("POST rest/api/2/components/findByArtifacts")
     @Headers("Content-Type: application/json")
     fun findComponentsByArtifacts(artifacts: Collection<ArtifactDependency>): Collection<VersionedComponent>
+
+    @RequestLine("GET rest/api/3/components/{componentKey}/copyright")
+    @Headers("Content-Type: application/octet-stream")
+    fun getCopyrightByComponent(@Param componentKey: String): Response
 }

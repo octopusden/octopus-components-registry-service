@@ -19,6 +19,7 @@ import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRange
 import org.octopusden.releng.versions.VersionRangeFactory
 
+import java.nio.file.Paths
 import java.util.function.BinaryOperator
 import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
@@ -107,6 +108,7 @@ class EscrowConfigValidator {
                 validateReleasesInDefaultBranch(moduleConfig, componentName)
                 validateSolution(moduleConfig, componentName)
                 validateBuildConfigurationTools(moduleConfig)
+                validateCopyright(moduleConfig, componentName)
             }
         }
         if (!hasErrors()) {
@@ -166,6 +168,9 @@ class EscrowConfigValidator {
             }
             if (StringUtils.isBlank(moduleConfig.releaseManager)) {
                 registerError("releaseManager is not set in '$component'")
+            }
+            if (StringUtils.isBlank(moduleConfig.copyright)) {
+                registerError("copyright is not set in '$component'")
             }
             def securityChampions = moduleConfig.securityChampion
             if (StringUtils.isNotBlank(securityChampions)) {
@@ -499,6 +504,17 @@ class EscrowConfigValidator {
             }
             if (tool.getTargetLocation() == null) {
                 registerError("tool targetLocation is not specified in '$toolName'")
+            }
+        }
+    }
+
+    def validateCopyright(EscrowModuleConfig moduleConfig, String component) {
+        def copyright = moduleConfig.copyright
+        if(copyright != null) {
+            def copyrightUrl = getClass().getClassLoader().getResource(moduleConfig.copyright)
+            def copyrightFile = Paths.get(Objects.requireNonNull(copyrightUrl).toURI()).toFile()
+            if (!copyrightFile.exists()) {
+                registerError("Copyright file '${copyrightFile.name}' sepified in '$component' is not exists")
             }
         }
     }

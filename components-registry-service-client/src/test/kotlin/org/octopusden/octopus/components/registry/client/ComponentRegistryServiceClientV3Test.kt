@@ -10,6 +10,7 @@ import org.octopusden.octopus.components.registry.test.BaseComponentsRegistrySer
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.parallel.ResourceLock
@@ -20,6 +21,7 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.junit.jupiter.SpringExtension
+import java.nio.charset.StandardCharsets
 import java.util.stream.Stream
 
 /**
@@ -27,7 +29,10 @@ import java.util.stream.Stream
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @ExtendWith(SpringExtension::class)
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, classes = [ComponentRegistryServiceApplication::class])
+@SpringBootTest(
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    classes = [ComponentRegistryServiceApplication::class]
+)
 @ActiveProfiles("v3", "test")
 @ResourceLock(value = "SYSTEM_PROPERTIES")
 class ComponentRegistryServiceClientV3Test {
@@ -80,7 +85,27 @@ class ComponentRegistryServiceClientV3Test {
         componentKey: String,
         expectedAutoUpdateValue: Boolean?
     ) {
-        assertThat(componentsRegistryClient.getComponents().find { it.component.id == componentKey }!!.variants.values.first().build?.dependencies?.autoUpdate)?.isEqualTo(expectedAutoUpdateValue)
+        assertThat(
+            componentsRegistryClient.getComponents()
+                .find { it.component.id == componentKey }!!.variants.values.first().build?.dependencies?.autoUpdate
+        )?.isEqualTo(expectedAutoUpdateValue)
+    }
+
+    @ParameterizedTest
+    @MethodSource("componentsCopyright")
+    @DisplayName("Test successful downloading copyright file specified in 'gradle-staging-plugin' component")
+    fun testCopyrightSuccessfullyDownloaded(
+        componentKey: String,
+        expectedCopyrightText: String,
+    ) {
+        val response = componentsRegistryClient.getCopyrightByComponent(componentKey)
+        val body = response.body()
+        val actualCopyrightText = body.asInputStream().use {
+            it.reader(StandardCharsets.UTF_8).readText()
+        }
+        println("Actual copyright text: $actualCopyrightText")
+        println("Expected copyright text: $expectedCopyrightText")
+        assertThat(actualCopyrightText).isEqualTo(expectedCopyrightText)
     }
 
     companion object {
@@ -117,6 +142,14 @@ class ComponentRegistryServiceClientV3Test {
             Arguments.of(
                 "SMComponent",
                 true
+            )
+        )
+
+        @JvmStatic
+        fun componentsCopyright(): Stream<Arguments> = Stream.of(
+            Arguments.of(
+                "gradle-staging-plugin",
+                "Some copyright text"
             )
         )
     }

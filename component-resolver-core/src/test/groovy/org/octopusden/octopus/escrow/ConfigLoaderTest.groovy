@@ -17,6 +17,7 @@ import static org.octopusden.octopus.escrow.configuration.loader.ComponentRegist
 @TypeChecked
 class ConfigLoaderTest {
 
+    private static final String DEFAULT_COMPONENT_NAME = "Defaults"
     public static final String TEST_VALUE = "1234"
     public static final String TEST_PARAMETER = "pkgj_version"
     public static final VersionNames VERSION_NAMES = new VersionNames("serviceCBranch", "serviceC", "minorC")
@@ -58,7 +59,7 @@ class ConfigLoaderTest {
 
         assert configObject != null;
 
-        def defaults = configObject.get("Defaults")
+        def defaults = configObject.get(DEFAULT_COMPONENT_NAME)
         assert defaults.repositoryType == RepositoryType.MERCURIAL;
 
         def myModule = configObject.myModule
@@ -106,7 +107,7 @@ class ConfigLoaderTest {
             assert false: "EscrowException should be thrown"
         } catch (ComponentResolverException e) {
             assert e.getMessage().contains("Unknown attribute 'invalidAttributeCvs' in bcomponent->Cvs");
-            assert e.getMessage().contains("Unknown attribute 'invalidAttributeDefault' in Defaults section of escrow config file");
+            assert e.getMessage().contains("Unknown attribute 'invalidAttributeDefault' in $DEFAULT_COMPONENT_NAME section of escrow config file");
         }
     }
 
@@ -125,6 +126,29 @@ class ConfigLoaderTest {
         assert testProject.containsKey(TEST_VALUE)
         def moduleConfig = testProject.getProperty(TEST_VALUE) as ConfigObject;
         assert moduleConfig.getProperty("vcsUrl") != null;
+    }
+
+    @Test
+    void testLoadingConfigWithCopyright() {
+        def basePath = "copyright/default-copyright"
+        def copyrightField = "copyright"
+        def loader = fromClassPath("$basePath/Aggregator.groovy")
+
+        def config = loader.loadModuleConfig()
+
+        def defaultComponent = config.getProperty(DEFAULT_COMPONENT_NAME) as ConfigObject
+        assert defaultComponent.containsKey(copyrightField)
+        def defaultCopyrightValue = defaultComponent.getProperty(copyrightField) as String
+        assert defaultCopyrightValue == "copyrights/companyName1"
+
+        def componentWithCopyright = config.getProperty("component-with-copyright") as ConfigObject
+        assert componentWithCopyright.containsKey(copyrightField)
+        def modifiedCopyrightValue = componentWithCopyright.getProperty(copyrightField) as String
+        assert modifiedCopyrightValue != defaultCopyrightValue
+        assert modifiedCopyrightValue == "copyrights/companyName2"
+
+        def componentWithoutCopyright = config.getProperty("component-without-copyright") as ConfigObject
+        assert !componentWithoutCopyright.containsKey(copyrightField)
     }
 
     @Test

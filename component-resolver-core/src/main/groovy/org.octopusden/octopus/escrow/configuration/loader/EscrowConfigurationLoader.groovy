@@ -331,6 +331,7 @@ class EscrowConfigurationLoader {
                 final Boolean solution = loadSolution(moduleConfigSection, componentDefaultConfiguration.solution)
                 final String componentDisplayName = loadComponentDisplayName(moduleConfigSection, componentDefaultConfiguration.componentDisplayName)
                 final String octopusVersion = loadVersion(moduleConfigSection, componentDefaultConfiguration.octopusVersion, LoaderInheritanceType.VERSION_RANGE.octopusVersionInherit)
+                final String copyright = loadCopyright(moduleConfigSection, componentDefaultConfiguration.copyright)
 
                 def versionRange = parseVersionRange(moduleConfigItemName.toString(), moduleName)
                 def buildFileLocation = moduleConfigSection.containsKey("buildFilePath") ? moduleConfigSection.buildFilePath.toString() :
@@ -356,7 +357,8 @@ class EscrowConfigurationLoader {
                         deprecated: moduleConfigSection.containsKey("deprecated") ? moduleConfigSection.deprecated : componentDefaultConfiguration.deprecated,
                         vcsSettings: vcsSettingsWrapper.vcsSettings,
                         distribution: distributionConfiguration,
-                        octopusVersion: octopusVersion
+                        octopusVersion: octopusVersion,
+                        copyright: copyright
                 )
                 escrowModule.moduleConfigurations.add(escrowModuleConfiguration)
             }
@@ -381,7 +383,8 @@ class EscrowConfigurationLoader {
                         deprecated: componentDefaultConfiguration.deprecated,
                         vcsSettings: componentDefaultConfiguration.vcsSettingsWrapper.vcsSettings,
                         distribution: componentDefaultConfiguration.distribution,
-                        octopusVersion: componentDefaultConfiguration.octopusVersion
+                        octopusVersion: componentDefaultConfiguration.octopusVersion,
+                        copyright: componentDefaultConfiguration.copyright
                 )
                 escrowModule.moduleConfigurations.add(escrowModuleConfiguration)
             }
@@ -805,6 +808,15 @@ class EscrowConfigurationLoader {
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
+    private static String loadCopyright(ConfigObject parentConfigObject, String defaultCopyright) {
+        if(parentConfigObject.containsKey("copyright")) {
+            return parentConfigObject.get("copyright")
+        } else {
+            return defaultCopyright
+        }
+    }
+
+    @TypeChecked(TypeCheckingMode.SKIP)
     private static String loadVersion(ConfigObject parentConfigObject, String defaultComponentVersion, boolean inherit) {
         if (parentConfigObject.containsKey("octopusVersion")) {
             return parentConfigObject.get("octopusVersion")
@@ -1044,6 +1056,7 @@ class EscrowConfigurationLoader {
         final Boolean solution = loadSolution(componentConfigObject, defaultConfiguration.solution)
         final String parentComponent = loadComponentParentComponent(componentConfigObject, defaultConfiguration.parentComponent)
         final String octopusVersion = loadVersion(componentConfigObject, defaultConfiguration.octopusVersion, inheritanceType.octopusVersionInherit)
+        final String copyright = loadCopyright(componentConfigObject, defaultConfiguration.copyright)
 
         def defaultConfigParameters = new DefaultConfigParameters(buildSystem: buildSystem,
                 groupIdPattern: componentConfigObject.containsKey("groupId") ? componentConfigObject.groupId : defaultConfiguration?.groupIdPattern,
@@ -1063,7 +1076,8 @@ class EscrowConfigurationLoader {
                 deprecated: componentConfigObject.containsKey("deprecated") ? componentConfigObject.deprecated : false,
                 distribution: distribution,
                 vcsSettingsWrapper: vcsSettingsWrapper,
-                octopusVersion: octopusVersion
+                octopusVersion: octopusVersion,
+                copyright: copyright
         )
         defaultConfigParameters
     }
