@@ -75,8 +75,8 @@ Each Component must be configured in corresponding configuration file according 
         solution             = <true|false> // true for solution
 
         componentOwner   = "username of component's owner" // without domain part
-        releaseManager   = "list of usernames of component's release manager"
-        securityChampion = "list of usernames of component's security champion"
+        releaseManager   = "list of usernames of component's release manager" // comma separated (e.g "user1,user2")
+        securityChampion = "list of usernames of component's security champion" // comma separated (e.g "user1,user2")
 
         buildSystem = <build tool> // MAVEN, GRADLE etc. (default for all versions)
         system      = <{system_name}> // used for differentiation between different corporate policies (license control, etc)
