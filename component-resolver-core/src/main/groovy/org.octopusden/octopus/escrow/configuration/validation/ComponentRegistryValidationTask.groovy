@@ -101,11 +101,11 @@ class ComponentRegistryValidationTask extends DefaultTask {
                     .each { moduleConfiguration ->
                         if (!moduleConfiguration.componentDisplayName?.endsWith(ARCHIVED_SUFFIX)) {
                             def componentOwner = moduleConfiguration.componentOwner
-                            def releaseManager = moduleConfiguration.releaseManager
+                            def releaseManagers = moduleConfiguration.releaseManager
                             def securityChampions = moduleConfiguration.securityChampion
                             getLogger().info("Add to employee validation '$componentName'," +
                                     " componentOwner '$componentOwner'," +
-                                    " releaseManager '$releaseManager'," +
+                                    " releaseManager '$releaseManagers'," +
                                     " securityChampions '$securityChampions'," +
                                     " displayName: '$moduleConfiguration.componentDisplayName'")
 
@@ -118,10 +118,13 @@ class ComponentRegistryValidationTask extends DefaultTask {
                                                     .add(componentName)
                                         }
                                     }
-                            if (!StringUtils.isBlank(releaseManager)) {
-                                releaseManagerComponents.computeIfAbsent(releaseManager, { _ -> new HashSet<>() })
-                                        .add(componentName)
-                            }
+                            releaseManagers?.split(",")
+                                    ?.each { releaseManager ->
+                                        if (!StringUtils.isBlank(releaseManager)) {
+                                            releaseManagerComponents.computeIfAbsent(releaseManager, { _ -> new HashSet<>() })
+                                                    .add(componentName)
+                                        }
+                                    }
                         }
                     }
         }
