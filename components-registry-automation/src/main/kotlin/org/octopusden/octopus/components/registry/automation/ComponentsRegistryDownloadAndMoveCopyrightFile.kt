@@ -50,9 +50,9 @@ class ComponentsRegistryDownloadAndMoveCopyrightFile : CliktCommand(name = COMMA
                     logger.info("Successfully downloaded copyright file by path '$targetDir' " +
                             "with name '$DOWNLOADING_COPYRIGHT_FILE_NAME'")
                 }
-                else -> {
-                    logger.error("Failed to download and move '$componentName' copyright, reason: {}", inputStream)
-                }
+                else ->
+                    logger.error("Failed to download and move '$componentName' copyright, " +
+                            "reason: {}", inputStream)
             }
         } catch (e: Exception) {
             logger.error("Error while saving of component '{}', reason: '{}'", componentName, e.message)
