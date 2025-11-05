@@ -1,13 +1,8 @@
 components-registry:
   vcs:
     enabled: false
-  work-dir: C:\Gitea-projects\components-registry
+  work-dir: # envFile property
   version-name:
     service-branch: serviceCBranch
     service: serviceC
     minor: minorC
-  product-type:
-    c: CARDS
-    k: KERNEL
-    d: DWH
-    ddb: DWH_DB
