@@ -9,7 +9,10 @@ import org.octopusden.octopus.escrow.exceptions.EscrowConfigurationException
 
 import java.nio.file.Paths
 
-import static org.octopusden.octopus.escrow.TestConfigUtils.*
+import static org.octopusden.octopus.escrow.TestConfigUtils.PRODUCT_TYPES
+import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_GROUP_IDS
+import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_SYSTEMS
+import static org.octopusden.octopus.escrow.TestConfigUtils.VERSION_NAMES
 
 @TypeChecked
 class NonDefaultCopyrightTest {
@@ -17,7 +20,9 @@ class NonDefaultCopyrightTest {
     @Test
     void testEEComponentWithoutCopyrightThrowsExceptionCauseOfCopyrightAbsent() {
         def basePath = Paths.get(
-                DefaultCopyrightTest.class.getResource("/copyright-configs/non-default-copyright/Aggregator.groovy").toURI()
+                DefaultCopyrightTest.class.getResource(
+                        "/copyright-configs/non-default-copyright/Aggregator.groovy"
+                ).toURI()
         )
         def componentRegistryInfo = ComponentRegistryInfo.createFromFileSystem(
                 basePath.getParent().toString(),
@@ -35,7 +40,7 @@ class NonDefaultCopyrightTest {
                     SUPPORTED_SYSTEMS,
                     VERSION_NAMES
             ).loadFullConfiguration(Collections.emptyMap())
-            assert false: "test should fail due to copyright absent in ee component"
+            assert false: "Test should fail due to 'copyright' field absent in EE component"
         } catch (EscrowConfigurationException e) {
             assert e.message.contains("copyright is not set in 'ee_component_without_copyright'")
         }

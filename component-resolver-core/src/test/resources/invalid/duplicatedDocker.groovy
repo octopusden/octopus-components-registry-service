@@ -9,6 +9,8 @@ Defaults {
     solution = false
     repositoryType = CVS
     buildSystem = GRADLE
+    copyright = "copyrights/companyName1"
+
     tag = '$module-$version'
     artifactId = ANY_ARTIFACT
     jira {

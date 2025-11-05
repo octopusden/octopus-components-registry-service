@@ -10,7 +10,6 @@ import org.octopusden.octopus.components.registry.test.BaseComponentsRegistrySer
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.DisplayName
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.parallel.ResourceLock
@@ -85,10 +84,7 @@ class ComponentRegistryServiceClientV3Test {
         componentKey: String,
         expectedAutoUpdateValue: Boolean?
     ) {
-        assertThat(
-            componentsRegistryClient.getComponents()
-                .find { it.component.id == componentKey }!!.variants.values.first().build?.dependencies?.autoUpdate
-        )?.isEqualTo(expectedAutoUpdateValue)
+        assertThat(componentsRegistryClient.getComponents().find { it.component.id == componentKey }!!.variants.values.first().build?.dependencies?.autoUpdate)?.isEqualTo(expectedAutoUpdateValue)
     }
 
     @ParameterizedTest

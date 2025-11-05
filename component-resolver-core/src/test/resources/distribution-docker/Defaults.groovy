@@ -9,6 +9,8 @@ Defaults {
     buildSystem = MAVEN;
     tag = '$module-$version';
     artifactId = ANY_ARTIFACT
+    copyright = "copyrights/companyName1"
+
     jira {
         majorVersionFormat = '$major.$minor'
         releaseVersionFormat = '$major.$minor.$service'

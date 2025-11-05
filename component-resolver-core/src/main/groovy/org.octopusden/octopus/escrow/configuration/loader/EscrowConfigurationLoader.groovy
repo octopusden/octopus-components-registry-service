@@ -317,7 +317,6 @@ class EscrowConfigurationLoader {
                 def vcsSettingsWrapper = loadVCSSettings(moduleConfigSection, componentDefaultConfiguration, buildSystem)
                 boolean isHotfixEnabled = COMPONENT_HOTFIX_SUPPORT_RESOLVER.isHotFixEnabled(vcsSettingsWrapper.vcsSettings)
 
-
                 JiraComponent jiraConfiguration = loadJiraConfiguration(moduleConfigSection, componentDefaultConfiguration.jiraComponent, isHotfixEnabled)
                 BuildParameters buildConfiguration = loadBuildConfiguration(moduleConfigSection, componentDefaultConfiguration.buildParameters, tools)
                 Distribution distributionConfiguration = loadDistribution(moduleConfigSection, componentDefaultConfiguration.distribution)
@@ -358,7 +357,7 @@ class EscrowConfigurationLoader {
                         vcsSettings: vcsSettingsWrapper.vcsSettings,
                         distribution: distributionConfiguration,
                         octopusVersion: octopusVersion,
-                        copyright: copyright
+                        copyright: copyright,
                 )
                 escrowModule.moduleConfigurations.add(escrowModuleConfiguration)
             }
@@ -384,7 +383,7 @@ class EscrowConfigurationLoader {
                         vcsSettings: componentDefaultConfiguration.vcsSettingsWrapper.vcsSettings,
                         distribution: componentDefaultConfiguration.distribution,
                         octopusVersion: componentDefaultConfiguration.octopusVersion,
-                        copyright: componentDefaultConfiguration.copyright
+                        copyright: componentDefaultConfiguration.copyright,
                 )
                 escrowModule.moduleConfigurations.add(escrowModuleConfiguration)
             }
@@ -811,9 +810,8 @@ class EscrowConfigurationLoader {
     private static String loadCopyright(ConfigObject parentConfigObject, String defaultCopyright) {
         if(parentConfigObject.containsKey("copyright")) {
             return parentConfigObject.get("copyright")
-        } else {
-            return defaultCopyright
         }
+        return defaultCopyright
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)

@@ -10,6 +10,8 @@ Defaults {
     buildSystem = MAVEN;
     tag = '$module-$version';
     artifactId = ANY_ARTIFACT
+    copyright = "copyrights/companyName1"
+
     build {
         javaVersion = "1.8"
         mavenVersion = "3"

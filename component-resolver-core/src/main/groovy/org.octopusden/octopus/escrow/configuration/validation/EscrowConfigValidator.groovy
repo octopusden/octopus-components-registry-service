@@ -509,8 +509,7 @@ class EscrowConfigValidator {
     }
 
     def validateCopyright(EscrowModuleConfig moduleConfig, String component) {
-        def copyright = moduleConfig.copyright
-        if(copyright != null) {
+        if (!StringUtils.isBlank(moduleConfig.copyright)) {
             def copyrightUrl = getClass().getClassLoader().getResource(moduleConfig.copyright)
             def copyrightFile = Paths.get(Objects.requireNonNull(copyrightUrl).toURI()).toFile()
             if (!copyrightFile.exists()) {

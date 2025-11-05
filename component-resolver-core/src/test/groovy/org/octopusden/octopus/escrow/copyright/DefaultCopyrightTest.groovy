@@ -31,7 +31,9 @@ class DefaultCopyrightTest {
     @BeforeAll
     static void init() {
         def basePath = Paths.get(
-                DefaultCopyrightTest.class.getResource("/copyright-configs/default-copyright/Aggregator.groovy").toURI()
+                DefaultCopyrightTest.class.getResource(
+                        "/copyright-configs/default-copyright/Aggregator.groovy"
+                ).toURI()
         )
         def componentRegistryInfo = ComponentRegistryInfo.createFromFileSystem(
                 basePath.getParent().toString(),
