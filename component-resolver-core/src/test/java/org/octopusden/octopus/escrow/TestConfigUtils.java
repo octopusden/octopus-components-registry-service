@@ -31,6 +31,8 @@ public class TestConfigUtils {
     public static final VersionRangeFactory VERSION_RANGE_FACTORY = new VersionRangeFactory(VERSION_NAMES);
     public static final NumericVersionFactory NUMERIC_VERSION_FACTORY = new NumericVersionFactory(VERSION_NAMES);
 
+    public static final String COPYRIGHT_PATH = "src/test/resources/copyrights";
+
     public static EscrowConfiguration loadConfiguration(String config) {
         EscrowConfigurationLoader escrowConfigurationLoader = escrowConfigurationLoader(config);
         return escrowConfigurationLoader.loadFullConfiguration(null);
@@ -45,7 +47,8 @@ public class TestConfigUtils {
                 new ConfigLoader(resource, VERSION_NAMES, PRODUCT_TYPES),
                 SUPPORTED_GROUP_IDS,
                 SUPPORTED_SYSTEMS,
-                VERSION_NAMES
+                VERSION_NAMES,
+                COPYRIGHT_PATH
         );
     }
 }

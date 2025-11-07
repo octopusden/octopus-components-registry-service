@@ -6,7 +6,7 @@ import static org.octopusden.octopus.escrow.BuildSystem.*
     groupId = "org.octopusden.octopus.gradle.plugin"
     artifactId = "gradle-staging-plugin"
     buildSystem = GRADLE
-    copyright = "copyrights/companyName1"
+    copyright = "companyName1"
     "(,1.200),[2,)" {
         vcsSettings {
             vcsUrl = "ssh://git@github.com:OCTOPUSDEN/octopus-rm-gradle-plugin.git"

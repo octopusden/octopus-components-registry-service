@@ -7,10 +7,10 @@ Defaults {
     releasesInDefaultBranch = true
     solution = false
     repositoryType = MERCURIAL
-    buildSystem = MAVEN;
+    buildSystem = MAVEN
     tag = '$module-$version'
     artifactId = ANY_ARTIFACT
-    copyright = "copyrights/companyName1"
+    copyright = 'companyName1'
 
     jira {
         majorVersionFormat = '$major.$minor'

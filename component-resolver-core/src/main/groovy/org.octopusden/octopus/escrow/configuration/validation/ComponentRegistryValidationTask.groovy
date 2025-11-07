@@ -1,5 +1,6 @@
 package org.octopusden.octopus.escrow.configuration.validation
 
+import org.gradle.api.tasks.Optional
 import org.octopusden.employee.client.EmployeeServiceClient
 import org.octopusden.employee.client.common.exception.NotFoundException
 import org.octopusden.employee.client.impl.ClassicEmployeeServiceClient
@@ -58,7 +59,9 @@ class ComponentRegistryValidationTask extends DefaultTask {
     String productTypeD
     @Input
     String productTypeDDB
-
+    @Input
+    @Optional
+    String copyrightPath
 
     @Input
     boolean isEmployeeServiceEnabled() {
@@ -226,7 +229,8 @@ class ComponentRegistryValidationTask extends DefaultTask {
                 supportedSystems.split(",").collect {it -> it.trim()},
                 serviceBranch,
                 service,
-                minor
+                minor,
+                copyrightPath
         )
         config.escrowModules
     }
@@ -236,13 +240,15 @@ class ComponentRegistryValidationTask extends DefaultTask {
                                                  List<String> supportedSystems,
                                                  String serviceBranch,
                                                  String service,
-                                                 String minor
+                                                 String minor,
+                                                 String copyrightPath
     ) {
         EscrowConfigurationLoader escrowConfigurationLoader = new EscrowConfigurationLoader(
                 loader,
                 supportedGroupIds,
                 supportedSystems,
-                new VersionNames(serviceBranch, service, minor)
+                new VersionNames(serviceBranch, service, minor),
+                copyrightPath
         )
         def configuration = escrowConfigurationLoader.loadFullConfiguration(null)
         assert configuration != null

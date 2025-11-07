@@ -48,7 +48,8 @@ public class ConfigResolverConfig {
                 configLoader(configHelper, versionNames),
                 configHelper.supportedGroupIds(),
                 configHelper.supportedSystems(),
-                versionNames
+                versionNames,
+                configHelper.copyrightPath()
         );
     }
 

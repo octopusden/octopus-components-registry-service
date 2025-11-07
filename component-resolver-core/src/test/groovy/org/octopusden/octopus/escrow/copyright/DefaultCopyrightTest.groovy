@@ -1,8 +1,8 @@
 package org.octopusden.octopus.escrow.copyright
 
 import groovy.transform.TypeChecked
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.Test
 import org.octopusden.octopus.escrow.configuration.loader.ComponentRegistryInfo
 import org.octopusden.octopus.escrow.configuration.loader.ConfigLoader
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
@@ -11,6 +11,7 @@ import org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration
 import java.nio.file.Paths
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat
+import static org.octopusden.octopus.escrow.TestConfigUtils.COPYRIGHT_PATH
 import static org.octopusden.octopus.escrow.TestConfigUtils.PRODUCT_TYPES
 import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_GROUP_IDS
 import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_SYSTEMS
@@ -23,8 +24,8 @@ class DefaultCopyrightTest {
     private static EscrowConfiguration escrowConfiguration
     private static EscrowConfigurationLoader escrowConfigurationLoader
 
-    private static final COMPANY_NAME1_COPYRIGHT_PATH = "copyrights/companyName1"
-    private static final COMPANY_NAME2_COPYRIGHT_PATH = "copyrights/companyName2"
+    private static final COMPANY_NAME1_COPYRIGHT_PATH = "companyName1"
+    private static final COMPANY_NAME2_COPYRIGHT_PATH = "companyName2"
     private static final String DEFAULT_COMPONENT_NAME = "Defaults"
     private static final String COPYRIGHT_FIELD = "copyright"
 
@@ -49,7 +50,8 @@ class DefaultCopyrightTest {
                 configLoader,
                 SUPPORTED_GROUP_IDS,
                 SUPPORTED_SYSTEMS,
-                VERSION_NAMES
+                VERSION_NAMES,
+                COPYRIGHT_PATH
         )
 
         escrowConfiguration = escrowConfigurationLoader.loadFullConfiguration(Collections.emptyMap())

@@ -38,6 +38,7 @@ class EscrowConfigValidator {
     private List<String> supportedSystems
     private VersionNames versionNames
     private final List<String> validationExcludedComponents
+    private final String copyrightPath
 
     @TupleConstructor
     static class MavenArtifact {
@@ -76,13 +77,15 @@ class EscrowConfigValidator {
     EscrowConfigValidator(List<String> supportedGroupIds,
                           List<String> supportedSystems,
                           VersionNames versionNames,
-                          List<String> validationExcludedComponents) {
+                          List<String> validationExcludedComponents,
+                          String copyrightPath) {
         this.supportedGroupIds = supportedGroupIds
         this.supportedSystems = supportedSystems
         this.versionNames = versionNames
         this.validationExcludedComponents = (validationExcludedComponents != null) ?
                 Collections.unmodifiableList(validationExcludedComponents)
                 : Collections.emptyList() as List<String>
+        this.copyrightPath = copyrightPath
     }
 
     List<String> errors = new ArrayList<>()
@@ -175,8 +178,8 @@ class EscrowConfigValidator {
             } else {
                 registerError("releaseManager is not set in '$component'")
             }
-            if (StringUtils.isBlank(moduleConfig.copyright)) {
-                registerError("copyright is not set in '$component'")
+            if (copyrightPath != null && StringUtils.isBlank(moduleConfig.copyright)) {
+                 registerError("copyright is not set in '$component'")
             }
             def securityChampions = moduleConfig.securityChampion
             if (StringUtils.isNotBlank(securityChampions)) {
@@ -515,8 +518,8 @@ class EscrowConfigValidator {
 
     def validateCopyright(EscrowModuleConfig moduleConfig, String component) {
         if (!StringUtils.isBlank(moduleConfig.copyright)) {
-            def copyrightUrl = getClass().getClassLoader().getResource(moduleConfig.copyright)
-            def copyrightFile = Paths.get(Objects.requireNonNull(copyrightUrl).toURI()).toFile()
+            def copyright = moduleConfig.copyright
+            def copyrightFile = Paths.get(copyrightPath, copyright).toFile()
             if (!copyrightFile.exists()) {
                 registerError("Copyright file '${copyrightFile.name}' sepified in '$component' is not exists")
             }

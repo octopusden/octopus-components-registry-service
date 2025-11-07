@@ -9,6 +9,7 @@ import org.octopusden.octopus.escrow.exceptions.EscrowConfigurationException
 
 import java.nio.file.Paths
 
+import static org.octopusden.octopus.escrow.TestConfigUtils.COPYRIGHT_PATH
 import static org.octopusden.octopus.escrow.TestConfigUtils.PRODUCT_TYPES
 import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_GROUP_IDS
 import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_SYSTEMS
@@ -38,7 +39,8 @@ class NonDefaultCopyrightTest {
                     ),
                     SUPPORTED_GROUP_IDS,
                     SUPPORTED_SYSTEMS,
-                    VERSION_NAMES
+                    VERSION_NAMES,
+                    COPYRIGHT_PATH
             ).loadFullConfiguration(Collections.emptyMap())
             assert false: "Test should fail due to 'copyright' field absent in EE component"
         } catch (EscrowConfigurationException e) {

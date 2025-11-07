@@ -32,7 +32,7 @@ component_with_copyright {
     artifactId = "component_with_copyright"
     groupId = "org.octopusden.octopus.platform"
     tag = 'component_with_copyright-$version'
-    copyright = "copyrights/companyName2"
+    copyright = "companyName2"
 
     build {
         javaVersion = 1.8

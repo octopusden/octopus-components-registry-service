@@ -21,6 +21,7 @@ components-registry:
     service-branch: serviceCBranch
     service: serviceC
     minor: minorC
+  #  copyright-path: # envFile property
 
 supportedGroupIds: org.octopusden.octopus,io.bcomponent
 supportedSystems: NONE,CLASSIC,ALFA

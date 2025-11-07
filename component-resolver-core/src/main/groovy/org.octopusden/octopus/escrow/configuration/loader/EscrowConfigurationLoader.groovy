@@ -66,15 +66,18 @@ class EscrowConfigurationLoader {
     private final List<String> supportedGroupIds
     private final List<String> supportedSystems
     private final VersionNames versionNames
+    private final String copyrightPath
 
     EscrowConfigurationLoader(IConfigLoader configLoader,
                               List<String> supportedGroupIds,
                               List<String> supportedSystems,
-                              VersionNames versionNames) {
+                              VersionNames versionNames,
+                              String copyrightPath) {
         this.configLoader = configLoader
         this.supportedGroupIds = supportedGroupIds
         this.supportedSystems = supportedSystems
         this.versionNames = versionNames
+        this.copyrightPath = copyrightPath
     }
 
     VersionNames getVersionNames() {
@@ -203,7 +206,7 @@ class EscrowConfigurationLoader {
             component.subComponents.forEach { name, subComponent -> mergeGroovyAndDslSubComponent(subComponent, fullConfig)}
         }
 
-        EscrowConfigValidator validator = new EscrowConfigValidator(supportedGroupIds, supportedSystems, versionNames, configLoader.loadDistributionValidationExcludedComponents())
+        EscrowConfigValidator validator = new EscrowConfigValidator(supportedGroupIds, supportedSystems, versionNames, configLoader.loadDistributionValidationExcludedComponents(), this.copyrightPath)
         if (!ignoreUnknownAttributes) {
             validator.validateEscrowConfiguration(fullConfig)
             if (validator.hasErrors()) {

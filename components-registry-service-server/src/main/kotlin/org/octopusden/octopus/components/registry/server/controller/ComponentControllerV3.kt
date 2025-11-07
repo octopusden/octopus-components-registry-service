@@ -79,18 +79,20 @@ class ComponentControllerV3(
     fun getCopyrightByComponent(
         @PathVariable component: String,
     ): ResponseEntity<*> {
-        val baseUrl = componentsRegistryProperties.groovyPath
+        val copyrightPath = componentsRegistryProperties.copyrightPath
+            ?: return ResponseEntity.status(HttpStatus.NO_CONTENT)
+                .body("Copyright Path is not configured on server")
 
         val escrowModule = componentRegistryResolver.getComponentById(component)
             ?: return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body("Component '$component' not found")
 
-        val copyrightPath = escrowModule.moduleConfigurations[0]
+        val copyright = escrowModule.moduleConfigurations[0]
             ?.copyright
             ?: return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body("Component '$component' does not contains copyright")
 
-        val file = Paths.get(baseUrl,copyrightPath).toFile()
+        val file = Paths.get(copyrightPath, copyright).toFile()
         val resource = FileSystemResource(file)
 
         return ResponseEntity.ok()
