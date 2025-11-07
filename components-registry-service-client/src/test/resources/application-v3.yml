@@ -19,7 +19,7 @@ components-registry:
     k: PT_K
     d: PT_D
     ddb: PT_D_DB
-#  copyright-path: # envFile property
+  copyright-path: # envFile property
 
 pathToConfig: file://${components-registry.groovy-path}
 
