@@ -16,14 +16,10 @@ object ComponentsRegistryScriptRunner {
 
     init {
         setIdeaIoUseFallback()
-        val existing = System.getProperty("kotlin.script.classpath")
-        logger.info("kotlin.script.classpath at init = $existing")
-        if (existing.isNullOrEmpty()) {
+        // Set kotlin.script.classpath if not already set
+        if (System.getProperty("kotlin.script.classpath").isNullOrEmpty()) {
             val custom = System.getProperty("cr.dsl.class.path", System.getProperty("java.class.path"))
             System.setProperty("kotlin.script.classpath", custom)
-            logger.info("Setting kotlin.script.classpath manually = $custom")
-        } else {
-            logger.info("Using existing kotlin.script.classpath = $existing")
         }
     }
 
@@ -49,29 +45,17 @@ object ComponentsRegistryScriptRunner {
         if (productTypeMap.isEmpty()) {
             products.forEach { k, v -> productTypeMap[v] = k }
         }
+        
         val engine = try {
-            val currentCl = Thread.currentThread().contextClassLoader
-            logger.info("Current context classloader = $currentCl")
+            // Always switch to buildscript classloader where Kotlin scripting classes are loaded
+            val properCl = this::class.java.classLoader
+            Thread.currentThread().contextClassLoader = properCl
 
-            val resource = currentCl.getResource("org/jetbrains/kotlin/mainKts/MainKtsScript.class")
-            logger.info("MainKtsScript resource = $resource")
-
-            if (resource == null) {
-                val properCl = this::class.java.classLoader
-                logger.info("Switching context classloader to $properCl")
-                Thread.currentThread().contextClassLoader = properCl
-            }
-
-            logger.info("Trying KotlinJsr223DefaultScriptEngineFactory...")
-            KotlinJsr223DefaultScriptEngineFactory().scriptEngine.also {
-                logger.info("Using KotlinJsr223DefaultScriptEngineFactory")
-            }
+            KotlinJsr223DefaultScriptEngineFactory().scriptEngine
         } catch (e: Throwable) {
             logger.warning("Default engine failed: ${e::class.java.simpleName}: ${e.message}, switching to LocalKotlinEngineFactory")
             e.printStackTrace()
-            LocalKotlinEngineFactory().scriptEngine.also {
-                logger.info("Using KotlinJsr223DefaultScriptEngineFactory")
-            }
+            LocalKotlinEngineFactory().scriptEngine
         }
         currentRegistry.clear()
         try {
