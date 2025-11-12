@@ -86,11 +86,11 @@ class StandaloneValidator {
             }
             
             log.info("=" * 80)
-            log.info("✓ Validation completed successfully for ${escrowModules.size()} components")
+            log.info("Validation completed successfully for ${escrowModules.size()} components")
             System.exit(0)
             
         } catch (Exception e) {
-            log.error("✗ Validation failed", e)
+            log.error("Validation failed", e)
             System.exit(1)
         }
     }
