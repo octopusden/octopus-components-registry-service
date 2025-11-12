@@ -26,16 +26,27 @@ The improvement is split into two parts:
     componentOwner = "user1"
     groupId = "org.company.mycomponent"
     
+    // With majorVersion - pins to specific version line
     "(1,2)" {
         doc {
             component = "doc_mycomponent"
-            majorVersion = '$major.$minor'
+            majorVersion = '$major.$minor'  // Resolves to latest in this line
         }
     }
+    
+    // With explicit version line
     "(2,3)" {
         doc {
             component = "doc_mycomponent"
-            majorVersion = '2'
+            majorVersion = '2'  // Resolves to latest 2.x
+        }
+    }
+    
+    // Without majorVersion - uses latest available
+    "(3,)" {
+        doc {
+            component = "doc_mycomponent"
+            // Will resolve to absolutely latest version: e.g., 3.2.18
         }
     }
 }
@@ -54,16 +65,6 @@ The improvement is split into two parts:
 }
 ```
 
-TODO: To decide (simplifications):
-* majorVersion is optional
-* don't support verion ranges for doc section
-* majorVersion or lineVersion (preferred)?
-* check that there ara not multi linked doc components
-* для Doc компонетов обязательный distribution->GAV (+ validation GAV что там нет file entities)
-* supportedLanguages не нужны?
-* doc component - это компонент, в котрый в другом компоненте указан в секции doc
-
-
 **Support in REST API:**
    `GET /api/rest/v2/components/{name}/versions/{version}`
    `GET /api/rest/v2/components/{name}/versions/{version}/doc`
@@ -77,10 +78,33 @@ TODO: To decide (simplifications):
   "version": "2.5.123",
   "doc": {
     "component": "doc_mycomponent",
-    "majorVersion": "2.5"
+    "majorVersion": "2.5"  // Present if specified in config
   }
 }
 ```
+
+Or without majorVersion:
+```json
+{
+   ...
+  "component": "mycomponent",
+  "version": "3.1.45",
+  "doc": {
+    "component": "doc_mycomponent"
+    // majorVersion omitted - will resolve to latest
+  }
+}
+```
+
+**Doc section validation rules:**
+
+1. `component` field is **required** when `doc` section is present
+2. `majorVersion` field is **optional**
+3. If `majorVersion` is specified, it must be valid (literals or variables: `$major`, `$minor`, etc.)
+4. Referenced doc component must exist in registry
+5. Doc component must have `distribution.GAV` defined (artifact-based, no `file:` entities)
+6. Version ranges with `doc` sections must not overlap for the same component
+7. No circular dependencies (A→B→A)
 
 ### 1.2 Calculate Documentation Dependencies in Build
 
@@ -95,10 +119,18 @@ TODO: To decide (simplifications):
 **Example:**
 ```
 Component: mycomponent v2.5.123
-doc section: { componentKey = "doc_mycomponent", majorVersion = "2.5" }
+doc section: { component = "doc_mycomponent", majorVersion = "2.5" }
 
 Resolved dependency:
 DOC_DEPENDENCIES = doc_mycomponent:2.5.45  (latest released 2.5.x version)
+
+---
+
+Component: mycomponent v3.1.45
+doc section: { component = "doc_mycomponent" }  // no majorVersion
+
+Resolved dependency:
+DOC_DEPENDENCIES = doc_mycomponent:3.2.18  (latest released version overall)
 ```
 
 **Purpose:** This parameter will be passed to the standard dependency registration mechanism on the build (register-build).
@@ -329,6 +361,55 @@ solution-1.0.0-russian.zip
 
 ---
 
+## TODO Action Items
+
+1. **`majorVersion` is optional:**
+   - If **specified**: resolve to latest released version from that version line (e.g., `"2.5"` → `2.5.45`)
+   - If **not specified**: resolve to latest released version across all versions of doc component
+   - Example without majorVersion:
+     ```groovy
+     doc {
+         component = "doc_mycomponent"
+         // Will resolve to latest: doc_mycomponent:3.1.15
+     }
+     ```
+
+2. **No version ranges support for doc section:**
+   - Doc section can be defined per version range (like distribution/build), but the `majorVersion` field itself doesn't support range syntax
+   - Use version ranges at component level instead:
+     ```groovy
+     "(1,2)" {
+         doc { component = "doc_mycomponent"; majorVersion = "1" }
+     }
+     "(2,)" {
+         doc { component = "doc_mycomponent"; majorVersion = "2" }
+     }
+     ```
+
+3. **Use `majorVersion` (not `lineVersion`):**
+   - Keep consistent with existing `majorVersionFormat` terminology in jira section
+   - Rename would be confusing across the codebase
+
+4. **Validation: single doc component per version:**
+   - Ensure no overlapping version ranges with different doc components
+   - Validator checks that version ranges with doc sections don't create conflicts
+
+5. **Doc components must have `distribution.GAV`:**
+   - Required field for doc components
+   - GAV must be artifact-based (no `file:` entities allowed)
+   - Validation ensures GAV format is correct
+
+6. **`supportedLanguages` not needed in component config:**
+   - Language support is global configuration (`supportedDocLanguages`)
+   - Artifacts follow naming convention: `{artifactId}-{version}-{language}.zip`
+   - No per-component language restrictions
+
+7. **Doc component identification:**
+   - A component is a "doc component" if it's referenced in another component's `doc` section
+   - No explicit flag needed - determined by reference
+
+---
+
 ## Open Questions
 
 1. **Artifact naming convention:** Should we enforce strict naming for language-specific docs?
@@ -351,8 +432,3 @@ solution-1.0.0-russian.zip
 
 ---
 
-## Related Documents
-
-- [doc-components-requirements.md](doc-components-requirements.md) - Detailed requirements for `doc` section
-- [doc-components-architecture.md](doc-components-architecture.md) - Architecture design
-- [doc-components-implementation-examples.md](doc-components-implementation-examples.md) - Code examples
