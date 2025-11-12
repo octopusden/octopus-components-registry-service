@@ -87,12 +87,19 @@ class ComponentControllerV3(
             ?: return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body("Component '$component' not found")
 
-        val copyright = escrowModule.moduleConfigurations[0]
+        val copyright = escrowModule.moduleConfigurations
+            .firstOrNull()
             ?.copyright
             ?: return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body("Component '$component' does not contains copyright")
 
         val file = Paths.get(copyrightPath, copyright).toFile()
+
+        if(!file.exists() || !file.isFile) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body("Component '$component' copyright file not found")
+        }
+
         val resource = FileSystemResource(file)
 
         return ResponseEntity.ok()

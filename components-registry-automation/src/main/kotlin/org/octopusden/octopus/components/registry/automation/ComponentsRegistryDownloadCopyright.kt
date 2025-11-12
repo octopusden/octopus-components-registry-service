@@ -1,0 +1,88 @@
+package org.octopusden.octopus.components.registry.automation
+
+import com.github.ajalt.clikt.core.CliktCommand
+import com.github.ajalt.clikt.core.requireObject
+import com.github.ajalt.clikt.parameters.options.check
+import com.github.ajalt.clikt.parameters.options.convert
+import com.github.ajalt.clikt.parameters.options.option
+import com.github.ajalt.clikt.parameters.options.required
+import org.octopusden.octopus.components.registry.client.impl.ClassicComponentsRegistryServiceClient
+import org.slf4j.Logger
+import java.nio.file.Files
+import java.nio.file.Paths
+import java.nio.file.StandardCopyOption
+
+class ComponentsRegistryDownloadCopyright : CliktCommand(name = COMMAND) {
+    private val context by requireObject<MutableMap<String, Any>>()
+
+    private val componentName by option(COMPONENT_NAME, help = "Component name")
+        .convert { it.trim() }.required()
+        .check("$COMPONENT_NAME is empty") { it.isNotBlank() }
+
+    private val targetPath by option(TARGET_PATH, help = "Target path")
+        .convert { it.trim() }.required()
+        .check("$TARGET_PATH is empty") { it.isNotBlank() }
+
+    private val client by lazy {
+        context[ComponentsRegistryCommand.CLIENT] as ClassicComponentsRegistryServiceClient
+    }
+    private val logger by lazy {
+        context[ComponentsRegistryCommand.LOGGER] as Logger
+    }
+
+    override fun run() {
+        logger.info("Downloading '$componentName' copyright file")
+
+        val response = client.getCopyrightByComponent(componentName)
+        val body = response.body() ?: run {
+            logger.error(
+                "Failed to download '{}' copyright: empty response body, status={}",
+                componentName,
+                response.status()
+            )
+            return
+        }
+
+        body.asInputStream().use { inputStream ->
+            val responseStatus = response.status()
+
+            when (responseStatus) {
+                HTTP_STATUS_OK -> {
+                    val fullPath = Paths.get(targetPath, DEFAULT_COPYRIGHT_FILE_NAME)
+                    fullPath.parent?.let { Files.createDirectories(it) }
+
+                    Files.copy(
+                        inputStream,
+                        fullPath,
+                        StandardCopyOption.REPLACE_EXISTING
+                    )
+                    logger.info(
+                        "Successfully downloaded copyright file by path '{}' with name '{}'",
+                        targetPath,
+                        DEFAULT_COPYRIGHT_FILE_NAME
+                    )
+                }
+                else -> {
+                    val errorBody = inputStream.bufferedReader().readText()
+                    logger.error(
+                        "Failed to download '{}' copyright: status={}, body={}",
+                        componentName,
+                        responseStatus,
+                        errorBody
+                    )
+                }
+            }
+        }
+    }
+
+    companion object {
+        private const val COMMAND = "download-copyright"
+
+        private const val COMPONENT_NAME = "--component-name"
+        private const val TARGET_PATH = "--target-path"
+
+        private const val HTTP_STATUS_OK = 200
+
+        private const val DEFAULT_COPYRIGHT_FILE_NAME = "COPYRIGHT"
+    }
+}

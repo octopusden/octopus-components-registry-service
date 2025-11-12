@@ -21,7 +21,7 @@ class NonDefaultCopyrightTest {
     @Test
     void testEEComponentWithoutCopyrightThrowsExceptionCauseOfCopyrightAbsent() {
         def basePath = Paths.get(
-                DefaultCopyrightTest.class.getResource(
+                NonDefaultCopyrightTest.class.getResource(
                         "/copyright-configs/non-default-copyright/Aggregator.groovy"
                 ).toURI()
         )

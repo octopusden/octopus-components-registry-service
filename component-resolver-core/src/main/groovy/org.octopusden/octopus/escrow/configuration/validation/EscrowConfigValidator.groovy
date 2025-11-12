@@ -517,11 +517,14 @@ class EscrowConfigValidator {
     }
 
     def validateCopyright(EscrowModuleConfig moduleConfig, String component) {
-        if (!StringUtils.isBlank(moduleConfig.copyright)) {
+        if (!StringUtils.isBlank(copyrightPath)) {
             def copyright = moduleConfig.copyright
+            if(copyright == null || copyright.isBlank()) {
+                registerError("Copyright is not set in '$component'")
+            }
             def copyrightFile = Paths.get(copyrightPath, copyright).toFile()
             if (!copyrightFile.exists()) {
-                registerError("Copyright file '${copyrightFile.name}' sepified in '$component' is not exists")
+                registerError("Copyright file '${copyrightFile.name}' specified in '$component' is not exists")
             }
         }
     }

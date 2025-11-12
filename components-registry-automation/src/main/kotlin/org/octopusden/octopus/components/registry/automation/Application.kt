@@ -4,6 +4,6 @@ import com.github.ajalt.clikt.core.subcommands
 
 fun main(args: Array<String>) {
     ComponentsRegistryCommand().subcommands(
-        ComponentsRegistryDownloadAndMoveCopyrightFile()
+        ComponentsRegistryDownloadCopyright()
     ).main(args)
 }

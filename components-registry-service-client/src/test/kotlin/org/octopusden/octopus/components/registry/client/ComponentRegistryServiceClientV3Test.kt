@@ -95,12 +95,12 @@ class ComponentRegistryServiceClientV3Test {
         expectedCopyrightText: String,
     ) {
         val response = componentsRegistryClient.getCopyrightByComponent(componentKey)
+        assertThat(response.status()).isEqualTo(200)
         val body = response.body()
+        assertThat(body).isNotNull
         val actualCopyrightText = body.asInputStream().use {
             it.reader(StandardCharsets.UTF_8).readText()
         }
-        println("Actual copyright text: $actualCopyrightText")
-        println("Expected copyright text: $expectedCopyrightText")
         assertThat(actualCopyrightText).isEqualTo(expectedCopyrightText)
     }
 

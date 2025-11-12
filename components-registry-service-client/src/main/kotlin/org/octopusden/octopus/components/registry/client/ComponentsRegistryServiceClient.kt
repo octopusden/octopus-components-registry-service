@@ -138,5 +138,5 @@ interface ComponentsRegistryServiceClient {
 
     @RequestLine("GET rest/api/3/components/{componentKey}/copyright")
     @Headers("Content-Type: application/octet-stream")
-    fun getCopyrightByComponent(@Param componentKey: String): Response
+    fun getCopyrightByComponent(@Param("componentKey") componentKey: String): Response
 }
