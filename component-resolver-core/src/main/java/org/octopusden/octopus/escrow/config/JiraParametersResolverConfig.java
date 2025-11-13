@@ -66,7 +66,8 @@ public class JiraParametersResolverConfig {
         return new EscrowConfigurationLoader(configLoader,
                 configHelper.supportedGroupIds(),
                 configHelper.supportedSystems(),
-                versionNames
+                versionNames,
+                configHelper.copyrightPath()
         );
     }
 

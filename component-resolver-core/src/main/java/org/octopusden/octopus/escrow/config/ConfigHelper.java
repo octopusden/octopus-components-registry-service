@@ -26,6 +26,8 @@ public class ConfigHelper {
     private static final String PRODUCT_TYPE_D = "components-registry.product-type.d";
     private static final String PRODUCT_TYPE_D_DB = "components-registry.product-type.ddb";
 
+    private static final String COPYRIGHT_PATH = "components-registry.copyright-path";
+
     private final Environment environment;
 
     public ConfigHelper(Environment environment) {
@@ -79,4 +81,6 @@ public class ConfigHelper {
     public String minor() {
         return environment.getRequiredProperty(VERSION_NAME_MINOR);
     }
+
+    public String copyrightPath() { return environment.getProperty(COPYRIGHT_PATH); }
 }

@@ -1,4 +1,5 @@
 dependencies {
+    api platform("com.fasterxml.jackson:jackson-bom:${project.properties["jackson.version"]}")
     api "com.fasterxml.jackson.core:jackson-annotations"
     api "com.fasterxml.jackson.core:jackson-databind"
     testImplementation "com.fasterxml.jackson.datatype:jackson-datatype-jdk8"
