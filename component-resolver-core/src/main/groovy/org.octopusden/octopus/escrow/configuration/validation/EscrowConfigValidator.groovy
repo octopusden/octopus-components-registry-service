@@ -150,7 +150,7 @@ class EscrowConfigValidator {
      * @param component
      */
     private void validateDistributions(EscrowModuleConfig moduleConfig, String component) {
-        if(isExcludedComponent(component)) {
+        if (isExcludedComponent(component)) {
             return
         }
         def distributions = [
@@ -178,8 +178,8 @@ class EscrowConfigValidator {
             } else {
                 registerError("releaseManager is not set in '$component'")
             }
-            if (copyrightPath != null && StringUtils.isBlank(moduleConfig.copyright)) {
-                 registerError("copyright is not set in '$component'")
+            if (!StringUtils.isBlank(copyrightPath) && StringUtils.isBlank(moduleConfig.copyright)) {
+                registerError("copyright is not set in '$component'")
             }
             def securityChampions = moduleConfig.securityChampion
             if (StringUtils.isNotBlank(securityChampions)) {
@@ -517,15 +517,18 @@ class EscrowConfigValidator {
     }
 
     def validateCopyright(EscrowModuleConfig moduleConfig, String component) {
-        if (!StringUtils.isBlank(copyrightPath)) {
-            def copyright = moduleConfig.copyright
-            if(copyright == null || copyright.isBlank()) {
-                registerError("Copyright is not set in '$component'")
-            }
-            def copyrightFile = Paths.get(copyrightPath, copyright).toFile()
-            if (!copyrightFile.exists()) {
-                registerError("Copyright file '${copyrightFile.name}' specified in '$component' is not exists")
-            }
+        if (StringUtils.isBlank(copyrightPath)) {
+            return
+        }
+
+        def copyright = moduleConfig.copyright
+        if (StringUtils.isBlank(copyright)) {
+            return
+        }
+
+        def copyrightFile = Paths.get(copyrightPath, copyright).toFile()
+        if (!copyrightFile.exists()) {
+            registerError("Copyright file '${copyrightFile.name}' specified in '$component' is not exists")
         }
     }
 
