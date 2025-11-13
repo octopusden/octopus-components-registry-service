@@ -16,13 +16,13 @@ dependencies {
     implementation "org.gradle:gradle-base-services-groovy:4.2"
     api "org.yaml:snakeyaml:1.33"
 
-    implementation "org.jetbrains.kotlin:kotlin-main-kts:${project.properties["kotlin.version"]}"
-    implementation "org.jetbrains.kotlin:kotlin-scripting-jsr223:${project.properties["kotlin.version"]}"
-    implementation "org.jetbrains.kotlin:kotlin-scripting-jvm-host:${project.properties["kotlin.version"]}"
-    implementation "org.jetbrains.kotlin:kotlin-scripting-jvm:${project.properties["kotlin.version"]}"
-    implementation "org.jetbrains.kotlin:kotlin-scripting-common:${project.properties["kotlin.version"]}"
-    implementation "org.jetbrains.kotlin:kotlin-compiler-embeddable:${project.properties["kotlin.version"]}"
-    implementation "org.jetbrains.kotlin:kotlin-script-runtime:${project.properties["kotlin.version"]}"
+    api "org.jetbrains.kotlin:kotlin-main-kts:${project.properties["kotlin.version"]}"
+    api "org.jetbrains.kotlin:kotlin-scripting-jsr223:${project.properties["kotlin.version"]}"
+    api "org.jetbrains.kotlin:kotlin-scripting-jvm-host:${project.properties["kotlin.version"]}"
+    api "org.jetbrains.kotlin:kotlin-scripting-jvm:${project.properties["kotlin.version"]}"
+    api "org.jetbrains.kotlin:kotlin-scripting-common:${project.properties["kotlin.version"]}"
+    api "org.jetbrains.kotlin:kotlin-compiler-embeddable:${project.properties["kotlin.version"]}"
+    api "org.jetbrains.kotlin:kotlin-script-runtime:${project.properties["kotlin.version"]}"
 
     implementation "org.codehaus.groovy.modules.http-builder:http-builder:0.7.1"
     testImplementation "org.springframework:spring-test"
@@ -34,6 +34,6 @@ dependencies {
 sourceSets {
     main {
         java { srcDirs = [] }    // no source dirs for the java compiler
-        groovy { srcDirs = ["src/main/groovy", "src/main/java"] }  // compile   everything in src/ with groovy
+        groovy { srcDirs = ["src/main/groovy", "src/main/java"] }  // compile everything in src/ with groovy
     }
 }
