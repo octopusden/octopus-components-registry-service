@@ -19,7 +19,6 @@ The improvement is split into two parts:
 **Implementation:**
 
 
-
 **Example configuration:**
 ```groovy
 "mycomponent" {
@@ -102,13 +101,13 @@ Or without majorVersion:
 2. `majorVersion` field is **optional**
 3. If `majorVersion` is specified, it must be valid (literals or variables: `$major`, `$minor`, etc.)
 4. Referenced doc component must exist in registry
-5. Doc component must have `distribution.GAV` defined (artifact-based, no `file:` entities)
+5. Documentation component must have `distribution.GAV` defined (artifact-based, no `file:` entities)
 6. Version ranges with `doc` sections must not overlap for the same component
-7. No circular dependencies (A→B→A)
+7. Documentation component can't have reference on other documentation component (i.e. the following MainComponentA -> DocComponentA -> DocComponentB is restricted)
 
 ### 1.2 Calculate Documentation Dependencies in Build
 
-**Goal:** Automatically resolve and inject documentation dependencies into the build process.
+**Goal:** Automatically resolve and inject documentation dependencies into the build process on Compile&UT step
 
 **Component:** `CalculateReleaseManagementParameters` (SetDistributionMojo in releng)
 
@@ -135,31 +134,6 @@ DOC_DEPENDENCIES = doc_mycomponent:3.2.18  (latest released version overall)
 
 **Purpose:** This parameter will be passed to the standard dependency registration mechanism on the build (register-build).
 
-### 1.3 Add `supportedDocLanguages` Configuration
-
-**Goal:** Support multiple documentation languages in the registry.
-
-**Component:** ComponentRegistryService
-
-**Implementation:**
-- Add configuration parameter `supportedDocLanguages` (similar to `supportedGroupIds`)
-- Expose in REST API
-
-**Configuration example:**
-```yaml
-components-registry:
-  supportedDocLanguages: "russian,english,spanish"
-```
-
-**API endpoint:**
-```
-GET /api/rest/v2/configuration
-Response:
-{
-  "supportedGroupIds": [...],
-  "supportedDocLanguages": ["russian", "english", "spanish"]
-}
-```
 
 ### 1.4 DMS Upload Step for Documentation
 
@@ -178,32 +152,21 @@ Response:
 
 **Algorithm:**
 ```
-1. Get component documentation info from Components Registry API
-   GET /api/rest/v2/components/{name}/versions/{version}
-   
-2. Resolve documentation component version
-   doc_mycomponent:2.5.45
-   
-3. Query Artifactory for language-specific artifacts:
-   GET /api/search/artifact?name=mycomponent-docs-2.5.45-russian.zip&repos=...
-   GET /api/search/artifact?name=mycomponent-docs-2.5.45-english.zip&repos=...
-   GET /api/search/artifact?name=mycomponent-docs-2.5.45-spanish.zip&repos=...
-   
-4. For each found artifact:
-   - Download from Artifactory
-   - Upload to DMS with type=documentation, language=<lang>
+At the release of the main component:
+1. Get linked documentation component name via Components Registry Service API
+   GET /api/rest/v2/components/{name}/versions/{version}/doc
+
+
+2. Get Version of linked documentaiton component from Release Management Service API
+
+3. Get information on the artifacts to deployed (distribution->GAV section ) for documentation component via
+GET /api/rest/v2/components/{doc_component_name}/versions/{doc_component_version}/distribution
+
+
+4. For each specified artifact:
+   - Upload to DMS with type=documentation
 ```
 
-**DMS Artifact Metadata:**
-```json
-{
-  "component": "mycomponent",
-  "version": "2.5.123",
-  "type": "documentation",
-  "language": "russian",
-  "sourceArtifact": "mycomponent-docs-2.5.45-russian.zip"
-}
-```
 
 ### 1.5 Add Documentation Step to Release Template
 
@@ -218,9 +181,10 @@ Response:
 ```
 Build Steps:
   ...
+  - Register Release in JIRA
+  ...
   - Upload Release Artifacts
   - Upload Documentation (from step 1.4)  ← NEW
-  - Register Release in JIRA
   ...
 ```
 
@@ -246,13 +210,13 @@ Build Steps:
 
 **Algorithm:**
 ```
-1. Get solution sub-components from Components Registry
-   GET /api/rest/v2/components/{solution_name}/versions/{version}
+1. Get solution sub-components from Release Management Service API
+   GET ... (TODO)
    → returns list of sub-components with versions
    
-2. For each sub-component:
+2. For each sub-component/version:
    Query DMS for documentation artifacts:
-   GET /dms/api/artifacts?component={sub}&version={ver}&type=documentation
+   GET ... (TODO)
    
 3. Download all found documentation artifacts
    
@@ -286,22 +250,6 @@ solution-1.0.0-russian.zip
 └── index.html  (optional: generated table of contents)
 ```
 
-**DMS Metadata for Aggregated Documentation:**
-```json
-{
-  "component": "my_solution",
-  "version": "1.0.0",
-  "type": "documentation",
-  "language": "russian",
-  "aggregated": true,
-  "subComponents": [
-    "component1:2.5.123",
-    "component2:3.1.45",
-    "component3:1.0.7"
-  ]
-}
-```
-
 ---
 
 ## Implementation Sequence
@@ -309,23 +257,17 @@ solution-1.0.0-russian.zip
 ### Phase 1: Foundation (Part 1.1-1.3)
 1. Implement `doc` section in Components Registry
 2. Add REST API support
-3. Add `supportedDocLanguages` configuration
-
-**Expected Duration:** 2-3 weeks
 
 ### Phase 2: Build Integration (Part 1.2, 1.4-1.5)
 1. Implement documentation dependency calculation in releng
 2. Implement DMS upload step
 3. Integrate into Release template
 
-**Expected Duration:** 2-3 weeks
-
 ### Phase 3: Solution Support (Part 2)
 1. Implement documentation aggregation for solutions
-2. Add to solution release template
+2. Add to release template assembling of documentaiion zips for solutions (conditional build step)
 3. Testing with real solutions
 
-**Expected Duration:** 2-3 weeks
 
 ---
 
@@ -336,10 +278,8 @@ solution-1.0.0-russian.zip
 - **releng (SetDistributionMojo)** - calculate doc dependencies
 - **DMS Client** - upload/download documentation artifacts
 - **TeamCity** - release templates modifications
-- **Artifactory** - query for artifact existence
 
 ### Configuration
-- `supportedDocLanguages` in Components Registry
 - Documentation component registration
 - Language-specific artifact naming convention
 
@@ -350,13 +290,10 @@ solution-1.0.0-russian.zip
 ### Part 1 Benefits
 1. **Traceability** - explicit link between software and documentation versions
 2. **Automation** - no manual documentation artifact management
-3. **Consistency** - documentation version always matches software version
-4. **Multi-language support** - automatic handling of different language versions
 
 ### Part 2 Benefits
 1. **Complete solution documentation** - all sub-component docs in one place
 2. **Customer convenience** - single download for all solution documentation
-3. **Consistency** - documentation versions match deployed component versions
 4. **Reduced manual work** - no manual documentation collection
 
 ---
@@ -373,6 +310,7 @@ solution-1.0.0-russian.zip
          // Will resolve to latest: doc_mycomponent:3.1.15
      }
      ```
+DONE!
 
 2. **No version ranges support for doc section:**
    - Doc section can be defined per version range (like distribution/build), but the `majorVersion` field itself doesn't support range syntax
@@ -400,9 +338,7 @@ solution-1.0.0-russian.zip
    - Validation ensures GAV format is correct
 
 6. **`supportedLanguages` not needed in component config:**
-   - Language support is global configuration (`supportedDocLanguages`)
-   - Artifacts follow naming convention: `{artifactId}-{version}-{language}.zip`
-   - No per-component language restrictions
+    DONE!
 
 7. **Doc component identification:**
    - A component is a "doc component" if it's referenced in another component's `doc` section
@@ -416,19 +352,9 @@ solution-1.0.0-russian.zip
    - Current proposal: `{artifactId}-{version}-{language}.zip`
 
 2. **Missing documentation handling:** What if some sub-components don't have documentation?
-   - Proposal: Continue, log warning, include README stub
-
-3. **Version mismatch:** What if documentation version doesn't match component version exactly?
-   - Proposal: Find closest lower version from same major.minor line
-
-4. **Large solutions:** How to handle solutions with 50+ sub-components?
-   - Proposal: Parallel download, size limit warnings, exclude optional components
-
-5. **Index generation:** Should we auto-generate index.html for aggregated docs?
-   - Proposal: Yes, with component list, versions, and links to PDFs
+   - Proposal: Proceed to the next
 
 6. **Failure handling:** Should documentation upload failure block the release?
-   - Proposal: No, log error, notify team, but proceed with release
-
+   - Proposal: Yes
 ---
 
