@@ -1,0 +1,105 @@
+# CodeRabbit Configuration File
+# Documentation: https://docs.coderabbit.ai/guides/configure-coderabbit
+
+# Review settings
+reviews:
+  # Review profile: chill or assertive
+  # assertive - more rigorous linting and stricter code quality checks
+  # chill - less strict, focuses on warnings and higher severity issues
+  profile: assertive
+  
+  # Enable review status messages in PRs
+  review_status: true
+  
+  # Enable commit status checks
+  commit_status: true
+  
+  # Enable automatic reviews for all branches (not just default)
+  auto_review:
+    enabled: true
+    # Automatically review draft PRs
+    drafts: false
+    # Enable automatic incremental reviews on new commits
+    auto_incremental_review: true
+    # Ignore PRs with these keywords in title (case-insensitive)
+    ignore_title_keywords:
+      - WIP
+      - draft
+  
+  # Enable high-level summary
+  high_level_summary: true
+  
+  # Enable walkthrough of changes
+  collapse_walkthrough: false
+  
+  # Enable changed files summary
+  changed_files_summary: true
+  
+  # Enable sequence diagrams generation
+  sequence_diagrams: true
+  
+  # Enable code review effort estimation
+  estimate_code_review_effort: true
+  
+  # Enable suggested labels
+  suggested_labels: true
+  
+  # Enable suggested reviewers
+  suggested_reviewers: true
+  
+  # Ignore specific files/folders
+  path_filters:
+    - "!**/build/**"
+    - "!**/gradle/wrapper/**"
+    - "!**/*.gradle.kts"
+    - "!**/gradlew*"
+    - "!**/*.jar"
+    - "!**/*.bin"
+  
+  # Path-specific instructions
+  path_instructions:
+    - path: "**/*.java"
+      instructions: |
+        Review Java code for best practices, including proper error handling,
+        resource management, and adherence to SOLID principles.
+    - path: "**/*.groovy"
+      instructions: |
+        Review Groovy code for idiomatic usage and integration with Java components.
+  
+  # Enable finishing touches features
+  finishing_touches:
+    docstrings:
+      enabled: true
+    unit_tests:
+      enabled: true
+  
+  # Tool configurations
+  tools:
+    # Enable static analysis tools
+    shellcheck:
+      enabled: true
+    markdownlint:
+      enabled: true
+    github-checks:
+      enabled: true
+      timeout_ms: 90000
+
+# Language for CodeRabbit comments
+language: en-US
+
+# Chat settings
+chat:
+  auto_reply: false
+
+# Enable early access features
+early_access: true
+
+# Knowledge base settings
+knowledge_base:
+  opt_out: false
+  learnings:
+    scope: auto
+  issues:
+    scope: auto
+  pull_requests:
+    scope: auto
