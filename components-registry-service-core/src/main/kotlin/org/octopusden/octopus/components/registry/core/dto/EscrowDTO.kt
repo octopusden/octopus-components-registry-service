@@ -2,6 +2,7 @@ package org.octopusden.octopus.components.registry.core.dto
 
 import com.fasterxml.jackson.annotation.JsonCreator
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonProperty
 
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -10,5 +11,8 @@ data class EscrowDTO @JsonCreator constructor(
     @JsonProperty("providedDependencies") val providedDependencies: List<String>? = emptyList(),
     @JsonProperty("diskSpaceRequirement") val diskSpaceRequirement: Long? = null,
     @JsonProperty("additionalSources") val additionalSources: List<String>? = emptyList(),
-    @JsonProperty("isReusable") val isReusable: Boolean
+    @JsonProperty("isReusable") val isReusable: Boolean,
+    @JsonProperty("generation")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    val generation: EscrowGenerationMode? = null
 )

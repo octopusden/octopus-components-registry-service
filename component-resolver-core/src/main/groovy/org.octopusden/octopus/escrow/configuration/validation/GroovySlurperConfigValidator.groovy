@@ -20,6 +20,7 @@ class GroovySlurperConfigValidator {
     public static final String DEPENDENCIES = 'dependencies'
     public static final String SECURITY_GROUPS = 'securityGroups'
     public static final String SECURITY_GROUPS_READ = "read"
+    public static final String ESCROW = "escrow"
 
     private static final String FILE_PATTERN = "file:/.+"
     private static final String PROHIBITED_SYMBOLS = "\\\\\\s:|\\?\\*\"'<>\\+"
@@ -57,6 +58,8 @@ class GroovySlurperConfigValidator {
     static SUPPORTED_VCS_ATTRIBUTES = [BRANCH, HOTFIX_BRANCH, TAG, REPOSITORY_TYPE, VCS_URL, EXTERNAL_REGISTRY]
 
     static SUPPORTED_TOOLS_ATTRIBUTES = ['escrowEnvironmentVariable', 'sourceLocation', 'targetLocation', 'installScript']
+
+    static SUPPORTED_ESCROW_ATTRIBUTES = ['generation']
 
     static SUPPORTED_DISTRIBUTION_ATTRIBUTES = ['external', 'explicit', 'GAV', 'DEB', 'RPM', 'docker', 'securityGroups']
     static SUPPORTED_DEPENDENCIES_ATTRIBUTES = ['autoUpdate']
@@ -124,10 +127,22 @@ class GroovySlurperConfigValidator {
                     validateDependenciesParameters(moduleConfigObject, "dependencies", componentName)
                 } else if (attribute == "components") {
                     validateSubComponents(moduleConfigObject)
+                } else if (attribute == ESCROW) {
+                    validateEscrow(moduleConfigObject, "defaults", componentName)
                 } else {
                     validateConfigSectionForUnknownAttributes(configTypeObject, componentName)
                 }
             }
+        }
+    }
+
+    def validateEscrow(ConfigObject configObject, String moduleConfigName, String moduleName) {
+        def escrowSectionValue = configObject.get(ESCROW)
+        if (escrowSectionValue instanceof ConfigObject) {
+            validateForUnknownAttributes(escrowSectionValue, ESCROW, SUPPORTED_ESCROW_ATTRIBUTES, moduleName, moduleConfigName)
+        } else {
+            registerError("Escrow section is not correctly configured in " +
+                    getWhereMessage(moduleConfigName, moduleName))
         }
     }
 
@@ -188,6 +203,8 @@ class GroovySlurperConfigValidator {
                 validateDistributionParameters(configObject, moduleConfigName, componentName)
             } else if (key == VCS_SETTINGS) {
                 validateVCSSettingsSection(configObject, componentName, key as String)
+            } else if (key == ESCROW) {
+                validateEscrow(configObject, moduleConfigName, componentName)
             } else if (!SUPPORTED_ATTRIBUTES.contains(key)) {
                 registerError("Unknown attribute '$key' in " +
                         getWhereMessage(moduleConfigName, componentName))

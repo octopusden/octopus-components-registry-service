@@ -7,6 +7,7 @@ import groovy.transform.ToString
 import groovy.transform.TupleConstructor
 import org.octopusden.octopus.components.registry.api.VersionedComponentConfiguration
 import org.octopusden.octopus.components.registry.api.beans.VersionedComponentConfigurationBean
+import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.components.registry.api.escrow.Escrow
 import org.octopusden.octopus.crs.resolver.core.converter.BuildParametersConverter

@@ -2,6 +2,8 @@ package org.octopusden.octopus.escrow.resolvers
 
 import groovy.transform.TypeChecked
 import org.junit.Test
+import org.octopusden.octopus.components.registry.api.beans.EscrowBean
+import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.TestConfigUtils
 import org.octopusden.octopus.escrow.configuration.loader.ComponentRegistryInfo
@@ -223,6 +225,31 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
         )
         assert expectedConfig.vcsSettings == configurations.get(0).vcsSettings
         assert expectedConfig == configurations.get(0)
+    }
+
+    @Test
+    void testDefaultsWithEscrowMode() {
+        EscrowConfiguration configuration = loadConfiguration("single-module/defaultsWithEscrowMode.groovy")
+        def configurations = configuration.escrowModules.get(TEST_MODULE).moduleConfigurations
+        def expectedConfig = new EscrowModuleConfig(
+                componentOwner: "user1",
+                vcsSettings: VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", MERCURIAL, "ssh://hg@mercurial/bcomponent", '$module-$version', null, null)),
+                buildSystem: MAVEN,
+                system: "NONE",
+                releasesInDefaultBranch: true,
+                solution: false,
+                artifactIdPattern: /[\w-]+/,
+                groupIdPattern: "org.octopusden.octopus.bcomponent",
+                versionRange: "[1.12.1-151,)",
+                jiraConfiguration: new JiraComponent("BCOMPONENT", null, ComponentVersionFormat.create('$major.$minor', '$major.$minor.$service'), new ComponentInfo(null, '$versionPrefix-$baseVersionFormat'), false, false),
+                distribution: null,
+                buildConfiguration: BuildParameters.create(null, null, null, false, null, null, null,
+                        [new Tool(name: "BuildEnv", escrowEnvironmentVariable: "BUILD_ENV", targetLocation: "tools/BUILD_ENV",
+                                sourceLocation: "env.BUILD_ENV", installScript: "script")], []
+                ),
+                escrow: new EscrowBean(EscrowGenerationMode.AUTO, null, [], null, [], true)
+        )
+        assert expectedConfig.escrow.generation.get() == configurations.get(0).escrow.generation.get()
     }
 
     @Test
