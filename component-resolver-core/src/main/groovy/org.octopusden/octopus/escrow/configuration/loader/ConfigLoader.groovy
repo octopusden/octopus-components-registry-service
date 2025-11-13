@@ -136,7 +136,7 @@ class ConfigLoader implements IConfigLoader {
         } else {
             LOG.warn("YAML file $validationConfigPath does not exist")
         }
-        return excludedComponents
+        return excludedComponents as List<String>
     }
 
     def static validateConfig(ConfigObject configObject, VersionNames versionNames) {

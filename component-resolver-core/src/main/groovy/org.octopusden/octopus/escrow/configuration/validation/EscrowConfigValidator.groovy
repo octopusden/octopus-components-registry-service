@@ -164,17 +164,12 @@ class EscrowConfigValidator {
             if (StringUtils.isBlank(moduleConfig.componentDisplayName)) {
                 registerError("componentDisplayName is not set in '$component'")
             }
-            def userListPattern = "\\w+(,\\w+)*"
-            def releaseManagers = moduleConfig.releaseManager
-            if (StringUtils.isNotBlank(releaseManagers)) {
-                if (releaseManagers?.matches(userListPattern) != true) {
-                    registerError("releaseManager is not matched '$userListPattern' in '$component'")
-                }
-            } else {
+            if (StringUtils.isBlank(moduleConfig.releaseManager)) {
                 registerError("releaseManager is not set in '$component'")
             }
             def securityChampions = moduleConfig.securityChampion
             if (StringUtils.isNotBlank(securityChampions)) {
+                def userListPattern = "\\w+(,\\w+)*"
                 if (securityChampions?.matches(userListPattern) != true) {
                     registerError("securityChampion is not matched '$userListPattern' in '$component'")
                 }
@@ -511,7 +506,7 @@ class EscrowConfigValidator {
     void validateDockerUniqueNames(EscrowConfiguration moduleConfig) {
         def dockerNames = new HashSet<String>()
         moduleConfig.escrowModules.each { componentName, escrowModule ->
-            def thisComponentImages = []
+            List<String> thisComponentImages = new ArrayList<>()
             escrowModule.moduleConfigurations.each { moduleConfiguration ->
                 def distribution = moduleConfiguration.getDistribution()
                 if (distribution != null) {

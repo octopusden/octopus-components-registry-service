@@ -29,7 +29,7 @@ dependencies {
     implementation 'io.micrometer:micrometer-registry-prometheus:1.2.1'
     implementation "io.github.microutils:kotlin-logging:1.6.22"
 
-    implementation("org.springdoc:springdoc-openapi-ui:1.6.7")
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:${project.properties["openapi.version"]}")
 
     implementation("org.eclipse.jgit:org.eclipse.jgit:5.13.0.202109080827-r")
 
@@ -48,7 +48,7 @@ sourceSets {
 }
 
 jar {
-    baseName = "${project.name}-it"
+    archiveBaseName = "${project.name}-it"
     enabled = true
     archiveClassifier = ''
 }
@@ -71,9 +71,21 @@ dockerCreateDockerfile.doLast {
     }
 }
 
+tasks.named('dockerSyncBuildContext') {
+    def bootJarArchive = tasks.named('bootJar').flatMap { it.archiveFile }
+    from(bootJarArchive) {
+        into('build/libs')
+    }
+    dependsOn bootJar
+}
+
 dockerBuildImage {
-    inputDir = file(".")
+    inputDir = dockerSyncBuildContext.destinationDir
     buildArgs.put("DOCKER_REGISTRY", "$dockerRegistry")
     buildArgs.put("BUILD_VERSION", "${project.version}")
     images.set(["$octopusGithubDockerRegistry/octopusden/components-registry-service:${project.version}"])
+
+    dependsOn dockerSyncBuildContext
+    dependsOn bootJar
 }
+
