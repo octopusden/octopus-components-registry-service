@@ -1,6 +1,7 @@
 package org.octopusden.octopus.components.registry.automation
 
 import com.github.ajalt.clikt.core.CliktCommand
+import com.github.ajalt.clikt.core.ProgramResult
 import com.github.ajalt.clikt.core.requireObject
 import com.github.ajalt.clikt.parameters.options.check
 import com.github.ajalt.clikt.parameters.options.convert
@@ -35,12 +36,13 @@ class ComponentsRegistryDownloadCopyright : CliktCommand(name = COMMAND) {
 
         val response = client.getCopyrightByComponent(componentName)
         val body = response.body() ?: run {
+            val responseStatus = response.status()
             logger.error(
                 "Failed to download '{}' copyright: empty response body, status={}",
                 componentName,
-                response.status()
+                responseStatus
             )
-            return
+            throw ProgramResult(statusCode = responseStatus)
         }
 
         body.asInputStream().use { inputStream ->
@@ -70,6 +72,7 @@ class ComponentsRegistryDownloadCopyright : CliktCommand(name = COMMAND) {
                         responseStatus,
                         errorBody
                     )
+                    throw ProgramResult(statusCode = responseStatus)
                 }
             }
         }
