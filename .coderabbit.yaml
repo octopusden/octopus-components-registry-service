@@ -47,6 +47,9 @@ reviews:
   # Enable suggested reviewers
   suggested_reviewers: true
   
+  # Disable poem feature
+  poem: false
+  
   # Ignore specific files/folders
   path_filters:
     - "!**/build/**"
