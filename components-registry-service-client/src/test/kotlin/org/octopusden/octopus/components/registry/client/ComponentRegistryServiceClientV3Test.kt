@@ -87,21 +87,16 @@ class ComponentRegistryServiceClientV3Test {
         assertThat(componentsRegistryClient.getComponents().find { it.component.id == componentKey }!!.variants.values.first().build?.dependencies?.autoUpdate)?.isEqualTo(expectedAutoUpdateValue)
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "Downloading copyright file of {0} component")
     @MethodSource("componentsCopyright")
-    @DisplayName("Test successful downloading copyright file specified in 'gradle-staging-plugin' component")
+    @DisplayName("Test successful downloading copyright file specified in component")
     fun testCopyrightSuccessfullyDownloaded(
         componentKey: String,
         expectedCopyrightText: String,
     ) {
-        val response = componentsRegistryClient.getCopyrightByComponent(componentKey)
-        assertThat(response.status()).isEqualTo(200)
-        val body = response.body()
-        assertThat(body).isNotNull
-        val actualCopyrightText = body.asInputStream().use {
-            it.reader(StandardCharsets.UTF_8).readText()
-        }
-        assertThat(actualCopyrightText).isEqualTo(expectedCopyrightText)
+        val copyrightContent = componentsRegistryClient.getCopyrightByComponent(componentKey)
+            .fileContent
+        assertThat(copyrightContent).isEqualTo(expectedCopyrightText)
     }
 
     companion object {
@@ -145,7 +140,11 @@ class ComponentRegistryServiceClientV3Test {
         fun componentsCopyright(): Stream<Arguments> = Stream.of(
             Arguments.of(
                 "gradle-staging-plugin",
-                "Some copyright text"
+                "CompanyName1 copyright text"
+            ),
+            Arguments.of(
+                "SMComponent",
+                "CompanyName2 another copyright text"
             )
         )
     }

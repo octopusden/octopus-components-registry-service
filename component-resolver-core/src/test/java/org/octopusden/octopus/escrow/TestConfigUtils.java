@@ -1,5 +1,7 @@
 package org.octopusden.octopus.escrow;
 
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes;
 import org.octopusden.octopus.escrow.configuration.loader.ComponentRegistryInfo;
 import org.octopusden.octopus.escrow.configuration.loader.ConfigLoader;
@@ -31,7 +33,7 @@ public class TestConfigUtils {
     public static final VersionRangeFactory VERSION_RANGE_FACTORY = new VersionRangeFactory(VERSION_NAMES);
     public static final NumericVersionFactory NUMERIC_VERSION_FACTORY = new NumericVersionFactory(VERSION_NAMES);
 
-    public static final String COPYRIGHT_PATH = "src/test/resources/copyrights";
+    public static final Path COPYRIGHT_PATH = Paths.get("src/test/resources/copyrights");
 
     public static EscrowConfiguration loadConfiguration(String config) {
         EscrowConfigurationLoader escrowConfigurationLoader = escrowConfigurationLoader(config);

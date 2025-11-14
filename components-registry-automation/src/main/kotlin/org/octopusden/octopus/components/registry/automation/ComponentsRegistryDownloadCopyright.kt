@@ -1,7 +1,6 @@
 package org.octopusden.octopus.components.registry.automation
 
 import com.github.ajalt.clikt.core.CliktCommand
-import com.github.ajalt.clikt.core.ProgramResult
 import com.github.ajalt.clikt.core.requireObject
 import com.github.ajalt.clikt.parameters.options.check
 import com.github.ajalt.clikt.parameters.options.convert
@@ -9,9 +8,7 @@ import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.required
 import org.octopusden.octopus.components.registry.client.impl.ClassicComponentsRegistryServiceClient
 import org.slf4j.Logger
-import java.nio.file.Files
 import java.nio.file.Paths
-import java.nio.file.StandardCopyOption
 
 class ComponentsRegistryDownloadCopyright : CliktCommand(name = COMMAND) {
     private val context by requireObject<MutableMap<String, Any>>()
@@ -34,47 +31,21 @@ class ComponentsRegistryDownloadCopyright : CliktCommand(name = COMMAND) {
     override fun run() {
         logger.info("Downloading '$componentName' copyright file")
 
-        val response = client.getCopyrightByComponent(componentName)
-        val body = response.body() ?: run {
-            val responseStatus = response.status()
-            logger.error(
-                "Failed to download '{}' copyright: empty response body, status={}",
-                componentName,
-                responseStatus
+        try {
+            val copyrightContent = client.getCopyrightByComponent(componentName)
+                .fileContent
+
+            val path = Paths.get(targetPath, DEFAULT_COPYRIGHT_FILE_NAME)
+
+            path.toFile().writeText(copyrightContent, Charsets.UTF_8)
+
+            logger.info(
+                "Successfully downloaded copyright file by path '{}' with name '{}'",
+                targetPath,
+                DEFAULT_COPYRIGHT_FILE_NAME
             )
-            throw ProgramResult(statusCode = responseStatus)
-        }
-
-        body.asInputStream().use { inputStream ->
-            val responseStatus = response.status()
-
-            when (responseStatus) {
-                HTTP_STATUS_OK -> {
-                    val fullPath = Paths.get(targetPath, DEFAULT_COPYRIGHT_FILE_NAME)
-                    fullPath.parent?.let { Files.createDirectories(it) }
-
-                    Files.copy(
-                        inputStream,
-                        fullPath,
-                        StandardCopyOption.REPLACE_EXISTING
-                    )
-                    logger.info(
-                        "Successfully downloaded copyright file by path '{}' with name '{}'",
-                        targetPath,
-                        DEFAULT_COPYRIGHT_FILE_NAME
-                    )
-                }
-                else -> {
-                    val errorBody = inputStream.bufferedReader().readText()
-                    logger.error(
-                        "Failed to download '{}' copyright: status={}, body={}",
-                        componentName,
-                        responseStatus,
-                        errorBody
-                    )
-                    throw ProgramResult(statusCode = responseStatus)
-                }
-            }
+        } catch (_: Exception) {
+            logger.error("Failed to download '{}' copyright file", componentName)
         }
     }
 
@@ -83,8 +54,6 @@ class ComponentsRegistryDownloadCopyright : CliktCommand(name = COMMAND) {
 
         private const val COMPONENT_NAME = "--component-name"
         private const val TARGET_PATH = "--target-path"
-
-        private const val HTTP_STATUS_OK = 200
 
         private const val DEFAULT_COPYRIGHT_FILE_NAME = "COPYRIGHT"
     }

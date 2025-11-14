@@ -19,6 +19,9 @@ import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.TaskAction
 import org.octopusden.releng.versions.VersionNames
 
+import java.nio.file.Path
+import java.nio.file.Paths
+
 import static groovyx.net.http.ContentType.TEXT
 
 class ComponentRegistryValidationTask extends DefaultTask {
@@ -230,7 +233,7 @@ class ComponentRegistryValidationTask extends DefaultTask {
                 serviceBranch,
                 service,
                 minor,
-                copyrightPath
+                copyrightPath != null ? Paths.get(copyrightPath) : null
         )
         config.escrowModules
     }
@@ -241,7 +244,7 @@ class ComponentRegistryValidationTask extends DefaultTask {
                                                  String serviceBranch,
                                                  String service,
                                                  String minor,
-                                                 String copyrightPath
+                                                 Path copyrightPath
     ) {
         EscrowConfigurationLoader escrowConfigurationLoader = new EscrowConfigurationLoader(
                 loader,

@@ -6,27 +6,23 @@ import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.core.dto.ComponentImage
 import org.octopusden.octopus.components.registry.core.dto.ComponentV2
 import org.octopusden.octopus.components.registry.core.dto.ComponentV3
+import org.octopusden.octopus.components.registry.core.dto.CopyrightDTO
 import org.octopusden.octopus.components.registry.core.dto.Image
-import org.octopusden.octopus.components.registry.server.config.ComponentsRegistryProperties
 import org.octopusden.octopus.components.registry.server.service.ComponentRegistryResolver
-import org.springframework.core.io.FileSystemResource
-import org.springframework.http.HttpHeaders
-import org.springframework.http.HttpStatus
+import org.octopusden.octopus.components.registry.server.service.CopyrightService
 import org.springframework.http.MediaType
-import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
-import java.nio.file.Paths
 
 @RestController
 @RequestMapping("rest/api/3/components")
 class ComponentControllerV3(
     private val componentRegistryResolver: ComponentRegistryResolver,
-    private val componentsRegistryProperties: ComponentsRegistryProperties,
+    private val copyrightService: CopyrightService,
 ) {
     /**
      * Get all components.
@@ -72,45 +68,7 @@ class ComponentControllerV3(
         return componentRegistryResolver.findComponentsByDockerImages(images)
     }
 
-    @GetMapping(
-        "/{component}/copyright",
-        produces = [MediaType.APPLICATION_OCTET_STREAM_VALUE]
-    )
-    fun getCopyrightByComponent(
-        @PathVariable component: String,
-    ): ResponseEntity<*> {
-        val copyrightPath = componentsRegistryProperties.copyrightPath
-            ?: return ResponseEntity.status(HttpStatus.NO_CONTENT)
-                .body("Copyright Path is not configured on server")
-
-        val escrowModule = componentRegistryResolver.getComponentById(component)
-            ?: return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body("Component '$component' not found")
-
-        val copyright = escrowModule.moduleConfigurations
-            .firstOrNull()
-            ?.copyright
-            ?: return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body("Component '$component' does not contains copyright")
-
-        val file = Paths.get(copyrightPath, copyright).toFile()
-
-        if(!file.exists() || !file.isFile) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body("Component '$component' copyright file not found")
-        }
-
-        val resource = FileSystemResource(file)
-
-        return ResponseEntity.ok()
-            .header(
-                HttpHeaders.CONTENT_DISPOSITION,
-                "attachment; filename=$DOWNLOADING_COPYRIGHT_FILE_NAME"
-            )
-            .body(resource)
-    }
-
-    companion object {
-        private const val DOWNLOADING_COPYRIGHT_FILE_NAME = "COPYRIGHT"
-    }
+    @GetMapping("/{component}/copyright")
+    fun getCopyrightByComponent(@PathVariable component: String): CopyrightDTO =
+        copyrightService.getCopyright(component)
 }

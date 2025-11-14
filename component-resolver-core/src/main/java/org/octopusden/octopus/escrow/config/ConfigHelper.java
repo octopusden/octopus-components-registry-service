@@ -1,12 +1,18 @@
 package org.octopusden.octopus.escrow.config;
 
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.EnumMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
-
-import java.io.File;
-import java.util.*;
-import java.util.stream.Collectors;
 
 @Component
 public class ConfigHelper {
@@ -33,6 +39,7 @@ public class ConfigHelper {
     public ConfigHelper(Environment environment) {
         this.environment = environment;
     }
+
     public String moduleConfigUrl(String param) {
         if (environment.containsProperty(param)) {
             return environment.getRequiredProperty(param);
@@ -82,5 +89,16 @@ public class ConfigHelper {
         return environment.getRequiredProperty(VERSION_NAME_MINOR);
     }
 
-    public String copyrightPath() { return environment.getProperty(COPYRIGHT_PATH); }
+    public Path copyrightPath() {
+        String copyrightPathStr = environment.getProperty(COPYRIGHT_PATH);
+        if(copyrightPathStr == null) {
+            return null;
+        }
+
+        Path copyrightPath = Paths.get(copyrightPathStr);
+        if (!Files.isDirectory(copyrightPath)) {
+            throw new IllegalStateException("Copyright path '" + copyrightPath + "' is not a directory");
+        }
+        return copyrightPath;
+    }
 }

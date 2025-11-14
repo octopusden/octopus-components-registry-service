@@ -39,6 +39,7 @@ import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRangeFactory
 
+import java.nio.file.Path
 import java.util.stream.Collectors
 
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.VCS_SETTINGS
@@ -66,13 +67,13 @@ class EscrowConfigurationLoader {
     private final List<String> supportedGroupIds
     private final List<String> supportedSystems
     private final VersionNames versionNames
-    private final String copyrightPath
+    private final Path copyrightPath
 
     EscrowConfigurationLoader(IConfigLoader configLoader,
                               List<String> supportedGroupIds,
                               List<String> supportedSystems,
                               VersionNames versionNames,
-                              String copyrightPath) {
+                              Path copyrightPath) {
         this.configLoader = configLoader
         this.supportedGroupIds = supportedGroupIds
         this.supportedSystems = supportedSystems
@@ -205,7 +206,6 @@ class EscrowConfigurationLoader {
             mergeGroovyAndDslComponent(component, fullConfig)
             component.subComponents.forEach { name, subComponent -> mergeGroovyAndDslSubComponent(subComponent, fullConfig)}
         }
-
         EscrowConfigValidator validator = new EscrowConfigValidator(supportedGroupIds, supportedSystems, versionNames, configLoader.loadDistributionValidationExcludedComponents(), this.copyrightPath)
         if (!ignoreUnknownAttributes) {
             validator.validateEscrowConfiguration(fullConfig)

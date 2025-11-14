@@ -19,7 +19,7 @@ import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRange
 import org.octopusden.releng.versions.VersionRangeFactory
 
-import java.nio.file.Paths
+import java.nio.file.Path
 import java.util.function.BinaryOperator
 import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
@@ -38,7 +38,7 @@ class EscrowConfigValidator {
     private List<String> supportedSystems
     private VersionNames versionNames
     private final List<String> validationExcludedComponents
-    private final String copyrightPath
+    private final Path copyrightPath
 
     @TupleConstructor
     static class MavenArtifact {
@@ -78,7 +78,7 @@ class EscrowConfigValidator {
                           List<String> supportedSystems,
                           VersionNames versionNames,
                           List<String> validationExcludedComponents,
-                          String copyrightPath) {
+                          Path copyrightPath) {
         this.supportedGroupIds = supportedGroupIds
         this.supportedSystems = supportedSystems
         this.versionNames = versionNames
@@ -178,7 +178,7 @@ class EscrowConfigValidator {
             } else {
                 registerError("releaseManager is not set in '$component'")
             }
-            if (!StringUtils.isBlank(copyrightPath) && StringUtils.isBlank(moduleConfig.copyright)) {
+            if (copyrightPath != null && StringUtils.isBlank(moduleConfig.copyright)) {
                 registerError("copyright is not set in '$component'")
             }
             def securityChampions = moduleConfig.securityChampion
@@ -517,7 +517,7 @@ class EscrowConfigValidator {
     }
 
     def validateCopyright(EscrowModuleConfig moduleConfig, String component) {
-        if (StringUtils.isBlank(copyrightPath)) {
+        if (copyrightPath == null) {
             return
         }
 
@@ -526,9 +526,9 @@ class EscrowConfigValidator {
             return
         }
 
-        def copyrightFile = Paths.get(copyrightPath, copyright).toFile()
-        if (!copyrightFile.exists()) {
-            registerError("Copyright file '${copyrightFile.name}' specified in '$component' is not exists")
+        def copyrightFile = copyrightPath.resolve(copyright).toFile()
+        if (!copyrightFile.isFile()) {
+            registerError("Сopyright '${copyrightFile.name}' of component '$component' is not exist or not file")
         }
     }
 

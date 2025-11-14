@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.module.SimpleModule
 import feign.Feign
 import feign.Logger
 import feign.Param
-import feign.Response
 import feign.httpclient.ApacheHttpClient
 import feign.jackson.JacksonDecoder
 import feign.jackson.JacksonEncoder
@@ -20,6 +19,7 @@ import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.core.dto.BuildSystem
 import org.octopusden.octopus.components.registry.core.dto.ComponentArtifactConfigurationDTO
 import org.octopusden.octopus.components.registry.core.dto.ComponentImage
+import org.octopusden.octopus.components.registry.core.dto.CopyrightDTO
 import org.octopusden.octopus.components.registry.core.dto.DistributionDTO
 import org.octopusden.octopus.components.registry.core.dto.Image
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionDTO
@@ -124,7 +124,7 @@ class ClassicComponentsRegistryServiceClient(
     override fun getServiceStatus(): ServiceStatusDTO =
         client.getServiceStatus()
 
-    override fun getCopyrightByComponent(componentKey: String): Response =
+    override fun getCopyrightByComponent(componentKey: String): CopyrightDTO =
         client.getCopyrightByComponent(componentKey)
 
     override fun findComponentByArtifact(artifact: ArtifactDependency): VersionedComponent =
