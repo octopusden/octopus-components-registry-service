@@ -1,7 +1,7 @@
 package org.octopusden.octopus.components.registry.server.service
 
-import org.octopusden.octopus.components.registry.core.dto.CopyrightDTO
+import org.springframework.core.io.Resource
 
 interface CopyrightService {
-    fun getCopyright(component: String): CopyrightDTO
+    fun getCopyrightAsResource(component: String): Resource
 }

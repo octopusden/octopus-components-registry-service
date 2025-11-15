@@ -1,20 +1,27 @@
 package org.octopusden.octopus.components.registry.client
 
+import feign.CollectionFormat
+import feign.Headers
+import feign.Param
+import feign.QueryMap
+import feign.RequestLine
+import feign.Response
 import org.octopusden.octopus.components.registry.api.build.tools.BuildTool
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.components.registry.core.dto.ArtifactComponentsDTO
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.core.dto.BuildSystem
 import org.octopusden.octopus.components.registry.core.dto.ComponentArtifactConfigurationDTO
+import org.octopusden.octopus.components.registry.core.dto.ComponentImage
 import org.octopusden.octopus.components.registry.core.dto.ComponentV1
 import org.octopusden.octopus.components.registry.core.dto.ComponentV2
 import org.octopusden.octopus.components.registry.core.dto.ComponentV3
 import org.octopusden.octopus.components.registry.core.dto.ComponentsDTO
-import org.octopusden.octopus.components.registry.core.dto.CopyrightDTO
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponent
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersion
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersions
 import org.octopusden.octopus.components.registry.core.dto.DistributionDTO
+import org.octopusden.octopus.components.registry.core.dto.Image
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionDTO
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionRangeDTO
 import org.octopusden.octopus.components.registry.core.dto.ServiceStatusDTO
@@ -23,13 +30,6 @@ import org.octopusden.octopus.components.registry.core.dto.VersionNamesDTO
 import org.octopusden.octopus.components.registry.core.dto.VersionRequest
 import org.octopusden.octopus.components.registry.core.dto.VersionedComponent
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
-import feign.CollectionFormat
-import feign.Headers
-import feign.Param
-import feign.QueryMap
-import feign.RequestLine
-import org.octopusden.octopus.components.registry.core.dto.ComponentImage
-import org.octopusden.octopus.components.registry.core.dto.Image
 
 interface ComponentsRegistryServiceClient {
     /**
@@ -165,5 +165,5 @@ interface ComponentsRegistryServiceClient {
 
     @RequestLine("GET rest/api/3/components/{componentKey}/copyright")
     @Headers("Content-Type: application/octet-stream")
-    fun getCopyrightByComponent(@Param("componentKey") componentKey: String): CopyrightDTO
+    fun getCopyrightByComponent(@Param("componentKey") componentKey: String): Response
 }
