@@ -9,7 +9,9 @@ plugins {
 apply plugin: 'docker-compose'
 
 dependencies {
-    implementation project(':component-resolver-core')
+    implementation(project(':component-resolver-core')) {
+        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-main-kts'
+    }
     implementation project(':components-registry-service-core')
 
     implementation platform("org.springframework.boot:spring-boot-dependencies:${project['spring-boot.version']}")
