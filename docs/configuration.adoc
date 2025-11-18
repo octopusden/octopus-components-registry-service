@@ -154,11 +154,6 @@ Each Component must be configured in corresponding configuration file according 
             diskSpaceRequirement = <disk space> // Disk space requirement in bytes or with units (KB, MB, GB) (optional)
             additionalSources = <list of paths> // Comma-separated list of additional source paths to include (optional)
             reusable = <true|false> // Whether escrow package can be reused by other components (default: true)
-            gradle { // Gradle-specific escrow parameters (optional)
-                includeTestConfigurations = <true|false> // Include test configurations (default: false)
-                includeConfigurations = <list of configurations> // Comma-separated list of configurations to include (optional)
-                excludeConfigurations = <list of configurations> // Comma-separated list of configurations to exclude (optional)
-            }
         }
 
         distribution { // Distribution parameters (for specific version range)
@@ -278,10 +273,6 @@ Below is the list of available parameters:
   ** String with units: `"1GB"`, `"512MB"`, `"1024KB"` (or `"1G"`, `"512M"`, `"1024K"`)
 * *additionalSources* - Comma-separated list of additional source paths to include in the escrow package (optional). For example: `"spa/.gradle,spa/node_modules"`.
 * *reusable* - Whether the escrow package can be reused by other components that depend on this component (default: `true`). When set to `true`, the escrow process will reuse already built escrow package instead of rebuilding dependencies.
-* *gradle* - Gradle-specific escrow parameters (optional):
-  ** *includeTestConfigurations* - Whether to include test configurations in the escrow package (default: `false`).
-  ** *includeConfigurations* - Comma-separated list of Gradle configurations to include in the escrow package (optional).
-  ** *excludeConfigurations* - Comma-separated list of Gradle configurations to exclude from the escrow package (optional).
 
 Example:
 ----
