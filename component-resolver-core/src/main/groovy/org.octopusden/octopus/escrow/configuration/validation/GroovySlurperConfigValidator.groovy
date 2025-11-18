@@ -136,13 +136,13 @@ class GroovySlurperConfigValidator {
         }
     }
 
-    def validateEscrow(ConfigObject configObject, String moduleConfigName, String moduleName) {
+    def validateEscrow(ConfigObject configObject, String moduleConfigName, String componentName) {
         def escrowSectionValue = configObject.get(ESCROW)
         if (escrowSectionValue instanceof ConfigObject) {
-            validateForUnknownAttributes(escrowSectionValue, ESCROW, SUPPORTED_ESCROW_ATTRIBUTES, moduleName, moduleConfigName)
+            validateForUnknownAttributes(escrowSectionValue, ESCROW, SUPPORTED_ESCROW_ATTRIBUTES, componentName, moduleConfigName)
         } else {
             registerError("Escrow section is not correctly configured in " +
-                    getWhereMessage(moduleConfigName, moduleName))
+                    getWhereMessage(moduleConfigName, componentName))
         }
     }
 
