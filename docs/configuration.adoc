@@ -282,10 +282,6 @@ escrow {
     providedDependencies = "test:test:1.1"
     additionalSources = "spa/.gradle,spa/node_modules"
     reusable = false
-    gradle {
-        includeTestConfigurations = true
-        excludeConfigurations = "testCompile"
-    }
 }
 ----
 
