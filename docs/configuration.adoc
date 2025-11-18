@@ -106,6 +106,15 @@ Each Component must be configured in corresponding configuration file according 
             systemProperties = <additional properties for maven build>
         }
 
+        escrow { // Parameters related to escrow package generation (default for all versions)
+            generation = <AUTO|MANUAL|UNSUPPORTED> // Escrow generation mode
+            buildTask = <build task> // Custom build task to execute (optional)
+            providedDependencies = <list of dependencies> // Comma-separated list of provided dependencies (optional)
+            diskSpaceRequirement = <disk space> // Disk space requirement in bytes or with units (KB, MB, GB) (optional)
+            additionalSources = <list of paths> // Comma-separated list of additional source paths to include (optional)
+            reusable = <true|false> // Whether escrow package can be reused by other components (default: true)
+        }
+
         distribution { // Distribution parameters (default for all versions)
             explicit = <true|false> // true - self-distributed component
             external = <true|false> // true - can be delivered outside the organization
@@ -136,6 +145,20 @@ Each Component must be configured in corresponding configuration file according 
         build { // Parameters related to escrow build (for specific version range)
             javaVersion = <java version>
             systemProperties = <additional properties for maven build>
+        }
+
+        escrow { // Parameters related to escrow package generation (for specific version range)
+            generation = <AUTO|MANUAL|UNSUPPORTED> // Escrow generation mode
+            buildTask = <build task> // Custom build task to execute (optional)
+            providedDependencies = <list of dependencies> // Comma-separated list of provided dependencies (optional)
+            diskSpaceRequirement = <disk space> // Disk space requirement in bytes or with units (KB, MB, GB) (optional)
+            additionalSources = <list of paths> // Comma-separated list of additional source paths to include (optional)
+            reusable = <true|false> // Whether escrow package can be reused by other components (default: true)
+            gradle { // Gradle-specific escrow parameters (optional)
+                includeTestConfigurations = <true|false> // Include test configurations (default: false)
+                includeConfigurations = <list of configurations> // Comma-separated list of configurations to include (optional)
+                excludeConfigurations = <list of configurations> // Comma-separated list of configurations to exclude (optional)
+            }
         }
 
         distribution { // Distribution parameters (for specific version range)
@@ -237,6 +260,42 @@ If your component uses multiple release branches, specify them in the `branch` p
 Example:
 ----
 branch = 'master|release/$major.$minor'
+----
+
+=== Escrow section
+The escrow section of the component configuration describes parameters related to Escrow package generation.
+
+Below is the list of available parameters:
+
+* *generation* - Escrow generation mode. Can be one of:
+  ** *AUTO* - Escrow automation is supported. Escrow Test configuration supported.
+  ** *MANUAL* - Escrow Test configuration to be created.
+  ** *UNSUPPORTED* - Escrow Test configuration should not be created.
+* *buildTask* - Custom build task to execute during escrow package generation (optional). For example: `"clean build -x test"`.
+* *providedDependencies* - Comma-separated list of provided dependencies that should be included in the escrow package (optional). Format: `"groupId:artifactId:version"`.
+* *diskSpaceRequirement* - Disk space requirement for escrow package generation (optional). Can be specified as:
+  ** Number in bytes (e.g., `1073741824`)
+  ** String with units: `"1GB"`, `"512MB"`, `"1024KB"` (or `"1G"`, `"512M"`, `"1024K"`)
+* *additionalSources* - Comma-separated list of additional source paths to include in the escrow package (optional). For example: `"spa/.gradle,spa/node_modules"`.
+* *reusable* - Whether the escrow package can be reused by other components that depend on this component (default: `true`). When set to `true`, the escrow process will reuse already built escrow package instead of rebuilding dependencies.
+* *gradle* - Gradle-specific escrow parameters (optional):
+  ** *includeTestConfigurations* - Whether to include test configurations in the escrow package (default: `false`).
+  ** *includeConfigurations* - Comma-separated list of Gradle configurations to include in the escrow package (optional).
+  ** *excludeConfigurations* - Comma-separated list of Gradle configurations to exclude from the escrow package (optional).
+
+Example:
+----
+escrow {
+    generation = AUTO
+    buildTask = "clean build -x test"
+    providedDependencies = "test:test:1.1"
+    additionalSources = "spa/.gradle,spa/node_modules"
+    reusable = false
+    gradle {
+        includeTestConfigurations = true
+        excludeConfigurations = "testCompile"
+    }
+}
 ----
 
 === Distribution section
