@@ -12,66 +12,96 @@ import org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration
 import org.octopusden.octopus.escrow.configuration.model.EscrowModule
 import groovyx.net.http.HTTPBuilder
 import org.apache.commons.lang3.StringUtils
-import org.gradle.api.DefaultTask
-import org.gradle.api.GradleException
-import org.gradle.api.tasks.Input
-import org.gradle.api.tasks.TaskAction
 import org.octopusden.releng.versions.VersionNames
+import org.slf4j.LoggerFactory
 
 import static groovyx.net.http.ContentType.TEXT
 
-class ComponentRegistryValidationTask extends DefaultTask {
+/**
+ * Component Registry Validator that can run in a separate JVM process.
+ * Validates component registry configuration including:
+ * - Component Owner, Release Manager, Security Champion validation via Employee Service
+ * - JIRA components validation
+ * - Comparison with production configuration
+ */
+class ComponentRegistryValidationTask {
 
+    private static final def log = LoggerFactory.getLogger(ComponentRegistryValidationTask.class)
     static final String ARCHIVED_SUFFIX = "(archived)"
-    @Input
+    
     String basePath
-    @Input
     String mainConfigFileName
-    @Input
     String jiraHost
-    private boolean employeeServiceEnabled
-    @Input
+    boolean employeeServiceEnabled
     String employeeServiceUrl
-    @Input
     String employeeServiceUsername
-    @Input
     String employeeServicePassword
-    @Input
     String employeeServiceToken
-    @Input
     String productionConfigPath
-    @Input
     String supportedGroupIds
-    @Input
     String supportedSystems
-    @Input
     String serviceBranch
-    @Input
     String service
-    @Input
     String minor
-    @Input
     String productTypeC
-    @Input
     String productTypeK
-    @Input
     String productTypeD
-    @Input
     String productTypeDDB
 
-
-    @Input
-    boolean isEmployeeServiceEnabled() {
-        return employeeServiceEnabled
+    static void main(String[] args) {
+        try {
+            log.info("=== Component Registry Validation Starting ===")
+            log.info("Java version: ${System.getProperty("java.version")}")
+            log.info("Working directory: ${System.getProperty("user.dir")}")
+            
+            // Create instance and load configuration from system properties
+            def task = new ComponentRegistryValidationTask()
+            task.basePath = getRequiredProperty("cr.basePath")
+            task.mainConfigFileName = getRequiredProperty("cr.mainConfigFileName")
+            task.jiraHost = getProperty("cr.jiraHost")
+            task.employeeServiceEnabled = Boolean.parseBoolean(getProperty("cr.employeeServiceEnabled") ?: "false")
+            task.employeeServiceUrl = getProperty("cr.employeeServiceUrl")
+            task.employeeServiceUsername = getProperty("cr.employeeServiceUsername")
+            task.employeeServicePassword = getProperty("cr.employeeServicePassword")
+            task.employeeServiceToken = getProperty("cr.employeeServiceToken")
+            task.productionConfigPath = getProperty("cr.productionConfigPath")
+            task.supportedGroupIds = getRequiredProperty("cr.supportedGroupIds")
+            task.supportedSystems = getRequiredProperty("cr.supportedSystems")
+            task.serviceBranch = getRequiredProperty("cr.serviceBranch")
+            task.service = getRequiredProperty("cr.service")
+            task.minor = getRequiredProperty("cr.minor")
+            task.productTypeC = getRequiredProperty("cr.productTypeC")
+            task.productTypeK = getRequiredProperty("cr.productTypeK")
+            task.productTypeD = getRequiredProperty("cr.productTypeD")
+            task.productTypeDDB = getRequiredProperty("cr.productTypeDDB")
+            
+            log.info("\nConfiguration:")
+            log.info("  basePath: $task.basePath")
+            log.info("  mainConfigFileName: $task.mainConfigFileName")
+            log.info("  jiraHost: $task.jiraHost")
+            log.info("  employeeServiceEnabled: $task.employeeServiceEnabled")
+            log.info("  employeeServiceUrl: $task.employeeServiceUrl")
+            log.info("  productionConfigPath: $task.productionConfigPath")
+            log.info("  supportedGroupIds: $task.supportedGroupIds")
+            log.info("  supportedSystems: $task.supportedSystems")
+            log.info("  serviceBranch: $task.serviceBranch")
+            log.info("  service: $task.service")
+            log.info("  minor: $task.minor")
+            
+            // Run validation
+            task.runEscrow()
+            
+            log.info("=== Component Registry Validation Completed Successfully ===")
+            System.exit(0)
+            
+        } catch (Exception e) {
+            log.error("=== Component Registry Validation Failed ===", e)
+            System.exit(1)
+        }
     }
 
-    void setEmployeeServiceEnabled(boolean employeeServiceEnabled) {
-        this.employeeServiceEnabled = employeeServiceEnabled
-    }
-
-    @TaskAction
     def runEscrow() {
-        getLogger().info "user.dir = ${System.getProperty('user.dir')} \n" +
+        log.info "user.dir = ${System.getProperty('user.dir')} \n" +
                 "basePath=$basePath \n" +
                 "mainConfigFileName=$mainConfigFileName \n" +
                 "employeeServiceEnabled=$employeeServiceEnabled \n" +
@@ -86,10 +116,12 @@ class ComponentRegistryValidationTask extends DefaultTask {
         productTypeMap.put(ProductTypes.PT_D, productTypeD)
         productTypeMap.put(ProductTypes.PT_D_DB, productTypeDDB)
 
-        def oldComponents = getComponentsFromConfig(productionConfigPath, productTypeMap)
+        def oldComponents = productionConfigPath 
+            ? getComponentsFromConfig(productionConfigPath, productTypeMap)
+            : null
         def newComponents = getComponentsFromConfig(basePath, productTypeMap)
 
-        def oldComponentNames = oldComponents.keySet()
+        def oldComponentNames = oldComponents?.keySet()
         def newComponentNames = newComponents.keySet()
 
         final Map<String, Set<String>> ownerComponents = new HashMap<>()
@@ -103,7 +135,7 @@ class ComponentRegistryValidationTask extends DefaultTask {
                             def componentOwner = moduleConfiguration.componentOwner
                             def releaseManager = moduleConfiguration.releaseManager
                             def securityChampions = moduleConfiguration.securityChampion
-                            getLogger().info("Add to employee validation '$componentName'," +
+                            log.info("Add to employee validation '$componentName'," +
                                     " componentOwner '$componentOwner'," +
                                     " releaseManager '$releaseManager'," +
                                     " securityChampions '$securityChampions'," +
@@ -127,23 +159,27 @@ class ComponentRegistryValidationTask extends DefaultTask {
         }
 
         def errors = findErrors(ownerComponents, "Component Owner") +
-                findErrors(releaseManagerComponents, "Release Manager") +
-                findErrors(securityChampionComponents, "Security Champion")
+                     findErrors(releaseManagerComponents, "Release Manager") +
+                     findErrors(securityChampionComponents, "Security Champion")
 
         if (!errors.isEmpty()) {
-            throw new GradleException("Component Owner, Release Manager, Security Champion validation finished with following errors: ${errors.join(". ")}")
+            throw new IllegalStateException("Component Owner, Release Manager, Security Champion validation finished with following errors: ${errors.join(". ")}")
         }
 
-        def jiraComponents = getJiRAComponents()
-        logger.info("oldComponents=$oldComponentNames")
-        logger.info("newComponents=$newComponentNames")
-        logger.info("jiraComponents=$jiraComponents")
-        oldComponentNames.removeAll(newComponentNames)
-        def removedComponents = oldComponents
-        logger.info("removedComponents=$removedComponents")
-        def renamedOrDeletedComponents = removedComponents.findAll { jiraComponents.contains(it) }
-        if (!renamedOrDeletedComponents.isEmpty()) {
-            throw new GradleException("Following component(s) $renamedOrDeletedComponents are deleted but exists in JIRA. Please revert them back or contact to solve this problem.")
+        if (jiraHost && oldComponents) {
+            def jiraComponents = getJiRAComponents()
+            log.info("oldComponents=$oldComponentNames")
+            log.info("newComponents=$newComponentNames")
+            log.info("jiraComponents=$jiraComponents")
+            oldComponentNames.removeAll(newComponentNames)
+            def removedComponents = oldComponents
+            log.info("removedComponents=$removedComponents")
+            def renamedOrDeletedComponents = removedComponents.findAll { jiraComponents.contains(it) }
+            if (!renamedOrDeletedComponents.isEmpty()) {
+                throw new IllegalStateException("Following component(s) $renamedOrDeletedComponents are deleted but exists in JIRA. Please revert them back or contact to solve this problem.")
+            }
+        } else {
+            log.info("Skipping JIRA validation: jiraHost=${jiraHost}, productionConfigPath=${productionConfigPath}")
         }
     }
 
@@ -188,7 +224,7 @@ class ComponentRegistryValidationTask extends DefaultTask {
                         }
                     }.findAll { error -> error != null }
         } else {
-            getLogger().warn 'Employee validation disabled'
+            log.warn 'Employee validation disabled'
             Collections.emptyList()
         }
     }
@@ -205,14 +241,14 @@ class ComponentRegistryValidationTask extends DefaultTask {
             }
         } catch (Exception e) {
             // service may be not available until its not in production
-            logger.error("Unable to get components from jira", e)
+            log.error("Unable to get components from jira", e)
         }
         components
     }
 
     private Map<String, EscrowModule> getComponentsFromConfig(String configPath, Map<ProductTypes, String> productTypeMap) {
-        getLogger().info("Loading: {}", configPath)
-        getLogger().info("Product types: {}", productTypeMap.toMapString())
+        log.info("Loading: {}", configPath)
+        log.info("Product types: {}", productTypeMap.toMapString())
         def loader = new ConfigLoader(
                 ComponentRegistryInfo.createFromFileSystem(configPath, mainConfigFileName),
                 new VersionNames(serviceBranch, service, minor),
@@ -244,5 +280,17 @@ class ComponentRegistryValidationTask extends DefaultTask {
         def configuration = escrowConfigurationLoader.loadFullConfiguration(null)
         assert configuration != null
         return configuration
+    }
+    
+    private static String getProperty(String name) {
+        return System.getProperty(name)
+    }
+    
+    private static String getRequiredProperty(String name) {
+        def value = System.getProperty(name)
+        if (value == null) {
+            throw new IllegalArgumentException("Required system property '$name' is not set")
+        }
+        return value
     }
 }
