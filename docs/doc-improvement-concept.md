@@ -58,7 +58,7 @@ The improvement is split into two parts:
     
     distribution {
         explicit = true
-        external = true
+        external = false //can be also true
         GAV = "org.company.docs:mycomponent-docs:zip"
     }
 }
@@ -107,13 +107,16 @@ Or without majorVersion:
 
 ### 1.2 Calculate Documentation Dependencies in Build
 
-**Goal:** Automatically resolve and inject documentation dependencies into the build process on Compile&UT step
+**Goal:** Automatically resolve and inject documentation dependencies into the build process in Compile&UT build configuration (in standard templates).
 
-**Component:** `CalculateReleaseManagementParameters` (SetDistributionMojo in releng)
+**Build step:** `CalculateReleaseManagementParameters` (SetDistributionMojo in releng)
 
 **Implementation:**
-- Add calculation of TeamCity parameter `DEPENDENCIES` or separate `DOC_DEPENDENCIES`
-- Resolution rule: `doc_mycomponent:<latest released version from version line in CR>` (Take data from CRS and RM service)
+Add calculation of TeamCity parameters:
+-  `DEPENDENCIES` or separate `DOC_DEPENDENCIES`
+   Resolution rule: `doc_mycomponent:<latest released version from version line in CR>` (Take data from CRS and RM service)
+- `DOC_ARTIFACTS_COORDINATES` in format supported by maven-dms-plugin (Example: DOC_ARTIFACTS_COORDINATES=org.myorg.mycomponent.doc:my-documentation:zip:english,org.myorg.mycomponent.doc:my-documentation:zip:spanish)
+- `DOC_ARTIFACTS_VERSION` with value = version of documentation sub-component. Example: DOC_ARTIFACTS_VERSION=1.3.9
 
 **Example:**
 ```
@@ -157,9 +160,9 @@ At the release of the main component:
    GET /api/rest/v2/components/{name}/versions/{version}/doc
 
 
-2. Get Version of linked documentaiton component from Release Management Service API
+2. Get version of linked documentation component from Release Management Service API
 
-3. Get information on the artifacts to deployed (distribution->GAV section ) for documentation component via
+3. Get information on the artifacts to be deployed (distribution->GAV section) for documentation component via
 GET /api/rest/v2/components/{doc_component_name}/versions/{doc_component_version}/distribution
 
 
@@ -265,7 +268,7 @@ solution-1.0.0-russian.zip
 
 ### Phase 3: Solution Support (Part 2)
 1. Implement documentation aggregation for solutions
-2. Add to release template assembling of documentaiion zips for solutions (conditional build step)
+2. Add to release template assembling of documentation zips for solutions (conditional build step)
 3. Testing with real solutions
 
 
@@ -294,7 +297,7 @@ solution-1.0.0-russian.zip
 ### Part 2 Benefits
 1. **Complete solution documentation** - all sub-component docs in one place
 2. **Customer convenience** - single download for all solution documentation
-4. **Reduced manual work** - no manual documentation collection
+3. **Reduced manual work** - no manual documentation collection
 
 ---
 
