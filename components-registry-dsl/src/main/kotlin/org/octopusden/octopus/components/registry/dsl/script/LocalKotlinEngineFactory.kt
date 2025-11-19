@@ -8,7 +8,7 @@ import org.jetbrains.kotlin.mainKts.jsr223.KotlinJsr223MainKtsScriptEngineFactor
 class LocalKotlinEngineFactory : ScriptEngineFactory {
     override fun getEngineName(): String? = "kotlin-local"
 
-    override fun getEngineVersion(): String? = "1.9.25"
+    override fun getEngineVersion(): String? = ENGINE_VERSION
 
     override fun getExtensions(): List<String?>? = listOf("kts")
 
@@ -21,7 +21,7 @@ class LocalKotlinEngineFactory : ScriptEngineFactory {
 
     override fun getLanguageName(): String? = "kotlin"
 
-    override fun getLanguageVersion(): String? = "1.9.25"
+    override fun getLanguageVersion(): String? = ENGINE_VERSION
 
     override fun getParameter(key: String?): Any? =
         when (key) {
@@ -46,5 +46,9 @@ class LocalKotlinEngineFactory : ScriptEngineFactory {
     override fun getScriptEngine(): ScriptEngine {
         setIdeaIoUseFallback()
         return KotlinJsr223MainKtsScriptEngineFactory().getScriptEngine()
+    }
+
+    companion object {
+        private const val ENGINE_VERSION = "1.9.25"
     }
 }

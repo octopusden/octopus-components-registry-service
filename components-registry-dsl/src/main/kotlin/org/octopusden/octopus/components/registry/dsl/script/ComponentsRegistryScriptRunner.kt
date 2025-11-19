@@ -54,9 +54,8 @@ object ComponentsRegistryScriptRunner {
             KotlinJsr223DefaultScriptEngineFactory().scriptEngine.also {
                 logger.info("Using KotlinJsr223DefaultScriptEngineFactory")
             }
-        } catch (e: Throwable) {
-            logger.warning("Default engine failed: ${e::class.java.simpleName}: ${e.message}, switching to LocalKotlinEngineFactory")
-            e.printStackTrace()
+        } catch (_: Throwable) {
+            logger.info("Unable to get default kotlin script engine, fallback to local script engine")
             LocalKotlinEngineFactory().scriptEngine
         }
         currentRegistry.clear()
