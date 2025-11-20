@@ -1,9 +1,12 @@
 package org.octopusden.octopus.components.registry.server.mapper
 
+import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
+import org.octopusden.octopus.components.registry.api.escrow.Escrow
 import org.octopusden.octopus.components.registry.core.dto.ComponentArtifactConfigurationDTO
 import org.octopusden.octopus.components.registry.core.dto.ComponentInfoDTO
 import org.octopusden.octopus.components.registry.core.dto.ComponentVersionFormatDTO
 import org.octopusden.octopus.components.registry.core.dto.DistributionDTO
+import org.octopusden.octopus.components.registry.core.dto.EscrowDTO
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentDTO
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionDTO
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionRangeDTO
@@ -65,3 +68,20 @@ fun VersionControlSystemRoot.toDTO(): VersionControlSystemRootDTO {
 
 fun ComponentArtifactConfiguration.toDTO(): ComponentArtifactConfigurationDTO =
     ComponentArtifactConfigurationDTO(this.groupPattern, this.artifactPattern)
+
+fun EscrowGenerationMode.toDTO(): org.octopusden.octopus.components.registry.core.dto.EscrowGenerationMode =
+    when (this) {
+        EscrowGenerationMode.AUTO -> org.octopusden.octopus.components.registry.core.dto.EscrowGenerationMode.AUTO
+        EscrowGenerationMode.MANUAL -> org.octopusden.octopus.components.registry.core.dto.EscrowGenerationMode.MANUAL
+        EscrowGenerationMode.UNSUPPORTED -> org.octopusden.octopus.components.registry.core.dto.EscrowGenerationMode.UNSUPPORTED
+    }
+
+fun Escrow.toDTO(): EscrowDTO =
+    EscrowDTO(
+        this.buildTask,
+        this.providedDependencies.toList(),
+        this.diskSpaceRequirement.orElse(null),
+        this.additionalSources.toList(),
+        this.isReusable,
+        this.generation.orElse(null)?.let { it.toDTO() }
+    )

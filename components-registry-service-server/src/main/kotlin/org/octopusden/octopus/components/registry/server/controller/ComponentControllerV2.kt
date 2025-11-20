@@ -11,7 +11,6 @@ import org.octopusden.octopus.components.registry.core.dto.DetailedComponent
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersion
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersions
 import org.octopusden.octopus.components.registry.core.dto.EscrowDTO
-import org.octopusden.octopus.components.registry.core.dto.EscrowGenerationMode
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionDTO
 import org.octopusden.octopus.components.registry.core.dto.RepositoryType
 import org.octopusden.octopus.components.registry.core.dto.ToolDTO
@@ -108,7 +107,7 @@ class ComponentControllerV2(
             releasesInDefaultBranch = escrowModuleConfig.releasesInDefaultBranch
             parentComponent = escrowModuleConfig.parentComponent
             buildParameters = escrowModuleConfig.buildConfiguration?.let { bc -> getBuildParametersDTO(bc) }
-            escrow = escrowModuleConfig.escrow?.let { escrow -> getEscrowDTO(escrow) }
+            escrow = escrowModuleConfig.escrow?.let { it.toDTO() }
             solution = escrowModuleConfig.solution
             this
         }
@@ -143,14 +142,6 @@ class ComponentControllerV2(
         )
     }
 
-    private fun getEscrowGenerationMode(escrowGenerationMode: org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode): EscrowGenerationMode {
-        return when (escrowGenerationMode) {
-            org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode.AUTO -> EscrowGenerationMode.AUTO
-            org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode.MANUAL -> EscrowGenerationMode.MANUAL
-            org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode.UNSUPPORTED -> EscrowGenerationMode.UNSUPPORTED
-        }
-    }
-
     private fun getEscrowDTO(escrow: Escrow): EscrowDTO {
         return EscrowDTO(
             escrow.buildTask,
@@ -158,7 +149,7 @@ class ComponentControllerV2(
             escrow.diskSpaceRequirement.orElse(null),
             escrow.additionalSources.toList(),
             escrow.isReusable,
-            escrow.generation.orElse(null)?.let { getEscrowGenerationMode(it) }
+            escrow.generation.orElse(null)?.let { it.toDTO() }
         )
     }
 
