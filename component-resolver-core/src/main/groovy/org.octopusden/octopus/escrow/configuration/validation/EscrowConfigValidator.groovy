@@ -164,12 +164,17 @@ class EscrowConfigValidator {
             if (StringUtils.isBlank(moduleConfig.componentDisplayName)) {
                 registerError("componentDisplayName is not set in '$component'")
             }
-            if (StringUtils.isBlank(moduleConfig.releaseManager)) {
+            def userListPattern = "\\w+(,\\w+)*"
+            def releaseManagers = moduleConfig.releaseManager
+            if (StringUtils.isNotBlank(releaseManagers)) {
+                if (releaseManagers?.matches(userListPattern) != true) {
+                    registerError("releaseManager is not matched '$userListPattern' in '$component'")
+                }
+            } else {
                 registerError("releaseManager is not set in '$component'")
             }
             def securityChampions = moduleConfig.securityChampion
             if (StringUtils.isNotBlank(securityChampions)) {
-                def userListPattern = "\\w+(,\\w+)*"
                 if (securityChampions?.matches(userListPattern) != true) {
                     registerError("securityChampion is not matched '$userListPattern' in '$component'")
                 }
