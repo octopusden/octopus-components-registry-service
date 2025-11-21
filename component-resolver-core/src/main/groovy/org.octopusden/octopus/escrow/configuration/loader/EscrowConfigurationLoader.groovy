@@ -365,7 +365,8 @@ class EscrowConfigurationLoader {
                         vcsSettings: vcsSettingsWrapper.vcsSettings,
                         distribution: distributionConfiguration,
                         octopusVersion: octopusVersion,
-                        escrow: escrow
+                        escrow: escrow,
+                        archived: componentDefaultConfiguration.archived
                 )
                 escrowModule.moduleConfigurations.add(escrowModuleConfiguration)
             }
@@ -391,7 +392,8 @@ class EscrowConfigurationLoader {
                         vcsSettings: componentDefaultConfiguration.vcsSettingsWrapper.vcsSettings,
                         distribution: componentDefaultConfiguration.distribution,
                         octopusVersion: componentDefaultConfiguration.octopusVersion,
-                        escrow: componentDefaultConfiguration.escrow
+                        escrow: componentDefaultConfiguration.escrow,
+                        archived: componentDefaultConfiguration.archived
                 )
                 escrowModule.moduleConfigurations.add(escrowModuleConfiguration)
             }
@@ -747,6 +749,15 @@ class EscrowConfigurationLoader {
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
+    private static Boolean loadArchived(ConfigObject parentConfigObject) {
+        if (parentConfigObject.containsKey("archived")) {
+            return parentConfigObject.get("archived")
+        } else {
+            return false
+        }
+    }
+
+    @TypeChecked(TypeCheckingMode.SKIP)
     private static String loadComponentReleaseManager(ConfigObject parentConfigObject, String defaultReleaseManager) {
         if (parentConfigObject.containsKey("releaseManager")) {
             return parentConfigObject.get("releaseManager")
@@ -1060,6 +1071,7 @@ class EscrowConfigurationLoader {
     ) {
         BuildSystem buildSystem = componentConfigObject.containsKey("buildSystem") ? BuildSystem.valueOf(componentConfigObject.buildSystem.toString()) : defaultConfiguration?.buildSystem
         VCSSettingsWrapper vcsSettingsWrapper = loadVCSSettings(componentConfigObject, defaultConfiguration, buildSystem)
+        Boolean isArchived = loadArchived(componentConfigObject)
 
         boolean isHotfixEnabled = COMPONENT_HOTFIX_SUPPORT_RESOLVER.isHotFixEnabled(vcsSettingsWrapper.vcsSettings)
 
@@ -1098,7 +1110,8 @@ class EscrowConfigurationLoader {
                 distribution: distribution,
                 vcsSettingsWrapper: vcsSettingsWrapper,
                 octopusVersion: octopusVersion,
-                escrow: escrow
+                escrow: escrow,
+                archived: isArchived
         )
         defaultConfigParameters
     }

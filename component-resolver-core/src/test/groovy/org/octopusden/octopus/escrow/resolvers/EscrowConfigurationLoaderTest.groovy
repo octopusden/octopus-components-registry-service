@@ -79,6 +79,41 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
     }
 
     @Test
+    @TypeChecked
+    void testArchivedConfig() {
+        EscrowConfiguration configuration = loadConfiguration("single-module/archivedConfig.groovy")
+        assert 1 == configuration.escrowModules.size()
+        def configurations = configuration.escrowModules.get(TEST_MODULE).moduleConfigurations
+        assert configurations.size() == 1
+        def escrowModuleConfig = configurations.get(0)
+        assert escrowModuleConfig
+        escrowModuleConfig.toString()
+
+        def expectedConfig = new EscrowModuleConfig(vcsSettings:
+                VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", MERCURIAL, VCS_URL, '$module.$version', 'default', null)),
+                componentOwner: "user",
+                releaseManager: "user",
+                securityChampion: "user",
+                system: "CLASSIC",
+                releasesInDefaultBranch: true,
+                solution: false,
+                buildSystem: BuildSystem.MAVEN,
+                artifactIdPattern: "builder",
+                groupIdPattern: "io.bcomponent",
+                versionRange: VERSION_RANGE,
+                jiraConfiguration: new JiraComponent("BCOMPONENT", null, ComponentVersionFormat.create('$major.$minor', '$major.$minor.$service'), new ComponentInfo(null, '$versionPrefix-$baseVersionFormat'), false, false),
+                buildConfiguration:
+                        BuildParameters.create(null, null, null, false, null, null, null, [new Tool(name: "BuildEnv", escrowEnvironmentVariable: "BUILD_ENV", targetLocation: "tools/BUILD_ENV",
+                                sourceLocation: "env.BUILD_ENV", installScript: "script")], []),
+                deprecated: false,
+                distribution: new Distribution(true, true, "org.octopusden.octopus.bcomponent:builder:war,org.octopusden.octopus.bcomponent:builder:jar", null, null, null, new SecurityGroups(null)),
+                componentDisplayName: "BCOMPONENT Official Name",
+                archived: true
+        )
+        assertEquals(expectedConfig.archived, escrowModuleConfig.archived)
+    }
+
+    @Test
     void testInvalidVcsPath() {
         shouldFail(EscrowConfigurationException) {
             loadConfiguration("invalidVcsPathConfig.groovy")
@@ -378,7 +413,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 securityChampion: "somesecuritychampion",
                 system: "CLASSIC",
                 releasesInDefaultBranch: false,
-                solution: true,
+                solution: true
         )
         assert expectedModuleConfig == modelConfiguration
 
