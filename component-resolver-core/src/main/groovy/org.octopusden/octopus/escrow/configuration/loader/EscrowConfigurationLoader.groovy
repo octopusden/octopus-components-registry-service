@@ -356,7 +356,8 @@ class EscrowConfigurationLoader {
                         deprecated: moduleConfigSection.containsKey("deprecated") ? moduleConfigSection.deprecated : componentDefaultConfiguration.deprecated,
                         vcsSettings: vcsSettingsWrapper.vcsSettings,
                         distribution: distributionConfiguration,
-                        octopusVersion: octopusVersion
+                        octopusVersion: octopusVersion,
+                        archived: componentDefaultConfiguration.archived
                 )
                 escrowModule.moduleConfigurations.add(escrowModuleConfiguration)
             }
@@ -381,7 +382,8 @@ class EscrowConfigurationLoader {
                         deprecated: componentDefaultConfiguration.deprecated,
                         vcsSettings: componentDefaultConfiguration.vcsSettingsWrapper.vcsSettings,
                         distribution: componentDefaultConfiguration.distribution,
-                        octopusVersion: componentDefaultConfiguration.octopusVersion
+                        octopusVersion: componentDefaultConfiguration.octopusVersion,
+                        archived: componentDefaultConfiguration.archived
                 )
                 escrowModule.moduleConfigurations.add(escrowModuleConfiguration)
             }
@@ -737,6 +739,15 @@ class EscrowConfigurationLoader {
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
+    private static Boolean loadArchived(ConfigObject parentConfigObject) {
+        if (parentConfigObject.containsKey("archived")) {
+            return parentConfigObject.get("archived")
+        } else {
+            return false
+        }
+    }
+
+    @TypeChecked(TypeCheckingMode.SKIP)
     private static String loadComponentReleaseManager(ConfigObject parentConfigObject, String defaultReleaseManager) {
         if (parentConfigObject.containsKey("releaseManager")) {
             return parentConfigObject.get("releaseManager")
@@ -1028,6 +1039,7 @@ class EscrowConfigurationLoader {
     ) {
         BuildSystem buildSystem = componentConfigObject.containsKey("buildSystem") ? BuildSystem.valueOf(componentConfigObject.buildSystem.toString()) : defaultConfiguration?.buildSystem
         VCSSettingsWrapper vcsSettingsWrapper = loadVCSSettings(componentConfigObject, defaultConfiguration, buildSystem)
+        Boolean isArchived = loadArchived(componentConfigObject)
 
         boolean isHotfixEnabled = COMPONENT_HOTFIX_SUPPORT_RESOLVER.isHotFixEnabled(vcsSettingsWrapper.vcsSettings)
 
@@ -1063,7 +1075,8 @@ class EscrowConfigurationLoader {
                 deprecated: componentConfigObject.containsKey("deprecated") ? componentConfigObject.deprecated : false,
                 distribution: distribution,
                 vcsSettingsWrapper: vcsSettingsWrapper,
-                octopusVersion: octopusVersion
+                octopusVersion: octopusVersion,
+                archived: isArchived
         )
         defaultConfigParameters
     }
