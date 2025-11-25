@@ -145,13 +145,7 @@ DOC_DEPENDENCIES = doc_mycomponent:3.2.18  (latest released version overall)
 **Component:** DMS Client
 
 **Implementation:**
-- Add new step (meta-runner + implementation)
-- Upload to DMS for the main component from documentation component ZIP artifacts:
-  - `{artifactId}-russian.zip`
-  - `{artifactId}-english.zip`
-  - `{artifactId}-spanish.zip`
-- Check artifact existence via Artifactory REST API first
-- Upload only found artifacts
+- Implement new meta-runner and UploadDocumentationMojo in maven-dms-plugin of octopus-dms-service
 
 **Algorithm:**
 ```
@@ -159,17 +153,14 @@ At the release of the main component:
 1. Get linked documentation component name via Components Registry Service API
    GET /api/rest/v2/components/{name}/versions/{version}/doc
 
-
 2. Get version of linked documentation component from Release Management Service API
 
 3. Get information on the artifacts to be deployed (distribution->GAV section) for documentation component via
 GET /api/rest/v2/components/{doc_component_name}/versions/{doc_component_version}/distribution
 
-
 4. For each specified artifact:
    - Upload to DMS with type=documentation
 ```
-
 
 ### 1.5 Add Documentation Step to Release Template
 
