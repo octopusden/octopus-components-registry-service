@@ -20,22 +20,6 @@ object ComponentsRegistryScriptRunner {
         if (System.getProperty("kotlin.script.classpath").isNullOrEmpty()) {
             val custom = System.getProperty("cr.dsl.class.path", System.getProperty("java.class.path"))
             System.setProperty("kotlin.script.classpath", custom)
-            logger.info("cr.dsl.class.path = ${System.getProperty("cr.dsl.class.path")}")
-            logger.info("Setting kotlin.script.classpath= $custom")
-        }
-        
-        // Set kotlin.java.stdlib.jar if not already set - required for Kotlin script engine initialization
-        if (System.getProperty("kotlin.java.stdlib.jar").isNullOrEmpty()) {
-            val classpath = System.getProperty("kotlin.script.classpath") ?: System.getProperty("java.class.path")
-            val stdlibJar = classpath.split(System.getProperty("path.separator"))
-                .firstOrNull { it.contains("kotlin-stdlib") && it.endsWith(".jar") }
-            
-            if (stdlibJar != null) {
-                System.setProperty("kotlin.java.stdlib.jar", stdlibJar)
-                logger.info("Setting kotlin.java.stdlib.jar=$stdlibJar")
-            } else {
-                logger.warning("Unable to find kotlin-stdlib jar in classpath")
-            }
         }
     }
 
