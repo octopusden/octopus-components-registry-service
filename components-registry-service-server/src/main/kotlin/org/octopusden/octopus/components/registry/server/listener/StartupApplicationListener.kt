@@ -36,10 +36,9 @@ class StartupApplicationListener: ApplicationListener<ApplicationStartingEvent> 
 
     override fun onApplicationEvent(event: ApplicationStartingEvent) {
         val dslKotlinModule = Thread.currentThread().contextClassLoader.getResource("/components-registry-dsl.txt")
-        println("DEBUG: StartupApplicationListener running. dslKotlinModule=$dslKotlinModule")
+        LOG.debug("StartupApplicationListener running. dslKotlinModule={}", dslKotlinModule)
         
         if (dslKotlinModule != null && dslKotlinModule.toString().contains("!BOOT-INF/")) {
-            println("DEBUG: Spring boot jar running mode detected")
             LOG.debug("Spring boot jar running mode detected")
             temporaryLibraryPath = Files.createTempDirectory("components-registry-dsl-" + UUID.randomUUID())
             val dslLibraryClassPath = StringBuffer()
