@@ -33,7 +33,7 @@ task storeDslLibraryDependencies {
         def artifacts = ["${project.name}-${project.version}.jar"]
         copiedConfiguration.resolvedConfiguration.resolvedArtifacts.forEach { artifacts.add(it.file.name) }
         artifacts
-        def file = file("${getLayout().getBuildDirectory()}/resources/main/${project.name}.txt")
+        def file = file("${project.buildDir}/resources/main/${project.name}.txt")
         file.getParentFile().mkdirs()
         file.write(artifacts.join('\n'))
     }
