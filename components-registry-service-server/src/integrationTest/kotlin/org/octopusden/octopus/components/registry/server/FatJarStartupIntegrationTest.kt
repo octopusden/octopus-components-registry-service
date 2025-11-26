@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.io.TempDir
+import org.slf4j.LoggerFactory
 import java.io.BufferedReader
 import java.io.File
 import java.io.InputStreamReader
@@ -20,7 +21,7 @@ import kotlin.concurrent.thread
  * This test specifically checks for the Kotlin stdlib issue that occurs
  * when running as a Spring Boot fat jar in production environments.
  *
- * This test is designed to detect folloqing errors:
+ * This test is designed to detect following errors:
  * - "Unable to find kotlin stdlib" error
  * - "Cannot access script base class" error
  *
@@ -29,6 +30,8 @@ import kotlin.concurrent.thread
  * - HTTP Health check verification
  */
 class FatJarStartupIntegrationTest {
+    
+    private val log = LoggerFactory.getLogger(FatJarStartupIntegrationTest::class.java)
 
     @Test
     @Timeout(120) // 2 minutes timeout
@@ -39,8 +42,8 @@ class FatJarStartupIntegrationTest {
         val fatJar = File(fatJarPath)
         Assertions.assertTrue(fatJar.exists(), "Fat jar not found at: $fatJarPath")
         
-        println("=== Fat Jar Startup Integration Test ===")
-        println("Fat jar: ${fatJar.absolutePath}")
+        log.info("Starting Fat Jar Startup Integration Test")
+        log.info("Fat jar: {}", fatJar.absolutePath)
         
         // Setup DSL files
         val dslDir = setupDslFiles(tempDir)
@@ -49,35 +52,31 @@ class FatJarStartupIntegrationTest {
         
         // Find free port
         val port = findRandomPort()
-        println("Using random port: $port")
+        log.info("Using random port: {}", port)
         
         // Build command
         val javaHome = System.getProperty("java.home")
         val javaExecutable = File(javaHome, "bin/java")
         
+        // Get path to integration test profile
+        val testResourcesPath = System.getProperty("test.resources.path")
+            ?: throw IllegalStateException("test.resources.path system property not set")
+        val profilePath = File(testResourcesPath, "application-integration-test.yml")
+        Assertions.assertTrue(profilePath.exists(), "Integration test profile not found at: ${profilePath.absolutePath}")
+        
         val command = listOf(
             javaExecutable.absolutePath,
-            "-Dspring.cloud.config.enabled=false",
-            "-Dspring.profiles.active=default",
+            "-Dspring.profiles.active=integration-test",
+            "-Dspring.config.additional-location=file:${profilePath.absolutePath}",
             "-Dcomponents-registry.groovy-path=${dslDir.toAbsolutePath()}",
             "-Dcomponents-registry.work-dir=${tempDir.toAbsolutePath()}",
-            "-Dcomponents-registry.main-groovy-file=Aggregator.groovy",
-            "-Dcomponents-registry.vcs.enabled=false",
-            "-Dcomponents-registry.version-name.service-branch=serviceBranch",
-            "-Dcomponents-registry.version-name.service=service",
-            "-Dcomponents-registry.version-name.minor=minor",
-            "-Dcomponents-registry.product-type.c=PT_C",
-            "-Dcomponents-registry.product-type.k=PT_K",
-            "-Dcomponents-registry.product-type.d=PT_D",
-            "-Dcomponents-registry.product-type.ddb=PT_D_DB",
             "-Dcomponents-registry.project-registry-path=${projectRegistryFile.toAbsolutePath()}",
             "-Dserver.port=$port",
-            "-Dmanagement.endpoints.web.exposure.include=health", // Ensure health endpoint is exposed
             "-jar",
             fatJar.absolutePath
         )
         
-        println("Starting application...")
+        log.info("Starting application...")
         val processBuilder = ProcessBuilder(command)
         processBuilder.redirectErrorStream(true)
         
@@ -92,7 +91,7 @@ class FatJarStartupIntegrationTest {
                     synchronized(output) {
                         output.appendLine(line)
                     }
-                    println(line) // Echo to stdout for CI visibility
+                    log.info("App output: {}", line)
                 }
             }
         }
@@ -110,7 +109,7 @@ class FatJarStartupIntegrationTest {
                 Assertions.fail<String>("Application did not become healthy within timeout.")
             }
             
-            println("\n✅ Application is healthy!")
+            log.info("Application is healthy")
             
             // Verify no specific errors in logs (even if healthy, we don't want these errors)
             val logContent = synchronized(output) { output.toString() }
@@ -131,9 +130,9 @@ class FatJarStartupIntegrationTest {
             val logFile = File(System.getProperty("java.io.tmpdir"), "fat-jar-integration-test-${System.currentTimeMillis()}.log")
             val logContent = synchronized(output) { output.toString() }
             logFile.writeText(logContent)
-            println("Full log saved to: ${logFile.absolutePath}")
+            log.info("Full log saved to: {}", logFile.absolutePath)
 
-            println("Shutting down application...")
+            log.info("Shutting down application...")
             process.destroy()
             process.waitFor(10, TimeUnit.SECONDS)
             if (process.isAlive) {
@@ -144,14 +143,14 @@ class FatJarStartupIntegrationTest {
     }
     
     private fun setupDslFiles(tempDir: Path): Path {
+        val dslDir = tempDir.resolve("dsl")
+        Files.createDirectories(dslDir)
+        
         val testResourcesPath = System.getProperty("test.resources.path")
             ?: throw IllegalStateException("test.resources.path system property not set")
         
         val resourcesDir = File(testResourcesPath)
         Assertions.assertTrue(resourcesDir.exists(), "Test resources directory not found")
-        
-        val dslDir = tempDir.resolve("dsl")
-        Files.createDirectories(dslDir)
         
         File(resourcesDir, "Aggregator.groovy").copyTo(dslDir.resolve("Aggregator.groovy").toFile())
         File(resourcesDir, "TestComponent.groovy").copyTo(dslDir.resolve("TestComponent.groovy").toFile())
@@ -170,7 +169,7 @@ class FatJarStartupIntegrationTest {
         val endTime = System.currentTimeMillis() + (timeoutSeconds * 1000)
         val healthUrl = URL("http://localhost:$port/actuator/health")
         
-        println("Waiting for health check at $healthUrl...")
+        log.info("Waiting for health check at {}", healthUrl)
         
         while (System.currentTimeMillis() < endTime) {
             try {

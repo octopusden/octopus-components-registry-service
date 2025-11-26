@@ -1,0 +1,30 @@
+spring:
+  cloud:
+    config:
+      enabled: false
+
+server:
+  port: 0  # Random port
+
+components-registry:
+  vcs:
+    enabled: false
+  groovy-path: # will be set via system property
+  work-dir: # will be set via system property
+  main-groovy-file: Aggregator.groovy
+  project-registry-path: # will be set via system property
+  version-name:
+    service-branch: serviceBranch
+    service: service
+    minor: minor
+  product-type:
+    c: PT_C
+    k: PT_K
+    d: PT_D
+    ddb: PT_D_DB
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
