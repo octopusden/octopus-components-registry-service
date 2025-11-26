@@ -64,11 +64,6 @@ configurations {
     integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
 }
 
-// Configure resource processing for integration tests
-processIntegrationTestResources {
-    duplicatesStrategy = DuplicatesStrategy.INCLUDE
-}
-
 task integrationTest(type: Test) {
     description = 'Runs integration tests including fat jar startup validation'
     group = 'verification'

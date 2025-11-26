@@ -42,7 +42,6 @@ class FatJarStartupIntegrationTest {
         val fatJar = File(fatJarPath)
         Assertions.assertTrue(fatJar.exists(), "Fat jar not found at: $fatJarPath")
         
-        log.info("Starting Fat Jar Startup Integration Test")
         log.info("Fat jar: {}", fatJar.absolutePath)
         
         // Setup DSL files
