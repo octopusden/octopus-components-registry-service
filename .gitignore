@@ -12,10 +12,4 @@ out/
 # Test/debug files
 BOOT-INF/
 *.class
-TestRegex.java
-reproduce-*.sh
-run-*.sh
-test-*.sh
-test_*.kts
-PR_DESCRIPTION.md
-components-registry-dsl/property 'buildDir'/
+*.sh
