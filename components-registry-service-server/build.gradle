@@ -47,7 +47,48 @@ sourceSets {
             srcDirs += [ project(':test-common').sourceSets.test.resources ]
         }
     }
+    integrationTest {
+        kotlin {
+            srcDir 'src/integrationTest/kotlin'
+        }
+        resources {
+            srcDir 'src/integrationTest/resources'
+        }
+        compileClasspath += sourceSets.main.output + configurations.testRuntimeClasspath
+        runtimeClasspath += output + compileClasspath
+    }
 }
+
+configurations {
+    integrationTestImplementation.extendsFrom testImplementation
+    integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+
+// Configure resource processing for integration tests
+processIntegrationTestResources {
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+}
+
+task integrationTest(type: Test) {
+    description = 'Runs integration tests including fat jar startup validation'
+    group = 'verification'
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    shouldRunAfter test
+    mustRunAfter bootJar
+    
+    // Pass required properties to test
+    systemProperty 'fatJar.path', bootJar.archiveFile.get().asFile.absolutePath
+    systemProperty 'test.resources.path', "$projectDir/src/integrationTest/resources"
+    systemProperty 'java.home', System.getProperty('java.home')
+    
+    useJUnitPlatform()
+    jvmArgs('--add-opens=java.base/java.lang=ALL-UNNAMED')
+    jvmArgs('--add-opens=java.base/java.util=ALL-UNNAMED')
+}
+
+check.dependsOn integrationTest
+integrationTest.dependsOn bootJar
 
 jar {
     archiveBaseName = "${project.name}-it"
