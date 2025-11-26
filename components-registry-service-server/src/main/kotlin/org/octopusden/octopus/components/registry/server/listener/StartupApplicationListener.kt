@@ -49,7 +49,7 @@ class StartupApplicationListener: ApplicationListener<ApplicationStartingEvent> 
                 }
                 
                 // Fix for kotlin.java.stdlib.jar property issue in fat jar
-                val stdlibJar = libraryFiles.find { it.fileName.toString().matches(Regex("kotlin-stdlib-[0-9].*\\.jar")) }
+                val stdlibJar = libraryFiles.find { it.fileName.toString().matches(Regex("kotlin-stdlib-\\d+.*\\.jar")) }
                 if (stdlibJar != null) {
                     val dstPath = temporaryLibraryPath!!.resolve(stdlibJar.fileName.toString())
                     if (!Files.exists(dstPath)) {
