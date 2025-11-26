@@ -85,6 +85,12 @@ task integrationTest(type: Test) {
 check.dependsOn integrationTest
 integrationTest.dependsOn bootJar
 
+// Integration test inherits testImplementation configuration which includes transitive dependencies with resources.
+// Gradle's Copy task detects these as duplicates during resource processing.
+processIntegrationTestResources {
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+}
+
 jar {
     archiveBaseName = "${project.name}-it"
     enabled = true

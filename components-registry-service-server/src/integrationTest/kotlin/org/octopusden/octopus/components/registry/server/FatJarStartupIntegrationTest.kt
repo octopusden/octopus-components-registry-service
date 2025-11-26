@@ -149,12 +149,12 @@ class FatJarStartupIntegrationTest {
         val testResourcesPath = System.getProperty("test.resources.path")
             ?: throw IllegalStateException("test.resources.path system property not set")
         
-        val resourcesDir = File(testResourcesPath)
-        Assertions.assertTrue(resourcesDir.exists(), "Test resources directory not found")
+        val testDataDir = File(testResourcesPath, "test-data")
+        Assertions.assertTrue(testDataDir.exists(), "Test data directory not found at: ${testDataDir.absolutePath}")
         
-        File(resourcesDir, "Aggregator.groovy").copyTo(dslDir.resolve("Aggregator.groovy").toFile())
-        File(resourcesDir, "TestComponent.groovy").copyTo(dslDir.resolve("TestComponent.groovy").toFile())
-        File(resourcesDir, "test.kts").copyTo(dslDir.resolve("test.kts").toFile())
+        File(testDataDir, "Aggregator.groovy").copyTo(dslDir.resolve("Aggregator.groovy").toFile())
+        File(testDataDir, "TestComponent.groovy").copyTo(dslDir.resolve("TestComponent.groovy").toFile())
+        File(testDataDir, "test.kts").copyTo(dslDir.resolve("test.kts").toFile())
         
         return dslDir
     }
