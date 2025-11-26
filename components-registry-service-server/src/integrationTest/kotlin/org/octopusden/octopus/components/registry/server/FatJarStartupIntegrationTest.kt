@@ -7,18 +7,26 @@ import org.junit.jupiter.api.io.TempDir
 import java.io.BufferedReader
 import java.io.File
 import java.io.InputStreamReader
+import java.net.HttpURLConnection
+import java.net.ServerSocket
+import java.net.URL
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
+import kotlin.concurrent.thread
 
 /**
  * Integration test that verifies the fat jar can start successfully.
  * This test specifically checks for the Kotlin stdlib issue that occurs
  * when running as a Spring Boot fat jar in production environments.
- * 
- * This test is designed to fail on branches without the fix for:
+ *
+ * This test is designed to detect folloqing errors:
  * - "Unable to find kotlin stdlib" error
  * - "Cannot access script base class" error
+ *
+ * Also:
+ * - Dynamic port allocation
+ * - HTTP Health check verification
  */
 class FatJarStartupIntegrationTest {
 
@@ -33,37 +41,21 @@ class FatJarStartupIntegrationTest {
         
         println("=== Fat Jar Startup Integration Test ===")
         println("Fat jar: ${fatJar.absolutePath}")
-        println("Fat jar size: ${fatJar.length() / 1024 / 1024} MB")
         
-        // Copy test DSL files from resources to temp directory
-        val testResourcesPath = System.getProperty("test.resources.path")
-            ?: throw IllegalStateException("test.resources.path system property not set")
-        
-        val resourcesDir = File(testResourcesPath)
-        Assertions.assertTrue(resourcesDir.exists() && resourcesDir.isDirectory, 
-            "Test resources directory not found at: $testResourcesPath")
-        
-        val dslDir = tempDir.resolve("dsl")
-        Files.createDirectories(dslDir)
-        
-        // Copy resource files
-        File(resourcesDir, "Aggregator.groovy").copyTo(dslDir.resolve("Aggregator.groovy").toFile())
-        File(resourcesDir, "TestComponent.groovy").copyTo(dslDir.resolve("TestComponent.groovy").toFile())
-        File(resourcesDir, "test.kts").copyTo(dslDir.resolve("test.kts").toFile())
-        
-        // Create dummy project registry
+        // Setup DSL files
+        val dslDir = setupDslFiles(tempDir)
         val projectRegistryFile = tempDir.resolve("project-registry.json")
         Files.writeString(projectRegistryFile, "{}")
         
-        println("Test DSL directory: ${dslDir.toAbsolutePath()}")
-        
-        // Find java executable
-        val javaHome = System.getProperty("java.home")
-        val javaExecutable = File(javaHome, "bin/java")
-        Assertions.assertTrue(javaExecutable.exists(), "Java executable not found at: ${javaExecutable.absolutePath}")
+        // Find free port
+        val port = findRandomPort()
+        println("Using random port: $port")
         
         // Build command
-        val command = mutableListOf(
+        val javaHome = System.getProperty("java.home")
+        val javaExecutable = File(javaHome, "bin/java")
+        
+        val command = listOf(
             javaExecutable.absolutePath,
             "-Dspring.cloud.config.enabled=false",
             "-Dspring.profiles.active=default",
@@ -79,114 +71,124 @@ class FatJarStartupIntegrationTest {
             "-Dcomponents-registry.product-type.d=PT_D",
             "-Dcomponents-registry.product-type.ddb=PT_D_DB",
             "-Dcomponents-registry.project-registry-path=${projectRegistryFile.toAbsolutePath()}",
-            "-Dserver.port=0", // Use random available port
+            "-Dserver.port=$port",
+            "-Dmanagement.endpoints.web.exposure.include=health", // Ensure health endpoint is exposed
             "-jar",
             fatJar.absolutePath
         )
         
         println("Starting application...")
-        
         val processBuilder = ProcessBuilder(command)
         processBuilder.redirectErrorStream(true)
         
         val process = processBuilder.start()
-        
         val output = StringBuilder()
-        var startupSuccessful = false
-        var kotlinStdlibError = false
-        var scriptBaseClassError = false
         
-        try {
-            val reader = BufferedReader(InputStreamReader(process.inputStream))
-            val startTime = System.currentTimeMillis()
-            val maxWaitTime = 90_000 // 90 seconds
-            
-            var line: String?
-            while (System.currentTimeMillis() - startTime < maxWaitTime) {
-                line = reader.readLine()
-                if (line == null) {
-                    // Process ended
-                    break
-                }
-                
-                output.appendLine(line)
-                println(line) // Echo to test output
-                
-                // Check for startup success
-                if (line.contains("Started ComponentRegistryServiceApplication")) {
-                    println("\n✅ Application started successfully!")
-                    startupSuccessful = true
-                    break
-                }
-                
-                // Check for Kotlin stdlib error
-                if (line.contains("kotlin stdlib", ignoreCase = true) && 
-                    line.contains("please specify it explicitly", ignoreCase = true)) {
-                    println("\n❌ Found Kotlin stdlib error!")
-                    kotlinStdlibError = true
-                }
-                
-                // Check for script base class error
-                if (line.contains("Cannot access script base class", ignoreCase = true)) {
-                    println("\n❌ Found script base class error!")
-                    scriptBaseClassError = true
-                }
-                
-                // Check for other fatal errors
-                if (line.contains("APPLICATION FAILED TO START", ignoreCase = true)) {
-                    println("\n❌ Application failed to start!")
-                    break
-                }
-            }
-            
-            // Give a moment to check if process is still alive
-            Thread.sleep(2000)
-            
-        } finally {
-            // Always cleanup the process
-            if (process.isAlive) {
-                println("Shutting down application...")
-                process.destroy()
-                process.waitFor(10, TimeUnit.SECONDS)
-                if (process.isAlive) {
-                    process.destroyForcibly()
+        // Consume output in separate thread to prevent blocking and capture logs
+        val loggerThread = thread(start = true) {
+            BufferedReader(InputStreamReader(process.inputStream)).use { reader ->
+                var line: String?
+                while (reader.readLine().also { line = it } != null) {
+                    synchronized(output) {
+                        output.appendLine(line)
+                    }
+                    println(line) // Echo to stdout for CI visibility
                 }
             }
         }
         
-        val exitCode = process.waitFor()
+        try {
+            // Wait for health check
+            val healthy = waitForHealth(port, 90) // 90 seconds timeout
+            
+            if (!healthy) {
+                // If not healthy, check if process is even alive
+                if (!process.isAlive) {
+                    val exitCode = process.exitValue()
+                    Assertions.fail<String>("Application exited prematurely with code $exitCode. Check logs above.")
+                }
+                Assertions.fail<String>("Application did not become healthy within timeout.")
+            }
+            
+            println("\n✅ Application is healthy!")
+            
+            // Verify no specific errors in logs (even if healthy, we don't want these errors)
+            val logContent = synchronized(output) { output.toString() }
+            
+            Assertions.assertFalse(
+                logContent.contains("kotlin stdlib", ignoreCase = true) && 
+                logContent.contains("please specify it explicitly", ignoreCase = true),
+                "Found 'kotlin stdlib' error in logs despite startup"
+            )
+            
+            Assertions.assertFalse(
+                logContent.contains("Cannot access script base class", ignoreCase = true),
+                "Found 'script base class' error in logs despite startup"
+            )
+            
+        } finally {
+            // Save full output to file for debugging
+            val logFile = File(System.getProperty("java.io.tmpdir"), "fat-jar-integration-test-${System.currentTimeMillis()}.log")
+            val logContent = synchronized(output) { output.toString() }
+            logFile.writeText(logContent)
+            println("Full log saved to: ${logFile.absolutePath}")
+
+            println("Shutting down application...")
+            process.destroy()
+            process.waitFor(10, TimeUnit.SECONDS)
+            if (process.isAlive) {
+                process.destroyForcibly()
+            }
+            loggerThread.join(2000)
+        }
+    }
+    
+    private fun setupDslFiles(tempDir: Path): Path {
+        val testResourcesPath = System.getProperty("test.resources.path")
+            ?: throw IllegalStateException("test.resources.path system property not set")
         
-        println("\n=== Test Results ===")
-        println("Startup successful: $startupSuccessful")
-        println("Kotlin stdlib error: $kotlinStdlibError")
-        println("Script base class error: $scriptBaseClassError")
-        println("Exit code: $exitCode")
+        val resourcesDir = File(testResourcesPath)
+        Assertions.assertTrue(resourcesDir.exists(), "Test resources directory not found")
         
-        // Save full output to file for debugging
-        val logFile = File(System.getProperty("java.io.tmpdir"), "fat-jar-integration-test-${System.currentTimeMillis()}.log")
-        logFile.writeText(output.toString())
-        println("Full log saved to: ${logFile.absolutePath}")
+        val dslDir = tempDir.resolve("dsl")
+        Files.createDirectories(dslDir)
         
-        // Assertions
-        Assertions.assertFalse(
-            kotlinStdlibError,
-            "Application failed with 'kotlin stdlib' error. This indicates the fix is not working correctly.\n" +
-            "Check log: ${logFile.absolutePath}"
-        )
+        File(resourcesDir, "Aggregator.groovy").copyTo(dslDir.resolve("Aggregator.groovy").toFile())
+        File(resourcesDir, "TestComponent.groovy").copyTo(dslDir.resolve("TestComponent.groovy").toFile())
+        File(resourcesDir, "test.kts").copyTo(dslDir.resolve("test.kts").toFile())
         
-        Assertions.assertFalse(
-            scriptBaseClassError,
-            "Application failed with 'script base class' error. This indicates classpath issues.\n" +
-            "Check log: ${logFile.absolutePath}"
-        )
+        return dslDir
+    }
+    
+    private fun findRandomPort(): Int {
+        ServerSocket(0).use { socket ->
+            return socket.localPort
+        }
+    }
+    
+    private fun waitForHealth(port: Int, timeoutSeconds: Int): Boolean {
+        val endTime = System.currentTimeMillis() + (timeoutSeconds * 1000)
+        val healthUrl = URL("http://localhost:$port/actuator/health")
         
-        Assertions.assertTrue(
-            startupSuccessful,
-            "Application did not start successfully within the timeout period.\n" +
-            "Check log: ${logFile.absolutePath}\n" +
-            "Exit code: $exitCode"
-        )
+        println("Waiting for health check at $healthUrl...")
         
-        println("\n✅ Fat jar integration test PASSED!")
+        while (System.currentTimeMillis() < endTime) {
+            try {
+                with(healthUrl.openConnection() as HttpURLConnection) {
+                    requestMethod = "GET"
+                    connectTimeout = 1000
+                    readTimeout = 1000
+                    connect()
+                    
+                    if (responseCode == 200) {
+                        return true
+                    }
+                }
+            } catch (e: Exception) {
+                // Ignore connection failures while starting
+                Thread.sleep(1000)
+            }
+        }
+        return false
     }
 }
