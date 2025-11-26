@@ -54,7 +54,7 @@ sourceSets {
         resources {
             srcDir 'src/integrationTest/resources'
         }
-        compileClasspath += sourceSets.main.output + configurations.testRuntimeClasspath
+        compileClasspath += sourceSets.main.output
         runtimeClasspath += output + compileClasspath
     }
 }

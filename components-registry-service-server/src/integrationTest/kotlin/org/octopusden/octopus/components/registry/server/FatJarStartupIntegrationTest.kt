@@ -10,6 +10,7 @@ import java.io.File
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.ServerSocket
+import java.net.URI
 import java.net.URL
 import java.nio.file.Files
 import java.nio.file.Path
@@ -166,7 +167,7 @@ class FatJarStartupIntegrationTest {
     
     private fun waitForHealth(port: Int, timeoutSeconds: Int): Boolean {
         val endTime = System.currentTimeMillis() + (timeoutSeconds * 1000)
-        val healthUrl = URL("http://localhost:$port/actuator/health")
+        val healthUrl = URI("http://localhost:$port/actuator/health").toURL()
         
         log.info("Waiting for health check at {}", healthUrl)
         
