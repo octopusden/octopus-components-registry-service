@@ -154,7 +154,7 @@ class FatJarStartupIntegrationTest {
         
         File(testDataDir, "Aggregator.groovy").copyTo(dslDir.resolve("Aggregator.groovy").toFile())
         File(testDataDir, "TestComponent.groovy").copyTo(dslDir.resolve("TestComponent.groovy").toFile())
-        File(testDataDir, "test.kts").copyTo(dslDir.resolve("test.kts").toFile())
+        File(testDataDir, "TestComponent.kts").copyTo(dslDir.resolve("TestComponent.kts").toFile())
         
         return dslDir
     }
