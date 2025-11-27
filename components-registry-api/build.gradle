@@ -1,9 +1,3 @@
-dependencies {
-    api "com.fasterxml.jackson.core:jackson-annotations"
-    api "com.fasterxml.jackson.core:jackson-databind"
-    testImplementation "com.fasterxml.jackson.datatype:jackson-datatype-jdk8"
-}
-
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
@@ -13,4 +7,10 @@ compileKotlin {
 
 compileTestKotlin {
     kotlinOptions.jvmTarget = "1.8"
+}
+
+dependencies {
+    api "com.fasterxml.jackson.core:jackson-annotations:${project.properties["jackson.version"]}"
+    api "com.fasterxml.jackson.core:jackson-databind:${project.properties["jackson.version"]}"
+    testImplementation "com.fasterxml.jackson.datatype:jackson-datatype-jdk8:${project.properties["jackson.version"]}"
 }

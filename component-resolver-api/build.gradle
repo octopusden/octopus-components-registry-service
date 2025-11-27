@@ -25,8 +25,8 @@ dependencies {
 
     api "org.codehaus.groovy:groovy-all:${project["groovy-all.version"]}"
     api "org.apache.maven:maven-artifact:${project["maven-artifact.version"]}"
-    api "org.apache.logging.log4j:log4j-api:2.22.1"
-    api "org.slf4j:slf4j-api:1.7.32"
+    api "org.apache.logging.log4j:log4j-api:${project.properties["log4j2.version"]}"
+    api "org.slf4j:slf4j-api:${project.properties["slf4j.version"]}"
 
     implementation "com.fasterxml.jackson.core:jackson-annotations"
     implementation "com.fasterxml.jackson.core:jackson-databind"
