@@ -1,5 +1,6 @@
 package org.octopusden.octopus.escrow.utilities;
 
+import org.apache.commons.lang.StringUtils;
 import org.octopusden.octopus.escrow.dto.DistributionEntity;
 import org.octopusden.octopus.escrow.dto.FileDistributionEntity;
 import org.octopusden.octopus.escrow.dto.MavenArtifactDistributionEntity;
@@ -18,7 +19,16 @@ public final class DistributionUtilities {
             return Collections.emptyList();
         }
         return Arrays.stream(distributionGAVAttribute.split("[,|]"))
-                .map(item -> item.startsWith("file:/") ? new FileDistributionEntity(item) : new MavenArtifactDistributionEntity(item))
+                .map(String::trim)
+                .filter(StringUtils::isNotBlank)
+                .map(item -> {
+                    if (!item.contains(":") && !item.startsWith("file:/")) {
+                        throw new IllegalArgumentException("Invalid GAV entry: '" + item + "'. Expected 'groupId:artifactId' or 'file:/<path>'. ");
+                    }
+                    return item.startsWith("file:/")
+                            ? new FileDistributionEntity(item)
+                            : new MavenArtifactDistributionEntity(item);
+                })
                 .collect(Collectors.toList());
     }
 }
