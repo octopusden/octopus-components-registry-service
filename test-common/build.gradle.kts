@@ -13,12 +13,17 @@ dependencies {
     testFixturesImplementation("org.junit.jupiter:junit-jupiter-engine")
     testFixturesImplementation("org.junit.jupiter:junit-jupiter-params")
 
-    testFixturesImplementation (platform("org.springframework.boot:spring-boot-dependencies:${project.properties["spring-boot.version"]}"))
+    testFixturesImplementation (platform("org.springframework.boot:spring-boot-dependencies:${project.properties["spring-boot-legacy.version"]}"))
     testFixturesImplementation ("org.springframework.boot:spring-boot-starter-actuator")
     testFixturesImplementation ("org.springframework.boot:spring-boot-starter-web")
     testFixturesImplementation ("org.springframework.boot:spring-boot-starter-test")
 }
 
+tasks.withType<JavaCompile>().configureEach {
+    sourceCompatibility = "1.8"
+    targetCompatibility = "1.8"
+}
+
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-    kotlinOptions.jvmTarget = "21"
+    kotlinOptions.jvmTarget = "1.8"
 }

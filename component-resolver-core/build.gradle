@@ -3,10 +3,21 @@ plugins {
     id 'groovy'
 }
 
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+compileKotlin {
+    kotlinOptions.jvmTarget = "1.8"
+}
+
+compileTestKotlin {
+    kotlinOptions.jvmTarget = "1.8"
+}
+
 dependencies {
     api project(":component-resolver-api")
     api project(':components-registry-dsl')
-    implementation platform("org.springframework.boot:spring-boot-dependencies:${project['spring-boot.version']}")
+    implementation platform("org.springframework.boot:spring-boot-dependencies:${project['spring-boot-legacy.version']}")
     implementation "org.springframework:spring-context"
     implementation("org.octopusden.octopus.employee:client:${project.properties["octopus-employee-service.version"]}") {
         exclude group: 'org.jetbrains.kotlin', module: '*'
@@ -28,7 +39,6 @@ dependencies {
     testImplementation "org.springframework:spring-test"
     testImplementation "org.assertj:assertj-core"
     testImplementation "ch.qos.logback:logback-classic"
-    testImplementation "org.apache.logging.log4j:log4j-core"
 }
 
 sourceSets {
