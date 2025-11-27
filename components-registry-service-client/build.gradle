@@ -18,6 +18,9 @@ compileTestKotlin {
 
 configurations {
     [testCompileClasspath, testRuntimeClasspath].each { cfg ->
+        // This parameter is necessary to support the ability to run tests.
+        // In the future need to create separate ft module.
+        cfg?.attributes?.attribute(org.gradle.api.attributes.java.TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE, 21)
         cfg?.exclude group: 'org.jetbrains.kotlin', module: 'kotlin-main-kts'
     }
 }
@@ -32,9 +35,10 @@ dependencies {
     implementation("io.github.openfeign:feign-slf4j")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
 
+    testImplementation project(":components-registry-service-server")
     testImplementation testFixtures(project(":test-common"))
     testImplementation platform("org.springframework.boot:spring-boot-dependencies:${project['spring-boot-legacy.version']}")
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation ("org.springframework.boot:spring-boot-starter-test")
 
     testImplementation("org.assertj:assertj-core:3.21.0")
     testImplementation("ch.qos.logback:logback-classic:1.2.7")
