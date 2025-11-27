@@ -24,11 +24,11 @@ dependencies {
 
     implementation "org.jetbrains.kotlin:kotlin-stdlib:${project.properties["kotlin.version"]}"
     implementation "org.jetbrains.kotlin:kotlin-main-kts:${project.properties["kotlin.version"]}"
-    implementation "org.jetbrains.kotlin:kotlin-scripting-jsr223:${project.properties["kotlin.version"]}"
-    implementation "org.jetbrains.kotlin:kotlin-scripting-common:${project.properties["kotlin.version"]}"
-    implementation "org.jetbrains.kotlin:kotlin-scripting-jvm:${project.properties["kotlin.version"]}"
-    implementation "org.jetbrains.kotlin:kotlin-scripting-jvm-host:${project.properties["kotlin.version"]}"
-    implementation "org.jetbrains.kotlin:kotlin-scripting-compiler-embeddable:${project.properties["kotlin.version"]}"
+    api "org.jetbrains.kotlin:kotlin-scripting-jsr223:${project.properties["kotlin.version"]}"
+    api "org.jetbrains.kotlin:kotlin-scripting-common:${project.properties["kotlin.version"]}"
+    api "org.jetbrains.kotlin:kotlin-scripting-jvm:${project.properties["kotlin.version"]}"
+    api "org.jetbrains.kotlin:kotlin-scripting-jvm-host:${project.properties["kotlin.version"]}"
+    api "org.jetbrains.kotlin:kotlin-scripting-compiler-embeddable:${project.properties["kotlin.version"]}"
     api "org.jetbrains.kotlin:kotlin-compiler-embeddable:${project.properties["kotlin.version"]}"
     implementation "org.jetbrains.kotlin:kotlin-reflect:${project.properties["kotlin.version"]}"
 
@@ -44,7 +44,7 @@ task storeDslLibraryDependencies {
         def artifacts = ["${project.name}-${project.version}.jar"]
         copiedConfiguration.resolvedConfiguration.resolvedArtifacts.forEach { artifacts.add(it.file.name) }
         artifacts
-        def file = file("${getLayout().getBuildDirectory()}/resources/main/${project.name}.txt")
+        def file = file("${getLayout().getBuildDirectory().get().asFile}/resources/main/${project.name}.txt")
         file.getParentFile().mkdirs()
         file.write(artifacts.join('\n'))
     }
