@@ -8,7 +8,7 @@ import org.octopusden.octopus.components.registry.server.service.VcsService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.util.Date
-import javax.annotation.PostConstruct
+import jakarta.annotation.PostConstruct
 import kotlin.system.measureTimeMillis
 
 @Service

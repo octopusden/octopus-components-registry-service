@@ -1,7 +1,6 @@
 package org.octopusden.octopus.components.registry.dsl.script
 
 import org.jetbrains.kotlin.cli.common.environment.setIdeaIoUseFallback
-import org.jetbrains.kotlin.script.jsr223.KotlinJsr223JvmLocalScriptEngineFactory
 import org.octopusden.octopus.components.registry.api.Component
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import java.nio.file.Files
@@ -9,7 +8,6 @@ import java.nio.file.Path
 import java.util.logging.Logger
 import java.util.stream.Collectors
 import kotlin.script.experimental.jsr223.KotlinJsr223DefaultScriptEngineFactory
-import kotlin.streams.toList
 
 object ComponentsRegistryScriptRunner {
     private val logger = Logger.getLogger(ComponentsRegistryScriptRunner::class.java.canonicalName)
@@ -18,10 +16,10 @@ object ComponentsRegistryScriptRunner {
 
     init {
         setIdeaIoUseFallback()
+        // Set kotlin.script.classpath if not already set
         if (System.getProperty("kotlin.script.classpath").isNullOrEmpty()) {
-            logger.info("cr.dsl.class.path = ${System.getProperty("cr.dsl.class.path")}")
-            logger.info("Setting kotlin.script.classpath= ${System.getProperty("cr.dsl.class.path", System.getProperty("java.class.path"))}")
-            System.setProperty("kotlin.script.classpath", System.getProperty("cr.dsl.class.path", System.getProperty("java.class.path")))
+            val custom = System.getProperty("cr.dsl.class.path", System.getProperty("java.class.path"))
+            System.setProperty("kotlin.script.classpath", custom)
         }
     }
 
@@ -43,19 +41,34 @@ object ComponentsRegistryScriptRunner {
 
     fun loadDSLFile(dslFilePath: Path, products: Map<ProductTypes, String>): Collection<Component> {
         logger.info("loadDSLFile $dslFilePath")
+
         if (productTypeMap.isEmpty()) {
             products.forEach { k, v -> productTypeMap[v] = k }
         }
+
         val engine = try {
-            KotlinJsr223DefaultScriptEngineFactory().scriptEngine
-        } catch (e: Exception) {
+            // Always switch to buildscript classloader where Kotlin scripting classes are loaded
+            val properCl = this::class.java.classLoader
+            Thread.currentThread().contextClassLoader = properCl
+
+            KotlinJsr223DefaultScriptEngineFactory().scriptEngine.also {
+                logger.info("Using KotlinJsr223DefaultScriptEngineFactory")
+            }
+        } catch (_: Throwable) {
             logger.info("Unable to get default kotlin script engine, fallback to local script engine")
-            KotlinJsr223JvmLocalScriptEngineFactory().scriptEngine
+            LocalKotlinEngineFactory().scriptEngine
         }
         currentRegistry.clear()
-        Files.newBufferedReader(dslFilePath).use { reader ->
-            logger.info("Loading $dslFilePath")
-            engine.eval(reader)
+        try {
+            Files.newBufferedReader(dslFilePath).use { reader ->
+                logger.info("Loading $dslFilePath")
+                engine.eval(reader)
+            }
+            logger.info("Successfully loaded DSL from $dslFilePath")
+        } catch (e: Throwable) {
+            logger.severe("DSL evaluation failed for $dslFilePath: ${e::class.java.simpleName}: ${e.message}")
+            e.printStackTrace()
+            throw e
         }
         return ArrayList(currentRegistry)
     }
@@ -73,5 +86,5 @@ object ComponentsRegistryScriptRunner {
         } ?: throw IllegalArgumentException("Unknown product type $type")
 
     fun getCurrentRegistry() = currentRegistry
-    fun getProductTypeMap()  = productTypeMap
+    fun getProductTypeMap() = productTypeMap
 }
