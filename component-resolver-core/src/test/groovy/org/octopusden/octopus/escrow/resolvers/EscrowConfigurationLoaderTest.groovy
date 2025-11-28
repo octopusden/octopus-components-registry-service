@@ -108,7 +108,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 componentDisplayName: "BCOMPONENT Official Name",
                 archived: true
         )
-        assertEquals(expectedConfig.archived, escrowModuleConfig.archived)
+        assertTrue(expectedConfig.archived == escrowModuleConfig.archived)
     }
 
     @Test
