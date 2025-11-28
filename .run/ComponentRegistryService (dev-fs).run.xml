@@ -10,6 +10,7 @@
     </additionalParameters>
     <option name="HIDE_BANNER" value="true" />
     <module name="components-registry-service.components-registry-service-server.main" />
+    <option name="SHORTEN_COMMAND_LINE" value="ARGS_FILE" />
     <option name="SPRING_BOOT_MAIN_CLASS" value="org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication" />
     <extension name="net.ashald.envfile">
       <option name="IS_ENABLED" value="true" />

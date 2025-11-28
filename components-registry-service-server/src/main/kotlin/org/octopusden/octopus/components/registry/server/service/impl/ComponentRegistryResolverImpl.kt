@@ -44,8 +44,8 @@ import java.nio.file.Paths
 import java.util.EnumMap
 import java.util.Properties
 import java.util.concurrent.ConcurrentHashMap
-import javax.annotation.PostConstruct
-import javax.annotation.Resource
+import jakarta.annotation.PostConstruct
+import jakarta.annotation.Resource
 import kotlin.io.path.exists
 import kotlin.io.path.inputStream
 import kotlin.io.path.isRegularFile
