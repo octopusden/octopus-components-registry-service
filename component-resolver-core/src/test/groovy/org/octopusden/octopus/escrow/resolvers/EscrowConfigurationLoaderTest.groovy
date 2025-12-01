@@ -248,7 +248,8 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 ),
                 escrow: new EscrowBean(EscrowGenerationMode.AUTO, null, [], null, [], true)
         )
-        assert expectedConfig.escrow.generation.get() == configurations.get(0).escrow.generation.get()
+        def actualConfig = configurations.get(0)
+        assert expectedConfig.escrow.generation.get() == actualConfig.escrow.generation.get()
     }
 
     @Test
