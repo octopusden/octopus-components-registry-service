@@ -11,7 +11,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.*
-import javax.annotation.PreDestroy
+import jakarta.annotation.PreDestroy
 import kotlin.collections.ArrayList
 import kotlin.streams.toList
 
@@ -36,22 +36,40 @@ class StartupApplicationListener: ApplicationListener<ApplicationStartingEvent> 
 
     override fun onApplicationEvent(event: ApplicationStartingEvent) {
         val dslKotlinModule = Thread.currentThread().contextClassLoader.getResource("/components-registry-dsl.txt")
-        if (dslKotlinModule != null && dslKotlinModule.toString().matches(Regex(".*!/BOOT-INF/.*"))) {
+        LOG.debug("StartupApplicationListener running. dslKotlinModule={}", dslKotlinModule)
+        
+        if (dslKotlinModule != null && dslKotlinModule.toString().contains("!BOOT-INF/")) {
             LOG.debug("Spring boot jar running mode detected")
             temporaryLibraryPath = Files.createTempDirectory("components-registry-dsl-" + UUID.randomUUID())
             val dslLibraryClassPath = StringBuffer()
-            FileSystems.newFileSystem(Paths.get(System.getProperty("java.class.path")), null).use { fs ->
+            FileSystems.newFileSystem(Paths.get(System.getProperty("java.class.path"))).use { fs ->
                 val libraryFiles = ArrayList<Path>()
                 Files.walk(fs.getPath("/BOOT-INF/lib")).use { filePath ->
                     libraryFiles.addAll(filePath.filter { it.toString().endsWith(".jar") }.toList())
                 }
+                
+                // Fix for kotlin.java.stdlib.jar property issue in fat jar
+                val stdlibJar = libraryFiles.find { it.fileName.toString().matches(Regex("kotlin-stdlib-\\d+.*\\.jar")) }
+                if (stdlibJar != null) {
+                    val dstPath = temporaryLibraryPath!!.resolve(stdlibJar.fileName.toString())
+                    if (!Files.exists(dstPath)) {
+                        Files.copy(stdlibJar, dstPath)
+                    }
+                    System.setProperty("kotlin.java.stdlib.jar", dstPath.toString())
+                    LOG.info("Set kotlin.java.stdlib.jar to $dstPath")
+                } else {
+                    LOG.warn("Unable to find kotlin-stdlib jar in BOOT-INF/lib")
+                }
+
                 dslKotlinModule.openStream().use {inputStream ->
                     inputStream.reader().forEachLine { fileName ->
                         val libraryName = fileName.split(LIBRARY_VERSION_SPLIT_REGEXP, 2)[0]
                         val srcPath = libraryFiles.findLast { it.fileName.toString().split(LIBRARY_VERSION_SPLIT_REGEXP, 2)[0] == libraryName }
                                 ?: throw IllegalStateException("Unable to match provided library $fileName")
                         val dstPath = temporaryLibraryPath!!.resolve(srcPath.fileName.toString())
-                        Files.copy(srcPath, dstPath)
+                        if (!Files.exists(dstPath)) {
+                            Files.copy(srcPath, dstPath)
+                        }
                         dslLibraryClassPath.append(File.pathSeparator).append(dstPath)
                     }
                 }
