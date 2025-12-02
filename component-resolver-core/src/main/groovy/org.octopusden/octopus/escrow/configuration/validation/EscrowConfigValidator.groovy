@@ -29,6 +29,8 @@ class EscrowConfigValidator {
     public static final String ARCHIVED_SUFFIX = "(archived)"
     static MavenArtifactMatcher mavenArtifactMatcher = new MavenArtifactMatcher()
 
+    private static ComponentHotfixSupportResolver componentHotfixSupportResolver = new ComponentHotfixSupportResolver()
+
     private static final Logger LOG = LogManager.getLogger(EscrowConfigValidator.class)
     public static final String SPLIT_PATTERN = "[,|\\s]+"
     private static final Pattern CLIENT_CODE_PATTERN = Pattern.compile("[A-Z_0-9]+")
@@ -545,7 +547,6 @@ class EscrowConfigValidator {
      * @param componentName
      */
     def validateHotfixVersionFormat(EscrowModuleConfig moduleConfig, String componentName) {
-        ComponentHotfixSupportResolver componentHotfixSupportResolver = new ComponentHotfixSupportResolver()
         if (!componentHotfixSupportResolver.isHotFixEnabled(moduleConfig.vcsSettings)) {
             return
         }
@@ -561,7 +562,7 @@ class EscrowConfigValidator {
             return
         }
         if (!hotfixVersionFormat.startsWith(baseVersionFormat)) {
-            registerError("Invalid hotfixVersionFormat '$hotfixVersionFormat' for '$componentName, it must start with buildVersionFormat/releaseVersionFormat: '$baseVersionFormat'")
+            registerError("Invalid hotfixVersionFormat '$hotfixVersionFormat' for '$componentName', it must start with buildVersionFormat/releaseVersionFormat: '$baseVersionFormat'")
         }
     }
 
