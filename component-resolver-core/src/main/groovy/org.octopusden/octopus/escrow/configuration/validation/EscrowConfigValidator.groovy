@@ -99,6 +99,7 @@ class EscrowConfigValidator {
                 validateArtifactId(moduleConfig.getArtifactIdPattern(), componentName)
                 validateGroupId(moduleConfig, componentName)
                 validateVcsSettings(moduleConfig, componentName)
+                validateHotfixVersionFormat(moduleConfig, componentName)
                 validateVersionRange(moduleConfig, componentName)
                 validateJiraParams(moduleConfig, componentName)
                 validateExplicitExternalComponent(moduleConfig, componentName)
@@ -379,7 +380,6 @@ class EscrowConfigValidator {
             if (!(moduleConfig.buildSystem == BuildSystem.BS2_0 || moduleConfig.buildSystem == BuildSystem.PROVIDED || moduleConfig.buildSystem == BuildSystem.ESCROW_PROVIDED_MANUALLY) && StringUtils.isEmpty(vcsRoot.vcsPath)) {
                 registerError("empty vcsUrl is not allowed in configuration of component $component (type=$moduleConfig.buildSystem)")
             }
-            validateHotfixVersionFormat(moduleConfig, component, vcsRoot)
         }
         if (moduleConfig.getBuildSystem() == BuildSystem.BS2_0) {
             if (vcsRoots.size() > 1) {
@@ -536,30 +536,32 @@ class EscrowConfigValidator {
 
     /**
      * Validate hotfix version format.
-     * Check if hotfixVersionFormat starts with buildVersionFormat and hotfixBranch is not empty.
-     * Register error if hotfixVersionFormat is not specified.
+     * If hotfixBranch is not empty, check if hotfixVersionFormat starts with buildVersionFormat (or releaseVersionFormat as fallback).
+     * Register error if:
+     * - hotfixVersionFormat is not specified
+     * - neither buildVersionFormat nor releaseVersionFormat exists
+     * - hotfixVersionFormat doesn't start with buildVersionFormat or releaseVersionFormat
      * @param moduleConfig
      * @param componentName
      */
-    def validateHotfixVersionFormat(EscrowModuleConfig moduleConfig, String componentName, VersionControlSystemRoot vcsRoot) {
-
+    def validateHotfixVersionFormat(EscrowModuleConfig moduleConfig, String componentName) {
         ComponentHotfixSupportResolver componentHotfixSupportResolver = new ComponentHotfixSupportResolver()
         if (!componentHotfixSupportResolver.isHotFixEnabled(moduleConfig.vcsSettings)) {
             return
         }
-        def hotfixVersionFormat = moduleConfig.getJiraConfiguration().componentVersionFormat.hotfixVersionFormat
-        boolean hasErrors = false
+        def componentVersionFormat = moduleConfig.getJiraConfiguration().componentVersionFormat
+        def hotfixVersionFormat = componentVersionFormat.hotfixVersionFormat
         if (StringUtils.isBlank(hotfixVersionFormat)) {
-            hasErrors = true
-            registerError("hotfixVersionFormat is not specified in '$componentName'")
+            registerError("Hotfix is enabled but hotfixVersionFormat is not defined for '$componentName'")
+            return
         }
-        def buildVersionFormat = moduleConfig.getJiraConfiguration().componentVersionFormat.buildVersionFormat
-        if (buildVersionFormat == null) {
-            hasErrors = true
-            registerError("buildVersionFormat is not specified in '$componentName'")
+        def baseVersionFormat = componentVersionFormat.buildVersionFormat ?: componentVersionFormat.releaseVersionFormat
+        if (StringUtils.isBlank(baseVersionFormat)) {
+            registerError("Hotfix is enabled but neither 'buildVersionFormat' nor 'releaseVersionFormat' is defined for '$componentName'")
+            return
         }
-        if (!hasErrors && !hotfixVersionFormat.startsWith(buildVersionFormat)) {
-            registerError("hotfixVersionFormat '$hotfixVersionFormat' doesn't start with buildVersionFormat '$buildVersionFormat'")
+        if (!hotfixVersionFormat.startsWith(baseVersionFormat)) {
+            registerError("Invalid hotfixVersionFormat '$hotfixVersionFormat' for '$componentName, it must start with buildVersionFormat/releaseVersionFormat: '$baseVersionFormat'")
         }
     }
 
