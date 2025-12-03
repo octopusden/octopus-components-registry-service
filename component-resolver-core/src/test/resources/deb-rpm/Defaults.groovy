@@ -14,6 +14,8 @@ Defaults {
     repositoryType = GIT
     tag = '$module-$version';
     artifactId = ANY_ARTIFACT
+    copyright = 'companyName1'
+
     jira {
         majorVersionFormat = '$major.$minor'
         releaseVersionFormat = '$major.$minor.$service'

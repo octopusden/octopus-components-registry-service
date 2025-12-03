@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<meta-runner name="Download copyright">
+    <description>Download copyright</description>
+    <settings>
+        <parameters>
+            <param name="COMPONENT_NAME" value="%COMPONENT_NAME%" />
+            <param name="TARGET_PATH" value="%TARGET_PATH%" />
+        </parameters>
+        <build-runners>
+            <runner name="download copyright" type="OctopusComponentsRegistryAutomation">
+                <parameters>
+                    <param name="ARGS" value="--url=%COMPONENTS_REGISTRY_URL% download-copyright --component-name=%COMPONENT_NAME% --target-path=%TARGET_PATH% " />
+                </parameters>
+            </runner>
+        </build-runners>
+        <requirements />
+    </settings>
+</meta-runner>

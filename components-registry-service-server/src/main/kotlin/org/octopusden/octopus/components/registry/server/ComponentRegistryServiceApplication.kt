@@ -64,7 +64,8 @@ class ComponentRegistryServiceApplication {
             configLoader,
             configHelper.supportedGroupIds(),
             configHelper.supportedSystems(),
-            versionNames
+            versionNames,
+            configHelper.copyrightPath()
         )
 
     @Bean

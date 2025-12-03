@@ -7,9 +7,11 @@ Defaults {
     releasesInDefaultBranch = true
     solution = false
     repositoryType = MERCURIAL
-    buildSystem = MAVEN;
-    tag = '$module-$version';
+    buildSystem = MAVEN
+    tag = '$module-$version'
     artifactId = ANY_ARTIFACT
+    copyright = 'companyName1'
+
     build {
         javaVersion = "1.8"
         mavenVersion = "3"

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.module.SimpleModule
 import feign.Feign
 import feign.Logger
 import feign.Param
+import feign.Response
 import feign.httpclient.ApacheHttpClient
 import feign.jackson.JacksonDecoder
 import feign.jackson.JacksonEncoder
@@ -122,6 +123,9 @@ class ClassicComponentsRegistryServiceClient(
 
     override fun getServiceStatus(): ServiceStatusDTO =
         client.getServiceStatus()
+
+    override fun getCopyrightByComponent(componentKey: String): Response =
+        client.getCopyrightByComponent(componentKey)
 
     override fun findComponentByArtifact(artifact: ArtifactDependency): VersionedComponent =
         client.findComponentByArtifact(artifact)

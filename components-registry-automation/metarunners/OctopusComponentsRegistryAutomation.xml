@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<meta-runner name="${description}">
+    <description>Run ${name}</description>
+    <settings>
+        <parameters>
+            <param name="ARGS" value="--help" spec="text description='${name} arguments.' validationMode='not_empty' display='normal'"/>
+        </parameters>
+
+        <build-runners>
+            <runner name="Download $name" type="Maven2">
+                <parameters>
+                    <param name="goals" value="org.apache.maven.plugins:maven-dependency-plugin:3.1.2:copy"/>
+                    <param name="jvmArgs" value="-Duser.home=%teamcity.agent.jvm.user.home%"/>
+                    <param name="maven.path" value="%env.BUILD_ENV%/MAVEN/3.6.3"/>
+                    <param name="runnerArgs">
+                        <![CDATA[-B -Dartifact=${group}:${name}:${version}:jar:all -DoutputDirectory=.]]></param>
+                    <param name="target.jdk.home" value="%env.BUILD_ENV%/JDK/1.8"/>
+                    <param name="userSettingsSelection" value="userSettingsSelection:default"/>
+                    <param name="teamcity.build.workingDir" value=".$name"/>
+                </parameters>
+            </runner>
+            <runner name="Run $name" type="simpleRunner">
+                <parameters>
+                    <param name="script.content">
+                        <![CDATA[%env.BUILD_ENV%/JDK/1.8/bin/java -jar ./.$name/$name-$version-all.jar %ARGS%]]></param>
+                    <param name="teamcity.step.mode" value="default"/>
+                    <param name="use.custom.script" value="true"/>
+                </parameters>
+            </runner>
+        </build-runners>
+        <requirements />
+    </settings>
+</meta-runner>
