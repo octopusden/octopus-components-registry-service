@@ -424,6 +424,13 @@ abstract class BaseComponentsRegistryServiceTest {
     }
 
     @ParameterizedTest
+    @MethodSource("archived")
+    fun testGetArchivedForProject(componentName: String, version: String, archived: Boolean) {
+        val componentDetail = getDetailedComponent(componentName, version)
+        Assertions.assertEquals(archived, componentDetail.archived)
+    }
+
+    @ParameterizedTest
     @MethodSource("mavenArtifacts")
     fun testGetComponentArtifactsParameters(component: String, path: String) {
         val actualArtifacts = getComponentArtifactsParameters(component)
@@ -558,6 +565,14 @@ abstract class BaseComponentsRegistryServiceTest {
                 Arguments.of("TESTONE", "1.0_RC", "expected-data/testone-1.0-distribution.json"),
                 Arguments.of("TESTONE", "versions-api.1.0", "expected-data/testone-versions-api.1.0-distribution.json")
 
+            )
+        }
+
+        @JvmStatic
+        fun archived(): Stream<Arguments> {
+            return Stream.of(
+                Arguments.of("ARCHIVED_TEST_COMPONENT", "3.0.0", true),
+                Arguments.of("NON_ARCHIVED_TEST_COMPONENT", "3.0.0", false)
             )
         }
 

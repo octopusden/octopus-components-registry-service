@@ -1034,3 +1034,30 @@ TEST_COMPONENT4 {
         docker = 'test-docker-5:amd64,test-docker-5:arm64'
     }
 }
+
+ARCHIVED_TEST_COMPONENT {
+    jira {
+        projectKey = "TEST_ARCHIVED"
+    }
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.test.archived"
+    artifactId = "test-archived"
+    archived = true
+    distribution {
+        explicit = false
+        external = true
+    }
+}
+
+NON_ARCHIVED_TEST_COMPONENT {
+    jira {
+        projectKey = "TEST_ARCHIVED"
+    }
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.test.archived"
+    artifactId = "test-archived"
+    distribution {
+        explicit = false
+        external = true
+    }
+}
