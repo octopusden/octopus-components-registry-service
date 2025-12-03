@@ -102,7 +102,6 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
         assert 'module1/my-pom.xml' == escrowModuleConfig.buildFilePath
     }
 
-
     @Test
     void testInvalidVersionRange() {
         try {
@@ -696,5 +695,15 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
         def sub2Root = sub2.vcsSettings.versionControlSystemRoots[0]
         assert "master" == sub2Root.branch
         assert "\$module-\$version" == sub2Root.tag
+    }
+
+    @Test
+    void testInvalidHotfixComponentsVersionFormat() {
+        def exception = GroovyAssert.shouldFail(EscrowConfigurationException.class, {
+            loadConfiguration("invalid/invalidHotfixComponents.groovy")
+        })
+        assert exception.message == "Validation of module config failed due following errors: \n" +
+                "Invalid hotfixVersionFormat '\$major.\$minor-\$fix' for 'component_hotfix_2', it must start with buildVersionFormat/releaseVersionFormat: '\$major.\$minor.\$service'\n" +
+                "Hotfix is enabled but hotfixVersionFormat is not defined for 'component_hotfix_1'"
     }
 }

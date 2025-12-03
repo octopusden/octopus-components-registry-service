@@ -6,10 +6,10 @@ on:
 
 jobs:
   build:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-release.yml@v2.1.7
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-release.yml@v2.1.10
     with:
       flow-type: hybrid
-      java-version: '11'
+      java-version: '21'
       commit-hash: ${{ github.event.client_payload.commit }}
       build-version: ${{ github.event.client_payload.project_version }}
       docker-image: components-registry-service

@@ -199,7 +199,7 @@ class EscrowConfigurationLoader {
 
         LOG.debug("Loading DSL")
         def dslComponents = configLoader.loadDslDefinedComponents()
-        LOG.info("Loaded $dslComponents.size DSL components")
+        LOG.info("Loaded ${dslComponents.size()} DSL components")
 
         dslComponents.forEach {component ->
             LOG.debug("processing dsl $component")
