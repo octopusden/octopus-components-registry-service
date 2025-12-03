@@ -109,9 +109,14 @@ class ComponentRegistryResolverImpl(
     override fun getVCSSettings(component: String, version: String): VCSSettings {
         val (jiraComponentVersion, jiraComponentVersionRange) =
             getJiraComponentVersionToRangeByComponentAndVersion(component, version)
-        val buildVersion = jiraComponentVersion.component.componentVersionFormat.buildVersionFormat.formatVersion(
-            numericVersionFactory, jiraComponentVersion.version
-        ) //TODO: What about hotfix version? Is it better to check version format and allow build/hotfix version only?
+        val versionFormat = jiraComponentVersion.component.componentVersionFormat
+        val hotfixVersion = versionFormat.hotfixVersionFormat.formatVersion(numericVersionFactory, jiraComponentVersion.version)
+        val buildVersion = if (jiraComponentVersionRange.component.isHotfixEnabled && hotfixVersion == jiraComponentVersion.version) {
+            hotfixVersion
+        } else {
+            versionFormat.buildVersionFormat.formatVersion(numericVersionFactory, jiraComponentVersion.version)
+        }
+
         return ModelConfigPostProcessor(ComponentVersion.create(component, buildVersion), versionNames)
             .resolveVariables(jiraComponentVersionRange.vcsSettings)
     }

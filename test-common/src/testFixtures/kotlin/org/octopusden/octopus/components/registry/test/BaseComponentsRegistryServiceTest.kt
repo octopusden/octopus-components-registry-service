@@ -84,6 +84,19 @@ val VCS_SETTINGS = VCSSettingsDTO(
     )
 )
 
+val VCS_SETTINGS_HOTFIX = VCSSettingsDTO(
+    versionControlSystemRoots = listOf(
+        VersionControlSystemRootDTO(
+            vcsPath = "ssh://hg@mercurial/sub",
+            name = "main",
+            branch = "v2",
+            tag = "SUB-$HOTFIX_VERSION",
+            type = RepositoryType.MERCURIAL,
+            hotfixBranch = "hotfix/3.0.0"
+        )
+    )
+)
+
 abstract class BaseComponentsRegistryServiceTest {
     init {
         configureSpringAppTestDataDir()
@@ -325,9 +338,15 @@ abstract class BaseComponentsRegistryServiceTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = [BUILD_VERSION, JIRA_BUILD_VERSION, LINE_VERSION, JIRA_LINE_VERSION, MINOR_VERSION, JIRA_MINOR_VERSION, RC_VERSION, JIRA_RC_VERSION, JIRA_RELEASE_VERSION, RELEASE_VERSION, HOTFIX_VERSION])
+    @ValueSource(strings = [BUILD_VERSION, JIRA_BUILD_VERSION, LINE_VERSION, JIRA_LINE_VERSION, MINOR_VERSION, JIRA_MINOR_VERSION, RC_VERSION, JIRA_RC_VERSION, JIRA_RELEASE_VERSION, RELEASE_VERSION])
     fun testGetVCSSettings(version: String) {
         Assertions.assertEquals(VCS_SETTINGS, getVcsSettings("SUB", version))
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = [HOTFIX_VERSION, JIRA_HOTFIX_VERSION])
+    fun testGetVCSSettingsForHotfix(version: String) {
+        Assertions.assertEquals(VCS_SETTINGS_HOTFIX, getVcsSettings("SUB", version))
     }
 
     @Test
@@ -544,6 +563,7 @@ abstract class BaseComponentsRegistryServiceTest {
         fun vcsSettings(): Stream<Arguments> {
             return Stream.of(
                 Arguments.of("SUB", "sub1k-1.0.0", "expected-data/sub-sub1k-1.0.0-vcs-settings.json"),
+                Arguments.of("SUB", "sub1k-1.0.0-0", "expected-data/sub-sub1k-1.0.0-0-vcs-settings.json"),
                 Arguments.of("SUB", "hlk-1.0", "expected-data/sub-hlk-1.0-vcs-settings.json"),
                 Arguments.of("SUB", "hlk-1.0_RC", "expected-data/sub-hlk-1.0_RC-vcs-settings.json"),
                 Arguments.of("SUB", "hlk-1.0.0", "expected-data/sub-hlk-1.0.0-vcs-settings.json")
