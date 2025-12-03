@@ -78,6 +78,9 @@ class ComponentRegistryValidationTask {
             task.productTypeK = getRequiredProperty("cr.productTypeK")
             task.productTypeD = getRequiredProperty("cr.productTypeD")
             task.productTypeDDB = getRequiredProperty("cr.productTypeDDB")
+            // After releasing component-registry copyright field need to change
+            // getProperty to getRequiredProperty
+            task.copyrightPath = getProperty("cr.copyrightPath")
 
             log.info("\nConfiguration:")
             log.info("  basePath: $task.basePath")
@@ -91,6 +94,7 @@ class ComponentRegistryValidationTask {
             log.info("  serviceBranch: $task.serviceBranch")
             log.info("  service: $task.service")
             log.info("  minor: $task.minor")
+            log.info("  copyrightPath: $task.minor")
 
             // Run validation
             task.runEscrow()
