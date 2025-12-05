@@ -252,9 +252,6 @@ class EscrowConfigurationLoader {
             escrowModuleConfig.escrow = dslComponent.escrow
         }
 
-        if (dslComponent.escrow) {
-            escrowModuleConfig.escrow = dslComponent.escrow
-        }
         if (dslComponent.build) {
             escrowModuleConfig.buildConfiguration.buildTools.with {
                 clear()

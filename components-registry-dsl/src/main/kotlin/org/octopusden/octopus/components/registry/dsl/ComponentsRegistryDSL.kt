@@ -399,10 +399,6 @@ class DependenciesDSL {
 
 }
 
-class SettingsDSL {
-    var param1: String = ""
-}
-
 fun throwException(message: String) {
     //TODO Log registry path to problem
     throw RuntimeException(message)
