@@ -202,9 +202,9 @@ class EscrowDSL(private val escrow: EscrowBean) {
             field = value
         }
 
-    var generation: EscrowGenerationMode? = escrow.generation.orElse(null)
+    var generation: EscrowGenerationMode = escrow.generation
         set(value) {
-            escrow.setGeneration(value)
+            escrow.generation = value
             field = value
         }
 

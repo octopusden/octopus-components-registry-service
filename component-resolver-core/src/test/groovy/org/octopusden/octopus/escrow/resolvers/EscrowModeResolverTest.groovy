@@ -20,7 +20,7 @@ class EscrowModeResolverTest {
 
         assertNotNull(releaseInfo.escrow)
         Escrow escrow = releaseInfo.escrow.get()
-        assertEquals(EscrowGenerationMode.AUTO, escrow.generation.get())
+        assertEquals(EscrowGenerationMode.AUTO, escrow.generation)
     }
 
     @Test
@@ -29,7 +29,7 @@ class EscrowModeResolverTest {
 
         assertNotNull(releaseInfo.escrow)
         Escrow escrow = releaseInfo.escrow.get()
-        assertEquals(EscrowGenerationMode.MANUAL, escrow.generation.get())
+        assertEquals(EscrowGenerationMode.MANUAL, escrow.generation)
     }
 
     @Test
@@ -38,7 +38,7 @@ class EscrowModeResolverTest {
 
         assertNotNull(releaseInfo.escrow)
         Escrow escrow = releaseInfo.escrow.get()
-        assertEquals(EscrowGenerationMode.UNSUPPORTED, escrow.generation.get())
+        assertEquals(EscrowGenerationMode.UNSUPPORTED, escrow.generation)
     }
 
     @Test
@@ -47,7 +47,7 @@ class EscrowModeResolverTest {
 
         assertNotNull(releaseInfo.escrow)
         Escrow escrow = releaseInfo.escrow.get()
-        assertEquals(EscrowGenerationMode.MANUAL, escrow.generation.get())
+        assertEquals(EscrowGenerationMode.MANUAL, escrow.generation)
     }
 
     private static ReleaseInfoResolver withConfigResolver(String resource) {

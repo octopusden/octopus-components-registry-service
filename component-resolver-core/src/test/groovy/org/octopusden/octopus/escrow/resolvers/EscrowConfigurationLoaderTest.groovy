@@ -249,7 +249,19 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 escrow: new EscrowBean(EscrowGenerationMode.AUTO, null, [], null, [], true)
         )
         def actualConfig = configurations.get(0)
-        assert expectedConfig.escrow.generation.get() == actualConfig.escrow.generation.get()
+        assert expectedConfig.escrow.generation == actualConfig.escrow.generation
+    }
+
+    /**
+     * Test that generation mode is required in escrow section
+     */
+    @Test
+    void testDefaultsWithEscrowModeEmpty() {
+        def exception = shouldFail(Exception.class) {
+            loadConfiguration("invalid/escrowGenerationEmpty.groovy")
+        }
+        assert exception.contains("Parameter specified as non-null is null:")
+        assert exception.contains("parameter generation")
     }
 
     @Test
