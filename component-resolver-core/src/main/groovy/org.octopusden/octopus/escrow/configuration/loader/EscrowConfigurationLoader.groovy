@@ -202,13 +202,15 @@ class EscrowConfigurationLoader {
         def dslComponents = configLoader.loadDslDefinedComponents()
         LOG.info("Loaded ${dslComponents.size()} DSL components")
 
+        EscrowConfigValidator validator = new EscrowConfigValidator(supportedGroupIds, supportedSystems, versionNames, configLoader.loadDistributionValidationExcludedComponents())
+
         dslComponents.forEach {component ->
             LOG.debug("processing dsl $component")
+            validator.validateEscrow(component, fullConfig)
             mergeGroovyAndDslComponent(component, fullConfig)
             component.subComponents.forEach { name, subComponent -> mergeGroovyAndDslSubComponent(subComponent, fullConfig)}
         }
 
-        EscrowConfigValidator validator = new EscrowConfigValidator(supportedGroupIds, supportedSystems, versionNames, configLoader.loadDistributionValidationExcludedComponents())
         if (!ignoreUnknownAttributes) {
             validator.validateEscrowConfiguration(fullConfig)
             if (validator.hasErrors()) {

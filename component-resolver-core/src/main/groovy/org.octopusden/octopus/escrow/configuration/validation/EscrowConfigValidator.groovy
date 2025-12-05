@@ -6,6 +6,8 @@ import kotlin.Pair
 import org.apache.commons.lang3.StringUtils
 import org.apache.logging.log4j.LogManager
 import org.apache.logging.log4j.Logger
+import org.octopusden.octopus.components.registry.api.Component
+import org.octopusden.octopus.components.registry.api.escrow.Escrow
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.MavenArtifactMatcher
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
@@ -504,6 +506,18 @@ class EscrowConfigValidator {
             }
             if (tool.getTargetLocation() == null) {
                 registerError("tool targetLocation is not specified in '$toolName'")
+            }
+        }
+    }
+
+    void validateEscrow(Component component, EscrowConfiguration moduleConfig) {
+        def moduleConfigurations = moduleConfig.escrowModules.get(component.name).moduleConfigurations
+        if (component.escrow != null && moduleConfigurations) {
+            if (component.escrow != null && moduleConfigurations) {
+                boolean hasEscrowInModule = moduleConfigurations.any { it.escrow != null }
+                if (hasEscrowInModule) {
+                    registerError("Escrow block is defined both in groovy configuration and in kotlin for '${component.name}'")
+                }
             }
         }
     }
