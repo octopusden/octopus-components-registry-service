@@ -512,11 +512,30 @@ class EscrowConfigValidator {
 
     void validateEscrow(Component component, EscrowConfiguration moduleConfig) {
         def moduleConfigurations = moduleConfig.escrowModules.get(component.name).moduleConfigurations
-        if (component.escrow != null && moduleConfigurations) {
-            if (component.escrow != null && moduleConfigurations) {
-                boolean hasEscrowInModule = moduleConfigurations.any { it.escrow != null }
-                if (hasEscrowInModule) {
-                    registerError("Escrow block is defined both in groovy configuration and in kotlin for '${component.name}'")
+        if (moduleConfigurations == null) {
+            return
+        }
+        if (component.escrow != null) {
+            boolean hasEscrowInModule = moduleConfigurations.any { it.escrow != null }
+            if (component.escrow != null && hasEscrowInModule) {
+                registerError("Escrow block is defined both in groovy configuration and in kotlin for '${component.name}'")
+            }
+        }
+        component.subComponents.each { _, subComponent ->
+            def subComponentName = subComponent.name
+            def subModuleConfigurations = moduleConfig.escrowModules.get(subComponentName).moduleConfigurations
+            if (subModuleConfigurations == null) {
+                return
+            }
+            boolean hasEscrowInSubModule = subModuleConfigurations.any { it.escrow != null }
+            if (subComponent.escrow != null && hasEscrowInSubModule) {
+                registerError("Escrow block is defined both in groovy configuration and in kotlin for subcomponent '${subComponentName}' of '${component.name}'")
+            }
+            subComponent.versions.each { dslVersionRange, dslVersionedComponent ->
+                def versionedEscrowModule = moduleConfigurations.find { moduleConfiguration -> moduleConfiguration.versionRangeString == dslVersionRange }
+                if (versionedEscrowModule != null && dslVersionedComponent.escrow != null && versionedEscrowModule.escrow != null) {
+                    registerError("Escrow block is defined both in groovy configuration and in kotlin for version range '${dslVersionRange}' of subcomponent '${subComponentName}' of '${component.name}'")
+
                 }
             }
         }

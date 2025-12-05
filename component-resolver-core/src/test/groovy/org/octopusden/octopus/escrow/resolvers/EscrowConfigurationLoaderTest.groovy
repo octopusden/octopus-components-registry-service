@@ -276,6 +276,30 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
         assert exception.contains("Escrow block is defined both in groovy configuration and in kotlin for 'Component'"): "Exception message: $exception"
     }
 
+    /**
+     * Test that double escrow block is forbidden in range-specific configuration
+     */
+    @Test
+    void testValidationDoubleEscrowBlockInRange() {
+        def exception = shouldFail(Exception.class) {
+            def l = TestConfigUtils.loadFromURL(ComponentRegistryInfo.createFromFileSystem("src/test/resources/invalid/escrow_range", "Aggregator.groovy"))
+            l.loadFullConfiguration()
+        }
+        assert exception.contains("Escrow block is defined both in groovy configuration and in kotlin for 'Component'"): "Exception message: $exception"
+    }
+
+    /**
+     * Test that double escrow block is forbidden in subcomponent configuration
+     */
+    @Test
+    void testValidationDoubleEscrowBlockInSubcomponent() {
+        def exception = shouldFail(Exception.class) {
+            def l = TestConfigUtils.loadFromURL(ComponentRegistryInfo.createFromFileSystem("src/test/resources/invalid/escrow_subcomponents", "Aggregator.groovy"))
+            l.loadFullConfiguration()
+        }
+        assert exception.contains("Escrow block is defined both in groovy configuration and in kotlin for subcomponent 'sub-component-one' of 'Component'"): "Exception message: $exception"
+    }
+
     @Test
     void testAllSettingOfComponentAreDefaults() {
         EscrowConfiguration configuration = loadConfiguration("allSettingsAreDefault.groovy")
