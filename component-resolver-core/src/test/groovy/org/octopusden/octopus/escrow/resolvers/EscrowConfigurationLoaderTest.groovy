@@ -260,8 +260,8 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
         def exception = shouldFail(Exception.class) {
             loadConfiguration("invalid/escrowGenerationEmpty.groovy")
         }
-        assert exception.contains("Parameter specified as non-null is null:")
-        assert exception.contains("parameter generation")
+        assert exception.contains("Parameter specified as non-null is null:") &&
+                exception.contains("parameter generation"): "Exception message: $exception"
     }
 
     @Test
