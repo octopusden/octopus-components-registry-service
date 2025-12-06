@@ -7,7 +7,6 @@ import org.octopusden.octopus.escrow.model.VCSSettings
 import org.octopusden.octopus.escrow.model.VersionControlSystemRoot
 import org.octopusden.octopus.releng.dto.ComponentVersion
 import org.octopusden.releng.versions.KotlinVersionFormatter
-import org.octopusden.releng.versions.NumericVersion
 import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionFormatter
 import org.apache.logging.log4j.LogManager

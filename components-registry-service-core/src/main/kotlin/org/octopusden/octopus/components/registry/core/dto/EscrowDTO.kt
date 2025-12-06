@@ -10,5 +10,7 @@ data class EscrowDTO @JsonCreator constructor(
     @JsonProperty("providedDependencies") val providedDependencies: List<String>? = emptyList(),
     @JsonProperty("diskSpaceRequirement") val diskSpaceRequirement: Long? = null,
     @JsonProperty("additionalSources") val additionalSources: List<String>? = emptyList(),
-    @JsonProperty("isReusable") val isReusable: Boolean
+    @JsonProperty("isReusable") val isReusable: Boolean,
+    @JsonProperty("generation")
+    val generation: EscrowGenerationMode
 )

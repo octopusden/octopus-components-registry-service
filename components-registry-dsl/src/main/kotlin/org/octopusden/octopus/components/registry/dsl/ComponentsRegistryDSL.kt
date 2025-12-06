@@ -29,6 +29,7 @@ import org.octopusden.octopus.components.registry.api.beans.OdbcToolBean
 import org.octopusden.octopus.components.registry.api.beans.OracleDatabaseToolBean
 import org.octopusden.octopus.components.registry.api.beans.SubComponentBean
 import org.octopusden.octopus.components.registry.api.beans.VersionedComponentConfigurationBean
+import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
 
 private val logger = Logger.getLogger("org.octopusden.octopus.components.registry.dsl.ComponentsRegistryDSL")
 
@@ -198,6 +199,12 @@ class EscrowDSL(private val escrow: EscrowBean) {
     var reusable: Boolean = escrow.isReusable
         set(value) {
             escrow.isReusable = value
+            field = value
+        }
+
+    var generation: EscrowGenerationMode = escrow.generation
+        set(value) {
+            escrow.generation = value
             field = value
         }
 
@@ -390,10 +397,6 @@ class DependenciesDSL {
     internal fun toDependencies(): Dependencies =
         Dependencies(autoUpdate)
 
-}
-
-class SettingsDSL {
-    var param1: String = ""
 }
 
 fun throwException(message: String) {

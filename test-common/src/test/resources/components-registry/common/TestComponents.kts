@@ -1,3 +1,4 @@
+import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
 import org.octopusden.octopus.components.registry.dsl.*
 
 component("TEST_PT_K_DB") {
@@ -13,6 +14,7 @@ component("TESTONE") {
             "spa/node_modules"
         )
         reusable = false
+        generation = EscrowGenerationMode.UNSUPPORTED
     }
 }
 

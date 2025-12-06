@@ -22,6 +22,7 @@ import org.octopusden.octopus.components.registry.api.distribution.entities.Mave
 import org.octopusden.octopus.components.registry.api.enums.BuildSystemType
 import org.octopusden.octopus.components.registry.api.enums.BuildToolTypes
 import org.octopusden.octopus.components.registry.api.enums.DatabaseTypes
+import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
 import org.octopusden.octopus.components.registry.api.enums.OracleDatabaseEditions
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.components.registry.api.enums.VersionControlSystemType
@@ -199,6 +200,25 @@ open class EscrowBean: Escrow {
     private var diskSpaceRequirement: Long? = null
     private val additionalSources = ArrayList<String>()
     private var reusable = true
+    private var generation: EscrowGenerationMode = EscrowGenerationMode.UNSUPPORTED
+
+    constructor()
+
+    constructor(
+        generation: EscrowGenerationMode,
+        buildTask: String? = null,
+        providedDependencies: Collection<String> = emptyList(),
+        diskSpaceRequirement: Long? = null,
+        additionalSources: Collection<String> = emptyList(),
+        reusable: Boolean = true
+    ) {
+        this.generation = generation
+        this.buildTask = buildTask
+        this.providedDependencies.addAll(providedDependencies)
+        this.diskSpaceRequirement = diskSpaceRequirement
+        this.additionalSources.addAll(additionalSources)
+        this.reusable = reusable
+    }
 
     override fun getBuildTask(): String? = this.buildTask
 
@@ -224,8 +244,14 @@ open class EscrowBean: Escrow {
         this.reusable = reusable
     }
 
+    override fun getGeneration(): EscrowGenerationMode = generation
+
+    fun setGeneration(generation: EscrowGenerationMode) {
+        this.generation = generation
+    }
+
     override fun toString(): String {
-        return "EscrowBean(buildTask=$buildTask, gradle=$gradle, providedDependencies=$providedDependencies, diskSpaceRequirement=$diskSpaceRequirement, additionalSources=$additionalSources, reusable=$reusable)"
+        return "EscrowBean(buildTask=$buildTask, gradle=$gradle, providedDependencies=$providedDependencies, diskSpaceRequirement=$diskSpaceRequirement, additionalSources=$additionalSources, reusable=$reusable, generation=$generation)"
     }
 
 }

@@ -6,6 +6,8 @@ import kotlin.Pair
 import org.apache.commons.lang3.StringUtils
 import org.apache.logging.log4j.LogManager
 import org.apache.logging.log4j.Logger
+import org.octopusden.octopus.components.registry.api.Component
+import org.octopusden.octopus.components.registry.api.escrow.Escrow
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.MavenArtifactMatcher
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
@@ -506,6 +508,36 @@ class EscrowConfigValidator {
             }
             if (tool.getTargetLocation() == null) {
                 registerError("tool targetLocation is not specified in '$toolName'")
+            }
+        }
+    }
+
+    void validateEscrow(Component component, EscrowConfiguration moduleConfig) {
+        def moduleConfigurations = moduleConfig.escrowModules.get(component.name).moduleConfigurations
+        if (moduleConfigurations == null) {
+            return
+        }
+        if (component.escrow != null) {
+            boolean hasEscrowInModule = moduleConfigurations.any { it.escrow != null && it.escrow.generation != component.escrow.getGeneration() }
+            if (hasEscrowInModule) {
+                registerError("Escrow.generation parameter is defined both in groovy configuration and in kotlin for '${component.name}'")
+            }
+        }
+        component.subComponents.each { _, subComponent ->
+            def subComponentName = subComponent.name
+            def subModuleConfigurations = moduleConfig.escrowModules.get(subComponentName).moduleConfigurations
+            if (subModuleConfigurations == null) {
+                return
+            }
+            boolean hasEscrowInSubModule = subModuleConfigurations.any { it.escrow != null && it.escrow.generation != subComponent.escrow?.getGeneration() }
+            if (hasEscrowInSubModule) {
+                registerError("Escrow.generation parameter is defined both in groovy configuration and in kotlin for subcomponent '${subComponentName}' of '${component.name}'")
+            }
+            subComponent.versions.each { dslVersionRange, dslVersionedComponent ->
+                def versionedEscrowModule = subModuleConfigurations.find { moduleConfiguration -> moduleConfiguration.versionRangeString == dslVersionRange }
+                if (versionedEscrowModule != null && dslVersionedComponent.escrow != null && versionedEscrowModule.escrow != null && dslVersionedComponent.escrow.getGeneration() != versionedEscrowModule.escrow.getGeneration()) {
+                    registerError("Escrowgene.generation parameter is defined both in groovy configuration and in kotlin for version range '${dslVersionRange}' of subcomponent '${subComponentName}' of '${component.name}'")
+                }
             }
         }
     }
