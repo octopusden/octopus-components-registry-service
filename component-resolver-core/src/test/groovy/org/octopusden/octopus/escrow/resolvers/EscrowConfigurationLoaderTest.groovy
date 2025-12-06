@@ -273,7 +273,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
             def l = TestConfigUtils.loadFromURL(ComponentRegistryInfo.createFromFileSystem("src/test/resources/invalid/escrow", "Aggregator.groovy"))
             l.loadFullConfiguration()
         }
-        assert exception.contains("Escrow block is defined both in groovy configuration and in kotlin for 'Component'"): "Exception message: $exception"
+        assert exception.contains("Escrow.generation parameter is defined both in groovy configuration and in kotlin for 'Component'"): "Exception message: $exception"
     }
 
     /**
@@ -285,7 +285,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
             def l = TestConfigUtils.loadFromURL(ComponentRegistryInfo.createFromFileSystem("src/test/resources/invalid/escrow_range", "Aggregator.groovy"))
             l.loadFullConfiguration()
         }
-        assert exception.contains("Escrow block is defined both in groovy configuration and in kotlin for 'Component'"): "Exception message: $exception"
+        assert exception.contains("Escrow.generation parameter is defined both in groovy configuration and in kotlin for 'Component'"): "Exception message: $exception"
     }
 
     /**
@@ -297,7 +297,19 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
             def l = TestConfigUtils.loadFromURL(ComponentRegistryInfo.createFromFileSystem("src/test/resources/invalid/escrow_subcomponents", "Aggregator.groovy"))
             l.loadFullConfiguration()
         }
-        assert exception.contains("Escrow block is defined both in groovy configuration and in kotlin for subcomponent 'sub-component-one' of 'Component'"): "Exception message: $exception"
+        assert exception.contains("Escrow.generation parameter is defined both in groovy configuration and in kotlin for subcomponent 'sub-component-one' of 'Component'"): "Exception message: $exception"
+    }
+
+    /**
+     * Test that double escrow block is forbidden in subcomponent range-specific configuration
+     */
+    @Test
+    void testValidationDoubleEscrowBlockInSubcomponentRange() {
+        def exception = shouldFail(Exception.class) {
+            def l = TestConfigUtils.loadFromURL(ComponentRegistryInfo.createFromFileSystem("src/test/resources/invalid/escrow_subcomponents_range", "Aggregator.groovy"))
+            l.loadFullConfiguration()
+        }
+        assert exception.contains("Escrowgene.generation parameter is defined both in groovy configuration and in kotlin for version range '[1.0,1.0.336)' of subcomponent 'sub-component-one' of 'Component'"): "Exception message: $exception"
     }
 
     @Test
