@@ -2,6 +2,8 @@ package org.octopusden.octopus.escrow.resolvers
 
 import groovy.transform.TypeChecked
 import org.junit.Test
+import org.octopusden.octopus.components.registry.api.beans.EscrowBean
+import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.TestConfigUtils
 import org.octopusden.octopus.escrow.configuration.loader.ComponentRegistryInfo
@@ -257,6 +259,92 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
         )
         assert expectedConfig.vcsSettings == configurations.get(0).vcsSettings
         assert expectedConfig == configurations.get(0)
+    }
+
+    @Test
+    void testDefaultsWithEscrowMode() {
+        EscrowConfiguration configuration = loadConfiguration("single-module/defaultsWithEscrowMode.groovy")
+        def configurations = configuration.escrowModules.get(TEST_MODULE).moduleConfigurations
+        def expectedConfig = new EscrowModuleConfig(
+                componentOwner: "user1",
+                vcsSettings: VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", MERCURIAL, "ssh://hg@mercurial/bcomponent", '$module-$version', null, null)),
+                buildSystem: MAVEN,
+                system: "NONE",
+                releasesInDefaultBranch: true,
+                solution: false,
+                artifactIdPattern: /[\w-]+/,
+                groupIdPattern: "org.octopusden.octopus.bcomponent",
+                versionRange: "[1.12.1-151,)",
+                jiraConfiguration: new JiraComponent("BCOMPONENT", null, ComponentVersionFormat.create('$major.$minor', '$major.$minor.$service'), new ComponentInfo(null, '$versionPrefix-$baseVersionFormat'), false, false),
+                distribution: null,
+                buildConfiguration: BuildParameters.create(null, null, null, false, null, null, null,
+                        [new Tool(name: "BuildEnv", escrowEnvironmentVariable: "BUILD_ENV", targetLocation: "tools/BUILD_ENV",
+                                sourceLocation: "env.BUILD_ENV", installScript: "script")], []
+                ),
+                escrow: new EscrowBean(EscrowGenerationMode.AUTO, null, [], null, [], true)
+        )
+        def actualConfig = configurations.get(0)
+        assert expectedConfig.escrow.generation == actualConfig.escrow.generation
+    }
+
+    /**
+     * Test that generation mode is required in escrow section
+     */
+    @Test
+    void testDefaultsWithEscrowModeEmpty() {
+        def exception = shouldFail(Exception.class) {
+            loadConfiguration("invalid/escrowGenerationEmpty.groovy")
+        }
+        assert exception.contains("Parameter specified as non-null is null:") &&
+                exception.contains("parameter generation"): "Exception message: $exception"
+    }
+
+    /**
+     * Test that double escrow block is forbidden
+     */
+    @Test
+    void testValidationDoubleEscrowBlock() {
+        def exception = shouldFail(Exception.class) {
+            def l = TestConfigUtils.loadFromURL(ComponentRegistryInfo.createFromFileSystem("src/test/resources/invalid/escrow", "Aggregator.groovy"))
+            l.loadFullConfiguration()
+        }
+        assert exception.contains("Escrow.generation parameter is defined both in groovy configuration and in kotlin for 'Component'"): "Exception message: $exception"
+    }
+
+    /**
+     * Test that double escrow block is forbidden in range-specific configuration
+     */
+    @Test
+    void testValidationDoubleEscrowBlockInRange() {
+        def exception = shouldFail(Exception.class) {
+            def l = TestConfigUtils.loadFromURL(ComponentRegistryInfo.createFromFileSystem("src/test/resources/invalid/escrow_range", "Aggregator.groovy"))
+            l.loadFullConfiguration()
+        }
+        assert exception.contains("Escrow.generation parameter is defined both in groovy configuration and in kotlin for 'Component'"): "Exception message: $exception"
+    }
+
+    /**
+     * Test that double escrow block is forbidden in subcomponent configuration
+     */
+    @Test
+    void testValidationDoubleEscrowBlockInSubcomponent() {
+        def exception = shouldFail(Exception.class) {
+            def l = TestConfigUtils.loadFromURL(ComponentRegistryInfo.createFromFileSystem("src/test/resources/invalid/escrow_subcomponents", "Aggregator.groovy"))
+            l.loadFullConfiguration()
+        }
+        assert exception.contains("Escrow.generation parameter is defined both in groovy configuration and in kotlin for subcomponent 'sub-component-one' of 'Component'"): "Exception message: $exception"
+    }
+
+    /**
+     * Test that double escrow block is forbidden in subcomponent range-specific configuration
+     */
+    @Test
+    void testValidationDoubleEscrowBlockInSubcomponentRange() {
+        def exception = shouldFail(Exception.class) {
+            def l = TestConfigUtils.loadFromURL(ComponentRegistryInfo.createFromFileSystem("src/test/resources/invalid/escrow_subcomponents_range", "Aggregator.groovy"))
+            l.loadFullConfiguration()
+        }
+        assert exception.contains("Escrow.generation parameter is defined both in groovy configuration and in kotlin for version range '[1.0,1.0.336)' of subcomponent 'sub-component-one' of 'Component'"): "Exception message: $exception"
     }
 
     @Test
@@ -726,5 +814,15 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
         def sub2Root = sub2.vcsSettings.versionControlSystemRoots[0]
         assert "master" == sub2Root.branch
         assert "\$module-\$version" == sub2Root.tag
+    }
+
+    @Test
+    void testInvalidHotfixComponentsVersionFormat() {
+        def exception = GroovyAssert.shouldFail(EscrowConfigurationException.class, {
+            loadConfiguration("invalid/invalidHotfixComponents.groovy")
+        })
+        assert exception.message == "Validation of module config failed due following errors: \n" +
+                "Invalid hotfixVersionFormat '\$major.\$minor-\$fix' for 'component_hotfix_2', it must start with buildVersionFormat/releaseVersionFormat: '\$major.\$minor.\$service'\n" +
+                "Hotfix is enabled but hotfixVersionFormat is not defined for 'component_hotfix_1'"
     }
 }

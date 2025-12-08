@@ -6,6 +6,8 @@ import kotlin.Pair
 import org.apache.commons.lang3.StringUtils
 import org.apache.logging.log4j.LogManager
 import org.apache.logging.log4j.Logger
+import org.octopusden.octopus.components.registry.api.Component
+import org.octopusden.octopus.components.registry.api.SubComponent
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.MavenArtifactMatcher
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
@@ -28,6 +30,8 @@ import java.util.stream.Stream
 class EscrowConfigValidator {
     public static final String ARCHIVED_SUFFIX = "(archived)"
     static MavenArtifactMatcher mavenArtifactMatcher = new MavenArtifactMatcher()
+
+    private static ComponentHotfixSupportResolver componentHotfixSupportResolver = new ComponentHotfixSupportResolver()
 
     private static final Logger LOG = LogManager.getLogger(EscrowConfigValidator.class)
     public static final String SPLIT_PATTERN = "[,|\\s]+"
@@ -99,6 +103,7 @@ class EscrowConfigValidator {
                 validateArtifactId(moduleConfig.getArtifactIdPattern(), componentName)
                 validateGroupId(moduleConfig, componentName)
                 validateVcsSettings(moduleConfig, componentName)
+                validateHotfixVersionFormat(moduleConfig, componentName)
                 validateVersionRange(moduleConfig, componentName)
                 validateJiraParams(moduleConfig, componentName)
                 validateExplicitExternalComponent(moduleConfig, componentName)
@@ -380,7 +385,6 @@ class EscrowConfigValidator {
             if (!(moduleConfig.buildSystem == BuildSystem.BS2_0 || moduleConfig.buildSystem == BuildSystem.PROVIDED || moduleConfig.buildSystem == BuildSystem.ESCROW_PROVIDED_MANUALLY) && StringUtils.isEmpty(vcsRoot.vcsPath)) {
                 registerError("empty vcsUrl is not allowed in configuration of component $component (type=$moduleConfig.buildSystem)")
             }
-            validateHotfixVersionFormat(moduleConfig, component, vcsRoot)
         }
         if (moduleConfig.getBuildSystem() == BuildSystem.BS2_0) {
             if (vcsRoots.size() > 1) {
@@ -509,6 +513,33 @@ class EscrowConfigValidator {
         }
     }
 
+    private Boolean hasDoubleEscrowBlock(SubComponent dslComponent, List<EscrowModuleConfig> moduleConfigurations) {
+        if (moduleConfigurations == null || dslComponent.escrow == null) {
+            return false
+        }
+        return moduleConfigurations.any { it.escrow != null && it.escrow.generation != dslComponent.escrow.getGeneration() }
+    }
+
+    void validateEscrow(Component dslComponent, EscrowConfiguration moduleConfig) {
+        def moduleConfigurations = moduleConfig.escrowModules.get(dslComponent.name).moduleConfigurations
+        if (hasDoubleEscrowBlock(dslComponent, moduleConfigurations)) {
+            registerError("Escrow.generation parameter is defined both in groovy configuration and in kotlin for '${dslComponent.name}'")
+        }
+        dslComponent.subComponents.each { _, subComponent ->
+            def subComponentName = subComponent.name
+            def subModuleConfigurations = moduleConfig.escrowModules.get(subComponentName).moduleConfigurations
+            if (hasDoubleEscrowBlock(subComponent, subModuleConfigurations)) {
+                registerError("Escrow.generation parameter is defined both in groovy configuration and in kotlin for subcomponent '${subComponentName}' of '${dslComponent.name}'")
+            }
+            subComponent.versions.each { dslVersionRange, dslVersionedComponent ->
+                def versionedEscrowModule = subModuleConfigurations.find { moduleConfiguration -> moduleConfiguration.versionRangeString == dslVersionRange }
+                if (versionedEscrowModule != null && dslVersionedComponent.escrow != null && versionedEscrowModule.escrow != null && dslVersionedComponent.escrow.getGeneration() != versionedEscrowModule.escrow.getGeneration()) {
+                    registerError("Escrow.generation parameter is defined both in groovy configuration and in kotlin for version range '${dslVersionRange}' of subcomponent '${subComponentName}' of '${dslComponent.name}'")
+                }
+            }
+        }
+    }
+
     void validateDockerUniqueNames(EscrowConfiguration moduleConfig) {
         def dockerNames = new HashSet<String>()
         moduleConfig.escrowModules.each { componentName, escrowModule ->
@@ -537,30 +568,31 @@ class EscrowConfigValidator {
 
     /**
      * Validate hotfix version format.
-     * Check if hotfixVersionFormat starts with buildVersionFormat and hotfixBranch is not empty.
-     * Register error if hotfixVersionFormat is not specified.
+     * If hotfixBranch is not empty, check if hotfixVersionFormat starts with buildVersionFormat (or releaseVersionFormat as fallback).
+     * Register error if:
+     * - hotfixVersionFormat is not specified
+     * - neither buildVersionFormat nor releaseVersionFormat exists
+     * - hotfixVersionFormat doesn't start with buildVersionFormat or releaseVersionFormat
      * @param moduleConfig
      * @param componentName
      */
-    def validateHotfixVersionFormat(EscrowModuleConfig moduleConfig, String componentName, VersionControlSystemRoot vcsRoot) {
-
-        ComponentHotfixSupportResolver componentHotfixSupportResolver = new ComponentHotfixSupportResolver()
+    def validateHotfixVersionFormat(EscrowModuleConfig moduleConfig, String componentName) {
         if (!componentHotfixSupportResolver.isHotFixEnabled(moduleConfig.vcsSettings)) {
             return
         }
-        def hotfixVersionFormat = moduleConfig.getJiraConfiguration().componentVersionFormat.hotfixVersionFormat
-        boolean hasErrors = false
+        def componentVersionFormat = moduleConfig.getJiraConfiguration().componentVersionFormat
+        def hotfixVersionFormat = componentVersionFormat.hotfixVersionFormat
         if (StringUtils.isBlank(hotfixVersionFormat)) {
-            hasErrors = true
-            registerError("hotfixVersionFormat is not specified in '$componentName'")
+            registerError("Hotfix is enabled but hotfixVersionFormat is not defined for '$componentName'")
+            return
         }
-        def buildVersionFormat = moduleConfig.getJiraConfiguration().componentVersionFormat.buildVersionFormat
-        if (buildVersionFormat == null) {
-            hasErrors = true
-            registerError("buildVersionFormat is not specified in '$componentName'")
+        def baseVersionFormat = componentVersionFormat.buildVersionFormat ?: componentVersionFormat.releaseVersionFormat
+        if (StringUtils.isBlank(baseVersionFormat)) {
+            registerError("Hotfix is enabled but neither 'buildVersionFormat' nor 'releaseVersionFormat' is defined for '$componentName'")
+            return
         }
-        if (!hasErrors && !hotfixVersionFormat.startsWith(buildVersionFormat)) {
-            registerError("hotfixVersionFormat '$hotfixVersionFormat' doesn't start with buildVersionFormat '$buildVersionFormat'")
+        if (!hotfixVersionFormat.startsWith(baseVersionFormat)) {
+            registerError("Invalid hotfixVersionFormat '$hotfixVersionFormat' for '$componentName', it must start with buildVersionFormat/releaseVersionFormat: '$baseVersionFormat'")
         }
     }
 

@@ -5,6 +5,7 @@ import groovy.transform.EqualsAndHashCode
 import groovy.transform.ToString
 import groovy.transform.TupleConstructor
 import groovy.transform.TypeChecked
+import org.octopusden.octopus.components.registry.api.escrow.Escrow
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.configuration.loader.VCSSettingsWrapper
 import org.octopusden.octopus.escrow.model.BuildParameters
@@ -55,6 +56,8 @@ class DefaultConfigParameters {
     Boolean releasesInDefaultBranch
 
     Boolean solution
+
+    Escrow escrow
 
     Boolean archived
 }
