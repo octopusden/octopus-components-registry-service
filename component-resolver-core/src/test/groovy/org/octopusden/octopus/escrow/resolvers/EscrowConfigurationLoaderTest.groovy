@@ -309,7 +309,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
             def l = TestConfigUtils.loadFromURL(ComponentRegistryInfo.createFromFileSystem("src/test/resources/invalid/escrow_subcomponents_range", "Aggregator.groovy"))
             l.loadFullConfiguration()
         }
-        assert exception.contains("Escrowgene.generation parameter is defined both in groovy configuration and in kotlin for version range '[1.0,1.0.336)' of subcomponent 'sub-component-one' of 'Component'"): "Exception message: $exception"
+        assert exception.contains("Escrow.generation parameter is defined both in groovy configuration and in kotlin for version range '[1.0,1.0.336)' of subcomponent 'sub-component-one' of 'Component'"): "Exception message: $exception"
     }
 
     @Test
