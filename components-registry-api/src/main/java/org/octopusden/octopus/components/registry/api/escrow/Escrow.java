@@ -1,5 +1,7 @@
 package org.octopusden.octopus.components.registry.api.escrow;
 
+import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode;
+
 import java.util.Collection;
 import java.util.Optional;
 
@@ -26,4 +28,10 @@ public interface Escrow {
      * @return Returns true if component's escrow package can be reused, false otherwise
      */
     boolean isReusable();
+
+    /**
+     * Gets generation mode for escrow package.
+     * @return Returns generation mode
+     */
+    EscrowGenerationMode getGeneration();
 }

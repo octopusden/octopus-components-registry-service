@@ -33,6 +33,7 @@ import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVers
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersions
 import org.octopusden.octopus.components.registry.core.dto.DistributionDTO
 import org.octopusden.octopus.components.registry.core.dto.EscrowDTO
+import org.octopusden.octopus.components.registry.core.dto.EscrowGenerationMode
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentDTO
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionDTO
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionRangeDTO
@@ -304,7 +305,8 @@ abstract class BaseComponentsRegistryServiceTest {
                 "spa/.gradle",
                 "spa/node_modules"
             ),
-            isReusable = false
+            isReusable = false,
+            generation = EscrowGenerationMode.UNSUPPORTED
         )
         expectedComponent.solution = true
         Assertions.assertEquals(expectedComponent, actualComponent)
