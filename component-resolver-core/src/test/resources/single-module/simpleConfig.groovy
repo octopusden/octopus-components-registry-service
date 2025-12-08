@@ -5,6 +5,8 @@ Defaults {
     system = "NONE"
     releasesInDefaultBranch = true
     solution = false
+    copyright = "companyName1"
+
     jira {
         majorVersionFormat = '$major.$minor'
         releaseVersionFormat = '$major.$minor.$service'

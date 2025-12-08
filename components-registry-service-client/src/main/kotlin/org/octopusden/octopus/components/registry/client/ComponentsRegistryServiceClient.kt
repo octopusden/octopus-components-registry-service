@@ -1,11 +1,18 @@
 package org.octopusden.octopus.components.registry.client
 
+import feign.CollectionFormat
+import feign.Headers
+import feign.Param
+import feign.QueryMap
+import feign.RequestLine
+import feign.Response
 import org.octopusden.octopus.components.registry.api.build.tools.BuildTool
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.components.registry.core.dto.ArtifactComponentsDTO
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.core.dto.BuildSystem
 import org.octopusden.octopus.components.registry.core.dto.ComponentArtifactConfigurationDTO
+import org.octopusden.octopus.components.registry.core.dto.ComponentImage
 import org.octopusden.octopus.components.registry.core.dto.ComponentV1
 import org.octopusden.octopus.components.registry.core.dto.ComponentV2
 import org.octopusden.octopus.components.registry.core.dto.ComponentV3
@@ -14,6 +21,7 @@ import org.octopusden.octopus.components.registry.core.dto.DetailedComponent
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersion
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersions
 import org.octopusden.octopus.components.registry.core.dto.DistributionDTO
+import org.octopusden.octopus.components.registry.core.dto.Image
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionDTO
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionRangeDTO
 import org.octopusden.octopus.components.registry.core.dto.ServiceStatusDTO
@@ -22,13 +30,6 @@ import org.octopusden.octopus.components.registry.core.dto.VersionNamesDTO
 import org.octopusden.octopus.components.registry.core.dto.VersionRequest
 import org.octopusden.octopus.components.registry.core.dto.VersionedComponent
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
-import feign.CollectionFormat
-import feign.Headers
-import feign.Param
-import feign.QueryMap
-import feign.RequestLine
-import org.octopusden.octopus.components.registry.core.dto.ComponentImage
-import org.octopusden.octopus.components.registry.core.dto.Image
 
 interface ComponentsRegistryServiceClient {
     /**
@@ -51,9 +52,15 @@ interface ComponentsRegistryServiceClient {
 
     @RequestLine("GET rest/api/2/components/{componentKey}/versions/{version}")
     @Throws(NotFoundException::class)
-    fun getDetailedComponent(@Param("componentKey") componentKey: String, @Param("version") version: String): DetailedComponent
+    fun getDetailedComponent(
+        @Param("componentKey") componentKey: String,
+        @Param("version") version: String
+    ): DetailedComponent
 
-    @RequestLine("GET /rest/api/2/components?vcs-path={vcsPath}&build-system={buildSystem}&systems={systems}&solution={solution}", collectionFormat = CollectionFormat.CSV)
+    @RequestLine(
+        "GET /rest/api/2/components?vcs-path={vcsPath}&build-system={buildSystem}&systems={systems}&solution={solution}",
+        collectionFormat = CollectionFormat.CSV
+    )
     fun getAllComponents(
         @Param("vcsPath") vcsPath: String? = null,
         @Param("buildSystem") buildSystem: BuildSystem? = null,
@@ -63,15 +70,24 @@ interface ComponentsRegistryServiceClient {
 
     @RequestLine("GET rest/api/1/components/{componentKey}/versions/{version}/distribution")
     @Throws(NotFoundException::class)
-    fun getComponentDistribution(@Param("componentKey") componentKey: String, @Param("version") version: String): DistributionDTO
+    fun getComponentDistribution(
+        @Param("componentKey") componentKey: String,
+        @Param("version") version: String
+    ): DistributionDTO
 
     @RequestLine("GET rest/api/2/components/{componentKey}/versions/{version}/detailed-version")
     @Throws(NotFoundException::class)
-    fun getDetailedComponentVersion(@Param("componentKey") componentKey: String, @Param("version") version: String): DetailedComponentVersion
+    fun getDetailedComponentVersion(
+        @Param("componentKey") componentKey: String,
+        @Param("version") version: String
+    ): DetailedComponentVersion
 
     @RequestLine("POST rest/api/2/components/{componentKey}/detailed-versions")
     @Headers("Content-Type: application/json")
-    fun getDetailedComponentVersions(@Param("componentKey") componentKey: String, versions: VersionRequest): DetailedComponentVersions
+    fun getDetailedComponentVersions(
+        @Param("componentKey") componentKey: String,
+        versions: VersionRequest
+    ): DetailedComponentVersions
 
     @RequestLine("GET rest/api/2/components/{componentKey}/maven-artifacts")
     fun getComponentArtifactsParameters(@Param("componentKey") componentKey: String): Map<String, ComponentArtifactConfigurationDTO>
@@ -88,10 +104,16 @@ interface ComponentsRegistryServiceClient {
     ): List<BuildTool>
 
     @RequestLine("GET rest/api/2/components/{componentKey}/versions/{version}/jira-component")
-    fun getJiraComponentForComponentAndVersion(@Param("componentKey") componentKey: String, @Param("version") version: String): JiraComponentVersionDTO
+    fun getJiraComponentForComponentAndVersion(
+        @Param("componentKey") componentKey: String,
+        @Param("version") version: String
+    ): JiraComponentVersionDTO
 
     @RequestLine("GET rest/api/2/projects/{projectKey}/versions/{version}")
-    fun getJiraComponentByProjectAndVersion(@Param("projectKey") projectKey: String, @Param("version") version: String): JiraComponentVersionDTO
+    fun getJiraComponentByProjectAndVersion(
+        @Param("projectKey") projectKey: String,
+        @Param("version") version: String
+    ): JiraComponentVersionDTO
 
     @RequestLine("GET rest/api/2/projects/{projectKey}/jira-components")
     fun getJiraComponentsByProject(@Param("projectKey") projectKey: String): Set<String>
@@ -103,10 +125,16 @@ interface ComponentsRegistryServiceClient {
     fun getComponentsDistributionByJiraProject(@Param("projectKey") projectKey: String): Map<String, DistributionDTO>
 
     @RequestLine("GET rest/api/2/projects/{projectKey}/versions/{version}/vcs-settings")
-    fun getVCSSettingForProject(@Param("projectKey") projectKey: String, @Param("version") version: String): VCSSettingsDTO
+    fun getVCSSettingForProject(
+        @Param("projectKey") projectKey: String,
+        @Param("version") version: String
+    ): VCSSettingsDTO
 
     @RequestLine("GET rest/api/2/projects/{projectKey}/versions/{version}/distribution")
-    fun getDistributionForProject(@Param("projectKey") projectKey: String, @Param("version") version: String): DistributionDTO
+    fun getDistributionForProject(
+        @Param("projectKey") projectKey: String,
+        @Param("version") version: String
+    ): DistributionDTO
 
     @RequestLine("GET rest/api/2/common/jira-component-version-ranges")
     fun getAllJiraComponentVersionRanges(): Set<JiraComponentVersionRangeDTO>
@@ -134,4 +162,8 @@ interface ComponentsRegistryServiceClient {
     @RequestLine("POST rest/api/2/components/findByArtifacts")
     @Headers("Content-Type: application/json")
     fun findComponentsByArtifacts(artifacts: Collection<ArtifactDependency>): Collection<VersionedComponent>
+
+    @RequestLine("GET rest/api/3/components/{componentKey}/copyright")
+    @Headers("Content-Type: application/octet-stream")
+    fun getCopyrightByComponent(@Param("componentKey") componentKey: String): Response
 }

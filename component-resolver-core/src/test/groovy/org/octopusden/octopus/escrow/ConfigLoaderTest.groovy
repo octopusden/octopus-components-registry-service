@@ -106,7 +106,7 @@ class ConfigLoaderTest {
             assert false: "EscrowException should be thrown"
         } catch (ComponentResolverException e) {
             assert e.getMessage().contains("Unknown attribute 'invalidAttributeCvs' in bcomponent->Cvs");
-            assert e.getMessage().contains("Unknown attribute 'invalidAttributeDefault' in Defaults section of escrow config file");
+            assert e.getMessage().contains("Unknown attribute 'invalidAttributeDefault' in Defaults section of escrow config file")
         }
     }
 

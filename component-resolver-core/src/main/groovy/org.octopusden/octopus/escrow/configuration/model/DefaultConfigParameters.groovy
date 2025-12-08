@@ -55,5 +55,7 @@ class DefaultConfigParameters {
     Boolean releasesInDefaultBranch
 
     Boolean solution
+
+    String copyright
 }
 

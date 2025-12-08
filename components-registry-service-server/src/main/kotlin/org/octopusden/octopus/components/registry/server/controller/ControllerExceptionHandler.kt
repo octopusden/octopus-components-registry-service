@@ -29,6 +29,13 @@ class ControllerExceptionHandler {
         return HttpEntity(ErrorResponse(e.localizedMessage))
     }
 
+    @ExceptionHandler(IllegalStateException::class)
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    fun illegalStateExceptionHandler(e: IllegalStateException): HttpEntity<ErrorResponse> {
+        log.error(e.localizedMessage)
+        return HttpEntity(ErrorResponse(e.localizedMessage))
+    }
+
     companion object {
         val log: Logger = LoggerFactory.getLogger(ControllerExceptionHandler::class.java)
     }

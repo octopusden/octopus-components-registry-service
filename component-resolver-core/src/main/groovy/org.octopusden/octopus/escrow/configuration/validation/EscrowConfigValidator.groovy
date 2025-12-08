@@ -19,6 +19,7 @@ import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRange
 import org.octopusden.releng.versions.VersionRangeFactory
 
+import java.nio.file.Path
 import java.util.function.BinaryOperator
 import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
@@ -39,6 +40,7 @@ class EscrowConfigValidator {
     private List<String> supportedSystems
     private VersionNames versionNames
     private final List<String> validationExcludedComponents
+    private final Path copyrightPath
 
     @TupleConstructor
     static class MavenArtifact {
@@ -77,13 +79,15 @@ class EscrowConfigValidator {
     EscrowConfigValidator(List<String> supportedGroupIds,
                           List<String> supportedSystems,
                           VersionNames versionNames,
-                          List<String> validationExcludedComponents) {
+                          List<String> validationExcludedComponents,
+                          Path copyrightPath) {
         this.supportedGroupIds = supportedGroupIds
         this.supportedSystems = supportedSystems
         this.versionNames = versionNames
         this.validationExcludedComponents = (validationExcludedComponents != null) ?
                 Collections.unmodifiableList(validationExcludedComponents)
                 : Collections.emptyList() as List<String>
+        this.copyrightPath = copyrightPath
     }
 
     List<String> errors = new ArrayList<>()
@@ -110,6 +114,7 @@ class EscrowConfigValidator {
                 validateReleasesInDefaultBranch(moduleConfig, componentName)
                 validateSolution(moduleConfig, componentName)
                 validateBuildConfigurationTools(moduleConfig)
+                validateCopyright(moduleConfig, componentName)
             }
         }
         if (!hasErrors()) {
@@ -148,7 +153,7 @@ class EscrowConfigValidator {
      * @param component
      */
     private void validateDistributions(EscrowModuleConfig moduleConfig, String component) {
-        if(isExcludedComponent(component)) {
+        if (isExcludedComponent(component)) {
             return
         }
         def distributions = [
@@ -175,6 +180,9 @@ class EscrowConfigValidator {
                 }
             } else {
                 registerError("releaseManager is not set in '$component'")
+            }
+            if (copyrightPath != null && StringUtils.isBlank(moduleConfig.copyright)) {
+                registerError("copyright is not set in '$component'")
             }
             def securityChampions = moduleConfig.securityChampion
             if (StringUtils.isNotBlank(securityChampions)) {
@@ -507,6 +515,22 @@ class EscrowConfigValidator {
             if (tool.getTargetLocation() == null) {
                 registerError("tool targetLocation is not specified in '$toolName'")
             }
+        }
+    }
+
+    def validateCopyright(EscrowModuleConfig moduleConfig, String component) {
+        if (copyrightPath == null) {
+            return
+        }
+
+        def copyright = moduleConfig.copyright
+        if (StringUtils.isBlank(copyright)) {
+            return
+        }
+
+        def copyrightFile = copyrightPath.resolve(copyright).toFile()
+        if (!copyrightFile.isFile()) {
+            registerError("Сopyright '${copyrightFile.name}' of component '$component' is not exist or not file")
         }
     }
 

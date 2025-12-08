@@ -12,6 +12,8 @@ Defaults {
     tag = '$module-$version'
     artifactId = ANY_ARTIFACT
     teamcityReleaseConfigId = 'bt_${module}_release'
+    copyright = 'companyName1'
+
     jira {
         majorVersionFormat = '$major.$minor'
         releaseVersionFormat = '$major.$minor.$service'
