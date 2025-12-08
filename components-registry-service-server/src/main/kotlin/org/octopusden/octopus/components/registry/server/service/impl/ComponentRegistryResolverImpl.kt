@@ -110,13 +110,18 @@ class ComponentRegistryResolverImpl(
         val (jiraComponentVersion, jiraComponentVersionRange) =
             getJiraComponentVersionToRangeByComponentAndVersion(component, version)
         val versionFormat = jiraComponentVersion.component.componentVersionFormat
-        val hotfixVersion = versionFormat.hotfixVersionFormat.formatVersion(numericVersionFactory, jiraComponentVersion.version)
-        val buildVersion = if (jiraComponentVersionRange.component.isHotfixEnabled && hotfixVersion == jiraComponentVersion.version) {
-            hotfixVersion
-        } else {
-            versionFormat.buildVersionFormat.formatVersion(numericVersionFactory, jiraComponentVersion.version)
-        }
-
+        val defaultBuildVersion = versionFormat.buildVersionFormat.formatVersion(numericVersionFactory, jiraComponentVersion.version)
+        val buildVersion =
+            if (jiraComponentVersionRange.component.isHotfixEnabled) {
+                val hotfixVersion = versionFormat.hotfixVersionFormat.formatVersion(numericVersionFactory, jiraComponentVersion.version)
+                if (hotfixVersion == jiraComponentVersion.version) {
+                    hotfixVersion
+                } else {
+                    defaultBuildVersion
+                }
+            } else {
+                defaultBuildVersion
+            }
         return ModelConfigPostProcessor(ComponentVersion.create(component, buildVersion), versionNames)
             .resolveVariables(jiraComponentVersionRange.vcsSettings)
     }

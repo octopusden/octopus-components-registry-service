@@ -71,31 +71,21 @@ val DETAILED_COMPONENT_VERSION = DetailedComponentVersion(
     hotfixVersion = ComponentRegistryVersion(ComponentVersionType.HOTFIX, HOTFIX_VERSION, JIRA_HOTFIX_VERSION)
 )
 
-val VCS_SETTINGS = VCSSettingsDTO(
+private fun createVcsSettings(version: String) = VCSSettingsDTO(
     versionControlSystemRoots = listOf(
         VersionControlSystemRootDTO(
             vcsPath = "ssh://hg@mercurial/sub",
             name = "main",
             branch = "v2",
-            tag = "SUB-3.0.0",
+            tag = "SUB-$version",
             type = RepositoryType.MERCURIAL,
             hotfixBranch = "hotfix/3.0.0"
         )
     )
 )
 
-val VCS_SETTINGS_HOTFIX = VCSSettingsDTO(
-    versionControlSystemRoots = listOf(
-        VersionControlSystemRootDTO(
-            vcsPath = "ssh://hg@mercurial/sub",
-            name = "main",
-            branch = "v2",
-            tag = "SUB-$HOTFIX_VERSION",
-            type = RepositoryType.MERCURIAL,
-            hotfixBranch = "hotfix/3.0.0"
-        )
-    )
-)
+val VCS_SETTINGS = createVcsSettings(BUILD_VERSION)
+val VCS_SETTINGS_HOTFIX = createVcsSettings(HOTFIX_VERSION)
 
 abstract class BaseComponentsRegistryServiceTest {
     init {
