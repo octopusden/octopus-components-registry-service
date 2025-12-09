@@ -138,29 +138,15 @@ DOC_DEPENDENCIES = doc_mycomponent:3.2.18  (latest released version overall)
 **Purpose:** This parameter will be passed to the standard dependency registration mechanism on the build (register-build).
 
 
-### 1.4 DMS Upload Step for Documentation
+### 1.4  Upload to DMS Step for Documentation 
 
-**Goal:** Automatically upload documentation artifacts to DMS during component release.
-
-**Component:** DMS Client
+**Goal:** Automatically upload documentation artifacts to DMS during main component release.
 
 **Implementation:**
-- Implement new meta-runner and UploadDocumentationMojo in maven-dms-plugin of octopus-dms-service
-
-**Algorithm:**
-```
-At the release of the main component:
-1. Get linked documentation component name via Components Registry Service API
-   GET /api/rest/v2/components/{name}/versions/{version}/doc
-
-2. Get version of linked documentation component from Release Management Service API
-
-3. Get information on the artifacts to be deployed (distribution->GAV section) for documentation component via
-GET /api/rest/v2/components/{doc_component_name}/versions/{doc_component_version}/distribution
-
-4. For each specified artifact:
-   - Upload to DMS with type=documentation
-```
+-  Add build step "Upload documentation to DMS" with meta-runner "Upload artifacts to DMS"  to "[CD] Release" template for uploading to DMS documentation artifacts of documentation sub-component. Set following parameters:
+ARTIFACT_TYPE=documentatiton
+ARTIFACTS_COORDINATES = %DOC_ARTIFACTS_COORDINATES%
+ARTIFACTS_COORDINATES_VERSION = %DOC_ARTIFACTS_COORDINATES_VERSION%
 
 ### 1.5 Add Documentation Step to Release Template
 
