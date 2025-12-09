@@ -1,4 +1,4 @@
-# Documentation Automation Improvement Concept (DRAFT)
+# Documentation Automation Improvement Concept
 
 ## Overview
 
