@@ -138,33 +138,30 @@ DOC_DEPENDENCIES = doc_mycomponent:3.2.18  (latest released version overall)
 **Purpose:** This parameter will be passed to the standard dependency registration mechanism on the build (register-build).
 
 
-### 1.4  Upload to DMS Step for Documentation 
+### 1.4 Add Documentation Upload Step to Release Template
 
 **Goal:** Automatically upload documentation artifacts to DMS during main component release.
 
 **Implementation:**
--  Add build step "Upload documentation to DMS" with meta-runner "Upload artifacts to DMS"  to "[CD] Release" template for uploading to DMS documentation artifacts of documentation sub-component. Set following parameters:
-ARTIFACT_TYPE=documentatiton
-ARTIFACTS_COORDINATES = %DOC_ARTIFACTS_COORDINATES%
-ARTIFACTS_COORDINATES_VERSION = %DOC_ARTIFACTS_COORDINATES_VERSION%
+- Add build step "Upload documentation to DMS" with meta-runner "Upload artifacts to DMS" to "[CD] Release" template to upload documentation artifacts of documentation sub-component.
 
-### 1.5 Add Documentation Step to Release Template
+**Parameters:**
+- `ARTIFACT_TYPE=documentation`
+- `ARTIFACTS_COORDINATES=%DOC_ARTIFACTS_COORDINATES%`
+- `ARTIFACTS_COORDINATES_VERSION=%DOC_ARTIFACTS_COORDINATES_VERSION%`
 
-**Goal:** Integrate documentation upload into standard release process.
+**Note:** The `DOC_ARTIFACTS_COORDINATES` and `DOC_ARTIFACTS_COORDINATES_VERSION` variables are populated from the documentation component's distribution configuration retrieved via Components Registry Service API (see section 1.3).
 
-**Implementation:**
-- Add step from 1.4 to Release TeamCity template
-- Execute after main artifact upload
-
+**Placement:** Execute after main artifact upload
 
 **Template addition:**
-```
+```yaml
 Build Steps:
   ...
   - Register Release in JIRA
   ...
   - Upload Release Artifacts
-  - Upload Documentation (from step 1.4)  ← NEW
+  - Upload Documentation to DMS  ← NEW
   ...
 ```
 
