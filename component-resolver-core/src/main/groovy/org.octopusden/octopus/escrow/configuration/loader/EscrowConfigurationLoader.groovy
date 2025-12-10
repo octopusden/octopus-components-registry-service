@@ -749,11 +749,7 @@ class EscrowConfigurationLoader {
 
     @TypeChecked(TypeCheckingMode.SKIP)
     private static Boolean loadArchived(ConfigObject parentConfigObject) {
-        if (parentConfigObject.containsKey("archived")) {
-            return parentConfigObject.get("archived")
-        } else {
-            return false
-        }
+        return parentConfigObject.getOrDefault("archived", false)
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)

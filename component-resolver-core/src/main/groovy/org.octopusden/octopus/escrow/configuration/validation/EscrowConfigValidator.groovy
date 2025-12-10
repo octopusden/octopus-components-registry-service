@@ -228,7 +228,7 @@ class EscrowConfigValidator {
         configuration.escrowModules.each { componentName, escrowModule ->
             escrowModule.moduleConfigurations.each { moduleConfiguration ->
                 //TODO Remove support of archived text suffix in componentDisplayName in future releases
-                if (!moduleConfiguration.componentDisplayName?.endsWith(ARCHIVED_SUFFIX) && moduleConfiguration.archived != true) {
+                if (!moduleConfiguration.componentDisplayName?.endsWith(ARCHIVED_SUFFIX) && !moduleConfiguration.archived) {
                     jiraProjectKeyAndVersionPrefixToComponentNames.computeIfAbsent(new Tuple2<>(
                             moduleConfiguration.jiraConfiguration.projectKey,
                             moduleConfiguration.jiraConfiguration.componentInfo?.versionPrefix

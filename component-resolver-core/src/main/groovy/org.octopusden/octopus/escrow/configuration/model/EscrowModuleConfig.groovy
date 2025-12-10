@@ -67,7 +67,7 @@ class EscrowModuleConfig {
 
     private String octopusVersion
 
-    private Boolean archived = false
+    private Boolean archived
 
     Escrow escrow
 
