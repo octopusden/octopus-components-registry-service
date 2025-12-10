@@ -44,16 +44,16 @@ Component {
     }
 }
 
-dwh_db {
-    componentOwner = "sepov"
-    groupId = "org.octopusden.octopus.dwh_db"
+test {
+    componentOwner = "user"
+    groupId = "org.octopusden.octopus.test"
     jira {
         projectKey = "DM"
         lineVersionFormat = '$major02.$minorC'
         majorVersionFormat = '$major02.$minorC.$serviceC'
         releaseVersionFormat = '$major02.$minor02.$service02.$fix02'
         buildVersionFormat = '$major02.$minor02.$service02.$fix02-$build'
-        displayName = "Datamart DB"
+        displayName = "Test DB"
         technical = true
         component {
             versionPrefix = 'db'
@@ -65,11 +65,8 @@ dwh_db {
         escrow {
             generation = EscrowGenerationMode.AUTO
         }
-        build {
-            requiredTools = "BuildEnv,Whiskey"
-        }
         vcsSettings {
-            externalRegistry = "dwh_db"
+            externalRegistry = "test"
         }
     }
     "(,03.51.29.15)" {
@@ -78,7 +75,7 @@ dwh_db {
             generation = EscrowGenerationMode.UNSUPPORTED
         }
         vcsSettings {
-            externalRegistry = "dwh_db"
+            externalRegistry = "test"
         }
     }
     distribution {
