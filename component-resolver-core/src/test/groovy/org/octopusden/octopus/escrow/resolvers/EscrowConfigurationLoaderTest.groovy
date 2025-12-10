@@ -253,7 +253,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
     }
 
     /**
-     * Test that generation mode is not required in escrow section
+     * Test that generation mode is optional in Kotlin DSL escrow section when it's defined in Groovy DSL
      */
     @Test
     void testDefaultsWithEscrowModeEmpty() {

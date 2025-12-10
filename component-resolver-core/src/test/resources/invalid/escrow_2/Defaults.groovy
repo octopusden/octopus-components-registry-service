@@ -7,8 +7,8 @@ Defaults {
     releasesInDefaultBranch = true
     solution = false
     repositoryType = MERCURIAL
-    buildSystem = MAVEN;
-    tag = '$module-$version';
+    buildSystem = MAVEN
+    tag = '$module-$version'
     artifactId = ANY_ARTIFACT
     jira {
         majorVersionFormat = '$major.$minor'

@@ -251,7 +251,7 @@ class EscrowConfigurationLoader {
 
     private void mergeComponents(VersionedComponentConfiguration dslComponent, EscrowModuleConfig escrowModuleConfig) {
         if (dslComponent.escrow) {
-            if (escrowModuleConfig.escrow != null && escrowModuleConfig.escrow.generation.orElse(null) && !dslComponent.escrow.generation.isPresent()) {
+            if (escrowModuleConfig.escrow != null && escrowModuleConfig.escrow.generation.isPresent() && !dslComponent.escrow.generation.isPresent()) {
                 def generationMode = escrowModuleConfig.escrow.getGeneration()
                 def escrow = new EscrowBean(
                         generation: generationMode.orElse(null),
