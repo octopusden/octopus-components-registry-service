@@ -33,5 +33,5 @@ public interface Escrow {
      * Gets generation mode for escrow package.
      * @return Returns generation mode
      */
-    EscrowGenerationMode getGeneration();
+    Optional<EscrowGenerationMode> getGeneration();
 }

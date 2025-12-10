@@ -253,15 +253,11 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
     }
 
     /**
-     * Test that generation mode is required in escrow section
+     * Test that generation mode is not required in escrow section
      */
     @Test
     void testDefaultsWithEscrowModeEmpty() {
-        def exception = shouldFail(Exception.class) {
-            loadConfiguration("invalid/escrowGenerationEmpty.groovy")
-        }
-        assert exception.contains("Parameter specified as non-null is null:") &&
-                exception.contains("parameter generation"): "Exception message: $exception"
+        loadConfiguration("invalid/escrowGenerationEmpty.groovy")
     }
 
     /**
@@ -310,6 +306,12 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
             l.loadFullConfiguration()
         }
         assert exception.contains("Escrow.generation parameter is defined both in groovy configuration and in kotlin for version range '[1.0,1.0.336)' of subcomponent 'sub-component-one' of 'Component'"): "Exception message: $exception"
+    }
+
+    @Test
+    void testValidationDoubleEscrowBlockInSubcomponentRange2() {
+        def l = TestConfigUtils.loadFromURL(ComponentRegistryInfo.createFromFileSystem("src/test/resources/invalid/escrow_2", "Aggregator.groovy"))
+        l.loadFullConfiguration()
     }
 
     @Test
