@@ -67,7 +67,7 @@ class EscrowModuleConfig {
 
     private String octopusVersion
 
-    private Boolean archived
+    private Boolean archived = false
 
     Escrow escrow
 
@@ -174,11 +174,11 @@ class EscrowModuleConfig {
     }
 
     Boolean getArchived() {
-        return archived ?: false
+        return archived
     }
 
     void setArchived(Boolean archived) {
-        this.archived = archived
+        this.archived = archived ?: false
     }
 
     VersionedComponentConfiguration toVersionedComponent() {
