@@ -21,6 +21,7 @@ import org.octopusden.octopus.escrow.configuration.model.DefaultConfigParameters
 import org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration
 import org.octopusden.octopus.escrow.configuration.model.EscrowModule
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
+import org.octopusden.octopus.escrow.configuration.validation.ComponentRegistryValidationTask
 import org.octopusden.octopus.escrow.configuration.validation.EscrowConfigValidator
 import org.octopusden.octopus.escrow.exceptions.ComponentResolverException
 import org.octopusden.octopus.escrow.exceptions.EscrowConfigurationException
@@ -748,7 +749,10 @@ class EscrowConfigurationLoader {
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
-    private static Boolean loadArchived(ConfigObject parentConfigObject) {
+    private static Boolean loadArchived(ConfigObject parentConfigObject, String componentDisplayName) {
+        if (StringUtils.isNotBlank(componentDisplayName) && componentDisplayName.endsWith(ComponentRegistryValidationTask.ARCHIVED_SUFFIX)) {
+            return true
+        }
         return parentConfigObject.getOrDefault("archived", false)
     }
 
@@ -1066,7 +1070,6 @@ class EscrowConfigurationLoader {
     ) {
         BuildSystem buildSystem = componentConfigObject.containsKey("buildSystem") ? BuildSystem.valueOf(componentConfigObject.buildSystem.toString()) : defaultConfiguration?.buildSystem
         VCSSettingsWrapper vcsSettingsWrapper = loadVCSSettings(componentConfigObject, defaultConfiguration, buildSystem)
-        Boolean isArchived = loadArchived(componentConfigObject)
 
         boolean isHotfixEnabled = COMPONENT_HOTFIX_SUPPORT_RESOLVER.isHotFixEnabled(vcsSettingsWrapper.vcsSettings)
 
@@ -1074,6 +1077,7 @@ class EscrowConfigurationLoader {
         BuildParameters buildParameters = loadBuildConfiguration(componentConfigObject, defaultConfiguration.buildParameters, tools)
         Distribution distribution = loadDistribution(componentConfigObject, defaultConfiguration.distribution)
         String componentDisplayName = loadComponentDisplayName(componentConfigObject, null)
+        Boolean isArchived = loadArchived(componentConfigObject, componentDisplayName)
         String componentOwner = loadComponentOwner(componentConfigObject, defaultConfiguration.componentOwner)
         final String releaseManager = loadComponentReleaseManager(componentConfigObject, defaultConfiguration.releaseManager)
         final String securityChampion = loadComponentSecurityChampion(componentConfigObject, defaultConfiguration.securityChampion)

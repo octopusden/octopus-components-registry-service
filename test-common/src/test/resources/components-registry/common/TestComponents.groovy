@@ -1049,6 +1049,22 @@ ARCHIVED_TEST_COMPONENT {
     }
 }
 
+ARCHIVED_TEST_COMPONENT_WITH_DISPLAY_NAME {
+    jira {
+        projectKey = "TEST_ARCHIVED"
+    }
+    componentOwner = "user9"
+    componentDisplayName = "Component (archived)"
+    groupId = "org.octopusden.octopus.test.archived"
+    artifactId = "test-archived"
+    archived = false
+    distribution {
+        explicit = false
+        external = true
+    }
+}
+
+
 NON_ARCHIVED_TEST_COMPONENT {
     jira {
         projectKey = "TEST_ARCHIVED"

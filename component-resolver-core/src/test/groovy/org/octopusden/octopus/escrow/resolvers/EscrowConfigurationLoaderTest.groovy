@@ -72,6 +72,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                         BuildParameters.create(null, null, null, false, null, null, null, [new Tool(name: "BuildEnv", escrowEnvironmentVariable: "BUILD_ENV", targetLocation: "tools/BUILD_ENV",
                                 sourceLocation: "env.BUILD_ENV", installScript: "script")], []),
                 deprecated: false,
+                archived: false,
                 distribution: new Distribution(true, true, "org.octopusden.octopus.bcomponent:builder:war,org.octopusden.octopus.bcomponent:builder:jar", null, null, null, new SecurityGroups(null)),
                 componentDisplayName: "BCOMPONENT Official Name")
         assertEquals(expectedConfig.vcsSettings, escrowModuleConfig.vcsSettings)
@@ -199,6 +200,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 system: "NONE",
                 releasesInDefaultBranch: true,
                 solution: false,
+                archived: false,
                 artifactIdPattern: /[\w-]+/,
                 groupIdPattern: "org.octopusden.octopus.bcomponent",
                 versionRange: "[1.12.1-150,)",
@@ -225,7 +227,8 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                         new ComponentInfo(null, '$versionPrefix-$baseVersionFormat'), false, false),
                 buildConfiguration: EMPTY_BUILD_CONFIG,
                 distribution: null,
-                componentDisplayName: "BCOMPONENT DISPLAY NAME"
+                componentDisplayName: "BCOMPONENT DISPLAY NAME",
+                archived: false
         )
         assert 2 == configurations.size()
         def config1 = configurations.get(0)
@@ -245,6 +248,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 vcsSettings: VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", MERCURIAL, "ssh://hg@mercurial/bcomponent", '$module-$version', null, null)),
                 buildSystem: MAVEN,
                 system: "NONE",
+                archived: false,
                 releasesInDefaultBranch: true,
                 solution: false,
                 artifactIdPattern: /[\w-]+/,
@@ -379,6 +383,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                          new Tool(name: "BuildLib", escrowEnvironmentVariable: "BUILD_LIB", targetLocation: "tools/BuildLib", sourceLocation: "env.BUILD_LIB")
                         ], []),
                 deprecated: true,
+                archived: false,
         )
         def actualModuleConfig = configurations.get(0)
         assertEquals(expectedModuleConfig, actualModuleConfig)
@@ -414,6 +419,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                          new Tool(name: "BuildLib", escrowEnvironmentVariable: "BUILD_LIB", targetLocation: "tools/BuildLib", sourceLocation: "env.BUILD_LIB")
                         ], []),
                 deprecated: true,
+                archived: false,
         )
         assertEquals(expectedModuleConfig, configurations.get(0))
     }
@@ -474,6 +480,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 system: "CLASSIC",
                 releasesInDefaultBranch: false,
                 solution: true,
+                archived: false
         )
         assert expectedModuleConfig == modelConfiguration
 
@@ -501,7 +508,8 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 securityChampion: "somesecuritychampion",
                 system: "CLASSIC",
                 releasesInDefaultBranch: false,
-                solution: true
+                solution: true,
+                archived: false
         )
         assert expectedModuleConfig == modelConfiguration
 
@@ -523,7 +531,8 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 securityChampion: "anothersecuritychampion",
                 system: "CLASSIC,ALFA",
                 releasesInDefaultBranch: true,
-                solution: false
+                solution: false,
+                archived: false
         )
         assert expectedModuleConfig == modelConfiguration
     }

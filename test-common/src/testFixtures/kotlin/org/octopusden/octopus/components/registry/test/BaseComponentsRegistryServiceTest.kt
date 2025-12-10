@@ -584,8 +584,9 @@ abstract class BaseComponentsRegistryServiceTest {
         fun archived(): Stream<Arguments> {
             return Stream.of(
                 Arguments.of("ARCHIVED_TEST_COMPONENT", "3.0.0", true),
-                Arguments.of("NON_ARCHIVED_TEST_COMPONENT", "3.0.0", false)
-            )
+                Arguments.of("NON_ARCHIVED_TEST_COMPONENT", "3.0.0", false),
+                Arguments.of("ARCHIVED_TEST_COMPONENT_WITH_DISPLAY_NAME", "3.0.0", true),
+                )
         }
 
         @JvmStatic
