@@ -1,3 +1,5 @@
+package validation.escrow_2
+
 import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
 import static org.octopusden.octopus.escrow.BuildSystem.*
 
@@ -26,11 +28,8 @@ Component {
 
     "[03.51.29.15,)" {
         buildSystem = WHISKEY
-        build {
-            requiredTools = "BuildEnv,Whiskey"
-        }
         vcsSettings {
-            externalRegistry = "dwh_db"
+            externalRegistry = "test_db"
         }
     }
     "(,03.51.29.15)" {
@@ -39,7 +38,7 @@ Component {
             generation = EscrowGenerationMode.UNSUPPORTED
         }
         vcsSettings {
-            externalRegistry = "dwh_db"
+            externalRegistry = "test_db"
         }
     }
 }
@@ -48,7 +47,7 @@ test {
     componentOwner = "user"
     groupId = "org.octopusden.octopus.test"
     jira {
-        projectKey = "DM"
+        projectKey = "PK"
         lineVersionFormat = '$major02.$minorC'
         majorVersionFormat = '$major02.$minorC.$serviceC'
         releaseVersionFormat = '$major02.$minor02.$service02.$fix02'

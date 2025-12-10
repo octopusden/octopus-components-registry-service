@@ -310,7 +310,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
 
     @Test
     void testValidationDoubleEscrowBlockInSubcomponentRange2() {
-        def l = TestConfigUtils.loadFromURL(ComponentRegistryInfo.createFromFileSystem("src/test/resources/invalid/escrow_2", "Aggregator.groovy"))
+        def l = TestConfigUtils.loadFromURL(ComponentRegistryInfo.createFromFileSystem("src/test/resources/validation/escrow_2", "Aggregator.groovy"))
         l.loadFullConfiguration()
     }
 

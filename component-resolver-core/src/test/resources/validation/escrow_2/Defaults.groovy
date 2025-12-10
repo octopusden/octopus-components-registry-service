@@ -1,3 +1,5 @@
+package validation.escrow_2
+
 import static org.octopusden.octopus.escrow.BuildSystem.*
 import static org.octopusden.octopus.escrow.RepositoryType.*
 
