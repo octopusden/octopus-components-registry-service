@@ -6,6 +6,7 @@ import org.octopusden.octopus.components.registry.core.dto.ComponentsDTO
 import org.octopusden.octopus.components.registry.core.dto.DistributionDTO
 import org.octopusden.octopus.components.registry.core.dto.SecurityGroupsDTO
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
+import org.octopusden.octopus.components.registry.server.mapper.toDTO
 import org.octopusden.octopus.components.registry.server.service.ComponentRegistryResolver
 import org.octopusden.octopus.escrow.configuration.model.EscrowModule
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
@@ -107,6 +108,7 @@ abstract class BaseComponentController<T : Component> {
             releasesInDefaultBranch = escrowModuleConfig.releasesInDefaultBranch
             solution = escrowModuleConfig.solution
             parentComponent = escrowModuleConfig.parentComponent
+            doc = escrowModuleConfig.doc?.let { it.toDTO() }
             this
         }
 

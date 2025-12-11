@@ -1,5 +1,7 @@
 package org.octopusden.octopus.components.registry.core.dto
 
+import java.util.Objects
+
 abstract class Component(val id: String, val name: String?, val componentOwner: String) {
     var system: Set<String> = emptySet()
     var clientCode: String? = null
@@ -9,6 +11,7 @@ abstract class Component(val id: String, val name: String?, val componentOwner: 
     var securityChampion: String? = null
     var releaseManager: String? = null
     var distribution: DistributionDTO? = null
+    var doc: DocDTO? = null
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
@@ -26,26 +29,31 @@ abstract class Component(val id: String, val name: String?, val componentOwner: 
         if (securityChampion != other.securityChampion) return false
         if (releaseManager != other.releaseManager) return false
         if (distribution != other.distribution) return false
-
+        if (doc != other.doc) return false
         return true
     }
 
     override fun hashCode(): Int {
-        var result = id.hashCode()
-        result = 31 * result + (name?.hashCode() ?: 0)
-        result = 31 * result + componentOwner.hashCode()
-        result = 31 * result + system.hashCode()
-        result = 31 * result + (clientCode?.hashCode() ?: 0)
-        result = 31 * result + (releasesInDefaultBranch?.hashCode() ?: 0)
-        result = 31 * result + (solution?.hashCode() ?: 0)
-        result = 31 * result + (parentComponent?.hashCode() ?: 0)
-        result = 31 * result + (securityChampion?.hashCode() ?: 0)
-        result = 31 * result + (releaseManager?.hashCode() ?: 0)
-        result = 31 * result + (distribution?.hashCode() ?: 0)
-        return result
+        return Objects.hash(
+            id,
+            name,
+            componentOwner,
+            system,
+            clientCode,
+            releasesInDefaultBranch,
+            solution,
+            parentComponent,
+            securityChampion,
+            releaseManager,
+            distribution,
+            doc
+        )
     }
 
     override fun toString(): String {
-        return "Component(id='$id', name=$name, componentOwner='$componentOwner', system=$system, clientCode=$clientCode, releasesInDefaultBranch=$releasesInDefaultBranch, solution=$solution, parentComponent=$parentComponent, securityChampion=$securityChampion, releaseManager=$releaseManager, distribution=$distribution)"
+        return "Component(id='$id', name=$name, componentOwner='$componentOwner', system=$system, " +
+                "clientCode=$clientCode, releasesInDefaultBranch=$releasesInDefaultBranch, solution=$solution, " +
+                "parentComponent=$parentComponent, securityChampion=$securityChampion, releaseManager=$releaseManager, " +
+                "distribution=$distribution, doc=$doc)"
     }
 }

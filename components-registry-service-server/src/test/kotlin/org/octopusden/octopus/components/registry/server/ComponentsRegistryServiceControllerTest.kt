@@ -18,6 +18,7 @@ import org.octopusden.octopus.components.registry.core.dto.DetailedComponent
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersion
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersions
 import org.octopusden.octopus.components.registry.core.dto.DistributionDTO
+import org.octopusden.octopus.components.registry.core.dto.DocDTO
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionDTO
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionRangeDTO
 import org.octopusden.octopus.components.registry.core.dto.SecurityGroupsDTO
@@ -357,7 +358,7 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
         expectedComponent.releasesInDefaultBranch = false
         expectedComponent.solution = true
 
-        Assertions.assertEquals(49, components.components.size)
+        Assertions.assertEquals(50, components.components.size)
         Assertions.assertTrue(expectedComponent in components.components) {
             components.components.toString()
         }
@@ -418,6 +419,52 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
         expectedComponent.releasesInDefaultBranch = false
         expectedComponent.solution = true
         Assertions.assertEquals(expectedComponent, actualComponent)
+    }
+
+    @Test
+    fun testGetComponentDoc() {
+        val actualComponent = mvc.perform(
+            MockMvcRequestBuilders.get("/rest/api/2/components/TEST_COMPONENT_WITH_DOC")
+                .accept(APPLICATION_JSON)
+        )
+            .andExpect(status().isOk)
+            .andReturn()
+            .response
+            .toObject(ComponentV2::class.java)
+
+        val expectedComponent = ComponentV2("TEST_COMPONENT_WITH_DOC", "Test Component with Doc", "user9")
+        expectedComponent.doc = DocDTO(
+            "TEST_COMPONENT_DOC",
+            "1.2"
+        )
+        Assertions.assertEquals(
+            expectedComponent.doc,
+            actualComponent.doc,
+            "Components do not match"
+        )
+    }
+
+    @Test
+    fun testGetComponentVersionDoc() {
+        val actualComponent = mvc.perform(
+            MockMvcRequestBuilders.get("/rest/api/2/components/TEST_COMPONENT_WITH_DOC/versions/1.0.0")
+                .accept(APPLICATION_JSON)
+        )
+            .andExpect(status().isOk)
+            .andReturn()
+            .response
+            .toObject(ComponentV2::class.java)
+
+        val expectedComponent = ComponentV2("TEST_COMPONENT_WITH_DOC", "Test Component with Doc", "user9")
+        expectedComponent.doc = DocDTO(
+            "TEST_COMPONENT_DOC",
+            "1.2"
+        )
+        Assertions.assertEquals(
+            expectedComponent.doc,
+            actualComponent.doc,
+            "Components do not match"
+        )
     }
 
     private fun getAndCheckComponents(vcsPath: String?, buildSystem: BuildSystem?, expectedComponents: Set<String>) {

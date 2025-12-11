@@ -21,6 +21,7 @@ class GroovySlurperConfigValidator {
     public static final String SECURITY_GROUPS = 'securityGroups'
     public static final String SECURITY_GROUPS_READ = "read"
     public static final String ESCROW = "escrow"
+    public static final String DOC = "doc"
 
     private static final String FILE_PATTERN = "file:/.+"
     private static final String PROHIBITED_SYMBOLS = "\\\\\\s:|\\?\\*\"'<>\\+"
@@ -60,6 +61,8 @@ class GroovySlurperConfigValidator {
     static SUPPORTED_TOOLS_ATTRIBUTES = ['escrowEnvironmentVariable', 'sourceLocation', 'targetLocation', 'installScript']
 
     static SUPPORTED_ESCROW_ATTRIBUTES = ['generation']
+
+    static SUPPORTED_DOC_ATTRIBUTES = ['component', 'majorVersion']
 
     static SUPPORTED_DISTRIBUTION_ATTRIBUTES = ['external', 'explicit', 'GAV', 'DEB', 'RPM', 'docker', 'securityGroups']
     static SUPPORTED_DEPENDENCIES_ATTRIBUTES = ['autoUpdate']
@@ -129,10 +132,22 @@ class GroovySlurperConfigValidator {
                     validateSubComponents(moduleConfigObject)
                 } else if (attribute == ESCROW) {
                     validateEscrow(moduleConfigObject, "defaults", componentName)
+                } else if (attribute == DOC) {
+                    validateDoc(moduleConfigObject, "defaults", componentName)
                 } else {
                     validateConfigSectionForUnknownAttributes(configTypeObject, componentName)
                 }
             }
+        }
+    }
+
+    def validateDoc(ConfigObject configObject, String moduleConfigName, String componentName) {
+        def docSectionValue = configObject.get(DOC)
+        if (docSectionValue instanceof ConfigObject) {
+            validateForUnknownAttributes(docSectionValue, DOC, SUPPORTED_DOC_ATTRIBUTES, componentName, moduleConfigName)
+        } else {
+            registerError("Doc section is not correctly configured in " +
+                    getWhereMessage(moduleConfigName, componentName))
         }
     }
 
@@ -205,6 +220,8 @@ class GroovySlurperConfigValidator {
                 validateVCSSettingsSection(configObject, componentName, key as String)
             } else if (key == ESCROW) {
                 validateEscrow(configObject, moduleConfigName, componentName)
+            } else if (key == DOC) {
+                validateDoc(configObject, moduleConfigName, componentName)
             } else if (!SUPPORTED_ATTRIBUTES.contains(key)) {
                 registerError("Unknown attribute '$key' in " +
                         getWhereMessage(moduleConfigName, componentName))

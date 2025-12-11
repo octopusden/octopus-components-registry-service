@@ -112,6 +112,7 @@ class EscrowConfigValidator {
                 validateReleasesInDefaultBranch(moduleConfig, componentName)
                 validateSolution(moduleConfig, componentName)
                 validateBuildConfigurationTools(moduleConfig)
+                validateDoc(configuration, moduleConfig, componentName)
             }
         }
         if (!hasErrors()) {
@@ -508,6 +509,24 @@ class EscrowConfigValidator {
             }
             if (tool.getTargetLocation() == null) {
                 registerError("tool targetLocation is not specified in '$toolName'")
+            }
+        }
+    }
+
+    def validateDoc(EscrowConfiguration configuration, EscrowModuleConfig moduleConfig, String module) {
+        def docComponentParameters = moduleConfig.getDoc()
+        if (docComponentParameters == null) {
+            return
+        }
+        if (StringUtils.isBlank(docComponentParameters.component())) {
+            registerError("Doc.component is not specified in module '$module'")
+        }
+        if (!configuration.escrowModules.containsKey(docComponentParameters.component())) {
+            registerError("Doc.component '${docComponentParameters.component()}' module is not found for module '$module'")
+        } else {
+            EscrowModule doc_component = configuration.escrowModules.get(docComponentParameters.component())
+            if (doc_component.moduleConfigurations.any { it.doc != null }) {
+                registerError("Doc component ${doc_component.moduleName} must not have 'doc' property")
             }
         }
     }
