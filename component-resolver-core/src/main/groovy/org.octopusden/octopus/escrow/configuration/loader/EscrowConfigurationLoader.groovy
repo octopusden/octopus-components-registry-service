@@ -337,6 +337,7 @@ class EscrowConfigurationLoader {
                 final Boolean releasesInDefaultBranch = loadReleasesInDefaultBranch(moduleConfigSection, componentDefaultConfiguration.releasesInDefaultBranch)
                 final Boolean solution = loadSolution(moduleConfigSection, componentDefaultConfiguration.solution)
                 final String componentDisplayName = loadComponentDisplayName(moduleConfigSection, componentDefaultConfiguration.componentDisplayName)
+                final Boolean isArchived = loadArchived(moduleConfigSection, componentDisplayName) || componentDefaultConfiguration.archived
                 final String octopusVersion = loadVersion(moduleConfigSection, componentDefaultConfiguration.octopusVersion, LoaderInheritanceType.VERSION_RANGE.octopusVersionInherit)
 
                 def versionRange = parseVersionRange(moduleConfigItemName.toString(), moduleName)
@@ -366,7 +367,7 @@ class EscrowConfigurationLoader {
                         distribution: distributionConfiguration,
                         octopusVersion: octopusVersion,
                         escrow: escrow,
-                        archived: componentDefaultConfiguration.archived
+                        archived: isArchived
                 )
                 escrowModule.moduleConfigurations.add(escrowModuleConfiguration)
             }
