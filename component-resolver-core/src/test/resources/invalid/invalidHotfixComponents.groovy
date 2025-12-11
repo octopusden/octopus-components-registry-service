@@ -38,3 +38,18 @@ Defaults {
         hotfixBranch = 'hotfix'
     }
 }
+
+"component_hotfix_3" {
+    componentOwner = "user"
+    groupId = "org.octopusden.octopus"
+    artifactId = "component_hotfix"
+    jira {
+        projectKey = "HOTFIX"
+        hotfixVersionFormat = '$major.$minor.$service-$fix'
+        buildVersionFormat = '$major.$minor.$service-$build'
+    }
+    vcsSettings {
+        vcsUrl = 'git@gitlab:platform/component_hotfix.git'
+        hotfixBranch = 'hotfix'
+    }
+}

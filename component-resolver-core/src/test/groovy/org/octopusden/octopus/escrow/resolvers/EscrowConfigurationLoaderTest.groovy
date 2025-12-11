@@ -788,6 +788,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
         })
         assert exception.message == "Validation of module config failed due following errors: \n" +
                 "Invalid hotfixVersionFormat '\$major.\$minor-\$fix' for 'component_hotfix_2', it must start with buildVersionFormat/releaseVersionFormat: '\$major.\$minor.\$service'\n" +
-                "Hotfix is enabled but hotfixVersionFormat is not defined for 'component_hotfix_1'"
+                "Hotfix is enabled but hotfixVersionFormat is not defined for 'component_hotfix_1'\n" +
+                "Hotfix is enabled for 'component_hotfix_3', buildVersionFormat must be the same as releaseVersionFormat for 'component_hotfix_3' (buildVersionFormat='\$major.\$minor.\$service-\$build', releaseVersionFormat='\$major.\$minor.\$service')"
     }
 }

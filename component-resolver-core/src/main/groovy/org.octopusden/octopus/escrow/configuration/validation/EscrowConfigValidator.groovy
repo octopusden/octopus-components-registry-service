@@ -571,6 +571,7 @@ class EscrowConfigValidator {
      * Register error if:
      * - hotfixVersionFormat is not specified
      * - neither buildVersionFormat nor releaseVersionFormat exists
+     * - both buildVersionFormat and releaseVersionFormat are specified but different
      * - hotfixVersionFormat doesn't start with buildVersionFormat or releaseVersionFormat
      * @param moduleConfig
      * @param componentName
@@ -585,11 +586,22 @@ class EscrowConfigValidator {
             registerError("Hotfix is enabled but hotfixVersionFormat is not defined for '$componentName'")
             return
         }
-        def baseVersionFormat = componentVersionFormat.buildVersionFormat ?: componentVersionFormat.releaseVersionFormat
-        if (StringUtils.isBlank(baseVersionFormat)) {
+        def buildVersionFormat = componentVersionFormat.buildVersionFormat
+        def releaseVersionFormat = componentVersionFormat.releaseVersionFormat
+
+        if (StringUtils.isBlank(buildVersionFormat) && StringUtils.isBlank(releaseVersionFormat)) {
             registerError("Hotfix is enabled but neither 'buildVersionFormat' nor 'releaseVersionFormat' is defined for '$componentName'")
             return
         }
+
+        if (StringUtils.isNotBlank(buildVersionFormat) && StringUtils.isNotBlank(releaseVersionFormat)) {
+            if (buildVersionFormat != releaseVersionFormat) {
+                registerError("Hotfix is enabled for '$componentName', buildVersionFormat must be the same as releaseVersionFormat for '$componentName' (buildVersionFormat='$buildVersionFormat', releaseVersionFormat='$releaseVersionFormat')")
+                return
+            }
+        }
+
+        def baseVersionFormat = buildVersionFormat ?: releaseVersionFormat
         if (!hotfixVersionFormat.startsWith(baseVersionFormat)) {
             registerError("Invalid hotfixVersionFormat '$hotfixVersionFormat' for '$componentName', it must start with buildVersionFormat/releaseVersionFormat: '$baseVersionFormat'")
         }
