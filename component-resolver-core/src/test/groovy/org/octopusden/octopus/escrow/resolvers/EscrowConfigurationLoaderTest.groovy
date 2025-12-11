@@ -308,10 +308,24 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
         assert exception.contains("Escrow.generation parameter is defined both in groovy configuration and in kotlin for version range '[1.0,1.0.336)' of subcomponent 'sub-component-one' of 'Component'"): "Exception message: $exception"
     }
 
+    /**
+     *  Test that escrow generation modes are correctly loaded from mixed Groovy/Kotlin DSL configuration
+     */
     @Test
     void testValidationDoubleEscrowBlockInSubcomponentRange2() {
         def l = TestConfigUtils.loadFromURL(ComponentRegistryInfo.createFromFileSystem("src/test/resources/validation/escrow_2", "Aggregator.groovy"))
-        l.loadFullConfiguration()
+        EscrowConfiguration configuration = l.loadFullConfiguration()
+        def testComponents = configuration.escrowModules.get("test")
+        assert testComponents != null
+        testComponents.moduleConfigurations.each { EscrowModuleConfig moduleConfig ->
+            assert moduleConfig.escrow != null
+            if (moduleConfig.versionRangeString == "[03.51.29.15,)") {
+                assert moduleConfig.escrow.generation.orElse(null) == EscrowGenerationMode.AUTO, "Wrong generation mode for version range ${moduleConfig.versionRangeString}"
+            }
+            if (moduleConfig.versionRangeString == "(,03.51.29.15)") {
+                assert moduleConfig.escrow.generation.orElse(null) == EscrowGenerationMode.UNSUPPORTED, "Wrong generation mode for version range ${moduleConfig.versionRangeString}"
+            }
+        }
     }
 
     @Test
