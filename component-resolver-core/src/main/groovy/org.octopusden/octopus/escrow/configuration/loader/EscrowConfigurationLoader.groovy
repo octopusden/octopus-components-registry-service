@@ -251,7 +251,20 @@ class EscrowConfigurationLoader {
 
     private void mergeComponents(VersionedComponentConfiguration dslComponent, EscrowModuleConfig escrowModuleConfig) {
         if (dslComponent.escrow) {
-            escrowModuleConfig.escrow = dslComponent.escrow
+            if (escrowModuleConfig.escrow != null && escrowModuleConfig.escrow.generation.isPresent() && !dslComponent.escrow.generation.isPresent()) {
+                def generationMode = escrowModuleConfig.escrow.getGeneration()
+                def escrow = new EscrowBean(
+                        generation: generationMode.orElse(null),
+                        buildTask: dslComponent.escrow.buildTask,
+                        diskSpaceRequirement: dslComponent.escrow.diskSpaceRequirement.orElse(null),
+                        reusable: dslComponent.escrow.reusable
+                )
+                escrow.providedDependencies.addAll(dslComponent.escrow.providedDependencies)
+                escrow.additionalSources.addAll(dslComponent.escrow.additionalSources)
+                escrowModuleConfig.escrow = escrow
+            } else {
+                escrowModuleConfig.escrow = dslComponent.escrow
+            }
         }
 
         if (dslComponent.build) {

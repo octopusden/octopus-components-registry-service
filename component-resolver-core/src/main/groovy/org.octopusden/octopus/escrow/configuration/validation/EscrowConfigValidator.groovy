@@ -516,7 +516,7 @@ class EscrowConfigValidator {
         if (moduleConfigurations == null || dslComponent.escrow == null) {
             return false
         }
-        return moduleConfigurations.any { it.escrow != null && it.escrow.generation != dslComponent.escrow.getGeneration() }
+        return moduleConfigurations.any { it.escrow != null && dslComponent.escrow.getGeneration().isPresent() && it.escrow.generation.orElse(null) != dslComponent.escrow.getGeneration().orElse(null) }
     }
 
     void validateEscrow(Component dslComponent, EscrowConfiguration moduleConfig) {

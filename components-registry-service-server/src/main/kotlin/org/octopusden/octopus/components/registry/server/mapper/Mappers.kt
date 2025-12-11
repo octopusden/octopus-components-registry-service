@@ -83,5 +83,5 @@ fun Escrow.toDTO(): EscrowDTO =
         this.diskSpaceRequirement.orElse(null),
         this.additionalSources.toList(),
         this.isReusable,
-        this.generation.toDTO()
+        this.generation.map { it.toDTO() }.orElse(null)
     )
