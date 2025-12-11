@@ -20,7 +20,7 @@ class EscrowModeResolverTest {
 
         assertNotNull(releaseInfo.escrow)
         Escrow escrow = releaseInfo.escrow.get()
-        assertEquals(EscrowGenerationMode.AUTO, escrow.generation)
+        assertEquals(EscrowGenerationMode.AUTO, escrow.generation.get())
     }
 
     @Test
@@ -29,7 +29,7 @@ class EscrowModeResolverTest {
 
         assertNotNull(releaseInfo.escrow)
         Escrow escrow = releaseInfo.escrow.get()
-        assertEquals(EscrowGenerationMode.MANUAL, escrow.generation)
+        assertEquals(EscrowGenerationMode.MANUAL, escrow.generation.get())
     }
 
     @Test
@@ -38,16 +38,14 @@ class EscrowModeResolverTest {
 
         assertNotNull(releaseInfo.escrow)
         Escrow escrow = releaseInfo.escrow.get()
-        assertEquals(EscrowGenerationMode.UNSUPPORTED, escrow.generation)
+        assertEquals(EscrowGenerationMode.UNSUPPORTED, escrow.generation.get())
     }
 
     @Test
     void testResolvedConfigurationComponentsEscrowMode2() {
         def releaseInfo = withConfigResolver("/escrowmode/Aggregator.groovy").resolveRelease(ComponentVersion.create("jdk-manual", "1.0.108"))
-
         assertNotNull(releaseInfo.escrow)
-        Escrow escrow = releaseInfo.escrow.get()
-        assertEquals(EscrowGenerationMode.MANUAL, escrow.generation)
+        assertEquals(EscrowGenerationMode.MANUAL, releaseInfo.escrow.get().generation.get())
     }
 
     private static ReleaseInfoResolver withConfigResolver(String resource) {

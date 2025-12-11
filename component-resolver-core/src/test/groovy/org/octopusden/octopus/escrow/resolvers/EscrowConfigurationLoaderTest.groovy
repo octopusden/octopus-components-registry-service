@@ -292,15 +292,13 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
     }
 
     /**
-     * Test that generation mode is required in escrow section
+     * Test that generation mode is optional in Kotlin DSL escrow section when it's defined in Groovy DSL
      */
     @Test
     void testDefaultsWithEscrowModeEmpty() {
-        def exception = shouldFail(Exception.class) {
-            loadConfiguration("invalid/escrowGenerationEmpty.groovy")
-        }
-        assert exception.contains("Parameter specified as non-null is null:") &&
-                exception.contains("parameter generation"): "Exception message: $exception"
+        EscrowConfiguration configuration = loadConfiguration("invalid/escrowGenerationEmpty.groovy")
+        def configurations = configuration.escrowModules.get("component").moduleConfigurations
+        assert configurations[0].escrow.generation.isEmpty(), "Escrow generation mode should be empty"
     }
 
     /**
@@ -349,6 +347,26 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
             l.loadFullConfiguration()
         }
         assert exception.contains("Escrow.generation parameter is defined both in groovy configuration and in kotlin for version range '[1.0,1.0.336)' of subcomponent 'sub-component-one' of 'Component'"): "Exception message: $exception"
+    }
+
+    /**
+     *  Test that escrow generation modes are correctly loaded from mixed Groovy/Kotlin DSL configuration
+     */
+    @Test
+    void testMixedDslEscrowGenerationAcrossVersionRanges() {
+        def l = TestConfigUtils.loadFromURL(ComponentRegistryInfo.createFromFileSystem("src/test/resources/validation/escrow_across_ranges", "Aggregator.groovy"))
+        EscrowConfiguration configuration = l.loadFullConfiguration()
+        def testComponents = configuration.escrowModules.get("test")
+        assert testComponents != null
+        testComponents.moduleConfigurations.each { EscrowModuleConfig moduleConfig ->
+            assert moduleConfig.escrow != null
+            if (moduleConfig.versionRangeString == "[03.51.29.15,)") {
+                assert moduleConfig.escrow.generation.orElse(null) == EscrowGenerationMode.AUTO, "Wrong generation mode for version range ${moduleConfig.versionRangeString}"
+            }
+            if (moduleConfig.versionRangeString == "(,03.51.29.15)") {
+                assert moduleConfig.escrow.generation.orElse(null) == EscrowGenerationMode.UNSUPPORTED, "Wrong generation mode for version range ${moduleConfig.versionRangeString}"
+            }
+        }
     }
 
     @Test
