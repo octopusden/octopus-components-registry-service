@@ -257,7 +257,9 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
      */
     @Test
     void testDefaultsWithEscrowModeEmpty() {
-        loadConfiguration("invalid/escrowGenerationEmpty.groovy")
+        EscrowConfiguration configuration = loadConfiguration("invalid/escrowGenerationEmpty.groovy")
+        def configurations = configuration.escrowModules.get("component").moduleConfigurations
+        assert configurations[0].escrow.generation.isEmpty(), "Escrow generation mode should be empty"
     }
 
     /**
