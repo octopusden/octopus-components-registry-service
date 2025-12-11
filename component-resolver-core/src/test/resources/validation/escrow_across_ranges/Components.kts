@@ -1,4 +1,4 @@
-package invalid.escrow
+package validation.escrow.acrossranges
 
 import org.octopusden.octopus.components.registry.dsl.component
 
