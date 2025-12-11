@@ -314,8 +314,8 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
      *  Test that escrow generation modes are correctly loaded from mixed Groovy/Kotlin DSL configuration
      */
     @Test
-    void testValidationDoubleEscrowBlockInSubcomponentRange2() {
-        def l = TestConfigUtils.loadFromURL(ComponentRegistryInfo.createFromFileSystem("src/test/resources/validation/escrow_2", "Aggregator.groovy"))
+    void testMixedDslEscrowGenerationAcrossVersionRanges() {
+        def l = TestConfigUtils.loadFromURL(ComponentRegistryInfo.createFromFileSystem("src/test/resources/validation/escrow_across_ranges", "Aggregator.groovy"))
         EscrowConfiguration configuration = l.loadFullConfiguration()
         def testComponents = configuration.escrowModules.get("test")
         assert testComponents != null
