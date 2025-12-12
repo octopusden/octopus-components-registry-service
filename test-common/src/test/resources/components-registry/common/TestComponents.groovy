@@ -104,7 +104,7 @@ Defaults {
         projectKey = "SUB"
         majorVersionFormat = '$major'
         releaseVersionFormat = '$major.$minor'
-        buildVersionFormat = '$major.$minor.$service'
+        buildVersionFormat = '$major.$minor'
         hotfixVersionFormat = '$major.$minor.$service-$build'
         displayName = "PPROJECT WITH CLIENT COMPONENT"
         customer {
@@ -185,7 +185,7 @@ Defaults {
         projectKey = "TESTONE"
         majorVersionFormat = '$major'
         releaseVersionFormat = '$major.$minor'
-        buildVersionFormat = '$major.$minor.$service'
+        buildVersionFormat = '$major.$minor'
         hotfixVersionFormat = '$major.$minor.$service.$fix'
         displayName = "TESTONE DISPLAY NAME WITH VERSIONS-API"
     }

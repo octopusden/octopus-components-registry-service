@@ -27,6 +27,9 @@ component {
     componentOwner = "user1"
     groupId = "org.octopusden.octopus.octopusweb,org.octopusden.octopus.operations"
     buildSystem = GRADLE
+    jira {
+        buildVersionFormat = '$major.$minor.$service'
+    }
     vcsSettings {
         externalRegistry = "componentc_db"
         repositoryType = MERCURIAL
