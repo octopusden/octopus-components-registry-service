@@ -223,16 +223,11 @@ class EscrowConfigValidator {
         }
     }
 
-    private Boolean isArchivedModule(EscrowModuleConfig moduleConfiguration) {
-        //TODO Remove support of archived text suffix in componentDisplayName in future releases
-        return (moduleConfiguration?.componentDisplayName?.endsWith(ARCHIVED_SUFFIX) == true) || (moduleConfiguration?.archived == true)
-    }
-
     def validateJiraProjectKeyAndVersionPrefixIntersections(EscrowConfiguration configuration) {
         def jiraProjectKeyAndVersionPrefixToComponentNames = new HashMap<Tuple2<String, String>, HashSet<String>>()
         configuration.escrowModules.each { componentName, escrowModule ->
             escrowModule.moduleConfigurations.each { moduleConfiguration ->
-                if (!isArchivedModule(moduleConfiguration)) {
+                if (!moduleConfiguration.archived) {
                     jiraProjectKeyAndVersionPrefixToComponentNames.computeIfAbsent(new Tuple2<>(
                             moduleConfiguration.jiraConfiguration.projectKey,
                             moduleConfiguration.jiraConfiguration.componentInfo?.versionPrefix
@@ -279,7 +274,7 @@ class EscrowConfigValidator {
     def validateArchivedComponents(EscrowConfiguration configuration) {
         configuration.escrowModules.each { componentKey, value ->
             value.moduleConfigurations.each { config ->
-                if (isArchivedModule(config)) {
+                if (config.archived) {
                     if (config.distribution.explicit() && config.distribution.external()) {
                         registerError("Archived component '$componentKey' can't be explicitly distributed. Pls set distribution->explicit=false")
                     }
