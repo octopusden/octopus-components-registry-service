@@ -181,6 +181,6 @@ class ConfigLoaderTest {
         def config = loader.loadModuleConfig()
         def module = config."hf-omponent-2"
         Assert.assertEquals("hotfix", module["vcsSettings"]["hotfixBranch"])
-        Assert.assertEquals("\$major.\$minor.\$fix.\$build", module["jira"]["hotfixVersionFormat"])
+        Assert.assertEquals("\$major.\$minor.\$service.\$build", module["jira"]["hotfixVersionFormat"])
     }
 }
