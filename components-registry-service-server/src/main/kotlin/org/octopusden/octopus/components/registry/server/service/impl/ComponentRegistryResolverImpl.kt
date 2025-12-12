@@ -272,8 +272,12 @@ class ComponentRegistryResolverImpl(
             ?: throw IllegalStateException("No module configurations available")
     }
 
-    private fun EscrowModule.isArchived() = moduleConfigurations.firstOrNull()?.componentDisplayName
-        ?.endsWith(EscrowConfigValidator.ARCHIVED_SUFFIX, ignoreCase = true) ?: false
+    private fun EscrowModule.isArchived(): Boolean {
+        val moduleConfig = moduleConfigurations.firstOrNull() ?: return false
+        //TODO: Remove archived suffix check when all archived components are marked with archived parameter
+        return moduleConfig.archived || (moduleConfig.componentDisplayName
+            ?.endsWith(EscrowConfigValidator.ARCHIVED_SUFFIX, ignoreCase = true) ?: false)
+    }
 
     private fun org.octopusden.octopus.escrow.BuildSystem.toDTO(): BuildSystem {
         return when (this) {

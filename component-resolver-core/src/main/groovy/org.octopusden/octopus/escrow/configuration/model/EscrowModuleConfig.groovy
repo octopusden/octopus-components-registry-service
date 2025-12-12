@@ -24,7 +24,7 @@ import static org.octopusden.octopus.escrow.configuration.validation.EscrowConfi
 @EqualsAndHashCode(includeFields = true, includes = ["buildSystem", "artifactIdPattern", "groupIdPattern",// "versionRange",
         "buildFilePath", "jiraConfiguration", "buildConfiguration", "deprecated", "vcsSettings",
         "distribution", "componentDisplayName", "componentOwner", "releaseManager", "securityChampion", "system",
-        "clientCode", "releasesInDefaultBranch", "solution", "parentComponent", "octopusVersion", "escrow", "productType"])
+        "clientCode", "releasesInDefaultBranch", "solution", "parentComponent", "octopusVersion", "escrow", "productType", "archived"])
 @ToString(includeFields = true)
 class EscrowModuleConfig {
     private BuildSystem buildSystem
@@ -66,6 +66,8 @@ class EscrowModuleConfig {
     private String parentComponent
 
     private String octopusVersion
+
+    private boolean archived
 
     Escrow escrow
 
@@ -169,6 +171,14 @@ class EscrowModuleConfig {
 
     String getOctopusVersion() {
         return octopusVersion
+    }
+
+    boolean getArchived() {
+        return archived
+    }
+
+    void setArchived(boolean archived) {
+        this.archived = archived
     }
 
     VersionedComponentConfiguration toVersionedComponent() {

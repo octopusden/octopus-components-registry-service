@@ -58,5 +58,7 @@ class DefaultConfigParameters {
     Boolean solution
 
     Escrow escrow
+
+    Boolean archived
 }
 
