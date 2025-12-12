@@ -225,7 +225,7 @@ class EscrowConfigValidator {
 
     private Boolean isArchivedModule(EscrowModuleConfig moduleConfiguration) {
         //TODO Remove support of archived text suffix in componentDisplayName in future releases
-        return moduleConfiguration?.componentDisplayName?.endsWith(ARCHIVED_SUFFIX) || moduleConfiguration?.archived
+        return (moduleConfiguration?.componentDisplayName?.endsWith(ARCHIVED_SUFFIX) == true) || (moduleConfiguration?.archived == true)
     }
 
     def validateJiraProjectKeyAndVersionPrefixIntersections(EscrowConfiguration configuration) {
