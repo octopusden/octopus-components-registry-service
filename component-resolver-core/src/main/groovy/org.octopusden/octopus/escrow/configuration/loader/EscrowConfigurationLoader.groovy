@@ -11,6 +11,8 @@ import org.apache.maven.artifact.versioning.VersionRange
 import org.octopusden.octopus.components.registry.api.Component
 import org.octopusden.octopus.components.registry.api.SubComponent
 import org.octopusden.octopus.components.registry.api.VersionedComponentConfiguration
+import org.octopusden.octopus.components.registry.api.beans.EscrowBean
+import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
 import org.octopusden.octopus.components.registry.api.model.Dependencies
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.ModelConfigPostProcessor
@@ -24,6 +26,8 @@ import org.octopusden.octopus.escrow.exceptions.ComponentResolverException
 import org.octopusden.octopus.escrow.exceptions.EscrowConfigurationException
 import org.octopusden.octopus.escrow.model.BuildParameters
 import org.octopusden.octopus.escrow.model.Distribution
+import org.octopusden.octopus.components.registry.api.escrow.Escrow
+
 import org.octopusden.octopus.escrow.model.SecurityGroups
 import org.octopusden.octopus.escrow.model.VCSSettings
 import org.octopusden.octopus.escrow.model.VersionControlSystemRoot
@@ -42,6 +46,7 @@ import org.octopusden.releng.versions.VersionRangeFactory
 import java.nio.file.Path
 import java.util.stream.Collectors
 
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.ESCROW
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.VCS_SETTINGS
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.REPOSITORY_TYPE
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.TAG
@@ -201,12 +206,15 @@ class EscrowConfigurationLoader {
         def dslComponents = configLoader.loadDslDefinedComponents()
         LOG.info("Loaded ${dslComponents.size()} DSL components")
 
+        EscrowConfigValidator validator = new EscrowConfigValidator(supportedGroupIds, supportedSystems, versionNames, configLoader.loadDistributionValidationExcludedComponents(), this.copyrightPath)
+
         dslComponents.forEach {component ->
             LOG.debug("processing dsl $component")
+            validator.validateEscrow(component, fullConfig)
             mergeGroovyAndDslComponent(component, fullConfig)
             component.subComponents.forEach { name, subComponent -> mergeGroovyAndDslSubComponent(subComponent, fullConfig)}
         }
-        EscrowConfigValidator validator = new EscrowConfigValidator(supportedGroupIds, supportedSystems, versionNames, configLoader.loadDistributionValidationExcludedComponents(), this.copyrightPath)
+
         if (!ignoreUnknownAttributes) {
             validator.validateEscrowConfiguration(fullConfig)
             if (validator.hasErrors()) {
@@ -247,12 +255,22 @@ class EscrowConfigurationLoader {
 
     private void mergeComponents(VersionedComponentConfiguration dslComponent, EscrowModuleConfig escrowModuleConfig) {
         if (dslComponent.escrow) {
-            escrowModuleConfig.escrow = dslComponent.escrow
+            if (escrowModuleConfig.escrow != null && escrowModuleConfig.escrow.generation.isPresent() && !dslComponent.escrow.generation.isPresent()) {
+                def generationMode = escrowModuleConfig.escrow.getGeneration()
+                def escrow = new EscrowBean(
+                        generation: generationMode.orElse(null),
+                        buildTask: dslComponent.escrow.buildTask,
+                        diskSpaceRequirement: dslComponent.escrow.diskSpaceRequirement.orElse(null),
+                        reusable: dslComponent.escrow.reusable
+                )
+                escrow.providedDependencies.addAll(dslComponent.escrow.providedDependencies)
+                escrow.additionalSources.addAll(dslComponent.escrow.additionalSources)
+                escrowModuleConfig.escrow = escrow
+            } else {
+                escrowModuleConfig.escrow = dslComponent.escrow
+            }
         }
 
-        if (dslComponent.escrow) {
-            escrowModuleConfig.escrow = dslComponent.escrow
-        }
         if (dslComponent.build) {
             escrowModuleConfig.buildConfiguration.buildTools.with {
                 clear()
@@ -302,7 +320,9 @@ class EscrowConfigurationLoader {
                         moduleConfigItemName == BUILD ||
                         moduleConfigItemName == DISTRIBUTION ||
                         moduleConfigItemName == TOOLS ||
-                        moduleConfigItemName == VCS_SETTINGS) {
+                        moduleConfigItemName == VCS_SETTINGS ||
+                        moduleConfigItemName == ESCROW
+                ) {
                     continue  //TODO: bad style
                 }
 
@@ -338,6 +358,7 @@ class EscrowConfigurationLoader {
                 def versionRange = parseVersionRange(moduleConfigItemName.toString(), moduleName)
                 def buildFileLocation = moduleConfigSection.containsKey("buildFilePath") ? moduleConfigSection.buildFilePath.toString() :
                         componentDefaultConfiguration.buildFilePath
+                def escrow = loadEscrow(moduleConfigSection, componentDefaultConfiguration.escrow)
 
                 def escrowModuleConfiguration = new EscrowModuleConfig(buildSystem: buildSystem,
                         groupIdPattern: moduleConfigSection.containsKey("groupId") ? moduleConfigSection.groupId : componentDefaultConfiguration.groupIdPattern,
@@ -360,6 +381,7 @@ class EscrowConfigurationLoader {
                         vcsSettings: vcsSettingsWrapper.vcsSettings,
                         distribution: distributionConfiguration,
                         octopusVersion: octopusVersion,
+                        escrow: escrow,
                         copyright: copyright,
                 )
                 escrowModule.moduleConfigurations.add(escrowModuleConfiguration)
@@ -386,6 +408,7 @@ class EscrowConfigurationLoader {
                         vcsSettings: componentDefaultConfiguration.vcsSettingsWrapper.vcsSettings,
                         distribution: componentDefaultConfiguration.distribution,
                         octopusVersion: componentDefaultConfiguration.octopusVersion,
+                        escrow: componentDefaultConfiguration.escrow,
                         copyright: componentDefaultConfiguration.copyright,
                 )
                 escrowModule.moduleConfigurations.add(escrowModuleConfiguration)
@@ -829,6 +852,26 @@ class EscrowConfigurationLoader {
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
+    private static Escrow loadEscrow(ConfigObject parentConfigObject, Escrow defaultEscrow) {
+        if (parentConfigObject.containsKey("escrow")) {
+            def raw = parentConfigObject.get("escrow")
+            if (raw instanceof EscrowBean) {
+                return raw as EscrowBean
+            }
+            def escrowConfig = raw as ConfigObject
+            def generation = escrowConfig.get("generation") as EscrowGenerationMode
+            def buildTask = escrowConfig.get("buildTask") as String
+            def providedDependencies = escrowConfig.get("providedDependencies") as Collection<String> ?: []
+            def diskSpaceRequirement = escrowConfig.get("diskSpaceRequirement") as Long
+            def additionalSources = escrowConfig.get("additionalSources") as Collection<String> ?: []
+            def reusable = escrowConfig.containsKey("reusable") ? escrowConfig.get("reusable") as Boolean : true
+            return new EscrowBean(generation, buildTask, providedDependencies, diskSpaceRequirement, additionalSources, reusable)
+        } else {
+            return defaultEscrow != null ? defaultEscrow as EscrowBean : null
+        }
+    }
+
+    @TypeChecked(TypeCheckingMode.SKIP)
     private static Distribution loadDistribution(ConfigObject parentConfigObject, Distribution defaultDistribution) {
         if (parentConfigObject.containsKey("distribution")) {
             return parseDistributionSection(parentConfigObject.get("distribution") as ConfigObject, defaultDistribution)
@@ -1008,6 +1051,8 @@ class EscrowConfigurationLoader {
                 new JiraComponent(pureComponentDefaults?.jiraComponent?.projectKey, displayName, componentVersionFormat,
                         componentInfo, pureComponentDefaults?.jiraComponent?.technical ?: false, isHotfixEnabled)
 
+        pureComponentDefaults.escrow = pureComponentDefaults.escrow != null ? pureComponentDefaults.escrow : defaultConfigParameters.escrow
+
         return pureComponentDefaults
     }
 
@@ -1033,11 +1078,11 @@ class EscrowConfigurationLoader {
     }
 
     private static DefaultConfigParameters loadDefaultConfigurationFromConfigObject(
-        String moduleName,
-        ConfigObject componentConfigObject,
-        DefaultConfigParameters defaultConfiguration,
-        List<Tool> tools,
-        LoaderInheritanceType inheritanceType
+            String moduleName,
+            ConfigObject componentConfigObject,
+            DefaultConfigParameters defaultConfiguration,
+            List<Tool> tools,
+            LoaderInheritanceType inheritanceType
     ) {
         BuildSystem buildSystem = componentConfigObject.containsKey("buildSystem") ? BuildSystem.valueOf(componentConfigObject.buildSystem.toString()) : defaultConfiguration?.buildSystem
         VCSSettingsWrapper vcsSettingsWrapper = loadVCSSettings(componentConfigObject, defaultConfiguration, buildSystem)
@@ -1051,13 +1096,15 @@ class EscrowConfigurationLoader {
         String componentOwner = loadComponentOwner(componentConfigObject, defaultConfiguration.componentOwner)
         final String releaseManager = loadComponentReleaseManager(componentConfigObject, defaultConfiguration.releaseManager)
         final String securityChampion = loadComponentSecurityChampion(componentConfigObject, defaultConfiguration.securityChampion)
-        final String system = loadComponentSystem(componentConfigObject,  defaultConfiguration.system)
+        final String system = loadComponentSystem(componentConfigObject, defaultConfiguration.system)
         final String clientCode = loadComponentClientCode(componentConfigObject, defaultConfiguration.clientCode)
         final Boolean releasesInDefaultBranch = loadReleasesInDefaultBranch(componentConfigObject, defaultConfiguration.releasesInDefaultBranch)
         final Boolean solution = loadSolution(componentConfigObject, defaultConfiguration.solution)
         final String parentComponent = loadComponentParentComponent(componentConfigObject, defaultConfiguration.parentComponent)
         final String octopusVersion = loadVersion(componentConfigObject, defaultConfiguration.octopusVersion, inheritanceType.octopusVersionInherit)
         final String copyright = loadCopyright(componentConfigObject, defaultConfiguration.copyright)
+
+        Escrow escrow = loadEscrow(componentConfigObject, defaultConfiguration.escrow)
 
         def defaultConfigParameters = new DefaultConfigParameters(buildSystem: buildSystem,
                 groupIdPattern: componentConfigObject.containsKey("groupId") ? componentConfigObject.groupId : defaultConfiguration?.groupIdPattern,
@@ -1078,7 +1125,8 @@ class EscrowConfigurationLoader {
                 distribution: distribution,
                 vcsSettingsWrapper: vcsSettingsWrapper,
                 octopusVersion: octopusVersion,
-                copyright: copyright
+                escrow: escrow,
+                copyright: copyright,
         )
         defaultConfigParameters
     }

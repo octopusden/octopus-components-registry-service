@@ -2,6 +2,8 @@ package org.octopusden.octopus.escrow.resolvers
 
 import groovy.transform.TypeChecked
 import org.junit.Test
+import org.octopusden.octopus.components.registry.api.beans.EscrowBean
+import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.TestConfigUtils
 import org.octopusden.octopus.escrow.configuration.loader.ComponentRegistryInfo
@@ -223,6 +225,110 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
         )
         assert expectedConfig.vcsSettings == configurations.get(0).vcsSettings
         assert expectedConfig == configurations.get(0)
+    }
+
+    @Test
+    void testDefaultsWithEscrowMode() {
+        EscrowConfiguration configuration = loadConfiguration("single-module/defaultsWithEscrowMode.groovy")
+        def configurations = configuration.escrowModules.get(TEST_MODULE).moduleConfigurations
+        def expectedConfig = new EscrowModuleConfig(
+                componentOwner: "user1",
+                vcsSettings: VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", MERCURIAL, "ssh://hg@mercurial/bcomponent", '$module-$version', null, null)),
+                buildSystem: MAVEN,
+                system: "NONE",
+                releasesInDefaultBranch: true,
+                solution: false,
+                artifactIdPattern: /[\w-]+/,
+                groupIdPattern: "org.octopusden.octopus.bcomponent",
+                versionRange: "[1.12.1-151,)",
+                jiraConfiguration: new JiraComponent("BCOMPONENT", null, ComponentVersionFormat.create('$major.$minor', '$major.$minor.$service'), new ComponentInfo(null, '$versionPrefix-$baseVersionFormat'), false, false),
+                distribution: null,
+                buildConfiguration: BuildParameters.create(null, null, null, false, null, null, null,
+                        [new Tool(name: "BuildEnv", escrowEnvironmentVariable: "BUILD_ENV", targetLocation: "tools/BUILD_ENV",
+                                sourceLocation: "env.BUILD_ENV", installScript: "script")], []
+                ),
+                escrow: new EscrowBean(EscrowGenerationMode.AUTO, null, [], null, [], true)
+        )
+        def actualConfig = configurations.get(0)
+        assert expectedConfig.escrow.generation == actualConfig.escrow.generation
+    }
+
+    /**
+     * Test that generation mode is optional in Kotlin DSL escrow section when it's defined in Groovy DSL
+     */
+    @Test
+    void testDefaultsWithEscrowModeEmpty() {
+        EscrowConfiguration configuration = loadConfiguration("invalid/escrowGenerationEmpty.groovy")
+        def configurations = configuration.escrowModules.get("component").moduleConfigurations
+        assert configurations[0].escrow.generation.isEmpty(), "Escrow generation mode should be empty"
+    }
+
+    /**
+     * Test that double escrow block is forbidden
+     */
+    @Test
+    void testValidationDoubleEscrowBlock() {
+        def exception = shouldFail(Exception.class) {
+            def l = TestConfigUtils.loadFromURL(ComponentRegistryInfo.createFromFileSystem("src/test/resources/invalid/escrow", "Aggregator.groovy"))
+            l.loadFullConfiguration()
+        }
+        assert exception.contains("Escrow.generation parameter is defined both in groovy configuration and in kotlin for 'Component'"): "Exception message: $exception"
+    }
+
+    /**
+     * Test that double escrow block is forbidden in range-specific configuration
+     */
+    @Test
+    void testValidationDoubleEscrowBlockInRange() {
+        def exception = shouldFail(Exception.class) {
+            def l = TestConfigUtils.loadFromURL(ComponentRegistryInfo.createFromFileSystem("src/test/resources/invalid/escrow_range", "Aggregator.groovy"))
+            l.loadFullConfiguration()
+        }
+        assert exception.contains("Escrow.generation parameter is defined both in groovy configuration and in kotlin for 'Component'"): "Exception message: $exception"
+    }
+
+    /**
+     * Test that double escrow block is forbidden in subcomponent configuration
+     */
+    @Test
+    void testValidationDoubleEscrowBlockInSubcomponent() {
+        def exception = shouldFail(Exception.class) {
+            def l = TestConfigUtils.loadFromURL(ComponentRegistryInfo.createFromFileSystem("src/test/resources/invalid/escrow_subcomponents", "Aggregator.groovy"))
+            l.loadFullConfiguration()
+        }
+        assert exception.contains("Escrow.generation parameter is defined both in groovy configuration and in kotlin for subcomponent 'sub-component-one' of 'Component'"): "Exception message: $exception"
+    }
+
+    /**
+     * Test that double escrow block is forbidden in subcomponent range-specific configuration
+     */
+    @Test
+    void testValidationDoubleEscrowBlockInSubcomponentRange() {
+        def exception = shouldFail(Exception.class) {
+            def l = TestConfigUtils.loadFromURL(ComponentRegistryInfo.createFromFileSystem("src/test/resources/invalid/escrow_subcomponents_range", "Aggregator.groovy"))
+            l.loadFullConfiguration()
+        }
+        assert exception.contains("Escrow.generation parameter is defined both in groovy configuration and in kotlin for version range '[1.0,1.0.336)' of subcomponent 'sub-component-one' of 'Component'"): "Exception message: $exception"
+    }
+
+    /**
+     *  Test that escrow generation modes are correctly loaded from mixed Groovy/Kotlin DSL configuration
+     */
+    @Test
+    void testMixedDslEscrowGenerationAcrossVersionRanges() {
+        def l = TestConfigUtils.loadFromURL(ComponentRegistryInfo.createFromFileSystem("src/test/resources/validation/escrow_across_ranges", "Aggregator.groovy"))
+        EscrowConfiguration configuration = l.loadFullConfiguration()
+        def testComponents = configuration.escrowModules.get("test")
+        assert testComponents != null
+        testComponents.moduleConfigurations.each { EscrowModuleConfig moduleConfig ->
+            assert moduleConfig.escrow != null
+            if (moduleConfig.versionRangeString == "[03.51.29.15,)") {
+                assert moduleConfig.escrow.generation.orElse(null) == EscrowGenerationMode.AUTO, "Wrong generation mode for version range ${moduleConfig.versionRangeString}"
+            }
+            if (moduleConfig.versionRangeString == "(,03.51.29.15)") {
+                assert moduleConfig.escrow.generation.orElse(null) == EscrowGenerationMode.UNSUPPORTED, "Wrong generation mode for version range ${moduleConfig.versionRangeString}"
+            }
+        }
     }
 
     @Test

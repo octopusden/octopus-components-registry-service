@@ -33,6 +33,7 @@ import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVers
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersions
 import org.octopusden.octopus.components.registry.core.dto.DistributionDTO
 import org.octopusden.octopus.components.registry.core.dto.EscrowDTO
+import org.octopusden.octopus.components.registry.core.dto.EscrowGenerationMode
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentDTO
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionDTO
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionRangeDTO
@@ -71,18 +72,21 @@ val DETAILED_COMPONENT_VERSION = DetailedComponentVersion(
     hotfixVersion = ComponentRegistryVersion(ComponentVersionType.HOTFIX, HOTFIX_VERSION, JIRA_HOTFIX_VERSION)
 )
 
-val VCS_SETTINGS = VCSSettingsDTO(
+private fun createVcsSettings(version: String) = VCSSettingsDTO(
     versionControlSystemRoots = listOf(
         VersionControlSystemRootDTO(
             vcsPath = "ssh://hg@mercurial/sub",
             name = "main",
             branch = "v2",
-            tag = "SUB-3.0.0",
+            tag = "SUB-$version",
             type = RepositoryType.MERCURIAL,
             hotfixBranch = "hotfix/3.0.0"
         )
     )
 )
+
+val VCS_SETTINGS = createVcsSettings(BUILD_VERSION)
+val VCS_SETTINGS_HOTFIX = createVcsSettings(HOTFIX_VERSION)
 
 abstract class BaseComponentsRegistryServiceTest {
     init {
@@ -301,7 +305,8 @@ abstract class BaseComponentsRegistryServiceTest {
                 "spa/.gradle",
                 "spa/node_modules"
             ),
-            isReusable = false
+            isReusable = false,
+            generation = EscrowGenerationMode.UNSUPPORTED
         )
         expectedComponent.solution = true
         Assertions.assertEquals(expectedComponent, actualComponent)
@@ -325,9 +330,15 @@ abstract class BaseComponentsRegistryServiceTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = [BUILD_VERSION, JIRA_BUILD_VERSION, LINE_VERSION, JIRA_LINE_VERSION, MINOR_VERSION, JIRA_MINOR_VERSION, RC_VERSION, JIRA_RC_VERSION, JIRA_RELEASE_VERSION, RELEASE_VERSION, HOTFIX_VERSION])
+    @ValueSource(strings = [BUILD_VERSION, JIRA_BUILD_VERSION, LINE_VERSION, JIRA_LINE_VERSION, MINOR_VERSION, JIRA_MINOR_VERSION, RC_VERSION, JIRA_RC_VERSION, JIRA_RELEASE_VERSION, RELEASE_VERSION])
     fun testGetVCSSettings(version: String) {
         Assertions.assertEquals(VCS_SETTINGS, getVcsSettings("SUB", version))
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = [HOTFIX_VERSION, JIRA_HOTFIX_VERSION])
+    fun testGetVCSSettingsForHotfix(version: String) {
+        Assertions.assertEquals(VCS_SETTINGS_HOTFIX, getVcsSettings("SUB", version))
     }
 
     @Test
@@ -544,6 +555,7 @@ abstract class BaseComponentsRegistryServiceTest {
         fun vcsSettings(): Stream<Arguments> {
             return Stream.of(
                 Arguments.of("SUB", "sub1k-1.0.0", "expected-data/sub-sub1k-1.0.0-vcs-settings.json"),
+                Arguments.of("SUB", "sub1k-1.0.0-0", "expected-data/sub-sub1k-1.0.0-0-vcs-settings.json"),
                 Arguments.of("SUB", "hlk-1.0", "expected-data/sub-hlk-1.0-vcs-settings.json"),
                 Arguments.of("SUB", "hlk-1.0_RC", "expected-data/sub-hlk-1.0_RC-vcs-settings.json"),
                 Arguments.of("SUB", "hlk-1.0.0", "expected-data/sub-hlk-1.0.0-vcs-settings.json")

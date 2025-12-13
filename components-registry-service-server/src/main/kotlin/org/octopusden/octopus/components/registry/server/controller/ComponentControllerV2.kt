@@ -1,16 +1,14 @@
 package org.octopusden.octopus.components.registry.server.controller
 
 import org.octopusden.octopus.components.registry.api.build.tools.BuildTool
-import org.octopusden.octopus.components.registry.api.escrow.Escrow
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
-import org.octopusden.octopus.components.registry.core.dto.BuildSystem
 import org.octopusden.octopus.components.registry.core.dto.BuildParametersDTO
+import org.octopusden.octopus.components.registry.core.dto.BuildSystem
 import org.octopusden.octopus.components.registry.core.dto.ComponentArtifactConfigurationDTO
 import org.octopusden.octopus.components.registry.core.dto.ComponentV2
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponent
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersion
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersions
-import org.octopusden.octopus.components.registry.core.dto.EscrowDTO
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionDTO
 import org.octopusden.octopus.components.registry.core.dto.RepositoryType
 import org.octopusden.octopus.components.registry.core.dto.ToolDTO
@@ -107,7 +105,7 @@ class ComponentControllerV2(
             releasesInDefaultBranch = escrowModuleConfig.releasesInDefaultBranch
             parentComponent = escrowModuleConfig.parentComponent
             buildParameters = escrowModuleConfig.buildConfiguration?.let { bc -> getBuildParametersDTO(bc) }
-            escrow = escrowModuleConfig.escrow?.let { escrow -> getEscrowDTO(escrow) }
+            escrow = escrowModuleConfig.escrow?.let { it.toDTO() }
             solution = escrowModuleConfig.solution
             this
         }
@@ -139,16 +137,6 @@ class ComponentControllerV2(
             buildParameters.buildTasks,
             getToolsDTO(buildParameters.tools),
             buildParameters.buildTools
-        )
-    }
-
-    private fun getEscrowDTO(escrow: Escrow): EscrowDTO {
-        return EscrowDTO(
-            escrow.buildTask,
-            escrow.providedDependencies.toList(),
-            escrow.diskSpaceRequirement.orElse(null),
-            escrow.additionalSources.toList(),
-            escrow.isReusable
         )
     }
 
