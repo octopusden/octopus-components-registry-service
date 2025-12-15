@@ -597,7 +597,7 @@ class EscrowConfigValidator {
 
         if (StringUtils.isNotBlank(buildVersionFormat) && StringUtils.isNotBlank(releaseVersionFormat)) {
             if (buildVersionFormat != releaseVersionFormat) {
-                registerError("Hotfix is enabled for '$componentName', buildVersionFormat must be the same as releaseVersionFormat for '$componentName' (buildVersionFormat='$buildVersionFormat', releaseVersionFormat='$releaseVersionFormat')")
+                registerError("Hotfix is enabled for '$componentName', buildVersionFormat must be the same as releaseVersionFormat (buildVersionFormat='$buildVersionFormat', releaseVersionFormat='$releaseVersionFormat')")
                 return
             }
         }

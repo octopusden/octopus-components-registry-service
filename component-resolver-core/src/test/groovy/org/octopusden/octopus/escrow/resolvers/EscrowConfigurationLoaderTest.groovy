@@ -790,6 +790,6 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 "Invalid hotfixVersionFormat '\$major.\$minor-\$fix' for 'component_hotfix_2', it must start with buildVersionFormat/releaseVersionFormat: '\$major.\$minor.\$service'\n" +
                 "Hotfix is enabled but hotfixVersionFormat is not defined for 'component_hotfix_1'\n" +
                 "Invalid hotfixVersionFormat '\$major.\$minor.\$service' for 'component_hotfix_4', it must be different from buildVersionFormat/releaseVersionFormat: '\$major.\$minor.\$service'\n" +
-                "Hotfix is enabled for 'component_hotfix_3', buildVersionFormat must be the same as releaseVersionFormat for 'component_hotfix_3' (buildVersionFormat='\$major.\$minor.\$service-\$build', releaseVersionFormat='\$major.\$minor.\$service')"
+                "Hotfix is enabled for 'component_hotfix_3', buildVersionFormat must be the same as releaseVersionFormat (buildVersionFormat='\$major.\$minor.\$service-\$build', releaseVersionFormat='\$major.\$minor.\$service')"
     }
 }
