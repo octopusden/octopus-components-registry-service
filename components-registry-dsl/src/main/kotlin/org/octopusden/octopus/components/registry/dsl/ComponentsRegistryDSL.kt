@@ -30,6 +30,7 @@ import org.octopusden.octopus.components.registry.api.beans.OracleDatabaseToolBe
 import org.octopusden.octopus.components.registry.api.beans.SubComponentBean
 import org.octopusden.octopus.components.registry.api.beans.VersionedComponentConfigurationBean
 import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
+import java.util.Optional
 
 private val logger = Logger.getLogger("org.octopusden.octopus.components.registry.dsl.ComponentsRegistryDSL")
 
@@ -202,9 +203,9 @@ class EscrowDSL(private val escrow: EscrowBean) {
             field = value
         }
 
-    var generation: EscrowGenerationMode = escrow.generation
+    var generation: EscrowGenerationMode? = escrow.generation.orElse(null)
         set(value) {
-            escrow.generation = value
+            escrow.setGeneration(value)
             field = value
         }
 

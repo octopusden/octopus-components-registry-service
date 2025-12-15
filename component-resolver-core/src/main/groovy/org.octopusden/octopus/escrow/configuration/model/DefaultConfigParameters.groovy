@@ -61,5 +61,7 @@ class DefaultConfigParameters {
     Escrow escrow
 
     Doc doc
+
+    Boolean archived
 }
 
