@@ -151,6 +151,10 @@ tasks.register("zipMetarunners", Zip) {
     }
 }
 
+tasks.named("ocProcess") {
+    dependsOn(":components-registry-service-server:dockerBuildImage")
+}
+
 tasks.withType(Test) {
     dependsOn ocCreate, shadowJar
     systemProperties["test.components-registry-host"] = ocTemplate.getOkdHost("comp-reg")
