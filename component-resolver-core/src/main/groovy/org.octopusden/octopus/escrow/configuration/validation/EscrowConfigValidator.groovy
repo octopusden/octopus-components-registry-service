@@ -573,6 +573,7 @@ class EscrowConfigValidator {
      * - neither buildVersionFormat nor releaseVersionFormat exists
      * - both buildVersionFormat and releaseVersionFormat are specified but different
      * - hotfixVersionFormat doesn't start with buildVersionFormat or releaseVersionFormat
+     * - hotfixVersionFormat is the same as buildVersionFormat or releaseVersionFormat
      * @param moduleConfig
      * @param componentName
      */
