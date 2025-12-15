@@ -125,7 +125,7 @@ ocTemplate {
 
                         "APPLICATION_TEST_CONTENT"           :
                                 layout.projectDirectory
-                                        .dir("test/components-registry-service.yaml")
+                                        .dir("data/components-registry-service.yaml")
                                         .asFile
                                         .text
                 ]
