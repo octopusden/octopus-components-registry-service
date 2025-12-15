@@ -604,6 +604,10 @@ class EscrowConfigValidator {
         def baseVersionFormat = buildVersionFormat ?: releaseVersionFormat
         if (!hotfixVersionFormat.startsWith(baseVersionFormat)) {
             registerError("Invalid hotfixVersionFormat '$hotfixVersionFormat' for '$componentName', it must start with buildVersionFormat/releaseVersionFormat: '$baseVersionFormat'")
+            return
+        }
+        if (hotfixVersionFormat == baseVersionFormat) {
+            registerError("Invalid hotfixVersionFormat '$hotfixVersionFormat' for '$componentName', it must be different from buildVersionFormat/releaseVersionFormat: '$baseVersionFormat'")
         }
     }
 
