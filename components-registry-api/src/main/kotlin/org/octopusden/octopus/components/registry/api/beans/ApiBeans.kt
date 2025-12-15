@@ -200,12 +200,12 @@ open class EscrowBean: Escrow {
     private var diskSpaceRequirement: Long? = null
     private val additionalSources = ArrayList<String>()
     private var reusable = true
-    private var generation: EscrowGenerationMode = EscrowGenerationMode.UNSUPPORTED
+    private var generation: EscrowGenerationMode? = null
 
     constructor()
 
     constructor(
-        generation: EscrowGenerationMode,
+        generation: EscrowGenerationMode? = null,
         buildTask: String? = null,
         providedDependencies: Collection<String> = emptyList(),
         diskSpaceRequirement: Long? = null,
@@ -244,9 +244,9 @@ open class EscrowBean: Escrow {
         this.reusable = reusable
     }
 
-    override fun getGeneration(): EscrowGenerationMode = generation
+    override fun getGeneration(): Optional<EscrowGenerationMode> = Optional.ofNullable(generation)
 
-    fun setGeneration(generation: EscrowGenerationMode) {
+    fun setGeneration(generation: EscrowGenerationMode?) {
         this.generation = generation
     }
 

@@ -108,7 +108,8 @@ abstract class BaseComponentController<T : Component> {
             releasesInDefaultBranch = escrowModuleConfig.releasesInDefaultBranch
             solution = escrowModuleConfig.solution
             parentComponent = escrowModuleConfig.parentComponent
-            doc = escrowModuleConfig.doc?.let { it.toDTO() }
+            archived = escrowModuleConfig.archived
+            doc = escrowModuleConfig.doc?.toDTO()
             this
         }
 

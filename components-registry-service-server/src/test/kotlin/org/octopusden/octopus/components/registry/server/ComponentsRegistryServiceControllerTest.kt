@@ -38,7 +38,6 @@ import org.springframework.test.context.junit.jupiter.SpringExtension
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
-import java.util.SimpleTimeZone
 
 @AutoConfigureMockMvc
 @ExtendWith(SpringExtension::class)
@@ -358,7 +357,7 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
         expectedComponent.releasesInDefaultBranch = false
         expectedComponent.solution = true
 
-        Assertions.assertEquals(50, components.components.size)
+        Assertions.assertEquals(53, components.components.size)
         Assertions.assertTrue(expectedComponent in components.components) {
             components.components.toString()
         }

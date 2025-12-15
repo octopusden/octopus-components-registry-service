@@ -228,7 +228,7 @@ class EscrowConfigValidator {
         def jiraProjectKeyAndVersionPrefixToComponentNames = new HashMap<Tuple2<String, String>, HashSet<String>>()
         configuration.escrowModules.each { componentName, escrowModule ->
             escrowModule.moduleConfigurations.each { moduleConfiguration ->
-                if (!moduleConfiguration.componentDisplayName?.endsWith(ARCHIVED_SUFFIX)) {
+                if (!moduleConfiguration.archived) {
                     jiraProjectKeyAndVersionPrefixToComponentNames.computeIfAbsent(new Tuple2<>(
                             moduleConfiguration.jiraConfiguration.projectKey,
                             moduleConfiguration.jiraConfiguration.componentInfo?.versionPrefix
@@ -275,8 +275,7 @@ class EscrowConfigValidator {
     def validateArchivedComponents(EscrowConfiguration configuration) {
         configuration.escrowModules.each { componentKey, value ->
             value.moduleConfigurations.each { config ->
-                //TODO Use appropriate attribute to check if component is archived
-                if (config?.componentDisplayName?.endsWith(ARCHIVED_SUFFIX)) {
+                if (config.archived) {
                     if (config.distribution.explicit() && config.distribution.external()) {
                         registerError("Archived component '$componentKey' can't be explicitly distributed. Pls set distribution->explicit=false")
                     }
@@ -535,7 +534,7 @@ class EscrowConfigValidator {
         if (moduleConfigurations == null || dslComponent.escrow == null) {
             return false
         }
-        return moduleConfigurations.any { it.escrow != null && it.escrow.generation != dslComponent.escrow.getGeneration() }
+        return moduleConfigurations.any { it.escrow != null && dslComponent.escrow.getGeneration().isPresent() && it.escrow.generation.orElse(null) != dslComponent.escrow.getGeneration().orElse(null) }
     }
 
     void validateEscrow(Component dslComponent, EscrowConfiguration moduleConfig) {
