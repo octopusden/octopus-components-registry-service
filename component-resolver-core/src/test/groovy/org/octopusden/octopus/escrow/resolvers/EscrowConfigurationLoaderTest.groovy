@@ -72,10 +72,46 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                         BuildParameters.create(null, null, null, false, null, null, null, [new Tool(name: "BuildEnv", escrowEnvironmentVariable: "BUILD_ENV", targetLocation: "tools/BUILD_ENV",
                                 sourceLocation: "env.BUILD_ENV", installScript: "script")], []),
                 deprecated: false,
+                archived: false,
                 distribution: new Distribution(true, true, "org.octopusden.octopus.bcomponent:builder:war,org.octopusden.octopus.bcomponent:builder:jar", null, null, null, new SecurityGroups(null)),
                 componentDisplayName: "BCOMPONENT Official Name")
         assertEquals(expectedConfig.vcsSettings, escrowModuleConfig.vcsSettings)
         assertEquals(expectedConfig, escrowModuleConfig)
+    }
+
+    @Test
+    @TypeChecked
+    void testArchivedConfig() {
+        EscrowConfiguration configuration = loadConfiguration("single-module/archivedConfig.groovy")
+        assert 1 == configuration.escrowModules.size()
+        def configurations = configuration.escrowModules.get(TEST_MODULE).moduleConfigurations
+        assert configurations.size() == 1
+        def escrowModuleConfig = configurations.get(0)
+        assert escrowModuleConfig
+        escrowModuleConfig.toString()
+
+        def expectedConfig = new EscrowModuleConfig(vcsSettings:
+                VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", MERCURIAL, VCS_URL, '$module.$version', 'default', null)),
+                componentOwner: "user",
+                releaseManager: "user",
+                securityChampion: "user",
+                system: "CLASSIC",
+                releasesInDefaultBranch: true,
+                solution: false,
+                buildSystem: BuildSystem.MAVEN,
+                artifactIdPattern: "builder",
+                groupIdPattern: "io.bcomponent",
+                versionRange: VERSION_RANGE,
+                jiraConfiguration: new JiraComponent("BCOMPONENT", null, ComponentVersionFormat.create('$major.$minor', '$major.$minor.$service'), new ComponentInfo(null, '$versionPrefix-$baseVersionFormat'), false, false),
+                buildConfiguration:
+                        BuildParameters.create(null, null, null, false, null, null, null, [new Tool(name: "BuildEnv", escrowEnvironmentVariable: "BUILD_ENV", targetLocation: "tools/BUILD_ENV",
+                                sourceLocation: "env.BUILD_ENV", installScript: "script")], []),
+                deprecated: false,
+                distribution: new Distribution(true, true, "org.octopusden.octopus.bcomponent:builder:war,org.octopusden.octopus.bcomponent:builder:jar", null, null, null, new SecurityGroups(null)),
+                componentDisplayName: "BCOMPONENT Official Name",
+                archived: true
+        )
+        assertTrue(expectedConfig.archived == escrowModuleConfig.archived)
     }
 
     @Test
@@ -164,6 +200,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 system: "NONE",
                 releasesInDefaultBranch: true,
                 solution: false,
+                archived: false,
                 artifactIdPattern: /[\w-]+/,
                 groupIdPattern: "org.octopusden.octopus.bcomponent",
                 versionRange: "[1.12.1-150,)",
@@ -190,7 +227,8 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                         new ComponentInfo(null, '$versionPrefix-$baseVersionFormat'), false, false),
                 buildConfiguration: EMPTY_BUILD_CONFIG,
                 distribution: null,
-                componentDisplayName: "BCOMPONENT DISPLAY NAME"
+                componentDisplayName: "BCOMPONENT DISPLAY NAME",
+                archived: false
         )
         assert 2 == configurations.size()
         def config1 = configurations.get(0)
@@ -210,6 +248,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 vcsSettings: VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", MERCURIAL, "ssh://hg@mercurial/bcomponent", '$module-$version', null, null)),
                 buildSystem: MAVEN,
                 system: "NONE",
+                archived: false,
                 releasesInDefaultBranch: true,
                 solution: false,
                 artifactIdPattern: /[\w-]+/,
@@ -362,6 +401,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                          new Tool(name: "BuildLib", escrowEnvironmentVariable: "BUILD_LIB", targetLocation: "tools/BuildLib", sourceLocation: "env.BUILD_LIB")
                         ], []),
                 deprecated: true,
+                archived: false,
         )
         def actualModuleConfig = configurations.get(0)
         assertEquals(expectedModuleConfig, actualModuleConfig)
@@ -397,6 +437,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                          new Tool(name: "BuildLib", escrowEnvironmentVariable: "BUILD_LIB", targetLocation: "tools/BuildLib", sourceLocation: "env.BUILD_LIB")
                         ], []),
                 deprecated: true,
+                archived: false,
         )
         assertEquals(expectedModuleConfig, configurations.get(0))
     }
@@ -457,6 +498,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 system: "CLASSIC",
                 releasesInDefaultBranch: false,
                 solution: true,
+                archived: false
         )
         assert expectedModuleConfig == modelConfiguration
 
@@ -484,7 +526,8 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 securityChampion: "somesecuritychampion",
                 system: "CLASSIC",
                 releasesInDefaultBranch: false,
-                solution: true
+                solution: true,
+                archived: false
         )
         assert expectedModuleConfig == modelConfiguration
 
@@ -506,7 +549,8 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 securityChampion: "anothersecuritychampion",
                 system: "CLASSIC,ALFA",
                 releasesInDefaultBranch: true,
-                solution: false
+                solution: false,
+                archived: false
         )
         assert expectedModuleConfig == modelConfiguration
     }
