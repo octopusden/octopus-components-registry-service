@@ -8,7 +8,7 @@ pluginManagement {
         id 'org.jetbrains.kotlin.plugin.spring'         version settings['kotlin.version']
         id 'org.jetbrains.kotlin.plugin.jpa'            version settings['kotlin.version']
         id 'com.bmuschko.docker-java-application'       version settings['gradle-docker-plugin.version']
-        id 'com.github.johnrengelman.shadow'            version '7.1.2'
+        id 'com.github.johnrengelman.shadow'            version '8.1.1'
     }
     repositories {
         gradlePluginPortal()

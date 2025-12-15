@@ -10,6 +10,7 @@ import static org.octopusden.octopus.escrow.BuildSystem.MAVEN
     vcsUrl = 'ssh://hg@mercurial/tdsecure'
     groupId = "org.octopusden.octopus.test"
     tag = 'octopustds-$version'
+    copyright = 'companyName1'
 //    branch = "default"
     jira {
         projectKey = "TDS"

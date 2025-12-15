@@ -1,23 +1,13 @@
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+import org.gradle.api.tasks.testing.logging.TestLogEvent
 
 plugins {
     id 'application'
     id 'com.github.johnrengelman.shadow'
+    id 'com.avast.gradle.docker-compose'
 }
 
 group = 'org.octopusden.octopus.components.registry.automation'
 description = 'Octopus Components Registry Automation'
-
-tasks.withType(KotlinCompile).configureEach {
-    kotlinOptions {
-        suppressWarnings = true
-        jvmTarget = "1.8"
-    }
-}
-
-java {
-    targetCompatibility = JavaVersion.VERSION_1_8
-}
 
 repositories {
     mavenCentral()
@@ -25,13 +15,33 @@ repositories {
 
 dependencies {
     api project(":components-registry-service-client")
-    implementation("com.github.ajalt.clikt:clikt:3.2.0")
+    implementation("com.github.ajalt.clikt:clikt:4.4.0")
 
     implementation("org.slf4j:slf4j-api:2.0.13")
     implementation("ch.qos.logback:logback-classic:1.3.14")
     implementation("io.github.openfeign:feign-core:12.2")
 
     testImplementation 'org.jetbrains.kotlin:kotlin-test'
+}
+
+ext {
+    def env = System.getenv()
+
+    dockerRegistry = env.getOrDefault("DOCKER_REGISTRY", properties["docker.registry"]).toString()
+}
+
+tasks.named("composeUp") {
+    dependsOn(":components-registry-service-server:dockerBuildImage")
+}
+
+dockerCompose {
+    useComposeFiles.add("${project.projectDir}/docker/docker-compose.yaml")
+    waitForTcpPorts = true
+    captureContainersOutputToFiles = layout.buildDirectory.dir("docker-logs").get().asFile
+    environment = [
+            "DOCKER_REGISTRY"                    : project.ext.get("dockerRegistry"),
+            "COMPONENTS_REGISTRY_SERVICE_VERSION": project.version
+    ]
 }
 
 application {
@@ -50,6 +60,22 @@ tasks.register("zipMetarunners", Zip) {
     from(layout.projectDirectory.dir('metarunners')) {
         expand(project.properties)
     }
+}
+
+tasks.shadowJar {
+    dependsOn composeUp
+}
+
+tasks.withType(Test) {
+    dependsOn shadowJar
+    systemProperties["test.components-registry-service-host"] = "localhost"
+    systemProperties["test.components-registry-service-port"] = 4567
+    useJUnitPlatform()
+    testLogging {
+        events TestLogEvent.FAILED, TestLogEvent.PASSED, TestLogEvent.SKIPPED
+    }
+    systemProperty "jar", configurations.shadow.artifacts.files.asPath
+    finalizedBy composeLogs, composeDown
 }
 
 configurations {
@@ -78,10 +104,6 @@ nexusPublishing {
         maxRetries.set(60)
         delayBetween.set(Duration.ofSeconds(30))
     }
-}
-
-test {
-    useJUnitPlatform()
 }
 
 tasks.named('distZip').configure { enabled = false }

@@ -1,17 +1,13 @@
 import static org.octopusden.octopus.escrow.BuildSystem.*
 import static org.octopusden.octopus.escrow.RepositoryType.*
 
-
 Defaults {
+    buildSystem = MAVEN
     system = "NONE"
-    releasesInDefaultBranch = true
-    solution = false
-    repositoryType = MERCURIAL
-    buildSystem = MAVEN;
+    repositoryType = GIT
     tag = '$module-$version'
     artifactId = ANY_ARTIFACT
-    copyright = 'companyName1'
-
+    solution = false
     jira {
         majorVersionFormat = '$major.$minor'
         releaseVersionFormat = '$major.$minor.$service'
@@ -22,11 +18,14 @@ Defaults {
     build {
         requiredTools = "BuildEnv"
         javaVersion = "1.8"
-        mavenVersion = "3.3.9"
+        mavenVersion = "3.6.3"
         gradleVersion = "LATEST"
     }
     distribution {
         explicit = false
         external = true
+        securityGroups {
+            read = "Production Security"
+        }
     }
 }

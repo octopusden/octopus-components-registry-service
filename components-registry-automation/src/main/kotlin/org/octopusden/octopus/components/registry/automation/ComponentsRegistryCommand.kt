@@ -29,7 +29,7 @@ class ComponentsRegistryCommand : CliktCommand(name = "") {
     }
 
     companion object {
-        private const val URL_OPTION = "--url"
+        const val URL_OPTION = "--url"
         const val LOGGER = "logger"
         const val CLIENT = "client"
 

@@ -21,6 +21,7 @@ import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRange
 import org.octopusden.releng.versions.VersionRangeFactory
 
+import java.nio.file.Files
 import java.nio.file.Path
 import java.util.function.BinaryOperator
 import java.util.regex.Pattern
@@ -101,6 +102,7 @@ class EscrowConfigValidator {
             if (configurations.isEmpty()) {
                 registerError("No configurations in module $componentName")
             }
+            def supportedCopyrights = getSupportedCopyrights()
             for (EscrowModuleConfig moduleConfig : configurations) {
                 validateMandatoryFields(moduleConfig, componentName)
                 validateBuildSystem(moduleConfig.getBuildSystem(), componentName)
@@ -116,7 +118,7 @@ class EscrowConfigValidator {
                 validateReleasesInDefaultBranch(moduleConfig, componentName)
                 validateSolution(moduleConfig, componentName)
                 validateBuildConfigurationTools(moduleConfig)
-                validateCopyright(moduleConfig, componentName)
+                validateCopyright(moduleConfig, componentName, supportedCopyrights)
             }
         }
         if (!hasErrors()) {
@@ -520,19 +522,14 @@ class EscrowConfigValidator {
         }
     }
 
-    def validateCopyright(EscrowModuleConfig moduleConfig, String component) {
-        if (copyrightPath == null) {
-            return
-        }
-
+    def validateCopyright(EscrowModuleConfig moduleConfig, String component, List<String> supportedCopyrights) {
         def copyright = moduleConfig.copyright
-        if (StringUtils.isBlank(copyright)) {
+        if (copyrightPath == null || copyright == null) {
             return
         }
 
-        def copyrightFile = copyrightPath.resolve(copyright).toFile()
-        if (!copyrightFile.isFile()) {
-            registerError("Сopyright '${copyrightFile.name}' of component '$component' is not exist or not file")
+        if (!supportedCopyrights.contains(copyright)) {
+            registerError("Сopyright '${moduleConfig.copyright}' of component '$component' is not exist or not file")
         }
     }
 
@@ -649,5 +646,19 @@ class EscrowConfigValidator {
 
     List<String> getErrors() {
         return errors
+    }
+
+    private List<String> getSupportedCopyrights() {
+        if (copyrightPath == null)
+            return null
+
+        try (def stream = Files.list(copyrightPath)) {
+            return stream.filter { Files.isRegularFile(it) }
+                    .map { it.fileName.toString()}
+                    .toList()
+        } catch (Exception exception) {
+            registerError("Failed to get files from '$copyrightPath', cause: ${exception.message}")
+            return null
+        }
     }
 }

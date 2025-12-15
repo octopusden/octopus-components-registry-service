@@ -1,6 +1,7 @@
 package org.octopusden.octopus.escrow.copyright
 
 import groovy.transform.TypeChecked
+import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import org.octopusden.octopus.escrow.configuration.loader.ComponentRegistryInfo
@@ -24,8 +25,9 @@ class DefaultCopyrightTest {
     private static EscrowConfiguration escrowConfiguration
     private static EscrowConfigurationLoader escrowConfigurationLoader
 
-    private static final COMPANY_NAME1_COPYRIGHT_PATH = "companyName1"
-    private static final COMPANY_NAME2_COPYRIGHT_PATH = "companyName2"
+    private static final COMPANY_NAME1_COPYRIGHT = "companyName1"
+    private static final COMPANY_NAME2_COPYRIGHT = "companyName2"
+    private static final COMPANY_NAME3_COPYRIGHT = "companyName3"
     private static final String DEFAULT_COMPONENT_NAME = "Defaults"
     private static final String COPYRIGHT_FIELD = "copyright"
 
@@ -64,7 +66,7 @@ class DefaultCopyrightTest {
         def defaultComponent = config.getProperty(DEFAULT_COMPONENT_NAME) as ConfigObject
         assert defaultComponent.containsKey(COPYRIGHT_FIELD)
         def defaultCopyrightValue = defaultComponent.getProperty(COPYRIGHT_FIELD) as String
-        assert defaultCopyrightValue == COMPANY_NAME1_COPYRIGHT_PATH
+        assert defaultCopyrightValue == COMPANY_NAME1_COPYRIGHT
     }
 
     @Test
@@ -82,7 +84,7 @@ class DefaultCopyrightTest {
         def componentWithCopyright = config.getProperty("component_with_copyright") as ConfigObject
         assert componentWithCopyright.containsKey(COPYRIGHT_FIELD)
         def componentWithCopyrightValue = componentWithCopyright.getProperty(COPYRIGHT_FIELD) as String
-        assert componentWithCopyrightValue == COMPANY_NAME2_COPYRIGHT_PATH
+        assert componentWithCopyrightValue == COMPANY_NAME2_COPYRIGHT
     }
 
     @Test
@@ -98,7 +100,7 @@ class DefaultCopyrightTest {
         def escrowModule = escrowConfiguration.escrowModules.get("component_without_copyright")
         def moduleConfig = escrowModule.getModuleConfigurations().first()
 
-        assertThat(moduleConfig.copyright).isEqualTo(COMPANY_NAME1_COPYRIGHT_PATH)
+        assertThat(moduleConfig.copyright).isEqualTo(COMPANY_NAME1_COPYRIGHT)
     }
 
     @Test
@@ -106,7 +108,39 @@ class DefaultCopyrightTest {
         def escrowModule = escrowConfiguration.escrowModules.get("component_with_copyright")
         def moduleConfig = escrowModule.getModuleConfigurations().first()
 
-        assertThat(moduleConfig.copyright).isEqualTo(COMPANY_NAME2_COPYRIGHT_PATH)
+        assertThat(moduleConfig.copyright).isEqualTo(COMPANY_NAME2_COPYRIGHT)
+    }
+
+    @Test
+    void testComponentWithVersionCopyright() {
+        def escrowModule = escrowConfiguration.escrowModules.get("component_with_version_copyright")
+        def moduleConfigs = escrowModule.getModuleConfigurations()
+
+        def versionCopyrightMap = [
+                "First version" : "companyName1",
+                "Second version": "companyName3"
+        ]
+
+        moduleConfigs.each {
+            Assertions.assertTrue(versionCopyrightMap.containsKey(it.componentDisplayName))
+            Assertions.assertEquals(it.copyright, versionCopyrightMap[it.componentDisplayName])
+        }
+    }
+
+    @Test
+    void testComponentWithSubcomponentContainsOwnCopyright() {
+        def escrowModule = escrowConfiguration.escrowModules.get("component_with_subcomponent_copyright")
+        def moduleConfig = escrowModule.getModuleConfigurations().first()
+
+        assertThat(moduleConfig.copyright).isEqualTo(COMPANY_NAME2_COPYRIGHT)
+    }
+
+    @Test
+    void testSubcomponentOverridesParentCopyright() {
+        def escrowModule = escrowConfiguration.escrowModules.get("inner_component_with_copyright")
+        def moduleConfig = escrowModule.getModuleConfigurations().first()
+
+        assertThat(moduleConfig.copyright).isEqualTo(COMPANY_NAME3_COPYRIGHT)
     }
 
     @Test
@@ -114,6 +148,6 @@ class DefaultCopyrightTest {
         def escrowModule = escrowConfiguration.escrowModules.get("ee_component_without_copyright")
         def moduleConfig = escrowModule.getModuleConfigurations().first()
 
-        assertThat(moduleConfig.copyright).isEqualTo(COMPANY_NAME1_COPYRIGHT_PATH)
+        assertThat(moduleConfig.copyright).isEqualTo(COMPANY_NAME1_COPYRIGHT)
     }
 }

@@ -60,27 +60,25 @@ class ComponentRegistryValidationTask {
 
             // Create instance and load configuration from system properties
             def task = new ComponentRegistryValidationTask()
-            task.basePath = getRequiredProperty("cr.basePath")
-            task.mainConfigFileName = getRequiredProperty("cr.mainConfigFileName")
-            task.jiraHost = getProperty("cr.jiraHost")
-            task.employeeServiceEnabled = Boolean.parseBoolean(getProperty("cr.employeeServiceEnabled") ?: "false")
-            task.employeeServiceUrl = getProperty("cr.employeeServiceUrl")
-            task.employeeServiceUsername = getProperty("cr.employeeServiceUsername")
-            task.employeeServicePassword = getProperty("cr.employeeServicePassword")
-            task.employeeServiceToken = getProperty("cr.employeeServiceToken")
-            task.productionConfigPath = getProperty("cr.productionConfigPath")
-            task.supportedGroupIds = getRequiredProperty("cr.supportedGroupIds")
-            task.supportedSystems = getRequiredProperty("cr.supportedSystems")
-            task.serviceBranch = getRequiredProperty("cr.serviceBranch")
-            task.service = getRequiredProperty("cr.service")
-            task.minor = getRequiredProperty("cr.minor")
-            task.productTypeC = getRequiredProperty("cr.productTypeC")
-            task.productTypeK = getRequiredProperty("cr.productTypeK")
-            task.productTypeD = getRequiredProperty("cr.productTypeD")
-            task.productTypeDDB = getRequiredProperty("cr.productTypeDDB")
-            // After releasing component-registry copyright field need to change
-            // getProperty to getRequiredProperty
-            task.copyrightPath = getProperty("cr.copyrightPath")
+            task.basePath = getRequiredSystemProperty("cr.basePath")
+            task.mainConfigFileName = getRequiredSystemProperty("cr.mainConfigFileName")
+            task.jiraHost = System.getProperty("cr.jiraHost")
+            task.employeeServiceEnabled = Boolean.parseBoolean(System.getProperty("cr.employeeServiceEnabled") ?: "false")
+            task.employeeServiceUrl = System.getProperty("cr.employeeServiceUrl")
+            task.employeeServiceUsername = System.getProperty("cr.employeeServiceUsername")
+            task.employeeServicePassword = System.getProperty("cr.employeeServicePassword")
+            task.employeeServiceToken = System.getProperty("cr.employeeServiceToken")
+            task.productionConfigPath = System.getProperty("cr.productionConfigPath")
+            task.supportedGroupIds = getRequiredSystemProperty("cr.supportedGroupIds")
+            task.supportedSystems = getRequiredSystemProperty("cr.supportedSystems")
+            task.serviceBranch = getRequiredSystemProperty("cr.serviceBranch")
+            task.service = getRequiredSystemProperty("cr.service")
+            task.minor = getRequiredSystemProperty("cr.minor")
+            task.productTypeC = getRequiredSystemProperty("cr.productTypeC")
+            task.productTypeK = getRequiredSystemProperty("cr.productTypeK")
+            task.productTypeD = getRequiredSystemProperty("cr.productTypeD")
+            task.productTypeDDB = getRequiredSystemProperty("cr.productTypeDDB")
+            task.copyrightPath = System.getProperty("cr.copyrightPath")
 
             log.info("\nConfiguration:")
             log.info("  basePath: $task.basePath")
@@ -94,7 +92,7 @@ class ComponentRegistryValidationTask {
             log.info("  serviceBranch: $task.serviceBranch")
             log.info("  service: $task.service")
             log.info("  minor: $task.minor")
-            log.info("  copyrightPath: $task.minor")
+            log.info("  copyrightPath: $task.copyrightPath")
 
             // Run validation
             task.runEscrow()
@@ -296,11 +294,7 @@ class ComponentRegistryValidationTask {
         return configuration
     }
 
-    private static String getProperty(String name) {
-        return System.getProperty(name)
-    }
-
-    private static String getRequiredProperty(String name) {
+    private static String getRequiredSystemProperty(String name) {
         def value = System.getProperty(name)
         if (value == null) {
             throw new IllegalArgumentException("Required system property '$name' is not set")

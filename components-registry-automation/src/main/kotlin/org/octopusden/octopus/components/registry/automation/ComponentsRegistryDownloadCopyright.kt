@@ -46,9 +46,7 @@ class ComponentsRegistryDownloadCopyright : CliktCommand(name = COMMAND) {
         }
 
         body.asInputStream().use { inputStream ->
-            val responseStatus = response.status()
-
-            when (responseStatus) {
+            when (val responseStatus = response.status()) {
                 HTTP_STATUS_OK -> {
                     val fullPath = Paths.get(targetPath, DEFAULT_COPYRIGHT_FILE_NAME)
                     fullPath.parent?.let { Files.createDirectories(it) }
@@ -64,6 +62,7 @@ class ComponentsRegistryDownloadCopyright : CliktCommand(name = COMMAND) {
                         DEFAULT_COPYRIGHT_FILE_NAME
                     )
                 }
+
                 else -> {
                     val errorBody = inputStream.bufferedReader().readText()
                     logger.error(
@@ -79,13 +78,13 @@ class ComponentsRegistryDownloadCopyright : CliktCommand(name = COMMAND) {
     }
 
     companion object {
-        private const val COMMAND = "download-copyright"
+        const val COMMAND = "download-copyright"
 
-        private const val COMPONENT_NAME = "--component-name"
-        private const val TARGET_PATH = "--target-path"
+        const val COMPONENT_NAME = "--component-name"
+        const val TARGET_PATH = "--target-path"
 
         private const val HTTP_STATUS_OK = 200
 
-        private const val DEFAULT_COPYRIGHT_FILE_NAME = "COPYRIGHT"
+        const val DEFAULT_COPYRIGHT_FILE_NAME = "COPYRIGHT"
     }
 }
