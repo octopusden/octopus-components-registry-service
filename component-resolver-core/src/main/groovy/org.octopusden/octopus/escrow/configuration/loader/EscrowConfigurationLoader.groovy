@@ -21,6 +21,7 @@ import org.octopusden.octopus.escrow.configuration.model.DefaultConfigParameters
 import org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration
 import org.octopusden.octopus.escrow.configuration.model.EscrowModule
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
+import org.octopusden.octopus.escrow.configuration.validation.ComponentRegistryValidationTask
 import org.octopusden.octopus.escrow.configuration.validation.EscrowConfigValidator
 import org.octopusden.octopus.escrow.exceptions.ComponentResolverException
 import org.octopusden.octopus.escrow.exceptions.EscrowConfigurationException
@@ -352,6 +353,7 @@ class EscrowConfigurationLoader {
                 final Boolean releasesInDefaultBranch = loadReleasesInDefaultBranch(moduleConfigSection, componentDefaultConfiguration.releasesInDefaultBranch)
                 final Boolean solution = loadSolution(moduleConfigSection, componentDefaultConfiguration.solution)
                 final String componentDisplayName = loadComponentDisplayName(moduleConfigSection, componentDefaultConfiguration.componentDisplayName)
+                final Boolean isArchived = loadArchived(moduleConfigSection, componentDisplayName) || componentDefaultConfiguration.archived
                 final String octopusVersion = loadVersion(moduleConfigSection, componentDefaultConfiguration.octopusVersion, LoaderInheritanceType.VERSION_RANGE.octopusVersionInherit)
                 final String copyright = loadCopyright(moduleConfigSection, componentDefaultConfiguration.copyright)
 
@@ -382,6 +384,7 @@ class EscrowConfigurationLoader {
                         distribution: distributionConfiguration,
                         octopusVersion: octopusVersion,
                         escrow: escrow,
+                        archived: isArchived,
                         copyright: copyright,
                 )
                 escrowModule.moduleConfigurations.add(escrowModuleConfiguration)
@@ -409,6 +412,7 @@ class EscrowConfigurationLoader {
                         distribution: componentDefaultConfiguration.distribution,
                         octopusVersion: componentDefaultConfiguration.octopusVersion,
                         escrow: componentDefaultConfiguration.escrow,
+                        archived: componentDefaultConfiguration.archived,
                         copyright: componentDefaultConfiguration.copyright,
                 )
                 escrowModule.moduleConfigurations.add(escrowModuleConfiguration)
@@ -765,6 +769,14 @@ class EscrowConfigurationLoader {
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
+    private static Boolean loadArchived(ConfigObject parentConfigObject, String componentDisplayName) {
+        if (StringUtils.isNotBlank(componentDisplayName) && componentDisplayName.endsWith(ComponentRegistryValidationTask.ARCHIVED_SUFFIX)) {
+            return true
+        }
+        return parentConfigObject.getOrDefault("archived", false)
+    }
+
+    @TypeChecked(TypeCheckingMode.SKIP)
     private static String loadComponentReleaseManager(ConfigObject parentConfigObject, String defaultReleaseManager) {
         if (parentConfigObject.containsKey("releaseManager")) {
             return parentConfigObject.get("releaseManager")
@@ -1093,6 +1105,7 @@ class EscrowConfigurationLoader {
         BuildParameters buildParameters = loadBuildConfiguration(componentConfigObject, defaultConfiguration.buildParameters, tools)
         Distribution distribution = loadDistribution(componentConfigObject, defaultConfiguration.distribution)
         String componentDisplayName = loadComponentDisplayName(componentConfigObject, null)
+        Boolean isArchived = loadArchived(componentConfigObject, componentDisplayName)
         String componentOwner = loadComponentOwner(componentConfigObject, defaultConfiguration.componentOwner)
         final String releaseManager = loadComponentReleaseManager(componentConfigObject, defaultConfiguration.releaseManager)
         final String securityChampion = loadComponentSecurityChampion(componentConfigObject, defaultConfiguration.securityChampion)
@@ -1126,6 +1139,7 @@ class EscrowConfigurationLoader {
                 vcsSettingsWrapper: vcsSettingsWrapper,
                 octopusVersion: octopusVersion,
                 escrow: escrow,
+                archived: isArchived,
                 copyright: copyright,
         )
         defaultConfigParameters

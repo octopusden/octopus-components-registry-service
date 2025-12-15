@@ -59,6 +59,8 @@ class DefaultConfigParameters {
 
     Escrow escrow
 
+    Boolean archived
+
     String copyright
 }
 
