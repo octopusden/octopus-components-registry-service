@@ -33,7 +33,7 @@ import static org.octopusden.octopus.escrow.BuildSystem.*
 
     "[1.0.336, 1.0.344]" {
         jira {
-            buildVersionFormat = '$major.$minor.$service-$fix'
+            buildVersionFormat = '$major.$minor.$service'
             hotfixVersionFormat = '$major.$minor.$service-$build'
         }
         build {
