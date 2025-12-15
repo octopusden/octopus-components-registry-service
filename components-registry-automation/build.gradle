@@ -1,13 +1,25 @@
 import org.gradle.api.tasks.testing.logging.TestLogEvent
 
+import java.util.zip.CRC32
+
 plugins {
     id 'application'
     id 'com.github.johnrengelman.shadow'
-    id 'com.avast.gradle.docker-compose'
+    id 'org.octopusden.octopus.oc-template'
 }
 
 group = 'org.octopusden.octopus.components.registry.automation'
 description = 'Octopus Components Registry Automation'
+
+def defaultVersion = "${{
+    def crc = new CRC32()
+    crc.update(InetAddress.localHost.hostName.bytes)
+    crc.value
+}}-SNAPSHOT"
+
+if (version == "unspecified") {
+    version = defaultVersion
+}
 
 repositories {
     mavenCentral()
@@ -21,27 +33,104 @@ dependencies {
     implementation("ch.qos.logback:logback-classic:1.3.14")
     implementation("io.github.openfeign:feign-core:12.2")
 
-    testImplementation 'org.jetbrains.kotlin:kotlin-test'
+    testImplementation("org.jetbrains.kotlin:kotlin-test")
 }
 
 ext {
     def env = System.getenv()
-
     dockerRegistry = env.getOrDefault("DOCKER_REGISTRY", properties["docker.registry"]).toString()
+    octopusGithubDockerRegistry = env.getOrDefault(
+            "OCTOPUS_GITHUB_DOCKER_REGISTRY", properties["octopus.github.docker.registry"]
+    ).toString()
+    okdActiveDeadlineSeconds = env.getOrDefault(
+            "OKD_ACTIVE_DEADLINE_SECONDS", properties["okd.active-deadline-seconds"]
+    ).toString()
+    okdProject = env.getOrDefault(
+            "OKD_PROJECT", properties["okd.project"]
+    ).toString()
+    okdClusterDomain = env.getOrDefault(
+            "OKD_CLUSTER_DOMAIN", properties["okd.cluster-domain"]
+    ).toString()
+    okdWebConsoleUrl = env.getOrDefault(
+            "OKD_WEB_CONSOLE_URL", properties["okd.web-console-url"]
+    ).toString()
 }
 
-tasks.named("composeUp") {
-    dependsOn(":components-registry-service-server:dockerBuildImage")
+def mandatoryProperties = [
+        "dockerRegistry",
+        "octopusGithubDockerRegistry",
+        "okdActiveDeadlineSeconds",
+        "okdProject",
+        "okdClusterDomain"
+]
+
+def undefinedProperties = mandatoryProperties.findAll {
+    (project.ext[it] as String).isBlank()
 }
 
-dockerCompose {
-    useComposeFiles.add("${project.projectDir}/docker/docker-compose.yaml")
-    waitForTcpPorts = true
-    captureContainersOutputToFiles = layout.buildDirectory.dir("docker-logs").get().asFile
-    environment = [
-            "DOCKER_REGISTRY"                    : project.ext.get("dockerRegistry"),
-            "COMPONENTS_REGISTRY_SERVICE_VERSION": project.version
-    ]
+if (!undefinedProperties.isEmpty()) {
+    throw new IllegalArgumentException(
+            "Start gradle build with" +
+                    (undefinedProperties.contains("dockerRegistry") ? " -Pdocker.registry=..." : "") +
+                    (undefinedProperties.contains("octopusGithubDockerRegistry") ? " -Poctopus.github.docker.registry=..." : "") +
+                    (undefinedProperties.contains("okdActiveDeadlineSeconds") ? " -Pokd.active-deadline-seconds=..." : "") +
+                    (undefinedProperties.contains("okdProject") ? " -Pokd.project=..." : "") +
+                    (undefinedProperties.contains("okdClusterDomain") ? " -Pokd.cluster-domain=..." : "") +
+                    " or set env variable(s):" +
+                    (undefinedProperties.contains("dockerRegistry") ? " DOCKER_REGISTRY" : "") +
+                    (undefinedProperties.contains("octopusGithubDockerRegistry") ? " OCTOPUS_GITHUB_DOCKER_REGISTRY" : "") +
+                    (undefinedProperties.contains("okdActiveDeadlineSeconds") ? " OKD_ACTIVE_DEADLINE_SECONDS" : "") +
+                    (undefinedProperties.contains("okdProject") ? " OKD_PROJECT" : "") +
+                    (undefinedProperties.contains("okdClusterDomain") ? " OKD_CLUSTER_DOMAIN" : "")
+    )
+}
+
+def commonOkdParameters = [
+        "ACTIVE_DEADLINE_SECONDS": project.ext.get("okdActiveDeadlineSeconds"),
+        "DOCKER_REGISTRY"        : project.ext.get("dockerRegistry")
+]
+
+ocTemplate {
+    workDir = layout.buildDirectory.dir("okd")
+    clusterDomain = project.ext.get("okdClusterDomain")
+    namespace = project.ext.get("okdProject")
+    prefix = "crs-auto"
+    projectVersion = defaultVersion
+
+    def okdWebConsoleUrl = project.ext.get("okdWebConsoleUrl")
+
+    if (okdWebConsoleUrl instanceof String && okdWebConsoleUrl.trim()) {
+        webConsoleUrl.set(okdWebConsoleUrl)
+    }
+
+    service("comp-reg") {
+        templateFile = layout.projectDirectory.file("okd/components-registry.yaml")
+        def componentsRegistryWorkDir =
+                layout.projectDirectory
+                        .dir("src/test/resources/components-registry")
+                        .asFile
+                        .absolutePath
+        parameters.set(
+                commonOkdParameters + [
+                        "COMPONENTS_REGISTRY_SERVICE_VERSION": project.version,
+
+                        "AGGREGATOR_GROOVY_CONTENT"          :
+                                file("${componentsRegistryWorkDir}/Aggregator.groovy").text,
+
+                        "DEFAULTS_GROOVY_CONTENT"            :
+                                file("${componentsRegistryWorkDir}/Defaults.groovy").text,
+
+                        "TEST_COMPONENTS_GROOVY_CONTENT"     :
+                                file("${componentsRegistryWorkDir}/TestComponents.groovy").text,
+
+                        "APPLICATION_TEST_CONTENT"           :
+                                layout.projectDirectory
+                                        .dir("test/components-registry-service.yaml")
+                                        .asFile
+                                        .text
+                ]
+        )
+    }
 }
 
 application {
@@ -62,20 +151,15 @@ tasks.register("zipMetarunners", Zip) {
     }
 }
 
-tasks.shadowJar {
-    dependsOn composeUp
-}
-
 tasks.withType(Test) {
-    dependsOn shadowJar
-    systemProperties["test.components-registry-service-host"] = "localhost"
-    systemProperties["test.components-registry-service-port"] = 4567
+    dependsOn ocCreate, shadowJar
+    systemProperties["test.components-registry-host"] = ocTemplate.getOkdHost("comp-reg")
     useJUnitPlatform()
     testLogging {
         events TestLogEvent.FAILED, TestLogEvent.PASSED, TestLogEvent.SKIPPED
     }
     systemProperty "jar", configurations.shadow.artifacts.files.asPath
-    finalizedBy composeLogs, composeDown
+    finalizedBy ocLogs, ocDelete
 }
 
 configurations {

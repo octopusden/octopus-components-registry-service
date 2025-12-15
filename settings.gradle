@@ -9,6 +9,7 @@ pluginManagement {
         id 'org.jetbrains.kotlin.plugin.jpa'            version settings['kotlin.version']
         id 'com.bmuschko.docker-java-application'       version settings['gradle-docker-plugin.version']
         id 'com.github.johnrengelman.shadow'            version '8.1.1'
+        id 'org.octopusden.octopus.oc-template'         version settings['octopus-oc-template.version']
     }
     repositories {
         gradlePluginPortal()

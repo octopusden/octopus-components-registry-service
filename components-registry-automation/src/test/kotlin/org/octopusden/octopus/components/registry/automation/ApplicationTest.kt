@@ -102,11 +102,9 @@ class ApplicationTest {
 
         private val componentsRegistryServiceHost = System.getProperty("test.components-registry-service-host")
             ?: throw Exception("System property 'test.components-registry-service-host' must be defined")
-        private val componentsRegistryServicePort = System.getProperty("test.components-registry-service-port")
-            ?: throw Exception("System property 'test.components-registry-service-port' must be defined")
 
-        private val testArtifactoryHost = "http://$componentsRegistryServiceHost:$componentsRegistryServicePort"
-        private val componentsRegistryCommandOptions = "${URL_OPTION}=$testArtifactoryHost"
+        private val testComponentsRegistryServiceHost = "http://$componentsRegistryServiceHost"
+        private val componentsRegistryCommandOptions = "${URL_OPTION}=$testComponentsRegistryServiceHost"
 
         private val copyrightFile by lazy {
             File(
