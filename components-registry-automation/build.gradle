@@ -31,7 +31,10 @@ dependencies {
 
     implementation("org.slf4j:slf4j-api:2.0.13")
     implementation("ch.qos.logback:logback-classic:1.3.14")
-    implementation("io.github.openfeign:feign-core:12.2")
+    implementation(platform("io.github.openfeign:feign-bom:12.2"))
+    implementation("io.github.openfeign:feign-httpclient")
+    implementation("io.github.openfeign:feign-jackson")
+    implementation("io.github.openfeign:feign-slf4j")
 
     testImplementation("org.jetbrains.kotlin:kotlin-test")
 }

@@ -1,6 +1,7 @@
 package org.octopusden.octopus.components.registry.automation
 
 import com.github.ajalt.clikt.core.CliktCommand
+import com.github.ajalt.clikt.core.ProgramResult
 import com.github.ajalt.clikt.core.findOrSetObject
 import com.github.ajalt.clikt.parameters.options.check
 import com.github.ajalt.clikt.parameters.options.convert
@@ -20,12 +21,17 @@ class ComponentsRegistryCommand : CliktCommand(name = "") {
 
     override fun run() {
         logger.info("Components Registry Service URL: $url")
-        val clientUrlProvider = object : ClassicComponentsRegistryServiceClientUrlProvider {
-            override fun getApiUrl(): String = url
+        try {
+            val clientUrlProvider = object : ClassicComponentsRegistryServiceClientUrlProvider {
+                override fun getApiUrl(): String = url
+            }
+            val client = ClassicComponentsRegistryServiceClient(clientUrlProvider)
+            context[LOGGER] = logger
+            context[CLIENT] = client
+        } catch (e: Exception) {
+            logger.error("Failed to create ComponentsRegistryServiceClient: ${e.message}", e)
+            throw ProgramResult(statusCode = 1)
         }
-        val client = ClassicComponentsRegistryServiceClient(clientUrlProvider)
-        context[LOGGER] = logger
-        context[CLIENT] = client
     }
 
     companion object {
