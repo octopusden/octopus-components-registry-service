@@ -59,9 +59,6 @@ ext {
 def mandatoryProperties = [
         "dockerRegistry",
         "octopusGithubDockerRegistry",
-        "okdActiveDeadlineSeconds",
-        "okdProject",
-        "okdClusterDomain"
 ]
 
 def undefinedProperties = mandatoryProperties.findAll {
@@ -73,15 +70,9 @@ if (!undefinedProperties.isEmpty()) {
             "Start gradle build with" +
                     (undefinedProperties.contains("dockerRegistry") ? " -Pdocker.registry=..." : "") +
                     (undefinedProperties.contains("octopusGithubDockerRegistry") ? " -Poctopus.github.docker.registry=..." : "") +
-                    (undefinedProperties.contains("okdActiveDeadlineSeconds") ? " -Pokd.active-deadline-seconds=..." : "") +
-                    (undefinedProperties.contains("okdProject") ? " -Pokd.project=..." : "") +
-                    (undefinedProperties.contains("okdClusterDomain") ? " -Pokd.cluster-domain=..." : "") +
                     " or set env variable(s):" +
                     (undefinedProperties.contains("dockerRegistry") ? " DOCKER_REGISTRY" : "") +
-                    (undefinedProperties.contains("octopusGithubDockerRegistry") ? " OCTOPUS_GITHUB_DOCKER_REGISTRY" : "") +
-                    (undefinedProperties.contains("okdActiveDeadlineSeconds") ? " OKD_ACTIVE_DEADLINE_SECONDS" : "") +
-                    (undefinedProperties.contains("okdProject") ? " OKD_PROJECT" : "") +
-                    (undefinedProperties.contains("okdClusterDomain") ? " OKD_CLUSTER_DOMAIN" : "")
+                    (undefinedProperties.contains("octopusGithubDockerRegistry") ? " OCTOPUS_GITHUB_DOCKER_REGISTRY" : "")
     )
 }
 
