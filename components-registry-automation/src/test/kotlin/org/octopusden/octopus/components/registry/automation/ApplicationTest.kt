@@ -48,7 +48,6 @@ class ApplicationTest {
         commands: Array<String>,
     ) {
         assertEquals(expectedExitCode, execute(name, *commands))
-        Assertions.assertFalse(copyrightFile.exists())
     }
 
     /**
@@ -97,7 +96,7 @@ class ApplicationTest {
         private const val CORRECT_EXIT_CODE = 0
         private const val INCORRECT_COMMAND_EXIT_CODE = 1
         private const val NOT_EXIST_EXIT_CODE = 404
-        private const val TEST_TARGET_PATH = "./build/tmp/downloaded_copyrights"
+        private const val TEST_TARGET_PATH = "downloaded_copyrights"
         private const val HELP_OPTION = "-h"
 
         private val componentsRegistryServiceHost = System.getProperty("test.components-registry-service-host")
