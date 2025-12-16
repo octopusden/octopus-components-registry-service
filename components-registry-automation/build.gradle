@@ -112,18 +112,30 @@ ocTemplate {
                         .absolutePath
         parameters.set(
                 commonOkdParameters + [
-                        "COMPONENTS_REGISTRY_SERVICE_VERSION": project.version,
+                        "COMPONENTS_REGISTRY_SERVICE_VERSION"    : project.version,
 
-                        "AGGREGATOR_GROOVY_CONTENT"          :
+                        "AGGREGATOR_GROOVY_CONTENT"              :
                                 file("${componentsRegistryWorkDir}/Aggregator.groovy").text,
 
-                        "DEFAULTS_GROOVY_CONTENT"            :
+                        "DEFAULTS_GROOVY_CONTENT"                :
                                 file("${componentsRegistryWorkDir}/Defaults.groovy").text,
 
-                        "TEST_COMPONENTS_GROOVY_CONTENT"     :
+                        "TEST_COMPONENTS_GROOVY_CONTENT"         :
                                 file("${componentsRegistryWorkDir}/TestComponents.groovy").text,
 
-                        "APPLICATION_TEST_CONTENT"           :
+                        "DEPENDENCY1_COPYRIGHT"                 :
+                                file("${componentsRegistryWorkDir}/copyrights/dependency1-copyright").text,
+
+                        "DEPENDENCY2_COPYRIGHT"                 :
+                                file("${componentsRegistryWorkDir}/copyrights/dependency2-copyright").text,
+
+                        "EE_CLIENT_SPECIFIC_COMPONENT_COPYRIGHT":
+                                file("${componentsRegistryWorkDir}/copyrights/ee-client-specific-component-copyright").text,
+
+                        "EE_COMPONENT_COPYRIGHT"                 :
+                                file("${componentsRegistryWorkDir}/copyrights/ee-component-copyright").text,
+
+                        "APPLICATION_TEST_CONTENT"               :
                                 layout.projectDirectory
                                         .dir("data/components-registry-service.yaml")
                                         .asFile
@@ -151,13 +163,13 @@ tasks.register("zipMetarunners", Zip) {
     }
 }
 
-tasks.named("ocProcess") {
-    dependsOn(":components-registry-service-server:dockerBuildImage")
+tasks.named("ocCreate") {
+    dependsOn(":components-registry-service-server:dockerPushImage")
 }
 
 tasks.withType(Test) {
     dependsOn ocCreate, shadowJar
-    systemProperties["test.components-registry-host"] = ocTemplate.getOkdHost("comp-reg")
+    systemProperties["test.components-registry-service-host"] = ocTemplate.getOkdHost("comp-reg")
     useJUnitPlatform()
     testLogging {
         events TestLogEvent.FAILED, TestLogEvent.PASSED, TestLogEvent.SKIPPED

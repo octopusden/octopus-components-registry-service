@@ -16,6 +16,14 @@ objects:
         ${TEST_COMPONENTS_GROOVY_CONTENT}
       application-test.yaml: |-
         ${APPLICATION_TEST_CONTENT}
+      dependency1-copyright: |-
+        ${DEPENDENCY1_COPYRIGHT}
+      dependency2-copyright: |-
+        ${DEPENDENCY2_COPYRIGHT}
+      ee-client-specific-component-copyright: |-
+        ${EE_CLIENT_SPECIFIC_COMPONENT_COPYRIGHT}
+      ee-component-copyright: |-
+        ${EE_COMPONENT_COPYRIGHT}
   - apiVersion: v1
     kind: Pod
     metadata:
@@ -63,6 +71,14 @@ objects:
                 path: Defaults.groovy
               - key: TestComponents.groovy
                 path: TestComponents.groovy
+              - key: dependency1-copyright
+                path: ./copyrights/dependency1-copyright
+              - key: dependency2-copyright
+                path: ./copyrights/dependency2-copyright
+              - key: ee-client-specific-component-copyright
+                path: ./copyrights/ee-client-specific-component-copyright
+              - key: ee-component-copyright
+                path: ./copyrights/ee-component-copyright
         - name: application-test
           configMap:
             name: ${DEPLOYMENT_PREFIX}-components-registry-config-data
@@ -114,4 +130,16 @@ parameters:
     required: true
   - description: application-test.yaml content
     name: APPLICATION_TEST_CONTENT
+    required: true
+  - description: Dependency1 copyright content
+    name: DEPENDENCY1_COPYRIGHT
+    required: true
+  - description: Dependency2 copyright content
+    name: DEPENDENCY2_COPYRIGHT
+    required: true
+  - description: EE client specific copyright content
+    name: EE_CLIENT_SPECIFIC_COMPONENT_COPYRIGHT
+    required: true
+  - description: EE component copyright content
+    name: EE_COMPONENT_COPYRIGHT
     required: true
