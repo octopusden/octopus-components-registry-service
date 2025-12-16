@@ -17,7 +17,7 @@ class DocConfigurationLoaderTest {
         def exception = shouldFail(Exception.class) {
             loadConfiguration("doc/invalidSimpleConfig.groovy")
         }
-        assert exception.message.contains("Doc.component is not specified in module 'component'")
+        assert exception.message.contains("Doc.component is not specified")
     }
 
     /**

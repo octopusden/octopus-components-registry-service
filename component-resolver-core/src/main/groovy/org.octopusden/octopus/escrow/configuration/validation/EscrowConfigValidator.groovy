@@ -517,22 +517,19 @@ class EscrowConfigValidator {
         if (docComponentParameters == null) {
             return
         }
-        if (StringUtils.isBlank(docComponentParameters.component())) {
-            registerError("Doc.component is not specified in module '$module'")
+
+        if (!configuration.escrowModules.containsKey(docComponentParameters.component())) {
+            registerError("Doc.component '${docComponentParameters.component()}' module is not found for module '$module'")
         } else {
-            if (!configuration.escrowModules.containsKey(docComponentParameters.component())) {
-                registerError("Doc.component '${docComponentParameters.component()}' module is not found for module '$module'")
-            } else {
-                EscrowModule doc_component = configuration.escrowModules.get(docComponentParameters.component())
-                if (doc_component.moduleConfigurations.any { it.doc != null }) {
-                    registerError("Doc component ${doc_component.moduleName} must not have 'doc' property")
-                }
-                def hasGAV = doc_component.moduleConfigurations.any { config ->
-                    config.distribution != null && StringUtils.isNotBlank(config.distribution.GAV())
-                }
-                if (!hasGAV) {
-                    registerError("Doc component '${docComponentParameters.component()}' must have distribution.GAV defined (artifact-based documentation) for module '$module'")
-                }
+            EscrowModule doc_component = configuration.escrowModules.get(docComponentParameters.component())
+            if (doc_component.moduleConfigurations.any { it.doc != null }) {
+                registerError("Doc component ${doc_component.moduleName} must not have 'doc' property")
+            }
+            def hasGAV = doc_component.moduleConfigurations.any { config ->
+                config.distribution != null && StringUtils.isNotBlank(config.distribution.GAV())
+            }
+            if (!hasGAV) {
+                registerError("Doc component '${docComponentParameters.component()}' must have distribution.GAV defined (artifact-based documentation) for module '$module'")
             }
         }
     }

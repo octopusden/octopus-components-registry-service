@@ -954,8 +954,8 @@ class EscrowConfigurationLoader {
 
     @TypeChecked(TypeCheckingMode.SKIP)
     static final Doc parseDocSection(ConfigObject docConfigObject) {
-        def component = docConfigObject.containsKey("component") ? docConfigObject.component : null
-        def majorVersion = docConfigObject.containsKey("majorVersion") ? docConfigObject.majorVersion : null
+        def component = docConfigObject.get("component") as String
+        def majorVersion = docConfigObject.getOrDefault("majorVersion", null) as String
         return new Doc(component, majorVersion)
     }
 
