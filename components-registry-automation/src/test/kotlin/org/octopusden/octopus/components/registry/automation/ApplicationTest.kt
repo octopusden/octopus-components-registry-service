@@ -1,6 +1,5 @@
 package org.octopusden.octopus.components.registry.org.octopusden.octopus.components.registry.automation
 
-import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.params.ParameterizedTest
