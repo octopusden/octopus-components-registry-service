@@ -30,6 +30,8 @@ class ApplicationTest {
         expectedExitCode: Int,
         commands: Array<String>,
     ) {
+        println("ENV: ${System.getenv()}")
+        println("PROPS: ${System.getProperties()}")
         assertEquals(expectedExitCode, execute(name, *commands))
         assertTrue(copyrightFile.exists())
         val expectedContent = getDownloadedFileContent()
