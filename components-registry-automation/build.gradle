@@ -170,11 +170,11 @@ tasks.named("ocCreate") {
 tasks.withType(Test) {
     dependsOn ocCreate, shadowJar
     systemProperties["test.components-registry-service-host"] = ocTemplate.getOkdHost("comp-reg")
+    systemProperties["jar"] = shadowJar.archiveFile.get().asFile.absolutePath
     useJUnitPlatform()
     testLogging {
         events TestLogEvent.FAILED, TestLogEvent.PASSED, TestLogEvent.SKIPPED
     }
-    systemProperty "jar", configurations.shadow.artifacts.files.asPath
     finalizedBy ocLogs, ocDelete
 }
 
