@@ -42,6 +42,17 @@ class DocConfigurationLoaderTest {
         assert exception.message.contains("Doc component doc_component must not have 'doc' property")
     }
 
+    /**
+     * Test that an exception is thrown when the 'Doc.component' does not have GAV defined.
+     */
+    @Test
+    void testDocWithoutGAV() {
+        def exception = shouldFail(EscrowConfigurationException.class) {
+            loadConfiguration("doc/invalidSimpleConfigWithoutGAV.groovy")
+        }
+        assert exception.message.contains("Doc component 'doc_component' must have distribution.GAV defined (artifact-based documentation) for module 'component'")
+    }
+
     @Test
     void testResolvedDoc() {
         EscrowConfiguration configuration = loadConfiguration("doc/simpleConfig.groovy")

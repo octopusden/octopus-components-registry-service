@@ -527,6 +527,12 @@ class EscrowConfigValidator {
                 if (doc_component.moduleConfigurations.any { it.doc != null }) {
                     registerError("Doc component ${doc_component.moduleName} must not have 'doc' property")
                 }
+                def hasGAV = doc_component.moduleConfigurations.any { config ->
+                    config.distribution != null && StringUtils.isNotBlank(config.distribution.GAV())
+                }
+                if (!hasGAV) {
+                    registerError("Doc component '${docComponentParameters.component()}' must have distribution.GAV defined (artifact-based documentation) for module '$module'")
+                }
             }
         }
     }
