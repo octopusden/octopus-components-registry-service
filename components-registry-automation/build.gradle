@@ -1,5 +1,5 @@
 import org.gradle.api.tasks.testing.logging.TestLogEvent
-
+import java.net.InetAddress
 import java.util.zip.CRC32
 
 plugins {
@@ -11,14 +11,15 @@ plugins {
 group = 'org.octopusden.octopus.components.registry.automation'
 description = 'Octopus Components Registry Automation'
 
-def defaultVersion = "${{
-    def crc = new CRC32()
-    crc.update(InetAddress.localHost.hostName.bytes)
-    crc.value
-}}-SNAPSHOT"
+def defaultVersion
 
 if (version == "unspecified") {
+    def crc = new CRC32()
+    crc.update(InetAddress.getLocalHost().getHostName().getBytes())
+    defaultVersion = "${crc.value}-SNAPSHOT"
     version = defaultVersion
+} else {
+    defaultVersion = version
 }
 
 repositories {
