@@ -110,6 +110,7 @@ abstract class BaseComponentController<T : Component> {
             parentComponent = escrowModuleConfig.parentComponent
             archived = escrowModuleConfig.archived
             doc = escrowModuleConfig.doc?.toDTO()
+            escrow = escrowModuleConfig.escrow?.toDTO()
             this
         }
 

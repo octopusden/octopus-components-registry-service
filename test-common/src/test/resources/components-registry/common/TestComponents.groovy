@@ -1,5 +1,6 @@
 import static org.octopusden.octopus.escrow.BuildSystem.*
 import static org.octopusden.octopus.escrow.RepositoryType.*
+import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
 
 Defaults {
     system = "NONE"
@@ -237,6 +238,22 @@ Defaults {
     buildFilePath = "build"
 }
 
+TEST_COMPONENT_WITH_ESCROW {
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.test2"
+    artifactId = "test2"
+    escrow {
+        generation = EscrowGenerationMode.MANUAL
+    }
+    jira {
+        projectKey = "PROJ"
+        majorVersionFormat = '$major.$minor'
+        releaseVersionFormat = '$major.$minor.$service'
+        lineVersionFormat = '$major.$minor'
+        buildVersionFormat = '$major.$minor.$service-$fix'
+    }
+    buildSystem = IN_CONTAINER
+}
 
 TEST_COMPONENT {
     componentOwner = "user9"

@@ -109,6 +109,7 @@ class ComponentControllerV2(
             solution = escrowModuleConfig.solution
             archived = escrowModuleConfig.archived
             doc = escrowModuleConfig.doc?.toDTO()
+            escrow = escrowModuleConfig.escrow?.toDTO()
             this
         }
     }

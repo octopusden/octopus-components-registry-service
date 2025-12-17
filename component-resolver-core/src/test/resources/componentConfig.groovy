@@ -1,3 +1,5 @@
+import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
+
 import static org.octopusden.octopus.escrow.BuildSystem.MAVEN
 import static org.octopusden.octopus.escrow.BuildSystem.PROVIDED
 import static org.octopusden.octopus.escrow.RepositoryType.MERCURIAL
@@ -198,6 +200,10 @@ sms_component {
         releaseVersionFormat = '$major.$minor'
         buildVersionFormat = '$major.$minor.$build'
         displayName = "TESTONE DISPLAY NAME WITH VERSIONS-API"
+    }
+
+    escrow {
+        generation = EscrowGenerationMode.MANUAL
     }
 
     components {
