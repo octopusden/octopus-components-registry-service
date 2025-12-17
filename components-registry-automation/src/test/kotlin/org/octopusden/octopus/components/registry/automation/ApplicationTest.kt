@@ -91,7 +91,7 @@ class ApplicationTest {
                 .start()
                 .waitFor()
         } catch (e: Exception) {
-            println("Failed to execute $name: ${e.message}")
+            throw IllegalStateException("Failed to execute $name", e)
         }
     }
 
