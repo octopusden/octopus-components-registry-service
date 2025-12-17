@@ -28,7 +28,7 @@ import org.octopusden.octopus.escrow.exceptions.EscrowConfigurationException
 import org.octopusden.octopus.escrow.model.BuildParameters
 import org.octopusden.octopus.escrow.model.Distribution
 import org.octopusden.octopus.components.registry.api.escrow.Escrow
-
+import org.octopusden.octopus.escrow.model.Doc
 import org.octopusden.octopus.escrow.model.SecurityGroups
 import org.octopusden.octopus.escrow.model.VCSSettings
 import org.octopusden.octopus.escrow.model.VersionControlSystemRoot
@@ -46,6 +46,7 @@ import org.octopusden.releng.versions.VersionRangeFactory
 
 import java.util.stream.Collectors
 
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.DOC
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.ESCROW
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.VCS_SETTINGS
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.REPOSITORY_TYPE
@@ -318,7 +319,8 @@ class EscrowConfigurationLoader {
                         moduleConfigItemName == DISTRIBUTION ||
                         moduleConfigItemName == TOOLS ||
                         moduleConfigItemName == VCS_SETTINGS ||
-                        moduleConfigItemName == ESCROW
+                        moduleConfigItemName == ESCROW ||
+                        moduleConfigItemName == DOC
                 ) {
                     continue  //TODO: bad style
                 }
@@ -357,6 +359,7 @@ class EscrowConfigurationLoader {
                 def buildFileLocation = moduleConfigSection.containsKey("buildFilePath") ? moduleConfigSection.buildFilePath.toString() :
                         componentDefaultConfiguration.buildFilePath
                 def escrow = loadEscrow(moduleConfigSection, componentDefaultConfiguration.escrow)
+                def doc = loadDoc(moduleConfigSection)
 
                 def escrowModuleConfiguration = new EscrowModuleConfig(buildSystem: buildSystem,
                         groupIdPattern: moduleConfigSection.containsKey("groupId") ? moduleConfigSection.groupId : componentDefaultConfiguration.groupIdPattern,
@@ -380,6 +383,7 @@ class EscrowConfigurationLoader {
                         distribution: distributionConfiguration,
                         octopusVersion: octopusVersion,
                         escrow: escrow,
+                        doc: doc,
                         archived: isArchived
                 )
                 escrowModule.moduleConfigurations.add(escrowModuleConfiguration)
@@ -407,6 +411,7 @@ class EscrowConfigurationLoader {
                         distribution: componentDefaultConfiguration.distribution,
                         octopusVersion: componentDefaultConfiguration.octopusVersion,
                         escrow: componentDefaultConfiguration.escrow,
+                        doc: componentDefaultConfiguration.doc,
                         archived: componentDefaultConfiguration.archived
                 )
                 escrowModule.moduleConfigurations.add(escrowModuleConfiguration)
@@ -850,6 +855,16 @@ class EscrowConfigurationLoader {
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
+    private static Doc loadDoc(ConfigObject parentConfigObject) {
+        if (parentConfigObject.containsKey("doc")) {
+            def configObject = parentConfigObject.get("doc") as ConfigObject
+            return parseDocSection(configObject)
+        } else {
+            return null
+        }
+    }
+
+    @TypeChecked(TypeCheckingMode.SKIP)
     private static Escrow loadEscrow(ConfigObject parentConfigObject, Escrow defaultEscrow) {
         if (parentConfigObject.containsKey("escrow")) {
             def raw = parentConfigObject.get("escrow")
@@ -935,6 +950,13 @@ class EscrowConfigurationLoader {
         def securityGroup = loadSecurityGroups(distributionConfigObject, defaultDistribution?.securityGroups)
         def docker = distributionConfigObject.getOrDefault("docker", defaultDistribution?.docker()) as String
         return new Distribution(explicit, external, GAV, DEB, RPM, docker, securityGroup)
+    }
+
+    @TypeChecked(TypeCheckingMode.SKIP)
+    static final Doc parseDocSection(ConfigObject docConfigObject) {
+        def component = docConfigObject.get("component") as String
+        def majorVersion = docConfigObject.getOrDefault("majorVersion", null) as String
+        return new Doc(component, majorVersion)
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
@@ -1103,6 +1125,7 @@ class EscrowConfigurationLoader {
         final String octopusVersion = loadVersion(componentConfigObject, defaultConfiguration.octopusVersion, inheritanceType.octopusVersionInherit)
 
         Escrow escrow = loadEscrow(componentConfigObject, defaultConfiguration.escrow)
+        Doc doc = loadDoc(componentConfigObject)
 
         def defaultConfigParameters = new DefaultConfigParameters(buildSystem: buildSystem,
                 groupIdPattern: componentConfigObject.containsKey("groupId") ? componentConfigObject.groupId : defaultConfiguration?.groupIdPattern,
@@ -1124,6 +1147,7 @@ class EscrowConfigurationLoader {
                 vcsSettingsWrapper: vcsSettingsWrapper,
                 octopusVersion: octopusVersion,
                 escrow: escrow,
+                doc: doc,
                 archived: isArchived
         )
         defaultConfigParameters

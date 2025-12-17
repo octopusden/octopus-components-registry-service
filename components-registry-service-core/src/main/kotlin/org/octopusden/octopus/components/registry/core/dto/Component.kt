@@ -12,6 +12,7 @@ abstract class Component(val id: String, val name: String?, val componentOwner: 
     var releaseManager: String? = null
     var distribution: DistributionDTO? = null
     var archived: Boolean = false
+    var doc: DocDTO? = null
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
@@ -30,6 +31,7 @@ abstract class Component(val id: String, val name: String?, val componentOwner: 
         if (releaseManager != other.releaseManager) return false
         if (distribution != other.distribution) return false
         if (archived != other.archived) return false
+        if (doc != other.doc) return false
         return true
     }
 
@@ -46,12 +48,15 @@ abstract class Component(val id: String, val name: String?, val componentOwner: 
             securityChampion,
             releaseManager,
             distribution,
-            archived
+            archived,
+            doc
         )
     }
 
     override fun toString(): String {
-        return "Component(id='$id', name=$name, componentOwner='$componentOwner', system=$system, clientCode=$clientCode, releasesInDefaultBranch=$releasesInDefaultBranch, " +
-                "solution=$solution, parentComponent=$parentComponent, securityChampion=$securityChampion, releaseManager=$releaseManager, distribution=$distribution, archived=$archived)"
+        return "Component(id='$id', name=$name, componentOwner='$componentOwner', system=$system, " +
+                "clientCode=$clientCode, releasesInDefaultBranch=$releasesInDefaultBranch, solution=$solution, " +
+                "parentComponent=$parentComponent, securityChampion=$securityChampion, releaseManager=$releaseManager, " +
+                "distribution=$distribution, archived=$archived, doc=$doc)"
     }
 }

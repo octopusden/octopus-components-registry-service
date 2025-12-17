@@ -14,6 +14,7 @@ import org.octopusden.octopus.crs.resolver.core.converter.VCSSettingsConverter
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.model.BuildParameters
 import org.octopusden.octopus.escrow.model.Distribution
+import org.octopusden.octopus.escrow.model.Doc
 import org.octopusden.octopus.escrow.model.VCSSettings
 import org.octopusden.octopus.releng.dto.JiraComponent
 
@@ -24,7 +25,8 @@ import static org.octopusden.octopus.escrow.configuration.validation.EscrowConfi
 @EqualsAndHashCode(includeFields = true, includes = ["buildSystem", "artifactIdPattern", "groupIdPattern",// "versionRange",
         "buildFilePath", "jiraConfiguration", "buildConfiguration", "deprecated", "vcsSettings",
         "distribution", "componentDisplayName", "componentOwner", "releaseManager", "securityChampion", "system",
-        "clientCode", "releasesInDefaultBranch", "solution", "parentComponent", "octopusVersion", "escrow", "productType", "archived"])
+        "clientCode", "releasesInDefaultBranch", "solution", "parentComponent", "octopusVersion", "escrow", "productType",
+        "doc", "archived"])
 @ToString(includeFields = true)
 class EscrowModuleConfig {
     private BuildSystem buildSystem
@@ -66,6 +68,8 @@ class EscrowModuleConfig {
     private String parentComponent
 
     private String octopusVersion
+
+    private Doc doc
 
     private boolean archived
 
@@ -171,6 +175,14 @@ class EscrowModuleConfig {
 
     String getOctopusVersion() {
         return octopusVersion
+    }
+
+    Doc getDoc() {
+        return doc
+    }
+
+    void setDoc(Doc doc) {
+        this.doc = doc
     }
 
     boolean getArchived() {

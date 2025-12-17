@@ -10,6 +10,7 @@ import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.configuration.loader.VCSSettingsWrapper
 import org.octopusden.octopus.escrow.model.BuildParameters
 import org.octopusden.octopus.escrow.model.Distribution
+import org.octopusden.octopus.escrow.model.Doc
 import org.octopusden.octopus.releng.dto.JiraComponent
 
 @TupleConstructor
@@ -58,6 +59,8 @@ class DefaultConfigParameters {
     Boolean solution
 
     Escrow escrow
+
+    Doc doc
 
     Boolean archived
 }

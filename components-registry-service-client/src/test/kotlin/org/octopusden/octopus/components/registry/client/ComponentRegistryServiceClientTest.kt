@@ -129,7 +129,7 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
 
     @Test
     fun testGetAllComponents() {
-        assertEquals(52, componentsRegistryClient.getAllComponents().components.size)
+        assertEquals(53, componentsRegistryClient.getAllComponents().components.size)
         assertEquals(
             3,
             componentsRegistryClient.getAllComponents("ssh://hg@mercurial/technical", null).components.size
@@ -144,11 +144,11 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
         )
         assertEquals(2, componentsRegistryClient.getAllComponents(systems = listOf("ALFA")).components.size)
         assertEquals(6, componentsRegistryClient.getAllComponents(systems = listOf("CLASSIC")).components.size)
-        assertEquals(46, componentsRegistryClient.getAllComponents(systems = listOf("NONE")).components.size)
+        assertEquals(47, componentsRegistryClient.getAllComponents(systems = listOf("NONE")).components.size)
         assertEquals(6, componentsRegistryClient.getAllComponents(systems = listOf("ALFA", "CLASSIC")).components.size)
-        assertEquals(48, componentsRegistryClient.getAllComponents(systems = listOf("ALFA", "NONE")).components.size)
-        assertEquals(52, componentsRegistryClient.getAllComponents(systems = listOf("CLASSIC", "NONE")).components.size)
-        assertEquals(52, componentsRegistryClient.getAllComponents(systems = listOf("ALFA", "CLASSIC", "NONE", "TEST")).components.size)
+        assertEquals(49, componentsRegistryClient.getAllComponents(systems = listOf("ALFA", "NONE")).components.size)
+        assertEquals(53, componentsRegistryClient.getAllComponents(systems = listOf("CLASSIC", "NONE")).components.size)
+        assertEquals(53, componentsRegistryClient.getAllComponents(systems = listOf("ALFA", "CLASSIC", "NONE", "TEST")).components.size)
     }
 
     @Test

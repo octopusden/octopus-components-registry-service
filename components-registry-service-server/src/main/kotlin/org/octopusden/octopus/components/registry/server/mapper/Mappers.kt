@@ -6,6 +6,7 @@ import org.octopusden.octopus.components.registry.core.dto.ComponentArtifactConf
 import org.octopusden.octopus.components.registry.core.dto.ComponentInfoDTO
 import org.octopusden.octopus.components.registry.core.dto.ComponentVersionFormatDTO
 import org.octopusden.octopus.components.registry.core.dto.DistributionDTO
+import org.octopusden.octopus.components.registry.core.dto.DocDTO
 import org.octopusden.octopus.components.registry.core.dto.EscrowDTO
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentDTO
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionDTO
@@ -17,6 +18,7 @@ import org.octopusden.octopus.components.registry.core.dto.VersionControlSystemR
 import org.octopusden.octopus.escrow.config.JiraComponentVersionRange
 import org.octopusden.octopus.escrow.dto.ComponentArtifactConfiguration
 import org.octopusden.octopus.escrow.model.Distribution
+import org.octopusden.octopus.escrow.model.Doc
 import org.octopusden.octopus.escrow.model.VCSSettings
 import org.octopusden.octopus.escrow.model.VersionControlSystemRoot
 import org.octopusden.octopus.releng.dto.JiraComponent
@@ -84,4 +86,10 @@ fun Escrow.toDTO(): EscrowDTO =
         this.additionalSources.toList(),
         this.isReusable,
         this.generation.map { it.toDTO() }.orElse(null)
+    )
+
+fun Doc.toDTO(): DocDTO =
+    DocDTO(
+        this.component(),
+        this.majorVersion()
     )
