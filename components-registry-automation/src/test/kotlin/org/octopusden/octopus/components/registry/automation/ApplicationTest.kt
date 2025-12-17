@@ -77,9 +77,9 @@ class ApplicationTest {
 
     private fun getDownloadedFileContent(): String = copyrightFile.readText(Charsets.UTF_8)
 
-    private fun execute(name: String, vararg commands: String) {
+    private fun execute(name: String, vararg commands: String): Int {
         try {
-            ProcessBuilder("java", "-jar", jar, *commands)
+            return ProcessBuilder("java", "-jar", jar, *commands)
                 .redirectErrorStream(true)
                 .redirectOutput(
                     File("")
@@ -91,7 +91,7 @@ class ApplicationTest {
                 .start()
                 .waitFor()
         } catch (e: Exception) {
-            throw IllegalStateException("Failed to execute $name", e)
+            return -1
         }
     }
 
