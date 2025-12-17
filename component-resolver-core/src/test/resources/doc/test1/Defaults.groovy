@@ -7,15 +7,12 @@ Defaults {
     releasesInDefaultBranch = true
     solution = false
     repositoryType = MERCURIAL
-    buildSystem = MAVEN
-    tag = '$module-$version'
-    copyright = 'companyName1'
-
+    buildSystem = MAVEN;
+    tag = '$module-$version';
+    artifactId = ANY_ARTIFACT
     jira {
         majorVersionFormat = '$major.$minor'
         releaseVersionFormat = '$major.$minor.$service'
-        buildVersionFormat = '$major.$minor.$service'
-        hotfixVersionFormat = '$major.$minor.$service.$fix.$build'
         customer {
             versionFormat = '$versionPrefix-$baseVersionFormat'
         }

@@ -118,6 +118,7 @@ class EscrowConfigValidator {
                 validateReleasesInDefaultBranch(moduleConfig, componentName)
                 validateSolution(moduleConfig, componentName)
                 validateBuildConfigurationTools(moduleConfig)
+                validateDoc(configuration, moduleConfig, componentName)
                 validateCopyright(moduleConfig, componentName, supportedCopyrights)
             }
         }
@@ -521,6 +522,28 @@ class EscrowConfigValidator {
         }
     }
 
+    def validateDoc(EscrowConfiguration configuration, EscrowModuleConfig moduleConfig, String module) {
+        def docComponentParameters = moduleConfig.getDoc()
+        if (docComponentParameters == null) {
+            return
+        }
+
+        if (!configuration.escrowModules.containsKey(docComponentParameters.component())) {
+            registerError("Doc.component '${docComponentParameters.component()}' module is not found for module '$module'")
+        } else {
+            EscrowModule doc_component = configuration.escrowModules.get(docComponentParameters.component())
+            if (doc_component.moduleConfigurations.any { it.doc != null }) {
+                registerError("Doc component ${doc_component.moduleName} must not have 'doc' property")
+            }
+            def hasGAV = doc_component.moduleConfigurations.any { config ->
+                config.distribution != null && StringUtils.isNotBlank(config.distribution.GAV())
+            }
+            if (!hasGAV) {
+                registerError("Doc component '${docComponentParameters.component()}' must have distribution.GAV defined (artifact-based documentation) for module '$module'")
+            }
+        }
+    }
+
     def validateCopyright(EscrowModuleConfig moduleConfig, String component, List<String> supportedCopyrights) {
         def copyright = moduleConfig.copyright
         if (copyrightPath == null || copyright == null) {
@@ -591,7 +614,9 @@ class EscrowConfigValidator {
      * Register error if:
      * - hotfixVersionFormat is not specified
      * - neither buildVersionFormat nor releaseVersionFormat exists
+     * - both buildVersionFormat and releaseVersionFormat are specified but different
      * - hotfixVersionFormat doesn't start with buildVersionFormat or releaseVersionFormat
+     * - hotfixVersionFormat is the same as buildVersionFormat or releaseVersionFormat
      * @param moduleConfig
      * @param componentName
      */
@@ -605,13 +630,28 @@ class EscrowConfigValidator {
             registerError("Hotfix is enabled but hotfixVersionFormat is not defined for '$componentName'")
             return
         }
-        def baseVersionFormat = componentVersionFormat.buildVersionFormat ?: componentVersionFormat.releaseVersionFormat
-        if (StringUtils.isBlank(baseVersionFormat)) {
+        def buildVersionFormat = componentVersionFormat.buildVersionFormat
+        def releaseVersionFormat = componentVersionFormat.releaseVersionFormat
+
+        if (StringUtils.isBlank(buildVersionFormat) && StringUtils.isBlank(releaseVersionFormat)) {
             registerError("Hotfix is enabled but neither 'buildVersionFormat' nor 'releaseVersionFormat' is defined for '$componentName'")
             return
         }
+
+        if (StringUtils.isNotBlank(buildVersionFormat) && StringUtils.isNotBlank(releaseVersionFormat)) {
+            if (buildVersionFormat != releaseVersionFormat) {
+                registerError("Hotfix is enabled for '$componentName', buildVersionFormat must be the same as releaseVersionFormat (buildVersionFormat='$buildVersionFormat', releaseVersionFormat='$releaseVersionFormat')")
+                return
+            }
+        }
+
+        def baseVersionFormat = buildVersionFormat ?: releaseVersionFormat
         if (!hotfixVersionFormat.startsWith(baseVersionFormat)) {
             registerError("Invalid hotfixVersionFormat '$hotfixVersionFormat' for '$componentName', it must start with buildVersionFormat/releaseVersionFormat: '$baseVersionFormat'")
+            return
+        }
+        if (hotfixVersionFormat == baseVersionFormat) {
+            registerError("Invalid hotfixVersionFormat '$hotfixVersionFormat' for '$componentName', it must be different from buildVersionFormat/releaseVersionFormat: '$baseVersionFormat'")
         }
     }
 

@@ -20,7 +20,7 @@ bcomponent {
         projectKey = "TEST"
         majorVersionFormat = '$major'
         releaseVersionFormat = '$major.$minor'
-        buildVersionFormat = '$major.$minor.$build'
+        buildVersionFormat = '$major.$minor'
         hotfixVersionFormat = '$major.$minor.$build'
         lineVersionFormat = '$major'
         technical = true
