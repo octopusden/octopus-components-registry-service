@@ -115,7 +115,7 @@ app {
         projectKey = "AS"
         majorVersionFormat = '$major.$minor'
         releaseVersionFormat = '$major.$minor.$service'
-        buildVersionFormat = '$major.$minor.$service.$fix'
+        buildVersionFormat = '$major.$minor.$service'
         hotfixVersionFormat = '$major.$minor.$service.$fix.$build'
         component {
             versionFormat = '$versionPrefix.$baseVersionFormat'

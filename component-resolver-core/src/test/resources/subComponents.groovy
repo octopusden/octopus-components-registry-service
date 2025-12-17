@@ -98,7 +98,7 @@ bcomponent {
                 lineVersionFormat = '$major'
                 majorVersionFormat = '$major.$minor'
                 releaseVersionFormat = '$major.$minor.$service'
-                buildVersionFormat = '$major.$minor.$service.$build'
+                buildVersionFormat = '$major.$minor.$service'
                 hotfixVersionFormat = '$major.$minor.$service.$build'
                 technical = true
                 component {

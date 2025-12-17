@@ -392,7 +392,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 groupIdPattern: "org.octopusden.octopus.bcomponent",
                 versionRange: "(,0),[0,)",
                 jiraConfiguration: new JiraComponent('TEST', null,
-                        ComponentVersionFormat.create('$major', '$major.$minor', '$major.$minor.$build', '$major', '$major.$minor.$build'),
+                        ComponentVersionFormat.create('$major', '$major.$minor', '$major.$minor', '$major', '$major.$minor.$build'),
                         null,
                         true, true),
                 buildFilePath: "test-cvs-maven-parent",
@@ -486,7 +486,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 groupIdPattern: "org.octopusden.octopus.buildsystem.model",
                 versionRange: "[1.2,)",
                 jiraConfiguration: new JiraComponent('BCOMPONENT', null, ComponentVersionFormat.create('$major.$minor', '$major.$minor.$service',
-                        '$major.$minor.$service.$build', '$major', '$major.$minor.$service.$build'), new ComponentInfo('Model', '$versionPrefix.$baseVersionFormat'), true, true),
+                        '$major.$minor.$service', '$major', '$major.$minor.$service.$build'), new ComponentInfo('Model', '$versionPrefix.$baseVersionFormat'), true, true),
                 buildConfiguration: BuildParameters.create("1.6", "1.6-maven", "1.6-gradle", false, "03.1.6", "-D1.6", "build",
                         [new Tool(name: "BuildEnv", escrowEnvironmentVariable: "BUILD_ENV", targetLocation: "tools/BUILD_ENV", sourceLocation: "env.BUILD_ENV"),
                         ], []),
@@ -850,6 +850,8 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
         })
         assert exception.message == "Validation of module config failed due following errors: \n" +
                 "Invalid hotfixVersionFormat '\$major.\$minor-\$fix' for 'component_hotfix_2', it must start with buildVersionFormat/releaseVersionFormat: '\$major.\$minor.\$service'\n" +
-                "Hotfix is enabled but hotfixVersionFormat is not defined for 'component_hotfix_1'"
+                "Hotfix is enabled but hotfixVersionFormat is not defined for 'component_hotfix_1'\n" +
+                "Invalid hotfixVersionFormat '\$major.\$minor.\$service' for 'component_hotfix_4', it must be different from buildVersionFormat/releaseVersionFormat: '\$major.\$minor.\$service'\n" +
+                "Hotfix is enabled for 'component_hotfix_3', buildVersionFormat must be the same as releaseVersionFormat (buildVersionFormat='\$major.\$minor.\$service-\$build', releaseVersionFormat='\$major.\$minor.\$service')"
     }
 }
