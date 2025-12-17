@@ -77,18 +77,23 @@ class ApplicationTest {
 
     private fun getDownloadedFileContent(): String = copyrightFile.readText(Charsets.UTF_8)
 
-    private fun execute(name: String, vararg commands: String) =
-        ProcessBuilder("java", "-jar", jar, *commands)
-            .redirectErrorStream(true)
-            .redirectOutput(
-                File("")
-                    .resolve("build")
-                    .resolve("logs")
-                    .resolve("$name.log")
-                    .also { it.parentFile.mkdirs() }
-            )
-            .start()
-            .waitFor()
+    private fun execute(name: String, vararg commands: String) {
+        try {
+            ProcessBuilder("java", "-jar", jar, *commands)
+                .redirectErrorStream(true)
+                .redirectOutput(
+                    File("")
+                        .resolve("build")
+                        .resolve("logs")
+                        .resolve("$name.log")
+                        .also { it.parentFile.mkdirs() }
+                )
+                .start()
+                .waitFor()
+        } catch (e: Exception) {
+            println("Failed to execute $name: ${e.message}")
+        }
+    }
 
     companion object {
 

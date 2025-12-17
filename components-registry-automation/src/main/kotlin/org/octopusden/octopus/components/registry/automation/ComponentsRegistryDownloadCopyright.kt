@@ -33,47 +33,52 @@ class ComponentsRegistryDownloadCopyright : CliktCommand(name = COMMAND) {
 
     override fun run() {
         logger.info("Downloading '$componentName' copyright file")
+        try {
 
-        val response = client.getCopyrightByComponent(componentName)
-        val body = response.body() ?: run {
-            val responseStatus = response.status()
-            logger.error(
-                "Failed to download '{}' copyright: empty response body, status={}",
-                componentName,
-                responseStatus
-            )
-            throw ProgramResult(statusCode = responseStatus)
-        }
+            val response = client.getCopyrightByComponent(componentName)
+            val body = response.body() ?: run {
+                val responseStatus = response.status()
+                logger.error(
+                    "Failed to download '{}' copyright: empty response body, status={}",
+                    componentName,
+                    responseStatus
+                )
+                throw ProgramResult(statusCode = responseStatus)
+            }
 
-        body.asInputStream().use { inputStream ->
-            when (val responseStatus = response.status()) {
-                HTTP_STATUS_OK -> {
-                    val fullPath = Paths.get(targetPath, DEFAULT_COPYRIGHT_FILE_NAME)
-                    fullPath.parent?.let { Files.createDirectories(it) }
+            body.asInputStream().use { inputStream ->
+                when (val responseStatus = response.status()) {
+                    HTTP_STATUS_OK -> {
+                        val fullPath = Paths.get(targetPath, DEFAULT_COPYRIGHT_FILE_NAME)
+                        fullPath.parent?.let { Files.createDirectories(it) }
 
-                    Files.copy(
-                        inputStream,
-                        fullPath,
-                        StandardCopyOption.REPLACE_EXISTING
-                    )
-                    logger.info(
-                        "Successfully downloaded copyright file by path '{}' with name '{}'",
-                        targetPath,
-                        DEFAULT_COPYRIGHT_FILE_NAME
-                    )
-                }
+                        Files.copy(
+                            inputStream,
+                            fullPath,
+                            StandardCopyOption.REPLACE_EXISTING
+                        )
+                        logger.info(
+                            "Successfully downloaded copyright file by path '{}' with name '{}'",
+                            targetPath,
+                            DEFAULT_COPYRIGHT_FILE_NAME
+                        )
+                    }
 
-                else -> {
-                    val errorBody = inputStream.bufferedReader().readText()
-                    logger.error(
-                        "Failed to download '{}' copyright: status={}, body={}",
-                        componentName,
-                        responseStatus,
-                        errorBody
-                    )
-                    throw ProgramResult(statusCode = responseStatus)
+                    else -> {
+                        val errorBody = inputStream.bufferedReader().readText()
+                        logger.error(
+                            "Failed to download '{}' copyright: status={}, body={}",
+                            componentName,
+                            responseStatus,
+                            errorBody
+                        )
+                        throw ProgramResult(statusCode = responseStatus)
+                    }
                 }
             }
+        } catch (e: Exception) {
+            logger.error("Failed to download copyright: ${e.message}", e)
+            throw ProgramResult(statusCode = 3)
         }
     }
 
