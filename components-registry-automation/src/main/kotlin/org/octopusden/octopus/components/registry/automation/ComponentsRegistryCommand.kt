@@ -30,7 +30,7 @@ class ComponentsRegistryCommand : CliktCommand(name = "") {
             context[CLIENT] = client
         } catch (e: Exception) {
             logger.error("Failed to create ComponentsRegistryServiceClient: ${e.message}", e)
-            throw ProgramResult(statusCode = 1)
+            throw ProgramResult(statusCode = 2)
         }
     }
 
