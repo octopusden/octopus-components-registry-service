@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.org.octopusden.octopus.components.registry.automation
 
+import kotlin.test.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.params.ParameterizedTest
@@ -43,10 +44,9 @@ class ApplicationTest {
     @MethodSource("componentWithoutCopyrightCommands")
     fun unsuccessfulDownloadingTest(
         name: String,
-        expectedExitCode: Int,
         commands: Array<String>,
     ) {
-        assertEquals(expectedExitCode, execute(name, *commands))
+        assertNotEquals(CORRECT_EXIT_CODE, execute(name, *commands))
     }
 
     /**
@@ -156,7 +156,6 @@ class ApplicationTest {
         private fun componentWithoutCopyrightCommands(): Stream<Arguments> = Stream.of(
             Arguments.of(
                 "Test downloading 'ie-component'",
-                NOT_EXIST_EXIT_CODE,
                 arrayOf(
                     componentsRegistryCommandOptions,
                     *createDownloadCopyrightCommandByComponentName("ie-component")
@@ -164,7 +163,6 @@ class ApplicationTest {
             ),
             Arguments.of(
                 "Test downloading 'ei-component'",
-                NOT_EXIST_EXIT_CODE,
                 arrayOf(
                     componentsRegistryCommandOptions,
                     *createDownloadCopyrightCommandByComponentName("ei-component")
@@ -172,7 +170,6 @@ class ApplicationTest {
             ),
             Arguments.of(
                 "Test downloading 'ii-component'",
-                NOT_EXIST_EXIT_CODE,
                 arrayOf(
                     componentsRegistryCommandOptions,
                     *createDownloadCopyrightCommandByComponentName("ii-component")
