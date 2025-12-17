@@ -56,10 +56,9 @@ class ApplicationTest {
     @MethodSource("nonExistentComponentCommand")
     fun downloadingNonExistentComponent(
         name: String,
-        expectedExitCode: Int,
         commands: Array<String>,
     ) {
-        assertEquals(expectedExitCode, execute(name, *commands))
+        assertNotEquals(CORRECT_EXIT_CODE, execute(name, *commands))
     }
 
     /**
@@ -93,7 +92,6 @@ class ApplicationTest {
 
         private const val CORRECT_EXIT_CODE = 0
         private const val INCORRECT_COMMAND_EXIT_CODE = 1
-        private const val NOT_EXIST_EXIT_CODE = 404
         private const val TEST_TARGET_PATH = "downloaded_copyrights"
         private const val HELP_OPTION = "-h"
 
@@ -181,7 +179,6 @@ class ApplicationTest {
         private fun nonExistentComponentCommand(): Stream<Arguments> = Stream.of(
             Arguments.of(
                 "Test downloading 'non-existent-component'",
-                NOT_EXIST_EXIT_CODE,
                 arrayOf(
                     componentsRegistryCommandOptions,
                     *createDownloadCopyrightCommandByComponentName("non-existent-component")

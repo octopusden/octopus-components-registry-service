@@ -42,7 +42,7 @@ class ComponentsRegistryDownloadCopyright : CliktCommand(name = COMMAND) {
                 componentName,
                 responseStatus
             )
-            throw ProgramResult(statusCode = responseStatus)
+            throw RuntimeException("Failed to download '$componentName' copyright. HTTP status: $responseStatus")
         }
 
         body.asInputStream().use { inputStream ->
@@ -71,7 +71,7 @@ class ComponentsRegistryDownloadCopyright : CliktCommand(name = COMMAND) {
                         responseStatus,
                         errorBody
                     )
-                    throw ProgramResult(statusCode = responseStatus)
+                    throw RuntimeException("Failed to download '$componentName' copyright. HTTP status: $responseStatus")
                 }
             }
         }
