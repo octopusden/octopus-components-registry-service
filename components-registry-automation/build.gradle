@@ -13,13 +13,17 @@ description = 'Octopus Components Registry Automation'
 
 def defaultVersion
 
-if (version == "unspecified") {
-    def crc = new CRC32()
-    crc.update(InetAddress.getLocalHost().getHostName().getBytes())
-    defaultVersion = "${crc.value}-SNAPSHOT"
-    version = defaultVersion
-} else {
-    defaultVersion = version
+if (project.version == "unspecified") {
+    try {
+        def crc = new CRC32()
+        crc.update(InetAddress.getLocalHost().getHostName().getBytes())
+        defaultVersion = "${crc.value}-SNAPSHOT"
+        project.version = defaultVersion
+    } catch (Exception e) {
+        defaultVersion = "unknown-host-SNAPSHOT"
+        project.version = defaultVersion
+        println "Warning: Failed to compute default version: ${e.message}"
+    }
 }
 
 repositories {
@@ -90,7 +94,7 @@ ocTemplate {
     clusterDomain = project.ext.get("okdClusterDomain")
     namespace = project.ext.get("okdProject")
     prefix = "crs-auto"
-    projectVersion = defaultVersion
+    projectVersion = project.version
 
     def okdWebConsoleUrl = project.ext.get("okdWebConsoleUrl")
 
