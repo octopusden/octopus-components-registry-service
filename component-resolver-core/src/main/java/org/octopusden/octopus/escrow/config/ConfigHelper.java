@@ -94,11 +94,6 @@ public class ConfigHelper {
         if(copyrightPathStr == null) {
             return null;
         }
-
-        Path copyrightPath = Paths.get(copyrightPathStr);
-        if (!Files.isDirectory(copyrightPath)) {
-            throw new IllegalStateException("Copyright path '" + copyrightPath + "' is not a directory");
-        }
-        return copyrightPath;
+        return Paths.get(copyrightPathStr);
     }
 }

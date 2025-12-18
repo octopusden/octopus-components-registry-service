@@ -20,7 +20,7 @@ class CopyrightServiceImpl(
         logger.info("Getting copyright for component '{}'", component)
 
         val copyrightPath = configHelper.copyrightPath()
-            ?: throw IllegalStateException("Copyright path is not configured")
+            ?: throw NotFoundException("Copyright path is not configured")
 
         val escrowModule = componentRegistryResolver.getComponentById(component)
             ?: throw NotFoundException("Component '$component' not found")
