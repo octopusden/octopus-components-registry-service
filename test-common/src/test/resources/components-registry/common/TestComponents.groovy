@@ -181,6 +181,7 @@ Defaults {
     clientCode = "CLIENT_CODE"
     releasesInDefaultBranch = false
     solution = true
+    copyright = "companyName1"
     jira {
         projectKey = "TESTONE"
         majorVersionFormat = '$major'

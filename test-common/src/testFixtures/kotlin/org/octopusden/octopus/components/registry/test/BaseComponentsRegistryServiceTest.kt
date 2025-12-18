@@ -193,6 +193,7 @@ abstract class BaseComponentsRegistryServiceTest {
         expectedComponent.clientCode = "CLIENT_CODE"
         expectedComponent.releasesInDefaultBranch = false
         expectedComponent.solution = true
+        expectedComponent.copyright = "companyName1"
         Assertions.assertEquals(expectedComponent, actualComponent)
     }
 
@@ -210,6 +211,7 @@ abstract class BaseComponentsRegistryServiceTest {
         expectedComponent.releasesInDefaultBranch = false
         expectedComponent.solution = true
         expectedComponent.parentComponent = "TESTONE"
+        expectedComponent.copyright = "companyName1"
         Assertions.assertEquals(expectedComponent, actualComponent)
     }
 
@@ -309,6 +311,7 @@ abstract class BaseComponentsRegistryServiceTest {
             generation = EscrowGenerationMode.UNSUPPORTED
         )
         expectedComponent.solution = true
+        expectedComponent.copyright = "companyName1"
         Assertions.assertEquals(expectedComponent, actualComponent)
     }
 
