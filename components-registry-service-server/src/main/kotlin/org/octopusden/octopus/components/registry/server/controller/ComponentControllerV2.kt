@@ -105,7 +105,6 @@ class ComponentControllerV2(
             releasesInDefaultBranch = escrowModuleConfig.releasesInDefaultBranch
             parentComponent = escrowModuleConfig.parentComponent
             buildParameters = escrowModuleConfig.buildConfiguration?.let { bc -> getBuildParametersDTO(bc) }
-            escrow = escrowModuleConfig.escrow?.let { it.toDTO() }
             solution = escrowModuleConfig.solution
             archived = escrowModuleConfig.archived
             doc = escrowModuleConfig.doc?.toDTO()

@@ -360,7 +360,7 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
                 "spa/node_modules"
             ),
             isReusable = false,
-            generation = EscrowGenerationMode.UNSUPPORTED
+            generation = EscrowGenerationMode.UNSUPPORTED,
         )
         expectedComponent.releaseManager = "user"
         expectedComponent.securityChampion = "user"
@@ -466,7 +466,8 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
             providedDependencies = listOf(),
             additionalSources = listOf(),
             isReusable = true,
-            generation = EscrowGenerationMode.MANUAL
+            generation = EscrowGenerationMode.MANUAL,
+            diskSpaceRequirement = null,
         )
 
         Assertions.assertEquals(expectedComponent.escrow, actualComponent.escrow, "Escrow do not match")
@@ -512,7 +513,7 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
             providedDependencies = listOf(),
             additionalSources = listOf(),
             isReusable = true,
-            generation = EscrowGenerationMode.MANUAL
+            generation = EscrowGenerationMode.MANUAL,
         )
 
         Assertions.assertEquals(
