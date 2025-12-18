@@ -9,7 +9,6 @@ import org.junit.jupiter.params.provider.MethodSource
 import org.octopusden.octopus.components.registry.automation.ComponentsRegistryCommand.Companion.URL_OPTION
 import org.octopusden.octopus.components.registry.automation.ComponentsRegistryDownloadCopyright.Companion.COMMAND
 import org.octopusden.octopus.components.registry.automation.ComponentsRegistryDownloadCopyright.Companion.COMPONENT_NAME
-import org.octopusden.octopus.components.registry.automation.ComponentsRegistryDownloadCopyright.Companion.DEFAULT_COPYRIGHT_FILE_NAME
 import org.octopusden.octopus.components.registry.automation.ComponentsRegistryDownloadCopyright.Companion.TARGET_PATH
 import java.io.File
 import java.nio.file.Paths
@@ -92,7 +91,7 @@ class ApplicationTest {
 
         private const val CORRECT_EXIT_CODE = 0
         private const val INCORRECT_COMMAND_EXIT_CODE = 1
-        private const val TEST_TARGET_PATH = "downloaded_copyrights"
+        private const val TEST_TARGET_PATH = "downloaded_copyrights/COPYRIGHT"
         private const val HELP_OPTION = "-h"
 
         private val componentsRegistryServiceHost = System.getProperty("test.components-registry-service-host")
@@ -102,12 +101,7 @@ class ApplicationTest {
         private val componentsRegistryCommandOptions = "${URL_OPTION}=$testComponentsRegistryServiceHost"
 
         private val copyrightFile by lazy {
-            File(
-                Paths.get(
-                    TEST_TARGET_PATH,
-                    DEFAULT_COPYRIGHT_FILE_NAME
-                ).toUri()
-            )
+            File(Paths.get(TEST_TARGET_PATH).toUri())
         }
 
         @JvmStatic

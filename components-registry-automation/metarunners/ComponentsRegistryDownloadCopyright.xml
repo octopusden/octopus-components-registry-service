@@ -3,13 +3,14 @@
     <description>Download copyright</description>
     <settings>
         <parameters>
-            <param name="COMPONENT_NAME" value="%COMPONENT_NAME%" />
-            <param name="TARGET_PATH" value="%TARGET_PATH%" />
+            <param name="COMPONENT_REGISTRY_URL" value="" spec="text description='URL of Components Registry Service' validationMode='not_empty' display='normal'"/>
+            <param name="COMPONENT_NAME" value="" spec="text description='Name of Component registered in Component Registry' validationMode='not_empty' display='normal'"/>
+            <param name="TARGET_PATH" value="" spec="text description='Path to copyright file' validationMode='not_empty' display='normal'"/>
         </parameters>
         <build-runners>
             <runner name="download copyright" type="OctopusComponentsRegistryAutomation">
                 <parameters>
-                    <param name="ARGS" value="--url=%COMPONENTS_REGISTRY_URL% download-copyright --component-name=%COMPONENT_NAME% --target-path=%TARGET_PATH% " />
+                    <param name="ARGS" value="--url=%COMPONENT_REGISTRY_URL% download-copyright --component-name=%COMPONENT_NAME% --target-path=%TARGET_PATH% " />
                 </parameters>
             </runner>
         </build-runners>

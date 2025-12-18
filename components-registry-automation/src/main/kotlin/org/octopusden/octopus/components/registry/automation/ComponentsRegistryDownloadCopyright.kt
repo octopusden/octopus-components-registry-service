@@ -1,7 +1,6 @@
 package org.octopusden.octopus.components.registry.automation
 
 import com.github.ajalt.clikt.core.CliktCommand
-import com.github.ajalt.clikt.core.ProgramResult
 import com.github.ajalt.clikt.core.requireObject
 import com.github.ajalt.clikt.parameters.options.check
 import com.github.ajalt.clikt.parameters.options.convert
@@ -48,18 +47,17 @@ class ComponentsRegistryDownloadCopyright : CliktCommand(name = COMMAND) {
         body.asInputStream().use { inputStream ->
             when (val responseStatus = response.status()) {
                 HTTP_STATUS_OK -> {
-                    val fullPath = Paths.get(targetPath, DEFAULT_COPYRIGHT_FILE_NAME)
-                    fullPath.parent?.let { Files.createDirectories(it) }
+                    val path = Paths.get(targetPath)
+                    path.parent?.let { Files.createDirectories(it) }
 
                     Files.copy(
                         inputStream,
-                        fullPath,
+                        path,
                         StandardCopyOption.REPLACE_EXISTING
                     )
                     logger.info(
-                        "Successfully downloaded copyright file by path '{}' with name '{}'",
-                        targetPath,
-                        DEFAULT_COPYRIGHT_FILE_NAME
+                        "Successfully downloaded copyright file to '{}'",
+                        path.toAbsolutePath()
                     )
                 }
 
@@ -84,7 +82,5 @@ class ComponentsRegistryDownloadCopyright : CliktCommand(name = COMMAND) {
         const val TARGET_PATH = "--target-path"
 
         private const val HTTP_STATUS_OK = 200
-
-        const val DEFAULT_COPYRIGHT_FILE_NAME = "COPYRIGHT"
     }
 }
