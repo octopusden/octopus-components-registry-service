@@ -13,6 +13,7 @@ abstract class Component(val id: String, val name: String?, val componentOwner: 
     var distribution: DistributionDTO? = null
     var archived: Boolean = false
     var doc: DocDTO? = null
+    var escrow: EscrowDTO? = null
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
@@ -32,6 +33,7 @@ abstract class Component(val id: String, val name: String?, val componentOwner: 
         if (distribution != other.distribution) return false
         if (archived != other.archived) return false
         if (doc != other.doc) return false
+        if (escrow != other.escrow) return false
         return true
     }
 
@@ -49,7 +51,8 @@ abstract class Component(val id: String, val name: String?, val componentOwner: 
             releaseManager,
             distribution,
             archived,
-            doc
+            doc,
+            escrow
         )
     }
 
@@ -57,6 +60,6 @@ abstract class Component(val id: String, val name: String?, val componentOwner: 
         return "Component(id='$id', name=$name, componentOwner='$componentOwner', system=$system, " +
                 "clientCode=$clientCode, releasesInDefaultBranch=$releasesInDefaultBranch, solution=$solution, " +
                 "parentComponent=$parentComponent, securityChampion=$securityChampion, releaseManager=$releaseManager, " +
-                "distribution=$distribution, archived=$archived, doc=$doc)"
+                "distribution=$distribution, archived=$archived, doc=$doc, escrow=$escrow)"
     }
 }

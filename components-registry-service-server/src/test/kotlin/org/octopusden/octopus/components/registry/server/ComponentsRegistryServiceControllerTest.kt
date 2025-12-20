@@ -19,6 +19,8 @@ import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVers
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersions
 import org.octopusden.octopus.components.registry.core.dto.DistributionDTO
 import org.octopusden.octopus.components.registry.core.dto.DocDTO
+import org.octopusden.octopus.components.registry.core.dto.EscrowDTO
+import org.octopusden.octopus.components.registry.core.dto.EscrowGenerationMode
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionDTO
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionRangeDTO
 import org.octopusden.octopus.components.registry.core.dto.SecurityGroupsDTO
@@ -350,6 +352,16 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
             ),
             docker
         )
+        expectedComponent.escrow = EscrowDTO(
+            buildTask = "clean build -x test",
+            providedDependencies = listOf("test:test:1.1"),
+            additionalSources = listOf(
+                "spa/.gradle",
+                "spa/node_modules"
+            ),
+            isReusable = false,
+            generation = EscrowGenerationMode.UNSUPPORTED,
+        )
         expectedComponent.releaseManager = "user"
         expectedComponent.securityChampion = "user"
         expectedComponent.system = setOf("ALFA", "CLASSIC")
@@ -357,7 +369,7 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
         expectedComponent.releasesInDefaultBranch = false
         expectedComponent.solution = true
 
-        Assertions.assertEquals(53, components.components.size)
+        Assertions.assertEquals(54, components.components.size)
         Assertions.assertTrue(expectedComponent in components.components) {
             components.components.toString()
         }
@@ -409,15 +421,56 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
             null,
             null,
             SecurityGroupsDTO(listOf("vfiler1-default#group")),
-            docker
+            docker,
         )
+        expectedComponent.escrow = EscrowDTO(
+            buildTask = "clean build -x test",
+            providedDependencies = listOf("test:test:1.1"),
+            additionalSources = listOf(
+                "spa/.gradle",
+                "spa/node_modules"
+            ),
+            isReusable = false,
+            generation = EscrowGenerationMode.UNSUPPORTED
+        )
+
         expectedComponent.releaseManager = "user"
         expectedComponent.securityChampion = "user"
         expectedComponent.system = setOf("ALFA", "CLASSIC")
         expectedComponent.clientCode = "CLIENT_CODE"
         expectedComponent.releasesInDefaultBranch = false
         expectedComponent.solution = true
+
+        Assertions.assertEquals(expectedComponent.escrow, actualComponent.escrow, "Escrow do not match")
         Assertions.assertEquals(expectedComponent, actualComponent)
+    }
+
+    /**
+     * This test is similar to [testGetComponentV2] and exists to ensure that escrow block is correctly
+     * deserialized from the response.
+     */
+    @Test
+    fun testGetComponentV2WithEscrowBlock() {
+        val actualComponent = mvc.perform(
+            MockMvcRequestBuilders.get("/rest/api/2/components/TEST_COMPONENT_WITH_ESCROW")
+                .accept(APPLICATION_JSON)
+        )
+            .andExpect(status().isOk)
+            .andReturn()
+            .response
+            .toObject(ComponentV2::class.java)
+
+        val expectedComponent = ComponentV2("TEST_COMPONENT_WITH_ESCROW", null, "user9")
+        expectedComponent.escrow = EscrowDTO(
+            buildTask = null,
+            providedDependencies = listOf(),
+            additionalSources = listOf(),
+            isReusable = true,
+            generation = EscrowGenerationMode.MANUAL,
+            diskSpaceRequirement = null,
+        )
+
+        Assertions.assertEquals(expectedComponent.escrow, actualComponent.escrow, "Escrow do not match")
     }
 
     @Test
@@ -440,6 +493,33 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
             expectedComponent.doc,
             actualComponent.doc,
             "Components do not match"
+        )
+    }
+
+    @Test
+    fun testGetComponentVersionEscrow() {
+        val actualComponent = mvc.perform(
+            MockMvcRequestBuilders.get("/rest/api/2/components/TEST_COMPONENT_WITH_ESCROW/versions/1.0.0")
+                .accept(APPLICATION_JSON)
+        )
+            .andExpect(status().isOk)
+            .andReturn()
+            .response
+            .toObject(ComponentV2::class.java)
+
+        val expectedComponent = ComponentV2("TEST_COMPONENT_WITH_ESCROW", null, "user9")
+        expectedComponent.escrow = EscrowDTO(
+            buildTask = null,
+            providedDependencies = listOf(),
+            additionalSources = listOf(),
+            isReusable = true,
+            generation = EscrowGenerationMode.MANUAL,
+        )
+
+        Assertions.assertEquals(
+            expectedComponent.escrow,
+            actualComponent.escrow,
+            "Escrow do not match"
         )
     }
 
