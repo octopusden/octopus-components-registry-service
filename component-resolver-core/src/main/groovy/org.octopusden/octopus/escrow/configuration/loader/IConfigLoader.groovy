@@ -13,6 +13,8 @@ interface IConfigLoader {
     Collection<Component> loadDslDefinedComponents()
 
     List<String> loadDistributionValidationExcludedComponents()
+
+    Set<String> loadAvailableLabels()
 }
 
 

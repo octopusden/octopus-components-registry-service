@@ -357,6 +357,7 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
         expectedComponent.releasesInDefaultBranch = false
         expectedComponent.solution = true
         expectedComponent.copyright = "companyName1"
+        expectedComponent.labels = setOf("Label2")
 
         Assertions.assertEquals(53, components.components.size)
         Assertions.assertTrue(expectedComponent in components.components) {
@@ -419,6 +420,7 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
         expectedComponent.releasesInDefaultBranch = false
         expectedComponent.solution = true
         expectedComponent.copyright = "companyName1"
+        expectedComponent.labels = setOf("Label2")
         Assertions.assertEquals(expectedComponent, actualComponent)
     }
 

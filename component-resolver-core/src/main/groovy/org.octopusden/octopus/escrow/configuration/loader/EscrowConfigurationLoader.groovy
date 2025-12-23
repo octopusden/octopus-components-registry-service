@@ -13,6 +13,7 @@ import org.octopusden.octopus.components.registry.api.SubComponent
 import org.octopusden.octopus.components.registry.api.VersionedComponentConfiguration
 import org.octopusden.octopus.components.registry.api.beans.EscrowBean
 import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
+import org.octopusden.octopus.components.registry.api.escrow.Escrow
 import org.octopusden.octopus.components.registry.api.model.Dependencies
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.ModelConfigPostProcessor
@@ -27,12 +28,11 @@ import org.octopusden.octopus.escrow.exceptions.ComponentResolverException
 import org.octopusden.octopus.escrow.exceptions.EscrowConfigurationException
 import org.octopusden.octopus.escrow.model.BuildParameters
 import org.octopusden.octopus.escrow.model.Distribution
-import org.octopusden.octopus.components.registry.api.escrow.Escrow
 import org.octopusden.octopus.escrow.model.Doc
 import org.octopusden.octopus.escrow.model.SecurityGroups
+import org.octopusden.octopus.escrow.model.Tool
 import org.octopusden.octopus.escrow.model.VCSSettings
 import org.octopusden.octopus.escrow.model.VersionControlSystemRoot
-import org.octopusden.octopus.escrow.model.Tool
 import org.octopusden.octopus.escrow.resolvers.ComponentHotfixSupportResolver
 import org.octopusden.octopus.escrow.resolvers.ReleaseInfoResolver
 import org.octopusden.octopus.releng.JiraComponentVersionFormatter
@@ -47,22 +47,21 @@ import org.octopusden.releng.versions.VersionRangeFactory
 import java.nio.file.Path
 import java.util.stream.Collectors
 
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.BRANCH
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.BUILD
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.DISTRIBUTION
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.DOC
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.ESCROW
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.VCS_SETTINGS
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.REPOSITORY_TYPE
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.TAG
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.VCS_URL
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.BRANCH
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.HOTFIX_BRANCH
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.JIRA
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.LABELS
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.REPOSITORY_TYPE
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.SECURITY_GROUPS_READ
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.SUPPORTED_ATTRIBUTES
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.JIRA
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.BUILD
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.TAG
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.TOOLS
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.DISTRIBUTION
-
-
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.VCS_SETTINGS
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.VCS_URL
 
 class EscrowConfigurationLoader {
     private static final Logger LOG = LogManager.getLogger(EscrowConfigurationLoader.class)
@@ -147,9 +146,9 @@ class EscrowConfigurationLoader {
 
     static String normalizeVersion(String version, JiraComponent jiraComponent, VCSSettings vcsSettings, VersionNames versionNames,
                                    boolean strict) {
-         def jiraComponentVersionFormatter = new JiraComponentVersionFormatter(versionNames)
-         return jiraComponentVersionFormatter.normalizeVersion(jiraComponent, version, strict,
-                 COMPONENT_HOTFIX_SUPPORT_RESOLVER.isHotFixEnabled(vcsSettings)  )
+        def jiraComponentVersionFormatter = new JiraComponentVersionFormatter(versionNames)
+        return jiraComponentVersionFormatter.normalizeVersion(jiraComponent, version, strict,
+                COMPONENT_HOTFIX_SUPPORT_RESOLVER.isHotFixEnabled(vcsSettings))
     }
 
     static Distribution calculateDistribution(Distribution distribution, String version) {
@@ -208,13 +207,22 @@ class EscrowConfigurationLoader {
         def dslComponents = configLoader.loadDslDefinedComponents()
         LOG.info("Loaded ${dslComponents.size()} DSL components")
 
-        EscrowConfigValidator validator = new EscrowConfigValidator(supportedGroupIds, supportedSystems, versionNames, configLoader.loadDistributionValidationExcludedComponents(), this.copyrightPath)
+        def validationExcludedComponents = configLoader.loadDistributionValidationExcludedComponents()
+        def availableLabels = configLoader.loadAvailableLabels()
+        EscrowConfigValidator validator = new EscrowConfigValidator(
+                supportedGroupIds,
+                supportedSystems,
+                versionNames,
+                validationExcludedComponents,
+                this.copyrightPath,
+                availableLabels
+        )
 
-        dslComponents.forEach {component ->
+        dslComponents.forEach { component ->
             LOG.debug("processing dsl $component")
             validator.validateEscrow(component, fullConfig)
             mergeGroovyAndDslComponent(component, fullConfig)
-            component.subComponents.forEach { name, subComponent -> mergeGroovyAndDslSubComponent(subComponent, fullConfig)}
+            component.subComponents.forEach { name, subComponent -> mergeGroovyAndDslSubComponent(subComponent, fullConfig) }
         }
 
         if (!ignoreUnknownAttributes) {
@@ -324,7 +332,8 @@ class EscrowConfigurationLoader {
                         moduleConfigItemName == TOOLS ||
                         moduleConfigItemName == VCS_SETTINGS ||
                         moduleConfigItemName == ESCROW ||
-                        moduleConfigItemName == DOC
+                        moduleConfigItemName == DOC ||
+                        moduleConfigItemName == LABELS
                 ) {
                     continue  //TODO: bad style
                 }
@@ -358,6 +367,7 @@ class EscrowConfigurationLoader {
                 final Boolean isArchived = loadArchived(moduleConfigSection, componentDisplayName) || componentDefaultConfiguration.archived
                 final String octopusVersion = loadVersion(moduleConfigSection, componentDefaultConfiguration.octopusVersion, LoaderInheritanceType.VERSION_RANGE.octopusVersionInherit)
                 final String copyright = loadCopyright(moduleConfigSection, componentDefaultConfiguration.copyright)
+                final Set<String> labels = loadLabels(moduleConfigSection, componentDefaultConfiguration.labels)
 
                 def versionRange = parseVersionRange(moduleConfigItemName.toString(), moduleName)
                 def buildFileLocation = moduleConfigSection.containsKey("buildFilePath") ? moduleConfigSection.buildFilePath.toString() :
@@ -390,6 +400,7 @@ class EscrowConfigurationLoader {
                         doc: doc,
                         archived: isArchived,
                         copyright: copyright,
+                        labels: labels,
                 )
                 escrowModule.moduleConfigurations.add(escrowModuleConfiguration)
             }
@@ -419,6 +430,7 @@ class EscrowConfigurationLoader {
                         doc: componentDefaultConfiguration.doc,
                         archived: componentDefaultConfiguration.archived,
                         copyright: componentDefaultConfiguration.copyright,
+                        labels: loadLabels(moduleConfigObject, componentDefaultConfiguration.labels),
                 )
                 escrowModule.moduleConfigurations.add(escrowModuleConfiguration)
             }
@@ -468,6 +480,7 @@ class EscrowConfigurationLoader {
         }
         return defaultRepositoryType
     }
+
     static List<VersionControlSystemRoot> replaceDefaults(VCSSettingsWrapper parentVCSSettings,
                                                           Map<String, List<String>> vcsRootName2ParametersFromDefaultMap,
                                                           VersionControlSystemRoot currentDefaultVCSParameters,
@@ -800,7 +813,7 @@ class EscrowConfigurationLoader {
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
-    private static loadComponentSystem(ConfigObject parentConfigObject, String defaultSystem){
+    private static loadComponentSystem(ConfigObject parentConfigObject, String defaultSystem) {
         if (parentConfigObject.containsKey("system")) {
             return parentConfigObject.get("system")
         } else {
@@ -809,7 +822,7 @@ class EscrowConfigurationLoader {
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
-    private static loadComponentClientCode(ConfigObject parentConfigObject, String defaultClientCode){
+    private static loadComponentClientCode(ConfigObject parentConfigObject, String defaultClientCode) {
         if (parentConfigObject.containsKey("clientCode")) {
             return parentConfigObject.get("clientCode")
         } else {
@@ -818,7 +831,7 @@ class EscrowConfigurationLoader {
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
-    private static loadReleasesInDefaultBranch(ConfigObject parentConfigObject, Boolean defaultReleasesInDefaultBranch){
+    private static loadReleasesInDefaultBranch(ConfigObject parentConfigObject, Boolean defaultReleasesInDefaultBranch) {
         if (parentConfigObject.containsKey("releasesInDefaultBranch")) {
             return parentConfigObject.get("releasesInDefaultBranch")
         } else {
@@ -832,7 +845,7 @@ class EscrowConfigurationLoader {
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
-    private static loadComponentParentComponent(ConfigObject parentConfigObject, String defaultParentComponent){
+    private static loadComponentParentComponent(ConfigObject parentConfigObject, String defaultParentComponent) {
         if (parentConfigObject.containsKey("parentComponent")) {
             return parentConfigObject.get("parentComponent")
         } else {
@@ -851,10 +864,21 @@ class EscrowConfigurationLoader {
 
     @TypeChecked(TypeCheckingMode.SKIP)
     private static String loadCopyright(ConfigObject parentConfigObject, String defaultCopyright) {
-        if(parentConfigObject.containsKey("copyright")) {
+        if (parentConfigObject.containsKey("copyright")) {
             return parentConfigObject.get("copyright")
         }
         return defaultCopyright
+    }
+
+    private static Set<String> loadLabels(
+            ConfigObject parentConfigObject,
+            Set<String> defaultLabels
+    ) {
+        def componentLabels = parentConfigObject.get("labels") as Set<String>
+
+        return (defaultLabels || componentLabels)
+                ? (defaultLabels ?: []) + (componentLabels ?: [])
+                : null
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
@@ -939,7 +963,7 @@ class EscrowConfigurationLoader {
 
 
     @TypeChecked(TypeCheckingMode.SKIP)
-    static JiraComponent parseJiraSection(ConfigObject jiraConfigObject, JiraComponent defaultJiraConfiguration, boolean isHotFixEnabled ) {
+    static JiraComponent parseJiraSection(ConfigObject jiraConfigObject, JiraComponent defaultJiraConfiguration, boolean isHotFixEnabled) {
         def projectKey = jiraConfigObject.containsKey("projectKey") ? jiraConfigObject.projectKey : defaultJiraConfiguration?.projectKey
         String displayName = jiraConfigObject.containsKey("displayName") ? jiraConfigObject.get("displayName") : defaultJiraConfiguration?.displayName
         Boolean technical = (jiraConfigObject.containsKey("technical") ? jiraConfigObject.get("technical") : defaultJiraConfiguration?.technical) ?: false
@@ -1041,8 +1065,6 @@ class EscrowConfigurationLoader {
                                                                      List<Tool> tools) {
         def pureComponentDefaults = loadDefaultConfigurationFromConfigObject(moduleName, moduleConfigObject, defaultConfigParameters, tools, LoaderInheritanceType.COMPONENT)
 
-
-
         boolean isHotfixEnabled = COMPONENT_HOTFIX_SUPPORT_RESOLVER.isHotFixEnabled(pureComponentDefaults.vcsSettingsWrapper.vcsSettings)
 
 //        pureComponentDefaults.distribution = defaultConfigParameters.distribution
@@ -1090,8 +1112,7 @@ class EscrowConfigurationLoader {
         return pureComponentDefaults
     }
 
-    private
-    static List<Tool> mergeTools(List<Tool> tools, List<Tool> defaultTools) {
+    private static List<Tool> mergeTools(List<Tool> tools, List<Tool> defaultTools) {
         List<Tool> mergedTools = []
         tools.each { tool ->
             Tool defaultTool = defaultTools.find { it.name == tool.name }
@@ -1138,6 +1159,7 @@ class EscrowConfigurationLoader {
         final String parentComponent = loadComponentParentComponent(componentConfigObject, defaultConfiguration.parentComponent)
         final String octopusVersion = loadVersion(componentConfigObject, defaultConfiguration.octopusVersion, inheritanceType.octopusVersionInherit)
         final String copyright = loadCopyright(componentConfigObject, defaultConfiguration.copyright)
+        final Set<String> labels = loadLabels(componentConfigObject, defaultConfiguration.labels)
 
         Escrow escrow = loadEscrow(componentConfigObject, defaultConfiguration.escrow)
         Doc doc = loadDoc(componentConfigObject)
@@ -1165,6 +1187,7 @@ class EscrowConfigurationLoader {
                 doc: doc,
                 archived: isArchived,
                 copyright: copyright,
+                labels: labels,
         )
         defaultConfigParameters
     }

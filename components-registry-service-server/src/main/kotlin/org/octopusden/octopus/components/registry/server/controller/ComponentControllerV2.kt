@@ -110,6 +110,7 @@ class ComponentControllerV2(
             archived = escrowModuleConfig.archived
             doc = escrowModuleConfig.doc?.toDTO()
             copyright = escrowModuleConfig.copyright
+            labels = escrowModuleConfig.labels?.toSet() ?: emptySet()
             this
         }
     }
