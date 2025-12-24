@@ -187,6 +187,18 @@ abstract class BaseComponentsRegistryServiceTest {
             securityGroups = SecurityGroupsDTO(listOf("vfiler1-default#group")),
             docker = "test/versions-api"
         )
+        expectedComponent.escrow = EscrowDTO(
+            buildTask = "clean build -x test",
+            providedDependencies = listOf("test:test:1.1"),
+            diskSpaceRequirement = null,
+            additionalSources = listOf(
+                "spa/.gradle",
+                "spa/node_modules"
+            ),
+            isReusable = false,
+            generation = EscrowGenerationMode.UNSUPPORTED
+        )
+
         expectedComponent.releaseManager = "user"
         expectedComponent.securityChampion = "user"
         expectedComponent.system = setOf("ALFA", "CLASSIC")
