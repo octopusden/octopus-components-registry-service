@@ -15,13 +15,13 @@ components-registry:
   vcs:
     tag-version-prefix: refs/tags/components-registry-
   groovy-path: ${components-registry.work-dir}/src/main/resources
+  copyright-path: # envFile property
   main-groovy-file: Aggregator.groovy
   dependency-mapping-file: dependency_mapping.properties
   version-name:
     service-branch: serviceCBranch
     service: serviceC
     minor: minorC
-  copyright-path: # envFile property
 
 supportedGroupIds: org.octopusden.octopus,io.bcomponent
 supportedSystems: NONE,CLASSIC,ALFA
