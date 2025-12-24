@@ -26,8 +26,7 @@ class CopyrightServiceImpl(
             ?: throw NotFoundException("Component '$component' not found")
 
         val copyright = escrowModule.moduleConfigurations
-            .firstOrNull()
-            ?.copyright
+            .firstNotNullOfOrNull { it.copyright }
             ?: throw NotFoundException("Component '$component' does not contains copyright")
 
         val copyrightFilePath = copyrightPath.resolve(copyright)

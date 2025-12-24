@@ -1,3 +1,5 @@
+import java.util.zip.CRC32
+
 //
 pluginManagement {
     plugins {
@@ -29,3 +31,13 @@ include ':components-registry-service-core'
 include ':components-registry-service-client'
 include ':components-registry-service-server'
 include ':test-common'
+
+def defaultVersion = {
+    def crc = new CRC32()
+    crc.update(InetAddress.localHost.hostName.bytes)
+    "${crc.value}-SNAPSHOT"
+}()
+
+gradle.beforeProject {
+    version = gradle.startParameter.projectProperties['version'] ?: defaultVersion
+}
