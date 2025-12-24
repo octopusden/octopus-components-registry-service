@@ -37,6 +37,7 @@ class EscrowConfigValidator {
 
     private static final Logger LOG = LogManager.getLogger(EscrowConfigValidator.class)
     public static final String SPLIT_PATTERN = "[,|\\s]+"
+    private static final String CORRECT_COPYRIGHT_FILE_PATTERN = /^[a-zA-Z0-9_]+$/
     private static final Pattern CLIENT_CODE_PATTERN = Pattern.compile("[A-Z_0-9]+")
 
     private List<String> supportedGroupIds
@@ -550,6 +551,19 @@ class EscrowConfigValidator {
     def validateCopyright(EscrowModuleConfig moduleConfig, String component, List<String> supportedCopyrights) {
         def copyright = moduleConfig.copyright
         if (copyrightPath == null || copyright == null) {
+            return
+        }
+
+        if (!(copyright ==~ CORRECT_COPYRIGHT_FILE_PATTERN)) {
+            registerError("Сopyright '${moduleConfig.copyright}' of component '$component' has invalid name")
+            return
+        }
+
+        def baseDir = copyrightPath.toAbsolutePath().normalize()
+        def resolved = baseDir.resolve(copyright).normalize()
+
+        if (!resolved.startsWith(baseDir)) {
+            registerError("Сopyright '${moduleConfig.copyright}' of component '$component' has invalid path")
             return
         }
 
