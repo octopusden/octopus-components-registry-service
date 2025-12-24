@@ -50,7 +50,7 @@ class CopyrightServiceImpl(
     }
 
     companion object {
-        private val correctCopyrightFileRegex = Regex("[a-zA-Z0-9_]+")
+        private val correctCopyrightFileRegex = Regex("[a-zA-Z0-9_-]+")
 
         private val logger = LoggerFactory.getLogger(CopyrightServiceImpl::class.java)
     }
