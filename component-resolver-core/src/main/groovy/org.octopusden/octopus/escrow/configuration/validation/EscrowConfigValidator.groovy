@@ -554,19 +554,6 @@ class EscrowConfigValidator {
             return
         }
 
-        if (!(copyright ==~ CORRECT_COPYRIGHT_FILE_PATTERN)) {
-            registerError("Сopyright '${moduleConfig.copyright}' of component '$component' has invalid name")
-            return
-        }
-
-        def baseDir = copyrightPath.toAbsolutePath().normalize()
-        def resolved = baseDir.resolve(copyright).normalize()
-
-        if (!resolved.startsWith(baseDir)) {
-            registerError("Сopyright '${moduleConfig.copyright}' of component '$component' has invalid path")
-            return
-        }
-
         if (!supportedCopyrights.contains(copyright)) {
             registerError("Сopyright '${moduleConfig.copyright}' of component '$component' is not exist or not file")
         }
