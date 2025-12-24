@@ -29,17 +29,29 @@ class CopyrightServiceImpl(
             .firstNotNullOfOrNull { it.copyright }
             ?: throw NotFoundException("Component '$component' does not contains copyright")
 
-        val copyrightFilePath = copyrightPath.resolve(copyright)
-        if (!Files.isRegularFile(copyrightFilePath)) {
+        if (!correctCopyrightFileRegex.matches(copyright)) {
+            throw IllegalStateException("Component '$component' copyright has invalid name")
+        }
+
+        val baseDir = copyrightPath.toAbsolutePath().normalize()
+        val resolved = baseDir.resolve(copyright).normalize()
+
+        if (!resolved.startsWith(baseDir)) {
+            throw IllegalStateException("Component '$component' copyright has invalid path")
+        }
+
+        if (!Files.isRegularFile(resolved)) {
             throw IllegalStateException("Component '$component' copyright file is not a file")
         }
 
         logger.info("Copyright file resource successfully received!")
 
-        return FileSystemResource(copyrightFilePath)
+        return FileSystemResource(resolved)
     }
 
     companion object {
+        private val correctCopyrightFileRegex = Regex("[a-zA-Z0-9_]+")
+
         private val logger = LoggerFactory.getLogger(CopyrightServiceImpl::class.java)
     }
 }
