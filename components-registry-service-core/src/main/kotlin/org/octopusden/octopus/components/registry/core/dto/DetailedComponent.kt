@@ -17,7 +17,6 @@ class DetailedComponent(
     @JsonProperty("buildFilePath") val buildFilePath: String?,
 ) : Component(id, name, componentOwner) {
     var buildParameters: BuildParametersDTO? = null
-    var escrow: EscrowDTO? = null
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other !is DetailedComponent) return false
@@ -28,7 +27,6 @@ class DetailedComponent(
                 deprecated == other.deprecated &&
                 buildParameters == other.buildParameters &&
                 buildFilePath == other.buildFilePath &&
-                escrow == other.escrow &&
                 super.equals(other)
     }
 
@@ -41,8 +39,7 @@ class DetailedComponent(
             detailedComponentVersion,
             buildParameters,
             deprecated,
-            buildFilePath,
-            escrow
+            buildFilePath
         )
     }
 
@@ -54,8 +51,7 @@ class DetailedComponent(
                 ", detailedComponentVersion=${detailedComponentVersion}" +
                 ", buildParameters=${buildParameters}" +
                 ", deprecated=${deprecated}" +
-                ", buildFilePath=${buildFilePath}" +
-                ", escrow=${escrow}"
+                ", buildFilePath=${buildFilePath}"
     }
 
 }
