@@ -1,0 +1,204 @@
+import org.gradle.api.tasks.testing.logging.TestLogEvent
+import java.net.InetAddress
+import java.util.zip.CRC32
+
+plugins {
+    id 'application'
+    id 'com.github.johnrengelman.shadow'
+    id 'org.octopusden.octopus.oc-template'
+}
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+compileKotlin {
+    kotlinOptions.jvmTarget = "1.8"
+}
+
+compileTestKotlin {
+    kotlinOptions.jvmTarget = "1.8"
+}
+
+group = 'org.octopusden.octopus.components.registry.automation'
+description = 'Octopus Components Registry Automation'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    api project(":components-registry-service-client")
+    implementation("com.github.ajalt.clikt:clikt:4.4.0")
+
+    implementation("org.slf4j:slf4j-api:2.0.13")
+    implementation("ch.qos.logback:logback-classic:1.3.14")
+    implementation("io.github.openfeign:feign-core:12.2")
+
+    testImplementation("org.jetbrains.kotlin:kotlin-test")
+}
+
+ext {
+    def env = System.getenv()
+    dockerRegistry = env.getOrDefault("DOCKER_REGISTRY", properties["docker.registry"]).toString()
+    octopusGithubDockerRegistry = env.getOrDefault(
+            "OCTOPUS_GITHUB_DOCKER_REGISTRY", properties["octopus.github.docker.registry"]
+    ).toString()
+    okdActiveDeadlineSeconds = env.getOrDefault(
+            "OKD_ACTIVE_DEADLINE_SECONDS", properties["okd.active-deadline-seconds"]
+    ).toString()
+    okdProject = env.getOrDefault(
+            "OKD_PROJECT", properties["okd.project"]
+    ).toString()
+    okdClusterDomain = env.getOrDefault(
+            "OKD_CLUSTER_DOMAIN", properties["okd.cluster-domain"]
+    ).toString()
+    okdWebConsoleUrl = env.getOrDefault(
+            "OKD_WEB_CONSOLE_URL", properties["okd.web-console-url"]
+    ).toString()
+}
+
+def mandatoryProperties = [
+        "dockerRegistry",
+        "octopusGithubDockerRegistry",
+]
+
+def undefinedProperties = mandatoryProperties.findAll {
+    (project.ext[it] as String).isBlank()
+}
+
+if (!undefinedProperties.isEmpty()) {
+    throw new IllegalArgumentException(
+            "Start gradle build with" +
+                    (undefinedProperties.contains("dockerRegistry") ? " -Pdocker.registry=..." : "") +
+                    (undefinedProperties.contains("octopusGithubDockerRegistry") ? " -Poctopus.github.docker.registry=..." : "") +
+                    " or set env variable(s):" +
+                    (undefinedProperties.contains("dockerRegistry") ? " DOCKER_REGISTRY" : "") +
+                    (undefinedProperties.contains("octopusGithubDockerRegistry") ? " OCTOPUS_GITHUB_DOCKER_REGISTRY" : "")
+    )
+}
+
+def commonOkdParameters = [
+        "ACTIVE_DEADLINE_SECONDS": project.ext.get("okdActiveDeadlineSeconds"),
+        "DOCKER_REGISTRY"        : project.ext.get("dockerRegistry")
+]
+
+ocTemplate {
+    workDir = layout.buildDirectory.dir("okd")
+    clusterDomain = project.ext.get("okdClusterDomain")
+    namespace = project.ext.get("okdProject")
+    prefix = "crs-auto"
+    projectVersion = project.version
+
+    def okdWebConsoleUrl = project.ext.get("okdWebConsoleUrl")
+
+    if (okdWebConsoleUrl instanceof String && okdWebConsoleUrl.trim()) {
+        webConsoleUrl.set(okdWebConsoleUrl)
+    }
+
+    service("comp-reg") {
+        templateFile = layout.projectDirectory.file("okd/components-registry.yaml")
+        def componentsRegistryWorkDir =
+                layout.projectDirectory
+                        .dir("src/test/resources/components-registry")
+                        .asFile
+                        .absolutePath
+        parameters.set(
+                commonOkdParameters + [
+                        "COMPONENTS_REGISTRY_SERVICE_VERSION"    : project.version,
+
+                        "AGGREGATOR_GROOVY_CONTENT"              :
+                                file("${componentsRegistryWorkDir}/Aggregator.groovy").text,
+
+                        "DEFAULTS_GROOVY_CONTENT"                :
+                                file("${componentsRegistryWorkDir}/Defaults.groovy").text,
+
+                        "TEST_COMPONENTS_GROOVY_CONTENT"         :
+                                file("${componentsRegistryWorkDir}/TestComponents.groovy").text,
+
+                        "DEPENDENCY1_COPYRIGHT"                 :
+                                file("${componentsRegistryWorkDir}/copyrights/dependency1-copyright").text,
+
+                        "DEPENDENCY2_COPYRIGHT"                 :
+                                file("${componentsRegistryWorkDir}/copyrights/dependency2-copyright").text,
+
+                        "EE_CLIENT_SPECIFIC_COMPONENT_COPYRIGHT":
+                                file("${componentsRegistryWorkDir}/copyrights/ee-client-specific-component-copyright").text,
+
+                        "EE_COMPONENT_COPYRIGHT"                 :
+                                file("${componentsRegistryWorkDir}/copyrights/ee-component-copyright").text,
+
+                        "APPLICATION_TEST_CONTENT"               :
+                                layout.projectDirectory
+                                        .file("data/components-registry-service.yaml")
+                                        .asFile
+                                        .text
+                ]
+        )
+    }
+}
+
+application {
+    mainClass = "${group}.ApplicationKt"
+}
+
+tasks.jar {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest {
+        attributes 'Main-Class': application.mainClass
+    }
+}
+
+tasks.register("zipMetarunners", Zip) {
+    archiveFileName = 'metarunners.zip'
+    from(layout.projectDirectory.dir('metarunners')) {
+        expand(project.properties)
+    }
+}
+
+tasks.named("ocCreate") {
+    dependsOn(":components-registry-service-server:dockerPushImage")
+}
+
+tasks.withType(Test) {
+    dependsOn ocCreate, shadowJar
+    systemProperties["test.components-registry-service-host"] = ocTemplate.getOkdHost("comp-reg")
+    systemProperties["jar"] = shadowJar.archiveFile.get().asFile.absolutePath
+    useJUnitPlatform()
+    testLogging {
+        events TestLogEvent.FAILED, TestLogEvent.PASSED, TestLogEvent.SKIPPED
+    }
+    finalizedBy ocLogs, ocDelete
+}
+
+configurations {
+    create("distributions")
+}
+
+def metarunners = artifacts.add(
+        'distributions',
+        layout.buildDirectory.file('distributions/metarunners.zip').get().asFile
+) {
+    classifier = 'metarunners'
+    type = 'zip'
+    builtBy 'zipMetarunners'
+}
+
+nexusPublishing {
+    repositories {
+        sonatype {
+            nexusUrl.set(uri('https://ossrh-staging-api.central.sonatype.com/service/local/'))
+            snapshotRepositoryUrl.set(uri('https://central.sonatype.com/repository/maven-snapshots/'))
+            username.set(System.getenv('MAVEN_USERNAME'))
+            password.set(System.getenv('MAVEN_PASSWORD'))
+        }
+    }
+    transitionCheckOptions {
+        maxRetries.set(60)
+        delayBetween.set(Duration.ofSeconds(30))
+    }
+}
+
+tasks.named('distZip').configure { enabled = false }
+tasks.named('shadowDistZip').configure { enabled = false }
+tasks.named('distTar').configure { enabled = false }
+tasks.named('shadowDistTar').configure { enabled = false }

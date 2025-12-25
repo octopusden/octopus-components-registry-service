@@ -44,6 +44,7 @@ import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRangeFactory
 
+import java.nio.file.Path
 import java.util.stream.Collectors
 
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.DOC
@@ -73,15 +74,18 @@ class EscrowConfigurationLoader {
     private final List<String> supportedGroupIds
     private final List<String> supportedSystems
     private final VersionNames versionNames
+    private final Path copyrightPath
 
     EscrowConfigurationLoader(IConfigLoader configLoader,
                               List<String> supportedGroupIds,
                               List<String> supportedSystems,
-                              VersionNames versionNames) {
+                              VersionNames versionNames,
+                              Path copyrightPath) {
         this.configLoader = configLoader
         this.supportedGroupIds = supportedGroupIds
         this.supportedSystems = supportedSystems
         this.versionNames = versionNames
+        this.copyrightPath = copyrightPath
     }
 
     VersionNames getVersionNames() {
@@ -204,7 +208,7 @@ class EscrowConfigurationLoader {
         def dslComponents = configLoader.loadDslDefinedComponents()
         LOG.info("Loaded ${dslComponents.size()} DSL components")
 
-        EscrowConfigValidator validator = new EscrowConfigValidator(supportedGroupIds, supportedSystems, versionNames, configLoader.loadDistributionValidationExcludedComponents())
+        EscrowConfigValidator validator = new EscrowConfigValidator(supportedGroupIds, supportedSystems, versionNames, configLoader.loadDistributionValidationExcludedComponents(), this.copyrightPath)
 
         dslComponents.forEach {component ->
             LOG.debug("processing dsl $component")
@@ -339,7 +343,6 @@ class EscrowConfigurationLoader {
                 def vcsSettingsWrapper = loadVCSSettings(moduleConfigSection, componentDefaultConfiguration, buildSystem)
                 boolean isHotfixEnabled = COMPONENT_HOTFIX_SUPPORT_RESOLVER.isHotFixEnabled(vcsSettingsWrapper.vcsSettings)
 
-
                 JiraComponent jiraConfiguration = loadJiraConfiguration(moduleConfigSection, componentDefaultConfiguration.jiraComponent, isHotfixEnabled)
                 BuildParameters buildConfiguration = loadBuildConfiguration(moduleConfigSection, componentDefaultConfiguration.buildParameters, tools)
                 Distribution distributionConfiguration = loadDistribution(moduleConfigSection, componentDefaultConfiguration.distribution)
@@ -354,6 +357,7 @@ class EscrowConfigurationLoader {
                 final String componentDisplayName = loadComponentDisplayName(moduleConfigSection, componentDefaultConfiguration.componentDisplayName)
                 final Boolean isArchived = loadArchived(moduleConfigSection, componentDisplayName) || componentDefaultConfiguration.archived
                 final String octopusVersion = loadVersion(moduleConfigSection, componentDefaultConfiguration.octopusVersion, LoaderInheritanceType.VERSION_RANGE.octopusVersionInherit)
+                final String copyright = loadCopyright(moduleConfigSection, componentDefaultConfiguration.copyright)
 
                 def versionRange = parseVersionRange(moduleConfigItemName.toString(), moduleName)
                 def buildFileLocation = moduleConfigSection.containsKey("buildFilePath") ? moduleConfigSection.buildFilePath.toString() :
@@ -384,7 +388,8 @@ class EscrowConfigurationLoader {
                         octopusVersion: octopusVersion,
                         escrow: escrow,
                         doc: doc,
-                        archived: isArchived
+                        archived: isArchived,
+                        copyright: copyright,
                 )
                 escrowModule.moduleConfigurations.add(escrowModuleConfiguration)
             }
@@ -412,7 +417,8 @@ class EscrowConfigurationLoader {
                         octopusVersion: componentDefaultConfiguration.octopusVersion,
                         escrow: componentDefaultConfiguration.escrow,
                         doc: componentDefaultConfiguration.doc,
-                        archived: componentDefaultConfiguration.archived
+                        archived: componentDefaultConfiguration.archived,
+                        copyright: componentDefaultConfiguration.copyright,
                 )
                 escrowModule.moduleConfigurations.add(escrowModuleConfiguration)
             }
@@ -844,6 +850,14 @@ class EscrowConfigurationLoader {
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
+    private static String loadCopyright(ConfigObject parentConfigObject, String defaultCopyright) {
+        if(parentConfigObject.containsKey("copyright")) {
+            return parentConfigObject.get("copyright")
+        }
+        return defaultCopyright
+    }
+
+    @TypeChecked(TypeCheckingMode.SKIP)
     private static String loadVersion(ConfigObject parentConfigObject, String defaultComponentVersion, boolean inherit) {
         if (parentConfigObject.containsKey("octopusVersion")) {
             return parentConfigObject.get("octopusVersion")
@@ -1123,6 +1137,7 @@ class EscrowConfigurationLoader {
         final Boolean solution = loadSolution(componentConfigObject, defaultConfiguration.solution)
         final String parentComponent = loadComponentParentComponent(componentConfigObject, defaultConfiguration.parentComponent)
         final String octopusVersion = loadVersion(componentConfigObject, defaultConfiguration.octopusVersion, inheritanceType.octopusVersionInherit)
+        final String copyright = loadCopyright(componentConfigObject, defaultConfiguration.copyright)
 
         Escrow escrow = loadEscrow(componentConfigObject, defaultConfiguration.escrow)
         Doc doc = loadDoc(componentConfigObject)
@@ -1148,7 +1163,8 @@ class EscrowConfigurationLoader {
                 octopusVersion: octopusVersion,
                 escrow: escrow,
                 doc: doc,
-                archived: isArchived
+                archived: isArchived,
+                copyright: copyright,
         )
         defaultConfigParameters
     }

@@ -18,6 +18,7 @@ import java.util.Objects;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.octopusden.octopus.escrow.TestConfigUtils.COPYRIGHT_PATH;
 import static org.octopusden.octopus.escrow.TestConfigUtils.PRODUCT_TYPES;
 import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_GROUP_IDS;
 import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_SYSTEMS;
@@ -38,7 +39,7 @@ public class DistributionResolverTest {
                                 aggregatorPath.getFileName().toString()
                         ),
                         VERSION_NAMES, PRODUCT_TYPES),
-                SUPPORTED_GROUP_IDS, SUPPORTED_SYSTEMS, VERSION_NAMES);
+                SUPPORTED_GROUP_IDS, SUPPORTED_SYSTEMS, VERSION_NAMES, COPYRIGHT_PATH);
     }
 
     @BeforeEach

@@ -1,12 +1,18 @@
 package org.octopusden.octopus.escrow.config;
 
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.EnumMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
-
-import java.io.File;
-import java.util.*;
-import java.util.stream.Collectors;
 
 @Component
 public class ConfigHelper {
@@ -26,11 +32,14 @@ public class ConfigHelper {
     private static final String PRODUCT_TYPE_D = "components-registry.product-type.d";
     private static final String PRODUCT_TYPE_D_DB = "components-registry.product-type.ddb";
 
+    private static final String COPYRIGHT_PATH = "components-registry.copyright-path";
+
     private final Environment environment;
 
     public ConfigHelper(Environment environment) {
         this.environment = environment;
     }
+
     public String moduleConfigUrl(String param) {
         if (environment.containsProperty(param)) {
             return environment.getRequiredProperty(param);
@@ -78,5 +87,13 @@ public class ConfigHelper {
 
     public String minor() {
         return environment.getRequiredProperty(VERSION_NAME_MINOR);
+    }
+
+    public Path copyrightPath() {
+        String copyrightPathStr = environment.getProperty(COPYRIGHT_PATH);
+        if(copyrightPathStr == null) {
+            return null;
+        }
+        return Paths.get(copyrightPathStr);
     }
 }

@@ -22,6 +22,7 @@ component {
     securityChampion = "user"
     system = "CLASSIC"
     componentDisplayName = "BCOMPONENT Official Name"
+    copyright = 'companyName1'
     escrow {
     }
     "[1.12.1-150,)" {

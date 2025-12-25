@@ -132,4 +132,3 @@ dockerBuildImage {
     dependsOn dockerSyncBuildContext
     dependsOn bootJar
 }
-

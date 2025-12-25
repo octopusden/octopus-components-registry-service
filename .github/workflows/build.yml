@@ -9,4 +9,3 @@ jobs:
       flow-type: hybrid
       java-version: '21'
       docker-image: components-registry-service
-      skip-tests: false
