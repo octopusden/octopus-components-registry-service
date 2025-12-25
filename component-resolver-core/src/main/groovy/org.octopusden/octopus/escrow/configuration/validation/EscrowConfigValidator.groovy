@@ -555,7 +555,7 @@ class EscrowConfigValidator {
         }
 
         if (!supportedCopyrights.contains(copyright)) {
-            registerError("Сopyright '${moduleConfig.copyright}' of component '$component' is not exist or not file")
+            registerError("Сopyright '${moduleConfig.copyright}' of component '$component' is invalid. Available values are $supportedCopyrights")
         }
     }
 
