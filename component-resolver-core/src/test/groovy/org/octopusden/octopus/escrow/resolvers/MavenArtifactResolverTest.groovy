@@ -15,6 +15,7 @@ import org.junit.Test
 
 import java.util.regex.Pattern
 
+import static org.octopusden.octopus.escrow.TestConfigUtils.COPYRIGHT_PATH
 import static org.octopusden.octopus.escrow.TestConfigUtils.PRODUCT_TYPES
 import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_GROUP_IDS
 import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_SYSTEMS
@@ -45,7 +46,8 @@ class MavenArtifactResolverTest {
                 new ConfigLoader(ComponentRegistryInfo.createFromURL(url), VERSION_NAMES, PRODUCT_TYPES),
                 SUPPORTED_GROUP_IDS,
                 SUPPORTED_SYSTEMS,
-                VERSION_NAMES
+                VERSION_NAMES,
+                COPYRIGHT_PATH
         )
         JiraParametersResolver jiraParametersResolver = new JiraParametersResolver(loader, new HashMap<String, String>());
         def vcsRoots = jiraParametersResolver.getVersionControlSystemRootsByJiraProject(JiraProjectVersion.create("MCOMPONENT", "1.0"))

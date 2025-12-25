@@ -194,6 +194,7 @@ sms_component {
     groupId = "org.octopusden.octopus.test"
     artifactId = "test2"
     vcsUrl = "ssh://hg@mercurial/o2/other/commoncomponent"
+    copyright = "companyName1"
     jira {
         projectKey = "TESTONE"
         majorVersionFormat = '$major'

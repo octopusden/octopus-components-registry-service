@@ -21,6 +21,8 @@ import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRange
 import org.octopusden.releng.versions.VersionRangeFactory
 
+import java.nio.file.Files
+import java.nio.file.Path
 import java.util.function.BinaryOperator
 import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
@@ -35,12 +37,14 @@ class EscrowConfigValidator {
 
     private static final Logger LOG = LogManager.getLogger(EscrowConfigValidator.class)
     public static final String SPLIT_PATTERN = "[,|\\s]+"
+    private static final String CORRECT_COPYRIGHT_FILE_PATTERN = /^[a-zA-Z0-9_-]+$/
     private static final Pattern CLIENT_CODE_PATTERN = Pattern.compile("[A-Z_0-9]+")
 
     private List<String> supportedGroupIds
     private List<String> supportedSystems
     private VersionNames versionNames
     private final List<String> validationExcludedComponents
+    private final Path copyrightPath
     private final Set<String> availableLabels
 
     @TupleConstructor
@@ -81,12 +85,17 @@ class EscrowConfigValidator {
                           List<String> supportedSystems,
                           VersionNames versionNames,
                           List<String> validationExcludedComponents,
-                          Set<String> availableLabels
+                          Path copyrightPath,
+                          Set<String> availableLabel
     ) {
+        if (copyrightPath != null && !Files.isDirectory(copyrightPath)) {
+            throw new IllegalStateException("Copyright path '" + copyrightPath + "' is not a directory");
+        }
         this.supportedGroupIds = supportedGroupIds
         this.supportedSystems = supportedSystems
         this.versionNames = versionNames
         this.validationExcludedComponents = convertToUnmodifiableList(validationExcludedComponents)
+        this.copyrightPath = copyrightPath
         this.availableLabels = availableLabels
     }
 
@@ -99,6 +108,7 @@ class EscrowConfigValidator {
             if (configurations.isEmpty()) {
                 registerError("No configurations in module $componentName")
             }
+            def supportedCopyrights = getSupportedCopyrights()
             for (EscrowModuleConfig moduleConfig : configurations) {
                 validateMandatoryFields(moduleConfig, componentName)
                 validateBuildSystem(moduleConfig.getBuildSystem(), componentName)
@@ -115,6 +125,7 @@ class EscrowConfigValidator {
                 validateSolution(moduleConfig, componentName)
                 validateBuildConfigurationTools(moduleConfig)
                 validateDoc(configuration, moduleConfig, componentName)
+                validateCopyright(moduleConfig, componentName, supportedCopyrights)
                 validateLabels(moduleConfig, componentName)
             }
         }
@@ -181,6 +192,9 @@ class EscrowConfigValidator {
                 }
             } else {
                 registerError("releaseManager is not set in '$component'")
+            }
+            if (copyrightPath != null && StringUtils.isBlank(moduleConfig.copyright)) {
+                registerError("copyright is not set in '$component'")
             }
             def securityChampions = moduleConfig.securityChampion
             if (StringUtils.isNotBlank(securityChampions)) {
@@ -537,6 +551,17 @@ class EscrowConfigValidator {
         }
     }
 
+    def validateCopyright(EscrowModuleConfig moduleConfig, String component, List<String> supportedCopyrights) {
+        def copyright = moduleConfig.copyright
+        if (copyrightPath == null || copyright == null) {
+            return
+        }
+
+        if (!supportedCopyrights.contains(copyright)) {
+            registerError("Сopyright '${moduleConfig.copyright}' of component '$component' is invalid. Available values are $supportedCopyrights")
+        }
+    }
+
     def validateLabels(EscrowModuleConfig moduleConfig, String component) {
         def labels = moduleConfig.labels
 
@@ -681,6 +706,20 @@ class EscrowConfigValidator {
 
     List<String> getErrors() {
         return errors
+    }
+
+    private List<String> getSupportedCopyrights() {
+        if (copyrightPath == null)
+            return null
+
+        try (def stream = Files.list(copyrightPath)) {
+            return stream.filter { Files.isRegularFile(it) }
+                    .map { it.fileName.toString()}
+                    .toList()
+        } catch (Exception exception) {
+            registerError("Failed to get files from '$copyrightPath', cause: ${exception.message}")
+            return null
+        }
     }
 
     private static List<String> convertToUnmodifiableList(List<String> list) {

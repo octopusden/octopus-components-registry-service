@@ -26,7 +26,7 @@ import static org.octopusden.octopus.escrow.configuration.validation.EscrowConfi
         "buildFilePath", "jiraConfiguration", "buildConfiguration", "deprecated", "vcsSettings",
         "distribution", "componentDisplayName", "componentOwner", "releaseManager", "securityChampion", "system",
         "clientCode", "releasesInDefaultBranch", "solution", "parentComponent", "octopusVersion", "escrow", "productType",
-        "doc", "archived", "labels"])
+        "doc", "archived", "copyright", "labels"])
 @ToString(includeFields = true)
 class EscrowModuleConfig {
     private BuildSystem buildSystem
@@ -72,6 +72,8 @@ class EscrowModuleConfig {
     private Doc doc
 
     private boolean archived
+
+    private String copyright
 
     private Set<String> labels
 
@@ -193,6 +195,10 @@ class EscrowModuleConfig {
 
     void setArchived(boolean archived) {
         this.archived = archived
+    }
+
+    String getCopyright() {
+        return copyright
     }
 
     Set<String> getLabels() {

@@ -1,13 +1,17 @@
+import java.util.zip.CRC32
+
 //
 pluginManagement {
     plugins {
-        id 'io.github.gradle-nexus.publish-plugin'     version '1.1.0'
-        id 'org.octopusden.octopus-release-management' version settings['octopus-release-management.version']
-        id 'org.springframework.boot'                  version settings['spring-boot.version']
-        id 'org.jetbrains.kotlin.jvm'                  version settings['kotlin.version']
-        id 'org.jetbrains.kotlin.plugin.spring'        version settings['kotlin.version']
-        id 'org.jetbrains.kotlin.plugin.jpa'           version settings['kotlin.version']
-        id 'com.bmuschko.docker-java-application'      version settings['gradle-docker-plugin.version']
+        id 'io.github.gradle-nexus.publish-plugin'      version '1.1.0'
+        id 'org.octopusden.octopus-release-management'  version settings['octopus-release-management.version']
+        id 'org.springframework.boot'                   version settings['spring-boot.version']
+        id 'org.jetbrains.kotlin.jvm'                   version settings['kotlin.version']
+        id 'org.jetbrains.kotlin.plugin.spring'         version settings['kotlin.version']
+        id 'org.jetbrains.kotlin.plugin.jpa'            version settings['kotlin.version']
+        id 'com.bmuschko.docker-java-application'       version settings['gradle-docker-plugin.version']
+        id 'com.github.johnrengelman.shadow'            version '8.1.1'
+        id 'org.octopusden.octopus.oc-template'         version settings['octopus-oc-template.version']
     }
     repositories {
         gradlePluginPortal()
@@ -22,7 +26,18 @@ include ':component-resolver-api'
 include ':component-resolver-core'
 include ':components-registry-api'
 include ':components-registry-dsl'
+include ':components-registry-automation'
 include ':components-registry-service-core'
 include ':components-registry-service-client'
 include ':components-registry-service-server'
 include ':test-common'
+
+def defaultVersion = {
+    def crc = new CRC32()
+    crc.update(InetAddress.localHost.hostName.bytes)
+    "${crc.value}-SNAPSHOT"
+}()
+
+gradle.beforeProject {
+    version = gradle.startParameter.projectProperties['version'] ?: defaultVersion
+}

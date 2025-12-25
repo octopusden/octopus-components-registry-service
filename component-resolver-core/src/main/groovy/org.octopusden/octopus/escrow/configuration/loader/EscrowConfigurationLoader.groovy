@@ -44,6 +44,7 @@ import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRangeFactory
 
+import java.nio.file.Path
 import java.util.stream.Collectors
 
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.DOC
@@ -212,6 +213,7 @@ class EscrowConfigurationLoader {
                 supportedSystems,
                 versionNames,
                 validationExcludedComponents,
+                this.copyrightPath,
                 availableLabels
         )
 
@@ -363,6 +365,7 @@ class EscrowConfigurationLoader {
                 final String componentDisplayName = loadComponentDisplayName(moduleConfigSection, componentDefaultConfiguration.componentDisplayName)
                 final Boolean isArchived = loadArchived(moduleConfigSection, componentDisplayName) || componentDefaultConfiguration.archived
                 final String octopusVersion = loadVersion(moduleConfigSection, componentDefaultConfiguration.octopusVersion, LoaderInheritanceType.VERSION_RANGE.octopusVersionInherit)
+                final String copyright = loadCopyright(moduleConfigSection, componentDefaultConfiguration.copyright)
                 final Set<String> labels = loadLabels(moduleConfigSection, componentDefaultConfiguration.labels)
 
                 def versionRange = parseVersionRange(moduleConfigItemName.toString(), moduleName)
@@ -395,6 +398,7 @@ class EscrowConfigurationLoader {
                         escrow: escrow,
                         doc: doc,
                         archived: isArchived,
+                        copyright: copyright,
                         labels: labels,
                 )
                 escrowModule.moduleConfigurations.add(escrowModuleConfiguration)
@@ -424,6 +428,7 @@ class EscrowConfigurationLoader {
                         escrow: componentDefaultConfiguration.escrow,
                         doc: componentDefaultConfiguration.doc,
                         archived: componentDefaultConfiguration.archived,
+                        copyright: componentDefaultConfiguration.copyright,
                         labels: loadLabels(moduleConfigObject, componentDefaultConfiguration.labels),
                 )
                 escrowModule.moduleConfigurations.add(escrowModuleConfiguration)
@@ -856,6 +861,14 @@ class EscrowConfigurationLoader {
         }
     }
 
+    @TypeChecked(TypeCheckingMode.SKIP)
+    private static String loadCopyright(ConfigObject parentConfigObject, String defaultCopyright) {
+        if(parentConfigObject.containsKey("copyright")) {
+            return parentConfigObject.get("copyright")
+        }
+        return defaultCopyright
+    }
+
     private static Set<String> loadLabels(
             ConfigObject parentConfigObject,
             Set<String> defaultLabels
@@ -1144,6 +1157,7 @@ class EscrowConfigurationLoader {
         final Boolean solution = loadSolution(componentConfigObject, defaultConfiguration.solution)
         final String parentComponent = loadComponentParentComponent(componentConfigObject, defaultConfiguration.parentComponent)
         final String octopusVersion = loadVersion(componentConfigObject, defaultConfiguration.octopusVersion, inheritanceType.octopusVersionInherit)
+        final String copyright = loadCopyright(componentConfigObject, defaultConfiguration.copyright)
         final Set<String> labels = loadLabels(componentConfigObject, defaultConfiguration.labels)
 
         Escrow escrow = loadEscrow(componentConfigObject, defaultConfiguration.escrow)
@@ -1171,6 +1185,7 @@ class EscrowConfigurationLoader {
                 escrow: escrow,
                 doc: doc,
                 archived: isArchived,
+                copyright: copyright,
                 labels: labels,
         )
         defaultConfigParameters

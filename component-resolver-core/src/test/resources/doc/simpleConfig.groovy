@@ -20,6 +20,7 @@ component {
     securityChampion = "user"
     system = "CLASSIC"
     componentDisplayName = "COMPONENT Official Name"
+    copyright = 'companyName1'
     doc {
         component = "doc_component"
         majorVersion = "1.2"

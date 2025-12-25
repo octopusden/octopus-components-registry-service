@@ -15,7 +15,8 @@ class ComponentsRegistryProperties(
     val mainGroovyFile: String,
     val dependencyMappingFile: String?,
     val vcs: VcsSettings,
-    val versionName: VersionNameSettings
+    val versionName: VersionNameSettings,
+    val copyrightPath: String?,
 ) {
     data class VcsSettings(
         val enabled: Boolean = true,

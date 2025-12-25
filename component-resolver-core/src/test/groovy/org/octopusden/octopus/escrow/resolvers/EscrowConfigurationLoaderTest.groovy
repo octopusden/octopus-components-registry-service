@@ -64,6 +64,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 releasesInDefaultBranch: true,
                 solution: false,
                 buildSystem: BuildSystem.MAVEN,
+                copyright: "companyName1",
                 artifactIdPattern: "builder",
                 groupIdPattern: "io.bcomponent",
                 versionRange: VERSION_RANGE,
@@ -498,7 +499,8 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 system: "CLASSIC",
                 releasesInDefaultBranch: false,
                 solution: true,
-                archived: false
+                archived: false,
+                copyright: "companyName1",
         )
         assert expectedModuleConfig == modelConfiguration
 
@@ -527,7 +529,8 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 system: "CLASSIC",
                 releasesInDefaultBranch: false,
                 solution: true,
-                archived: false
+                archived: false,
+                copyright: "companyName1",
         )
         assert expectedModuleConfig == modelConfiguration
 
@@ -550,7 +553,8 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 system: "CLASSIC,ALFA",
                 releasesInDefaultBranch: true,
                 solution: false,
-                archived: false
+                archived: false,
+                copyright: "companyName1",
         )
         assert expectedModuleConfig == modelConfiguration
     }
