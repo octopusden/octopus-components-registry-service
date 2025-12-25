@@ -109,6 +109,7 @@ class ComponentControllerV2(
             archived = escrowModuleConfig.archived
             doc = escrowModuleConfig.doc?.toDTO()
             escrow = escrowModuleConfig.escrow?.toDTO()
+            labels = escrowModuleConfig.labels?.toSet() ?: emptySet()
             this
         }
     }

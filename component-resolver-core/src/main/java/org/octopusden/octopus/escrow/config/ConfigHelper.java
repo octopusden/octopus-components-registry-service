@@ -31,6 +31,7 @@ public class ConfigHelper {
     public ConfigHelper(Environment environment) {
         this.environment = environment;
     }
+
     public String moduleConfigUrl(String param) {
         if (environment.containsProperty(param)) {
             return environment.getRequiredProperty(param);

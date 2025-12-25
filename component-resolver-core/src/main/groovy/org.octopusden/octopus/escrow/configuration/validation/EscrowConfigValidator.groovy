@@ -41,6 +41,7 @@ class EscrowConfigValidator {
     private List<String> supportedSystems
     private VersionNames versionNames
     private final List<String> validationExcludedComponents
+    private final Set<String> availableLabels
 
     @TupleConstructor
     static class MavenArtifact {
@@ -79,13 +80,14 @@ class EscrowConfigValidator {
     EscrowConfigValidator(List<String> supportedGroupIds,
                           List<String> supportedSystems,
                           VersionNames versionNames,
-                          List<String> validationExcludedComponents) {
+                          List<String> validationExcludedComponents,
+                          Set<String> availableLabels
+    ) {
         this.supportedGroupIds = supportedGroupIds
         this.supportedSystems = supportedSystems
         this.versionNames = versionNames
-        this.validationExcludedComponents = (validationExcludedComponents != null) ?
-                Collections.unmodifiableList(validationExcludedComponents)
-                : Collections.emptyList() as List<String>
+        this.validationExcludedComponents = convertToUnmodifiableList(validationExcludedComponents)
+        this.availableLabels = availableLabels
     }
 
     List<String> errors = new ArrayList<>()
@@ -113,6 +115,7 @@ class EscrowConfigValidator {
                 validateSolution(moduleConfig, componentName)
                 validateBuildConfigurationTools(moduleConfig)
                 validateDoc(configuration, moduleConfig, componentName)
+                validateLabels(moduleConfig, componentName)
             }
         }
         if (!hasErrors()) {
@@ -151,7 +154,7 @@ class EscrowConfigValidator {
      * @param component
      */
     private void validateDistributions(EscrowModuleConfig moduleConfig, String component) {
-        if(isExcludedComponent(component)) {
+        if (isExcludedComponent(component)) {
             return
         }
         def distributions = [
@@ -534,6 +537,20 @@ class EscrowConfigValidator {
         }
     }
 
+    def validateLabels(EscrowModuleConfig moduleConfig, String component) {
+        def labels = moduleConfig.labels
+
+        if(!labels) {
+            return
+        }
+
+        def unavailableLabels = labels - availableLabels
+
+        if (unavailableLabels) {
+            registerError("Labels '${unavailableLabels.join(", ")}' of component '$component' is not available")
+        }
+    }
+
     private Boolean hasDoubleEscrowBlock(SubComponent dslComponent, List<EscrowModuleConfig> moduleConfigurations) {
         if (moduleConfigurations == null || dslComponent.escrow == null) {
             return false
@@ -664,5 +681,11 @@ class EscrowConfigValidator {
 
     List<String> getErrors() {
         return errors
+    }
+
+    private static List<String> convertToUnmodifiableList(List<String> list) {
+        return list != null
+                ? Collections.unmodifiableList(list)
+                : Collections.emptyList() as List<String>
     }
 }

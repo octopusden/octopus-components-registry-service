@@ -44,7 +44,7 @@ class EscrowConfigurationLoaderTest {
     @BeforeAll
     static void init() {
         def aggregatorPath = Paths.get(EscrowConfigurationLoaderTest.class.getResource("/production/Aggregator.groovy").toURI())
-         escrowConfigurationLoader  = new EscrowConfigurationLoader(
+        escrowConfigurationLoader = new EscrowConfigurationLoader(
                 new ConfigLoader(
                         ComponentRegistryInfo.createFromFileSystem(
                                 aggregatorPath.getParent().toString(),

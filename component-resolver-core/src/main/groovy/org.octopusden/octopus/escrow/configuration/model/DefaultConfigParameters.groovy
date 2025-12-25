@@ -63,5 +63,7 @@ class DefaultConfigParameters {
     Doc doc
 
     Boolean archived
+
+    Set<String> labels
 }
 

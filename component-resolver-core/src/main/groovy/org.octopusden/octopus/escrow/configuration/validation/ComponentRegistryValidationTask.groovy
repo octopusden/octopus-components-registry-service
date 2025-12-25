@@ -28,7 +28,7 @@ class ComponentRegistryValidationTask {
 
     private static final def log = LoggerFactory.getLogger(ComponentRegistryValidationTask.class)
     static final String ARCHIVED_SUFFIX = "(archived)"
-    
+
     String basePath
     String mainConfigFileName
     String jiraHost
@@ -53,7 +53,7 @@ class ComponentRegistryValidationTask {
             log.info("=== Component Registry Validation Starting ===")
             log.info("Java version: ${System.getProperty("java.version")}")
             log.info("Working directory: ${System.getProperty("user.dir")}")
-            
+
             // Create instance and load configuration from system properties
             def task = new ComponentRegistryValidationTask()
             task.basePath = getRequiredProperty("cr.basePath")
@@ -90,10 +90,10 @@ class ComponentRegistryValidationTask {
             
             // Run validation
             task.runEscrow()
-            
+
             log.info("=== Component Registry Validation Completed Successfully ===")
             System.exit(0)
-            
+
         } catch (Exception e) {
             log.error("=== Component Registry Validation Failed ===", e)
             System.exit(1)
@@ -116,7 +116,7 @@ class ComponentRegistryValidationTask {
         productTypeMap.put(ProductTypes.PT_D, productTypeD)
         productTypeMap.put(ProductTypes.PT_D_DB, productTypeDDB)
 
-        def oldComponents = productionConfigPath 
+        def oldComponents = productionConfigPath
             ? getComponentsFromConfig(productionConfigPath, productTypeMap)
             : null
         def newComponents = getComponentsFromConfig(basePath, productTypeMap)

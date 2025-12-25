@@ -368,6 +368,7 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
         expectedComponent.clientCode = "CLIENT_CODE"
         expectedComponent.releasesInDefaultBranch = false
         expectedComponent.solution = true
+        expectedComponent.labels = setOf("Label2")
 
         Assertions.assertEquals(54, components.components.size)
         Assertions.assertTrue(expectedComponent in components.components) {
@@ -440,6 +441,7 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
         expectedComponent.clientCode = "CLIENT_CODE"
         expectedComponent.releasesInDefaultBranch = false
         expectedComponent.solution = true
+        expectedComponent.labels = setOf("Label2")
 
         Assertions.assertEquals(expectedComponent.escrow, actualComponent.escrow, "Escrow do not match")
         Assertions.assertEquals(expectedComponent, actualComponent)

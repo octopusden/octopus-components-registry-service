@@ -182,6 +182,7 @@ Defaults {
     clientCode = "CLIENT_CODE"
     releasesInDefaultBranch = false
     solution = true
+    labels = ['Label2']
     jira {
         projectKey = "TESTONE"
         majorVersionFormat = '$major'

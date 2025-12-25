@@ -205,6 +205,7 @@ abstract class BaseComponentsRegistryServiceTest {
         expectedComponent.clientCode = "CLIENT_CODE"
         expectedComponent.releasesInDefaultBranch = false
         expectedComponent.solution = true
+        expectedComponent.labels = setOf("Label2")
         Assertions.assertEquals(expectedComponent, actualComponent)
     }
 
@@ -222,6 +223,7 @@ abstract class BaseComponentsRegistryServiceTest {
         expectedComponent.releasesInDefaultBranch = false
         expectedComponent.solution = true
         expectedComponent.parentComponent = "TESTONE"
+        expectedComponent.labels = setOf("Label2")
         Assertions.assertEquals(expectedComponent, actualComponent)
     }
 
@@ -321,6 +323,7 @@ abstract class BaseComponentsRegistryServiceTest {
             generation = EscrowGenerationMode.UNSUPPORTED
         )
         expectedComponent.solution = true
+        expectedComponent.labels = setOf("Label2")
         Assertions.assertEquals(expectedComponent, actualComponent)
     }
 

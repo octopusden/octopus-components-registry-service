@@ -30,13 +30,20 @@ class ComponentControllerV3(
     fun getAllComponents(): Collection<ComponentV3> {
         return componentRegistryResolver.getComponents().map { escrowModule ->
             //TODO Check/Discuss if display name and owner should be in escrowModule (not versioned part of Component)
+            val baseConfiguration = escrowModule.moduleConfigurations.find { it.componentOwner != null }!!
+
+            val componentV2 = ComponentV2(
+                id = escrowModule.moduleName,
+                name = escrowModule.moduleName,
+                componentOwner = baseConfiguration.componentOwner,
+            ).apply {
+                labels = baseConfiguration.labels?.toSet() ?: emptySet()
+            }
+
             ComponentV3(
-                ComponentV2(
-                    escrowModule.moduleName,
-                    escrowModule.moduleName,
-                    escrowModule.moduleConfigurations.find { it.componentOwner != null }!!.componentOwner
-                ),
-                escrowModule.moduleConfigurations.map { Pair(it.versionRangeString, it.toVersionedComponent()) }.toMap()
+                componentV2,
+                escrowModule.moduleConfigurations
+                    .associate { it.versionRangeString to it.toVersionedComponent() }
             )
         }
     }

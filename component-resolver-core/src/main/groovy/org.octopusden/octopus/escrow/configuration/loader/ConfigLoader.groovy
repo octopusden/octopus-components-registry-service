@@ -1,5 +1,9 @@
 package org.octopusden.octopus.escrow.configuration.loader
 
+import groovy.transform.TupleConstructor
+import groovy.transform.TypeChecked
+import org.apache.logging.log4j.LogManager
+import org.apache.logging.log4j.Logger
 import org.octopusden.octopus.components.registry.api.Component
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.components.registry.dsl.script.ComponentsRegistryScriptRunner
@@ -7,10 +11,6 @@ import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.RepositoryType
 import org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator
 import org.octopusden.octopus.escrow.resolvers.ComposedConfigScript
-import groovy.transform.TupleConstructor
-import groovy.transform.TypeChecked
-import org.apache.logging.log4j.LogManager
-import org.apache.logging.log4j.Logger
 import org.octopusden.releng.versions.VersionNames
 import org.yaml.snakeyaml.Yaml
 
@@ -106,41 +106,54 @@ class ConfigLoader implements IConfigLoader {
      */
     @Override
     List<String> loadDistributionValidationExcludedComponents() {
-        def excludedComponents = []
-        LOG.info("Loading excluded components from YAML file: $validationConfigPath")
+        return loadValuesFromValidationConfig(['distribution', 'ee', 'exclude'])
+    }
 
-        def file = validationConfigPath.toFile()
-        if (file.exists()) {
-            LOG.info("File $validationConfigPath exists. Loading excluded components from YAML")
-            try {
-                def yamlContent = new Yaml().loadAs(file.text, Map.class)
-
-                def excludeList = yamlContent['distribution'] as Map
-                excludeList = excludeList?excludeList['ee'] as Map:null
-                excludeList = excludeList?excludeList['exclude']:null
-
-                if (excludeList) {
-                    if (excludeList instanceof List) {
-                        excludedComponents.addAll(excludeList)
-                    } else {
-                        excludedComponents << excludeList.toString()
-                    }
-                    LOG.info("Found ${excludedComponents.size()} excluded components in YAML")
-                } else {
-                    LOG.info("No distribution.ee.exclude section found in YAML file")
-                }
-            } catch (Exception e) {
-                LOG.error("Error parsing YAML file: ${e.message}", e)
-                throw e
-            }
-        } else {
-            LOG.warn("YAML file $validationConfigPath does not exist")
-        }
-        return excludedComponents as List<String>
+    /**
+     * Load list of available labels from validation
+     * @return
+     */
+    @Override
+    Set<String> loadAvailableLabels() {
+        return loadValuesFromValidationConfig(['labels']).toSet()
     }
 
     def static validateConfig(ConfigObject configObject, VersionNames versionNames) {
         def validator = new GroovySlurperConfigValidator(versionNames)
         validator.validateConfig(configObject)
+    }
+
+    private List<String> loadValuesFromValidationConfig(List<String> fieldsChain) {
+        List<String> resultValues = []
+        LOG.info("Loading values from YAML file: $validationConfigPath")
+
+        def file = validationConfigPath.toFile()
+        if (!file.exists()) {
+            LOG.warn("YAML file $validationConfigPath does not exist")
+            return resultValues
+        }
+
+        LOG.info("File $validationConfigPath exists. Loading values from YAML")
+        try {
+            def yamlContent = new Yaml().loadAs(file.text, Map)
+            def values = getValuesByFieldChain(yamlContent, fieldsChain)
+
+            if (values) {
+                resultValues.addAll(values)
+                LOG.info("Found ${resultValues.size()} values in YAML")
+            } else {
+                LOG.info("No '${fieldsChain.join(".")}' section found in YAML file")
+            }
+        } catch (Exception e) {
+            LOG.error("Error parsing YAML file: ${e.message}", e)
+            throw e
+        }
+        return resultValues as List<String>
+    }
+
+    private static List<String> getValuesByFieldChain(Map yamlContent, List<String> fieldsChain) {
+        return fieldsChain.inject(yamlContent) { accumulator, element ->
+            accumulator instanceof Map ? accumulator[element] : null
+        } as List<String>
     }
 }

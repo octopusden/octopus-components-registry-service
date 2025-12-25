@@ -179,7 +179,8 @@ class JiraParametersResolver implements IJiraParametersResolver {
                         clientCode: escrowModuleConfig.clientCode,
                         releasesInDefaultBranch: escrowModuleConfig.releasesInDefaultBranch,
                         solution: escrowModuleConfig.solution,
-                        parentComponent: escrowModuleConfig.parentComponent
+                        parentComponent: escrowModuleConfig.parentComponent,
+                        labels: escrowModuleConfig.labels,
                 )
                 addJiraComponentVersionRange(projectKey, projectKeyToJiraComponentVersionRangeMap, enrichedModuleConfig, projectKey, componentName, versionNames)
                 addJiraComponentVersionRange(componentName, componentNameToJiraComponentVersionRangeMap, enrichedModuleConfig, projectKey, componentName, versionNames)
