@@ -34,12 +34,9 @@ class CopyrightServiceImpl(
             throw IllegalStateException("Component '$component' copyright has invalid name")
         }
 
-        val baseDir = copyrightPath.toAbsolutePath().normalize()
-        val resolved = baseDir.resolve(copyright).normalize()
-
-        if (!resolved.startsWith(baseDir)) {
-            throw IllegalStateException("Component '$component' copyright has invalid path")
-        }
+        val resolved = copyrightPath.resolve(copyright)
+            .toAbsolutePath()
+            .normalize()
 
         if (!Files.isRegularFile(resolved)) {
             throw IllegalStateException("Component '$component' copyright file is not a file")
