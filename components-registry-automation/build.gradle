@@ -19,7 +19,7 @@ compileTestKotlin {
     kotlinOptions.jvmTarget = "1.8"
 }
 
-group = 'org.octopusden.octopus.automation.components-registry-service'
+group = 'org.octopusden.octopus.automation.componentsregistryservice'
 description = 'Octopus Components Registry Automation'
 
 repositories {
@@ -198,7 +198,7 @@ publishing {
                     }
                 }
                 scm {
-                    url.set("https://github.com/octopusden/octopus-component-registry-service.git")
+                    url.set("https://github.com/octopusden/octopus-components-registry-service.git")
                     connection.set("scm:git://github.com/octopusden/octopus-components-registry-service.git")
                 }
                 developers {

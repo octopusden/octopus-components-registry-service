@@ -1,4 +1,4 @@
-package org.octopusden.octopus.components.registry.org.octopusden.octopus.automation.componentsregistryservice
+package org.octopusden.octopus.automation.componentsregistryservice
 
 import kotlin.test.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertEquals
