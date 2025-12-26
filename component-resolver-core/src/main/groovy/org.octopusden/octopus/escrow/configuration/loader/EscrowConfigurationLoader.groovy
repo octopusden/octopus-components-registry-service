@@ -13,6 +13,7 @@ import org.octopusden.octopus.components.registry.api.SubComponent
 import org.octopusden.octopus.components.registry.api.VersionedComponentConfiguration
 import org.octopusden.octopus.components.registry.api.beans.EscrowBean
 import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
+import org.octopusden.octopus.components.registry.api.escrow.Escrow
 import org.octopusden.octopus.components.registry.api.model.Dependencies
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.ModelConfigPostProcessor
@@ -27,12 +28,11 @@ import org.octopusden.octopus.escrow.exceptions.ComponentResolverException
 import org.octopusden.octopus.escrow.exceptions.EscrowConfigurationException
 import org.octopusden.octopus.escrow.model.BuildParameters
 import org.octopusden.octopus.escrow.model.Distribution
-import org.octopusden.octopus.components.registry.api.escrow.Escrow
 import org.octopusden.octopus.escrow.model.Doc
 import org.octopusden.octopus.escrow.model.SecurityGroups
+import org.octopusden.octopus.escrow.model.Tool
 import org.octopusden.octopus.escrow.model.VCSSettings
 import org.octopusden.octopus.escrow.model.VersionControlSystemRoot
-import org.octopusden.octopus.escrow.model.Tool
 import org.octopusden.octopus.escrow.resolvers.ComponentHotfixSupportResolver
 import org.octopusden.octopus.escrow.resolvers.ReleaseInfoResolver
 import org.octopusden.octopus.releng.JiraComponentVersionFormatter
@@ -47,23 +47,21 @@ import org.octopusden.releng.versions.VersionRangeFactory
 import java.nio.file.Path
 import java.util.stream.Collectors
 
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.BRANCH
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.BUILD
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.DISTRIBUTION
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.DOC
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.ESCROW
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.LABELS
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.VCS_SETTINGS
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.REPOSITORY_TYPE
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.TAG
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.VCS_URL
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.BRANCH
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.HOTFIX_BRANCH
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.JIRA
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.LABELS
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.REPOSITORY_TYPE
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.SECURITY_GROUPS_READ
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.SUPPORTED_ATTRIBUTES
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.JIRA
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.BUILD
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.TAG
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.TOOLS
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.DISTRIBUTION
-
-
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.VCS_SETTINGS
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.VCS_URL
 
 class EscrowConfigurationLoader {
     private static final Logger LOG = LogManager.getLogger(EscrowConfigurationLoader.class)
@@ -75,15 +73,18 @@ class EscrowConfigurationLoader {
     private final List<String> supportedGroupIds
     private final List<String> supportedSystems
     private final VersionNames versionNames
+    private final Path copyrightPath
 
     EscrowConfigurationLoader(IConfigLoader configLoader,
                               List<String> supportedGroupIds,
                               List<String> supportedSystems,
-                              VersionNames versionNames) {
+                              VersionNames versionNames,
+                              Path copyrightPath) {
         this.configLoader = configLoader
         this.supportedGroupIds = supportedGroupIds
         this.supportedSystems = supportedSystems
         this.versionNames = versionNames
+        this.copyrightPath = copyrightPath
     }
 
     VersionNames getVersionNames() {
@@ -863,7 +864,7 @@ class EscrowConfigurationLoader {
 
     @TypeChecked(TypeCheckingMode.SKIP)
     private static String loadCopyright(ConfigObject parentConfigObject, String defaultCopyright) {
-        if(parentConfigObject.containsKey("copyright")) {
+        if (parentConfigObject.containsKey("copyright")) {
             return parentConfigObject.get("copyright")
         }
         return defaultCopyright
@@ -873,7 +874,12 @@ class EscrowConfigurationLoader {
             ConfigObject parentConfigObject,
             Set<String> defaultLabels
     ) {
-        def componentLabels = parentConfigObject.get("labels") as Set<String>
+        def rawLabels = parentConfigObject.get("labels")
+        Set<String> componentLabels = rawLabels?.with {
+            it instanceof Collection
+                    ? it.collect { it.toString() } as Set
+                    : [it.toString()] as Set
+        }
 
         return (defaultLabels || componentLabels)
                 ? (defaultLabels ?: []) + (componentLabels ?: [])

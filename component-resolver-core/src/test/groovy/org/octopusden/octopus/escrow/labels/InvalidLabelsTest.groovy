@@ -38,7 +38,8 @@ class InvalidLabelsTest {
                     ),
                     SUPPORTED_GROUP_IDS,
                     SUPPORTED_SYSTEMS,
-                    VERSION_NAMES
+                    VERSION_NAMES,
+                    null
             ).loadFullConfiguration(Collections.emptyMap())
             assert false: "Test should fail due to 'labels' field presents in Defaults component"
         } catch (EscrowConfigurationException e) {

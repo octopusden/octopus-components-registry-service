@@ -50,7 +50,8 @@ class ValidLabelsTest {
                 configLoader,
                 SUPPORTED_GROUP_IDS,
                 SUPPORTED_SYSTEMS,
-                VERSION_NAMES
+                VERSION_NAMES,
+                null
         )
 
         escrowConfiguration = escrowConfigurationLoader.loadFullConfiguration(Collections.emptyMap())

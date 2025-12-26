@@ -86,7 +86,7 @@ class EscrowConfigValidator {
                           VersionNames versionNames,
                           List<String> validationExcludedComponents,
                           Path copyrightPath,
-                          Set<String> availableLabel
+                          Set<String> availableLabels
     ) {
         if (copyrightPath != null && !Files.isDirectory(copyrightPath)) {
             throw new IllegalStateException("Copyright path '" + copyrightPath + "' is not a directory");
