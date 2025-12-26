@@ -19,7 +19,7 @@ compileTestKotlin {
     kotlinOptions.jvmTarget = "1.8"
 }
 
-group = 'org.octopusden.octopus.components.registry.automation'
+group = 'org.octopusden.octopus.automation.components-registry-service'
 description = 'Octopus Components Registry Automation'
 
 repositories {
@@ -181,6 +181,35 @@ def metarunners = artifacts.add(
     classifier = 'metarunners'
     type = 'zip'
     builtBy 'zipMetarunners'
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            artifact metarunners
+            pom {
+                name.set(project.name)
+                description.set("Octopus module: ${project.name}")
+                url.set("https://github.com/octopusden/octopus-components-registry-service.git")
+                licenses {
+                    license {
+                        name.set("The Apache License, Version 2.0")
+                        url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+                    }
+                }
+                scm {
+                    url.set("https://github.com/octopusden/octopus-component-registry-service.git")
+                    connection.set("scm:git://github.com/octopusden/octopus-components-registry-service.git")
+                }
+                developers {
+                    developer {
+                        id.set("octopus")
+                        name.set("octopus")
+                    }
+                }
+            }
+        }
+    }
 }
 
 tasks.named('distZip').configure { enabled = false }

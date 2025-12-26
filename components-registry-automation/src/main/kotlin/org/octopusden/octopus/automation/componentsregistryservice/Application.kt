@@ -1,4 +1,4 @@
-package org.octopusden.octopus.components.registry.automation
+package org.octopusden.octopus.automation.componentsregistryservice
 
 import com.github.ajalt.clikt.core.subcommands
 

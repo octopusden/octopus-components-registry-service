@@ -1,4 +1,4 @@
-package org.octopusden.octopus.components.registry.org.octopusden.octopus.components.registry.automation
+package org.octopusden.octopus.components.registry.org.octopusden.octopus.automation.componentsregistryservice
 
 import kotlin.test.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -6,10 +6,10 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
-import org.octopusden.octopus.components.registry.automation.ComponentsRegistryCommand.Companion.URL_OPTION
-import org.octopusden.octopus.components.registry.automation.ComponentsRegistryDownloadCopyright.Companion.COMMAND
-import org.octopusden.octopus.components.registry.automation.ComponentsRegistryDownloadCopyright.Companion.COMPONENT_NAME
-import org.octopusden.octopus.components.registry.automation.ComponentsRegistryDownloadCopyright.Companion.TARGET_PATH
+import org.octopusden.octopus.automation.componentsregistryservice.ComponentsRegistryCommand.Companion.URL_OPTION
+import org.octopusden.octopus.automation.componentsregistryservice.ComponentsRegistryDownloadCopyright.Companion.COMMAND
+import org.octopusden.octopus.automation.componentsregistryservice.ComponentsRegistryDownloadCopyright.Companion.COMPONENT_NAME
+import org.octopusden.octopus.automation.componentsregistryservice.ComponentsRegistryDownloadCopyright.Companion.TARGET_PATH
 import java.io.File
 import java.nio.file.Paths
 import java.util.stream.Stream

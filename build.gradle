@@ -175,7 +175,7 @@ configure(subprojects) {
                 pom {
                     name.set(project.name)
                     description.set("Octopus module: ${project.name}")
-                    url.set("https://github.com/octopusden/octopus-component-registry-service.git")
+                    url.set("https://github.com/octopusden/octopus-components-registry-service.git")
                     licenses {
                         license {
                             name.set("The Apache License, Version 2.0")
@@ -183,8 +183,8 @@ configure(subprojects) {
                         }
                     }
                     scm {
-                        url.set("https://github.com/octopusden/octopus-component-registry-service.git")
-                        connection.set("scm:git://github.com/octopusden/octopus-component-registry-service.git")
+                        url.set("https://github.com/octopusden/octopus-components-registry-service.git")
+                        connection.set("scm:git://github.com/octopusden/octopus-components-registry-service.git")
                     }
                     developers {
                         developer {
