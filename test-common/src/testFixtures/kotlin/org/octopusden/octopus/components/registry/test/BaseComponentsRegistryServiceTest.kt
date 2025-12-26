@@ -206,6 +206,7 @@ abstract class BaseComponentsRegistryServiceTest {
         expectedComponent.releasesInDefaultBranch = false
         expectedComponent.solution = true
         expectedComponent.copyright = "companyName1"
+        expectedComponent.labels = setOf("Label2")
         Assertions.assertEquals(expectedComponent, actualComponent)
     }
 
@@ -224,6 +225,7 @@ abstract class BaseComponentsRegistryServiceTest {
         expectedComponent.solution = true
         expectedComponent.parentComponent = "TESTONE"
         expectedComponent.copyright = "companyName1"
+        expectedComponent.labels = setOf("Label2")
         Assertions.assertEquals(expectedComponent, actualComponent)
     }
 
@@ -324,6 +326,7 @@ abstract class BaseComponentsRegistryServiceTest {
         )
         expectedComponent.solution = true
         expectedComponent.copyright = "companyName1"
+        expectedComponent.labels = setOf("Label2")
         Assertions.assertEquals(expectedComponent, actualComponent)
     }
 

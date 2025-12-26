@@ -183,6 +183,7 @@ Defaults {
     releasesInDefaultBranch = false
     solution = true
     copyright = "companyName1"
+    labels = ['Label2']
     jira {
         projectKey = "TESTONE"
         majorVersionFormat = '$major'

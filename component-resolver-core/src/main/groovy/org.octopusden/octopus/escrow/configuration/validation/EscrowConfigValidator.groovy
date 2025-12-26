@@ -45,6 +45,7 @@ class EscrowConfigValidator {
     private VersionNames versionNames
     private final List<String> validationExcludedComponents
     private final Path copyrightPath
+    private final Set<String> availableLabels
 
     @TupleConstructor
     static class MavenArtifact {
@@ -84,17 +85,18 @@ class EscrowConfigValidator {
                           List<String> supportedSystems,
                           VersionNames versionNames,
                           List<String> validationExcludedComponents,
-                          Path copyrightPath) {
+                          Path copyrightPath,
+                          Set<String> availableLabels
+    ) {
         if (copyrightPath != null && !Files.isDirectory(copyrightPath)) {
             throw new IllegalStateException("Copyright path '" + copyrightPath + "' is not a directory");
         }
         this.supportedGroupIds = supportedGroupIds
         this.supportedSystems = supportedSystems
         this.versionNames = versionNames
-        this.validationExcludedComponents = (validationExcludedComponents != null) ?
-                Collections.unmodifiableList(validationExcludedComponents)
-                : Collections.emptyList() as List<String>
+        this.validationExcludedComponents = convertToUnmodifiableList(validationExcludedComponents)
         this.copyrightPath = copyrightPath
+        this.availableLabels = availableLabels
     }
 
     List<String> errors = new ArrayList<>()
@@ -125,6 +127,7 @@ class EscrowConfigValidator {
                 validateDoc(configuration, moduleConfig, componentName)
                 validateCopyright(moduleConfig, componentName, supportedCopyrights)
             }
+            validateLabels(configurations.first, componentName)
         }
         if (!hasErrors()) {
             validateVersionConflicts(configuration)
@@ -559,6 +562,22 @@ class EscrowConfigValidator {
         }
     }
 
+    def validateLabels(EscrowModuleConfig moduleConfig, String component) {
+        def labels = moduleConfig.labels
+
+        if(!labels) {
+            return
+        }
+
+        def unavailableLabels = labels - availableLabels
+
+        // TODO, схлопнуть это до проверки на основном компоненте,
+        //  чтобы не было 20 однаковых ошибок на вершен ренджах
+        if (unavailableLabels) {
+            registerError("Labels '${unavailableLabels.join(", ")}' of component '$component' is not available")
+        }
+    }
+
     private Boolean hasDoubleEscrowBlock(SubComponent dslComponent, List<EscrowModuleConfig> moduleConfigurations) {
         if (moduleConfigurations == null || dslComponent.escrow == null) {
             return false
@@ -703,5 +722,11 @@ class EscrowConfigValidator {
             registerError("Failed to get files from '$copyrightPath', cause: ${exception.message}")
             return null
         }
+    }
+
+    private static List<String> convertToUnmodifiableList(List<String> list) {
+        return list != null
+                ? Collections.unmodifiableList(list)
+                : Collections.emptyList() as List<String>
     }
 }
