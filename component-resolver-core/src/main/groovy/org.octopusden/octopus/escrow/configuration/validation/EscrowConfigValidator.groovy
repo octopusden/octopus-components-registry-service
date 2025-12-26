@@ -126,8 +126,8 @@ class EscrowConfigValidator {
                 validateBuildConfigurationTools(moduleConfig)
                 validateDoc(configuration, moduleConfig, componentName)
                 validateCopyright(moduleConfig, componentName, supportedCopyrights)
-                validateLabels(moduleConfig, componentName)
             }
+            validateLabels(configurations.first, componentName)
         }
         if (!hasErrors()) {
             validateVersionConflicts(configuration)
@@ -571,6 +571,8 @@ class EscrowConfigValidator {
 
         def unavailableLabels = labels - availableLabels
 
+        // TODO, схлопнуть это до проверки на основном компоненте,
+        //  чтобы не было 20 однаковых ошибок на вершен ренджах
         if (unavailableLabels) {
             registerError("Labels '${unavailableLabels.join(", ")}' of component '$component' is not available")
         }
