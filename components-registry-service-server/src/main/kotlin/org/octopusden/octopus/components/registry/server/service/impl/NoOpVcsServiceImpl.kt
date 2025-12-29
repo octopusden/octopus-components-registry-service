@@ -4,7 +4,7 @@ import org.octopusden.octopus.components.registry.server.service.VcsService
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Service
-import javax.annotation.PostConstruct
+import jakarta.annotation.PostConstruct
 
 @Service
 @ConditionalOnProperty(prefix = "components-registry.vcs", name = ["enabled"], havingValue = "false")

@@ -44,8 +44,8 @@ import java.nio.file.Paths
 import java.util.EnumMap
 import java.util.Properties
 import java.util.concurrent.ConcurrentHashMap
-import javax.annotation.PostConstruct
-import javax.annotation.Resource
+import jakarta.annotation.PostConstruct
+import jakarta.annotation.Resource
 import kotlin.io.path.exists
 import kotlin.io.path.inputStream
 import kotlin.io.path.isRegularFile
@@ -109,9 +109,19 @@ class ComponentRegistryResolverImpl(
     override fun getVCSSettings(component: String, version: String): VCSSettings {
         val (jiraComponentVersion, jiraComponentVersionRange) =
             getJiraComponentVersionToRangeByComponentAndVersion(component, version)
-        val buildVersion = jiraComponentVersion.component.componentVersionFormat.buildVersionFormat.formatVersion(
-            numericVersionFactory, jiraComponentVersion.version
-        ) //TODO: What about hotfix version? Is it better to check version format and allow build/hotfix version only?
+        val versionFormat = jiraComponentVersion.component.componentVersionFormat
+        val defaultBuildVersion = versionFormat.buildVersionFormat.formatVersion(numericVersionFactory, jiraComponentVersion.version)
+        val buildVersion =
+            if (jiraComponentVersionRange.component.isHotfixEnabled) {
+                val hotfixVersion = versionFormat.hotfixVersionFormat.formatVersion(numericVersionFactory, jiraComponentVersion.version)
+                if (hotfixVersion == jiraComponentVersion.version) {
+                    hotfixVersion
+                } else {
+                    defaultBuildVersion
+                }
+            } else {
+                defaultBuildVersion
+            }
         return ModelConfigPostProcessor(ComponentVersion.create(component, buildVersion), versionNames)
             .resolveVariables(jiraComponentVersionRange.vcsSettings)
     }
@@ -262,8 +272,12 @@ class ComponentRegistryResolverImpl(
             ?: throw IllegalStateException("No module configurations available")
     }
 
-    private fun EscrowModule.isArchived() = moduleConfigurations.firstOrNull()?.componentDisplayName
-        ?.endsWith(EscrowConfigValidator.ARCHIVED_SUFFIX, ignoreCase = true) ?: false
+    private fun EscrowModule.isArchived(): Boolean {
+        val moduleConfig = moduleConfigurations.firstOrNull() ?: return false
+        //TODO: Remove archived suffix check when all archived components are marked with archived parameter
+        return moduleConfig.archived || (moduleConfig.componentDisplayName
+            ?.endsWith(EscrowConfigValidator.ARCHIVED_SUFFIX, ignoreCase = true) ?: false)
+    }
 
     private fun org.octopusden.octopus.escrow.BuildSystem.toDTO(): BuildSystem {
         return when (this) {

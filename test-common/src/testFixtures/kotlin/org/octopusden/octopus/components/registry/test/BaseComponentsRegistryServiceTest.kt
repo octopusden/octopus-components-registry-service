@@ -33,6 +33,7 @@ import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVers
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersions
 import org.octopusden.octopus.components.registry.core.dto.DistributionDTO
 import org.octopusden.octopus.components.registry.core.dto.EscrowDTO
+import org.octopusden.octopus.components.registry.core.dto.EscrowGenerationMode
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentDTO
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionDTO
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionRangeDTO
@@ -71,18 +72,21 @@ val DETAILED_COMPONENT_VERSION = DetailedComponentVersion(
     hotfixVersion = ComponentRegistryVersion(ComponentVersionType.HOTFIX, HOTFIX_VERSION, JIRA_HOTFIX_VERSION)
 )
 
-val VCS_SETTINGS = VCSSettingsDTO(
+private fun createVcsSettings(version: String) = VCSSettingsDTO(
     versionControlSystemRoots = listOf(
         VersionControlSystemRootDTO(
             vcsPath = "ssh://hg@mercurial/sub",
             name = "main",
             branch = "v2",
-            tag = "SUB-3.0.0",
+            tag = "SUB-$version",
             type = RepositoryType.MERCURIAL,
             hotfixBranch = "hotfix/3.0.0"
         )
     )
 )
+
+val VCS_SETTINGS = createVcsSettings(BUILD_VERSION)
+val VCS_SETTINGS_HOTFIX = createVcsSettings(HOTFIX_VERSION)
 
 abstract class BaseComponentsRegistryServiceTest {
     init {
@@ -183,12 +187,25 @@ abstract class BaseComponentsRegistryServiceTest {
             securityGroups = SecurityGroupsDTO(listOf("vfiler1-default#group")),
             docker = "test/versions-api"
         )
+        expectedComponent.escrow = EscrowDTO(
+            buildTask = "clean build -x test",
+            providedDependencies = listOf("test:test:1.1"),
+            diskSpaceRequirement = null,
+            additionalSources = listOf(
+                "spa/.gradle",
+                "spa/node_modules"
+            ),
+            isReusable = false,
+            generation = EscrowGenerationMode.UNSUPPORTED
+        )
+
         expectedComponent.releaseManager = "user"
         expectedComponent.securityChampion = "user"
         expectedComponent.system = setOf("ALFA", "CLASSIC")
         expectedComponent.clientCode = "CLIENT_CODE"
         expectedComponent.releasesInDefaultBranch = false
         expectedComponent.solution = true
+        expectedComponent.copyright = "companyName1"
         Assertions.assertEquals(expectedComponent, actualComponent)
     }
 
@@ -206,6 +223,7 @@ abstract class BaseComponentsRegistryServiceTest {
         expectedComponent.releasesInDefaultBranch = false
         expectedComponent.solution = true
         expectedComponent.parentComponent = "TESTONE"
+        expectedComponent.copyright = "companyName1"
         Assertions.assertEquals(expectedComponent, actualComponent)
     }
 
@@ -301,9 +319,11 @@ abstract class BaseComponentsRegistryServiceTest {
                 "spa/.gradle",
                 "spa/node_modules"
             ),
-            isReusable = false
+            isReusable = false,
+            generation = EscrowGenerationMode.UNSUPPORTED
         )
         expectedComponent.solution = true
+        expectedComponent.copyright = "companyName1"
         Assertions.assertEquals(expectedComponent, actualComponent)
     }
 
@@ -325,9 +345,15 @@ abstract class BaseComponentsRegistryServiceTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = [BUILD_VERSION, JIRA_BUILD_VERSION, LINE_VERSION, JIRA_LINE_VERSION, MINOR_VERSION, JIRA_MINOR_VERSION, RC_VERSION, JIRA_RC_VERSION, JIRA_RELEASE_VERSION, RELEASE_VERSION, HOTFIX_VERSION])
+    @ValueSource(strings = [BUILD_VERSION, JIRA_BUILD_VERSION, LINE_VERSION, JIRA_LINE_VERSION, MINOR_VERSION, JIRA_MINOR_VERSION, RC_VERSION, JIRA_RC_VERSION, JIRA_RELEASE_VERSION, RELEASE_VERSION])
     fun testGetVCSSettings(version: String) {
         Assertions.assertEquals(VCS_SETTINGS, getVcsSettings("SUB", version))
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = [HOTFIX_VERSION, JIRA_HOTFIX_VERSION])
+    fun testGetVCSSettingsForHotfix(version: String) {
+        Assertions.assertEquals(VCS_SETTINGS_HOTFIX, getVcsSettings("SUB", version))
     }
 
     @Test
@@ -421,6 +447,13 @@ abstract class BaseComponentsRegistryServiceTest {
         val expectedDistribution = testDataDir.resolve(path)
             .toObject(DistributionDTO::class.java)
         Assertions.assertEquals(expectedDistribution, distribution)
+    }
+
+    @ParameterizedTest
+    @MethodSource("archived")
+    fun testGetArchivedForProject(componentName: String, version: String, archived: Boolean) {
+        val componentDetail = getDetailedComponent(componentName, version)
+        Assertions.assertEquals(archived, componentDetail.archived)
     }
 
     @ParameterizedTest
@@ -544,6 +577,7 @@ abstract class BaseComponentsRegistryServiceTest {
         fun vcsSettings(): Stream<Arguments> {
             return Stream.of(
                 Arguments.of("SUB", "sub1k-1.0.0", "expected-data/sub-sub1k-1.0.0-vcs-settings.json"),
+                Arguments.of("SUB", "sub1k-1.0.0-0", "expected-data/sub-sub1k-1.0.0-0-vcs-settings.json"),
                 Arguments.of("SUB", "hlk-1.0", "expected-data/sub-hlk-1.0-vcs-settings.json"),
                 Arguments.of("SUB", "hlk-1.0_RC", "expected-data/sub-hlk-1.0_RC-vcs-settings.json"),
                 Arguments.of("SUB", "hlk-1.0.0", "expected-data/sub-hlk-1.0.0-vcs-settings.json")
@@ -558,6 +592,15 @@ abstract class BaseComponentsRegistryServiceTest {
                 Arguments.of("TESTONE", "1.0_RC", "expected-data/testone-1.0-distribution.json"),
                 Arguments.of("TESTONE", "versions-api.1.0", "expected-data/testone-versions-api.1.0-distribution.json")
 
+            )
+        }
+
+        @JvmStatic
+        fun archived(): Stream<Arguments> {
+            return Stream.of(
+                Arguments.of("ARCHIVED_TEST_COMPONENT", "3.0.0", true),
+                Arguments.of("NON_ARCHIVED_TEST_COMPONENT", "3.0.0", false),
+                Arguments.of("ARCHIVED_TEST_COMPONENT_WITH_DISPLAY_NAME", "3.0.0", true)
             )
         }
 

@@ -4,9 +4,8 @@ on: [push, pull_request, workflow_dispatch]
 
 jobs:
   run-build-and-deploy:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-build.yml@v2.1.7
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-build.yml@v2.1.10
     with:
       flow-type: hybrid
-      java-version: '11'
+      java-version: '21'
       docker-image: components-registry-service
-      skip-tests: false

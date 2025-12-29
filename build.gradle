@@ -122,11 +122,18 @@ configure(subprojects) {
     apply plugin: 'org.jetbrains.kotlin.jvm'
     apply plugin: 'maven-publish'
 
+    configurations.matching { cfg ->
+        cfg?.name?.toLowerCase()?.contains('test')
+    }.all { cfg ->
+        cfg.exclude group: 'org.jetbrains.kotlin', module: 'kotlin-main-kts'
+    }
+
     dependencies {
         api "org.jetbrains.kotlin:kotlin-stdlib"
         implementation "org.jetbrains.kotlin:kotlin-reflect"
+        implementation platform("org.jetbrains.kotlin:kotlin-bom:${project['kotlin.version']}")
         implementation platform("com.fasterxml.jackson:jackson-bom:${project['jackson.version']}")
-        testImplementation enforcedPlatform("org.junit:junit-bom:${project.'junit-jupiter.version'}")
+        testImplementation platform("org.junit:junit-bom:${project['junit-jupiter.version']}")
         testImplementation "org.jetbrains.kotlin:kotlin-test-junit5"
         testImplementation "org.junit.jupiter:junit-jupiter-engine"
         testImplementation "org.junit.jupiter:junit-jupiter-params"
@@ -135,15 +142,15 @@ configure(subprojects) {
     }
 
     compileKotlin {
-        kotlinOptions.jvmTarget = "1.8"
+        kotlinOptions.jvmTarget = "21"
     }
 
     compileTestKotlin {
-        kotlinOptions.jvmTarget = "1.8"
+        kotlinOptions.jvmTarget = "21"
     }
 
-    sourceCompatibility = 1.8
-    targetCompatibility = 1.8
+    sourceCompatibility = 21
+    targetCompatibility = 21
 
     test {
         useJUnitPlatform()
@@ -152,6 +159,8 @@ configure(subprojects) {
                 // can fail sporadically on GH
             'junit.jupiter.execution.parallel.enabled': false
         ]
+        jvmArgs('--add-opens=java.base/java.lang=ALL-UNNAMED')
+        jvmArgs('--add-opens=java.base/java.util=ALL-UNNAMED')
     }
 
     java {
@@ -166,7 +175,7 @@ configure(subprojects) {
                 pom {
                     name.set(project.name)
                     description.set("Octopus module: ${project.name}")
-                    url.set("https://github.com/octopusden/octopus-component-registry-service.git")
+                    url.set("https://github.com/octopusden/octopus-components-registry-service.git")
                     licenses {
                         license {
                             name.set("The Apache License, Version 2.0")
@@ -174,8 +183,8 @@ configure(subprojects) {
                         }
                     }
                     scm {
-                        url.set("https://github.com/octopusden/octopus-component-registry-service.git")
-                        connection.set("scm:git://github.com/octopusden/octopus-component-registry-service.git")
+                        url.set("https://github.com/octopusden/octopus-components-registry-service.git")
+                        connection.set("scm:git://github.com/octopusden/octopus-components-registry-service.git")
                     }
                     developers {
                         developer {

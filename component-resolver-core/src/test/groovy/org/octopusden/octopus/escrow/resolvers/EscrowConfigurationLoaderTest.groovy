@@ -2,6 +2,8 @@ package org.octopusden.octopus.escrow.resolvers
 
 import groovy.transform.TypeChecked
 import org.junit.Test
+import org.octopusden.octopus.components.registry.api.beans.EscrowBean
+import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.TestConfigUtils
 import org.octopusden.octopus.escrow.configuration.loader.ComponentRegistryInfo
@@ -62,6 +64,42 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 releasesInDefaultBranch: true,
                 solution: false,
                 buildSystem: BuildSystem.MAVEN,
+                copyright: "companyName1",
+                artifactIdPattern: "builder",
+                groupIdPattern: "io.bcomponent",
+                versionRange: VERSION_RANGE,
+                jiraConfiguration: new JiraComponent("BCOMPONENT", null, ComponentVersionFormat.create('$major.$minor', '$major.$minor.$service'), new ComponentInfo(null, '$versionPrefix-$baseVersionFormat'), false, false),
+                buildConfiguration:
+                        BuildParameters.create(null, null, null, false, null, null, null, [new Tool(name: "BuildEnv", escrowEnvironmentVariable: "BUILD_ENV", targetLocation: "tools/BUILD_ENV",
+                                sourceLocation: "env.BUILD_ENV", installScript: "script")], []),
+                deprecated: false,
+                archived: false,
+                distribution: new Distribution(true, true, "org.octopusden.octopus.bcomponent:builder:war,org.octopusden.octopus.bcomponent:builder:jar", null, null, null, new SecurityGroups(null)),
+                componentDisplayName: "BCOMPONENT Official Name")
+        assertEquals(expectedConfig.vcsSettings, escrowModuleConfig.vcsSettings)
+        assertEquals(expectedConfig, escrowModuleConfig)
+    }
+
+    @Test
+    @TypeChecked
+    void testArchivedConfig() {
+        EscrowConfiguration configuration = loadConfiguration("single-module/archivedConfig.groovy")
+        assert 1 == configuration.escrowModules.size()
+        def configurations = configuration.escrowModules.get(TEST_MODULE).moduleConfigurations
+        assert configurations.size() == 1
+        def escrowModuleConfig = configurations.get(0)
+        assert escrowModuleConfig
+        escrowModuleConfig.toString()
+
+        def expectedConfig = new EscrowModuleConfig(vcsSettings:
+                VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", MERCURIAL, VCS_URL, '$module.$version', 'default', null)),
+                componentOwner: "user",
+                releaseManager: "user",
+                securityChampion: "user",
+                system: "CLASSIC",
+                releasesInDefaultBranch: true,
+                solution: false,
+                buildSystem: BuildSystem.MAVEN,
                 artifactIdPattern: "builder",
                 groupIdPattern: "io.bcomponent",
                 versionRange: VERSION_RANGE,
@@ -71,9 +109,10 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                                 sourceLocation: "env.BUILD_ENV", installScript: "script")], []),
                 deprecated: false,
                 distribution: new Distribution(true, true, "org.octopusden.octopus.bcomponent:builder:war,org.octopusden.octopus.bcomponent:builder:jar", null, null, null, new SecurityGroups(null)),
-                componentDisplayName: "BCOMPONENT Official Name")
-        assertEquals(expectedConfig.vcsSettings, escrowModuleConfig.vcsSettings)
-        assertEquals(expectedConfig, escrowModuleConfig)
+                componentDisplayName: "BCOMPONENT Official Name",
+                archived: true
+        )
+        assertTrue(expectedConfig.archived == escrowModuleConfig.archived)
     }
 
     @Test
@@ -100,7 +139,6 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
         def escrowModuleConfig = configurations.get(0)
         assert 'module1/my-pom.xml' == escrowModuleConfig.buildFilePath
     }
-
 
     @Test
     void testInvalidVersionRange() {
@@ -163,6 +201,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 system: "NONE",
                 releasesInDefaultBranch: true,
                 solution: false,
+                archived: false,
                 artifactIdPattern: /[\w-]+/,
                 groupIdPattern: "org.octopusden.octopus.bcomponent",
                 versionRange: "[1.12.1-150,)",
@@ -189,7 +228,8 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                         new ComponentInfo(null, '$versionPrefix-$baseVersionFormat'), false, false),
                 buildConfiguration: EMPTY_BUILD_CONFIG,
                 distribution: null,
-                componentDisplayName: "BCOMPONENT DISPLAY NAME"
+                componentDisplayName: "BCOMPONENT DISPLAY NAME",
+                archived: false
         )
         assert 2 == configurations.size()
         def config1 = configurations.get(0)
@@ -209,6 +249,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 vcsSettings: VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", MERCURIAL, "ssh://hg@mercurial/bcomponent", '$module-$version', null, null)),
                 buildSystem: MAVEN,
                 system: "NONE",
+                archived: false,
                 releasesInDefaultBranch: true,
                 solution: false,
                 artifactIdPattern: /[\w-]+/,
@@ -223,6 +264,110 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
         )
         assert expectedConfig.vcsSettings == configurations.get(0).vcsSettings
         assert expectedConfig == configurations.get(0)
+    }
+
+    @Test
+    void testDefaultsWithEscrowMode() {
+        EscrowConfiguration configuration = loadConfiguration("single-module/defaultsWithEscrowMode.groovy")
+        def configurations = configuration.escrowModules.get(TEST_MODULE).moduleConfigurations
+        def expectedConfig = new EscrowModuleConfig(
+                componentOwner: "user1",
+                vcsSettings: VCSSettings.createForSingleRoot(VersionControlSystemRoot.create("main", MERCURIAL, "ssh://hg@mercurial/bcomponent", '$module-$version', null, null)),
+                buildSystem: MAVEN,
+                system: "NONE",
+                releasesInDefaultBranch: true,
+                solution: false,
+                artifactIdPattern: /[\w-]+/,
+                groupIdPattern: "org.octopusden.octopus.bcomponent",
+                versionRange: "[1.12.1-151,)",
+                jiraConfiguration: new JiraComponent("BCOMPONENT", null, ComponentVersionFormat.create('$major.$minor', '$major.$minor.$service'), new ComponentInfo(null, '$versionPrefix-$baseVersionFormat'), false, false),
+                distribution: null,
+                buildConfiguration: BuildParameters.create(null, null, null, false, null, null, null,
+                        [new Tool(name: "BuildEnv", escrowEnvironmentVariable: "BUILD_ENV", targetLocation: "tools/BUILD_ENV",
+                                sourceLocation: "env.BUILD_ENV", installScript: "script")], []
+                ),
+                escrow: new EscrowBean(EscrowGenerationMode.AUTO, null, [], null, [], true)
+        )
+        def actualConfig = configurations.get(0)
+        assert expectedConfig.escrow.generation == actualConfig.escrow.generation
+    }
+
+    /**
+     * Test that generation mode is optional in Kotlin DSL escrow section when it's defined in Groovy DSL
+     */
+    @Test
+    void testDefaultsWithEscrowModeEmpty() {
+        EscrowConfiguration configuration = loadConfiguration("invalid/escrowGenerationEmpty.groovy")
+        def configurations = configuration.escrowModules.get("component").moduleConfigurations
+        assert configurations[0].escrow.generation.isEmpty(), "Escrow generation mode should be empty"
+    }
+
+    /**
+     * Test that double escrow block is forbidden
+     */
+    @Test
+    void testValidationDoubleEscrowBlock() {
+        def exception = shouldFail(Exception.class) {
+            def l = TestConfigUtils.loadFromURL(ComponentRegistryInfo.createFromFileSystem("src/test/resources/invalid/escrow", "Aggregator.groovy"))
+            l.loadFullConfiguration()
+        }
+        assert exception.contains("Escrow.generation parameter is defined both in groovy configuration and in kotlin for 'Component'"): "Exception message: $exception"
+    }
+
+    /**
+     * Test that double escrow block is forbidden in range-specific configuration
+     */
+    @Test
+    void testValidationDoubleEscrowBlockInRange() {
+        def exception = shouldFail(Exception.class) {
+            def l = TestConfigUtils.loadFromURL(ComponentRegistryInfo.createFromFileSystem("src/test/resources/invalid/escrow_range", "Aggregator.groovy"))
+            l.loadFullConfiguration()
+        }
+        assert exception.contains("Escrow.generation parameter is defined both in groovy configuration and in kotlin for 'Component'"): "Exception message: $exception"
+    }
+
+    /**
+     * Test that double escrow block is forbidden in subcomponent configuration
+     */
+    @Test
+    void testValidationDoubleEscrowBlockInSubcomponent() {
+        def exception = shouldFail(Exception.class) {
+            def l = TestConfigUtils.loadFromURL(ComponentRegistryInfo.createFromFileSystem("src/test/resources/invalid/escrow_subcomponents", "Aggregator.groovy"))
+            l.loadFullConfiguration()
+        }
+        assert exception.contains("Escrow.generation parameter is defined both in groovy configuration and in kotlin for subcomponent 'sub-component-one' of 'Component'"): "Exception message: $exception"
+    }
+
+    /**
+     * Test that double escrow block is forbidden in subcomponent range-specific configuration
+     */
+    @Test
+    void testValidationDoubleEscrowBlockInSubcomponentRange() {
+        def exception = shouldFail(Exception.class) {
+            def l = TestConfigUtils.loadFromURL(ComponentRegistryInfo.createFromFileSystem("src/test/resources/invalid/escrow_subcomponents_range", "Aggregator.groovy"))
+            l.loadFullConfiguration()
+        }
+        assert exception.contains("Escrow.generation parameter is defined both in groovy configuration and in kotlin for version range '[1.0,1.0.336)' of subcomponent 'sub-component-one' of 'Component'"): "Exception message: $exception"
+    }
+
+    /**
+     *  Test that escrow generation modes are correctly loaded from mixed Groovy/Kotlin DSL configuration
+     */
+    @Test
+    void testMixedDslEscrowGenerationAcrossVersionRanges() {
+        def l = TestConfigUtils.loadFromURL(ComponentRegistryInfo.createFromFileSystem("src/test/resources/validation/escrow_across_ranges", "Aggregator.groovy"))
+        EscrowConfiguration configuration = l.loadFullConfiguration()
+        def testComponents = configuration.escrowModules.get("test")
+        assert testComponents != null
+        testComponents.moduleConfigurations.each { EscrowModuleConfig moduleConfig ->
+            assert moduleConfig.escrow != null
+            if (moduleConfig.versionRangeString == "[03.51.29.15,)") {
+                assert moduleConfig.escrow.generation.orElse(null) == EscrowGenerationMode.AUTO, "Wrong generation mode for version range ${moduleConfig.versionRangeString}"
+            }
+            if (moduleConfig.versionRangeString == "(,03.51.29.15)") {
+                assert moduleConfig.escrow.generation.orElse(null) == EscrowGenerationMode.UNSUPPORTED, "Wrong generation mode for version range ${moduleConfig.versionRangeString}"
+            }
+        }
     }
 
     @Test
@@ -248,7 +393,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 groupIdPattern: "org.octopusden.octopus.bcomponent",
                 versionRange: "(,0),[0,)",
                 jiraConfiguration: new JiraComponent('TEST', null,
-                        ComponentVersionFormat.create('$major', '$major.$minor', '$major.$minor.$build', '$major', '$major.$minor.$build'),
+                        ComponentVersionFormat.create('$major', '$major.$minor', '$major.$minor', '$major', '$major.$minor.$build'),
                         null,
                         true, true),
                 buildFilePath: "test-cvs-maven-parent",
@@ -257,6 +402,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                          new Tool(name: "BuildLib", escrowEnvironmentVariable: "BUILD_LIB", targetLocation: "tools/BuildLib", sourceLocation: "env.BUILD_LIB")
                         ], []),
                 deprecated: true,
+                archived: false,
         )
         def actualModuleConfig = configurations.get(0)
         assertEquals(expectedModuleConfig, actualModuleConfig)
@@ -292,6 +438,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                          new Tool(name: "BuildLib", escrowEnvironmentVariable: "BUILD_LIB", targetLocation: "tools/BuildLib", sourceLocation: "env.BUILD_LIB")
                         ], []),
                 deprecated: true,
+                archived: false,
         )
         assertEquals(expectedModuleConfig, configurations.get(0))
     }
@@ -340,7 +487,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 groupIdPattern: "org.octopusden.octopus.buildsystem.model",
                 versionRange: "[1.2,)",
                 jiraConfiguration: new JiraComponent('BCOMPONENT', null, ComponentVersionFormat.create('$major.$minor', '$major.$minor.$service',
-                        '$major.$minor.$service.$build', '$major', '$major.$minor.$service.$build'), new ComponentInfo('Model', '$versionPrefix.$baseVersionFormat'), true, true),
+                        '$major.$minor.$service', '$major', '$major.$minor.$service.$build'), new ComponentInfo('Model', '$versionPrefix.$baseVersionFormat'), true, true),
                 buildConfiguration: BuildParameters.create("1.6", "1.6-maven", "1.6-gradle", false, "03.1.6", "-D1.6", "build",
                         [new Tool(name: "BuildEnv", escrowEnvironmentVariable: "BUILD_ENV", targetLocation: "tools/BUILD_ENV", sourceLocation: "env.BUILD_ENV"),
                         ], []),
@@ -352,6 +499,8 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 system: "CLASSIC",
                 releasesInDefaultBranch: false,
                 solution: true,
+                archived: false,
+                copyright: "companyName1",
         )
         assert expectedModuleConfig == modelConfiguration
 
@@ -379,7 +528,9 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 securityChampion: "somesecuritychampion",
                 system: "CLASSIC",
                 releasesInDefaultBranch: false,
-                solution: true
+                solution: true,
+                archived: false,
+                copyright: "companyName1",
         )
         assert expectedModuleConfig == modelConfiguration
 
@@ -401,7 +552,9 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 securityChampion: "anothersecuritychampion",
                 system: "CLASSIC,ALFA",
                 releasesInDefaultBranch: true,
-                solution: false
+                solution: false,
+                archived: false,
+                copyright: "companyName1",
         )
         assert expectedModuleConfig == modelConfiguration
     }
@@ -692,5 +845,17 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
         def sub2Root = sub2.vcsSettings.versionControlSystemRoots[0]
         assert "master" == sub2Root.branch
         assert "\$module-\$version" == sub2Root.tag
+    }
+
+    @Test
+    void testInvalidHotfixComponentsVersionFormat() {
+        def exception = GroovyAssert.shouldFail(EscrowConfigurationException.class, {
+            loadConfiguration("invalid/invalidHotfixComponents.groovy")
+        })
+        assert exception.message == "Validation of module config failed due following errors: \n" +
+                "Invalid hotfixVersionFormat '\$major.\$minor-\$fix' for 'component_hotfix_2', it must start with buildVersionFormat/releaseVersionFormat: '\$major.\$minor.\$service'\n" +
+                "Hotfix is enabled but hotfixVersionFormat is not defined for 'component_hotfix_1'\n" +
+                "Invalid hotfixVersionFormat '\$major.\$minor.\$service' for 'component_hotfix_4', it must be different from buildVersionFormat/releaseVersionFormat: '\$major.\$minor.\$service'\n" +
+                "Hotfix is enabled for 'component_hotfix_3', buildVersionFormat must be the same as releaseVersionFormat (buildVersionFormat='\$major.\$minor.\$service-\$build', releaseVersionFormat='\$major.\$minor.\$service')"
     }
 }

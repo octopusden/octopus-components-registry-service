@@ -20,6 +20,8 @@ class GroovySlurperConfigValidator {
     public static final String DEPENDENCIES = 'dependencies'
     public static final String SECURITY_GROUPS = 'securityGroups'
     public static final String SECURITY_GROUPS_READ = "read"
+    public static final String ESCROW = "escrow"
+    public static final String DOC = "doc"
 
     private static final String FILE_PATTERN = "file:/.+"
     private static final String PROHIBITED_SYMBOLS = "\\\\\\s:|\\?\\*\"'<>\\+"
@@ -46,7 +48,7 @@ class GroovySlurperConfigValidator {
                                           'teamcityReleaseConfigId', 'jiraProjectKey', 'jiraMajorVersionFormat', 'jiraReleaseVersionFormat',
                                           'buildFilePath', 'deprecated', BRANCH, HOTFIX_BRANCH,
                                           'componentDisplayName', 'componentOwner', 'releaseManager', 'securityChampion', 'system',
-                                          'clientCode', 'releasesInDefaultBranch', 'solution', 'parentComponent', 'octopusVersion']
+                                          'clientCode', 'releasesInDefaultBranch', 'solution', 'parentComponent', 'octopusVersion', 'archived', 'copyright']
 
     static SUPPORTED_JIRA_ATTRIBUTES = ['projectKey', 'lineVersionFormat', 'majorVersionFormat', 'releaseVersionFormat', 'buildVersionFormat', 'hotfixVersionFormat', "displayName", 'technical']
 
@@ -57,6 +59,10 @@ class GroovySlurperConfigValidator {
     static SUPPORTED_VCS_ATTRIBUTES = [BRANCH, HOTFIX_BRANCH, TAG, REPOSITORY_TYPE, VCS_URL, EXTERNAL_REGISTRY]
 
     static SUPPORTED_TOOLS_ATTRIBUTES = ['escrowEnvironmentVariable', 'sourceLocation', 'targetLocation', 'installScript']
+
+    static SUPPORTED_ESCROW_ATTRIBUTES = ['generation']
+
+    static SUPPORTED_DOC_ATTRIBUTES = ['component', 'majorVersion']
 
     static SUPPORTED_DISTRIBUTION_ATTRIBUTES = ['external', 'explicit', 'GAV', 'DEB', 'RPM', 'docker', 'securityGroups']
     static SUPPORTED_DEPENDENCIES_ATTRIBUTES = ['autoUpdate']
@@ -124,10 +130,34 @@ class GroovySlurperConfigValidator {
                     validateDependenciesParameters(moduleConfigObject, "dependencies", componentName)
                 } else if (attribute == "components") {
                     validateSubComponents(moduleConfigObject)
+                } else if (attribute == ESCROW) {
+                    validateEscrow(moduleConfigObject, "defaults", componentName)
+                } else if (attribute == DOC) {
+                    validateDoc(moduleConfigObject, "defaults", componentName)
                 } else {
                     validateConfigSectionForUnknownAttributes(configTypeObject, componentName)
                 }
             }
+        }
+    }
+
+    def validateDoc(ConfigObject configObject, String moduleConfigName, String componentName) {
+        def docSectionValue = configObject.get(DOC)
+        if (docSectionValue instanceof ConfigObject) {
+            validateForUnknownAttributes(docSectionValue, DOC, SUPPORTED_DOC_ATTRIBUTES, componentName, moduleConfigName)
+        } else {
+            registerError("Doc section is not correctly configured in " +
+                    getWhereMessage(moduleConfigName, componentName))
+        }
+    }
+
+    def validateEscrow(ConfigObject configObject, String moduleConfigName, String componentName) {
+        def escrowSectionValue = configObject.get(ESCROW)
+        if (escrowSectionValue instanceof ConfigObject) {
+            validateForUnknownAttributes(escrowSectionValue, ESCROW, SUPPORTED_ESCROW_ATTRIBUTES, componentName, moduleConfigName)
+        } else {
+            registerError("Escrow section is not correctly configured in " +
+                    getWhereMessage(moduleConfigName, componentName))
         }
     }
 
@@ -188,6 +218,10 @@ class GroovySlurperConfigValidator {
                 validateDistributionParameters(configObject, moduleConfigName, componentName)
             } else if (key == VCS_SETTINGS) {
                 validateVCSSettingsSection(configObject, componentName, key as String)
+            } else if (key == ESCROW) {
+                validateEscrow(configObject, moduleConfigName, componentName)
+            } else if (key == DOC) {
+                validateDoc(configObject, moduleConfigName, componentName)
             } else if (!SUPPORTED_ATTRIBUTES.contains(key)) {
                 registerError("Unknown attribute '$key' in " +
                         getWhereMessage(moduleConfigName, componentName))

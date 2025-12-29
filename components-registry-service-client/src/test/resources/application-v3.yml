@@ -5,6 +5,7 @@ components-registry:
   vcs:
     enabled: false
   work-dir: ${COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR}/components-registry/production
+  copyright-path: ${components-registry.work-dir}/copyrights
   main-groovy-file: Aggregator.groovy
   groovy-path: ${components-registry.work-dir}
 

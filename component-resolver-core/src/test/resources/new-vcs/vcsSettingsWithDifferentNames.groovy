@@ -15,7 +15,7 @@ Defaults {
     jira {
         majorVersionFormat = '$major.$minor'
         releaseVersionFormat = '$major.$minor.$service'
-        buildVersionFormat = '$major.$minor.$service.$fix'
+        buildVersionFormat = '$major.$minor.$service'
         hotfixVersionFormat = '$major.$minor.$service.$fix.$build'
         customer {
             versionFormat = '$versionPrefix-$baseVersionFormat'

@@ -27,6 +27,8 @@ Defaults {
     buildSystem = GRADLE
     tag = '$module-$version'
     artifactId = ANY_ARTIFACT
+    copyright = 'companyName1'
+
     jira {
         majorVersionFormat = '$major.$minor'
         releaseVersionFormat = '$major.$minor.$service'
@@ -98,7 +100,7 @@ bcomponent {
                 lineVersionFormat = '$major'
                 majorVersionFormat = '$major.$minor'
                 releaseVersionFormat = '$major.$minor.$service'
-                buildVersionFormat = '$major.$minor.$service.$build'
+                buildVersionFormat = '$major.$minor.$service'
                 hotfixVersionFormat = '$major.$minor.$service.$build'
                 technical = true
                 component {

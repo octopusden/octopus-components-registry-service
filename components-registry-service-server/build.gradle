@@ -9,7 +9,9 @@ plugins {
 apply plugin: 'docker-compose'
 
 dependencies {
-    implementation project(':component-resolver-core')
+    implementation(project(':component-resolver-core')) {
+        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-main-kts'
+    }
     implementation project(':components-registry-service-core')
 
     implementation platform("org.springframework.boot:spring-boot-dependencies:${project['spring-boot.version']}")
@@ -29,7 +31,7 @@ dependencies {
     implementation 'io.micrometer:micrometer-registry-prometheus:1.2.1'
     implementation "io.github.microutils:kotlin-logging:1.6.22"
 
-    implementation("org.springdoc:springdoc-openapi-ui:1.6.7")
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:${project.properties["openapi.version"]}")
 
     implementation("org.eclipse.jgit:org.eclipse.jgit:5.13.0.202109080827-r")
 
@@ -45,10 +47,52 @@ sourceSets {
             srcDirs += [ project(':test-common').sourceSets.test.resources ]
         }
     }
+    integrationTest {
+        kotlin {
+            srcDir 'src/integrationTest/kotlin'
+        }
+        resources {
+            srcDir 'src/integrationTest/resources'
+        }
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += output + compileClasspath
+    }
+}
+
+configurations {
+    integrationTestImplementation.extendsFrom testImplementation
+    integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+
+task integrationTest(type: Test) {
+    description = 'Runs integration tests including fat jar startup validation'
+    group = 'verification'
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    shouldRunAfter test
+    mustRunAfter bootJar
+    
+    // Pass required properties to test
+    systemProperty 'fatJar.path', bootJar.archiveFile.get().asFile.absolutePath
+    systemProperty 'test.resources.path', "$projectDir/src/integrationTest/resources"
+    systemProperty 'java.home', System.getProperty('java.home')
+    
+    useJUnitPlatform()
+    jvmArgs('--add-opens=java.base/java.lang=ALL-UNNAMED')
+    jvmArgs('--add-opens=java.base/java.util=ALL-UNNAMED')
+}
+
+check.dependsOn integrationTest
+integrationTest.dependsOn bootJar
+
+// Integration test inherits testImplementation configuration which includes transitive dependencies with resources.
+// Gradle's Copy task detects these as duplicates during resource processing.
+processIntegrationTestResources {
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
 }
 
 jar {
-    baseName = "${project.name}-it"
+    archiveBaseName = "${project.name}-it"
     enabled = true
     archiveClassifier = ''
 }
@@ -71,9 +115,20 @@ dockerCreateDockerfile.doLast {
     }
 }
 
+tasks.named('dockerSyncBuildContext') {
+    def bootJarArchive = tasks.named('bootJar').flatMap { it.archiveFile }
+    from(bootJarArchive) {
+        into('build/libs')
+    }
+    dependsOn bootJar
+}
+
 dockerBuildImage {
-    inputDir = file(".")
+    inputDir = dockerSyncBuildContext.destinationDir
     buildArgs.put("DOCKER_REGISTRY", "$dockerRegistry")
     buildArgs.put("BUILD_VERSION", "${project.version}")
     images.set(["$octopusGithubDockerRegistry/octopusden/components-registry-service:${project.version}"])
+
+    dependsOn dockerSyncBuildContext
+    dependsOn bootJar
 }

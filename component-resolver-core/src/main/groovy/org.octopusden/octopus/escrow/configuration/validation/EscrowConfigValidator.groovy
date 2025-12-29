@@ -6,6 +6,8 @@ import kotlin.Pair
 import org.apache.commons.lang3.StringUtils
 import org.apache.logging.log4j.LogManager
 import org.apache.logging.log4j.Logger
+import org.octopusden.octopus.components.registry.api.Component
+import org.octopusden.octopus.components.registry.api.SubComponent
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.MavenArtifactMatcher
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
@@ -19,6 +21,8 @@ import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRange
 import org.octopusden.releng.versions.VersionRangeFactory
 
+import java.nio.file.Files
+import java.nio.file.Path
 import java.util.function.BinaryOperator
 import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
@@ -29,14 +33,18 @@ class EscrowConfigValidator {
     public static final String ARCHIVED_SUFFIX = "(archived)"
     static MavenArtifactMatcher mavenArtifactMatcher = new MavenArtifactMatcher()
 
+    private static ComponentHotfixSupportResolver componentHotfixSupportResolver = new ComponentHotfixSupportResolver()
+
     private static final Logger LOG = LogManager.getLogger(EscrowConfigValidator.class)
     public static final String SPLIT_PATTERN = "[,|\\s]+"
+    private static final String CORRECT_COPYRIGHT_FILE_PATTERN = /^[a-zA-Z0-9_-]+$/
     private static final Pattern CLIENT_CODE_PATTERN = Pattern.compile("[A-Z_0-9]+")
 
     private List<String> supportedGroupIds
     private List<String> supportedSystems
     private VersionNames versionNames
     private final List<String> validationExcludedComponents
+    private final Path copyrightPath
 
     @TupleConstructor
     static class MavenArtifact {
@@ -75,13 +83,18 @@ class EscrowConfigValidator {
     EscrowConfigValidator(List<String> supportedGroupIds,
                           List<String> supportedSystems,
                           VersionNames versionNames,
-                          List<String> validationExcludedComponents) {
+                          List<String> validationExcludedComponents,
+                          Path copyrightPath) {
+        if (copyrightPath != null && !Files.isDirectory(copyrightPath)) {
+            throw new IllegalStateException("Copyright path '" + copyrightPath + "' is not a directory");
+        }
         this.supportedGroupIds = supportedGroupIds
         this.supportedSystems = supportedSystems
         this.versionNames = versionNames
         this.validationExcludedComponents = (validationExcludedComponents != null) ?
                 Collections.unmodifiableList(validationExcludedComponents)
                 : Collections.emptyList() as List<String>
+        this.copyrightPath = copyrightPath
     }
 
     List<String> errors = new ArrayList<>()
@@ -93,12 +106,14 @@ class EscrowConfigValidator {
             if (configurations.isEmpty()) {
                 registerError("No configurations in module $componentName")
             }
+            def supportedCopyrights = getSupportedCopyrights()
             for (EscrowModuleConfig moduleConfig : configurations) {
                 validateMandatoryFields(moduleConfig, componentName)
                 validateBuildSystem(moduleConfig.getBuildSystem(), componentName)
                 validateArtifactId(moduleConfig.getArtifactIdPattern(), componentName)
                 validateGroupId(moduleConfig, componentName)
                 validateVcsSettings(moduleConfig, componentName)
+                validateHotfixVersionFormat(moduleConfig, componentName)
                 validateVersionRange(moduleConfig, componentName)
                 validateJiraParams(moduleConfig, componentName)
                 validateExplicitExternalComponent(moduleConfig, componentName)
@@ -107,6 +122,8 @@ class EscrowConfigValidator {
                 validateReleasesInDefaultBranch(moduleConfig, componentName)
                 validateSolution(moduleConfig, componentName)
                 validateBuildConfigurationTools(moduleConfig)
+                validateDoc(configuration, moduleConfig, componentName)
+                validateCopyright(moduleConfig, componentName, supportedCopyrights)
             }
         }
         if (!hasErrors()) {
@@ -145,7 +162,7 @@ class EscrowConfigValidator {
      * @param component
      */
     private void validateDistributions(EscrowModuleConfig moduleConfig, String component) {
-        if(isExcludedComponent(component)) {
+        if (isExcludedComponent(component)) {
             return
         }
         def distributions = [
@@ -172,6 +189,9 @@ class EscrowConfigValidator {
                 }
             } else {
                 registerError("releaseManager is not set in '$component'")
+            }
+            if (copyrightPath != null && StringUtils.isBlank(moduleConfig.copyright)) {
+                registerError("copyright is not set in '$component'")
             }
             def securityChampions = moduleConfig.securityChampion
             if (StringUtils.isNotBlank(securityChampions)) {
@@ -222,7 +242,7 @@ class EscrowConfigValidator {
         def jiraProjectKeyAndVersionPrefixToComponentNames = new HashMap<Tuple2<String, String>, HashSet<String>>()
         configuration.escrowModules.each { componentName, escrowModule ->
             escrowModule.moduleConfigurations.each { moduleConfiguration ->
-                if (!moduleConfiguration.componentDisplayName?.endsWith(ARCHIVED_SUFFIX)) {
+                if (!moduleConfiguration.archived) {
                     jiraProjectKeyAndVersionPrefixToComponentNames.computeIfAbsent(new Tuple2<>(
                             moduleConfiguration.jiraConfiguration.projectKey,
                             moduleConfiguration.jiraConfiguration.componentInfo?.versionPrefix
@@ -269,8 +289,7 @@ class EscrowConfigValidator {
     def validateArchivedComponents(EscrowConfiguration configuration) {
         configuration.escrowModules.each { componentKey, value ->
             value.moduleConfigurations.each { config ->
-                //TODO Use appropriate attribute to check if component is archived
-                if (config?.componentDisplayName?.endsWith(ARCHIVED_SUFFIX)) {
+                if (config.archived) {
                     if (config.distribution.explicit() && config.distribution.external()) {
                         registerError("Archived component '$componentKey' can't be explicitly distributed. Pls set distribution->explicit=false")
                     }
@@ -379,7 +398,6 @@ class EscrowConfigValidator {
             if (!(moduleConfig.buildSystem == BuildSystem.BS2_0 || moduleConfig.buildSystem == BuildSystem.PROVIDED || moduleConfig.buildSystem == BuildSystem.ESCROW_PROVIDED_MANUALLY) && StringUtils.isEmpty(vcsRoot.vcsPath)) {
                 registerError("empty vcsUrl is not allowed in configuration of component $component (type=$moduleConfig.buildSystem)")
             }
-            validateHotfixVersionFormat(moduleConfig, component, vcsRoot)
         }
         if (moduleConfig.getBuildSystem() == BuildSystem.BS2_0) {
             if (vcsRoots.size() > 1) {
@@ -508,10 +526,70 @@ class EscrowConfigValidator {
         }
     }
 
+    def validateDoc(EscrowConfiguration configuration, EscrowModuleConfig moduleConfig, String module) {
+        def docComponentParameters = moduleConfig.getDoc()
+        if (docComponentParameters == null) {
+            return
+        }
+
+        if (!configuration.escrowModules.containsKey(docComponentParameters.component())) {
+            registerError("Doc.component '${docComponentParameters.component()}' module is not found for module '$module'")
+        } else {
+            EscrowModule doc_component = configuration.escrowModules.get(docComponentParameters.component())
+            if (doc_component.moduleConfigurations.any { it.doc != null }) {
+                registerError("Doc component ${doc_component.moduleName} must not have 'doc' property")
+            }
+            def hasGAV = doc_component.moduleConfigurations.any { config ->
+                config.distribution != null && StringUtils.isNotBlank(config.distribution.GAV())
+            }
+            if (!hasGAV) {
+                registerError("Doc component '${docComponentParameters.component()}' must have distribution.GAV defined (artifact-based documentation) for module '$module'")
+            }
+        }
+    }
+
+    def validateCopyright(EscrowModuleConfig moduleConfig, String component, List<String> supportedCopyrights) {
+        def copyright = moduleConfig.copyright
+        if (copyrightPath == null || copyright == null) {
+            return
+        }
+
+        if (!supportedCopyrights.contains(copyright)) {
+            registerError("Сopyright '${moduleConfig.copyright}' of component '$component' is invalid. Available values are $supportedCopyrights")
+        }
+    }
+
+    private Boolean hasDoubleEscrowBlock(SubComponent dslComponent, List<EscrowModuleConfig> moduleConfigurations) {
+        if (moduleConfigurations == null || dslComponent.escrow == null) {
+            return false
+        }
+        return moduleConfigurations.any { it.escrow != null && dslComponent.escrow.getGeneration().isPresent() && it.escrow.generation.orElse(null) != dslComponent.escrow.getGeneration().orElse(null) }
+    }
+
+    void validateEscrow(Component dslComponent, EscrowConfiguration moduleConfig) {
+        def moduleConfigurations = moduleConfig.escrowModules.get(dslComponent.name).moduleConfigurations
+        if (hasDoubleEscrowBlock(dslComponent, moduleConfigurations)) {
+            registerError("Escrow.generation parameter is defined both in groovy configuration and in kotlin for '${dslComponent.name}'")
+        }
+        dslComponent.subComponents.each { _, subComponent ->
+            def subComponentName = subComponent.name
+            def subModuleConfigurations = moduleConfig.escrowModules.get(subComponentName).moduleConfigurations
+            if (hasDoubleEscrowBlock(subComponent, subModuleConfigurations)) {
+                registerError("Escrow.generation parameter is defined both in groovy configuration and in kotlin for subcomponent '${subComponentName}' of '${dslComponent.name}'")
+            }
+            subComponent.versions.each { dslVersionRange, dslVersionedComponent ->
+                def versionedEscrowModule = subModuleConfigurations.find { moduleConfiguration -> moduleConfiguration.versionRangeString == dslVersionRange }
+                if (versionedEscrowModule != null && dslVersionedComponent.escrow != null && versionedEscrowModule.escrow != null && dslVersionedComponent.escrow.getGeneration() != versionedEscrowModule.escrow.getGeneration()) {
+                    registerError("Escrow.generation parameter is defined both in groovy configuration and in kotlin for version range '${dslVersionRange}' of subcomponent '${subComponentName}' of '${dslComponent.name}'")
+                }
+            }
+        }
+    }
+
     void validateDockerUniqueNames(EscrowConfiguration moduleConfig) {
         def dockerNames = new HashSet<String>()
         moduleConfig.escrowModules.each { componentName, escrowModule ->
-            def thisComponentImages = []
+            List<String> thisComponentImages = new ArrayList<>()
             escrowModule.moduleConfigurations.each { moduleConfiguration ->
                 def distribution = moduleConfiguration.getDistribution()
                 if (distribution != null) {
@@ -536,30 +614,48 @@ class EscrowConfigValidator {
 
     /**
      * Validate hotfix version format.
-     * Check if hotfixVersionFormat starts with buildVersionFormat and hotfixBranch is not empty.
-     * Register error if hotfixVersionFormat is not specified.
+     * If hotfixBranch is not empty, check if hotfixVersionFormat starts with buildVersionFormat (or releaseVersionFormat as fallback).
+     * Register error if:
+     * - hotfixVersionFormat is not specified
+     * - neither buildVersionFormat nor releaseVersionFormat exists
+     * - both buildVersionFormat and releaseVersionFormat are specified but different
+     * - hotfixVersionFormat doesn't start with buildVersionFormat or releaseVersionFormat
+     * - hotfixVersionFormat is the same as buildVersionFormat or releaseVersionFormat
      * @param moduleConfig
      * @param componentName
      */
-    def validateHotfixVersionFormat(EscrowModuleConfig moduleConfig, String componentName, VersionControlSystemRoot vcsRoot) {
-
-        ComponentHotfixSupportResolver componentHotfixSupportResolver = new ComponentHotfixSupportResolver()
+    def validateHotfixVersionFormat(EscrowModuleConfig moduleConfig, String componentName) {
         if (!componentHotfixSupportResolver.isHotFixEnabled(moduleConfig.vcsSettings)) {
             return
         }
-        def hotfixVersionFormat = moduleConfig.getJiraConfiguration().componentVersionFormat.hotfixVersionFormat
-        boolean hasErrors = false
+        def componentVersionFormat = moduleConfig.getJiraConfiguration().componentVersionFormat
+        def hotfixVersionFormat = componentVersionFormat.hotfixVersionFormat
         if (StringUtils.isBlank(hotfixVersionFormat)) {
-            hasErrors = true
-            registerError("hotfixVersionFormat is not specified in '$componentName'")
+            registerError("Hotfix is enabled but hotfixVersionFormat is not defined for '$componentName'")
+            return
         }
-        def buildVersionFormat = moduleConfig.getJiraConfiguration().componentVersionFormat.buildVersionFormat
-        if (buildVersionFormat == null) {
-            hasErrors = true
-            registerError("buildVersionFormat is not specified in '$componentName'")
+        def buildVersionFormat = componentVersionFormat.buildVersionFormat
+        def releaseVersionFormat = componentVersionFormat.releaseVersionFormat
+
+        if (StringUtils.isBlank(buildVersionFormat) && StringUtils.isBlank(releaseVersionFormat)) {
+            registerError("Hotfix is enabled but neither 'buildVersionFormat' nor 'releaseVersionFormat' is defined for '$componentName'")
+            return
         }
-        if (!hasErrors && !hotfixVersionFormat.startsWith(buildVersionFormat)) {
-            registerError("hotfixVersionFormat '$hotfixVersionFormat' doesn't start with buildVersionFormat '$buildVersionFormat'")
+
+        if (StringUtils.isNotBlank(buildVersionFormat) && StringUtils.isNotBlank(releaseVersionFormat)) {
+            if (buildVersionFormat != releaseVersionFormat) {
+                registerError("Hotfix is enabled for '$componentName', buildVersionFormat must be the same as releaseVersionFormat (buildVersionFormat='$buildVersionFormat', releaseVersionFormat='$releaseVersionFormat')")
+                return
+            }
+        }
+
+        def baseVersionFormat = buildVersionFormat ?: releaseVersionFormat
+        if (!hotfixVersionFormat.startsWith(baseVersionFormat)) {
+            registerError("Invalid hotfixVersionFormat '$hotfixVersionFormat' for '$componentName', it must start with buildVersionFormat/releaseVersionFormat: '$baseVersionFormat'")
+            return
+        }
+        if (hotfixVersionFormat == baseVersionFormat) {
+            registerError("Invalid hotfixVersionFormat '$hotfixVersionFormat' for '$componentName', it must be different from buildVersionFormat/releaseVersionFormat: '$baseVersionFormat'")
         }
     }
 
@@ -593,5 +689,19 @@ class EscrowConfigValidator {
 
     List<String> getErrors() {
         return errors
+    }
+
+    private List<String> getSupportedCopyrights() {
+        if (copyrightPath == null)
+            return null
+
+        try (def stream = Files.list(copyrightPath)) {
+            return stream.filter { Files.isRegularFile(it) }
+                    .map { it.fileName.toString()}
+                    .toList()
+        } catch (Exception exception) {
+            registerError("Failed to get files from '$copyrightPath', cause: ${exception.message}")
+            return null
+        }
     }
 }

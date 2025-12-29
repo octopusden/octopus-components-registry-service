@@ -6,6 +6,7 @@ Defaults {
     system = "NONE"
     releasesInDefaultBranch = true
     solution = false
+    copyright = 'companyName1'
 }
 
 Tools {

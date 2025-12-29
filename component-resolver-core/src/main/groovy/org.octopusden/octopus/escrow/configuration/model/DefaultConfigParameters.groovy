@@ -5,10 +5,12 @@ import groovy.transform.EqualsAndHashCode
 import groovy.transform.ToString
 import groovy.transform.TupleConstructor
 import groovy.transform.TypeChecked
+import org.octopusden.octopus.components.registry.api.escrow.Escrow
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.configuration.loader.VCSSettingsWrapper
 import org.octopusden.octopus.escrow.model.BuildParameters
 import org.octopusden.octopus.escrow.model.Distribution
+import org.octopusden.octopus.escrow.model.Doc
 import org.octopusden.octopus.releng.dto.JiraComponent
 
 @TupleConstructor
@@ -55,5 +57,13 @@ class DefaultConfigParameters {
     Boolean releasesInDefaultBranch
 
     Boolean solution
+
+    Escrow escrow
+
+    Doc doc
+
+    Boolean archived
+
+    String copyright
 }
 

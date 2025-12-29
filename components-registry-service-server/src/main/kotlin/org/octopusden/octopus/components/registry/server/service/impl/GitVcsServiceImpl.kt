@@ -13,8 +13,8 @@ import org.springframework.util.FileSystemUtils
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Paths
-import javax.annotation.PostConstruct
-import javax.annotation.PreDestroy
+import jakarta.annotation.PostConstruct
+import jakarta.annotation.PreDestroy
 
 @Service
 @EnableConfigurationProperties(ComponentsRegistryProperties::class)

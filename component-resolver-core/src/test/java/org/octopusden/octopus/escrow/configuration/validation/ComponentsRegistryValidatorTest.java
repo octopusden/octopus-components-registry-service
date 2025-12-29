@@ -18,6 +18,7 @@ import org.octopusden.octopus.escrow.exceptions.EscrowConfigurationException;
 import static java.util.Collections.emptyMap;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
+import static org.octopusden.octopus.escrow.TestConfigUtils.COPYRIGHT_PATH;
 import static org.octopusden.octopus.escrow.TestConfigUtils.PRODUCT_TYPES;
 import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_GROUP_IDS;
 import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_SYSTEMS;
@@ -33,9 +34,9 @@ class ComponentsRegistryValidatorTest {
                 Arguments.of("version-prefix-intersection", Arrays.asList("Following components have no version prefix in Jira project 'PROJECT_2': component4, component5",
                         "Following components have the same version prefix 'versionPrefix' in Jira project 'PROJECT': component1, component3")),
                 Arguments.of("test-multi-release-managers/invalid", Arrays.asList(
-                                "releaseManager is not matched '\\w+(,\\w+)*' in 'test-component-1'",
-                                "releaseManager is not matched '\\w+(,\\w+)*' in 'test-component-2'",
-                                "releaseManager is not set in 'test-component-3'"))
+                        "releaseManager is not matched '\\w+(,\\w+)*' in 'test-component-1'",
+                        "releaseManager is not matched '\\w+(,\\w+)*' in 'test-component-2'",
+                        "releaseManager is not set in 'test-component-3'"))
         );
     }
 
@@ -60,8 +61,8 @@ class ComponentsRegistryValidatorTest {
     }
 
     /**
-    * Verify correctly configured Components Registries do not produce validation errors.
-    */
+     * Verify correctly configured Components Registries do not produce validation errors.
+     */
     @DisplayName("Test Component Registry validation for valid data")
     @ParameterizedTest(name = "For {0} expects no validation errors")
     @MethodSource("crsValidData")
@@ -85,7 +86,8 @@ class ComponentsRegistryValidatorTest {
                 ),
                 SUPPORTED_GROUP_IDS,
                 SUPPORTED_SYSTEMS,
-                VERSION_NAMES
+                VERSION_NAMES,
+                COPYRIGHT_PATH
         );
     }
 }

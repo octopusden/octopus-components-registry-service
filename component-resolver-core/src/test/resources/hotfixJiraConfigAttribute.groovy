@@ -40,7 +40,7 @@ Defaults {
             projectKey = "bs-core-jira-new"
             majorVersionFormat = '$major'
             releaseVersionFormat = '$major.$minor'
-            buildVersionFormat = '$major.$minor.$fix'
+            buildVersionFormat = '$major.$minor'
             hotfixVersionFormat = '$major.$minor.$fix.$build'
         }
     }
@@ -56,8 +56,8 @@ Defaults {
         projectKey = "STREAMS"
         majorVersionFormat = '$major.$minor'
         releaseVersionFormat = '$major.$minor.$service'
-        buildVersionFormat = '$major.$minor.$fix'
-        hotfixVersionFormat = '$major.$minor.$fix.$build'
+        buildVersionFormat = '$major.$minor.$service'
+        hotfixVersionFormat = '$major.$minor.$service.$build'
         displayName = "Streams Commons"
         component {
             versionPrefix = "commons"

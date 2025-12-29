@@ -11,6 +11,7 @@ import java.nio.file.Paths
 
 import static org.junit.Assert.assertNotNull
 import static org.junit.jupiter.api.Assertions.assertThrows
+import static org.octopusden.octopus.escrow.TestConfigUtils.COPYRIGHT_PATH
 import static org.octopusden.octopus.escrow.TestConfigUtils.PRODUCT_TYPES
 import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_GROUP_IDS
 import static org.octopusden.octopus.escrow.TestConfigUtils.SUPPORTED_SYSTEMS
@@ -20,17 +21,6 @@ import static org.junit.Assert.assertTrue
 import static org.octopusden.octopus.escrow.TestConfigUtils.VERSION_NAMES
 
 class ReleaseInfoResolverTest {
-
-    @Test
-    void testResolvedHotfixConfiguration() {
-        def resolver = getResolver("/hotfix/Aggregator.groovy")
-
-        def exception = assertThrows(EscrowConfigurationException, {
-            resolver.resolveRelease(ComponentVersion.create("component_hotfix", "1.0.107.9-9"))
-        })
-
-        assertTrue("Expected error message to contain validation failure details", exception.message.contains("hotfixVersionFormat '\$major.\$minor.\$service-\$build' doesn't start with buildVersionFormat '\$major.\$minor.\$service-\$fix'"))
-    }
 
     @Test
     void testResolvedConfiguration() {
@@ -100,7 +90,8 @@ class ReleaseInfoResolverTest {
                 ),
                 SUPPORTED_GROUP_IDS,
                 SUPPORTED_SYSTEMS,
-                VERSION_NAMES
+                VERSION_NAMES,
+                COPYRIGHT_PATH
         )
         return new ReleaseInfoResolver(escrowConfigurationLoader)
     }

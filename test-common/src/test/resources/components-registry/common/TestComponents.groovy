@@ -1,5 +1,6 @@
 import static org.octopusden.octopus.escrow.BuildSystem.*
 import static org.octopusden.octopus.escrow.RepositoryType.*
+import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
 
 Defaults {
     system = "NONE"
@@ -181,6 +182,7 @@ Defaults {
     clientCode = "CLIENT_CODE"
     releasesInDefaultBranch = false
     solution = true
+    copyright = "companyName1"
     jira {
         projectKey = "TESTONE"
         majorVersionFormat = '$major'
@@ -237,6 +239,22 @@ Defaults {
     buildFilePath = "build"
 }
 
+TEST_COMPONENT_WITH_ESCROW {
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.test2"
+    artifactId = "test2"
+    escrow {
+        generation = EscrowGenerationMode.MANUAL
+    }
+    jira {
+        projectKey = "PROJ"
+        majorVersionFormat = '$major.$minor'
+        releaseVersionFormat = '$major.$minor.$service'
+        lineVersionFormat = '$major.$minor'
+        buildVersionFormat = '$major.$minor.$service-$fix'
+    }
+    buildSystem = IN_CONTAINER
+}
 
 TEST_COMPONENT {
     componentOwner = "user9"
@@ -253,6 +271,30 @@ TEST_COMPONENT {
     repositoryType = MERCURIAL
     vcsUrl = "ssh://hg@mercurial/test-component"
     branch = "v2"
+}
+
+TEST_COMPONENT_WITH_DOC {
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.test2"
+    artifactId = "test2"
+    componentDisplayName = "Test Component with Doc"
+    doc {
+        component = "TEST_COMPONENT_DOC"
+        majorVersion = "1.2"
+    }
+    jira {
+        projectKey = "DOC"
+        majorVersionFormat = '$major.$minor'
+        releaseVersionFormat = '$major.$minor.$service'
+        lineVersionFormat = '$major.$minor'
+        buildVersionFormat = '$major.$minor.$service-$fix'
+    }
+    distribution {
+        explicit = false
+        external = true
+        docker = 'test-doc'
+    }
+    buildSystem = GRADLE
 }
 
 
@@ -1032,5 +1074,48 @@ TEST_COMPONENT4 {
         explicit = false
         external = true
         docker = 'test-docker-5:amd64,test-docker-5:arm64'
+    }
+}
+
+ARCHIVED_TEST_COMPONENT {
+    jira {
+        projectKey = "TEST_ARCHIVED"
+    }
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.test.archived"
+    artifactId = "test-archived"
+    archived = true
+    distribution {
+        explicit = false
+        external = true
+    }
+}
+
+ARCHIVED_TEST_COMPONENT_WITH_DISPLAY_NAME {
+    jira {
+        projectKey = "TEST_ARCHIVED"
+    }
+    componentOwner = "user9"
+    componentDisplayName = "Component (archived)"
+    groupId = "org.octopusden.octopus.test.archived"
+    artifactId = "test-archived"
+    archived = false
+    distribution {
+        explicit = false
+        external = true
+    }
+}
+
+
+NON_ARCHIVED_TEST_COMPONENT {
+    jira {
+        projectKey = "TEST_ARCHIVED"
+    }
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.test.archived"
+    artifactId = "test-archived"
+    distribution {
+        explicit = false
+        external = true
     }
 }

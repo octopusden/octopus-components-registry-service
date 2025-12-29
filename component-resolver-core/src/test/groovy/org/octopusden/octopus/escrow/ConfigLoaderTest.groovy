@@ -106,7 +106,7 @@ class ConfigLoaderTest {
             assert false: "EscrowException should be thrown"
         } catch (ComponentResolverException e) {
             assert e.getMessage().contains("Unknown attribute 'invalidAttributeCvs' in bcomponent->Cvs");
-            assert e.getMessage().contains("Unknown attribute 'invalidAttributeDefault' in Defaults section of escrow config file");
+            assert e.getMessage().contains("Unknown attribute 'invalidAttributeDefault' in Defaults section of escrow config file")
         }
     }
 
@@ -181,6 +181,6 @@ class ConfigLoaderTest {
         def config = loader.loadModuleConfig()
         def module = config."hf-omponent-2"
         Assert.assertEquals("hotfix", module["vcsSettings"]["hotfixBranch"])
-        Assert.assertEquals("\$major.\$minor.\$fix.\$build", module["jira"]["hotfixVersionFormat"])
+        Assert.assertEquals("\$major.\$minor.\$service.\$build", module["jira"]["hotfixVersionFormat"])
     }
 }
