@@ -34,7 +34,10 @@ public class DistributionUtilitiesTest {
                 () -> DistributionUtilities.parseDistributionGAV("invalid")
         );
 
-        Assertions.assertTrue(ex.getMessage().contains("Invalid GAV entry: 'invalid'. Expected 'groupId:artifactId' or 'file:/<path>'. "));
+        Assertions.assertTrue(
+                ex.getMessage().contains("Invalid GAV entry"),
+                "Exception message should indicate invalid GAV entry"
+        );
     }
 
     @Test
@@ -44,9 +47,9 @@ public class DistributionUtilitiesTest {
                 () -> DistributionUtilities.parseDistributionGAV("a:b:1.0,null")
         );
 
-        Assertions.assertEquals(
-                "Invalid GAV entry: 'null'. Expected 'groupId:artifactId' or 'file:/<path>'. ",
-                ex.getMessage()
+        Assertions.assertTrue(
+                ex.getMessage().contains("Invalid GAV entry"),
+                "Exception message should indicate invalid GAV entry"
         );
     }
 
@@ -58,4 +61,16 @@ public class DistributionUtilitiesTest {
         Assertions.assertEquals(1, result.size());
     }
 
+    @Test
+    void testTrailingColon() {
+        IllegalArgumentException ex = Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> DistributionUtilities.parseDistributionGAV("a:b:")
+        );
+
+        Assertions.assertTrue(
+                ex.getMessage().contains("Invalid GAV entry"),
+                "Exception message should indicate invalid GAV entry"
+        );
+    }
 }

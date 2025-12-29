@@ -22,12 +22,19 @@ public final class DistributionUtilities {
                 .map(String::trim)
                 .filter(StringUtils::isNotBlank)
                 .map(item -> {
-                    if (!item.contains(":") && !item.startsWith("file:/")) {
-                        throw new IllegalArgumentException("Invalid GAV entry: '" + item + "'. Expected 'groupId:artifactId' or 'file:/<path>'. ");
+                    if (item.startsWith("file:/")) {
+                        return new FileDistributionEntity(item);
                     }
-                    return item.startsWith("file:/")
-                            ? new FileDistributionEntity(item)
-                            : new MavenArtifactDistributionEntity(item);
+
+                    String[] parts = item.split(":", -1);
+                    if (parts.length >= 2 && parts.length <= 4 && Arrays.stream(parts).allMatch(StringUtils::isNotBlank)) {
+                        return new MavenArtifactDistributionEntity(item);
+                    }
+
+                    throw new IllegalArgumentException(
+                            "Invalid GAV entry: '" + item +
+                                    "'. Expected 'groupId:artifactId[:...]' or 'file:/<path>'."
+                    );
                 })
                 .collect(Collectors.toList());
     }
