@@ -18,7 +18,7 @@ import static org.octopusden.octopus.escrow.TestConfigUtils.VERSION_NAMES
 class InvalidLabelsTest {
 
     @Test
-    void testEEComponentWithoutCopyrightThrowsExceptionCauseOfCopyrightAbsent() {
+    void testEEComponentWithoutCopyrightThrowsExceptionCauseOfCopyrightPresents() {
         def basePath = Paths.get(
                 InvalidLabelsTest.class.getResource(
                         "/labels/invalid/Aggregator.groovy"
@@ -43,7 +43,7 @@ class InvalidLabelsTest {
             ).loadFullConfiguration(Collections.emptyMap())
             assert false: "Test should fail due to 'labels' field presents in Defaults component"
         } catch (EscrowConfigurationException e) {
-            assert e.message.contains("Unknown attribute 'labels' in Defaults section of escrow config file")
+            assert e.message.contains("Unknown attribute 'labels' in Defaults section")
         }
     }
 }

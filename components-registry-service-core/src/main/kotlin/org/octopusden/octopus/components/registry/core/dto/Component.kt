@@ -67,6 +67,6 @@ abstract class Component(val id: String, val name: String?, val componentOwner: 
                 "clientCode=$clientCode, releasesInDefaultBranch=$releasesInDefaultBranch, solution=$solution, " +
                 "parentComponent=$parentComponent, securityChampion=$securityChampion, releaseManager=$releaseManager, " +
                 "distribution=$distribution, archived=$archived, doc=$doc, escrow=$escrow, copyright='$copyright' " +
-                "labels='${labels.joinToString()}')"
+                "labels=$labels)"
     }
 }

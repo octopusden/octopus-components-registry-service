@@ -1,8 +1,5 @@
-package labels.valid
-
 import static org.octopusden.octopus.escrow.BuildSystem.*
 import static org.octopusden.octopus.escrow.RepositoryType.*
-
 
 Defaults {
     system = "NONE"

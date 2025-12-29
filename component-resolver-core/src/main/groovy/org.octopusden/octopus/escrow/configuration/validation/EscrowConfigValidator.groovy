@@ -96,7 +96,7 @@ class EscrowConfigValidator {
         this.versionNames = versionNames
         this.validationExcludedComponents = convertToUnmodifiableList(validationExcludedComponents)
         this.copyrightPath = copyrightPath
-        this.availableLabels = availableLabels
+        this.availableLabels = convertToUnmodifiableSet(availableLabels)
     }
 
     List<String> errors = new ArrayList<>()
@@ -570,11 +570,8 @@ class EscrowConfigValidator {
         }
 
         def unavailableLabels = labels - availableLabels
-
-        // TODO, схлопнуть это до проверки на основном компоненте,
-        //  чтобы не было 20 однаковых ошибок на вершен ренджах
         if (unavailableLabels) {
-            registerError("Labels '${unavailableLabels.join(", ")}' of component '$component' is not available")
+            registerError("Labels '${unavailableLabels.join(", ")}' of component '$component' are not available")
         }
     }
 
@@ -728,5 +725,11 @@ class EscrowConfigValidator {
         return list != null
                 ? Collections.unmodifiableList(list)
                 : Collections.emptyList() as List<String>
+    }
+
+    private static Set<String> convertToUnmodifiableSet(Set<String> set) {
+        return set != null
+                ? Collections.unmodifiableSet(set)
+                : Collections.emptySet() as Set<String>
     }
 }
