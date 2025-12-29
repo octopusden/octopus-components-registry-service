@@ -1,5 +1,7 @@
 package org.octopusden.octopus.escrow.configuration.loader
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import groovy.transform.TupleConstructor
 import groovy.transform.TypeChecked
 import org.apache.logging.log4j.LogManager
@@ -9,10 +11,10 @@ import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.components.registry.dsl.script.ComponentsRegistryScriptRunner
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.RepositoryType
+import org.octopusden.octopus.escrow.configuration.model.ValidationConfig
 import org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator
 import org.octopusden.octopus.escrow.resolvers.ComposedConfigScript
 import org.octopusden.releng.versions.VersionNames
-import org.yaml.snakeyaml.Yaml
 
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -22,6 +24,7 @@ import java.nio.file.Paths
 class ConfigLoader implements IConfigLoader {
 
     private static final Logger LOG = LogManager.getLogger(ConfigLoader.class)
+    private static final ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory())
 
     private final VersionNames versionNames
     private final ComponentRegistryInfo componentRegistryInfo
@@ -106,7 +109,7 @@ class ConfigLoader implements IConfigLoader {
      */
     @Override
     List<String> loadDistributionValidationExcludedComponents() {
-        return loadValuesFromValidationConfig(['distribution', 'ee', 'exclude'])
+        return readValidationConfigYaml()?.distribution?.get('ee')?.exclude
     }
 
     /**
@@ -115,7 +118,7 @@ class ConfigLoader implements IConfigLoader {
      */
     @Override
     Set<String> loadAvailableLabels() {
-        return loadValuesFromValidationConfig(['labels']).toSet()
+        return readValidationConfigYaml()?.labels
     }
 
     def static validateConfig(ConfigObject configObject, VersionNames versionNames) {
@@ -123,37 +126,12 @@ class ConfigLoader implements IConfigLoader {
         validator.validateConfig(configObject)
     }
 
-    private List<String> loadValuesFromValidationConfig(List<String> fieldsChain) {
-        List<String> resultValues = []
-        LOG.info("Loading values from YAML file: $validationConfigPath")
-
+    private ValidationConfig readValidationConfigYaml() {
         def file = validationConfigPath.toFile()
         if (!file.exists()) {
             LOG.warn("YAML file $validationConfigPath does not exist")
-            return resultValues
+            return null
         }
-
-        LOG.info("File $validationConfigPath exists. Loading values from YAML")
-        try {
-            def yamlContent = new Yaml().loadAs(file.text, Map)
-            def values = getValuesByFieldChain(yamlContent, fieldsChain)
-
-            if (values) {
-                resultValues.addAll(values)
-                LOG.info("Found ${resultValues.size()} values in YAML")
-            } else {
-                LOG.info("No '${fieldsChain.join(".")}' section found in YAML file")
-            }
-        } catch (Exception e) {
-            LOG.error("Error parsing YAML file: ${e.message}", e)
-            throw e
-        }
-        return resultValues as List<String>
-    }
-
-    private static List<String> getValuesByFieldChain(Map yamlContent, List<String> fieldsChain) {
-        return fieldsChain.inject(yamlContent) { accumulator, element ->
-            accumulator instanceof Map ? accumulator[element] : null
-        } as List<String>
+        return yamlMapper.readValue(file, ValidationConfig.class)
     }
 }

@@ -94,9 +94,13 @@ class EscrowConfigValidator {
         this.supportedGroupIds = supportedGroupIds
         this.supportedSystems = supportedSystems
         this.versionNames = versionNames
-        this.validationExcludedComponents = convertToUnmodifiableList(validationExcludedComponents)
+        this.validationExcludedComponents = validationExcludedComponents != null
+                ? Collections.unmodifiableList(validationExcludedComponents)
+                : Collections.emptyList() as List<String>
         this.copyrightPath = copyrightPath
-        this.availableLabels = convertToUnmodifiableSet(availableLabels)
+        this.availableLabels = availableLabels != null
+                ? Collections.unmodifiableSet(availableLabels)
+                : Collections.emptySet() as Set<String>
     }
 
     List<String> errors = new ArrayList<>()
@@ -565,7 +569,7 @@ class EscrowConfigValidator {
     def validateLabels(EscrowModuleConfig moduleConfig, String component) {
         def labels = moduleConfig.labels
 
-        if(!labels) {
+        if (!labels) {
             return
         }
 
@@ -713,23 +717,11 @@ class EscrowConfigValidator {
 
         try (def stream = Files.list(copyrightPath)) {
             return stream.filter { Files.isRegularFile(it) }
-                    .map { it.fileName.toString()}
+                    .map { it.fileName.toString() }
                     .toList()
         } catch (Exception exception) {
             registerError("Failed to get files from '$copyrightPath', cause: ${exception.message}")
             return null
         }
-    }
-
-    private static List<String> convertToUnmodifiableList(List<String> list) {
-        return list != null
-                ? Collections.unmodifiableList(list)
-                : Collections.emptyList() as List<String>
-    }
-
-    private static Set<String> convertToUnmodifiableSet(Set<String> set) {
-        return set != null
-                ? Collections.unmodifiableSet(set)
-                : Collections.emptySet() as Set<String>
     }
 }
