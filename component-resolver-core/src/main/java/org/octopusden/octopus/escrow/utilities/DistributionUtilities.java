@@ -1,6 +1,6 @@
 package org.octopusden.octopus.escrow.utilities;
 
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.octopusden.octopus.escrow.dto.DistributionEntity;
 import org.octopusden.octopus.escrow.dto.FileDistributionEntity;
 import org.octopusden.octopus.escrow.dto.MavenArtifactDistributionEntity;
