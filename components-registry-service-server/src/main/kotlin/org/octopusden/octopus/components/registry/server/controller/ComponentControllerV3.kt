@@ -44,6 +44,7 @@ class ComponentControllerV3(
                 componentOwner = baseConfiguration.componentOwner,
             ).apply {
                 copyright = baseConfiguration.copyright
+                labels = baseConfiguration.labels?.toSet() ?: emptySet()
             }
 
             ComponentV3(

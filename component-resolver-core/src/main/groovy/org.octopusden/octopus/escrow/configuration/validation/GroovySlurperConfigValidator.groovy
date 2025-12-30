@@ -22,6 +22,7 @@ class GroovySlurperConfigValidator {
     public static final String SECURITY_GROUPS_READ = "read"
     public static final String ESCROW = "escrow"
     public static final String DOC = "doc"
+    public static final String LABELS = "labels"
 
     private static final String FILE_PATTERN = "file:/.+"
     private static final String PROHIBITED_SYMBOLS = "\\\\\\s:|\\?\\*\"'<>\\+"
@@ -134,6 +135,8 @@ class GroovySlurperConfigValidator {
                     validateEscrow(moduleConfigObject, "defaults", componentName)
                 } else if (attribute == DOC) {
                     validateDoc(moduleConfigObject, "defaults", componentName)
+                } else if (attribute == LABELS) {
+                    continue
                 } else {
                     validateConfigSectionForUnknownAttributes(configTypeObject, componentName)
                 }
