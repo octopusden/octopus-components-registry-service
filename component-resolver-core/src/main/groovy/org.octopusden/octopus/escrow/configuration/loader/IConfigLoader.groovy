@@ -1,6 +1,7 @@
 package org.octopusden.octopus.escrow.configuration.loader
 
 import org.octopusden.octopus.components.registry.api.Component
+import org.octopusden.octopus.escrow.configuration.model.ValidationConfig
 
 interface IConfigLoader {
 
@@ -12,9 +13,7 @@ interface IConfigLoader {
 
     Collection<Component> loadDslDefinedComponents()
 
-    List<String> loadDistributionValidationExcludedComponents()
-
-    Set<String> loadAvailableLabels()
+    ValidationConfig loadAndParseValidationConfigFile()
 }
 
 

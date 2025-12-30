@@ -103,35 +103,18 @@ class ConfigLoader implements IConfigLoader {
         return ComponentsRegistryScriptRunner.INSTANCE.loadDSL(Paths.get(componentRegistryInfo.basePath), products)
     }
 
-    /**
-     * Load list of components excluded from validation
-     * @return
-     */
     @Override
-    List<String> loadDistributionValidationExcludedComponents() {
-        return readValidationConfigYaml()?.distribution?.get('ee')?.exclude
-    }
-
-    /**
-     * Load list of available labels from validation
-     * @return
-     */
-    @Override
-    Set<String> loadAvailableLabels() {
-        return readValidationConfigYaml()?.labels
+    ValidationConfig loadAndParseValidationConfigFile() {
+        def file = validationConfigPath.toFile()
+        if (!file.exists()) {
+            LOG.warn("YAML file $validationConfigPath does not exist")
+            return new ValidationConfig(null, null)
+        }
+        return yamlMapper.readValue(file, ValidationConfig.class)
     }
 
     def static validateConfig(ConfigObject configObject, VersionNames versionNames) {
         def validator = new GroovySlurperConfigValidator(versionNames)
         validator.validateConfig(configObject)
-    }
-
-    private ValidationConfig readValidationConfigYaml() {
-        def file = validationConfigPath.toFile()
-        if (!file.exists()) {
-            LOG.warn("YAML file $validationConfigPath does not exist")
-            return null
-        }
-        return yamlMapper.readValue(file, ValidationConfig.class)
     }
 }

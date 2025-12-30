@@ -6,37 +6,26 @@ import groovy.transform.TypeChecked
 
 @TypeChecked
 class ValidationConfig {
-    private final Map<String, DistributionConfig> distribution
+    private final Set<String> distributionEeExclude
     private final Set<String> labels
 
     @JsonCreator
     ValidationConfig(
-            @JsonProperty('distribution') Map<String, DistributionConfig> distribution,
+            @JsonProperty('distribution') Map<String, Object> distribution,
             @JsonProperty('labels') Set<String> labels
     ) {
-        this.distribution = distribution
-        this.labels = labels
+        this.labels = labels ?: Collections.emptySet() as Set<String>
+
+        def ee = distribution?.get("ee") as Map
+        def exclude = ee?.get("exclude") as Collection<String>
+        this.distributionEeExclude = exclude?.toSet() ?: Collections.emptySet() as Set<String>
     }
 
-    Map<String, DistributionConfig> getDistribution() {
-        return distribution
+    Set<String> getDistributionEeExclude() {
+        return distributionEeExclude
     }
 
     Set<String> getLabels() {
         return labels
-    }
-
-    @TypeChecked
-    private static class DistributionConfig {
-        private final List<String> exclude
-
-        @JsonCreator
-        DistributionConfig(@JsonProperty('exclude') List<String> exclude) {
-            this.exclude = exclude
-        }
-
-        List<String> getExclude() {
-            return exclude
-        }
     }
 }

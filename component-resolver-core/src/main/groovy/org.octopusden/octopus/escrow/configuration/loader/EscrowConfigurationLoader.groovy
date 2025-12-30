@@ -207,15 +207,13 @@ class EscrowConfigurationLoader {
         def dslComponents = configLoader.loadDslDefinedComponents()
         LOG.info("Loaded ${dslComponents.size()} DSL components")
 
-        def validationExcludedComponents = configLoader.loadDistributionValidationExcludedComponents()
-        def availableLabels = configLoader.loadAvailableLabels()
+        def validationConfig = configLoader.loadAndParseValidationConfigFile()
         EscrowConfigValidator validator = new EscrowConfigValidator(
                 supportedGroupIds,
                 supportedSystems,
                 versionNames,
-                validationExcludedComponents,
-                this.copyrightPath,
-                availableLabels
+                copyrightPath,
+                validationConfig
         )
 
         dslComponents.forEach { component ->

@@ -14,6 +14,7 @@ import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoa
 import org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration
 import org.octopusden.octopus.escrow.configuration.model.EscrowModule
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
+import org.octopusden.octopus.escrow.configuration.model.ValidationConfig
 import org.octopusden.octopus.escrow.model.VersionControlSystemRoot
 import org.octopusden.octopus.escrow.resolvers.ComponentHotfixSupportResolver
 import org.octopusden.releng.versions.KotlinVersionFormatter
@@ -43,7 +44,7 @@ class EscrowConfigValidator {
     private List<String> supportedGroupIds
     private List<String> supportedSystems
     private VersionNames versionNames
-    private final List<String> validationExcludedComponents
+    private final Set<String> validationExcludedComponents
     private final Path copyrightPath
     private final Set<String> availableLabels
 
@@ -84,9 +85,8 @@ class EscrowConfigValidator {
     EscrowConfigValidator(List<String> supportedGroupIds,
                           List<String> supportedSystems,
                           VersionNames versionNames,
-                          List<String> validationExcludedComponents,
                           Path copyrightPath,
-                          Set<String> availableLabels
+                          ValidationConfig validationConfig
     ) {
         if (copyrightPath != null && !Files.isDirectory(copyrightPath)) {
             throw new IllegalStateException("Copyright path '" + copyrightPath + "' is not a directory");
@@ -94,13 +94,9 @@ class EscrowConfigValidator {
         this.supportedGroupIds = supportedGroupIds
         this.supportedSystems = supportedSystems
         this.versionNames = versionNames
-        this.validationExcludedComponents = validationExcludedComponents != null
-                ? Collections.unmodifiableList(validationExcludedComponents)
-                : Collections.emptyList() as List<String>
+        this.validationExcludedComponents = convertToUnmodifiableSet(validationConfig.distributionEeExclude)
         this.copyrightPath = copyrightPath
-        this.availableLabels = availableLabels != null
-                ? Collections.unmodifiableSet(availableLabels)
-                : Collections.emptySet() as Set<String>
+        this.availableLabels = convertToUnmodifiableSet(validationConfig.labels)
     }
 
     List<String> errors = new ArrayList<>()
@@ -723,5 +719,11 @@ class EscrowConfigValidator {
             registerError("Failed to get files from '$copyrightPath', cause: ${exception.message}")
             return null
         }
+    }
+
+    private static Set<String> convertToUnmodifiableSet(Set<String> set) {
+        return set != null
+                ? Collections.unmodifiableSet(set)
+                : Collections.emptySet() as Set<String>
     }
 }
