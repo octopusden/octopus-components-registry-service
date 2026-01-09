@@ -23,6 +23,11 @@ public final class DistributionUtilities {
                 .filter(StringUtils::isNotBlank)
                 .map(item -> {
                     if (item.startsWith("file:/")) {
+                        if (item.length() <= 6) {
+                            throw new IllegalArgumentException(
+                                    "Invalid GAV entry: '" + item + "'. File path cannot be empty."
+                            );
+                        }
                         return new FileDistributionEntity(item);
                     }
 

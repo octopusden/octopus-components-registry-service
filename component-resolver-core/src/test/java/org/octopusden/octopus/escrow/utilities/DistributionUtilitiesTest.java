@@ -73,4 +73,17 @@ public class DistributionUtilitiesTest {
                 "Exception message should indicate invalid GAV entry"
         );
     }
+
+    @Test
+    void testNoPathForFile() {
+        IllegalArgumentException ex = Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> DistributionUtilities.parseDistributionGAV("file:/")
+        );
+
+        Assertions.assertTrue(
+                ex.getMessage().contains("Invalid GAV entry"),
+                "Exception message should indicate invalid GAV entry"
+        );
+    }
 }
