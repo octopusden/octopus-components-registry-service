@@ -9,16 +9,18 @@ class ValidationConfig {
     private final Set<String> distributionEeExclude
     private final Set<String> labels
 
+    ValidationConfig() {}
+
     @JsonCreator
     ValidationConfig(
             @JsonProperty('distribution') Map<String, Object> distribution,
             @JsonProperty('labels') Set<String> labels
     ) {
-        this.labels = labels ?: Collections.emptySet() as Set<String>
+        this.labels = labels
 
         def ee = distribution?.get("ee") as Map
         def exclude = ee?.get("exclude") as Collection<String>
-        this.distributionEeExclude = exclude?.toSet() ?: Collections.emptySet() as Set<String>
+        this.distributionEeExclude = exclude?.toSet()
     }
 
     Set<String> getDistributionEeExclude() {

@@ -108,7 +108,7 @@ class ConfigLoader implements IConfigLoader {
         def file = validationConfigPath.toFile()
         if (!file.exists()) {
             LOG.warn("YAML file $validationConfigPath does not exist")
-            return new ValidationConfig(null, null)
+            return new ValidationConfig()
         }
         return yamlMapper.readValue(file, ValidationConfig.class)
     }

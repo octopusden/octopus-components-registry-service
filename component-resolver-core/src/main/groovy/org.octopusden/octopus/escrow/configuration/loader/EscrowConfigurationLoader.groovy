@@ -875,9 +875,9 @@ class EscrowConfigurationLoader {
         def rawLabels = parentConfigObject.get("labels")
         Set<String> componentLabels = rawLabels?.with {
             it instanceof Collection
-                    ? it.collect { it.toString() } as Set
-                    : [it.toString()] as Set
-        }
+                    ? it.collect { it.toString() }
+                    : [it.toString()]
+        }?.toSet()
 
         return (defaultLabels || componentLabels)
                 ? (defaultLabels ?: []) + (componentLabels ?: [])
