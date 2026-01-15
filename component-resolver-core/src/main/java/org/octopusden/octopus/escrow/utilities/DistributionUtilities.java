@@ -24,19 +24,25 @@ public final class DistributionUtilities {
         }
         return Arrays.stream(distributionGAVAttribute.split("[,|]")).filter(StringUtils::isNotBlank).map(String::trim).map(item -> {
             if (item.startsWith("file:")) {
+                URI uri;
                 try {
-                    URI uri = URI.create(item);
-
-                    String path = uri.getPath();
-                    if (StringUtils.isBlank(path) || "/".equals(path)) {
-                        throw new IllegalArgumentException("Invalid GAV entry: '" + item + "'. File URI must point to a concrete path.");
-                    }
-
-                    return new FileDistributionEntity(item);
+                    uri = URI.create(item);
                 } catch (IllegalArgumentException e) {
-                    throw new IllegalArgumentException("Invalid GAV entry: '" + item + "'. Invalid file URI syntax.", e);
+                    throw new IllegalArgumentException(
+                            "Invalid GAV entry: '" + item + "'. Invalid file URI syntax.", e
+                    );
                 }
+
+                String path = uri.getPath();
+                if (StringUtils.isBlank(path) || "/".equals(path)) {
+                    throw new IllegalArgumentException(
+                            "Invalid GAV entry: '" + item + "'. File URI must point to a concrete path."
+                    );
+                }
+
+                return new FileDistributionEntity(item);
             }
+
             if (MAVEN_GAV_PATTERN.matcher(item).matches()) {
                 return new MavenArtifactDistributionEntity(item);
             }
