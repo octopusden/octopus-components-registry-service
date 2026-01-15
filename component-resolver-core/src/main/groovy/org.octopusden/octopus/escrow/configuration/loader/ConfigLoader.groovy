@@ -1,18 +1,20 @@
 package org.octopusden.octopus.escrow.configuration.loader
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
+import groovy.transform.TupleConstructor
+import groovy.transform.TypeChecked
+import org.apache.logging.log4j.LogManager
+import org.apache.logging.log4j.Logger
 import org.octopusden.octopus.components.registry.api.Component
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.components.registry.dsl.script.ComponentsRegistryScriptRunner
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.RepositoryType
+import org.octopusden.octopus.escrow.configuration.model.ValidationConfig
 import org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator
 import org.octopusden.octopus.escrow.resolvers.ComposedConfigScript
-import groovy.transform.TupleConstructor
-import groovy.transform.TypeChecked
-import org.apache.logging.log4j.LogManager
-import org.apache.logging.log4j.Logger
 import org.octopusden.releng.versions.VersionNames
-import org.yaml.snakeyaml.Yaml
 
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -22,6 +24,7 @@ import java.nio.file.Paths
 class ConfigLoader implements IConfigLoader {
 
     private static final Logger LOG = LogManager.getLogger(ConfigLoader.class)
+    private static final ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory())
 
     private final VersionNames versionNames
     private final ComponentRegistryInfo componentRegistryInfo
@@ -100,43 +103,14 @@ class ConfigLoader implements IConfigLoader {
         return ComponentsRegistryScriptRunner.INSTANCE.loadDSL(Paths.get(componentRegistryInfo.basePath), products)
     }
 
-    /**
-     * Load list of components excluded from validation
-     * @return
-     */
     @Override
-    List<String> loadDistributionValidationExcludedComponents() {
-        def excludedComponents = []
-        LOG.info("Loading excluded components from YAML file: $validationConfigPath")
-
+    ValidationConfig loadAndParseValidationConfigFile() {
         def file = validationConfigPath.toFile()
-        if (file.exists()) {
-            LOG.info("File $validationConfigPath exists. Loading excluded components from YAML")
-            try {
-                def yamlContent = new Yaml().loadAs(file.text, Map.class)
-
-                def excludeList = yamlContent['distribution'] as Map
-                excludeList = excludeList?excludeList['ee'] as Map:null
-                excludeList = excludeList?excludeList['exclude']:null
-
-                if (excludeList) {
-                    if (excludeList instanceof List) {
-                        excludedComponents.addAll(excludeList)
-                    } else {
-                        excludedComponents << excludeList.toString()
-                    }
-                    LOG.info("Found ${excludedComponents.size()} excluded components in YAML")
-                } else {
-                    LOG.info("No distribution.ee.exclude section found in YAML file")
-                }
-            } catch (Exception e) {
-                LOG.error("Error parsing YAML file: ${e.message}", e)
-                throw e
-            }
-        } else {
+        if (!file.exists()) {
             LOG.warn("YAML file $validationConfigPath does not exist")
+            return new ValidationConfig()
         }
-        return excludedComponents as List<String>
+        return yamlMapper.readValue(file, ValidationConfig.class)
     }
 
     def static validateConfig(ConfigObject configObject, VersionNames versionNames) {
