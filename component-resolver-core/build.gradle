@@ -27,7 +27,6 @@ dependencies {
     implementation "org.gradle:gradle-base-services-groovy:4.2"
     implementation "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:${project.properties["jackson.version"]}"
     implementation "org.apache.commons:commons-lang3:${project.properties["apache-commons-lang3.version"]}"
-    api "org.yaml:snakeyaml:1.33"
 
     api "org.jetbrains.kotlin:kotlin-main-kts:${project.properties["kotlin.version"]}"
     api "org.jetbrains.kotlin:kotlin-scripting-jsr223:${project.properties["kotlin.version"]}"
