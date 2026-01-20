@@ -65,5 +65,7 @@ class DefaultConfigParameters {
     Boolean archived
 
     String copyright
+
+    Set<String> labels
 }
 

@@ -15,6 +15,7 @@ abstract class Component(val id: String, val name: String?, val componentOwner: 
     var doc: DocDTO? = null
     var escrow: EscrowDTO? = null
     var copyright: String? = null
+    var labels: Set<String> = emptySet()
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
@@ -36,7 +37,7 @@ abstract class Component(val id: String, val name: String?, val componentOwner: 
         if (doc != other.doc) return false
         if (escrow != other.escrow) return false
         if (copyright != other.copyright) return false
-
+        if (labels != other.labels) return false
         return true
     }
 
@@ -57,6 +58,7 @@ abstract class Component(val id: String, val name: String?, val componentOwner: 
             doc,
             escrow,
             copyright,
+            labels,
         )
     }
 
@@ -64,6 +66,7 @@ abstract class Component(val id: String, val name: String?, val componentOwner: 
         return "Component(id='$id', name=$name, componentOwner='$componentOwner', system=$system, " +
                 "clientCode=$clientCode, releasesInDefaultBranch=$releasesInDefaultBranch, solution=$solution, " +
                 "parentComponent=$parentComponent, securityChampion=$securityChampion, releaseManager=$releaseManager, " +
-                "distribution=$distribution, archived=$archived, doc=$doc, escrow=$escrow, copyright='$copyright')"
+                "distribution=$distribution, archived=$archived, doc=$doc, escrow=$escrow, copyright='$copyright' " +
+                "labels=$labels)"
     }
 }
