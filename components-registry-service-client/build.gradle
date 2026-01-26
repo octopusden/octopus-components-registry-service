@@ -28,7 +28,6 @@ configurations {
 dependencies {
     api project(":components-registry-service-core")
     implementation "com.fasterxml.jackson.core:jackson-databind"
-
     implementation(platform("io.github.openfeign:feign-bom:12.2"))
     implementation("io.github.openfeign:feign-httpclient")
     implementation("io.github.openfeign:feign-jackson")
