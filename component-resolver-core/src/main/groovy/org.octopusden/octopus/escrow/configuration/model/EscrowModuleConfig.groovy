@@ -10,6 +10,7 @@ import org.octopusden.octopus.components.registry.api.beans.VersionedComponentCo
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.components.registry.api.escrow.Escrow
 import org.octopusden.octopus.crs.resolver.core.converter.BuildParametersConverter
+import org.octopusden.octopus.crs.resolver.core.converter.EscrowConverter
 import org.octopusden.octopus.crs.resolver.core.converter.VCSSettingsConverter
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.model.BuildParameters
@@ -212,6 +213,9 @@ class EscrowModuleConfig {
         }
         if (vcsSettings) {
             component.vcs = new VCSSettingsConverter().convertFrom(vcsSettings)
+        }
+        if (escrow) {
+            component.escrow = new EscrowConverter().convertFrom(this)
         }
         //TODO Set others attributes
         return component
