@@ -1,4 +1,5 @@
 import static org.octopusden.octopus.escrow.BuildSystem.*
+import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
 
 "gradle-staging-plugin" {
     componentOwner = "user"
@@ -6,6 +7,9 @@ import static org.octopusden.octopus.escrow.BuildSystem.*
     groupId = "org.octopusden.octopus.gradle.plugin"
     artifactId = "gradle-staging-plugin"
     buildSystem = GRADLE
+    escrow {
+        generation = EscrowGenerationMode.AUTO
+    }
     copyright = "companyName1"
     "(,1.200),[2,)" {
         vcsSettings {
