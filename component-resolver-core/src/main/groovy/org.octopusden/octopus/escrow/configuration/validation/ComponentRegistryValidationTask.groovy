@@ -18,7 +18,7 @@ import org.slf4j.LoggerFactory
 import java.nio.file.Path
 import java.nio.file.Paths
 
-import static groovyx.net.http.ContentType.TEXT
+import static groovyx.net.http.ContentType.JSON
 
 /**
  * Component Registry Validator that can run in a separate JVM process.
@@ -241,16 +241,15 @@ class ComponentRegistryValidationTask {
     private List<String> getJiRAComponents() {
         def components = []
         try {
-            def http = new HTTPBuilder("https://$jiraHost/rest/release-engineering/3/component-management/components")
-            http.get(contentType: TEXT) { resp, reader ->
-                if (reader != null) {
-                    def componentList = reader.text as String
-                    components.addAll(componentList.split(","))
+            def http = new HTTPBuilder("https://$jiraHost/rest/release-engineering/3/component-management")
+            http.get(contentType: JSON) { resp, json ->
+                if (json instanceof List) {
+                    components.addAll(json.collect { it.id })
                 }
             }
         } catch (Exception e) {
-            // service may be not available until its not in production
             log.error("Unable to get components from jira", e)
+            throw e
         }
         components
     }
