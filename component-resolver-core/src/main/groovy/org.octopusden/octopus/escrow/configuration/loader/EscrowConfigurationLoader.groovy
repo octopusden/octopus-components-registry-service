@@ -371,7 +371,7 @@ class EscrowConfigurationLoader {
                 def buildFileLocation = moduleConfigSection.containsKey("buildFilePath") ? moduleConfigSection.buildFilePath.toString() :
                         componentDefaultConfiguration.buildFilePath
                 def escrow = loadEscrow(moduleConfigSection, componentDefaultConfiguration.escrow)
-                def doc = loadDoc(moduleConfigSection)
+                def doc = loadDoc(moduleConfigSection, componentDefaultConfiguration.doc)
 
                 def escrowModuleConfiguration = new EscrowModuleConfig(buildSystem: buildSystem,
                         groupIdPattern: moduleConfigSection.containsKey("groupId") ? moduleConfigSection.groupId : componentDefaultConfiguration.groupIdPattern,
@@ -896,12 +896,12 @@ class EscrowConfigurationLoader {
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
-    private static Doc loadDoc(ConfigObject parentConfigObject) {
+    private static Doc loadDoc(ConfigObject parentConfigObject, Doc defaultDoc) {
         if (parentConfigObject.containsKey("doc")) {
             def configObject = parentConfigObject.get("doc") as ConfigObject
             return parseDocSection(configObject)
         } else {
-            return null
+            return defaultDoc
         }
     }
 
@@ -1111,6 +1111,7 @@ class EscrowConfigurationLoader {
                         componentInfo, pureComponentDefaults?.jiraComponent?.technical ?: false, isHotfixEnabled)
 
         pureComponentDefaults.escrow = pureComponentDefaults.escrow != null ? pureComponentDefaults.escrow : defaultConfigParameters.escrow
+        pureComponentDefaults.doc = pureComponentDefaults.doc != null ? pureComponentDefaults.doc : defaultConfigParameters.doc
 
         return pureComponentDefaults
     }
@@ -1165,7 +1166,7 @@ class EscrowConfigurationLoader {
         final Set<String> labels = loadLabels(componentConfigObject, defaultConfiguration.labels)
 
         Escrow escrow = loadEscrow(componentConfigObject, defaultConfiguration.escrow)
-        Doc doc = loadDoc(componentConfigObject)
+        Doc doc = loadDoc(componentConfigObject, defaultConfiguration.doc)
 
         def defaultConfigParameters = new DefaultConfigParameters(buildSystem: buildSystem,
                 groupIdPattern: componentConfigObject.containsKey("groupId") ? componentConfigObject.groupId : defaultConfiguration?.groupIdPattern,

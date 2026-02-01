@@ -371,7 +371,7 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
         expectedComponent.copyright = "companyName1"
         expectedComponent.labels = setOf("Label2")
 
-        Assertions.assertEquals(54, components.components.size)
+        Assertions.assertEquals(55, components.components.size)
         Assertions.assertTrue(expectedComponent in components.components) {
             components.components.toString()
         }
@@ -497,6 +497,29 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
             expectedComponent.doc,
             actualComponent.doc,
             "Components do not match"
+        )
+    }
+
+    @Test
+    fun testGetComponentDocWithVersionRange() {
+        val actualComponent = mvc.perform(
+            MockMvcRequestBuilders.get("/rest/api/2/components/TEST_COMPONENT_WITH_DOC_AND_VERSIONS/versions/1.3")
+                .accept(APPLICATION_JSON)
+        )
+            .andExpect(status().isOk)
+            .andReturn()
+            .response
+            .toObject(ComponentV2::class.java)
+
+        val expectedComponent = ComponentV2("TEST_COMPONENT_WITH_DOC_AND_VERSIONS", "Test Component with Doc", "user9")
+        expectedComponent.doc = DocDTO(
+            "TEST_COMPONENT_DOC",
+            "1.2"
+        )
+        Assertions.assertEquals(
+            expectedComponent.doc,
+            actualComponent.doc,
+            "Doc do not match"
         )
     }
 

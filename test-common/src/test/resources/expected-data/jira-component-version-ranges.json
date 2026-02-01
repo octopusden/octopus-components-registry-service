@@ -1617,6 +1617,74 @@
     }
   },
   {
+    "componentName": "TEST_COMPONENT_WITH_DOC_AND_VERSIONS",
+    "versionRange": "[1.0,1.3)",
+    "component": {
+      "projectKey": "DOC",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major.$minor",
+        "releaseVersionFormat": "$major.$minor.$service",
+        "buildVersionFormat": "$major.$minor.$service-$fix",
+        "lineVersionFormat": "$major.$minor",
+        "hotfixVersionFormat": "$major.$minor.$service-$fix.$build"
+      },
+      "componentInfo": {
+        "versionPrefix": "",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      },
+      "docker": "test-doc"
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "TEST_COMPONENT_WITH_DOC_AND_VERSIONS",
+    "versionRange": "[1.3,)",
+    "component": {
+      "projectKey": "DOC",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major.$minor",
+        "releaseVersionFormat": "$major.$minor.$service",
+        "buildVersionFormat": "$major.$minor.$service-$fix",
+        "lineVersionFormat": "$major.$minor",
+        "hotfixVersionFormat": "$major.$minor.$service-$fix.$build"
+      },
+      "componentInfo": {
+        "versionPrefix": "",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      },
+        "docker": "test-doc"
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [],
+      "externalRegistry": null
+    }
+  },
+  {
     "componentName": "TEST_COMPONENT_WITH_DOC",
     "versionRange": "(,0),[0,)",
     "component": {
