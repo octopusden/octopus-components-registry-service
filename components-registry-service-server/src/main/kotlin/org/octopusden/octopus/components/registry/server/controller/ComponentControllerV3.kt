@@ -7,6 +7,7 @@ import org.octopusden.octopus.components.registry.core.dto.ComponentImage
 import org.octopusden.octopus.components.registry.core.dto.ComponentV2
 import org.octopusden.octopus.components.registry.core.dto.ComponentV3
 import org.octopusden.octopus.components.registry.core.dto.Image
+import org.octopusden.octopus.components.registry.server.mapper.toDTO
 import org.octopusden.octopus.components.registry.server.service.ComponentRegistryResolver
 import org.octopusden.octopus.components.registry.server.service.CopyrightService
 import org.springframework.core.io.Resource
@@ -45,6 +46,7 @@ class ComponentControllerV3(
             ).apply {
                 copyright = baseConfiguration.copyright
                 labels = baseConfiguration.labels?.toSet() ?: emptySet()
+                escrow = baseConfiguration.escrow?.toDTO()
             }
 
             ComponentV3(

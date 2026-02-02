@@ -11,6 +11,7 @@ import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
 import org.octopusden.octopus.components.registry.api.beans.GitVersionControlSystemBean
 import org.octopusden.octopus.components.registry.api.enums.BuildSystemType
+import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
 import org.octopusden.octopus.components.registry.api.vcs.VersionControlSystem
 import org.octopusden.octopus.components.registry.client.impl.ClassicComponentsRegistryServiceClient
 import org.octopusden.octopus.components.registry.client.impl.ClassicComponentsRegistryServiceClientUrlProvider
@@ -65,13 +66,17 @@ class ComponentRegistryServiceClientV3Test {
         componentKey: String,
         versionRange: String,
         buildSystemType: BuildSystemType,
-        versionControlSystem: VersionControlSystem
-    ) {
+        versionControlSystem: VersionControlSystem,
+        escrowGenerationMode: EscrowGenerationMode,
+        escrowGenerationModeDTO: org.octopusden.octopus.components.registry.core.dto.EscrowGenerationMode
+        ) {
         val component = componentsRegistryClient.getComponents().find { it.component.id == componentKey }
         assertThat(component).isNotNull
         assertThat(component?.variants?.get(versionRange)).isNotNull
+        assertThat(component?.component?.escrow?.generation).isEqualTo(escrowGenerationModeDTO)
         assertThat(component!!.variants[versionRange]?.build?.buildSystem?.type).isEqualTo(buildSystemType)
         assertThat(component.variants[versionRange]?.vcs).isEqualTo(versionControlSystem)
+        assertThat(component.variants[versionRange]?.escrow?.generation?.get()).isEqualTo(escrowGenerationMode)
     }
 
     /**
@@ -115,7 +120,9 @@ class ComponentRegistryServiceClientV3Test {
                     "ssh://git@github.com:octopusden/archive/gradle-staging-plugin.git",
                     "\$module-\$version",
                     "master"
-                )
+                ),
+                EscrowGenerationMode.AUTO,
+                org.octopusden.octopus.components.registry.core.dto.EscrowGenerationMode.AUTO
             ),
             Arguments.of(
                 "gradle-staging-plugin",
@@ -125,7 +132,9 @@ class ComponentRegistryServiceClientV3Test {
                     "ssh://git@github.com:octopusden/octopus-rm-gradle-plugin.git",
                     "release-management-gradle-plugin-\$version",
                     "master"
-                )
+                ),
+                EscrowGenerationMode.AUTO,
+                org.octopusden.octopus.components.registry.core.dto.EscrowGenerationMode.AUTO
             )
         )
 
