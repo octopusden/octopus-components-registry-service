@@ -523,6 +523,35 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
         )
     }
 
+    /**
+     * Verifies that Doc configured at component level is correctly overridden by version-range-specific Doc.
+     * TEST_COMPONENT_WITH_DOC_AND_VERSIONS has component-level doc (TEST_COMPONENT_DOC:1.2) and
+     * version range [1.0,1.3) overrides it with doc_mycomponent:1.3.
+     * For version 1.2.5 (within [1.0,1.3)) the API must return the overridden doc, not the component-level one.
+     */
+    @Test
+    fun testGetComponentVersionDocOverriddenAtVersionLevel() {
+        val actualComponent = mvc.perform(
+            MockMvcRequestBuilders.get("/rest/api/2/components/TEST_COMPONENT_WITH_DOC_AND_VERSIONS/versions/1.2.5")
+                .accept(APPLICATION_JSON)
+        )
+            .andExpect(status().isOk)
+            .andReturn()
+            .response
+            .toObject(ComponentV2::class.java)
+
+        val expectedComponent = ComponentV2("TEST_COMPONENT_WITH_DOC_AND_VERSIONS", "Test Component with Doc", "user9")
+        expectedComponent.doc = DocDTO(
+            "doc_mycomponent",
+            "1.3"
+        )
+        Assertions.assertEquals(
+            expectedComponent.doc,
+            actualComponent.doc,
+            "Doc overridden at version level [1.0,1.3) should be doc_mycomponent:1.3, not component-level TEST_COMPONENT_DOC:1.2"
+        )
+    }
+
     @Test
     fun testGetComponentVersionEscrow() {
         val actualComponent = mvc.perform(
