@@ -274,6 +274,44 @@ TEST_COMPONENT {
     branch = "v2"
 }
 
+TEST_COMPONENT_WITH_DOC_AND_VERSIONS {
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.test2"
+    artifactId = "test2"
+    componentDisplayName = "Test Component with Doc"
+    doc {
+        component = "TEST_COMPONENT_DOC"
+        majorVersion = "1.2"
+    }
+    jira {
+        projectKey = "DOC"
+        majorVersionFormat = '$major.$minor'
+        releaseVersionFormat = '$major.$minor.$service'
+        lineVersionFormat = '$major.$minor'
+        buildVersionFormat = '$major.$minor.$service-$fix'
+    }
+    distribution {
+        explicit = false
+        external = true
+        docker = 'test-doc'
+    }
+    buildSystem = GRADLE
+    "[1.0,1.3)" {
+        vcsSettings {
+            branch = "v1.2"
+        }
+        doc {
+            component = "doc_mycomponent"
+            majorVersion = '1.3'
+        }
+    }
+    "[1.3,)" {
+        vcsSettings {
+            branch = "master"
+        }
+    }
+}
+
 TEST_COMPONENT_WITH_DOC {
     componentOwner = "user9"
     groupId = "org.octopusden.octopus.test2"
