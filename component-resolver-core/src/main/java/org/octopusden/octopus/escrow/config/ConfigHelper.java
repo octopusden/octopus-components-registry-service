@@ -44,7 +44,7 @@ public class ConfigHelper {
         if (environment.containsProperty(param)) {
             return environment.getRequiredProperty(param);
         }
-        return environment.getRequiredProperty(PATH_TO_CONFIG) + File.separator
+        return environment.getRequiredProperty(PATH_TO_CONFIG) + "/"
                 + environment.getProperty("mainConfigFile", DEFAULT_MAIN_CONFIG_FILE);
     }
 

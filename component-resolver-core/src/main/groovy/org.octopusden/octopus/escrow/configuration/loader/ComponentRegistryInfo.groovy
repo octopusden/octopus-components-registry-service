@@ -17,8 +17,13 @@ class ComponentRegistryInfo {
     }
 
     static ComponentRegistryInfo createFromURL(URL url) {
-        File file = new File(url.getFile());
-        return createFromFileSystem(file.getParent(), file.getName());
+        File file
+        try {
+            file = new File(url.toURI())
+        } catch (URISyntaxException | IllegalArgumentException ignored) {
+            file = new File(url.getFile())
+        }
+        return createFromFileSystem(file.getParent(), file.getName())
     }
 
     private ComponentRegistryInfo(String basePath, String mainConfigName, boolean fromClassPath) {
