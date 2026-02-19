@@ -42,6 +42,8 @@ object ComponentsRegistryScriptRunner {
         setIdeaIoUseFallback()
         if (System.getProperty("kotlin.script.classpath").isNullOrEmpty()) {
             val custom = System.getProperty("cr.dsl.class.path") ?: resolveClasspath()
+            logger.info("Setting kotlin.script.classpath with ${custom.split(File.pathSeparator).size} entries")
+            logger.fine("kotlin.script.classpath = $custom")
             System.setProperty("kotlin.script.classpath", custom)
         }
     }
@@ -49,7 +51,17 @@ object ComponentsRegistryScriptRunner {
     private fun resolveClasspath(): String {
         val javaClassPath = System.getProperty("java.class.path") ?: ""
         val extracted = extractedBootInfJarPaths
-        return if (extracted.isNotEmpty()) extracted.joinToString(File.pathSeparator) else javaClassPath
+        if (extracted.isEmpty()) return javaClassPath
+
+        // On Windows, normalize paths to use forward slashes for the Kotlin script engine
+        // The Kotlin compiler expects forward slashes in classpath entries, even on Windows
+        val normalizedPaths = if (isWindows) {
+            extracted.map { it.replace('\\', '/') }
+        } else {
+            extracted
+        }
+
+        return normalizedPaths.joinToString(File.pathSeparator)
     }
 
     private fun buildSafeClassLoader(): ClassLoader {
@@ -81,6 +93,7 @@ object ComponentsRegistryScriptRunner {
 
                 logger.info("Windows: extracting ${bootInfEntries.size} nested JARs from fat JAR for Kotlin scripting")
                 val tempDir = Files.createTempDirectory("kotlin-script")
+                logger.info("Windows: created temp directory at ${tempDir.toAbsolutePath()}")
                 Runtime.getRuntime().addShutdownHook(Thread { tempDir.toFile().deleteRecursively() })
 
                 for (entry in bootInfEntries) {
@@ -91,7 +104,14 @@ object ComponentsRegistryScriptRunner {
                             targetFile.outputStream().use { output -> input.copyTo(output) }
                         }
                     }
-                    paths.add(targetFile.absolutePath)
+                    // Use canonical path to resolve any symlinks or path issues
+                    val canonicalPath = try {
+                        targetFile.canonicalPath
+                    } catch (e: Exception) {
+                        logger.warning("Failed to get canonical path for ${targetFile.absolutePath}, using absolute path: ${e.message}")
+                        targetFile.absolutePath
+                    }
+                    paths.add(canonicalPath)
                 }
             }
         } catch (e: Exception) {
