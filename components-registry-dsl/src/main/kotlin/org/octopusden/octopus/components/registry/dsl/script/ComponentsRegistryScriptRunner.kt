@@ -4,10 +4,14 @@ import org.jetbrains.kotlin.cli.common.environment.setIdeaIoUseFallback
 import org.octopusden.octopus.components.registry.api.Component
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import java.io.File
+import java.net.URI
 import java.net.URL
 import java.net.URLClassLoader
+import java.nio.file.FileSystem
+import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.ConcurrentMap
 import java.util.jar.JarFile
 import java.util.logging.Logger
 import java.util.stream.Collectors
@@ -83,6 +87,34 @@ object ComponentsRegistryScriptRunner {
 
         // 4. NOW it's safe to initialize Kotlin compiler
         setIdeaIoUseFallback()
+
+        // 5. On Windows, pre-populate the Kotlin compiler's JRT filesystem cache with the
+        // default (already-working) JRT filesystem. Without this, the Kotlin compiler's
+        // CoreJrtFileSystem creates File(java.home).absolutePath which converts forward slashes
+        // back to backslashes, then passes that to FileSystems.newFileSystem("jrt:/", ...) which
+        // fails with IOException on Windows. By pre-populating the cache, that code path is skipped.
+        if (isWindows) {
+            prePopulateJrtFsCache()
+        }
+    }
+
+    private fun prePopulateJrtFsCache() {
+        try {
+            // The Kotlin compiler's CoreJrtFileSystem uses File(java.home).absolutePath as cache key,
+            // which always has backslashes on Windows regardless of System.setProperty normalization
+            val jdkHomeKey = File(System.getProperty("java.home")).absolutePath
+            val defaultJrtFs = FileSystems.getFileSystem(URI.create("jrt:/"))
+
+            val coreJrtClass = Class.forName("org.jetbrains.kotlin.cli.jvm.modules.CoreJrtFileSystem")
+            val cacheField = coreJrtClass.getDeclaredField("globalJrtFsCache")
+            cacheField.isAccessible = true
+            @Suppress("UNCHECKED_CAST")
+            val cache = cacheField.get(null) as ConcurrentMap<String, FileSystem>
+            cache.putIfAbsent(jdkHomeKey, defaultJrtFs)
+            logger.info("Pre-populated JRT filesystem cache for key: $jdkHomeKey")
+        } catch (e: Exception) {
+            logger.warning("Failed to pre-populate JRT filesystem cache (non-fatal): ${e.message}")
+        }
     }
 
     private fun resolveClasspath(): String {
