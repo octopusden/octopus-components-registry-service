@@ -1,6 +1,8 @@
 package org.octopusden.octopus.escrow.configuration.loader
 
 import org.apache.commons.lang3.Validate
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
 
 class ComponentRegistryInfo {
 
@@ -21,9 +23,22 @@ class ComponentRegistryInfo {
         try {
             file = new File(url.toURI())
         } catch (URISyntaxException | IllegalArgumentException ignored) {
-            file = new File(url.getFile())
+            // Handle malformed URIs or special URL formats
+            String urlPath = URLDecoder.decode(url.getFile(), StandardCharsets.UTF_8.toString())
+            // On Windows, remove leading slash from file:///C:/path format
+            if (System.getProperty("os.name", "").toLowerCase().contains("win") &&
+                urlPath.matches("^/[A-Za-z]:/.*")) {
+                urlPath = urlPath.substring(1)
+            }
+            file = new File(urlPath)
         }
-        return createFromFileSystem(file.getParent(), file.getName())
+
+        String parentPath = file.getParent()
+        if (parentPath == null) {
+            throw new IllegalStateException("Cannot determine parent directory for config file URL: ${url}, resolved file: ${file.absolutePath}")
+        }
+
+        return createFromFileSystem(parentPath, file.getName())
     }
 
     private ComponentRegistryInfo(String basePath, String mainConfigName, boolean fromClassPath) {
