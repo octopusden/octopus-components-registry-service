@@ -85,35 +85,54 @@ object ComponentsRegistryScriptRunner {
             logger.info("  kotlin.script.classpath entry $i: $path")
         }
 
-        // 4. NOW it's safe to initialize Kotlin compiler
-        setIdeaIoUseFallback()
-
-        // 5. On Windows, pre-populate the Kotlin compiler's JRT filesystem cache with the
-        // default (already-working) JRT filesystem. Without this, the Kotlin compiler's
-        // CoreJrtFileSystem creates File(java.home).absolutePath which converts forward slashes
-        // back to backslashes, then passes that to FileSystems.newFileSystem("jrt:/", ...) which
-        // fails with IOException on Windows. By pre-populating the cache, that code path is skipped.
+        // 4. On Windows, pre-populate the Kotlin compiler's JRT filesystem cache BEFORE
+        // setIdeaIoUseFallback(). This must happen first because setIdeaIoUseFallback() loads
+        // Kotlin compiler classes which may trigger CoreJrtFileSystem initialization.
+        // Without this, CoreJrtFileSystem creates File(java.home).absolutePath which converts
+        // forward slashes back to backslashes, then passes that to
+        // FileSystems.newFileSystem("jrt:/", ...) which fails with IOException on Windows.
         if (isWindows) {
-            prePopulateJrtFsCache()
+            prePopulateJrtFsCache(this::class.java.classLoader)
         }
+
+        // 5. NOW it's safe to initialize Kotlin compiler
+        setIdeaIoUseFallback()
     }
 
-    private fun prePopulateJrtFsCache() {
+    /**
+     * Pre-populate CoreJrtFileSystem.globalJrtFsCache with the default JRT filesystem.
+     * Uses the specified classloader to find the CoreJrtFileSystem class, addressing
+     * potential classloader isolation in Spring Boot fat JAR environments.
+     */
+    private fun prePopulateJrtFsCache(classLoader: ClassLoader) {
         try {
-            // The Kotlin compiler's CoreJrtFileSystem uses File(java.home).absolutePath as cache key,
-            // which always has backslashes on Windows regardless of System.setProperty normalization
             val jdkHomeKey = File(System.getProperty("java.home")).absolutePath
             val defaultJrtFs = FileSystems.getFileSystem(URI.create("jrt:/"))
 
-            val coreJrtClass = Class.forName("org.jetbrains.kotlin.cli.jvm.modules.CoreJrtFileSystem")
+            val coreJrtClass = Class.forName(
+                "org.jetbrains.kotlin.cli.jvm.modules.CoreJrtFileSystem", true, classLoader
+            )
             val cacheField = coreJrtClass.getDeclaredField("globalJrtFsCache")
             cacheField.isAccessible = true
             @Suppress("UNCHECKED_CAST")
             val cache = cacheField.get(null) as ConcurrentMap<String, FileSystem>
-            cache.putIfAbsent(jdkHomeKey, defaultJrtFs)
-            logger.info("Pre-populated JRT filesystem cache for key: $jdkHomeKey")
+
+            // Use put() instead of putIfAbsent() to force overwrite any previously cached failure
+            cache.put(jdkHomeKey, defaultJrtFs)
+
+            // Verify the cache entry was stored correctly
+            val verified = cache[jdkHomeKey]
+            if (verified === defaultJrtFs) {
+                logger.info("Pre-populated JRT filesystem cache for key: $jdkHomeKey " +
+                    "(classLoader=${classLoader::class.java.simpleName}, " +
+                    "coreJrtClass@${System.identityHashCode(coreJrtClass).toString(16)})")
+            } else {
+                logger.warning("JRT cache verification failed: stored=$defaultJrtFs, got=$verified " +
+                    "(classLoader=${classLoader::class.java.simpleName})")
+            }
         } catch (e: Exception) {
-            logger.warning("Failed to pre-populate JRT filesystem cache (non-fatal): ${e.message}")
+            logger.warning("Failed to pre-populate JRT filesystem cache " +
+                "(classLoader=${classLoader::class.java.simpleName}): ${e.message}")
         }
     }
 
@@ -217,6 +236,12 @@ object ComponentsRegistryScriptRunner {
 
         val engine = try {
             Thread.currentThread().contextClassLoader = safeScriptClassLoader
+            // Re-populate JRT cache using the context classloader that the REPL compiler will use.
+            // This handles classloader isolation in Spring Boot fat JAR where the compiler may
+            // load CoreJrtFileSystem through a different classloader than the init block used.
+            if (isWindows) {
+                prePopulateJrtFsCache(Thread.currentThread().contextClassLoader)
+            }
             KotlinJsr223DefaultScriptEngineFactory().scriptEngine.also {
                 logger.info("Using KotlinJsr223DefaultScriptEngineFactory")
             }
