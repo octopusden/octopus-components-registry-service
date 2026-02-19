@@ -65,20 +65,15 @@ class FatJarStartupIntegrationTest {
         Assertions.assertTrue(profilePath.exists(), "Integration test profile not found at: ${profilePath.absolutePath}")
         
         // Use URI format for file paths to ensure cross-platform compatibility (especially Windows)
-        val profileUri = profilePath.toURI().toString()
-        val groovyPathUri = dslDir.toAbsolutePath().toUri().toString().trimEnd('/')
+        val profilePathStr = profilePath.absolutePath
         val groovyPathStr = dslDir.toAbsolutePath().toString()
-
-        // Normalize java.home for Windows to use forward slashes (Kotlin compiler requirement)
-        val normalizedJavaHome = javaHome.replace('\\', '/')
 
         val command = listOf(
             javaExecutable.absolutePath,
-            "-Djava.home=$normalizedJavaHome",
             "-Dspring.cloud.config.enabled=false",
             "-Dspring.profiles.active=integration-test",
-            "-Dspring.config.additional-location=$profileUri",
-            "-DpathToConfig=$groovyPathUri",
+            "-Dspring.config.additional-location=$profilePathStr",
+            "-DpathToConfig=$groovyPathStr",
             "-Dcomponents-registry.groovy-path=$groovyPathStr",
             "-Dcomponents-registry.work-dir=${tempDir.toAbsolutePath()}",
             "-Dcomponents-registry.project-registry-path=${projectRegistryFile.toAbsolutePath()}",

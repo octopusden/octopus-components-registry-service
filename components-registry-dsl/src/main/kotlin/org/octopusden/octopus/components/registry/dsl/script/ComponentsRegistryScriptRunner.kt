@@ -46,6 +46,7 @@ object ComponentsRegistryScriptRunner {
         // 1. Normalize java.home on Windows
         if (isWindows) {
             val javaHome = System.getProperty("java.home")
+            logger.info("Windows detected. Current java.home = $javaHome")
             if (javaHome != null && javaHome.contains('\\')) {
                 // Convert backslashes to forward slashes
                 val normalizedJavaHome = javaHome.replace('\\', '/')
