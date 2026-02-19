@@ -40,6 +40,18 @@ object ComponentsRegistryScriptRunner {
 
     init {
         setIdeaIoUseFallback()
+
+        // On Windows, normalize java.home path for Kotlin compiler
+        if (isWindows) {
+            val javaHome = System.getProperty("java.home")
+            if (javaHome != null) {
+                // Convert backslashes to forward slashes for Kotlin compiler
+                val normalizedJavaHome = javaHome.replace('\\', '/')
+                System.setProperty("kotlin.compiler.jdkHome", normalizedJavaHome)
+                logger.info("Set kotlin.compiler.jdkHome to: $normalizedJavaHome")
+            }
+        }
+
         if (System.getProperty("kotlin.script.classpath").isNullOrEmpty()) {
             val custom = System.getProperty("cr.dsl.class.path") ?: resolveClasspath()
             logger.info("Setting kotlin.script.classpath with ${custom.split(File.pathSeparator).size} entries")
