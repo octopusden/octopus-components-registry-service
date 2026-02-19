@@ -39,10 +39,11 @@ object ComponentsRegistryScriptRunner {
     private val safeScriptClassLoader: ClassLoader by lazy { buildSafeClassLoader() }
 
     init {
-        setIdeaIoUseFallback()
+        // CRITICAL: Set all Kotlin compiler properties BEFORE setIdeaIoUseFallback()
+        // setIdeaIoUseFallback() loads Kotlin compiler classes which immediately
+        // read and cache these properties. If we set them after, it's too late!
 
-        // On Windows, normalize java.home path for Kotlin compiler
-        // The Kotlin compiler reads java.home directly and doesn't handle backslashes well
+        // 1. Normalize java.home on Windows
         if (isWindows) {
             val javaHome = System.getProperty("java.home")
             if (javaHome != null && javaHome.contains('\\')) {
@@ -54,12 +55,19 @@ object ComponentsRegistryScriptRunner {
             }
         }
 
+        // 2. Set kotlin.script.classpath
         if (System.getProperty("kotlin.script.classpath").isNullOrEmpty()) {
             val custom = System.getProperty("cr.dsl.class.path") ?: resolveClasspath()
             logger.info("Setting kotlin.script.classpath with ${custom.split(File.pathSeparator).size} entries")
-            logger.fine("kotlin.script.classpath = $custom")
+            // Log first 3 entries to verify path format
+            custom.split(File.pathSeparator).take(3).forEachIndexed { i, path ->
+                logger.info("  Entry $i: $path")
+            }
             System.setProperty("kotlin.script.classpath", custom)
         }
+
+        // 3. NOW it's safe to initialize Kotlin compiler
+        setIdeaIoUseFallback()
     }
 
     private fun resolveClasspath(): String {

@@ -69,8 +69,12 @@ class FatJarStartupIntegrationTest {
         val groovyPathUri = dslDir.toAbsolutePath().toUri().toString().trimEnd('/')
         val groovyPathStr = dslDir.toAbsolutePath().toString()
 
+        // Normalize java.home for Windows to use forward slashes (Kotlin compiler requirement)
+        val normalizedJavaHome = javaHome.replace('\\', '/')
+
         val command = listOf(
             javaExecutable.absolutePath,
+            "-Djava.home=$normalizedJavaHome",
             "-Dspring.cloud.config.enabled=false",
             "-Dspring.profiles.active=integration-test",
             "-Dspring.config.additional-location=$profileUri",
