@@ -42,13 +42,15 @@ object ComponentsRegistryScriptRunner {
         setIdeaIoUseFallback()
 
         // On Windows, normalize java.home path for Kotlin compiler
+        // The Kotlin compiler reads java.home directly and doesn't handle backslashes well
         if (isWindows) {
             val javaHome = System.getProperty("java.home")
-            if (javaHome != null) {
-                // Convert backslashes to forward slashes for Kotlin compiler
+            if (javaHome != null && javaHome.contains('\\')) {
+                // Convert backslashes to forward slashes
                 val normalizedJavaHome = javaHome.replace('\\', '/')
-                System.setProperty("kotlin.compiler.jdkHome", normalizedJavaHome)
-                logger.info("Set kotlin.compiler.jdkHome to: $normalizedJavaHome")
+                logger.info("Normalizing java.home from: $javaHome")
+                logger.info("Normalizing java.home to: $normalizedJavaHome")
+                System.setProperty("java.home", normalizedJavaHome)
             }
         }
 
