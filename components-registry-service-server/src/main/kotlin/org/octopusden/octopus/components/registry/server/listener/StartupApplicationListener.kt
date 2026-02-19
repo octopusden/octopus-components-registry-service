@@ -37,7 +37,7 @@ class StartupApplicationListener: ApplicationListener<ApplicationStartingEvent> 
     override fun onApplicationEvent(event: ApplicationStartingEvent) {
         val dslKotlinModule = Thread.currentThread().contextClassLoader.getResource("/components-registry-dsl.txt")
         LOG.debug("StartupApplicationListener running. dslKotlinModule={}", dslKotlinModule)
-        
+
         if (dslKotlinModule != null && dslKotlinModule.toString().contains("!BOOT-INF/")) {
             LOG.debug("Spring boot jar running mode detected")
             temporaryLibraryPath = Files.createTempDirectory("components-registry-dsl-" + UUID.randomUUID())
@@ -47,7 +47,7 @@ class StartupApplicationListener: ApplicationListener<ApplicationStartingEvent> 
                 Files.walk(fs.getPath("/BOOT-INF/lib")).use { filePath ->
                     libraryFiles.addAll(filePath.filter { it.toString().endsWith(".jar") }.toList())
                 }
-                
+
                 // Fix for kotlin.java.stdlib.jar property issue in fat jar
                 val stdlibJar = libraryFiles.find { it.fileName.toString().matches(Regex("kotlin-stdlib-\\d+.*\\.jar")) }
                 if (stdlibJar != null) {
@@ -55,7 +55,7 @@ class StartupApplicationListener: ApplicationListener<ApplicationStartingEvent> 
                     if (!Files.exists(dstPath)) {
                         Files.copy(stdlibJar, dstPath)
                     }
-                    System.setProperty("kotlin.java.stdlib.jar", dstPath.toString())
+                    System.setProperty("kotlin.java.stdlib.jar", normalizePath(dstPath.toString()))
                     LOG.info("Set kotlin.java.stdlib.jar to $dstPath")
                 } else {
                     LOG.warn("Unable to find kotlin-stdlib jar in BOOT-INF/lib")
@@ -70,14 +70,18 @@ class StartupApplicationListener: ApplicationListener<ApplicationStartingEvent> 
                         if (!Files.exists(dstPath)) {
                             Files.copy(srcPath, dstPath)
                         }
-                        dslLibraryClassPath.append(File.pathSeparator).append(dstPath)
+                        dslLibraryClassPath.append(File.pathSeparator).append(normalizePath(dstPath.toString()))
                     }
                 }
             }
             System.setProperty("kotlin.script.classpath", dslLibraryClassPath.substring(1))
         } else {
-            System.setProperty("kotlin.script.classpath", System.getProperty("cr.dsl.class.path", System.getProperty("java.class.path")))
+            System.setProperty("kotlin.script.classpath", normalizePath(System.getProperty("cr.dsl.class.path", System.getProperty("java.class.path"))))
         }
+    }
+
+    private fun normalizePath(path: String): String {
+        return if (File.separatorChar == '\\') path.replace('\\', '/') else path
     }
 
     @PreDestroy

@@ -43,31 +43,45 @@ object ComponentsRegistryScriptRunner {
         // setIdeaIoUseFallback() loads Kotlin compiler classes which immediately
         // read and cache these properties. If we set them after, it's too late!
 
-        // 1. Normalize java.home on Windows
+        // 1. Normalize java.home on Windows (Kotlin compiler constructs URIs from it)
         if (isWindows) {
             val javaHome = System.getProperty("java.home")
             logger.info("Windows detected. Current java.home = $javaHome")
             if (javaHome != null && javaHome.contains('\\')) {
-                // Convert backslashes to forward slashes
                 val normalizedJavaHome = javaHome.replace('\\', '/')
-                logger.info("Normalizing java.home from: $javaHome")
                 logger.info("Normalizing java.home to: $normalizedJavaHome")
                 System.setProperty("java.home", normalizedJavaHome)
             }
         }
 
-        // 2. Set kotlin.script.classpath
-        if (System.getProperty("kotlin.script.classpath").isNullOrEmpty()) {
+        // 2. Set kotlin.script.classpath (or normalize if already set by StartupApplicationListener)
+        val existingClasspath = System.getProperty("kotlin.script.classpath")
+        if (existingClasspath.isNullOrEmpty()) {
             val custom = System.getProperty("cr.dsl.class.path") ?: resolveClasspath()
             logger.info("Setting kotlin.script.classpath with ${custom.split(File.pathSeparator).size} entries")
-            // Log first 3 entries to verify path format
-            custom.split(File.pathSeparator).take(3).forEachIndexed { i, path ->
-                logger.info("  Entry $i: $path")
-            }
             System.setProperty("kotlin.script.classpath", custom)
+        } else if (isWindows && existingClasspath.contains('\\')) {
+            // StartupApplicationListener may have set classpath with backslash paths
+            val normalized = existingClasspath.split(File.pathSeparator)
+                .joinToString(File.pathSeparator) { it.replace('\\', '/') }
+            logger.info("Normalizing existing kotlin.script.classpath (${normalized.split(File.pathSeparator).size} entries)")
+            System.setProperty("kotlin.script.classpath", normalized)
         }
 
-        // 3. NOW it's safe to initialize Kotlin compiler
+        // 3. Normalize kotlin.java.stdlib.jar if set with backslashes
+        if (isWindows) {
+            val stdlibJar = System.getProperty("kotlin.java.stdlib.jar")
+            if (stdlibJar != null && stdlibJar.contains('\\')) {
+                System.setProperty("kotlin.java.stdlib.jar", stdlibJar.replace('\\', '/'))
+            }
+        }
+
+        // Log first 3 classpath entries to verify path format
+        System.getProperty("kotlin.script.classpath")?.split(File.pathSeparator)?.take(3)?.forEachIndexed { i, path ->
+            logger.info("  kotlin.script.classpath entry $i: $path")
+        }
+
+        // 4. NOW it's safe to initialize Kotlin compiler
         setIdeaIoUseFallback()
     }
 

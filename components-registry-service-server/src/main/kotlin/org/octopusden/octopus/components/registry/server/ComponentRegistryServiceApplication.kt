@@ -96,5 +96,14 @@ class ComponentRegistryServiceApplication {
 }
 
 fun main(args: Array<String>) {
+    // Normalize java.home on Windows before anything else.
+    // The Kotlin compiler constructs URIs from java.home to access JDK modules;
+    // backslashes in the path produce malformed URIs that fail with IOException.
+    // This must happen before SpringApplication.run() because the StartupApplicationListener
+    // (registered in spring.factories) fires on ApplicationStartingEvent.
+    val javaHome = System.getProperty("java.home")
+    if (javaHome != null && javaHome.contains('\\')) {
+        System.setProperty("java.home", javaHome.replace('\\', '/'))
+    }
     SpringApplication.run(ComponentRegistryServiceApplication::class.java, *args)
 }
