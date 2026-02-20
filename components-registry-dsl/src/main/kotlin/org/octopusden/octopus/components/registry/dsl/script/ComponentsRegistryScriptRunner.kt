@@ -101,38 +101,85 @@ object ComponentsRegistryScriptRunner {
 
     /**
      * Pre-populate CoreJrtFileSystem.globalJrtFsCache with the default JRT filesystem.
-     * Uses the specified classloader to find the CoreJrtFileSystem class, addressing
-     * potential classloader isolation in Spring Boot fat JAR environments.
+     * Tries multiple classloaders to handle classloader isolation in Spring Boot fat JAR.
+     *
+     * SOLUTIONS IMPLEMENTED:
+     * #1: Fallback if default JRT filesystem is not available
+     * #2: Try multiple classloaders to handle isolation
+     * #3: Multiple verification to handle ConcurrentFactoryMap behavior
      */
     private fun prePopulateJrtFsCache(classLoader: ClassLoader) {
-        try {
-            val jdkHomeKey = File(System.getProperty("java.home")).absolutePath
-            val defaultJrtFs = FileSystems.getFileSystem(URI.create("jrt:/"))
+        val javaHomeProperty = System.getProperty("java.home")
+        val jdkHomeKey = File(javaHomeProperty).absolutePath
 
-            val coreJrtClass = Class.forName(
-                "org.jetbrains.kotlin.cli.jvm.modules.CoreJrtFileSystem", true, classLoader
-            )
-            val cacheField = coreJrtClass.getDeclaredField("globalJrtFsCache")
-            cacheField.isAccessible = true
-            @Suppress("UNCHECKED_CAST")
-            val cache = cacheField.get(null) as ConcurrentMap<String, FileSystem>
+        logger.info("[JRT-CACHE] Attempting to pre-populate JRT cache (key: $jdkHomeKey)")
 
-            // Use put() instead of putIfAbsent() to force overwrite any previously cached failure
-            cache.put(jdkHomeKey, defaultJrtFs)
-
-            // Verify the cache entry was stored correctly
-            val verified = cache[jdkHomeKey]
-            if (verified === defaultJrtFs) {
-                logger.info("Pre-populated JRT filesystem cache for key: $jdkHomeKey " +
-                    "(classLoader=${classLoader::class.java.simpleName}, " +
-                    "coreJrtClass@${System.identityHashCode(coreJrtClass).toString(16)})")
-            } else {
-                logger.warning("JRT cache verification failed: stored=$defaultJrtFs, got=$verified " +
-                    "(classLoader=${classLoader::class.java.simpleName})")
-            }
+        // SOLUTION #1: Handle silent failures - get default JRT filesystem with fallback
+        val defaultJrtFs = try {
+            FileSystems.getFileSystem(URI.create("jrt:/"))
         } catch (e: Exception) {
-            logger.warning("Failed to pre-populate JRT filesystem cache " +
-                "(classLoader=${classLoader::class.java.simpleName}): ${e.message}")
+            logger.warning("[JRT-CACHE] Default JRT filesystem not found, attempting to create with empty config")
+            try {
+                // Try creating JRT filesystem without java.home parameter to avoid Windows path issues
+                FileSystems.newFileSystem(URI.create("jrt:/"), emptyMap<String, Any>())
+            } catch (e2: Exception) {
+                logger.severe("[JRT-CACHE] CRITICAL: Cannot get or create JRT filesystem. " +
+                    "Relying on in-process compiler execution to avoid this issue.")
+                // Don't throw - let in-process compiler execution handle it
+                return
+            }
+        }
+        logger.info("[JRT-CACHE] Obtained JRT filesystem: $defaultJrtFs")
+
+        // SOLUTION #2: Try multiple classloaders to handle classloader isolation
+        val classLoadersToTry = listOf(
+            "Primary" to classLoader,
+            "Current" to this::class.java.classLoader,
+            "System" to ClassLoader.getSystemClassLoader(),
+            "Thread Context" to Thread.currentThread().contextClassLoader
+        ).distinctBy { it.second }  // Remove duplicates
+
+        logger.info("[JRT-CACHE] Trying ${classLoadersToTry.size} distinct classloader(s)")
+
+        var successCount = 0
+        for ((name, loader) in classLoadersToTry) {
+            try {
+                val coreJrtClass = Class.forName(
+                    "org.jetbrains.kotlin.cli.jvm.modules.CoreJrtFileSystem", true, loader
+                )
+                val cacheField = coreJrtClass.getDeclaredField("globalJrtFsCache")
+                cacheField.isAccessible = true
+                @Suppress("UNCHECKED_CAST")
+                val cache = cacheField.get(null) as ConcurrentMap<String, FileSystem>
+
+                // SOLUTION #3: Handle ConcurrentFactoryMap - use put() and verify multiple times
+                cache.put(jdkHomeKey, defaultJrtFs)
+
+                // Immediate verification
+                val verified1 = cache[jdkHomeKey]
+                // Second verification with get() method
+                val verified2 = cache.get(jdkHomeKey)
+
+                if (verified1 === defaultJrtFs && verified2 === defaultJrtFs) {
+                    successCount++
+                    logger.info("[JRT-CACHE] ✓ Success via $name classloader " +
+                        "(cache@${System.identityHashCode(cache).toString(16)})")
+                } else {
+                    logger.warning("[JRT-CACHE] ✗ Verification failed via $name classloader " +
+                        "(v1=$verified1, v2=$verified2)")
+                }
+            } catch (e: ClassNotFoundException) {
+                logger.fine("[JRT-CACHE] CoreJrtFileSystem not found via $name classloader")
+            } catch (e: Exception) {
+                logger.warning("[JRT-CACHE] Failed via $name classloader: ${e.message}")
+            }
+        }
+
+        if (successCount > 0) {
+            logger.info("[JRT-CACHE] ✓ Pre-populated via $successCount classloader(s)")
+        } else {
+            logger.warning("[JRT-CACHE] ✗ Failed for all classloaders. " +
+                "Relying on in-process compiler execution strategy.")
         }
     }
 
