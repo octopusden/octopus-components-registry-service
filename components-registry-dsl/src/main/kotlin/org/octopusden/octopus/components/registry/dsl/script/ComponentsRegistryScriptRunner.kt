@@ -45,6 +45,8 @@ object ComponentsRegistryScriptRunner {
     init {
         logger.info("=== ComponentsRegistryScriptRunner Initialization ===")
         logger.info("[DIAGNOSTIC] OS: ${System.getProperty("os.name")}, isWindows=$isWindows")
+        logger.info("[DIAGNOSTIC] JAVA_HOME env var: ${System.getenv("JAVA_HOME")}")
+        logger.info("[DIAGNOSTIC] java.home property: ${System.getProperty("java.home")}")
 
         // CRITICAL: Set all Kotlin compiler properties BEFORE setIdeaIoUseFallback()
         // setIdeaIoUseFallback() loads Kotlin compiler classes which immediately
@@ -355,10 +357,23 @@ object ComponentsRegistryScriptRunner {
             e.printStackTrace()
 
             // Log additional diagnostic information
-            if (e.cause != null) {
-                logger.severe("[DIAGNOSTIC] Caused by: ${e.cause!!::class.java.name}: ${e.cause!!.message}")
-                e.cause!!.printStackTrace()
+            logger.severe("[DIAGNOSTIC] ==== FULL EXCEPTION CHAIN ====")
+            var cause: Throwable? = e
+            var level = 0
+            while (cause != null && level < 10) {
+                logger.severe("[DIAGNOSTIC] Level $level: ${cause::class.java.name}")
+                logger.severe("[DIAGNOSTIC]   Message: ${cause.message}")
+
+                // Try to extract file/path information from the exception
+                val msg = cause.message ?: ""
+                if (msg.contains(":\\") || msg.contains(":/") || msg.contains("file") || msg.contains("path")) {
+                    logger.severe("[DIAGNOSTIC]   *** This level mentions a file/path! ***")
+                }
+
+                cause = cause.cause
+                level++
             }
+            logger.severe("[DIAGNOSTIC] ==== END EXCEPTION CHAIN ====")
 
             throw e
         }
