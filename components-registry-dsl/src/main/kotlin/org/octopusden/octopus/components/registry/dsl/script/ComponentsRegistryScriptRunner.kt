@@ -11,6 +11,7 @@ import java.nio.file.FileSystem
 import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
 import java.util.jar.JarFile
 import java.util.logging.Logger
@@ -206,22 +207,31 @@ object ComponentsRegistryScriptRunner {
 
                 // SOLUTION #3: Replace the entire cache with a custom map that ALWAYS returns
                 // our pre-populated filesystem, bypassing any ConcurrentFactoryMap logic
-                val customCache = object : ConcurrentHashMap<String, FileSystem>() {
-                    override fun get(key: String): FileSystem? {
+                @Suppress("UNCHECKED_CAST")
+                val customCache = object : ConcurrentMap<String, FileSystem> {
+                    override val size: Int get() = 1
+                    override val entries: MutableSet<MutableMap.MutableEntry<String, FileSystem>>
+                        get() = mutableSetOf()
+                    override val keys: MutableSet<String> get() = mutableSetOf()
+                    override val values: MutableCollection<FileSystem> get() = mutableListOf()
+
+                    override fun get(key: String): FileSystem {
                         logger.fine("[JRT-CACHE] Custom cache get() called with key: $key")
                         return defaultJrtFs  // Always return our pre-populated filesystem
                     }
 
-                    override fun getOrDefault(key: String, defaultValue: FileSystem?): FileSystem {
-                        logger.fine("[JRT-CACHE] Custom cache getOrDefault() called with key: $key")
-                        return defaultJrtFs  // Always return our pre-populated filesystem
-                    }
-
-                    override fun computeIfAbsent(key: String, mappingFunction: (String) -> FileSystem?): FileSystem {
-                        logger.fine("[JRT-CACHE] Custom cache computeIfAbsent() called with key: $key")
-                        return defaultJrtFs  // Bypass factory function, return our filesystem
-                    }
-                }
+                    override fun containsKey(key: String): Boolean = true
+                    override fun containsValue(value: FileSystem): Boolean = true
+                    override fun isEmpty(): Boolean = false
+                    override fun clear() {}
+                    override fun put(key: String, value: FileSystem): FileSystem? = value
+                    override fun putAll(from: Map<out String, FileSystem>) {}
+                    override fun remove(key: String): FileSystem? = null
+                    override fun remove(key: String, value: FileSystem): Boolean = false
+                    override fun putIfAbsent(key: String, value: FileSystem): FileSystem? = value
+                    override fun replace(key: String, oldValue: FileSystem, newValue: FileSystem): Boolean = false
+                    override fun replace(key: String, value: FileSystem): FileSystem? = value
+                } as ConcurrentHashMap<String, FileSystem>
 
                 // Replace the cache field with our custom cache
                 cacheField.set(null, customCache)
