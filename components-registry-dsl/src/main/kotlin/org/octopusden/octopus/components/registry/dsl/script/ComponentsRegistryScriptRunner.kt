@@ -121,15 +121,14 @@ object ComponentsRegistryScriptRunner {
             logger.info("[DIAGNOSTIC] kotlin.script.classpath already set with ${existingClasspath.split(File.pathSeparator).size} entries")
         }
 
-        // 3. Normalize kotlin.java.stdlib.jar if set with backslashes
-        if (isWindows) {
-            val stdlibJar = System.getProperty("kotlin.java.stdlib.jar")
-            logger.info("[DIAGNOSTIC] kotlin.java.stdlib.jar = $stdlibJar")
-            if (stdlibJar != null && stdlibJar.contains('\\')) {
-                val normalized = stdlibJar.replace('\\', '/')
-                System.setProperty("kotlin.java.stdlib.jar", normalized)
-                logger.info("[DIAGNOSTIC] Normalized kotlin.java.stdlib.jar to: $normalized")
-            }
+        // 3. On Windows, kotlin.java.stdlib.jar should NOT be set (causes path issues)
+        // The compiler will find stdlib from kotlin.script.classpath
+        val stdlibJar = System.getProperty("kotlin.java.stdlib.jar")
+        logger.info("[DIAGNOSTIC] kotlin.java.stdlib.jar = $stdlibJar")
+        if (isWindows && stdlibJar != null) {
+            logger.warning("[DIAGNOSTIC] ⚠️ WARNING: kotlin.java.stdlib.jar is set on Windows!")
+            logger.warning("[DIAGNOSTIC] This may cause 'filename syntax incorrect' errors.")
+            logger.warning("[DIAGNOSTIC] Consider unsetting this property on Windows.")
         }
 
         // Log first 3 classpath entries to verify path format and check path lengths

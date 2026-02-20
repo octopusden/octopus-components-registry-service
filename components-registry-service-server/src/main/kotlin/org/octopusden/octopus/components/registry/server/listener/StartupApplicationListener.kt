@@ -57,8 +57,14 @@ class StartupApplicationListener: ApplicationListener<ApplicationStartingEvent> 
                 }
 
                 // Fix for kotlin.java.stdlib.jar property issue in fat jar
+                // CRITICAL: On Windows, do NOT set kotlin.java.stdlib.jar property!
+                // Unit tests pass without it, but setting it causes "filename syntax incorrect" error
+                // The Kotlin compiler can find stdlib from kotlin.script.classpath
+                val isWindows = System.getProperty("os.name", "").lowercase().contains("win")
                 val stdlibJar = libraryFiles.find { it.fileName.toString().matches(Regex("kotlin-stdlib-\\d+.*\\.jar")) }
-                if (stdlibJar != null) {
+
+                if (stdlibJar != null && !isWindows) {
+                    // Only set on non-Windows platforms
                     val dstPath = temporaryLibraryPath!!.resolve(stdlibJar.fileName.toString())
                     if (!Files.exists(dstPath)) {
                         Files.copy(stdlibJar, dstPath)
@@ -66,12 +72,11 @@ class StartupApplicationListener: ApplicationListener<ApplicationStartingEvent> 
                     val normalizedPath = normalizePath(dstPath.toString())
                     System.setProperty("kotlin.java.stdlib.jar", normalizedPath)
                     LOG.info("[DIAGNOSTIC] Set kotlin.java.stdlib.jar = {}", normalizedPath)
-                    LOG.info("[DIAGNOSTIC] Stdlib jar path length: {}", normalizedPath.length)
-                    if (normalizedPath.length > 200) {
-                        LOG.warn("[DIAGNOSTIC] ⚠️ Stdlib jar path approaching MAX_PATH limit")
-                    }
+                } else if (isWindows) {
+                    LOG.info("[DIAGNOSTIC] Windows detected: Skipping kotlin.java.stdlib.jar property (not needed, causes path issues)")
+                    LOG.info("[DIAGNOSTIC] Kotlin compiler will find stdlib from kotlin.script.classpath instead")
                 } else {
-                    LOG.error("[DIAGNOSTIC] ✗ Unable to find kotlin-stdlib jar in BOOT-INF/lib - THIS WILL CAUSE FAILURES!")
+                    LOG.error("[DIAGNOSTIC] ✗ Unable to find kotlin-stdlib jar in BOOT-INF/lib")
                 }
 
                 dslKotlinModule.openStream().use {inputStream ->
