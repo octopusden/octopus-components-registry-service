@@ -40,7 +40,8 @@ class StartupApplicationListener: ApplicationListener<ApplicationStartingEvent> 
 
         if (dslKotlinModule != null && dslKotlinModule.toString().contains("!BOOT-INF/")) {
             LOG.debug("Spring boot jar running mode detected")
-            temporaryLibraryPath = Files.createTempDirectory("components-registry-dsl-" + UUID.randomUUID())
+            // Use short temp dir name to avoid Windows MAX_PATH (260 char) limit
+            temporaryLibraryPath = Files.createTempDirectory("cr-dsl-")
             val dslLibraryClassPath = StringBuffer()
             FileSystems.newFileSystem(Paths.get(System.getProperty("java.class.path"))).use { fs ->
                 val libraryFiles = ArrayList<Path>()

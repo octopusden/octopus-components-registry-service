@@ -180,7 +180,8 @@ object ComponentsRegistryScriptRunner {
                 if (bootInfEntries.isEmpty()) return emptyList()
 
                 logger.info("Windows: extracting ${bootInfEntries.size} nested JARs from fat JAR for Kotlin scripting")
-                val tempDir = Files.createTempDirectory("kotlin-script")
+                // Use short temp dir name to avoid Windows MAX_PATH (260 char) limit
+                val tempDir = Files.createTempDirectory("ks-")
                 logger.info("Windows: created temp directory at ${tempDir.toAbsolutePath()}")
                 Runtime.getRuntime().addShutdownHook(Thread { tempDir.toFile().deleteRecursively() })
 

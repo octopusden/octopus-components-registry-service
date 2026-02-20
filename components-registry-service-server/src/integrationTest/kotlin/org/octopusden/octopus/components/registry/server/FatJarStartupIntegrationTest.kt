@@ -77,6 +77,7 @@ class FatJarStartupIntegrationTest {
         val command = listOf(
             javaExecutable.absolutePath,
             "-Djava.home=$normalizedJavaHome",
+            "-Dkotlin.compiler.execution.strategy=in-process",
             "-Dspring.cloud.config.enabled=false",
             "-Dspring.profiles.active=integration-test",
             "-Dspring.config.additional-location=$profileUri",

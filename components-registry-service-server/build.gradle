@@ -80,6 +80,8 @@ task integrationTest(type: Test) {
     useJUnitPlatform()
     jvmArgs('--add-opens=java.base/java.lang=ALL-UNNAMED')
     jvmArgs('--add-opens=java.base/java.util=ALL-UNNAMED')
+    // Force Kotlin compiler to run in-process to avoid Windows process spawning issues
+    jvmArgs('-Dkotlin.compiler.execution.strategy=in-process')
 }
 
 check.dependsOn integrationTest
