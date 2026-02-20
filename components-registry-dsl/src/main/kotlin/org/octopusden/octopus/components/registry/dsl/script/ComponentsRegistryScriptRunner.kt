@@ -72,6 +72,39 @@ object ComponentsRegistryScriptRunner {
                 "This may cause subprocess spawning issues. Add: -Dkotlin.compiler.execution.strategy=in-process")
         }
 
+        // ADDITIONAL WINDOWS FIXES: Set compiler temp/cache directories to short paths
+        if (isWindows) {
+            try {
+                // Create a very short temp directory for Kotlin compiler to use
+                val kotlinTempDir = Files.createTempDirectory("kt-")
+                val kotlinTempPath = kotlinTempDir.toAbsolutePath().toString()
+                logger.info("[DIAGNOSTIC] Created Kotlin compiler temp dir: $kotlinTempPath (length: ${kotlinTempPath.length})")
+
+                // Override java.io.tmpdir for the Kotlin compiler to use our short temp dir
+                // This prevents the compiler from creating deeply nested paths that exceed MAX_PATH
+                val originalTmpDir = System.getProperty("java.io.tmpdir")
+                System.setProperty("java.io.tmpdir", kotlinTempPath)
+                logger.info("[DIAGNOSTIC] Overriding java.io.tmpdir: $originalTmpDir → $kotlinTempPath")
+
+                // Clean up on shutdown
+                Runtime.getRuntime().addShutdownHook(Thread {
+                    try {
+                        System.setProperty("java.io.tmpdir", originalTmpDir)
+                        kotlinTempDir.toFile().deleteRecursively()
+                    } catch (e: Exception) {
+                        // Ignore cleanup errors
+                    }
+                })
+
+                // Set Kotlin script compilation cache to a short path
+                System.setProperty("kotlin.script.compilation.cache.dir", kotlinTempPath)
+                logger.info("[DIAGNOSTIC] Set kotlin.script.compilation.cache.dir = $kotlinTempPath")
+
+            } catch (e: Exception) {
+                logger.warning("[DIAGNOSTIC] Failed to create Kotlin temp directory: ${e.message}")
+            }
+        }
+
         // 2. Set kotlin.script.classpath (or normalize if already set by StartupApplicationListener)
         val existingClasspath = System.getProperty("kotlin.script.classpath")
         if (existingClasspath.isNullOrEmpty()) {
@@ -304,7 +337,13 @@ object ComponentsRegistryScriptRunner {
 
     fun loadDSLFile(dslFilePath: Path, products: Map<ProductTypes, String>): Collection<Component> {
         logger.info("=== loadDSLFile: $dslFilePath ===")
-        logger.info("[DIAGNOSTIC] File path length: ${dslFilePath.toAbsolutePath().toString().length}")
+        val absolutePath = dslFilePath.toAbsolutePath().toString()
+        val normalizedPath = absolutePath.replace('\\', '/')
+        logger.info("[DIAGNOSTIC] File absolute path: $absolutePath (length: ${absolutePath.length})")
+        logger.info("[DIAGNOSTIC] File normalized path: $normalizedPath")
+        logger.info("[DIAGNOSTIC] File URI: ${dslFilePath.toUri()}")
+        logger.info("[DIAGNOSTIC] Current working directory: ${System.getProperty("user.dir")}")
+        logger.info("[DIAGNOSTIC] Temp directory (java.io.tmpdir): ${System.getProperty("java.io.tmpdir")}")
 
         if (productTypeMap.isEmpty()) {
             products.forEach { k, v -> productTypeMap[v] = k }
@@ -341,13 +380,31 @@ object ComponentsRegistryScriptRunner {
 
         currentRegistry.clear()
         try {
-            Files.newBufferedReader(dslFilePath).use { reader ->
-                logger.info("[DIAGNOSTIC] Evaluating DSL script...")
-                val startTime = System.currentTimeMillis()
-                engine.eval(reader)
-                val duration = System.currentTimeMillis() - startTime
-                logger.info("[DIAGNOSTIC] ✓ DSL evaluation completed successfully in ${duration}ms")
+            // THEORY #1 FIX: Try using normalized file path for script context
+            // Create a ScriptContext with normalized filename to avoid backslash issues
+            val scriptContent = Files.readString(dslFilePath)
+            val normalizedFileName = dslFilePath.toAbsolutePath().toString().replace('\\', '/')
+
+            logger.info("[DIAGNOSTIC] Evaluating DSL script...")
+            logger.info("[DIAGNOSTIC] Script content length: ${scriptContent.length} chars")
+            logger.info("[DIAGNOSTIC] Using normalized filename: $normalizedFileName")
+
+            val startTime = System.currentTimeMillis()
+
+            // Try to set the filename in the engine context to use forward slashes
+            try {
+                engine.put(javax.script.ScriptEngine.FILENAME, normalizedFileName)
+                logger.info("[DIAGNOSTIC] Set ScriptEngine.FILENAME to normalized path")
+            } catch (e: Exception) {
+                logger.warning("[DIAGNOSTIC] Could not set FILENAME in engine: ${e.message}")
             }
+
+            // Evaluate the script content directly instead of using a Reader
+            // This allows us to control the source filename
+            engine.eval(scriptContent)
+
+            val duration = System.currentTimeMillis() - startTime
+            logger.info("[DIAGNOSTIC] ✓ DSL evaluation completed successfully in ${duration}ms")
             logger.info("Successfully loaded DSL from $dslFilePath")
         } catch (e: Throwable) {
             logger.severe("[DIAGNOSTIC] ✗ DSL evaluation FAILED for $dslFilePath")
