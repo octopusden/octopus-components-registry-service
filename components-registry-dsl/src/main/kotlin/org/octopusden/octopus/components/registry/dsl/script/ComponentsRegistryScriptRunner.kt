@@ -203,24 +203,37 @@ object ComponentsRegistryScriptRunner {
                 )
                 val cacheField = coreJrtClass.getDeclaredField("globalJrtFsCache")
                 cacheField.isAccessible = true
-                @Suppress("UNCHECKED_CAST")
-                val cache = cacheField.get(null) as ConcurrentMap<String, FileSystem>
 
-                // SOLUTION #3: Handle ConcurrentFactoryMap - use put() and verify multiple times
-                cache.put(jdkHomeKey, defaultJrtFs)
+                // SOLUTION #3: Replace the entire cache with a custom map that ALWAYS returns
+                // our pre-populated filesystem, bypassing any ConcurrentFactoryMap logic
+                val customCache = object : ConcurrentHashMap<String, FileSystem>() {
+                    override fun get(key: String): FileSystem? {
+                        logger.fine("[JRT-CACHE] Custom cache get() called with key: $key")
+                        return defaultJrtFs  // Always return our pre-populated filesystem
+                    }
 
-                // Immediate verification
-                val verified1 = cache[jdkHomeKey]
-                // Second verification with get() method
-                val verified2 = cache.get(jdkHomeKey)
+                    override fun getOrDefault(key: String, defaultValue: FileSystem?): FileSystem {
+                        logger.fine("[JRT-CACHE] Custom cache getOrDefault() called with key: $key")
+                        return defaultJrtFs  // Always return our pre-populated filesystem
+                    }
 
-                if (verified1 === defaultJrtFs && verified2 === defaultJrtFs) {
+                    override fun computeIfAbsent(key: String, mappingFunction: (String) -> FileSystem?): FileSystem {
+                        logger.fine("[JRT-CACHE] Custom cache computeIfAbsent() called with key: $key")
+                        return defaultJrtFs  // Bypass factory function, return our filesystem
+                    }
+                }
+
+                // Replace the cache field with our custom cache
+                cacheField.set(null, customCache)
+
+                // Verify replacement worked
+                val replacedCache = cacheField.get(null)
+                if (replacedCache === customCache) {
                     successCount++
-                    logger.info("[JRT-CACHE] ✓ Success via $name classloader " +
-                        "(cache@${System.identityHashCode(cache).toString(16)})")
+                    logger.info("[JRT-CACHE] ✓ Replaced cache via $name classloader " +
+                        "(cache@${System.identityHashCode(customCache).toString(16)})")
                 } else {
-                    logger.warning("[JRT-CACHE] ✗ Verification failed via $name classloader " +
-                        "(v1=$verified1, v2=$verified2)")
+                    logger.warning("[JRT-CACHE] ✗ Cache replacement failed via $name classloader")
                 }
             } catch (e: ClassNotFoundException) {
                 logger.fine("[JRT-CACHE] CoreJrtFileSystem not found via $name classloader")
@@ -230,7 +243,7 @@ object ComponentsRegistryScriptRunner {
         }
 
         if (successCount > 0) {
-            logger.info("[JRT-CACHE] ✓ Pre-populated via $successCount classloader(s)")
+            logger.info("[JRT-CACHE] ✓ Replaced globalJrtFsCache via $successCount classloader(s)")
         } else {
             logger.warning("[JRT-CACHE] ✗ Failed for all classloaders. " +
                 "Relying on in-process compiler execution strategy.")
