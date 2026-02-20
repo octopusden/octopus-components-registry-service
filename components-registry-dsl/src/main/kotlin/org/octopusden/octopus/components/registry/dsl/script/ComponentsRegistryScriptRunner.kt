@@ -43,6 +43,9 @@ object ComponentsRegistryScriptRunner {
     private val safeScriptClassLoader: ClassLoader by lazy { buildSafeClassLoader() }
 
     init {
+        logger.info("=== ComponentsRegistryScriptRunner Initialization ===")
+        logger.info("[DIAGNOSTIC] OS: ${System.getProperty("os.name")}, isWindows=$isWindows")
+
         // CRITICAL: Set all Kotlin compiler properties BEFORE setIdeaIoUseFallback()
         // setIdeaIoUseFallback() loads Kotlin compiler classes which immediately
         // read and cache these properties. If we set them after, it's too late!
@@ -50,39 +53,56 @@ object ComponentsRegistryScriptRunner {
         // 1. Normalize java.home on Windows (Kotlin compiler constructs URIs from it)
         if (isWindows) {
             val javaHome = System.getProperty("java.home")
-            logger.info("Windows detected. Current java.home = $javaHome")
+            logger.info("[DIAGNOSTIC] Windows detected. Current java.home = $javaHome (length: ${javaHome?.length})")
             if (javaHome != null && javaHome.contains('\\')) {
                 val normalizedJavaHome = javaHome.replace('\\', '/')
-                logger.info("Normalizing java.home to: $normalizedJavaHome")
+                logger.info("[DIAGNOSTIC] Normalizing java.home to: $normalizedJavaHome")
                 System.setProperty("java.home", normalizedJavaHome)
             }
+        }
+
+        // Check if in-process compiler execution is enabled (PRIMARY FIX for Windows)
+        val compilerStrategy = System.getProperty("kotlin.compiler.execution.strategy")
+        logger.info("[DIAGNOSTIC] kotlin.compiler.execution.strategy = $compilerStrategy " +
+            "(expected: 'in-process' for Windows compatibility)")
+        if (isWindows && compilerStrategy != "in-process") {
+            logger.warning("[DIAGNOSTIC] ⚠️ WARNING: In-process compiler execution NOT enabled on Windows! " +
+                "This may cause subprocess spawning issues. Add: -Dkotlin.compiler.execution.strategy=in-process")
         }
 
         // 2. Set kotlin.script.classpath (or normalize if already set by StartupApplicationListener)
         val existingClasspath = System.getProperty("kotlin.script.classpath")
         if (existingClasspath.isNullOrEmpty()) {
             val custom = System.getProperty("cr.dsl.class.path") ?: resolveClasspath()
-            logger.info("Setting kotlin.script.classpath with ${custom.split(File.pathSeparator).size} entries")
+            logger.info("[DIAGNOSTIC] Setting kotlin.script.classpath with ${custom.split(File.pathSeparator).size} entries")
             System.setProperty("kotlin.script.classpath", custom)
         } else if (isWindows && existingClasspath.contains('\\')) {
             // StartupApplicationListener may have set classpath with backslash paths
             val normalized = existingClasspath.split(File.pathSeparator)
                 .joinToString(File.pathSeparator) { it.replace('\\', '/') }
-            logger.info("Normalizing existing kotlin.script.classpath (${normalized.split(File.pathSeparator).size} entries)")
+            logger.info("[DIAGNOSTIC] Normalizing existing kotlin.script.classpath (${normalized.split(File.pathSeparator).size} entries)")
             System.setProperty("kotlin.script.classpath", normalized)
+        } else {
+            logger.info("[DIAGNOSTIC] kotlin.script.classpath already set with ${existingClasspath.split(File.pathSeparator).size} entries")
         }
 
         // 3. Normalize kotlin.java.stdlib.jar if set with backslashes
         if (isWindows) {
             val stdlibJar = System.getProperty("kotlin.java.stdlib.jar")
+            logger.info("[DIAGNOSTIC] kotlin.java.stdlib.jar = $stdlibJar")
             if (stdlibJar != null && stdlibJar.contains('\\')) {
-                System.setProperty("kotlin.java.stdlib.jar", stdlibJar.replace('\\', '/'))
+                val normalized = stdlibJar.replace('\\', '/')
+                System.setProperty("kotlin.java.stdlib.jar", normalized)
+                logger.info("[DIAGNOSTIC] Normalized kotlin.java.stdlib.jar to: $normalized")
             }
         }
 
-        // Log first 3 classpath entries to verify path format
+        // Log first 3 classpath entries to verify path format and check path lengths
         System.getProperty("kotlin.script.classpath")?.split(File.pathSeparator)?.take(3)?.forEachIndexed { i, path ->
-            logger.info("  kotlin.script.classpath entry $i: $path")
+            logger.info("[DIAGNOSTIC] kotlin.script.classpath[$i]: $path (length: ${path.length})")
+            if (isWindows && path.length > 200) {
+                logger.warning("[DIAGNOSTIC] ⚠️ Path length ${path.length} approaching MAX_PATH limit (260)")
+            }
         }
 
         // 4. On Windows, pre-populate the Kotlin compiler's JRT filesystem cache BEFORE
@@ -229,7 +249,12 @@ object ComponentsRegistryScriptRunner {
                 logger.info("Windows: extracting ${bootInfEntries.size} nested JARs from fat JAR for Kotlin scripting")
                 // Use short temp dir name to avoid Windows MAX_PATH (260 char) limit
                 val tempDir = Files.createTempDirectory("ks-")
-                logger.info("Windows: created temp directory at ${tempDir.toAbsolutePath()}")
+                val tempDirPath = tempDir.toAbsolutePath().toString()
+                logger.info("[DIAGNOSTIC] Created temp directory: $tempDirPath")
+                logger.info("[DIAGNOSTIC] Temp dir path length: ${tempDirPath.length} (MAX_PATH limit: 260)")
+                if (tempDirPath.length > 200) {
+                    logger.warning("[DIAGNOSTIC] ⚠️ Temp directory path is long! May cause issues with nested files.")
+                }
                 Runtime.getRuntime().addShutdownHook(Thread { tempDir.toFile().deleteRecursively() })
 
                 for (entry in bootInfEntries) {
@@ -276,37 +301,65 @@ object ComponentsRegistryScriptRunner {
     }
 
     fun loadDSLFile(dslFilePath: Path, products: Map<ProductTypes, String>): Collection<Component> {
-        logger.info("loadDSLFile $dslFilePath")
+        logger.info("=== loadDSLFile: $dslFilePath ===")
+        logger.info("[DIAGNOSTIC] File path length: ${dslFilePath.toAbsolutePath().toString().length}")
 
         if (productTypeMap.isEmpty()) {
             products.forEach { k, v -> productTypeMap[v] = k }
         }
 
         val engine = try {
+            logger.info("[DIAGNOSTIC] Setting context classloader to SafeContextClassLoader")
+            val originalClassLoader = Thread.currentThread().contextClassLoader
             Thread.currentThread().contextClassLoader = safeScriptClassLoader
+            logger.info("[DIAGNOSTIC] Context classloader changed: ${originalClassLoader::class.java.simpleName} → ${safeScriptClassLoader::class.java.simpleName}")
+
             // Re-populate JRT cache using the context classloader that the REPL compiler will use.
             // This handles classloader isolation in Spring Boot fat JAR where the compiler may
             // load CoreJrtFileSystem through a different classloader than the init block used.
             if (isWindows) {
+                logger.info("[DIAGNOSTIC] Re-populating JRT cache with context classloader before engine creation")
                 prePopulateJrtFsCache(Thread.currentThread().contextClassLoader)
             }
-            KotlinJsr223DefaultScriptEngineFactory().scriptEngine.also {
-                logger.info("Using KotlinJsr223DefaultScriptEngineFactory")
-            }
-        } catch (_: Throwable) {
-            logger.info("Unable to get default kotlin script engine, fallback to local script engine")
+
+            logger.info("[DIAGNOSTIC] Creating Kotlin script engine...")
+            val startTime = System.currentTimeMillis()
+            val scriptEngine = KotlinJsr223DefaultScriptEngineFactory().scriptEngine
+            val duration = System.currentTimeMillis() - startTime
+            logger.info("[DIAGNOSTIC] ✓ Script engine created successfully in ${duration}ms")
+            logger.info("[DIAGNOSTIC] Engine: ${scriptEngine::class.java.name}")
+            scriptEngine
+        } catch (e: Throwable) {
+            logger.warning("[DIAGNOSTIC] ✗ Failed to create default Kotlin script engine: ${e::class.java.simpleName}: ${e.message}")
+            logger.warning("[DIAGNOSTIC] Stack trace:")
+            e.printStackTrace()
+            logger.info("[DIAGNOSTIC] Falling back to LocalKotlinEngineFactory")
             LocalKotlinEngineFactory().scriptEngine
         }
+
         currentRegistry.clear()
         try {
             Files.newBufferedReader(dslFilePath).use { reader ->
-                logger.info("Loading $dslFilePath")
+                logger.info("[DIAGNOSTIC] Evaluating DSL script...")
+                val startTime = System.currentTimeMillis()
                 engine.eval(reader)
+                val duration = System.currentTimeMillis() - startTime
+                logger.info("[DIAGNOSTIC] ✓ DSL evaluation completed successfully in ${duration}ms")
             }
             logger.info("Successfully loaded DSL from $dslFilePath")
         } catch (e: Throwable) {
-            logger.severe("DSL evaluation failed for $dslFilePath: ${e::class.java.simpleName}: ${e.message}")
+            logger.severe("[DIAGNOSTIC] ✗ DSL evaluation FAILED for $dslFilePath")
+            logger.severe("[DIAGNOSTIC] Exception type: ${e::class.java.name}")
+            logger.severe("[DIAGNOSTIC] Exception message: ${e.message}")
+            logger.severe("[DIAGNOSTIC] Stack trace:")
             e.printStackTrace()
+
+            // Log additional diagnostic information
+            if (e.cause != null) {
+                logger.severe("[DIAGNOSTIC] Caused by: ${e.cause!!::class.java.name}: ${e.cause!!.message}")
+                e.cause!!.printStackTrace()
+            }
+
             throw e
         }
         return ArrayList(currentRegistry)

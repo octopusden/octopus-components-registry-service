@@ -35,13 +35,20 @@ class StartupApplicationListener: ApplicationListener<ApplicationStartingEvent> 
     }
 
     override fun onApplicationEvent(event: ApplicationStartingEvent) {
+        LOG.info("=== StartupApplicationListener ===")
         val dslKotlinModule = Thread.currentThread().contextClassLoader.getResource("/components-registry-dsl.txt")
-        LOG.debug("StartupApplicationListener running. dslKotlinModule={}", dslKotlinModule)
+        LOG.info("[DIAGNOSTIC] dslKotlinModule resource: {}", dslKotlinModule)
 
         if (dslKotlinModule != null && dslKotlinModule.toString().contains("!BOOT-INF/")) {
-            LOG.debug("Spring boot jar running mode detected")
+            LOG.info("[DIAGNOSTIC] Spring Boot fat JAR mode detected")
             // Use short temp dir name to avoid Windows MAX_PATH (260 char) limit
             temporaryLibraryPath = Files.createTempDirectory("cr-dsl-")
+            val tempPath = temporaryLibraryPath.toString()
+            LOG.info("[DIAGNOSTIC] Created temp directory: {}", tempPath)
+            LOG.info("[DIAGNOSTIC] Temp path length: {} (MAX_PATH limit: 260)", tempPath.length)
+            if (tempPath.length > 200) {
+                LOG.warn("[DIAGNOSTIC] ⚠️ Temp directory path is long! May cause issues.")
+            }
             val dslLibraryClassPath = StringBuffer()
             FileSystems.newFileSystem(Paths.get(System.getProperty("java.class.path"))).use { fs ->
                 val libraryFiles = ArrayList<Path>()
@@ -56,10 +63,15 @@ class StartupApplicationListener: ApplicationListener<ApplicationStartingEvent> 
                     if (!Files.exists(dstPath)) {
                         Files.copy(stdlibJar, dstPath)
                     }
-                    System.setProperty("kotlin.java.stdlib.jar", normalizePath(dstPath.toString()))
-                    LOG.info("Set kotlin.java.stdlib.jar to $dstPath")
+                    val normalizedPath = normalizePath(dstPath.toString())
+                    System.setProperty("kotlin.java.stdlib.jar", normalizedPath)
+                    LOG.info("[DIAGNOSTIC] Set kotlin.java.stdlib.jar = {}", normalizedPath)
+                    LOG.info("[DIAGNOSTIC] Stdlib jar path length: {}", normalizedPath.length)
+                    if (normalizedPath.length > 200) {
+                        LOG.warn("[DIAGNOSTIC] ⚠️ Stdlib jar path approaching MAX_PATH limit")
+                    }
                 } else {
-                    LOG.warn("Unable to find kotlin-stdlib jar in BOOT-INF/lib")
+                    LOG.error("[DIAGNOSTIC] ✗ Unable to find kotlin-stdlib jar in BOOT-INF/lib - THIS WILL CAUSE FAILURES!")
                 }
 
                 dslKotlinModule.openStream().use {inputStream ->
@@ -75,10 +87,27 @@ class StartupApplicationListener: ApplicationListener<ApplicationStartingEvent> 
                     }
                 }
             }
-            System.setProperty("kotlin.script.classpath", dslLibraryClassPath.substring(1))
+            val classpath = dslLibraryClassPath.substring(1)
+            System.setProperty("kotlin.script.classpath", classpath)
+            val classpathEntries = classpath.split(File.pathSeparator)
+            LOG.info("[DIAGNOSTIC] Set kotlin.script.classpath with {} entries", classpathEntries.size)
+
+            // Log sample entries and check for path length issues
+            classpathEntries.take(3).forEachIndexed { i, path ->
+                LOG.info("[DIAGNOSTIC] Classpath[{}]: {} (length: {})", i, path, path.length)
+                if (path.length > 200) {
+                    LOG.warn("[DIAGNOSTIC] ⚠️ Classpath entry {} has length {} approaching MAX_PATH limit", i, path.length)
+                }
+            }
+
+            LOG.info("[DIAGNOSTIC] ✓ Fat JAR library extraction complete")
         } else {
-            System.setProperty("kotlin.script.classpath", normalizePath(System.getProperty("cr.dsl.class.path", System.getProperty("java.class.path"))))
+            val classpath = normalizePath(System.getProperty("cr.dsl.class.path", System.getProperty("java.class.path")))
+            System.setProperty("kotlin.script.classpath", classpath)
+            LOG.info("[DIAGNOSTIC] Not running as fat JAR, using standard classpath")
         }
+
+        LOG.info("=== StartupApplicationListener Complete ===")
     }
 
     private fun normalizePath(path: String): String {
