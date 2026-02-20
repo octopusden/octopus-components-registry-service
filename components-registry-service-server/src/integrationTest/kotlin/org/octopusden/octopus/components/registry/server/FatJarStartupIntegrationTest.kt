@@ -93,6 +93,14 @@ class FatJarStartupIntegrationTest {
         log.info("Starting application...")
         val processBuilder = ProcessBuilder(command)
         processBuilder.redirectErrorStream(true)
+
+        // CRITICAL Windows fix: Set JAVA_HOME environment variable with forward slashes
+        // The Kotlin REPL compiler reads JAVA_HOME instead of java.home property
+        // and this allows us to override the path format
+        if (System.getProperty("os.name", "").lowercase().contains("win")) {
+            processBuilder.environment()["JAVA_HOME"] = normalizedJavaHome
+            log.info("Set JAVA_HOME environment variable to: $normalizedJavaHome")
+        }
         
         val process = processBuilder.start()
         val output = StringBuilder()
