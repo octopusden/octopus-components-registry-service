@@ -10,5 +10,4 @@ enum class BuildSystem {
     NOT_SUPPORTED,
     GOLANG,
     IN_CONTAINER,
-    ESCROW_PROVIDED_MANUALLY
 }
