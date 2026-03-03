@@ -1,9 +1,8 @@
 package org.octopusden.octopus.components.registry.core.dto
 
-import com.fasterxml.jackson.annotation.JsonCreator
 import com.fasterxml.jackson.annotation.JsonProperty
 
-data class JiraComponentDTO @JsonCreator constructor(
+data class JiraComponentDTO (
     @JsonProperty("projectKey") val projectKey: String,
     @JsonProperty("displayName") val displayName: String?,
     @JsonProperty("componentVersionFormat") val componentVersionFormat: ComponentVersionFormatDTO,
