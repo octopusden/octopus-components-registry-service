@@ -24,23 +24,24 @@ public final class DistributionUtilities {
         }
         return Arrays.stream(distributionGAVAttribute.split("[,|]")).filter(StringUtils::isNotBlank).map(String::trim).map(item -> {
             if (item.startsWith("file:")) {
+                String normalizedItem = item.replace("\\", "/");
                 URI uri;
                 try {
-                    uri = URI.create(item);
+                    uri = URI.create(normalizedItem);
                 } catch (IllegalArgumentException e) {
                     throw new IllegalArgumentException(
-                            "Invalid GAV entry: '" + item + "'. Invalid file URI syntax.", e
+                            "Invalid GAV entry: '" + normalizedItem + "'. Invalid file URI syntax.", e
                     );
                 }
 
                 String path = uri.getPath();
                 if (StringUtils.isBlank(path) || "/".equals(path)) {
                     throw new IllegalArgumentException(
-                            "Invalid GAV entry: '" + item + "'. File URI must point to a concrete path."
+                            "Invalid GAV entry: '" + normalizedItem + "'. File URI must point to a concrete path."
                     );
                 }
 
-                return new FileDistributionEntity(item);
+                return new FileDistributionEntity(normalizedItem);
             }
 
             if (MAVEN_GAV_PATTERN.matcher(item).matches()) {

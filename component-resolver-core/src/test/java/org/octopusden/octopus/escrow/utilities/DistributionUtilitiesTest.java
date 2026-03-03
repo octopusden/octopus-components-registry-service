@@ -26,6 +26,15 @@ public class DistributionUtilitiesTest {
     }
 
     @Test
+    void testInvalidFilePathDistributionEntity() {
+        Collection<DistributionEntity> result =
+                DistributionUtilities.parseDistributionGAV("file:///C:\\path/file.txt");
+
+        Assertions.assertEquals(1, result.size());
+        Assertions.assertTrue(result.iterator().next() instanceof FileDistributionEntity);
+    }
+
+    @Test
     void testInvalidGAV() {
         IllegalArgumentException ex = Assertions.assertThrows(IllegalArgumentException.class, () -> DistributionUtilities.parseDistributionGAV("invalid"));
 
