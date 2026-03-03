@@ -8,6 +8,7 @@ import org.apache.logging.log4j.LogManager
 import org.apache.logging.log4j.Logger
 import org.octopusden.octopus.components.registry.api.Component
 import org.octopusden.octopus.components.registry.api.SubComponent
+import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.MavenArtifactMatcher
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
@@ -376,7 +377,8 @@ class EscrowConfigValidator {
     def validateGroupId(EscrowModuleConfig moduleConfig, String module) {
         def groupId = moduleConfig.getGroupIdPattern()
         if (StringUtils.isEmpty(groupId)) {  //TODO!
-            if (moduleConfig.getBuildSystem() != BuildSystem.BS2_0 && moduleConfig.getBuildSystem() != BuildSystem.ESCROW_NOT_SUPPORTED) {
+            def escrowGeneration = moduleConfig.escrow?.getGeneration()?.orElse(null)
+            if (moduleConfig.getBuildSystem() != BuildSystem.BS2_0 && escrowGeneration != EscrowGenerationMode.UNSUPPORTED) {
                 registerError("empty groupId is not allowed in configuration of module $module (type=$moduleConfig.buildSystem)")
             }
         } else {
@@ -390,7 +392,8 @@ class EscrowConfigValidator {
     }
 
     def validateVcsSettings(EscrowModuleConfig moduleConfig, String component) {
-        if (!(moduleConfig.getBuildSystem() in [BuildSystem.ESCROW_PROVIDED_MANUALLY, BuildSystem.ESCROW_NOT_SUPPORTED, BuildSystem.PROVIDED, BuildSystem.WHISKEY]) &&
+        def escrowGeneration = moduleConfig.escrow?.getGeneration()?.orElse(null)
+        if (!(moduleConfig.getBuildSystem() in [BuildSystem.ESCROW_PROVIDED_MANUALLY, BuildSystem.ESCROW_NOT_SUPPORTED, BuildSystem.PROVIDED, BuildSystem.WHISKEY] || escrowGeneration in [EscrowGenerationMode.MANUAL, EscrowGenerationMode.UNSUPPORTED]) &&
                 moduleConfig.getVcsSettings().getVersionControlSystemRoots().isEmpty()) {
             registerError("No VCS roots is configured for component '$component' (type=$moduleConfig.buildSystem)")
             return
@@ -398,7 +401,7 @@ class EscrowConfigValidator {
 
         def vcsRoots = moduleConfig.getVcsSettings().getVersionControlSystemRoots()
         vcsRoots.each { VersionControlSystemRoot vcsRoot ->
-            if (!(moduleConfig.buildSystem == BuildSystem.BS2_0 || moduleConfig.buildSystem == BuildSystem.PROVIDED || moduleConfig.buildSystem == BuildSystem.ESCROW_PROVIDED_MANUALLY) && StringUtils.isEmpty(vcsRoot.vcsPath)) {
+            if (!(moduleConfig.buildSystem == BuildSystem.BS2_0 || moduleConfig.buildSystem == BuildSystem.PROVIDED || escrowGeneration == EscrowGenerationMode.MANUAL) && StringUtils.isEmpty(vcsRoot.vcsPath)) {
                 registerError("empty vcsUrl is not allowed in configuration of component $component (type=$moduleConfig.buildSystem)")
             }
         }
