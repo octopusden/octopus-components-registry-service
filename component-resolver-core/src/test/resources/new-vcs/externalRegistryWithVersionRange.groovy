@@ -32,7 +32,6 @@ torpedo {
     vcsSettings {
         externalRegistry = "NOT_AVAILABLE"
     }
-    buildSystem = ESCROW_NOT_SUPPORTED
     escrow {
         generation = EscrowGenerationMode.UNSUPPORTED
     }

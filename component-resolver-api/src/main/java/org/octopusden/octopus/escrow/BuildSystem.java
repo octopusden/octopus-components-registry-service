@@ -7,8 +7,6 @@ public enum BuildSystem {
     GRADLE,
     WHISKEY,
     PROVIDED,
-    ESCROW_NOT_SUPPORTED,
-    ESCROW_PROVIDED_MANUALLY,
     GOLANG,
     IN_CONTAINER
 }
