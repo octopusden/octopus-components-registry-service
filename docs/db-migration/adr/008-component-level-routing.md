@@ -97,7 +97,7 @@ override fun getAllComponents(): List<Component> {
 Admin endpoint for migrating individual components:
 
 ```
-POST /api/v4/admin/migrate-component/{componentName}
+POST /rest/api/4/admin/migrate-component/{componentName}
 
 Steps:
 1. Load component from Git DSL
@@ -109,7 +109,7 @@ Steps:
 
 Bulk variant for batch migration:
 ```
-POST /api/v4/admin/migrate-components
+POST /rest/api/4/admin/migrate-components
 Body: { "components": ["comp-a", "comp-b", ...] }  // or { "all": true }
 ```
 

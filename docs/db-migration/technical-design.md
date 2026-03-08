@@ -101,9 +101,28 @@ CONSTRAINT chk_owner CHECK (
 )
 ```
 
-### 3.3 Full DDL
+### 3.3 Schema Extensibility
 
-See [plan.md — Database Schema section](../../plan.md) for complete SQL DDL with all tables, constraints, and indexes.
+Component properties are classified into three tiers by stability. See [ADR-010](adr/010-schema-extensibility.md) for full rationale.
+
+| Tier | Storage | Fields | Adding new field |
+|------|---------|--------|------------------|
+| 1 — Stable core | Columns | `name`, `archived`, `system`, `product_type`, `client_code`, `solution`, `parent_component_id` | Flyway + Entity + Mapper + DTO |
+| 2 — Domain configs | Separate tables | build, escrow, VCS, distribution, jira | Flyway + Entity + Mapper + DTO |
+| 3 — Extensible metadata | `metadata JSONB` | `componentOwner`, `releaseManager`, `securityChampion`, `labels`, `doc`, `copyright`, `releasesInDefaultBranch` | DTO only |
+
+```sql
+-- metadata column on components table
+ALTER TABLE components ADD COLUMN metadata JSONB NOT NULL DEFAULT '{}';
+CREATE INDEX idx_components_metadata ON components USING GIN (metadata);
+```
+
+**Promotion path:** if a Tier 3 field becomes critical for performance or joins, it can be promoted to a Tier 1 column via Flyway migration + backfill from JSONB.
+
+### 3.4 Full DDL
+
+Complete DDL is maintained in Flyway migration files (see §3.1 ERD above for entity relationships). The full SQL will be finalized at implementation start and placed in:
+
 
 Flyway migration files will be placed in:
 ```
@@ -123,30 +142,42 @@ components-registry-service-server/src/main/resources/db/migration/
 class ComponentEntity(
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    val id: UUID? = null,
+    var id: UUID? = null,
 
     @Column(nullable = false, unique = true)
     val name: String,
 
-    var displayName: String? = null,
+    // Tier 1 — stable core (columns)
     var productType: String? = null,
-    var componentOwner: String? = null,
     var system: String? = null,
     var clientCode: String? = null,
     var archived: Boolean = false,
+    var solution: Boolean? = null,
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_component_id")
     var parentComponent: ComponentEntity? = null,
 
+    // Tier 3 — extensible metadata (JSONB)
+    // Contains: displayName, componentOwner, releaseManager, securityChampion,
+    //           labels, doc, copyright, releasesInDefaultBranch, and future fields
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(columnDefinition = "jsonb")
+    var metadata: MutableMap<String, Any?> = mutableMapOf(),
+
+    // Tier 2 — domain configs (separate tables, via relations)
     @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true)
     val versions: MutableList<ComponentVersionEntity> = mutableListOf(),
 
     @Version
     var version: Long = 0,  // optimistic locking
 
-    val createdAt: Instant = Instant.now(),
-    var updatedAt: Instant = Instant.now()
+    @CreationTimestamp
+    @Column(updatable = false)
+    val createdAt: Instant? = null,
+
+    @UpdateTimestamp
+    var updatedAt: Instant? = null
 )
 ```
 
@@ -182,11 +213,13 @@ GET    /rest/api/4/components/{id}
   Response: ComponentDetailResponse (full tree with all nested configs)
   Auth:     ACCESS_COMPONENTS
 
-PUT    /rest/api/4/components/{id}
-  Request:  ComponentUpdateRequest { displayName, productType, build, escrow, ... }
+PATCH  /rest/api/4/components/{id}
+  Request:  ComponentUpdateRequest { version, displayName, productType, build, escrow, ... }
   Response: ComponentDetailResponse
   Auth:     EDIT_COMPONENTS
+  Headers:  If-Match (optional, alternative to version field for optimistic locking)
   Validation: Bean Validation (Jakarta @Valid, @NotBlank, @Size, etc.)
+  Note:     Merge-update semantics — only provided fields are changed
 
 DELETE /rest/api/4/components/{id}
   Behavior: Sets archived=true (soft delete)
@@ -199,8 +232,8 @@ POST   /rest/api/4/components/{id}/versions
   Request:  VersionCreateRequest { versionRange, build, escrow, vcs, ... }
   Auth:     EDIT_COMPONENTS
 
-PUT    /rest/api/4/components/{id}/versions/{versionId}
-  Request:  VersionUpdateRequest { build, escrow, vcs, distribution, jira }
+PATCH  /rest/api/4/components/{id}/versions/{versionId}
+  Request:  VersionUpdateRequest { version, build, escrow, vcs, distribution, jira }
   Auth:     EDIT_COMPONENTS
 
 DELETE /rest/api/4/components/{id}/versions/{versionId}
@@ -228,6 +261,31 @@ GET    /rest/api/4/admin/export
   Response: JSON export of all components
   Auth:     ACCESS_COMPONENTS
 ```
+
+#### Configuration (Field Visibility & Defaults)
+
+See [ADR-011](adr/011-field-configuration.md) for full rationale.
+
+```
+GET    /rest/api/4/config/field-config
+  Response: Field configuration (visibility, options, descriptions)
+  Auth:     ACCESS_COMPONENTS (read-only, used by UI to render forms)
+
+GET    /rest/api/4/admin/config/field-config
+PUT    /rest/api/4/admin/config/field-config
+  Request:  JSON — field visibility/editability rules per section
+  Auth:     ADMIN only
+
+GET    /rest/api/4/admin/config/component-defaults
+PUT    /rest/api/4/admin/config/component-defaults
+  Request:  JSON — default values for new components (replaces Default.groovy)
+  Auth:     ADMIN only
+```
+
+The API schema (v1/v2/v3/v4 request/response DTOs) is **identical across all deployments**. Field configuration affects only:
+- UI rendering (which fields are shown/hidden/readonly)
+- Server-side defaults (values applied when field is absent in create request)
+- Server-side enforcement (hidden/readonly fields ignore client-provided values)
 
 ## 6. Security
 

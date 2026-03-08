@@ -34,9 +34,10 @@ Migrating from Git-based storage to PostgreSQL is a high-risk change. The `Compo
 ### Implementation
 
 ```
-registry.storage=git    → GitComponentRegistryResolver (current, default)
-registry.storage=db     → DatabaseComponentRegistryResolver (new)
-registry.storage=dual   → DualComponentRegistryResolver (reads both, compares, logs)
+registry.storage=git      → GitComponentRegistryResolver (current, default)
+registry.storage=db       → DatabaseComponentRegistryResolver (new)
+registry.storage=routing  → ComponentRoutingResolver (per-component source, see ADR-008)
+registry.storage=dual     → DualComponentRegistryResolver (reads both, compares, logs)
 ```
 
 ### DualComponentRegistryResolver behavior

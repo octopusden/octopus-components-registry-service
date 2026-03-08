@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Settings - Components Registry</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="theme.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--fg); transition: background .2s, color .2s; }
+        header { border-bottom: 1px solid var(--border); }
+        .nav-active { background: var(--accent); color: var(--accent-fg); }
+        .nav-inactive { color: var(--muted-fg); }
+        .nav-inactive:hover { color: var(--fg); background: var(--accent); opacity: .6; }
+        .text-muted { color: var(--muted-fg); }
+        .badge { display: inline-flex; align-items: center; border-radius: 9999px; padding: 2px 10px; font-size: 12px; font-weight: 500; }
+        .badge-outline { border: 1px solid var(--border); color: var(--muted-fg); }
+        .badge-green { background: var(--badge-green-bg); color: var(--badge-green-fg); }
+        .badge-yellow { background: var(--badge-yellow-bg); color: var(--badge-yellow-fg); }
+        .badge-blue { background: var(--badge-blue-bg); color: var(--badge-blue-fg); }
+        .badge-red { background: var(--badge-red-bg); color: var(--badge-red-fg); }
+        .section-card { border: 1px solid var(--border); border-radius: 8px; padding: 20px; }
+        .field-input { width: 100%; height: 36px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--input); background: transparent; font-size: 14px; color: var(--fg); }
+        .field-input:focus { outline: none; box-shadow: 0 0 0 1px var(--ring); }
+        .field-label { font-size: 13px; font-weight: 500; color: var(--muted-fg); margin-bottom: 4px; }
+        .tab-active { color: var(--fg); border-bottom: 2px solid var(--fg); }
+        .tab-inactive { color: var(--muted-fg); border-bottom: 2px solid transparent; }
+        .tab-inactive:hover { color: var(--fg); opacity: .7; }
+        .btn-primary { background: var(--primary); color: var(--primary-fg); }
+        .btn-primary:hover { opacity: .9; }
+        .btn-outline { border: 1px solid var(--input); color: var(--muted-fg); }
+        .btn-outline:hover { background: var(--accent); color: var(--fg); }
+        .theme-btn { width: 32px; height: 32px; border-radius: 6px; border: 1px solid var(--input); display: flex; align-items: center; justify-content: center; color: var(--muted-fg); cursor: pointer; background: transparent; }
+        .theme-btn:hover { background: var(--accent); color: var(--fg); }
+        .table-inner { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+        .table-inner thead tr { background: var(--muted); border-bottom: 1px solid var(--border); }
+        .table-inner thead th { color: var(--muted-fg); }
+        .table-inner tbody tr { border-bottom: 1px solid var(--border); }
+        .table-inner tbody tr:last-child { border-bottom: none; }
+        .table-inner tbody tr:hover td { background: var(--row-hover); }
+        select.vis-select { height: 32px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--input); background: var(--bg); font-size: 13px; color: var(--fg); }
+        .vis-editable { color: var(--badge-green-fg); }
+        .vis-readonly { color: var(--badge-yellow-fg); }
+        .vis-hidden { color: var(--muted-fg); }
+    </style>
+</head>
+<body class="min-h-screen">
+    <!-- Header -->
+    <header>
+        <div class="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
+            <div class="flex items-center gap-6">
+                <h1 class="text-base font-semibold tracking-tight">Components Registry</h1>
+                <nav class="flex items-center gap-1 text-sm">
+                    <a href="index.html" class="px-3 py-1.5 rounded-md nav-inactive transition-colors">Components</a>
+                    <a href="audit-log.html" class="px-3 py-1.5 rounded-md nav-inactive transition-colors">Audit Log</a>
+                    <a href="admin-settings.html" class="px-3 py-1.5 rounded-md nav-active font-medium">
+                        <svg class="w-3.5 h-3.5 inline mr-1 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                        Settings
+                    </a>
+                </nav>
+            </div>
+            <div class="flex items-center gap-3">
+                <button class="theme-btn" onclick="toggleTheme()" title="Toggle theme">
+                    <svg class="theme-icon-sun w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                    <svg class="theme-icon-moon w-4 h-4" style="display:none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+                </button>
+                <div style="width:1px;height:16px;background:var(--border)"></div>
+                <span class="badge badge-red">ADMIN</span>
+                <div class="flex items-center gap-2">
+                    <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium" style="background:var(--accent);color:var(--accent-fg)">PG</div>
+                    <span class="text-sm text-muted">p.gorbachev</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-6 py-6">
+        <div class="mb-6">
+            <h2 class="text-2xl font-semibold tracking-tight">Admin Settings</h2>
+            <p class="text-sm text-muted mt-1">Configure field visibility, default values, and deployment-specific behavior.</p>
+        </div>
+
+        <!-- Tabs -->
+        <div class="flex gap-6 mb-6" style="border-bottom:1px solid var(--border)" id="tabs">
+            <button class="tab-active pb-3 text-sm font-medium" onclick="showTab('fields')">Field Configuration</button>
+            <button class="tab-inactive pb-3 text-sm font-medium" onclick="showTab('defaults')">Component Defaults</button>
+            <button class="tab-inactive pb-3 text-sm font-medium" onclick="showTab('migration')">Migration Status</button>
+        </div>
+
+        <!-- Field Configuration Tab -->
+        <div id="tab-fields">
+            <div class="flex items-center justify-between mb-4">
+                <p class="text-sm text-muted">
+                    Control which fields are visible to users. <span class="vis-editable">Editable</span> fields can be modified.
+                    <span class="vis-readonly">Read-only</span> fields are shown but cannot be changed.
+                    <span class="vis-hidden">Hidden</span> fields are not displayed and use their default value.
+                </p>
+                <button class="inline-flex items-center rounded-md btn-primary px-4 py-2 text-sm font-medium transition-opacity">
+                    Save Configuration
+                </button>
+            </div>
+
+            <!-- Component Fields -->
+            <div class="section-card mb-4">
+                <h3 class="text-sm font-semibold mb-4">Component Fields</h3>
+                <div class="table-inner">
+                    <table class="w-full">
+                        <thead>
+                            <tr>
+                                <th class="h-9 px-4 text-left text-xs font-medium uppercase w-48">Field</th>
+                                <th class="h-9 px-4 text-left text-xs font-medium uppercase w-36">Visibility</th>
+                                <th class="h-9 px-4 text-left text-xs font-medium uppercase w-24">Required</th>
+                                <th class="h-9 px-4 text-left text-xs font-medium uppercase">Default Value</th>
+                                <th class="h-9 px-4 text-left text-xs font-medium uppercase">Description</th>
+                            </tr>
+                        </thead>
+                        <tbody class="text-sm">
+                            <tr>
+                                <td class="h-11 px-4 font-mono text-xs font-medium">name</td>
+                                <td class="h-11 px-4"><span class="vis-editable text-xs font-medium">editable</span> <span class="text-xs text-muted">(locked)</span></td>
+                                <td class="h-11 px-4"><input type="checkbox" checked disabled></td>
+                                <td class="h-11 px-4 text-muted">-</td>
+                                <td class="h-11 px-4 text-muted">Unique component identifier</td>
+                            </tr>
+                            <tr>
+                                <td class="h-11 px-4 font-mono text-xs font-medium">displayName</td>
+                                <td class="h-11 px-4">
+                                    <select class="vis-select vis-editable">
+                                        <option selected>editable</option>
+                                        <option>readonly</option>
+                                        <option>hidden</option>
+                                    </select>
+                                </td>
+                                <td class="h-11 px-4"><input type="checkbox"></td>
+                                <td class="h-11 px-4 text-muted">-</td>
+                                <td class="h-11 px-4 text-muted">Human-readable name</td>
+                            </tr>
+                            <tr>
+                                <td class="h-11 px-4 font-mono text-xs font-medium">system</td>
+                                <td class="h-11 px-4">
+                                    <select class="vis-select vis-hidden">
+                                        <option>editable</option>
+                                        <option>readonly</option>
+                                        <option selected>hidden</option>
+                                    </select>
+                                </td>
+                                <td class="h-11 px-4"><input type="checkbox"></td>
+                                <td class="h-11 px-4">
+                                    <input type="text" value="CLASSIC" class="field-input h-8 text-xs w-32">
+                                </td>
+                                <td class="h-11 px-4 text-muted">System classification. Hidden: always "CLASSIC" in this deployment.</td>
+                            </tr>
+                            <tr>
+                                <td class="h-11 px-4 font-mono text-xs font-medium">productType</td>
+                                <td class="h-11 px-4">
+                                    <select class="vis-select vis-editable">
+                                        <option selected>editable</option>
+                                        <option>readonly</option>
+                                        <option>hidden</option>
+                                    </select>
+                                </td>
+                                <td class="h-11 px-4"><input type="checkbox"></td>
+                                <td class="h-11 px-4">
+                                    <input type="text" value="PT_K" class="field-input h-8 text-xs w-32">
+                                </td>
+                                <td class="h-11 px-4 text-muted">Product type</td>
+                            </tr>
+                            <tr>
+                                <td class="h-11 px-4 font-mono text-xs font-medium">componentOwner</td>
+                                <td class="h-11 px-4">
+                                    <select class="vis-select vis-editable">
+                                        <option selected>editable</option>
+                                        <option>readonly</option>
+                                        <option>hidden</option>
+                                    </select>
+                                </td>
+                                <td class="h-11 px-4"><input type="checkbox" checked></td>
+                                <td class="h-11 px-4 text-muted">-</td>
+                                <td class="h-11 px-4 text-muted">Component owner</td>
+                            </tr>
+                            <tr>
+                                <td class="h-11 px-4 font-mono text-xs font-medium">releaseManager</td>
+                                <td class="h-11 px-4">
+                                    <select class="vis-select vis-readonly">
+                                        <option>editable</option>
+                                        <option selected>readonly</option>
+                                        <option>hidden</option>
+                                    </select>
+                                </td>
+                                <td class="h-11 px-4"><input type="checkbox"></td>
+                                <td class="h-11 px-4 text-muted">-</td>
+                                <td class="h-11 px-4 text-muted">Read-only: set by admin only</td>
+                            </tr>
+                            <tr>
+                                <td class="h-11 px-4 font-mono text-xs font-medium">copyright</td>
+                                <td class="h-11 px-4">
+                                    <select class="vis-select vis-readonly">
+                                        <option>editable</option>
+                                        <option selected>readonly</option>
+                                        <option>hidden</option>
+                                    </select>
+                                </td>
+                                <td class="h-11 px-4"><input type="checkbox"></td>
+                                <td class="h-11 px-4">
+                                    <input type="text" value="Copyright (c) 2026 ACME Corp." class="field-input h-8 text-xs w-56">
+                                </td>
+                                <td class="h-11 px-4 text-muted">Copyright text. Read-only: standard for all components.</td>
+                            </tr>
+                            <tr>
+                                <td class="h-11 px-4 font-mono text-xs font-medium">solution</td>
+                                <td class="h-11 px-4">
+                                    <select class="vis-select vis-hidden">
+                                        <option>editable</option>
+                                        <option>readonly</option>
+                                        <option selected>hidden</option>
+                                    </select>
+                                </td>
+                                <td class="h-11 px-4"><input type="checkbox"></td>
+                                <td class="h-11 px-4">
+                                    <input type="text" value="false" class="field-input h-8 text-xs w-32">
+                                </td>
+                                <td class="h-11 px-4 text-muted">Hidden: not used in this deployment</td>
+                            </tr>
+                            <tr>
+                                <td class="h-11 px-4 font-mono text-xs font-medium">labels</td>
+                                <td class="h-11 px-4">
+                                    <select class="vis-select vis-editable">
+                                        <option selected>editable</option>
+                                        <option>readonly</option>
+                                        <option>hidden</option>
+                                    </select>
+                                </td>
+                                <td class="h-11 px-4"><input type="checkbox"></td>
+                                <td class="h-11 px-4 text-muted">-</td>
+                                <td class="h-11 px-4 text-muted">Free-form tags</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Build Fields -->
+            <div class="section-card mb-4">
+                <h3 class="text-sm font-semibold mb-4">Build Fields</h3>
+                <div class="table-inner">
+                    <table class="w-full">
+                        <thead>
+                            <tr>
+                                <th class="h-9 px-4 text-left text-xs font-medium uppercase w-48">Field</th>
+                                <th class="h-9 px-4 text-left text-xs font-medium uppercase w-36">Visibility</th>
+                                <th class="h-9 px-4 text-left text-xs font-medium uppercase w-24">Required</th>
+                                <th class="h-9 px-4 text-left text-xs font-medium uppercase">Default Value</th>
+                                <th class="h-9 px-4 text-left text-xs font-medium uppercase">Description</th>
+                            </tr>
+                        </thead>
+                        <tbody class="text-sm">
+                            <tr>
+                                <td class="h-11 px-4 font-mono text-xs font-medium">buildSystem</td>
+                                <td class="h-11 px-4">
+                                    <select class="vis-select vis-editable"><option selected>editable</option><option>readonly</option><option>hidden</option></select>
+                                </td>
+                                <td class="h-11 px-4"><input type="checkbox" checked></td>
+                                <td class="h-11 px-4"><input type="text" value="GRADLE" class="field-input h-8 text-xs w-32"></td>
+                                <td class="h-11 px-4 text-muted">Build system</td>
+                            </tr>
+                            <tr>
+                                <td class="h-11 px-4 font-mono text-xs font-medium">javaVersion</td>
+                                <td class="h-11 px-4">
+                                    <select class="vis-select vis-editable"><option selected>editable</option><option>readonly</option><option>hidden</option></select>
+                                </td>
+                                <td class="h-11 px-4"><input type="checkbox"></td>
+                                <td class="h-11 px-4"><input type="text" value="21" class="field-input h-8 text-xs w-32"></td>
+                                <td class="h-11 px-4 text-muted">Java version for compilation</td>
+                            </tr>
+                            <tr>
+                                <td class="h-11 px-4 font-mono text-xs font-medium">gradleVersion</td>
+                                <td class="h-11 px-4">
+                                    <select class="vis-select vis-editable"><option selected>editable</option><option>readonly</option><option>hidden</option></select>
+                                </td>
+                                <td class="h-11 px-4"><input type="checkbox"></td>
+                                <td class="h-11 px-4"><input type="text" value="8.6" class="field-input h-8 text-xs w-32"></td>
+                                <td class="h-11 px-4 text-muted">Gradle version</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Component Defaults Tab -->
+        <div id="tab-defaults" class="hidden">
+            <div class="flex items-center justify-between mb-4">
+                <p class="text-sm text-muted">
+                    Default values applied when creating a new component. Replaces <code class="text-xs px-1.5 py-0.5 rounded" style="background:var(--muted)">Default.groovy</code>.
+                </p>
+                <button class="inline-flex items-center rounded-md btn-primary px-4 py-2 text-sm font-medium transition-opacity">
+                    Save Defaults
+                </button>
+            </div>
+
+            <div class="grid grid-cols-2 gap-6">
+                <div class="section-card">
+                    <h3 class="text-sm font-semibold mb-4">General Defaults</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="field-label">System</label>
+                            <input type="text" value="CLASSIC" class="field-input">
+                        </div>
+                        <div>
+                            <label class="field-label">Product Type</label>
+                            <select class="field-input">
+                                <option selected>PT_K</option>
+                                <option>PT_C</option>
+                                <option>PT_D</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="field-label">Copyright</label>
+                            <textarea rows="2" class="w-full px-3 py-2 rounded-md text-sm" style="border:1px solid var(--input);background:transparent;color:var(--fg)" onfocus="this.style.boxShadow='0 0 0 1px var(--ring)'" onblur="this.style.boxShadow=''">Copyright (c) 2026 ACME Corp. All rights reserved.</textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-card">
+                    <h3 class="text-sm font-semibold mb-4">Build Defaults</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="field-label">Build System</label>
+                            <select class="field-input">
+                                <option selected>GRADLE</option>
+                                <option>MAVEN</option>
+                                <option>PROVIDED</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="field-label">Java Version</label>
+                            <input type="text" value="21" class="field-input">
+                        </div>
+                        <div>
+                            <label class="field-label">Gradle Version</label>
+                            <input type="text" value="8.6" class="field-input">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-card">
+                    <h3 class="text-sm font-semibold mb-4">Escrow Defaults</h3>
+                    <div class="space-y-4">
+                        <div class="flex items-center gap-4">
+                            <label class="flex items-center gap-2 text-sm cursor-pointer">
+                                <input type="checkbox" checked class="rounded"> Reusable
+                            </label>
+                        </div>
+                        <div>
+                            <label class="field-label">Generation Mode</label>
+                            <select class="field-input">
+                                <option selected>AUTO</option>
+                                <option>MANUAL</option>
+                                <option>UNSUPPORTED</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="field-label">Build Task</label>
+                            <input type="text" value="clean build" class="field-input font-mono text-xs">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-card">
+                    <h3 class="text-sm font-semibold mb-4">Jira Version Format Defaults</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="field-label">Line Version Format</label>
+                            <input type="text" value="$major02.$minor02" class="field-input font-mono text-xs">
+                        </div>
+                        <div>
+                            <label class="field-label">Release Version Format</label>
+                            <input type="text" value="$major02.$minor02.$service02.$fix02" class="field-input font-mono text-xs">
+                        </div>
+                        <div>
+                            <label class="field-label">Build Version Format</label>
+                            <input type="text" value="$major02.$minor02.$service02.$fix02-$build" class="field-input font-mono text-xs">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-4 p-4 rounded-md" style="background:var(--muted);border:1px solid var(--border)">
+                <div class="flex items-center gap-2 text-sm text-muted">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <span>These defaults are applied to new components at creation time. Changing defaults does not affect existing components. Last modified by <strong style="color:var(--fg)">p.gorbachev</strong> on 2026-03-07 10:30.</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Migration Status Tab -->
+        <div id="tab-migration" class="hidden">
+            <div class="section-card mb-4">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-sm font-semibold">Migration Progress</h3>
+                    <div class="flex items-center gap-2">
+                        <span class="text-sm text-muted">Storage mode:</span>
+                        <select class="field-input" style="width: auto; height: 32px;">
+                            <option>git</option>
+                            <option selected>routing</option>
+                            <option>db</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Progress Bar -->
+                <div class="mb-4">
+                    <div class="flex items-center justify-between text-sm mb-2">
+                        <span class="text-muted">Components migrated to DB</span>
+                        <span class="font-medium">183 / 247 <span class="text-muted">(74%)</span></span>
+                    </div>
+                    <div class="w-full h-2 rounded-full overflow-hidden" style="background:var(--muted)">
+                        <div class="h-full rounded-full" style="width:74%;background:var(--badge-green-fg)"></div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-4 gap-4 text-center">
+                    <div class="p-3 rounded-md" style="background:var(--muted)">
+                        <div class="text-2xl font-semibold" style="color:var(--badge-green-fg)">183</div>
+                        <div class="text-xs text-muted mt-1">In DB</div>
+                    </div>
+                    <div class="p-3 rounded-md" style="background:var(--muted)">
+                        <div class="text-2xl font-semibold" style="color:var(--badge-blue-fg)">61</div>
+                        <div class="text-xs text-muted mt-1">In Git</div>
+                    </div>
+                    <div class="p-3 rounded-md" style="background:var(--muted)">
+                        <div class="text-2xl font-semibold" style="color:var(--badge-red-fg)">3</div>
+                        <div class="text-xs text-muted mt-1">Failed</div>
+                    </div>
+                    <div class="p-3 rounded-md" style="background:var(--muted)">
+                        <div class="text-2xl font-semibold">15</div>
+                        <div class="text-xs text-muted mt-1">New (DB-only)</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-sm font-semibold">Component Sources</h3>
+                    <div class="flex items-center gap-2">
+                        <button class="inline-flex items-center rounded-md btn-outline px-3 py-1.5 text-sm transition-colors">
+                            Migrate Selected
+                        </button>
+                        <button class="inline-flex items-center rounded-md btn-primary px-3 py-1.5 text-sm font-medium transition-opacity">
+                            Migrate All Remaining
+                        </button>
+                    </div>
+                </div>
+                <div class="table-inner">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr>
+                                <th class="h-9 px-3 text-left"><input type="checkbox"></th>
+                                <th class="h-9 px-3 text-left text-xs font-medium uppercase">Component</th>
+                                <th class="h-9 px-3 text-left text-xs font-medium uppercase">Source</th>
+                                <th class="h-9 px-3 text-left text-xs font-medium uppercase">Migrated At</th>
+                                <th class="h-9 px-3 text-left text-xs font-medium uppercase">Status</th>
+                                <th class="h-9 px-3 text-left text-xs font-medium uppercase">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="h-10 px-3"><input type="checkbox"></td>
+                                <td class="h-10 px-3 font-medium">ee-component</td>
+                                <td class="h-10 px-3"><span class="badge badge-green">DB</span></td>
+                                <td class="h-10 px-3 text-muted">2026-03-06 09:30</td>
+                                <td class="h-10 px-3"><span class="badge badge-green">validated</span></td>
+                                <td class="h-10 px-3"><button class="text-xs text-muted hover:underline">Revert to Git</button></td>
+                            </tr>
+                            <tr>
+                                <td class="h-10 px-3"><input type="checkbox"></td>
+                                <td class="h-10 px-3 font-medium">legacy-old-module</td>
+                                <td class="h-10 px-3"><span class="badge badge-outline">Git</span></td>
+                                <td class="h-10 px-3 text-muted">-</td>
+                                <td class="h-10 px-3"><span class="badge badge-outline">pending</span></td>
+                                <td class="h-10 px-3">
+                                    <button class="text-xs hover:underline mr-2" style="color:var(--link)">Migrate</button>
+                                    <button class="text-xs text-muted hover:underline">Dry Run</button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="h-10 px-3"><input type="checkbox"></td>
+                                <td class="h-10 px-3 font-medium">broken-dsl-component</td>
+                                <td class="h-10 px-3"><span class="badge badge-outline">Git</span></td>
+                                <td class="h-10 px-3 text-muted">2026-03-05 14:20</td>
+                                <td class="h-10 px-3"><span class="badge badge-red">failed</span></td>
+                                <td class="h-10 px-3">
+                                    <button class="text-xs hover:underline mr-2" style="color:var(--link)">Retry</button>
+                                    <button class="text-xs text-muted hover:underline">View Error</button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="h-10 px-3"><input type="checkbox" disabled></td>
+                                <td class="h-10 px-3 font-medium">new-platform-service</td>
+                                <td class="h-10 px-3"><span class="badge badge-green">DB</span></td>
+                                <td class="h-10 px-3 text-muted">-</td>
+                                <td class="h-10 px-3"><span class="badge badge-blue">db-native</span></td>
+                                <td class="h-10 px-3 text-muted text-xs">Created via API v4</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        function showTab(name) {
+            document.querySelectorAll('[id^="tab-"]').forEach(el => el.classList.add('hidden'));
+            document.getElementById('tab-' + name).classList.remove('hidden');
+            document.querySelectorAll('#tabs button').forEach(btn => {
+                btn.className = btn.className.replace('tab-active', 'tab-inactive');
+            });
+            event.target.className = event.target.className.replace('tab-inactive', 'tab-active');
+        }
+    </script>
+</body>
+</html>

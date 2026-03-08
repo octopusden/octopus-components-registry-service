@@ -170,8 +170,8 @@ slices().matching("org.octopusden.octopus.components.registry.(*)..")
 |-----------|-----|
 | **Per-component rollback** | Flip `component_source.source` back to `git` for any single component |
 | **Global rollback** | `registry.storage=git` → instant revert to Git for everything |
-| **Dry-run mode** | `POST /api/v4/admin/migrate-component/{name}?dryRun=true` — validate without committing |
-| **Migration progress tracking** | `GET /api/v4/admin/migration-status` — returns counts: git/db/failed per component |
+| **Dry-run mode** | `POST /rest/api/4/admin/migrate-component/{name}?dryRun=true` — validate without committing |
+| **Migration progress tracking** | `GET /rest/api/4/admin/migration-status` — returns counts: git/db/failed per component |
 | **Automatic validation gate** | Component not flipped to DB until equivalence check passes |
 | **Git repo preserved** | Git repository remains read-only until all components validated in DB + bake-in period |
 | **Time-boxed bake-in** | After last component migrated, keep Git repo available for N days before cleanup |
@@ -266,3 +266,15 @@ Production deployment additionally runs:
 - ADRs for all significant decisions
 - Integration tests with Testcontainers (no external DB dependency for CI)
 - API documentation via OpenAPI/Swagger for v4 endpoints
+
+### 8.1 Schema Extensibility
+
+Adding new component properties must remain low-friction. See [ADR-010](adr/010-schema-extensibility.md).
+
+| Property tier | Adding new field | DB migration? | Example |
+|---|---|---|---|
+| Tier 1 (stable core) | Flyway + Entity + Mapper + DTO | Yes | `system`, `archived` |
+| Tier 2 (domain configs) | Flyway + Entity + Mapper + DTO | Yes | build, escrow, VCS tables |
+| Tier 3 (extensible metadata) | DTO + mapper only | **No** | `releaseManager`, `labels`, future fields |
+
+**Goal:** Adding a new metadata property (Tier 3) should require changes in **one service module only** (mapper + DTO), with no Flyway migration, no schema coordination across environments.

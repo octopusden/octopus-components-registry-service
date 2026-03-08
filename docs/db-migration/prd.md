@@ -83,9 +83,10 @@ The Components Registry Service stores all component configuration in a Git repo
 - Role-based access: READER / EDITOR / ADMIN
 - @PreAuthorize on endpoints
 
-### Phase 3: Dual-Read
+### Phase 3: Dual-Read & Routing
 - `DatabaseComponentRegistryResolver` implementation
-- Feature flag: `registry.storage=git|db|dual`
+- `ComponentRoutingResolver` for per-component source routing
+- Feature flag: `registry.storage=git|db|routing|dual`
 - Validation: DB results match Git results
 
 ### Phase 4: Data Import

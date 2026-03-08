@@ -40,6 +40,8 @@ PRD (why?) ──→ FS (what?) ──→ TDD (how?)
 | [ADR-007](adr/007-dual-read-migration.md) | Dual-read migration with feature flag |
 | [ADR-008](adr/008-component-level-routing.md) | Component-level routing — canary migration |
 | [ADR-009](adr/009-ui-repository-strategy.md) | UI repository strategy — monorepo vs separate repo (Proposed) |
+| [ADR-010](adr/010-schema-extensibility.md) | Hybrid schema extensibility — Columns + JSONB (Proposed) |
+| [ADR-011](adr/011-field-configuration.md) | Configurable field visibility, defaults, multi-org support (Proposed) |
 
 ### Planned (create as needed)
 

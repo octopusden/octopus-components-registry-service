@@ -59,9 +59,11 @@ CREATE TABLE audit_log (
 ### Mechanism
 1. Service method captures entity state before modification
 2. Performs the modification
-3. Publishes domain event with old/new state
-4. `@TransactionalEventListener` writes to `audit_log` within same transaction
+3. Publishes domain event with old/new state via `ApplicationEventPublisher`
+4. `@TransactionalEventListener(phase = BEFORE_COMMIT)` writes to `audit_log` **within the same transaction** — guaranteeing that audit entry and data change either both commit or both roll back. If audit write fails, the entire transaction (including the data change) is rolled back.
 5. Correlation ID assigned per API request (MDC / RequestContext)
+
+> **Note:** Using `BEFORE_COMMIT` phase (not the default `AFTER_COMMIT`) is a deliberate choice to ensure atomicity of data + audit writes. The trade-off is slightly longer transaction duration.
 
 ### Comparison with Git history
 

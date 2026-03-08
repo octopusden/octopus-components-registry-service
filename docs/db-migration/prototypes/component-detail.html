@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ee-component - Components Registry</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="theme.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--fg); transition: background .2s, color .2s; }
+        header { border-bottom: 1px solid var(--border); }
+        .nav-inactive { color: var(--muted-fg); }
+        .nav-inactive:hover { color: var(--fg); background: var(--accent); opacity: .6; }
+        .text-muted { color: var(--muted-fg); }
+        .text-link { color: var(--link); }
+        .badge { display: inline-flex; align-items: center; border-radius: 9999px; padding: 2px 10px; font-size: 12px; font-weight: 500; }
+        .badge-outline { border: 1px solid var(--border); color: var(--muted-fg); }
+        .badge-green { background: var(--badge-green-bg); color: var(--badge-green-fg); }
+        .badge-blue { background: var(--badge-blue-bg); color: var(--badge-blue-fg); }
+        .badge-yellow { background: var(--badge-yellow-bg); color: var(--badge-yellow-fg); }
+        .tab-active { color: var(--fg); border-bottom: 2px solid var(--fg); }
+        .tab-inactive { color: var(--muted-fg); border-bottom: 2px solid transparent; }
+        .tab-inactive:hover { color: var(--fg); opacity: .7; }
+        .field-label { font-size: 13px; font-weight: 500; color: var(--muted-fg); margin-bottom: 4px; }
+        .field-input { width: 100%; height: 36px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--input); background: transparent; font-size: 14px; color: var(--fg); }
+        .field-input:focus { outline: none; box-shadow: 0 0 0 1px var(--ring); }
+        .field-input:disabled { opacity: 0.5; cursor: not-allowed; }
+        .section-card { border: 1px solid var(--border); border-radius: 8px; padding: 20px; }
+        .override-indicator { font-size: 11px; cursor: help; }
+        .override-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 4px; }
+        .level-component .override-dot { background: var(--default-dot); }
+        .level-override .override-dot { background: var(--override-dot); }
+        .field-group { position: relative; }
+        .field-group .level-tag { position: absolute; right: 0; top: 0; }
+        .btn-primary { background: var(--primary); color: var(--primary-fg); }
+        .btn-primary:hover { opacity: .9; }
+        .btn-outline { border: 1px solid var(--input); color: var(--muted-fg); }
+        .btn-outline:hover { background: var(--accent); color: var(--fg); }
+        .theme-btn { width: 32px; height: 32px; border-radius: 6px; border: 1px solid var(--input); display: flex; align-items: center; justify-content: center; color: var(--muted-fg); cursor: pointer; background: transparent; }
+        .theme-btn:hover { background: var(--accent); color: var(--fg); }
+        .version-banner { background: var(--muted); border: 1px solid var(--border); }
+        .table-inner { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+        .table-inner thead tr { background: var(--muted); border-bottom: 1px solid var(--border); }
+        .table-inner thead th { color: var(--muted-fg); }
+        .table-inner tbody tr { border-bottom: 1px solid var(--border); }
+        .table-inner tbody tr:last-child { border-bottom: none; }
+    </style>
+</head>
+<body class="min-h-screen">
+    <!-- Header -->
+    <header>
+        <div class="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
+            <div class="flex items-center gap-6">
+                <h1 class="text-base font-semibold tracking-tight">Components Registry</h1>
+                <nav class="flex items-center gap-1 text-sm">
+                    <a href="index.html" class="px-3 py-1.5 rounded-md nav-inactive transition-colors">Components</a>
+                    <a href="audit-log.html" class="px-3 py-1.5 rounded-md nav-inactive transition-colors">Audit Log</a>
+                    <a href="admin-settings.html" class="px-3 py-1.5 rounded-md nav-inactive transition-colors">Settings</a>
+                </nav>
+            </div>
+            <div class="flex items-center gap-3">
+                <button class="theme-btn" onclick="toggleTheme()" title="Toggle theme">
+                    <svg class="theme-icon-sun w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                    <svg class="theme-icon-moon w-4 h-4" style="display:none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+                </button>
+                <div style="width:1px;height:16px;background:var(--border)"></div>
+                <div class="flex items-center gap-2">
+                    <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium" style="background:var(--accent);color:var(--accent-fg)">PG</div>
+                    <span class="text-sm text-muted">p.gorbachev</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Breadcrumb + Actions -->
+    <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div class="flex items-center gap-2 text-sm">
+            <a href="index.html" class="text-muted hover:underline">Components</a>
+            <svg class="w-4 h-4 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            <span class="font-medium">ee-component</span>
+            <span class="badge badge-blue ml-2">CLASSIC</span>
+            <span class="badge badge-green ml-1">GRADLE</span>
+            <!-- Links -->
+            <div class="flex items-center gap-1.5 ml-3">
+                <a href="#" class="text-muted hover:opacity-80" title="Jira: EE"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="#2684FF"><path d="M11.571 11.513H0a5.218 5.218 0 005.232 5.215h2.13v2.057A5.215 5.215 0 0012.575 24V12.518a1.005 1.005 0 00-1.005-1.005zm5.723-5.756H5.736a5.215 5.215 0 005.215 5.214h2.129v2.058a5.218 5.218 0 005.215 5.214V6.758a1.001 1.001 0 00-1.001-1.001zM23.013 0H11.455a5.215 5.215 0 005.215 5.215h2.129v2.057A5.215 5.215 0 0024 12.483V1.005A1.001 1.001 0 0023.013 0z"/></svg></a>
+                <a href="#" class="text-muted hover:opacity-80" title="Git: ee-component"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="#2684FF"><path d="M.778 1.213a.768.768 0 00-.768.892l3.263 19.81c.084.5.515.868 1.022.873H19.95a.772.772 0 00.77-.646l3.27-20.03a.768.768 0 00-.768-.891z"/><path d="M14.52 15.53H9.522L8.17 8.466h7.561z"/></svg></a>
+                <a href="#" class="text-muted hover:opacity-80" title="TeamCity"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="#07C3F2"><path d="M0 0v24h24V0zm2.664 2.964h7.48v1.832H7.396v7.196H5.412V4.796H2.664zm9.328 18H2.992v-1.5h8.999zm5.564-9.218a4.62 4.62 0 01-2.036.374 4.556 4.556 0 01-4.628-4.616v-.024a4.584 4.584 0 014.708-4.668 4.656 4.656 0 013.56 1.388l-1.264 1.456a3.336 3.336 0 00-2.312-1.02 2.671 2.671 0 00-2.616 2.8v.028a2.68 2.68 0 002.616 2.836 3.226 3.226 0 002.376-1.056l1.264 1.276a4.619 4.619 0 01-1.668 1.226z"/></svg></a>
+                <a href="#" class="text-muted hover:opacity-80" title="DMS"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg></a>
+            </div>
+        </div>
+        <div class="flex items-center gap-2">
+            <a href="audit-log.html" class="inline-flex items-center rounded-md btn-outline px-3 py-1.5 text-sm transition-colors">
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                History
+            </a>
+            <button class="inline-flex items-center rounded-md px-3 py-1.5 text-sm transition-colors" style="border:1px solid var(--input);color:var(--badge-red-fg)">Archive</button>
+            <button class="inline-flex items-center rounded-md btn-primary px-4 py-1.5 text-sm font-medium transition-opacity">
+                Save Changes
+            </button>
+        </div>
+    </div>
+
+    <!-- Version Context Banner -->
+    <div class="max-w-7xl mx-auto px-6 mb-2">
+        <div class="flex items-center gap-3 px-4 py-2.5 rounded-lg version-banner">
+            <span class="text-sm text-muted">Editing version:</span>
+            <span class="font-mono text-sm font-semibold" style="color:var(--badge-green-fg)">[3.0, )</span>
+            <span class="badge badge-green">HEAD</span>
+            <span class="text-xs text-muted">Tabs below show the resolved configuration for this version (component defaults + head overrides).</span>
+            <div class="ml-auto flex items-center gap-3 text-xs">
+                <span class="level-component override-indicator"><span class="override-dot"></span>component default</span>
+                <span class="level-override override-indicator"><span class="override-dot"></span>head override</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="max-w-7xl mx-auto px-6">
+        <div class="flex gap-6" style="border-bottom:1px solid var(--border)" id="tabs">
+            <button class="tab-active pb-3 text-sm font-medium transition-colors" onclick="showTab('general')">General</button>
+            <button class="tab-inactive pb-3 text-sm font-medium transition-colors" onclick="showTab('build')">Build</button>
+            <button class="tab-inactive pb-3 text-sm font-medium transition-colors" onclick="showTab('vcs')">VCS</button>
+            <button class="tab-inactive pb-3 text-sm font-medium transition-colors" onclick="showTab('distribution')">Distribution</button>
+            <button class="tab-inactive pb-3 text-sm font-medium transition-colors" onclick="showTab('jira')">Jira</button>
+            <button class="tab-inactive pb-3 text-sm font-medium transition-colors" onclick="showTab('escrow')">Escrow</button>
+            <button class="tab-inactive pb-3 text-sm font-medium transition-colors" onclick="showTab('versions')">Previous Versions <span class="ml-1 text-xs px-1.5 py-0.5 rounded-full" style="background:var(--muted);color:var(--muted-fg)">2</span></button>
+        </div>
+    </div>
+
+    <!-- Tab Content -->
+    <main class="max-w-7xl mx-auto px-6 py-6">
+
+        <!-- General Tab -->
+        <div id="tab-general">
+            <div class="grid grid-cols-2 gap-6">
+                <div class="section-card">
+                    <h3 class="text-sm font-semibold mb-4">Component Identity</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="field-label">Name</label>
+                            <input type="text" value="ee-component" disabled class="field-input">
+                        </div>
+                        <div>
+                            <label class="field-label">Display Name</label>
+                            <input type="text" value="EE Component" class="field-input">
+                        </div>
+                        <div class="field-group">
+                            <div class="flex items-center justify-between">
+                                <label class="field-label">Group ID</label>
+                                <span class="level-override override-indicator" title="Overridden in head version [3.0, ). Component default: corp.domain"><span class="override-dot"></span>head override</span>
+                            </div>
+                            <input type="text" value="corp.domain.v3" class="field-input" style="border-color: var(--override-dot);">
+                            <div class="text-xs text-muted mt-1">Component default: <code class="text-xs" style="background:var(--muted);padding:1px 4px;border-radius:3px">corp.domain</code> &middot; <button style="color:var(--override-dot)" class="hover:underline">Reset to default</button></div>
+                        </div>
+                        <div>
+                            <label class="field-label">Parent Component</label>
+                            <input type="text" value="" placeholder="None" class="field-input">
+                        </div>
+                        <div class="flex items-center gap-4 pt-2">
+                            <label class="flex items-center gap-2 text-sm cursor-pointer">
+                                <input type="checkbox" checked class="rounded"> Solution
+                            </label>
+                            <label class="flex items-center gap-2 text-sm cursor-pointer">
+                                <input type="checkbox" class="rounded"> Releases in Default Branch
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-6">
+                    <div class="section-card">
+                        <h3 class="text-sm font-semibold mb-4">Ownership</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="field-label">Component Owner</label>
+                                <input type="text" value="EE Component Owner" class="field-input">
+                            </div>
+                            <div>
+                                <label class="field-label">Release Manager</label>
+                                <input type="text" value="EE Component Release Manager" class="field-input">
+                            </div>
+                            <div>
+                                <label class="field-label">Security Champion</label>
+                                <input type="text" value="" placeholder="Not assigned" class="field-input">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="section-card">
+                        <h3 class="text-sm font-semibold mb-4">Metadata</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="field-label">Labels</label>
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <span class="badge badge-outline">critical</span>
+                                    <span class="badge badge-outline">platform</span>
+                                    <span class="badge badge-outline">java-21</span>
+                                    <button class="text-xs text-muted hover:underline">+ Add label</button>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="field-label">Copyright</label>
+                                <input type="text" value="ee-component-copyright" class="field-input">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Build Tab -->
+        <div id="tab-build" class="hidden">
+            <div class="section-card">
+                <h3 class="text-sm font-semibold mb-4">Build Configuration</h3>
+                <div class="grid grid-cols-3 gap-4">
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <label class="field-label">Build System</label>
+                            <span class="level-component override-indicator"><span class="override-dot"></span>default</span>
+                        </div>
+                        <select class="field-input">
+                            <option selected>GRADLE</option>
+                            <option>MAVEN</option>
+                            <option>PROVIDED</option>
+                        </select>
+                    </div>
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <label class="field-label">Java Version</label>
+                            <span class="level-override override-indicator" title="Component default: 17"><span class="override-dot"></span>head override</span>
+                        </div>
+                        <input type="text" value="21" class="field-input" style="border-color: var(--override-dot);">
+                        <div class="text-xs text-muted mt-1">Component default: <code style="background:var(--muted);padding:1px 4px;border-radius:3px">17</code> &middot; <button style="color:var(--override-dot)" class="hover:underline">Reset to default</button></div>
+                    </div>
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <label class="field-label">Gradle Version</label>
+                            <span class="level-component override-indicator"><span class="override-dot"></span>default</span>
+                        </div>
+                        <input type="text" value="8.6" class="field-input">
+                    </div>
+                </div>
+
+                <h4 class="text-sm font-medium mt-6 mb-3 text-muted">Build Tools</h4>
+                <div class="table-inner">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr>
+                                <th class="h-9 px-3 text-left text-xs font-medium uppercase">Type</th>
+                                <th class="h-9 px-3 text-left text-xs font-medium uppercase">Name</th>
+                                <th class="h-9 px-3 text-left text-xs font-medium uppercase">Source</th>
+                                <th class="h-9 px-3 text-left text-xs font-medium uppercase">Env Variable</th>
+                                <th class="h-9 px-3"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="h-10 px-3"><span class="badge badge-outline">DATABASE</span></td>
+                                <td class="h-10 px-3">PostgreSQL 16</td>
+                                <td class="h-10 px-3 text-muted">docker:postgres:16</td>
+                                <td class="h-10 px-3 text-muted font-mono text-xs">DB_HOME</td>
+                                <td class="h-10 px-3 text-right"><button class="text-xs hover:underline" style="color:var(--badge-red-fg)">Remove</button></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <button class="mt-2 text-sm text-muted hover:underline flex items-center gap-1">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                    Add build tool
+                </button>
+            </div>
+        </div>
+
+        <!-- VCS Tab -->
+        <div id="tab-vcs" class="hidden">
+            <div class="section-card">
+                <h3 class="text-sm font-semibold mb-4">VCS Settings</h3>
+                <div class="space-y-4">
+                    <div class="rounded-md p-4" style="border:1px solid var(--border)">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center gap-2">
+                                <span class="badge badge-green">GIT</span>
+                                <span class="text-sm font-medium">Primary</span>
+                            </div>
+                            <button class="text-xs hover:underline" style="color:var(--badge-red-fg)">Remove</button>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <div class="flex items-center justify-between">
+                                    <label class="field-label">Repository URL</label>
+                                    <span class="level-component override-indicator"><span class="override-dot"></span>default</span>
+                                </div>
+                                <input type="text" value="ssh://git@git.domain.corp/ee/ee-component.git" class="field-input font-mono text-xs">
+                            </div>
+                            <div>
+                                <div class="flex items-center justify-between">
+                                    <label class="field-label">Branch</label>
+                                    <span class="level-component override-indicator"><span class="override-dot"></span>default</span>
+                                </div>
+                                <input type="text" value="master" class="field-input">
+                            </div>
+                            <div>
+                                <label class="field-label">Tag Pattern</label>
+                                <input type="text" value="v${version}" class="field-input font-mono text-xs">
+                            </div>
+                            <div>
+                                <label class="field-label">Hotfix Branch</label>
+                                <input type="text" value="" placeholder="Not set" class="field-input">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Distribution Tab -->
+        <div id="tab-distribution" class="hidden">
+            <div class="section-card">
+                <h3 class="text-sm font-semibold mb-4">Distribution Configuration</h3>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="flex items-center gap-4">
+                        <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked> Explicit</label>
+                        <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked> External</label>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4 mt-4">
+                    <div>
+                        <label class="field-label">Docker Image</label>
+                        <input type="text" value="test/test-component" class="field-input font-mono text-xs">
+                    </div>
+                    <div>
+                        <label class="field-label">GAV</label>
+                        <input type="text" value="" placeholder="group:artifact:version" class="field-input font-mono text-xs">
+                    </div>
+                </div>
+                <h4 class="text-sm font-medium mt-6 mb-3 text-muted">Security Groups (Read Access)</h4>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <span class="badge badge-outline">sg-platform-read</span>
+                    <button class="text-xs text-muted hover:underline">+ Add group</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Jira Tab -->
+        <div id="tab-jira" class="hidden">
+            <div class="section-card">
+                <h3 class="text-sm font-semibold mb-4">Jira Configuration</h3>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="field-label">Project Key</label>
+                        <input type="text" value="EE" class="field-input font-mono">
+                    </div>
+                    <div>
+                        <label class="field-label">Display Name</label>
+                        <input type="text" value="EE Component" class="field-input">
+                    </div>
+                </div>
+                <h4 class="text-sm font-medium mt-6 mb-3 text-muted">Version Formats</h4>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="field-label">Line Version</label>
+                        <input type="text" value="$major02.$minor02" class="field-input font-mono text-xs">
+                    </div>
+                    <div>
+                        <label class="field-label">Release Version</label>
+                        <input type="text" value="$major02.$minor02.$service02.$fix02" class="field-input font-mono text-xs">
+                    </div>
+                    <div>
+                        <label class="field-label">Build Version</label>
+                        <input type="text" value="$major02.$minor02.$service02.$fix02-$build" class="field-input font-mono text-xs">
+                    </div>
+                    <div>
+                        <label class="field-label">Major Version</label>
+                        <input type="text" value="$major02.$minorC.$serviceC" class="field-input font-mono text-xs">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Escrow Tab -->
+        <div id="tab-escrow" class="hidden">
+            <div class="section-card">
+                <h3 class="text-sm font-semibold mb-4">Escrow Configuration</h3>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="field-label">Build Task</label>
+                        <input type="text" value="clean build" class="field-input font-mono text-xs">
+                    </div>
+                    <div>
+                        <label class="field-label">Generation Mode</label>
+                        <select class="field-input">
+                            <option selected>AUTO</option>
+                            <option>MANUAL</option>
+                            <option>UNSUPPORTED</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="field-label">Disk Space</label>
+                        <input type="text" value="2 GB" class="field-input">
+                    </div>
+                    <div class="flex items-center pt-5">
+                        <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked> Reusable</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Previous Versions Tab -->
+        <div id="tab-versions" class="hidden">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h3 class="text-sm font-semibold">Previous Version Ranges</h3>
+                    <p class="text-xs text-muted mt-1">Older versions with overrides. Head version <code class="font-mono" style="color:var(--badge-green-fg)">[3.0, )</code> is edited in the main tabs above.</p>
+                </div>
+                <button class="inline-flex items-center rounded-md btn-outline px-3 py-1.5 text-sm transition-colors">
+                    <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                    Add Version Range
+                </button>
+            </div>
+
+            <div class="space-y-3">
+                <!-- Version [2.0, 3.0) -->
+                <div class="section-card">
+                    <div class="flex items-center justify-between cursor-pointer" onclick="this.parentElement.querySelector('.version-body').classList.toggle('hidden'); this.querySelector('.chevron').classList.toggle('rotate-90')">
+                        <div class="flex items-center gap-3">
+                            <svg class="chevron w-4 h-4 text-muted transition-transform rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                            <span class="font-mono text-sm font-medium" style="color:var(--link)">[2.0, 3.0)</span>
+                            <span class="text-xs text-muted">2 overrides</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button class="text-xs hover:underline" style="color:var(--badge-red-fg)" onclick="event.stopPropagation()">Delete range</button>
+                        </div>
+                    </div>
+                    <div class="version-body mt-4 pt-4" style="border-top:1px solid var(--border)">
+                        <p class="text-xs text-muted mb-3">Only overridden fields are shown. All other fields inherit from component defaults.</p>
+                        <div class="grid grid-cols-2 gap-x-6 gap-y-4">
+                            <div>
+                                <div class="flex items-center justify-between">
+                                    <label class="field-label">Java Version</label>
+                                    <button class="text-xs hover:underline" style="color:var(--badge-red-fg)">Remove override</button>
+                                </div>
+                                <input type="text" value="17" class="field-input" style="border-color: var(--override-dot);">
+                                <div class="text-xs text-muted mt-1">Component default: <code style="background:var(--muted);padding:1px 4px;border-radius:3px">17</code></div>
+                            </div>
+                            <div>
+                                <div class="flex items-center justify-between">
+                                    <label class="field-label">VCS Branch</label>
+                                    <button class="text-xs hover:underline" style="color:var(--badge-red-fg)">Remove override</button>
+                                </div>
+                                <input type="text" value="release/2.x" class="field-input" style="border-color: var(--override-dot);">
+                                <div class="text-xs text-muted mt-1">Component default: <code style="background:var(--muted);padding:1px 4px;border-radius:3px">master</code></div>
+                            </div>
+                        </div>
+                        <button class="mt-4 text-sm text-muted hover:underline flex items-center gap-1">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                            Add override for this version
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Version [1.0, 2.0) -->
+                <div class="section-card">
+                    <div class="flex items-center justify-between cursor-pointer" onclick="this.parentElement.querySelector('.version-body').classList.toggle('hidden'); this.querySelector('.chevron').classList.toggle('rotate-90')">
+                        <div class="flex items-center gap-3">
+                            <svg class="chevron w-4 h-4 text-muted transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                            <span class="font-mono text-sm font-medium" style="color:var(--link)">[1.0, 2.0)</span>
+                            <span class="badge badge-outline ml-1">legacy</span>
+                            <span class="text-xs text-muted">3 overrides</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button class="text-xs hover:underline" style="color:var(--badge-red-fg)" onclick="event.stopPropagation()">Delete range</button>
+                        </div>
+                    </div>
+                    <div class="version-body hidden mt-4 pt-4" style="border-top:1px solid var(--border)">
+                        <p class="text-xs text-muted mb-3">Only overridden fields are shown.</p>
+                        <div class="grid grid-cols-2 gap-x-6 gap-y-4">
+                            <div>
+                                <div class="flex items-center justify-between">
+                                    <label class="field-label">Java Version</label>
+                                    <button class="text-xs hover:underline" style="color:var(--badge-red-fg)">Remove override</button>
+                                </div>
+                                <input type="text" value="11" class="field-input" style="border-color: var(--override-dot);">
+                            </div>
+                            <div>
+                                <div class="flex items-center justify-between">
+                                    <label class="field-label">Build System</label>
+                                    <button class="text-xs hover:underline" style="color:var(--badge-red-fg)">Remove override</button>
+                                </div>
+                                <select class="field-input" style="border-color: var(--override-dot);">
+                                    <option>GRADLE</option>
+                                    <option selected>MAVEN</option>
+                                </select>
+                            </div>
+                            <div>
+                                <div class="flex items-center justify-between">
+                                    <label class="field-label">VCS Branch</label>
+                                    <button class="text-xs hover:underline" style="color:var(--badge-red-fg)">Remove override</button>
+                                </div>
+                                <input type="text" value="release/1.x" class="field-input" style="border-color: var(--override-dot);">
+                            </div>
+                        </div>
+                        <button class="mt-4 text-sm text-muted hover:underline flex items-center gap-1">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                            Add override for this version
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        function showTab(name) {
+            document.querySelectorAll('[id^="tab-"]').forEach(el => el.classList.add('hidden'));
+            document.getElementById('tab-' + name).classList.remove('hidden');
+            document.querySelectorAll('#tabs button').forEach(btn => {
+                btn.className = btn.className.replace('tab-active', 'tab-inactive');
+            });
+            event.target.className = event.target.className.replace('tab-inactive', 'tab-active');
+        }
+    </script>
+</body>
+</html>
