@@ -31,6 +31,7 @@ PRD (why?) ──→ FS (what?) ──→ TDD (how?)
 
 | ADR | Decision |
 |-----|----------|
+| [ADR-000](adr/000-migrate-git-to-db-ui.md) | Migrate from Git-based DSL to Database + Web UI (overarching decision) |
 | [ADR-001](adr/001-storage-postgresql.md) | PostgreSQL as storage engine (vs MySQL, MongoDB) |
 | [ADR-002](adr/002-backend-language.md) | Kotlin vs Java 21 for new code (Proposed) |
 | [ADR-003](adr/003-ui-stack-react19.md) | React 19 + Vite + shadcn/ui for the web UI |
@@ -42,6 +43,14 @@ PRD (why?) ──→ FS (what?) ──→ TDD (how?)
 | [ADR-009](adr/009-ui-repository-strategy.md) | UI repository strategy — monorepo vs separate repo (Proposed) |
 | [ADR-010](adr/010-schema-extensibility.md) | Hybrid schema extensibility — Columns + JSONB (Proposed) |
 | [ADR-011](adr/011-field-configuration.md) | Configurable field visibility, defaults, multi-org support (Proposed) |
+
+### Action Items
+
+| # | Item | Status | Notes |
+|---|------|--------|-------|
+| AI-1 | **API versioning strategy**: analyze current v2/v3 client base (access logs, Feign client consumers), decide whether to extend v3 or create v4 for read/write | Open | v2 is the primary API (7+ consumers), v3 is underused (3 consumers). Study actual endpoint usage from server logs before deciding. |
+| AI-2 | **Simplify storage modes**: replace 4 modes (`git\|db\|routing\|dual`) with single `component_source`-based routing | Open | See discussion in ADR-007/008. `dual` becomes a validation step, not a mode. |
+| AI-3 | **Rollback semantics**: reframe rollback as one-way cutover after first DB write per component | Open | See P1 review finding. |
 
 ### Planned (create as needed)
 
