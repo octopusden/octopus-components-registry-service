@@ -1,3 +1,5 @@
+import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
+
 import static org.octopusden.octopus.escrow.BuildSystem.*
 
 Defaults {
@@ -30,7 +32,9 @@ torpedo {
     vcsSettings {
         externalRegistry = "NOT_AVAILABLE"
     }
-    buildSystem = ESCROW_NOT_SUPPORTED
+    escrow {
+        generation = EscrowGenerationMode.UNSUPPORTED
+    }
     groupId = "org.octopusden.octopus.torpedo"
     artifactId = "myartifct"
     jira {
