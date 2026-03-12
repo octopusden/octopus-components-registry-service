@@ -76,34 +76,31 @@ The Components Registry Service stores all component configuration in a Git repo
 ### Phase 1: Foundation
 - PostgreSQL schema + Flyway migrations
 - JPA entities + Spring Data repositories
+- CRUD API (v4) for components and versions
+- Audit log with JSONB diff
+- Keycloak integration (octopus-security-common), role-based access
+- Bean Validation (Jakarta)
 - Integration tests with Testcontainers
 
-### Phase 2: Security
-- Keycloak integration (octopus-security-common)
-- Role-based access: READER / EDITOR / ADMIN
-- @PreAuthorize on endpoints
+### Phase 2: Web UI
+- React 19 + Vite + shadcn/ui + TailwindCSS
+- Components list, editor (multi-tab), audit log viewer
+- Keycloak JS adapter for authentication
+- Works with DB-native components (created via API/UI)
 
 ### Phase 3: Component-Source Routing
 - `DatabaseComponentRegistryResolver` implementation
 - `ComponentRoutingResolver` — routes per component based on `component_source` table
 - No global mode flag — routing is always active once deployed
-- Validation: DB results match Git results (per-component import step)
+- Existing v1/v2/v3 API serves both Git and DB sources transparently
 
 ### Phase 4: Data Import
-- Admin endpoint: Groovy/Kotlin DSL → DB
+- Per-component import from Groovy/Kotlin DSL → DB
+- Validation: deep-compare Git vs DB resolver output per component
+- Gradual migration of existing components
 - Validation against existing test suite (250+ test .groovy files)
 
-### Phase 5: Write API + Audit
-- REST API v4 (CRUD for components, versions)
-- Audit log with JSONB diff
-- Bean Validation (Jakarta)
-
-### Phase 6: Web UI
-- React 19 + Vite + shadcn/ui + TailwindCSS
-- Components list, editor (multi-tab), audit log viewer
-- Keycloak JS adapter for authentication
-
-### Phase 7: Cutover
+### Phase 5: Cutover
 - All components migrated to `source=db` in `component_source` table
 - Remove Git resolver code, drop `component_source` table
 - Remove JGit dependency

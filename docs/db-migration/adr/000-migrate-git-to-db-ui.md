@@ -29,16 +29,6 @@ This architecture was appropriate at the initial stage when the registry was sma
 
 Migrate the Components Registry Service from Git-based DSL storage to a **relational database (PostgreSQL) with a web UI (React)**, while preserving full backward compatibility of existing REST APIs (v1/v2/v3).
 
-The migration is structured in phases:
-
-| Phase | Scope |
-|-------|-------|
-| **Phase 1** | DB schema, JPA entities, Flyway migrations |
-| **Phase 2** | `ComponentRoutingResolver` + `component_source` table — routes per component (Git or DB) |
-| **Phase 3** | Per-component import from DSL with validation (deep-compare Git vs DB) |
-| **Phase 4** | CRUD API (v4), audit log, authorization (Keycloak), web UI |
-| **Phase 5** | Full cutover to DB, decommission Git-based resolver, remove DSL dependency |
-
 Key architectural principles:
 - **Backward compatibility first** — all 34 existing REST endpoints (v1/v2/v3) must return identical responses from DB as they did from Git
 - **Component atomicity** — a component is entirely in Git or entirely in DB; no data split across storage systems

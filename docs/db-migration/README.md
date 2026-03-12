@@ -1,5 +1,15 @@
 # Components Registry: Git → DB Migration — Architecture Documentation
 
+## Glossary
+
+| Abbreviation | Full name | Purpose |
+|---|---|---|
+| **PRD** | Product Requirements Document | Why we're doing this, goals, user stories, project phases |
+| **FS** | Functional Specification | What the system does — CRUD operations, search, audit, authorization rules |
+| **NFS** | Non-Functional Specification | How well — performance, availability, security, observability |
+| **TDD** | Technical Design Document | How — architecture, DB schema, API contracts, code examples |
+| **ADR** | Architecture Decision Record | Why this way — rationale for each technical decision |
+
 ## Document Hierarchy
 
 ```
@@ -12,7 +22,7 @@ PRD (why?) ──→ FS (what?) ──→ TDD (how?)
 
 | Document | Description | Audience |
 |----------|-------------|----------|
-| [prd.md](prd.md) | Product Requirements Document — business goals, user stories, scope, milestones, risks | PO, managers, stakeholders |
+| [prd.md](prd.md) | Product Requirements Document — business goals, user stories, **project phases**, milestones, risks | PO, managers, stakeholders |
 
 ### Level 2 — Specifications (What exactly)
 
