@@ -27,7 +27,7 @@ The Components Registry Service stores all component configuration in a Git repo
 | G3 | **Audit trail** | Every change is recorded: who, when, what changed (old→new values) |
 | G4 | **Access control** | Role-based permissions via Keycloak: reader, editor, admin, component owner |
 | G5 | **Data migration** | 100% of existing Groovy/Kotlin DSL data imported into database without loss |
-| G6 | **Zero-downtime migration** | Dual-read mode allows gradual cutover with rollback capability |
+| G6 | **Zero-downtime migration** | Per-component source routing allows gradual cutover; rollback safe for unedited components |
 
 ## 3. Non-Goals
 
@@ -83,11 +83,11 @@ The Components Registry Service stores all component configuration in a Git repo
 - Role-based access: READER / EDITOR / ADMIN
 - @PreAuthorize on endpoints
 
-### Phase 3: Dual-Read & Routing
+### Phase 3: Component-Source Routing
 - `DatabaseComponentRegistryResolver` implementation
-- `ComponentRoutingResolver` for per-component source routing
-- Feature flag: `registry.storage=git|db|routing|dual`
-- Validation: DB results match Git results
+- `ComponentRoutingResolver` — routes per component based on `component_source` table
+- No global mode flag — routing is always active once deployed
+- Validation: DB results match Git results (per-component import step)
 
 ### Phase 4: Data Import
 - Admin endpoint: Groovy/Kotlin DSL → DB
@@ -104,7 +104,8 @@ The Components Registry Service stores all component configuration in a Git repo
 - Keycloak JS adapter for authentication
 
 ### Phase 7: Cutover
-- Switch `registry.storage=db`
+- All components migrated to `source=db` in `component_source` table
+- Remove Git resolver code, drop `component_source` table
 - Remove JGit dependency
 - Decommission Git-based DSL repository
 
@@ -112,11 +113,11 @@ The Components Registry Service stores all component configuration in a Git repo
 
 | Risk | Impact | Mitigation |
 |------|--------|-----------|
-| Data loss during DSL→DB import | High | Dual-read validation, 250+ test files, rollback capability |
+| Data loss during DSL→DB import | High | Per-component validation (deep-compare Git vs DB), 250+ test files, rollback for unedited components |
 | Breaking existing API consumers | Critical | No changes to v1/v2/v3 endpoints or DTOs; integration tests |
 | Groovy DSL edge cases | Medium | Comprehensive test coverage with production DSL files |
 | Performance degradation | Medium | PostgreSQL indexes + Caffeine cache for hot paths |
-| Downtime during cutover | Medium | Feature flag `registry.storage` enables gradual rollout |
+| Downtime during cutover | Medium | Per-component source routing enables gradual rollout |
 
 ## 8. Open Questions
 

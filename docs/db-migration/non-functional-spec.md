@@ -29,7 +29,7 @@
 | Service uptime | 99.5% (allows ~3.6h downtime/month) |
 | Database availability | PostgreSQL with replication (streaming replica) |
 | Zero-downtime deployments | Rolling update via Kubernetes/OKD |
-| Migration cutover | Zero-downtime via feature flag `registry.storage` |
+| Migration cutover | Zero-downtime via per-component source routing (`component_source` table) |
 
 ### Failure Modes
 | Failure | Impact | Recovery |
@@ -81,7 +81,7 @@ The #1 risk of migration: DB returns different data than Git.
 |-----------------|-------|-----|
 | Per-component equivalence check | Migration time | Deep-compare Git vs DB response for every migrated component |
 | Existing test suite on DB resolver | CI | Run all 250+ .groovy test fixtures against `DatabaseComponentRegistryResolver` |
-| Dual-read mismatch rate = 0 | Production (routing mode) | Prometheus alert if `registry.dual_read.mismatch > 0` |
+| Import validation mismatch rate = 0 | Production (during migration) | Prometheus alert if `registry.migration.validation.mismatch > 0` |
 | Feign client contract tests | CI | All 28 `ComponentsRegistryServiceClient` methods return identical DTOs |
 | Import idempotency | CI | Import same DSL twice → same DB state (no duplicates, no diffs) |
 
@@ -146,7 +146,7 @@ slices().matching("org.octopusden.octopus.components.registry.(*)..")
 | Mechanism | Description |
 |-----------|-------------|
 | **Circuit breaker** (Resilience4j) | DB calls wrapped in circuit breaker; if DB fails, opens circuit and returns error fast |
-| **Graceful degradation** | In `routing` mode: if DB is down, Git-sourced components still served from Git |
+| **Graceful degradation** | During migration: if DB is down, Git-sourced components still served from Git |
 | **Connection pool monitoring** | HikariCP metrics → alert if pool exhaustion > 80% |
 | **Health check depth** | `/actuator/health` verifies: DB connection, Flyway status, Keycloak reachability |
 | **Timeout enforcement** | DB query timeout = 5s; API timeout = 10s; prevents thread starvation |
@@ -155,12 +155,12 @@ slices().matching("org.octopusden.octopus.components.registry.(*)..")
 
 **Failure mode matrix:**
 
-| Failure | routing mode | db mode | Mitigation |
-|---------|-------------|---------|------------|
-| PostgreSQL down | Git components OK, DB components fail | Service unavailable | Replica failover + alert |
+| Failure | During migration (mixed sources) | After migration (all DB) | Mitigation |
+|---------|----------------------------------|--------------------------|------------|
+| PostgreSQL down | Git-sourced components OK, DB-sourced fail | Service unavailable | Replica failover + alert |
 | PostgreSQL slow (>5s) | Circuit opens for DB, Git OK | Circuit opens, 503 | Scale DB, optimize queries |
 | Keycloak down | Reads OK, v4 writes fail | Reads OK, v4 writes fail | Cache JWT public keys locally |
-| Import fails mid-way | Partial import, component stays on Git | N/A | Transactional: all-or-nothing per component |
+| Import fails mid-way | Component stays on Git (source not flipped) | N/A | Transactional: all-or-nothing per component |
 | Cache corruption | Stale data served | Stale data served | TTL + cache clear endpoint |
 | OOM / thread exhaustion | Both resolvers affected | Service degraded | Bulkhead, connection limits |
 
@@ -168,14 +168,15 @@ slices().matching("org.octopusden.octopus.components.registry.(*)..")
 
 | Guarantee | How |
 |-----------|-----|
-| **Per-component rollback** | Flip `component_source.source` back to `git` for any single component |
-| **Global rollback** | `registry.storage=git` → instant revert to Git for everything |
+| **Per-component rollback** | Flip `component_source.source` back to `git` — safe only if component was NOT edited in DB after import |
 | **Dry-run mode** | `POST /rest/api/4/admin/migrate-component/{name}?dryRun=true` — validate without committing |
 | **Migration progress tracking** | `GET /rest/api/4/admin/migration-status` — returns counts: git/db/failed per component |
 | **Automatic validation gate** | Component not flipped to DB until equivalence check passes |
 | **Git repo preserved** | Git repository remains read-only until all components validated in DB + bake-in period |
 | **Time-boxed bake-in** | After last component migrated, keep Git repo available for N days before cleanup |
 | **Audit trail of migration** | Each migration action logged in `audit_log` (who, when, which component, result) |
+
+**Rollback is a one-way cutover after first DB write.** See [ADR-007](adr/007-dual-read-migration.md) for full rollback semantics per component state. There is no global "rollback to Git" switch.
 
 ### 5.7 Data Integrity
 
@@ -195,12 +196,20 @@ slices().matching("org.octopusden.octopus.components.registry.(*)..")
 
 ### 5.9 Rollback Strategy
 
+Rollback is per-component. There is no global "switch to Git" flag.
+
+| Component state | Rollback to Git | Data loss? | Time |
+|---|---|---|---|
+| `source=git` (never imported) | Already on Git | No | — |
+| `source=db` (imported, not edited) | Flip `component_source` to `git` | No | Seconds |
+| `source=db` (edited in DB after import) | Flip to `git` | **Yes** — DB edits lost | Seconds |
+| `source=db` (created via API/UI) | Cannot rollback | **Component disappears** | — |
+
 | Level | Mechanism | Time to recover |
 |-------|-----------|----------------|
-| Single component | Flip `component_source` to `git` | Seconds |
-| All components | Set `registry.storage=git` | Seconds (config reload) |
+| Single component (pre-edit) | Flip `component_source` to `git` | Seconds |
 | DB schema | Flyway rollback migration | Minutes |
-| Full system | Redeploy previous version + `storage=git` | Minutes |
+| Full system | Redeploy previous version (Git resolver still available during migration) | Minutes |
 
 ### 5.10 CI Pipeline Fitness Gates
 
@@ -227,14 +236,14 @@ Production deployment additionally runs:
 - `registry.read.duration` — read API latency histogram
 - `registry.write.duration` — write API latency histogram
 - `registry.cache.hit_ratio` — cache effectiveness
-- `registry.dual_read.match` / `registry.dual_read.mismatch` — migration validation
+- `registry.migration.validation.match` / `registry.migration.validation.mismatch` — per-component import validation
 - `registry.audit.events` — audit log write rate
 - Standard JVM, DB pool, HTTP metrics via Actuator
 
 ### 6.2 Logging
 - Structured JSON logs (Logback + SLF4J)
 - Correlation ID in MDC for request tracing
-- WARN level for dual-read mismatches
+- WARN level for import validation mismatches
 - ERROR level for write failures
 
 ### 6.3 Health Checks

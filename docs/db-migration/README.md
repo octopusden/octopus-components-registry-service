@@ -38,8 +38,8 @@ PRD (why?) ──→ FS (what?) ──→ TDD (how?)
 | [ADR-004](adr/004-auth-keycloak.md) | octopus-security-common + Keycloak integration |
 | [ADR-005](adr/005-audit-log.md) | Custom audit_log + Domain Events (vs Hibernate Envers) |
 | [ADR-006](adr/006-api-versioning-v4.md) | New API v4 for CRUD; v1/v2/v3 unchanged |
-| [ADR-007](adr/007-dual-read-migration.md) | Dual-read migration with feature flag |
-| [ADR-008](adr/008-component-level-routing.md) | Component-level routing — canary migration |
+| [ADR-007](adr/007-dual-read-migration.md) | Component-Source Routing — per-component migration strategy |
+| [ADR-008](adr/008-component-level-routing.md) | ~~Component-level routing~~ — Superseded by ADR-007 |
 | [ADR-009](adr/009-ui-repository-strategy.md) | UI repository strategy — monorepo vs separate repo (Proposed) |
 | [ADR-010](adr/010-schema-extensibility.md) | Hybrid schema extensibility — Columns + JSONB (Proposed) |
 | [ADR-011](adr/011-field-configuration.md) | Configurable field visibility, defaults, multi-org support (Proposed) |
@@ -49,8 +49,8 @@ PRD (why?) ──→ FS (what?) ──→ TDD (how?)
 | # | Item | Status | Notes |
 |---|------|--------|-------|
 | AI-1 | **API versioning strategy**: analyze current v2/v3 client base (access logs, Feign client consumers), decide whether to extend v3 or create v4 for read/write | Open | v2 is the primary API (7+ consumers), v3 is underused (3 consumers). Study actual endpoint usage from server logs before deciding. |
-| AI-2 | **Simplify storage modes**: replace 4 modes (`git\|db\|routing\|dual`) with single `component_source`-based routing | Open | See discussion in ADR-007/008. `dual` becomes a validation step, not a mode. |
-| AI-3 | **Rollback semantics**: reframe rollback as one-way cutover after first DB write per component | Open | See P1 review finding. |
+| AI-2 | **Simplify storage modes**: replace 4 modes (`git\|db\|routing\|dual`) with single `component_source`-based routing | **Done** | Implemented in ADR-007. No global mode flag, single `ComponentRoutingResolver` always active. |
+| AI-3 | **Rollback semantics**: reframe rollback as one-way cutover after first DB write per component | **Done** | Implemented in ADR-007 §Rollback Semantics. Updated NFS §5.6, §5.9. |
 
 ### Planned (create as needed)
 

@@ -133,7 +133,7 @@ All existing search/lookup operations must return identical results from DB:
 ### 5.1 Import from DSL
 - **Input**: Admin triggers import (optional: Git repo URL, branch, tag)
 - **Process**: Clone Git → parse Groovy DSL → parse Kotlin DSL → map to entities → save to DB
-- **Validation**: After import, dual-read mode compares results
+- **Validation**: After import, deep-compare Git vs DB resolver output per component; flip `source=db` only if match
 - **Idempotency**: Re-import overwrites existing data for matching component names
 - **Output**: Import report — count of imported components, versions, errors
 

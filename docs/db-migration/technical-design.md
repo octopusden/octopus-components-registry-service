@@ -51,19 +51,22 @@ REST Controllers (v1, v2, v3) → Feign Clients (7+ consumers)
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 2.3 Feature Flag
+### 2.3 Component-Source Routing
 
-```yaml
-registry:
-  storage: git    # git | db | routing | dual
+There is no global mode flag. The system always uses `ComponentRoutingResolver`, which looks up the source for each component in the `component_source` table. See [ADR-007](adr/007-dual-read-migration.md).
+
+```sql
+CREATE TABLE component_source (
+    component_name  VARCHAR(255) PRIMARY KEY,
+    source          VARCHAR(10) NOT NULL DEFAULT 'git',  -- 'git' | 'db'
+    migrated_at     TIMESTAMP,
+    migrated_by     VARCHAR(255)
+);
 ```
 
-- `git` — current behavior (default)
-- `db` — reads from PostgreSQL
-- `routing` — new components from DB, existing from Git (see [ADR-008](adr/008-component-level-routing.md))
-- `dual` — reads from both, compares, logs discrepancies, returns Git result
-
-Implemented via `@ConditionalOnProperty` or custom `@Configuration` selecting the `ComponentRegistryResolver` bean.
+- On initial deployment: all existing components have `source = 'git'` → system behaves as before
+- New components created via API/UI: inserted with `source = 'db'`
+- After successful import + validation: updated to `source = 'db'`
 
 ## 3. Database Schema
 
@@ -315,16 +318,30 @@ class WebSecurityConfig(
 
 ## 7. Data Migration
 
-### 7.1 Migration Strategy: Component-Level Routing
+### 7.1 Migration Strategy: Component-Source Routing
 
-New components created via API v4 / UI are stored directly in DB. Existing components remain in Git until individually imported and validated. See [ADR-008](adr/008-component-level-routing.md).
+New components created via API v4 / UI are stored directly in DB. Existing components remain in Git until individually imported and validated. There is no global mode flag — `ComponentRoutingResolver` always routes per component based on the `component_source` table. See [ADR-007](adr/007-dual-read-migration.md).
 
 ```
-Phase 1: registry.storage=git       → current behavior
-Phase 2: registry.storage=routing   → new components → DB, existing → Git
-Phase 3: Per-component import       → existing components migrated one-by-one
-Phase 4: registry.storage=db        → all in DB
-Phase 5: Cleanup                    → remove Git code
+Phase 1: Deploy ComponentRoutingResolver + DB schema
+         All components have source=git → system behaves as before
+         UI not yet available for git-sourced components
+
+Phase 2: New components created via API/UI → source=db
+         Existing components unchanged (source=git)
+         UI works only for DB-sourced components
+
+Phase 3: Per-component import (gradual)
+         For each component:
+           1. Load from Git DSL → write to DB
+           2. Validate: compare Git vs DB resolver output (deep equals)
+           3. If match → flip source to 'db'
+           4. If mismatch → keep source='git', log discrepancy report
+
+Phase 4: All components source=db
+         Git resolver becomes unused
+
+Phase 5: Remove Git resolver code, drop component_source table
 ```
 
 ### 7.2 Import Flow (per-component)
@@ -341,7 +358,7 @@ Phase 5: Cleanup                    → remove Git code
 ### 7.3 Routing Resolver
 ```kotlin
 @Component
-@ConditionalOnProperty("registry.storage", havingValue = "routing")
+@Primary
 class ComponentRoutingResolver(
     private val gitResolver: GitComponentRegistryResolver,
     private val dbResolver: DatabaseComponentRegistryResolver,
@@ -450,24 +467,20 @@ spring:
   flyway:
     enabled: true
 
-registry:
-  storage: git    # git | db | routing
+# No global mode flag — ComponentRoutingResolver always routes
+# per component based on component_source table.
+# During migration: some components source=git, others source=db.
+# After migration: all components source=db, Git resolver unused.
 
 # components-registry-service-cloud-prod.yml
 db:
   host: <postgres-prod-host>.f1.svc.cluster.local
   port: 5432
 
-registry:
-  storage: db     # after migration complete
-
 # components-registry-service-cloud-qa.yml
 db:
   host: <postgres-qa-host>.f1.svc.cluster.local
   port: 5432
-
-registry:
-  storage: routing  # canary mode for QA
 ```
 
 Keycloak config follows existing pattern from `application.yml`:
@@ -527,8 +540,7 @@ ocTemplate {
                 // ... existing params ...
                 "DB_HOST"    : ocTemplate.getOkdInternalHost("postgres"),
                 "DB_PORT"    : "5432",
-                "DB_NAME"    : "components-registry",
-                "STORAGE_MODE": "db"
+                "DB_NAME"    : "components-registry"
             ]
         )
         dependsOn.set(["postgres"])  // wait for DB before starting service
@@ -583,9 +595,8 @@ objects:
 
 ### 10.6 OKD Template Update for Service
 
-Update `components-registry-automation/okd/components-registry.yaml` to support DB mode:
+Update `components-registry-automation/okd/components-registry.yaml` to support DB:
 - Add `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` parameters
-- Add `STORAGE_MODE` parameter (default: `git`)
 - Pass as Spring environment variables to container
 
 ## 11. Open Questions

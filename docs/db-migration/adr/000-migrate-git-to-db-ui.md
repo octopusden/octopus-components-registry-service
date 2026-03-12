@@ -9,17 +9,19 @@ The Components Registry Service stores all component configuration (build settin
 
 This architecture was appropriate at the initial stage when the registry was small and managed by a few developers. Over time, the number of components has grown (250+), the number of consumers has increased (CI/CD pipelines, DMS, Jira integrations, build plugins), and the following problems have emerged:
 
-1. **Not automation-friendly** — there is no API for programmatic changes. Automation scripts (mass renames, bulk property updates, computed field generation) must generate DSL code, commit to Git, and hope the syntax is correct. Simple operations like "rename groupId across 50 components" or "auto-compute Jira projectKey from component name" require custom tooling around Git and DSL parsing instead of a straightforward API call.
+1. **Not automation-friendly** — there is no API for programmatic changes. Automation scripts must generate DSL code, commit to Git, and hope the syntax is correct. Real examples: adding a new component requires manually writing a .groovy file with correct DSL syntax; mass-updating a property (e.g., setting `securityChampion` for 50 components) requires scripted edits to 50 DSL files; migrating a component to a new VCS repository requires editing DSL and pushing through the PR process — all of this instead of a straightforward API call.
 2. **Hard to extend** — adding a new component property requires changes to the Groovy DSL grammar, Kotlin DSL parser, in-memory model classes, and all serialization layers. There is no way to add a field without a code release. Organizations with different needs (different metadata, different required fields) cannot customize the schema without forking the codebase.
 3. **Version range conflicts** — version ranges (e.g., `[1.0, 2.0)`, `[2.0, 3.0)`) are defined independently per component in DSL files with override inheritance. Overlapping ranges, gaps, and contradictory overrides are only detected at parse time. There is no tooling to visualize which version inherits which value, making it easy to introduce subtle misconfiguration. Resolving conflicting ranges in DSL syntax is error-prone.
 4. **Read-only service** — configuration can only be changed by committing to the Git repository. There is no API or UI for CRUD operations. Every change requires knowledge of the DSL syntax and Git workflow.
 5. **No audit trail** — the only change history is Git log, which shows file-level diffs, not field-level "who changed what". There is no way to track who changed a specific component field and when.
 6. **No access control** — anyone with write access to the Git repository can modify any component. There is no role-based access (reader/editor/admin) or ownership model.
-7. **Full reload on change** — any modification (even a single field) triggers a complete re-parse of all DSL files. This takes tens of seconds and blocks all reads during reload.
-8. **Blast radius of a single error** — a broken DSL file in one component fails the entire registry parse. The service cannot start or refresh until the error is fixed. All 250+ components become unavailable because of one bad commit in one file. There is no isolation between components at the parsing level.
+7. **Full reload on change** — any modification (even a single field) requires a PR review and approval wait, followed by a complete re-parse of all DSL files. The real bottleneck is not the parse itself but the human process: the user submits a change, waits for a reviewer to approve, and only then the configuration takes effect.
+8. **Blast radius of a single error** — pre-merge validation prevents broken DSL from reaching the registry, but if a batch of changes contains one error, the entire batch is blocked. All other valid changes in the same PR are held up until the error is fixed. There is no isolation between components at the parsing level.
 9. **No validation on write** — broken DSL syntax or invalid values are discovered only after cache reload fails (see above). The author of the broken commit may not know about the failure.
 10. **Merge conflicts** — parallel edits by different teams result in Git merge conflicts that require manual resolution in DSL files.
 11. **High onboarding barrier** — new users must learn Groovy DSL syntax, understand inheritance (Default.groovy, version range overrides), and follow Git commit conventions.
+12. **No clustering support** — cache reload is triggered by a webhook that reaches only one pod in k8s. Other replicas remain stale until restart. This prevents horizontal scaling, makes the service a single point of failure, and blocks zero-downtime deployments.
+13. **No event-driven notifications** — the service works only with the current state of the repository and has no mechanism to emit events when a component is created or its properties change. Implementing event-driven integration (e.g., notifying other services about component changes) is non-trivial because there is no write path that could produce events — only periodic Git re-reads with no diff tracking.
 
 **Strength of the current approach:** every change goes through a Git Pull Request with mandatory code review, providing a built-in approval gate. However, this also slows down development — PRs can remain pending for days, blocking configuration changes that are often urgent (e.g., release preparation, hotfix VCS settings). The review process was designed for code, not for configuration metadata, and the overhead is disproportionate to the risk of most changes.
 
@@ -31,15 +33,17 @@ The migration is structured in phases:
 
 | Phase | Scope |
 |-------|-------|
-| **Phase 1** | DB schema, JPA entities, Flyway migrations, data import from DSL |
-| **Phase 2** | Dual-read mode — feature flag switches reads between Git and DB resolvers; validation of data parity |
-| **Phase 3** | Component-level routing — gradual canary migration, per-component source (Git or DB) |
+| **Phase 1** | DB schema, JPA entities, Flyway migrations |
+| **Phase 2** | `ComponentRoutingResolver` + `component_source` table — routes per component (Git or DB) |
+| **Phase 3** | Per-component import from DSL with validation (deep-compare Git vs DB) |
 | **Phase 4** | CRUD API (v4), audit log, authorization (Keycloak), web UI |
 | **Phase 5** | Full cutover to DB, decommission Git-based resolver, remove DSL dependency |
 
 Key architectural principles:
 - **Backward compatibility first** — all 34 existing REST endpoints (v1/v2/v3) must return identical responses from DB as they did from Git
-- **Gradual migration** — dual-read and component-level routing allow controlled rollout with rollback capability
+- **Component atomicity** — a component is entirely in Git or entirely in DB; no data split across storage systems
+- **Per-component source routing** — no global mode flag; `component_source` table determines where each component lives. See [ADR-007](007-dual-read-migration.md)
+- **One-way cutover** — rollback to Git is safe only before first DB-owned write per component
 - **Zero downtime** — no flag day; Git and DB coexist during migration
 - **Separation of concerns** — new CRUD API (v4) is independent from legacy read API (v1/v2/v3)
 
@@ -86,13 +90,12 @@ Keep Git as storage but add an API layer that reads/writes DSL files programmati
 - Team needs to maintain JPA entity model alongside existing in-memory DSL model until Git resolver is decommissioned
 
 ### Risks
-- **Data parity** — DB must return identical results to Git resolver for all 34 endpoints. Mitigated by dual-read validation with deep comparison.
+- **Data parity** — DB must return identical results to Git resolver for all 34 endpoints. Mitigated by per-component validation (deep-compare Git vs DB output) during import; source not flipped until match confirmed.
 - **Migration data loss** — complex DSL constructs (escrow, nested inheritance, tools) may not map cleanly to relational schema. Mitigated by import validation and per-component dry-run.
-- **Rollback complexity** — once components are edited via CRUD API (new data that never existed in Git), rollback to Git-only mode loses those changes. Mitigated by component-level routing (Phase 3) allowing selective rollback.
+- **Rollback complexity** — once components are edited via CRUD API or created in DB (data that never existed in Git), rollback to Git loses those changes. This is a one-way cutover per component after first DB write. See [ADR-007](007-dual-read-migration.md) §Rollback Semantics.
 - **DB as single point of failure** — mitigated by PostgreSQL replication, automated backups, and connection pool resilience.
 
 ## References
 - [PRD: Components Registry Service — Migration to Database + Web UI](../prd.md)
 - [ADR-001: PostgreSQL as Primary Storage](001-storage-postgresql.md)
-- [ADR-007: Dual-read migration with feature flag](007-dual-read-migration.md)
-- [ADR-008: Component-level routing — canary migration](008-component-level-routing.md)
+- [ADR-007: Component-Source Routing (Migration Strategy)](007-dual-read-migration.md)
