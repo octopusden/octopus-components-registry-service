@@ -316,3 +316,100 @@ tasks.register('qualityCoverage') {
     dependsOn(coverageProjects.collect { "${it.path}:jacocoTestReport" })
     dependsOn(coverageProjects.collect { "${it.path}:jacocoTestCoverageVerification" })
 }
+
+tasks.register('qualityReportsIndex') {
+    group = 'verification'
+    description = 'Generates a single HTML entry point for all quality reports'
+    outputs.file(layout.buildDirectory.file('reports/quality/index.html'))
+    doLast {
+        def indexFile = layout.buildDirectory.file('reports/quality/index.html').get().asFile
+        indexFile.parentFile.mkdirs()
+
+        def sections = [
+                'Static Analysis': [
+                        '**/build/reports/checkstyle/*.html',
+                        '**/build/reports/pmd/*.html',
+                        '**/build/reports/codenarc/*.html',
+                        '**/build/reports/detekt/*.html',
+                        '**/build/reports/ktlint/*.html',
+                        '**/build/reports/spotbugs/*.html'
+                ],
+                'Coverage': [
+                        '**/build/reports/jacoco/*/html/index.html',
+                        '**/build/reports/kover/**/index.html'
+                ],
+                'Tests': [
+                        '**/build/reports/tests/**/index.html'
+                ]
+        ]
+
+        def rootPath = projectDir.toPath()
+        def indexDirPath = indexFile.parentFile.toPath()
+        def escape = { String value ->
+            value
+                    .replace('&', '&amp;')
+                    .replace('<', '&lt;')
+                    .replace('>', '&gt;')
+                    .replace('"', '&quot;')
+        }
+
+        def sectionsHtml = sections.collect { sectionName, globs ->
+            def files = globs.collectMany { pattern ->
+                fileTree(projectDir) {
+                    include pattern
+                }.files as List<File>
+            }
+                    .findAll { it.isFile() }
+                    .unique { it.path }
+                    .sort { it.path }
+
+            def items = files.collect { reportFile ->
+                def href = indexDirPath.relativize(reportFile.toPath()).toString().replace('\\', '/')
+                def label = rootPath.relativize(reportFile.toPath()).toString().replace('\\', '/')
+                "<li><a href=\"${escape(href)}\">${escape(label)}</a></li>"
+            }
+
+            if (items.isEmpty()) {
+                items = ['<li>No reports generated for this section</li>']
+            }
+
+            """<section>
+  <h2>${escape(sectionName)}</h2>
+  <ul>
+    ${items.join('\n    ')}
+  </ul>
+</section>"""
+        }.join('\n')
+
+        indexFile.text = """<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>CRS Quality Reports</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 24px; color: #1f2937; }
+    h1 { margin-bottom: 0.25rem; }
+    .meta { color: #6b7280; margin-bottom: 1.25rem; }
+    section { margin-bottom: 1.5rem; }
+    ul { margin-top: 0.5rem; }
+    a { color: #0f62fe; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+<h1>CRS Quality Reports</h1>
+<div class="meta">Generated at ${new Date().format("yyyy-MM-dd HH:mm:ss Z")}</div>
+${sectionsHtml}
+</body>
+</html>
+"""
+    }
+}
+
+tasks.named('qualityStatic') {
+    finalizedBy(tasks.named('qualityReportsIndex'))
+}
+
+tasks.named('qualityCoverage') {
+    finalizedBy(tasks.named('qualityReportsIndex'))
+}
