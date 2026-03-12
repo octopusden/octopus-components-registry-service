@@ -110,9 +110,9 @@ Component properties are classified into three tiers by stability. See [ADR-010]
 
 | Tier | Storage | Fields | Adding new field |
 |------|---------|--------|------------------|
-| 1 — Stable core | Columns | `name`, `archived`, `system`, `product_type`, `client_code`, `solution`, `parent_component_id` | Flyway + Entity + Mapper + DTO |
+| 1 — Stable core | Columns | `name`, `component_owner`, `archived`, `system`, `product_type`, `client_code`, `solution`, `parent_component_id` | Flyway + Entity + Mapper + DTO |
 | 2 — Domain configs | Separate tables | build, escrow, VCS, distribution, jira | Flyway + Entity + Mapper + DTO |
-| 3 — Extensible metadata | `metadata JSONB` | `componentOwner`, `releaseManager`, `securityChampion`, `labels`, `doc`, `copyright`, `releasesInDefaultBranch` | DTO only |
+| 3 — Extensible metadata | `metadata JSONB` | `releaseManager`, `securityChampion`, `labels`, `doc`, `copyright`, `releasesInDefaultBranch` | DTO only |
 
 ```sql
 -- metadata column on components table
@@ -147,12 +147,19 @@ class ComponentEntity(
     @GeneratedValue(strategy = GenerationType.UUID)
     var id: UUID? = null,
 
+    // name is the public API identifier (Component.id in v1/v2/v3 is the component name)
     @Column(nullable = false, unique = true)
     val name: String,
 
     // Tier 1 — stable core (columns)
+    @Column(name = "component_owner", nullable = false)
+    var componentOwner: String,
+
     var productType: String? = null,
-    var system: String? = null,
+    // NOTE: current model uses Set<String> for system (Component.system: Set<String>)
+    // DB: stored as array or join table; mapped to Set<String> in DTO
+    @Column(columnDefinition = "text[]")
+    var system: Set<String> = emptySet(),
     var clientCode: String? = null,
     var archived: Boolean = false,
     var solution: Boolean? = null,
@@ -162,7 +169,7 @@ class ComponentEntity(
     var parentComponent: ComponentEntity? = null,
 
     // Tier 3 — extensible metadata (JSONB)
-    // Contains: displayName, componentOwner, releaseManager, securityChampion,
+    // Contains: displayName, releaseManager, securityChampion,
     //           labels, doc, copyright, releasesInDefaultBranch, and future fields
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")

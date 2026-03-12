@@ -39,7 +39,7 @@ distributions, jira_component_configs
 Fields that describe the component but don't affect build/release logic. Often added ad-hoc to support reporting, ownership, or documentation needs.
 
 ```
-displayName, componentOwner, releaseManager, securityChampion,
+displayName, releaseManager, securityChampion,
 copyright, labels, doc, releasesInDefaultBranch,
 and future properties
 ```
@@ -75,19 +75,15 @@ ALTER TABLE components ADD COLUMN metadata JSONB NOT NULL DEFAULT '{}';
 
 -- GIN index for containment queries (@> operator)
 CREATE INDEX idx_components_metadata ON components USING GIN (metadata);
-
--- Functional index for specific frequently-queried fields
-CREATE INDEX idx_components_metadata_owner
-    ON components ((metadata->>'componentOwner'));
 ```
 
 ### Tier Classification
 
 | Tier | Storage | Example fields | Adding new field requires |
 |------|---------|----------------|--------------------------|
-| 1 — Stable core | Columns | `name`, `archived`, `system`, `product_type`, `parent_component_id` | Flyway + Entity + Mapper + DTO |
+| 1 — Stable core | Columns | `name`, `component_owner`, `archived`, `system`, `product_type`, `parent_component_id` | Flyway + Entity + Mapper + DTO |
 | 2 — Domain configs | Separate tables | build, escrow, VCS, distribution, jira | Flyway + Entity + Mapper + DTO |
-| 3 — Extensible metadata | `metadata` JSONB | `componentOwner`, `releaseManager`, `labels`, `doc`, `copyright` | DTO only (optionally: validation schema) |
+| 3 — Extensible metadata | `metadata` JSONB | `releaseManager`, `securityChampion`, `labels`, `doc`, `copyright` | DTO only (optionally: validation schema) |
 
 ### JPA Entity
 
@@ -102,9 +98,14 @@ class ComponentEntity(
     @Column(nullable = false, unique = true)
     val name: String,
 
+    @Column(name = "component_owner", nullable = false)
+    var componentOwner: String,
+
     var productType: String? = null,
-    var system: String? = null,
+    @Column(columnDefinition = "text[]")
+    var system: Set<String> = emptySet(),
     var clientCode: String? = null,
+
     var archived: Boolean = false,
     var solution: Boolean? = null,
 
@@ -129,12 +130,10 @@ class ComponentEntity(
 
 ```kotlin
 // Write
-component.metadata["componentOwner"] = "john.doe"
 component.metadata["labels"] = listOf("critical", "platform")
 component.metadata["doc"] = mapOf("component" to "MY-DOC", "majorVersion" to "2")
 
 // Read (in mapper)
-val owner = component.metadata["componentOwner"] as? String
 val labels = (component.metadata["labels"] as? List<*>)?.filterIsInstance<String>()?.toSet()
     ?: emptySet()
 ```
@@ -154,7 +153,6 @@ JSONB fields lose compile-time type safety. Compensate with:
    @Component
    class MetadataValidator {
        private val knownFields = mapOf(
-           "componentOwner" to String::class,
            "releaseManager" to String::class,
            "labels" to List::class,
            "doc" to Map::class,
@@ -170,17 +168,17 @@ JSONB fields lose compile-time type safety. Compensate with:
 ### Querying Tier 3 Fields
 
 ```sql
--- Find components by owner
-SELECT * FROM components WHERE metadata->>'componentOwner' = 'john.doe';
+-- Find components by owner (Tier 1 column — standard indexed lookup)
+SELECT * FROM components WHERE component_owner = 'john.doe';
 
--- Find components with specific label
+-- Find components with specific label (Tier 3 JSONB)
 SELECT * FROM components WHERE metadata @> '{"labels": ["critical"]}';
 
 -- Find components with doc set
 SELECT * FROM components WHERE metadata ? 'doc';
 ```
 
-All queries are indexable via the GIN index on `metadata`.
+The GIN index on `metadata` covers containment queries (`@>`, `?`). Equality lookups like `metadata->>'field' = 'value'` require a separate B-tree expression index. Hot-path fields should be promoted to Tier 1 columns (e.g., `componentOwner`) rather than relying on JSONB indexing.
 
 ### Migration Path for Existing Fields
 

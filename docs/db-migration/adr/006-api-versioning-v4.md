@@ -5,7 +5,7 @@ Accepted
 
 ## Context
 
-The service exposes 34 REST endpoints across API v1, v2, and v3. These are consumed by 7+ octopus services via a Feign client (`ComponentsRegistryServiceClient`, 28 methods). We need to add CRUD operations without breaking existing consumers.
+The service exposes 34 REST endpoints across API v1, v2, and v3. These are consumed by 7+ octopus services via a Feign client (`ComponentsRegistryServiceClient`, 28 methods — some endpoints have multiple URL mappings or are not exposed via Feign). We need to add CRUD operations without breaking existing consumers.
 
 ### Current API usage analysis (by consumer code inspection)
 
@@ -74,4 +74,4 @@ GET    /rest/api/4/admin/export                            → export to JSON
 
 ## References
 - Feign client: `components-registry-service-client/.../ComponentsRegistryServiceClient.kt`
-- API consumer analysis: see plan.md "Анализ реального использования endpoints"
+- API consumer analysis: see Action Item AI-1 in [README](../README.md)

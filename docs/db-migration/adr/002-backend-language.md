@@ -35,7 +35,7 @@ Need to decide the language for new persistence and API code.
 
 ## Decision
 
-**To be decided.** Both Kotlin and Java 21 are acceptable. Recommend **Option A (Kotlin)** for consistency with the server module where most new code will live, with Java 21 acceptable for new API-level DTOs if they belong in Java API modules.
+**Option A (Kotlin)** for consistency with the server module where most new code will live. Java 21 is acceptable for new API-level DTOs if they belong in Java API modules.
 
 ## Consequences
 
