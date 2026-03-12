@@ -173,4 +173,4 @@ Git repository is preserved read-only until all components are validated in DB +
 
 ## References
 - Strangler Fig pattern: https://martinfowler.com/bliki/StranglerFigApplication.html
-- `ComponentRegistryResolver` interface: `component-resolver-api/.../ComponentRegistryResolver`
+- `ComponentRegistryResolver` interface: `components-registry-service-server/.../service/ComponentRegistryResolver.kt`

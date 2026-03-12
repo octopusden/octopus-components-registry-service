@@ -117,13 +117,13 @@
     <!-- Tabs -->
     <div class="max-w-7xl mx-auto px-6">
         <div class="flex gap-6" style="border-bottom:1px solid var(--border)" id="tabs">
-            <button class="tab-active pb-3 text-sm font-medium transition-colors" onclick="showTab('general')">General</button>
-            <button class="tab-inactive pb-3 text-sm font-medium transition-colors" onclick="showTab('build')">Build</button>
-            <button class="tab-inactive pb-3 text-sm font-medium transition-colors" onclick="showTab('vcs')">VCS</button>
-            <button class="tab-inactive pb-3 text-sm font-medium transition-colors" onclick="showTab('distribution')">Distribution</button>
-            <button class="tab-inactive pb-3 text-sm font-medium transition-colors" onclick="showTab('jira')">Jira</button>
-            <button class="tab-inactive pb-3 text-sm font-medium transition-colors" onclick="showTab('escrow')">Escrow</button>
-            <button class="tab-inactive pb-3 text-sm font-medium transition-colors" onclick="showTab('versions')">Previous Versions <span class="ml-1 text-xs px-1.5 py-0.5 rounded-full" style="background:var(--muted);color:var(--muted-fg)">2</span></button>
+            <button class="tab-active pb-3 text-sm font-medium transition-colors" onclick="showTab('general', event)">General</button>
+            <button class="tab-inactive pb-3 text-sm font-medium transition-colors" onclick="showTab('build', event)">Build</button>
+            <button class="tab-inactive pb-3 text-sm font-medium transition-colors" onclick="showTab('vcs', event)">VCS</button>
+            <button class="tab-inactive pb-3 text-sm font-medium transition-colors" onclick="showTab('distribution', event)">Distribution</button>
+            <button class="tab-inactive pb-3 text-sm font-medium transition-colors" onclick="showTab('jira', event)">Jira</button>
+            <button class="tab-inactive pb-3 text-sm font-medium transition-colors" onclick="showTab('escrow', event)">Escrow</button>
+            <button class="tab-inactive pb-3 text-sm font-medium transition-colors" onclick="showTab('versions', event)">Previous Versions <span class="ml-1 text-xs px-1.5 py-0.5 rounded-full" style="background:var(--muted);color:var(--muted-fg)">2</span></button>
         </div>
     </div>
 
@@ -510,7 +510,7 @@
     </main>
 
     <script>
-        function showTab(name) {
+        function showTab(name, event) {
             document.querySelectorAll('[id^="tab-"]').forEach(el => el.classList.add('hidden'));
             document.getElementById('tab-' + name).classList.remove('hidden');
             document.querySelectorAll('#tabs button').forEach(btn => {

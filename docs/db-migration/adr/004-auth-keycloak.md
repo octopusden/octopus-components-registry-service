@@ -1,4 +1,4 @@
-gh# ADR-004: Authentication & Authorization via Keycloak
+# ADR-004: Authentication & Authorization via Keycloak
 
 ## Status
 Accepted

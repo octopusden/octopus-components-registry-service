@@ -46,7 +46,7 @@ Base URLs for links are configurable per deployment via `registry_config` (same 
 **UI — Create Component dialog:**
 
 1. **Profile selection** (future feature, out of scope for initial implementation) — admin-defined profiles (e.g., "Gradle Library", "Spring Boot Service", "Kotlin DSL Plugin") that pre-fill build, VCS, and escrow settings. For now, component defaults serve as a single implicit profile.
-2. **Component name + display name** — required input
+2. **Component name** (required) + **display name** (optional, defaults to name)
 3. **Owner** — pre-filled with current user
 4. **TeamCity integration** — optional checkbox "Create TeamCity project". When checked, user selects a parent TeamCity project from a dropdown/search. On component creation, the system calls TeamCity API to create a sub-project. (Out of scope for initial implementation — documented as future integration point.)
 5. **VCS repository URL** — optional, for linking to existing repo
