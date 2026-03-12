@@ -222,7 +222,10 @@ PATCH  /rest/api/4/components/{id}
   Auth:     EDIT_COMPONENTS
   Headers:  If-Match (optional, alternative to version field for optimistic locking)
   Validation: Bean Validation (Jakarta @Valid, @NotBlank, @Size, etc.)
-  Note:     Merge-update semantics — only provided fields are changed
+  Semantics: JSON Merge Patch (RFC 7396):
+    - field present with value → set
+    - field absent → not changed
+    - field set to null → clear/reset to default (remove override)
 
 DELETE /rest/api/4/components/{id}
   Behavior: Sets archived=true (soft delete)
@@ -274,6 +277,10 @@ GET    /rest/api/4/config/field-config
   Response: Field configuration (visibility, options, descriptions)
   Auth:     ACCESS_COMPONENTS (read-only, used by UI to render forms)
 
+GET    /rest/api/4/config/component-defaults
+  Response: Default values for new components (used by UI to pre-fill create form)
+  Auth:     ACCESS_COMPONENTS (read-only)
+
 GET    /rest/api/4/admin/config/field-config
 PUT    /rest/api/4/admin/config/field-config
   Request:  JSON — field visibility/editability rules per section
@@ -281,7 +288,7 @@ PUT    /rest/api/4/admin/config/field-config
 
 GET    /rest/api/4/admin/config/component-defaults
 PUT    /rest/api/4/admin/config/component-defaults
-  Request:  JSON — default values for new components (replaces Default.groovy)
+  Request:  JSON — default values for new components (replaces Defaults.groovy)
   Auth:     ADMIN only
 ```
 
@@ -365,13 +372,20 @@ class ComponentRoutingResolver(
     private val sourceRegistry: ComponentSourceRegistry
 ) : ComponentRegistryResolver {
 
-    override fun getComponentById(id: String): Component =
+    override fun getComponentById(id: String): EscrowModule? =
         if (sourceRegistry.isDbComponent(id)) dbResolver.getComponentById(id)
         else gitResolver.getComponentById(id)
 
-    override fun getAllComponents(): List<Component> =
-        gitResolver.getAllComponents().filter { sourceRegistry.isGitComponent(it.id) } +
-        dbResolver.getAllComponents().filter { sourceRegistry.isDbComponent(it.id) }
+    override fun getComponents(): MutableCollection<EscrowModule> {
+        val gitComponents = gitResolver.getComponents()
+            .filter { sourceRegistry.isGitComponent(it.moduleName) }
+        val dbComponents = dbResolver.getComponents()
+            .filter { sourceRegistry.isDbComponent(it.moduleName) }
+        return (gitComponents + dbComponents).toMutableList()
+    }
+
+    // All other 20+ methods follow the same pattern:
+    // delegate to gitResolver or dbResolver based on sourceRegistry
 }
 ```
 

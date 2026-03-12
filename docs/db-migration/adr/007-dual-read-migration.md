@@ -55,26 +55,26 @@ CREATE TABLE component_source (
 
 ```kotlin
 @Component
+@Primary
 class ComponentRoutingResolver(
     private val gitResolver: GitComponentRegistryResolver,
     private val dbResolver: DatabaseComponentRegistryResolver,
     private val sourceRegistry: ComponentSourceRegistry
 ) : ComponentRegistryResolver {
 
-    override fun getComponentById(id: String): Component {
-        return if (sourceRegistry.isDbComponent(id))
-            dbResolver.getComponentById(id)
-        else
-            gitResolver.getComponentById(id)
+    override fun getComponentById(id: String): EscrowModule? =
+        if (sourceRegistry.isDbComponent(id)) dbResolver.getComponentById(id)
+        else gitResolver.getComponentById(id)
+
+    override fun getComponents(): MutableCollection<EscrowModule> {
+        val gitComponents = gitResolver.getComponents()
+            .filter { sourceRegistry.isGitComponent(it.moduleName) }
+        val dbComponents = dbResolver.getComponents()
+            .filter { sourceRegistry.isDbComponent(it.moduleName) }
+        return (gitComponents + dbComponents).toMutableList()
     }
 
-    override fun getAllComponents(): List<Component> {
-        val gitComponents = gitResolver.getAllComponents()
-            .filter { sourceRegistry.isGitComponent(it.id) }
-        val dbComponents = dbResolver.getAllComponents()
-            .filter { sourceRegistry.isDbComponent(it.id) }
-        return gitComponents + dbComponents
-    }
+    // All other 20+ methods delegate to git or db resolver based on sourceRegistry
 }
 ```
 

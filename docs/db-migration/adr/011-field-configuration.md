@@ -14,7 +14,7 @@ The Components Registry is used across **multiple organizations** with similar b
 
 In the current Groovy DSL model:
 
-- `Default.groovy` defines default values for all components (e.g., `system = "CLASSIC"`, default build settings, copyright)
+- `Defaults.groovy` defines default values for all components (e.g., `system = "CLASSIC"`, default build settings, copyright)
 - Some fields are always the same in a given installation and showing/editing them adds clutter (e.g., `system` is always `"CLASSIC"` in one org)
 - There is no way to control which fields are visible or required in the UI
 - Adapting to a new organization requires code/DSL changes
@@ -22,7 +22,7 @@ In the current Groovy DSL model:
 When migrating to a database-backed model with a web UI, we need:
 
 1. **Global field configuration** — control which fields are visible, read-only, or editable in the UI, per deployment/organization
-2. **Default values** — a replacement for `Default.groovy` that admins can manage through the UI (includes copyright, build defaults, etc.)
+2. **Default values** — a replacement for `Defaults.groovy` that admins can manage through the UI (includes copyright, build defaults, etc.)
 3. **Role-based editability** — defaults and field config should be editable only by admins
 4. **Zero-code customization** — adapting the system to a new organization should require only configuration changes, not code
 5. **Unified API contract** — the REST API (v1/v2/v3/v4) is identical across all deployments; field configuration affects only UI rendering, default values, and server-side validation — not the API schema
@@ -109,7 +109,7 @@ CREATE TABLE registry_config (
 INSERT INTO registry_config (key, value, updated_by)
 VALUES ('field_config', '{ "component": { ... }, "build": { ... } }', 'system');
 
--- Single row for component defaults (replaces Default.groovy):
+-- Single row for component defaults (replaces Defaults.groovy):
 INSERT INTO registry_config (key, value, updated_by)
 VALUES ('component_defaults', '{
   "system": "CLASSIC",
@@ -125,7 +125,7 @@ VALUES ('component_defaults', '{
 
 Two separate config entries:
 - **`field_config`** — controls UI rendering (visibility, options, descriptions)
-- **`component_defaults`** — default values applied when creating a new component (replaces `Default.groovy`)
+- **`component_defaults`** — default values applied when creating a new component (replaces `Defaults.groovy`)
 
 ### API
 
@@ -140,6 +140,9 @@ PUT    /rest/api/4/admin/config/component-defaults
 
 GET    /rest/api/4/config/field-config
   Auth: ACCESS_COMPONENTS (read-only, for UI to fetch display rules)
+
+GET    /rest/api/4/config/component-defaults
+  Auth: ACCESS_COMPONENTS (read-only, for UI to pre-fill create form)
 ```
 
 ### UI Behavior
@@ -166,10 +169,10 @@ On `POST /rest/api/4/components` (create):
 5. Save
 ```
 
-### Migration from Default.groovy
+### Migration from Defaults.groovy
 
 During initial import:
-1. Parse `Default.groovy` into structured JSON
+1. Parse `Defaults.groovy` into structured JSON
 2. Store as `component_defaults` in `registry_config`
 3. Generate initial `field_config` with all fields set to `editable`
 4. Admin tunes visibility per deployment needs
@@ -178,9 +181,9 @@ During initial import:
 
 ### Positive
 - Each deployment can hide irrelevant fields (e.g., `system` always "CLASSIC") without code changes
-- Defaults managed by admin via UI, not by developers via Git commits to Default.groovy
+- Defaults managed by admin via UI, not by developers via Git commits to Defaults.groovy
 - UI dynamically adapts — no frontend redeployment needed to show/hide fields
-- New Tier 3 metadata fields (ADR-010) automatically work — just add to `field_config`
+- New Tier 3 metadata fields (ADR-010) require minimal code changes — add to DTO + mapper, then configure visibility in `field_config` (no Flyway migration needed)
 - Clear separation: admin controls what users see, developers control what exists in the model
 
 ### Negative
@@ -194,5 +197,5 @@ During initial import:
 - **ADR-004 (Keycloak Auth)**: Only ADMIN role can modify field config and defaults
 
 ## References
-- Current `Default.groovy` in components-registry configuration repository
+- Current `Defaults.groovy` in components-registry configuration repository
 - Feature flag pattern for per-deployment customization

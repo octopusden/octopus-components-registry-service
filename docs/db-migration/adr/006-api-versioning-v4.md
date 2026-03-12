@@ -40,11 +40,11 @@ The service exposes 34 REST endpoints across API v1, v2, and v3. These are consu
 ```
 POST   /rest/api/4/components                              → create component
 GET    /rest/api/4/components/{id}                         → get (extended format for UI)
-PUT    /rest/api/4/components/{id}                         → update component
+PATCH  /rest/api/4/components/{id}                         → update component (JSON Merge Patch)
 DELETE /rest/api/4/components/{id}                         → soft delete (→ archived)
 
 POST   /rest/api/4/components/{id}/versions                → add version range
-PUT    /rest/api/4/components/{id}/versions/{versionId}    → update version
+PATCH  /rest/api/4/components/{id}/versions/{versionId}    → update version (JSON Merge Patch)
 DELETE /rest/api/4/components/{id}/versions/{versionId}    → delete version
 
 GET    /rest/api/4/audit/{entityType}/{entityId}           → change history

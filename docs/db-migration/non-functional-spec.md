@@ -14,7 +14,7 @@
 | Component list (full, no filter) | < 200ms | Expected ~500-2000 components |
 | Cache hit ratio | > 95% | Most reads are repeated (CI/CD pipelines) |
 | Import time (full DSL → DB) | < 5 min | One-time operation, acceptable delay |
-| Dual-read overhead | < 50ms additional | Async comparison, not on critical path |
+| Import validation overhead | < 50ms additional per component | Async comparison during per-component import, not on read path |
 
 ### Caching Strategy
 - **Caffeine** in-process cache for hot read paths
@@ -34,7 +34,7 @@
 ### Failure Modes
 | Failure | Impact | Recovery |
 |---------|--------|----------|
-| PostgreSQL down | Service cannot serve requests | Failover to replica; alert |
+| PostgreSQL down | During migration: Git-sourced components OK, DB-sourced fail. After migration: service unavailable | Failover to replica; alert |
 | Cache failure | Higher DB load, slower responses | Service continues without cache |
 | Keycloak down | v4 write endpoints unavailable | v1/v2/v3 read endpoints still work (no auth required) |
 
@@ -249,7 +249,7 @@ Production deployment additionally runs:
 ### 6.3 Health Checks
 - `/actuator/health` — includes DB connection, Flyway migration status
 - `/rest/api/2/components-registry/service/ping` — existing ping endpoint (backward compat)
-- `/rest/api/2/components-registry/service/status` — includes DB storage mode
+- `/rest/api/2/components-registry/service/status` — includes migration progress (git/db component counts)
 
 ## 7. Compatibility
 

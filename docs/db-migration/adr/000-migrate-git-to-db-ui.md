@@ -19,7 +19,7 @@ This architecture was appropriate at the initial stage when the registry was sma
 8. **Blast radius of a single error** — pre-merge validation prevents broken DSL from reaching the registry, but if a batch of changes contains one error, the entire batch is blocked. All other valid changes in the same PR are held up until the error is fixed. There is no isolation between components at the parsing level.
 9. **No validation on write** — broken DSL syntax or invalid values are discovered only after cache reload fails (see above). The author of the broken commit may not know about the failure.
 10. **Merge conflicts** — parallel edits by different teams result in Git merge conflicts that require manual resolution in DSL files.
-11. **High onboarding barrier** — new users must learn Groovy DSL syntax, understand inheritance (Default.groovy, version range overrides), and follow Git commit conventions.
+11. **High onboarding barrier** — new users must learn Groovy DSL syntax, understand inheritance (Defaults.groovy, version range overrides), and follow Git commit conventions.
 12. **No clustering support** — cache reload is triggered by a webhook that reaches only one pod in k8s. Other replicas remain stale until restart. This prevents horizontal scaling, makes the service a single point of failure, and blocks zero-downtime deployments.
 13. **No event-driven notifications** — the service works only with the current state of the repository and has no mechanism to emit events when a component is created or its properties change. Implementing event-driven integration (e.g., notifying other services about component changes) is non-trivial because there is no write path that could produce events — only periodic Git re-reads with no diff tracking.
 

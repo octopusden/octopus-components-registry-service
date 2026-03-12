@@ -35,8 +35,9 @@
 Base URLs for links are configurable per deployment via `registry_config` (same as field config). The "My Components" filter shows only components where `componentOwner` matches the current Keycloak user.
 
 ### 1.3 Create Component
-- **Required fields**: `name` (unique, alphanumeric + hyphens + underscores, max 255 chars)
-- **Optional fields**: displayName, productType, componentOwner, releaseManager, securityChampion, system, clientCode, solution, groupId, copyright, labels, doc
+- **Required fields**: `name` (unique, alphanumeric + hyphens + underscores, max 255 chars), `componentOwner`
+- **Conditionally required**: `releaseManager`, `securityChampion`, `copyright` — required when `distribution.explicit && distribution.external` (enforced by current `EscrowConfigValidator`)
+- **Optional fields**: displayName, productType, system, clientCode, solution, groupId, labels, doc
 - **Nested creation**: Can include build, escrow, VCS, distribution, jira configs in single request
 - **Validation**: Name uniqueness (409 Conflict if exists), field format validation
 - **Default application**: Component defaults (see 7.2) are applied to all absent fields
@@ -53,7 +54,11 @@ Base URLs for links are configurable per deployment via `registry_config` (same 
 
 ### 1.4 Update Component
 - **Input**: Component ID + partial or full update payload
-- **Behavior**: Merge update — only provided fields are changed, null/absent fields remain unchanged
+- **Behavior**: JSON Merge Patch semantics (RFC 7396):
+  - **Field present with value** → set to that value
+  - **Field absent** → not changed
+  - **Field set to `null`** → clear/reset to component default (removes override)
+- **"Reset to default"**: Setting a field to `null` in the update request removes the version-level or component-level override and reverts the field to the inherited default. This is how the UI "Reset to default" action is implemented.
 - **Nested updates**: Build, escrow, VCS, distribution, jira can be updated in same request
 - **Optimistic locking**: `@Version` field prevents lost updates (409 Conflict on stale version)
 - **Audit**: UPDATE event logged with old_value, new_value, change_diff
@@ -170,7 +175,7 @@ All existing search/lookup operations must return identical results from DB:
 | View field config | ACCESS_COMPONENTS | Read-only (UI uses to render forms) |
 | Edit field config | ADMIN role only | Controls which fields are visible/editable per deployment |
 | View component defaults | ACCESS_COMPONENTS | Read-only |
-| Edit component defaults | ADMIN role only | Replaces Default.groovy; applied to new components |
+| Edit component defaults | ADMIN role only | Replaces Defaults.groovy; applied to new components |
 
 ## 7. Field Configuration & Defaults (Admin)
 
@@ -190,7 +195,7 @@ Admin controls per-field behavior:
 
 ### 7.2 Component Defaults
 
-Replaces `Default.groovy`. Admin defines default values applied when creating a new component:
+Replaces `Defaults.groovy`. Admin defines default values applied when creating a new component:
 - Build defaults (Java version, build system, Gradle version)
 - Copyright template
 - Escrow defaults (reusable, generation mode)

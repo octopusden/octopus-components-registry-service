@@ -30,7 +30,15 @@ The Components Registry Service needs to migrate from Git-based storage (Groovy/
 - No temporal tables
 - Flyway support available
 
-### Option C: MongoDB
+### Option C: Supabase (PostgreSQL-as-a-Service + built-in API)
+- PostgreSQL under the hood — same JSONB, relational integrity, Flyway compatibility
+- Built-in REST API (PostgREST) and real-time subscriptions out of the box
+- Auth, row-level security, storage — batteries included
+- **Problem: no deployed instance** — the organization does not have a Supabase instance; DevOps do not officially support or maintain it
+- Would require either self-hosting (operational overhead, no team expertise) or using Supabase Cloud (external dependency, data residency concerns)
+- Adds a platform-level dependency for what is essentially a PostgreSQL database with an API layer we can build ourselves
+
+### Option D: MongoDB
 - Native JSON storage, flexible schema
 - No relational integrity (foreign keys)
 - Different Spring Data module (Spring Data MongoDB)
