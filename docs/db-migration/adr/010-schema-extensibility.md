@@ -41,7 +41,7 @@ Fields that describe the component but don't affect build/release logic. Often a
 ```
 displayName, componentOwner, releaseManager, securityChampion,
 copyright, labels, doc, releasesInDefaultBranch,
-and future properties (teamLead, supportGroup, slackChannel, etc.)
+and future properties
 ```
 
 ## Considered Options
