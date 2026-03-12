@@ -102,6 +102,8 @@ allprojects {
     group = 'org.octopusden.octopus.infrastructure'
 }
 
+def qualityFailOnViolation = (findProperty('quality.failOnViolation')?.toString()?.toBoolean()) ?: false
+
 subprojects {
     repositories {
         mavenLocal()
@@ -120,6 +122,8 @@ configure(subprojects) {
     apply plugin: 'idea'
     apply plugin: 'java-library'
     apply plugin: 'jacoco'
+    apply plugin: 'checkstyle'
+    apply plugin: 'pmd'
     apply plugin: 'org.jetbrains.kotlin.jvm'
     apply plugin: 'maven-publish'
 
@@ -140,6 +144,51 @@ configure(subprojects) {
         testImplementation "org.junit.jupiter:junit-jupiter-params"
         testImplementation "junit:junit:4.12"
         testRuntimeOnly "org.junit.vintage:junit-vintage-engine"
+    }
+
+    checkstyle {
+        toolVersion = '10.17.0'
+        configFile = rootProject.file('config/checkstyle/checkstyle.xml')
+        ignoreFailures = !qualityFailOnViolation
+        showViolations = true
+    }
+
+    pmd {
+        toolVersion = '6.55.0'
+        consoleOutput = true
+        incrementalAnalysis = true
+        ignoreFailures = !qualityFailOnViolation
+        ruleSets = []
+        ruleSetFiles = files(rootProject.file('config/pmd/ruleset.xml'))
+    }
+
+    if (file("$projectDir/src/main/groovy").exists() || file("$projectDir/src/test/groovy").exists()) {
+        apply plugin: 'codenarc'
+        codenarc {
+            configFile = rootProject.file('config/codenarc/codenarc.groovy')
+            ignoreFailures = !qualityFailOnViolation
+        }
+    }
+
+    tasks.withType(org.gradle.api.plugins.quality.Checkstyle).configureEach {
+        reports {
+            xml.required = true
+            html.required = true
+        }
+    }
+
+    tasks.withType(org.gradle.api.plugins.quality.Pmd).configureEach {
+        reports {
+            xml.required = true
+            html.required = true
+        }
+    }
+
+    tasks.withType(org.gradle.api.plugins.quality.CodeNarc).configureEach {
+        reports {
+            xml.required = true
+            html.required = true
+        }
     }
 
     compileKotlin {
@@ -235,9 +284,26 @@ configure(subprojects) {
 
 tasks.register('qualityStatic') {
     group = 'verification'
-    description = 'Runs compile-time quality checks for CI quality gate'
-    dependsOn(subprojects.collect { "${it.path}:classes" })
-    dependsOn(subprojects.collect { "${it.path}:testClasses" })
+    description = 'Runs static analysis and compile-time checks for CI quality gate'
+    def groovyProjects = subprojects.findAll { project ->
+        file("${project.projectDir}/src/main/groovy").exists() || file("${project.projectDir}/src/test/groovy").exists()
+    }
+    dependsOn(subprojects.collectMany { project ->
+        [
+                "${project.path}:checkstyleMain",
+                "${project.path}:checkstyleTest",
+                "${project.path}:pmdMain",
+                "${project.path}:pmdTest",
+                "${project.path}:classes",
+                "${project.path}:testClasses"
+        ]
+    })
+    dependsOn(groovyProjects.collectMany { project ->
+        [
+                "${project.path}:codenarcMain",
+                "${project.path}:codenarcTest"
+        ]
+    })
 }
 
 tasks.register('qualityCoverage') {
