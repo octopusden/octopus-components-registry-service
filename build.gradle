@@ -119,6 +119,7 @@ configure(subprojects) {
     apply plugin: 'signing'
     apply plugin: 'idea'
     apply plugin: 'java-library'
+    apply plugin: 'jacoco'
     apply plugin: 'org.jetbrains.kotlin.jvm'
     apply plugin: 'maven-publish'
 
@@ -161,6 +162,29 @@ configure(subprojects) {
         ]
         jvmArgs('--add-opens=java.base/java.lang=ALL-UNNAMED')
         jvmArgs('--add-opens=java.base/java.util=ALL-UNNAMED')
+        finalizedBy(tasks.named('jacocoTestReport'))
+    }
+
+    jacocoTestReport {
+        dependsOn(test)
+        reports {
+            xml.required = true
+            html.required = true
+        }
+    }
+
+    jacocoTestCoverageVerification {
+        dependsOn(test)
+        violationRules {
+            rule {
+                element = 'BUNDLE'
+                limit {
+                    counter = 'LINE'
+                    value = 'COVEREDRATIO'
+                    minimum = 0.10
+                }
+            }
+        }
     }
 
     java {
@@ -207,4 +231,22 @@ configure(subprojects) {
                 signingPassword
         )
     }
+}
+
+tasks.register('qualityStatic') {
+    group = 'verification'
+    description = 'Runs compile-time quality checks for CI quality gate'
+    dependsOn(subprojects.collect { "${it.path}:classes" })
+    dependsOn(subprojects.collect { "${it.path}:testClasses" })
+}
+
+tasks.register('qualityCoverage') {
+    group = 'verification'
+    description = 'Runs unit tests and coverage report generation for CI quality gate'
+    def coverageProjects = subprojects.findAll {
+        !['components-registry-automation', 'test-common'].contains(it.name)
+    }
+    dependsOn(coverageProjects.collect { "${it.path}:test" })
+    dependsOn(coverageProjects.collect { "${it.path}:jacocoTestReport" })
+    dependsOn(coverageProjects.collect { "${it.path}:jacocoTestCoverageVerification" })
 }

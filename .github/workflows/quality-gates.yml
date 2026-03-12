@@ -1,0 +1,9 @@
+name: Quality Gates
+
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+  quality:
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-quality-gates.yml@3f707f5c15311c47176d5dbf3a6501296e54b556
+    with:
+      java-version: '21'
