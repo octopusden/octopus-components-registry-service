@@ -1,0 +1,52 @@
+build:
+  maxIssues: 0
+
+config:
+  validation: true
+
+exceptions:
+  SwallowedException:
+    active: true
+  TooGenericExceptionCaught:
+    active: true
+
+complexity:
+  LongMethod:
+    active: false
+  LongParameterList:
+    active: false
+  NestedBlockDepth:
+    active: false
+
+naming:
+  TopLevelPropertyNaming:
+    active: true
+
+performance:
+  SpreadOperator:
+    active: false
+
+style:
+  ClassOrdering:
+    active: true
+  ForbiddenComment:
+    active: true
+  MagicNumber:
+    active: false
+  MaxLineLength:
+    active: true
+    maxLineLength: 140
+  NewLineAtEndOfFile:
+    active: true
+  ProtectedMemberInFinalClass:
+    active: true
+  ReturnCount:
+    active: false
+  UnusedPrivateMember:
+    active: true
+  UnusedPrivateProperty:
+    active: true
+  UseCheckOrError:
+    active: true
+  WildcardImport:
+    active: true

@@ -14,6 +14,8 @@ plugins {
     id 'org.jetbrains.kotlin.jvm'                 apply false
     id 'org.jetbrains.kotlin.plugin.spring'       apply false
     id 'org.jetbrains.kotlin.plugin.jpa'          apply false
+    id 'io.gitlab.arturbosch.detekt'              apply false
+    id 'org.jlleitschuh.gradle.ktlint'            apply false
     id 'signing'
     id 'org.asciidoctor.jvm.convert' version '3.3.2'
     id 'com.platformlib.gradle-wrapper' version '0.2.6'
@@ -102,7 +104,17 @@ allprojects {
     group = 'org.octopusden.octopus.infrastructure'
 }
 
-def qualityFailOnViolation = (findProperty('quality.failOnViolation')?.toString()?.toBoolean()) ?: false
+def qualityFailOnViolation = { String propertyName, boolean defaultValue ->
+    def value = findProperty(propertyName)?.toString()
+    if (value == null) {
+        return defaultValue
+    }
+    value.toBoolean()
+}
+
+def javaQualityFailOnViolation = qualityFailOnViolation('quality.java.failOnViolation', true)
+def groovyQualityFailOnViolation = qualityFailOnViolation('quality.groovy.failOnViolation', false)
+def kotlinQualityFailOnViolation = qualityFailOnViolation('quality.kotlin.failOnViolation', true)
 
 subprojects {
     repositories {
@@ -149,7 +161,7 @@ configure(subprojects) {
     checkstyle {
         toolVersion = '10.17.0'
         configFile = rootProject.file('config/checkstyle/checkstyle.xml')
-        ignoreFailures = !qualityFailOnViolation
+        ignoreFailures = !javaQualityFailOnViolation
         showViolations = true
     }
 
@@ -157,7 +169,7 @@ configure(subprojects) {
         toolVersion = '6.55.0'
         consoleOutput = true
         incrementalAnalysis = true
-        ignoreFailures = !qualityFailOnViolation
+        ignoreFailures = !javaQualityFailOnViolation
         ruleSets = []
         ruleSetFiles = files(rootProject.file('config/pmd/ruleset.xml'))
     }
@@ -166,7 +178,58 @@ configure(subprojects) {
         apply plugin: 'codenarc'
         codenarc {
             configFile = rootProject.file('config/codenarc/codenarc.groovy')
-            ignoreFailures = !qualityFailOnViolation
+            ignoreFailures = !groovyQualityFailOnViolation
+        }
+    }
+
+    if (
+            file("$projectDir/src/main/kotlin").exists() ||
+            file("$projectDir/src/test/kotlin").exists() ||
+            file("$projectDir/src/integrationTest/kotlin").exists() ||
+            file("$projectDir/src/testFixtures/kotlin").exists()
+    ) {
+        apply plugin: 'io.gitlab.arturbosch.detekt'
+        apply plugin: 'org.jlleitschuh.gradle.ktlint'
+
+        detekt {
+            buildUponDefaultConfig = true
+            allRules = false
+            config.setFrom(rootProject.file('config/detekt/detekt.yml'))
+            baseline = file("$projectDir/detekt-baseline.xml")
+            ignoreFailures = !kotlinQualityFailOnViolation
+        }
+
+        tasks.withType(io.gitlab.arturbosch.detekt.Detekt).configureEach {
+            reports {
+                xml.required.set(true)
+                html.required.set(true)
+                sarif.required.set(true)
+                txt.required.set(false)
+            }
+        }
+
+        ktlint {
+            ignoreFailures.set(!kotlinQualityFailOnViolation)
+            outputToConsole.set(true)
+            reporters {
+                reporter org.jlleitschuh.gradle.ktlint.reporter.ReporterType.PLAIN
+                reporter org.jlleitschuh.gradle.ktlint.reporter.ReporterType.CHECKSTYLE
+            }
+            baseline.set(file("$projectDir/ktlint-baseline.xml"))
+            filter {
+                exclude("**/generated/**")
+                exclude("**/build/**")
+                include("**/src/**/*.kt")
+            }
+        }
+
+        tasks.matching {
+            it.name == 'runKtlintCheckOverKotlinScripts' ||
+                    it.name == 'ktlintKotlinScriptCheck' ||
+                    it.name == 'runKtlintFormatOverKotlinScripts' ||
+                    it.name == 'ktlintKotlinScriptFormat'
+        }.configureEach {
+            enabled = false
         }
     }
 
@@ -291,6 +354,12 @@ tasks.register('qualityStatic') {
     def integrationTestProjects = subprojects.findAll { project ->
         file("${project.projectDir}/src/integrationTest").exists()
     }
+    def kotlinProjects = subprojects.findAll { project ->
+        file("${project.projectDir}/src/main/kotlin").exists() ||
+                file("${project.projectDir}/src/test/kotlin").exists() ||
+                file("${project.projectDir}/src/integrationTest/kotlin").exists() ||
+                file("${project.projectDir}/src/testFixtures/kotlin").exists()
+    }
     dependsOn(subprojects.collectMany { project ->
         [
                 "${project.path}:checkstyleMain",
@@ -305,6 +374,12 @@ tasks.register('qualityStatic') {
         [
                 "${project.path}:codenarcMain",
                 "${project.path}:codenarcTest"
+        ]
+    })
+    dependsOn(kotlinProjects.collectMany { project ->
+        [
+                "${project.path}:detekt",
+                "${project.path}:ktlintCheck"
         ]
     })
     dependsOn(integrationTestProjects.collectMany { project ->

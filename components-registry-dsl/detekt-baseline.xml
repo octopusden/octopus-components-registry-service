@@ -1,0 +1,41 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <CurrentIssues>
+    <ID>ClassOrdering:ComponentsRegistryDSL.kt$EscrowDSL$var diskspace: Any? = escrow.diskSpaceRequirement.orElse(null) set(value) { when (value) { null -&gt; { escrow.setDiskspaceRequirement(value) } is Number -&gt; { escrow.setDiskspaceRequirement(value.toLong()) } is String -&gt; { var multiplier = 1 if (value.endsWith("KB") || value.endsWith("K")) { multiplier = 1024 } else if (value.endsWith("MB") || value.endsWith("M")) { multiplier = 1024 * 1024 } else if (value.endsWith("GB") || value.endsWith("G")) { multiplier = 1024 * 1024 * 1024 } escrow.setDiskspaceRequirement(value.replace(Regex("(KB)|(K)|(MB)|(M)|(GB)|(G)"), "").toLong() * multiplier) } else -&gt; { throw IllegalArgumentException("Not supported type " + value::class.java) } } field = value }</ID>
+    <ID>ClassOrdering:ComponentsRegistryDSL.kt$VcsSettingsDSL$lateinit var repositoryType: VcsTypes</ID>
+    <ID>ClassOrdering:ComponentsRegistryScriptRunnerTest.kt$ComponentsRegistryScriptRunnerTest$Companion</ID>
+    <ID>EmptyFunctionBlock:ComponentsRegistryDSL.kt$DistributionDSL${ }</ID>
+    <ID>EmptyFunctionBlock:ComponentsRegistryDSL.kt$JiraDSL${ }</ID>
+    <ID>EmptyFunctionBlock:ComponentsRegistryDSL.kt$VersionedComponentDSL${ }</ID>
+    <ID>MaxLineLength:ComponentsRegistryDSL.kt$val componentCloneFilter = SimpleBeanPropertyFilter.serializeAllExcept("subComponents", "versions", "name", "displayName", "productType")</ID>
+    <ID>MaxLineLength:ComponentsRegistryDSLTest.kt$ComponentsRegistryDSLTest$assertEquals("11", components.getValue("component_commons").build.tools.filter { it.buildToolType == BuildToolTypes.ODBC }.map { it as OdbcTool }[0].version)</ID>
+    <ID>MaxLineLength:ComponentsRegistryDSLTest.kt$ComponentsRegistryDSLTest$assertEquals("12", components.getValue("manager").build.tools.filter { it.buildToolType == BuildToolTypes.ODBC }.map { it as OdbcTool }[0].version)</ID>
+    <ID>MaxLineLength:ComponentsRegistryDSLTest.kt$ComponentsRegistryDSLTest$assertEquals("12.2", components.getValue("octopusweb").build.tools.filter { it.buildToolType == BuildToolTypes.ODBC }.map { it as OdbcTool }[0].version)</ID>
+    <ID>MaxLineLength:EscrowDslTest.kt$EscrowDslTest$assertThat(components.getValue("component_commons").versions.getValue("(0,1)").escrow.gradle.includeConfigurations).containsExactly("1", "2", "3")</ID>
+    <ID>MaxLineLength:EscrowDslTest.kt$EscrowDslTest$assertThat(components.getValue("component_commons").versions.getValue("(0,1)").escrow.providedDependencies).containsExactly("a:b:v1", "a:b:v2")</ID>
+    <ID>MaxLineLength:EscrowDslTest.kt$EscrowDslTest$assertThat(components.getValue("component_commons").versions.getValue("(1,2)").escrow.gradle.includeConfigurations).containsExactly("4")</ID>
+    <ID>MaxLineLength:EscrowDslTest.kt$EscrowDslTest$assertThat(components.getValue("component_commons").versions.getValue("(1,2)").escrow.providedDependencies).containsExactly("a:b:v1")</ID>
+    <ID>MaxLineLength:EscrowDslTest.kt$EscrowDslTest$assertThat(components.getValue("component_commons").versions.getValue("(2,3)").escrow.gradle.includeConfigurations).containsExactly("5", "6")</ID>
+    <ID>MaxLineLength:EscrowDslTest.kt$EscrowDslTest$assertThat(components.getValue("component_commons").versions.getValue("(2,3)").escrow.providedDependencies).containsExactly("a:b:v3")</ID>
+    <ID>MaxLineLength:EscrowDslTest.kt$EscrowDslTest$assertThat(components.getValue("component_commons").versions.getValue("(3,4)").escrow.providedDependencies).containsExactly("a:b:v1", "a:b:v4", "a:b:v5")</ID>
+    <ID>NewLineAtEndOfFile:ComponentsRegistryDSLTest.kt$org.octopusden.octopus.components.registry.dsl.test.ComponentsRegistryDSLTest.kt</ID>
+    <ID>NewLineAtEndOfFile:ComponentsRegistryScriptRunnerTest.kt$org.octopusden.octopus.components.registry.dsl.test.ComponentsRegistryScriptRunnerTest.kt</ID>
+    <ID>NewLineAtEndOfFile:DslTestUtilities.kt$org.octopusden.octopus.components.registry.dsl.test.DslTestUtilities.kt</ID>
+    <ID>NewLineAtEndOfFile:EscrowDslTest.kt$org.octopusden.octopus.components.registry.dsl.test.EscrowDslTest.kt</ID>
+    <ID>NewLineAtEndOfFile:JacksonFactory.kt$org.octopusden.octopus.components.registry.dsl.jackson.JacksonFactory.kt</ID>
+    <ID>PrintStackTrace:ComponentsRegistryScriptRunner.kt$ComponentsRegistryScriptRunner$e</ID>
+    <ID>TooGenericExceptionCaught:ComponentsRegistryScriptRunner.kt$ComponentsRegistryScriptRunner$e: Throwable</ID>
+    <ID>TooGenericExceptionThrown:ComponentsRegistryDSL.kt$throw RuntimeException(message)</ID>
+    <ID>TooManyFunctions:LocalKotlinEngineFactory.kt$LocalKotlinEngineFactory : ScriptEngineFactory</ID>
+    <ID>UnusedParameter:ComponentsRegistryDSL.kt$DistributionDSL$jiraComponent: JiraComponent.()-&gt; Unit</ID>
+    <ID>UnusedParameter:ComponentsRegistryDSL.kt$JiraDSL$jiraComponent: JiraComponent.()-&gt; Unit</ID>
+    <ID>UnusedParameter:ComponentsRegistryDSL.kt$VersionedComponentDSL$distribution: Distribution.() -&gt; Unit</ID>
+    <ID>UnusedParameter:ComponentsRegistryDSL.kt$VersionedComponentDSL$jira: JiraDSL.() -&gt; Unit</ID>
+    <ID>UnusedParameter:ComponentsRegistryDSL.kt$VersionedComponentDSL$vcsSettings: GitSettingsDSL.() -&gt; Unit</ID>
+    <ID>UnusedParameter:ComponentsRegistryDSL.kt$VersionedComponentDSL$vcsSettings: VcsSettingsDSL.() -&gt; Unit</ID>
+    <ID>WildcardImport:ComponentsRegistryDSLTest.kt$import org.junit.jupiter.api.Assertions.*</ID>
+    <ID>WildcardImport:ComponentsRegistryDSLTest.kt$import org.octopusden.octopus.components.registry.dsl.*</ID>
+    <ID>WildcardImport:EscrowDslTest.kt$import org.junit.jupiter.api.Assertions.*</ID>
+  </CurrentIssues>
+</SmellBaseline>
