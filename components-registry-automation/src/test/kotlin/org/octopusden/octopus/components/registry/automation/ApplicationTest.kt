@@ -105,112 +105,116 @@ class ApplicationTest {
         }
 
         @JvmStatic
-        private fun componentWithCopyrightCommands(): Stream<Arguments> = Stream.of(
-            Arguments.of(
-                "Test downloading 'ee-component'",
-                "EE component copyright content",
-                CORRECT_EXIT_CODE,
-                arrayOf(
-                    componentsRegistryCommandOptions,
-                    *createDownloadCopyrightCommandByComponentName("ee-component")
-                )
-            ),
-            Arguments.of(
-                "Test downloading 'ee-client-specific-component'",
-                "EE client specific component copyright content",
-                CORRECT_EXIT_CODE,
-                arrayOf(
-                    componentsRegistryCommandOptions,
-                    *createDownloadCopyrightCommandByComponentName("ee-client-specific-component")
-                )
-            ),
-            Arguments.of(
-                "Test downloading 'dependency1'",
-                "Dependency 1 copyright content",
-                CORRECT_EXIT_CODE,
-                arrayOf(
-                    componentsRegistryCommandOptions,
-                    *createDownloadCopyrightCommandByComponentName("dependency1")
-                )
-            ),
-            Arguments.of(
-                "Test downloading 'dependency2'",
-                "Dependency 2 copyright content",
-                CORRECT_EXIT_CODE,
-                arrayOf(
-                    componentsRegistryCommandOptions,
-                    *createDownloadCopyrightCommandByComponentName("dependency2")
-                )
-            ),
-        )
+        fun componentWithCopyrightCommands(): Stream<Arguments> =
+            Stream.of(
+                Arguments.of(
+                    "Test downloading 'ee-component'",
+                    "EE component copyright content",
+                    CORRECT_EXIT_CODE,
+                    arrayOf(
+                        componentsRegistryCommandOptions,
+                        *createDownloadCopyrightCommandByComponentName("ee-component")
+                    )
+                ),
+                Arguments.of(
+                    "Test downloading 'ee-client-specific-component'",
+                    "EE client specific component copyright content",
+                    CORRECT_EXIT_CODE,
+                    arrayOf(
+                        componentsRegistryCommandOptions,
+                        *createDownloadCopyrightCommandByComponentName("ee-client-specific-component")
+                    )
+                ),
+                Arguments.of(
+                    "Test downloading 'dependency1'",
+                    "Dependency 1 copyright content",
+                    CORRECT_EXIT_CODE,
+                    arrayOf(
+                        componentsRegistryCommandOptions,
+                        *createDownloadCopyrightCommandByComponentName("dependency1")
+                    )
+                ),
+                Arguments.of(
+                    "Test downloading 'dependency2'",
+                    "Dependency 2 copyright content",
+                    CORRECT_EXIT_CODE,
+                    arrayOf(
+                        componentsRegistryCommandOptions,
+                        *createDownloadCopyrightCommandByComponentName("dependency2")
+                    )
+                ),
+            )
 
         @JvmStatic
-        private fun componentWithoutCopyrightCommands(): Stream<Arguments> = Stream.of(
-            Arguments.of(
-                "Test downloading 'ie-component'",
-                arrayOf(
-                    componentsRegistryCommandOptions,
-                    *createDownloadCopyrightCommandByComponentName("ie-component")
-                )
-            ),
-            Arguments.of(
-                "Test downloading 'ei-component'",
-                arrayOf(
-                    componentsRegistryCommandOptions,
-                    *createDownloadCopyrightCommandByComponentName("ei-component")
-                )
-            ),
-            Arguments.of(
-                "Test downloading 'ii-component'",
-                arrayOf(
-                    componentsRegistryCommandOptions,
-                    *createDownloadCopyrightCommandByComponentName("ii-component")
-                )
-            ),
-        )
+        fun componentWithoutCopyrightCommands(): Stream<Arguments> =
+            Stream.of(
+                Arguments.of(
+                    "Test downloading 'ie-component'",
+                    arrayOf(
+                        componentsRegistryCommandOptions,
+                        *createDownloadCopyrightCommandByComponentName("ie-component")
+                    )
+                ),
+                Arguments.of(
+                    "Test downloading 'ei-component'",
+                    arrayOf(
+                        componentsRegistryCommandOptions,
+                        *createDownloadCopyrightCommandByComponentName("ei-component")
+                    )
+                ),
+                Arguments.of(
+                    "Test downloading 'ii-component'",
+                    arrayOf(
+                        componentsRegistryCommandOptions,
+                        *createDownloadCopyrightCommandByComponentName("ii-component")
+                    )
+                ),
+            )
 
         @JvmStatic
-        private fun nonExistentComponentCommand(): Stream<Arguments> = Stream.of(
-            Arguments.of(
-                "Test downloading 'non-existent-component'",
-                arrayOf(
-                    componentsRegistryCommandOptions,
-                    *createDownloadCopyrightCommandByComponentName("non-existent-component")
+        fun nonExistentComponentCommand(): Stream<Arguments> =
+            Stream.of(
+                Arguments.of(
+                    "Test downloading 'non-existent-component'",
+                    arrayOf(
+                        componentsRegistryCommandOptions,
+                        *createDownloadCopyrightCommandByComponentName("non-existent-component")
+                    )
                 )
             )
-        )
 
         @JvmStatic
-        private fun differentArgumentsCommands(): Stream<Arguments> = Stream.of(
-            Arguments.of(
-                "Test help",
-                CORRECT_EXIT_CODE,
-                arrayOf(HELP_OPTION)
-            ),
-            Arguments.of(
-                "Test empty command",
-                INCORRECT_COMMAND_EXIT_CODE,
-                arrayOf<String>()
-            ),
-            Arguments.of(
-                "Test '--component-name' not specified",
-                INCORRECT_COMMAND_EXIT_CODE,
-                arrayOf(
-                    componentsRegistryCommandOptions,
-                    COMMAND,
-                    "${TARGET_PATH}=$TEST_TARGET_PATH",
-                )
-            ),
-            Arguments.of(
-                "Test '--target-path' not specified",
-                INCORRECT_COMMAND_EXIT_CODE,
-                arrayOf(
-                    componentsRegistryCommandOptions,
-                    COMMAND,
-                    "${COMPONENT_NAME}=ee-component",
-                )
-            ),
-        )
+        fun differentArgumentsCommands(): Stream<Arguments> =
+            Stream.of(
+                Arguments.of(
+                    "Test help",
+                    CORRECT_EXIT_CODE,
+                    arrayOf(HELP_OPTION)
+                ),
+                Arguments.of(
+                    "Test empty command",
+                    INCORRECT_COMMAND_EXIT_CODE,
+                    arrayOf<String>()
+                ),
+                Arguments.of(
+                    "Test '--component-name' not specified",
+                    INCORRECT_COMMAND_EXIT_CODE,
+                    arrayOf(
+                        componentsRegistryCommandOptions,
+                        COMMAND,
+                        "${TARGET_PATH}=$TEST_TARGET_PATH",
+                    )
+                ),
+                Arguments.of(
+                    "Test '--target-path' not specified",
+                    INCORRECT_COMMAND_EXIT_CODE,
+                    arrayOf(
+                        componentsRegistryCommandOptions,
+                        COMMAND,
+                        "${COMPONENT_NAME}=ee-component",
+                    )
+                ),
+            )
 
         private fun createDownloadCopyrightCommandByComponentName(componentName: String) =
             arrayOf(

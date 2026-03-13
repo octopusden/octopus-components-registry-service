@@ -5,10 +5,6 @@
     <ID>InvalidPackageDeclaration:ApplicationTest.kt$package org.octopusden.octopus.components.registry.org.octopusden.octopus.components.registry.automation</ID>
     <ID>TooGenericExceptionThrown:ApplicationTest.kt$ApplicationTest.Companion$throw Exception("System property 'test.components-registry-service-host' must be defined")</ID>
     <ID>TooGenericExceptionThrown:ComponentsRegistryDownloadCopyright.kt$ComponentsRegistryDownloadCopyright$throw RuntimeException("Failed to download '$componentName' copyright. HTTP status: $responseStatus")</ID>
-    <ID>UnusedPrivateMember:ApplicationTest.kt$ApplicationTest.Companion$@JvmStatic private fun componentWithCopyrightCommands(): Stream&lt;Arguments&gt;</ID>
-    <ID>UnusedPrivateMember:ApplicationTest.kt$ApplicationTest.Companion$@JvmStatic private fun componentWithoutCopyrightCommands(): Stream&lt;Arguments&gt;</ID>
-    <ID>UnusedPrivateMember:ApplicationTest.kt$ApplicationTest.Companion$@JvmStatic private fun differentArgumentsCommands(): Stream&lt;Arguments&gt;</ID>
-    <ID>UnusedPrivateMember:ApplicationTest.kt$ApplicationTest.Companion$@JvmStatic private fun nonExistentComponentCommand(): Stream&lt;Arguments&gt;</ID>
     <ID>UseCheckOrError:ApplicationTest.kt$ApplicationTest$throw IllegalStateException("System property 'jar' must be provided")</ID>
   </CurrentIssues>
 </SmellBaseline>

@@ -84,7 +84,7 @@ class GitVcsServiceImpl(
     }
 
     @PostConstruct
-    private fun postGitVcsServiceImplConstruct() {
+    fun postGitVcsServiceImplConstruct() {
         log.info("Service works in Version Control System mode")
     }
 

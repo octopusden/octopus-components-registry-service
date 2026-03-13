@@ -21,8 +21,6 @@
     <ID>TooManyFunctions:ComponentControllerV2.kt$ComponentControllerV2 : BaseComponentController</ID>
     <ID>TooManyFunctions:ComponentRegistryResolver.kt$ComponentRegistryResolver</ID>
     <ID>TooManyFunctions:ComponentRegistryResolverImpl.kt$ComponentRegistryResolverImpl : ComponentRegistryResolver</ID>
-    <ID>UnusedPrivateMember:ComponentsRegistryServiceImpl.kt$ComponentsRegistryServiceImpl$@PostConstruct private fun cloneVcsData()</ID>
-    <ID>UnusedPrivateMember:GitVcsServiceImpl.kt$GitVcsServiceImpl$@PostConstruct private fun postGitVcsServiceImplConstruct()</ID>
     <ID>UnusedPrivateProperty:BaseComponentController.kt$BaseComponentController$private val logger: Logger = LoggerFactory.getLogger(this::class.java)</ID>
     <ID>UseCheckOrError:BaseComponentController.kt$BaseComponentController$throw IllegalStateException("Distribution can not be null")</ID>
     <ID>UseCheckOrError:ComponentRegistryResolverImpl.kt$ComponentRegistryResolverImpl$throw IllegalStateException("Found ${it.size} configurations for version '$version' of component $component")</ID>

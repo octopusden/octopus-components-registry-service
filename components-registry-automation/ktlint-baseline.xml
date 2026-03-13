@@ -29,34 +29,26 @@
         <error line="87" column="9" source="standard:chain-method-continuation" />
         <error line="91" column="1" source="standard:no-empty-first-line-in-class-body" />
         <error line="97" column="53" source="standard:multiline-expression-wrapping" />
-        <error line="108" column="75" source="standard:multiline-expression-wrapping" />
-        <error line="108" column="75" source="standard:function-signature" />
-        <error line="115" column="83" source="standard:trailing-comma-on-call-site" />
-        <error line="116" column="18" source="standard:trailing-comma-on-call-site" />
-        <error line="124" column="99" source="standard:trailing-comma-on-call-site" />
-        <error line="125" column="18" source="standard:trailing-comma-on-call-site" />
-        <error line="133" column="82" source="standard:trailing-comma-on-call-site" />
-        <error line="134" column="18" source="standard:trailing-comma-on-call-site" />
-        <error line="142" column="82" source="standard:trailing-comma-on-call-site" />
-        <error line="143" column="18" source="standard:trailing-comma-on-call-site" />
-        <error line="148" column="78" source="standard:multiline-expression-wrapping" />
-        <error line="148" column="78" source="standard:function-signature" />
-        <error line="153" column="83" source="standard:trailing-comma-on-call-site" />
-        <error line="154" column="18" source="standard:trailing-comma-on-call-site" />
-        <error line="160" column="83" source="standard:trailing-comma-on-call-site" />
-        <error line="161" column="18" source="standard:trailing-comma-on-call-site" />
-        <error line="167" column="83" source="standard:trailing-comma-on-call-site" />
-        <error line="168" column="18" source="standard:trailing-comma-on-call-site" />
-        <error line="173" column="72" source="standard:multiline-expression-wrapping" />
-        <error line="173" column="72" source="standard:function-signature" />
-        <error line="178" column="93" source="standard:trailing-comma-on-call-site" />
-        <error line="179" column="18" source="standard:trailing-comma-on-call-site" />
-        <error line="180" column="14" source="standard:trailing-comma-on-call-site" />
-        <error line="184" column="71" source="standard:multiline-expression-wrapping" />
-        <error line="184" column="71" source="standard:function-signature" />
-        <error line="188" column="37" source="standard:trailing-comma-on-call-site" />
-        <error line="193" column="34" source="standard:trailing-comma-on-call-site" />
-        <error line="202" column="18" source="standard:trailing-comma-on-call-site" />
-        <error line="211" column="18" source="standard:trailing-comma-on-call-site" />
+        <error line="116" column="87" source="standard:trailing-comma-on-call-site" />
+        <error line="117" column="22" source="standard:trailing-comma-on-call-site" />
+        <error line="125" column="103" source="standard:trailing-comma-on-call-site" />
+        <error line="126" column="22" source="standard:trailing-comma-on-call-site" />
+        <error line="134" column="86" source="standard:trailing-comma-on-call-site" />
+        <error line="135" column="22" source="standard:trailing-comma-on-call-site" />
+        <error line="143" column="86" source="standard:trailing-comma-on-call-site" />
+        <error line="144" column="22" source="standard:trailing-comma-on-call-site" />
+        <error line="155" column="87" source="standard:trailing-comma-on-call-site" />
+        <error line="156" column="22" source="standard:trailing-comma-on-call-site" />
+        <error line="162" column="87" source="standard:trailing-comma-on-call-site" />
+        <error line="163" column="22" source="standard:trailing-comma-on-call-site" />
+        <error line="169" column="87" source="standard:trailing-comma-on-call-site" />
+        <error line="170" column="22" source="standard:trailing-comma-on-call-site" />
+        <error line="181" column="97" source="standard:trailing-comma-on-call-site" />
+        <error line="182" column="22" source="standard:trailing-comma-on-call-site" />
+        <error line="183" column="18" source="standard:trailing-comma-on-call-site" />
+        <error line="192" column="41" source="standard:trailing-comma-on-call-site" />
+        <error line="197" column="38" source="standard:trailing-comma-on-call-site" />
+        <error line="206" column="22" source="standard:trailing-comma-on-call-site" />
+        <error line="215" column="22" source="standard:trailing-comma-on-call-site" />
     </file>
 </baseline>

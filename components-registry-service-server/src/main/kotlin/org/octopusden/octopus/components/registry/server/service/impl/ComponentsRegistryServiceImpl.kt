@@ -38,7 +38,7 @@ class ComponentsRegistryServiceImpl(
     }
 
     @PostConstruct
-    private fun cloneVcsData() {
+    fun cloneVcsData() {
         updateConfigCache()
     }
 
