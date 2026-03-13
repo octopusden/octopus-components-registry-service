@@ -110,7 +110,11 @@ def qualityFailOnViolation = { String propertyName, boolean defaultValue ->
     if (value == null) {
         return defaultValue
     }
-    value.toBoolean()
+    def normalized = value.trim().toLowerCase()
+    if (!(normalized in ['true', 'false'])) {
+        throw new GradleException("Property `${propertyName}` must be `true` or `false`, got `${value}`")
+    }
+    normalized.toBoolean()
 }
 
 def javaQualityFailOnViolation = qualityFailOnViolation('quality.java.failOnViolation', true)
@@ -124,7 +128,7 @@ def qualityCoverageProjects = {
     }
 }
 
-subprojects {
+allprojects {
     repositories {
         mavenLocal()
         mavenCentral()
@@ -135,6 +139,10 @@ subprojects {
             url = uri("https://oss.sonatype.org/content/repositories/releases/")
         }
     }
+}
+
+def existingTaskPath = { Project project, String taskName ->
+    project.tasks.findByName(taskName) != null ? "${project.path}:${taskName}" : null
 }
 
 configure(subprojects) {
@@ -392,9 +400,9 @@ tasks.register('qualityStatic') {
     })
     dependsOn(integrationTestProjects.collectMany { project ->
         [
-                "${project.path}:checkstyleIntegrationTest",
-                "${project.path}:pmdIntegrationTest"
-        ]
+                existingTaskPath(project, 'checkstyleIntegrationTest'),
+                existingTaskPath(project, 'pmdIntegrationTest')
+        ].findAll { it != null }
     })
 }
 
@@ -408,8 +416,8 @@ tasks.register('qualityCoverage') {
     dependsOn(coverageProjects.collect { "${it.path}:test" })
     dependsOn(coverageProjects.collect { "${it.path}:jacocoTestReport" })
     dependsOn(coverageProjects.collect { "${it.path}:jacocoTestCoverageVerification" })
-    dependsOn(integrationTestProjects.collect { "${it.path}:integrationTest" })
-    dependsOn(integrationTestProjects.collect { "${it.path}:jacocoIntegrationTestReport" })
+    dependsOn(integrationTestProjects.collect { existingTaskPath(it, 'integrationTest') }.findAll { it != null })
+    dependsOn(integrationTestProjects.collect { existingTaskPath(it, 'jacocoIntegrationTestReport') }.findAll { it != null })
     dependsOn(tasks.named('jacocoOverallCoverageReport'))
     dependsOn(tasks.named('jacocoOverallCoverageVerification'))
 }

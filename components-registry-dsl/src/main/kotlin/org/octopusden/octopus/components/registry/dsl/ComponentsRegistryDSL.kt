@@ -30,7 +30,6 @@ import org.octopusden.octopus.components.registry.api.beans.OracleDatabaseToolBe
 import org.octopusden.octopus.components.registry.api.beans.SubComponentBean
 import org.octopusden.octopus.components.registry.api.beans.VersionedComponentConfigurationBean
 import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
-import java.util.Optional
 
 private val logger = Logger.getLogger("org.octopusden.octopus.components.registry.dsl.ComponentsRegistryDSL")
 
