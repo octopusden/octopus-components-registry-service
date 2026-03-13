@@ -6,7 +6,7 @@ on:
 
 jobs:
   build:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-release.yml@v2.1.12
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-release.yml@feature/common-quality-gates
     with:
       flow-type: hybrid
       java-version: '21'

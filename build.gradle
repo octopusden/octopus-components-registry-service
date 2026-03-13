@@ -288,6 +288,9 @@ tasks.register('qualityStatic') {
     def groovyProjects = subprojects.findAll { project ->
         file("${project.projectDir}/src/main/groovy").exists() || file("${project.projectDir}/src/test/groovy").exists()
     }
+    def integrationTestProjects = subprojects.findAll { project ->
+        file("${project.projectDir}/src/integrationTest").exists()
+    }
     dependsOn(subprojects.collectMany { project ->
         [
                 "${project.path}:checkstyleMain",
@@ -304,17 +307,28 @@ tasks.register('qualityStatic') {
                 "${project.path}:codenarcTest"
         ]
     })
+    dependsOn(integrationTestProjects.collectMany { project ->
+        [
+                "${project.path}:checkstyleIntegrationTest",
+                "${project.path}:pmdIntegrationTest"
+        ]
+    })
 }
 
 tasks.register('qualityCoverage') {
     group = 'verification'
-    description = 'Runs unit tests and coverage report generation for CI quality gate'
+    description = 'Runs test suites and coverage report generation for CI quality gate'
     def coverageProjects = subprojects.findAll {
         !['components-registry-automation', 'test-common'].contains(it.name)
+    }
+    def integrationTestProjects = coverageProjects.findAll { project ->
+        file("${project.projectDir}/src/integrationTest").exists()
     }
     dependsOn(coverageProjects.collect { "${it.path}:test" })
     dependsOn(coverageProjects.collect { "${it.path}:jacocoTestReport" })
     dependsOn(coverageProjects.collect { "${it.path}:jacocoTestCoverageVerification" })
+    dependsOn(integrationTestProjects.collect { "${it.path}:integrationTest" })
+    dependsOn(integrationTestProjects.collect { "${it.path}:jacocoIntegrationTestReport" })
 }
 
 tasks.register('qualityReportsIndex') {
