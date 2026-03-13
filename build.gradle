@@ -476,107 +476,72 @@ tasks.register('jacocoOverallCoverageVerification', org.gradle.testing.jacoco.ta
     }
 }
 
-tasks.register('qualityReportsIndex') {
-    group = 'verification'
-    description = 'Generates a single HTML entry point for all quality reports'
-    def groovyProjects = subprojects.findAll { project ->
-        file("${project.projectDir}/src/main/groovy").exists() || file("${project.projectDir}/src/test/groovy").exists()
-    }
-    def kotlinProjects = subprojects.findAll { project ->
-        file("${project.projectDir}/src/main/kotlin").exists() ||
-                file("${project.projectDir}/src/test/kotlin").exists() ||
-                file("${project.projectDir}/src/integrationTest/kotlin").exists() ||
-                file("${project.projectDir}/src/testFixtures/kotlin").exists()
-    }
-    def integrationTestProjects = qualityCoverageProjects().findAll { project ->
-        file("${project.projectDir}/src/integrationTest").exists()
-    }
-    dependsOn(subprojects.collectMany { project ->
-        [
-                "${project.path}:checkstyleMain",
-                "${project.path}:checkstyleTest",
-                "${project.path}:pmdMain",
-                "${project.path}:pmdTest",
-                "${project.path}:test"
-        ]
-    })
-    dependsOn(groovyProjects.collectMany { project ->
-        [
-                "${project.path}:codenarcMain",
-                "${project.path}:codenarcTest"
-        ]
-    })
-    dependsOn(kotlinProjects.collect { "${it.path}:detekt" })
-    dependsOn(qualityCoverageProjects().collect { "${it.path}:jacocoTestReport" })
-    dependsOn(integrationTestProjects.collectMany { project ->
-        [
-                "${project.path}:integrationTest",
-                "${project.path}:jacocoIntegrationTestReport"
-        ]
-    })
-    dependsOn(tasks.named('jacocoOverallCoverageReport'))
-    outputs.file(layout.buildDirectory.file('reports/quality/index.html'))
-    doLast {
-        def indexFile = layout.buildDirectory.file('reports/quality/index.html').get().asFile
-        indexFile.parentFile.mkdirs()
+def writeQualityReportsIndex = {
+    def indexFile = layout.buildDirectory.file('reports/quality/index.html').get().asFile
+    indexFile.parentFile.mkdirs()
 
-        def sections = [
-                'Static Analysis': [
-                        '**/build/reports/checkstyle/*.html',
-                        '**/build/reports/pmd/*.html',
-                        '**/build/reports/codenarc/*.html',
-                        '**/build/reports/detekt/*.html',
-                        '**/build/reports/ktlint/*.html',
-                        '**/build/reports/spotbugs/*.html'
-                ],
-                'Coverage': [
-                        '**/build/reports/jacoco/*/html/index.html',
-                        '**/build/reports/kover/**/index.html'
-                ],
-                'Tests': [
-                        '**/build/reports/tests/**/index.html'
-                ]
-        ]
+    def sections = [
+            'Static Analysis': [
+                    [pattern: '**/build/reports/checkstyle/*.html', artifactPrefix: 'checkstyle'],
+                    [pattern: '**/build/reports/pmd/*.html', artifactPrefix: 'pmd'],
+                    [pattern: '**/build/reports/codenarc/*.html', artifactPrefix: 'codenarc'],
+                    [pattern: '**/build/reports/detekt/*.html', artifactPrefix: 'detekt'],
+                    [pattern: '**/build/reports/ktlint/*.html', artifactPrefix: 'ktlint'],
+                    [pattern: '**/build/reports/spotbugs/*.html', artifactPrefix: 'spotbugs']
+            ],
+            'Coverage': [
+                    [pattern: '**/build/reports/jacoco/*/html/index.html', artifactPrefix: 'jacoco'],
+                    [pattern: '**/build/reports/kover/**/index.html', artifactPrefix: 'kover']
+            ],
+            'Tests': [
+                    [pattern: '**/build/reports/tests/**/index.html', artifactPrefix: 'tests']
+            ]
+    ]
 
-        def rootPath = projectDir.toPath()
-        def indexDirPath = indexFile.parentFile.toPath()
-        def escape = { String value ->
-            value
-                    .replace('&', '&amp;')
-                    .replace('<', '&lt;')
-                    .replace('>', '&gt;')
-                    .replace('"', '&quot;')
+    def rootPath = projectDir.toPath()
+    def escape = { String value ->
+        value
+                .replace('&', '&amp;')
+                .replace('<', '&lt;')
+                .replace('>', '&gt;')
+                .replace('"', '&quot;')
+    }
+    def artifactHref = { File reportFile, String artifactPrefix ->
+        def relativePath = rootPath.relativize(reportFile.toPath()).toString().replace('\\', '/')
+        "../${artifactPrefix}/${relativePath}"
+    }
+
+    def sectionsHtml = sections.collect { sectionName, entries ->
+        def files = entries.collectMany { entry ->
+            fileTree(projectDir) {
+                include entry.pattern
+            }.files.collect { reportFile ->
+                [file: reportFile, artifactPrefix: entry.artifactPrefix]
+            }
+        }
+                .findAll { it.file.isFile() }
+                .unique { it.file.path }
+                .sort { it.file.path }
+
+        def items = files.collect { report ->
+            def href = artifactHref(report.file, report.artifactPrefix)
+            def label = rootPath.relativize(report.file.toPath()).toString().replace('\\', '/')
+            "<li><a href=\"${escape(href)}\">${escape(label)}</a></li>"
         }
 
-        def sectionsHtml = sections.collect { sectionName, globs ->
-            def files = globs.collectMany { pattern ->
-                fileTree(projectDir) {
-                    include pattern
-                }.files as List<File>
-            }
-                    .findAll { it.isFile() }
-                    .unique { it.path }
-                    .sort { it.path }
+        if (items.isEmpty()) {
+            items = ['<li>No reports generated for this section</li>']
+        }
 
-            def items = files.collect { reportFile ->
-                def href = indexDirPath.relativize(reportFile.toPath()).toString().replace('\\', '/')
-                def label = rootPath.relativize(reportFile.toPath()).toString().replace('\\', '/')
-                "<li><a href=\"${escape(href)}\">${escape(label)}</a></li>"
-            }
-
-            if (items.isEmpty()) {
-                items = ['<li>No reports generated for this section</li>']
-            }
-
-            """<section>
+        """<section>
   <h2>${escape(sectionName)}</h2>
   <ul>
     ${items.join('\n    ')}
   </ul>
 </section>"""
-        }.join('\n')
+    }.join('\n')
 
-        indexFile.text = """<!doctype html>
+    indexFile.text = """<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -598,6 +563,14 @@ ${sectionsHtml}
 </body>
 </html>
 """
+}
+
+tasks.register('qualityReportsIndex') {
+    group = 'verification'
+    description = 'Generates a single HTML entry point for all quality reports'
+    outputs.file(layout.buildDirectory.file('reports/quality/index.html'))
+    doLast {
+        writeQualityReportsIndex()
     }
 }
 
@@ -609,6 +582,14 @@ tasks.named('qualityCoverage') {
     finalizedBy(tasks.named('qualityReportsIndex'))
 }
 
-tasks.named('build') {
-    finalizedBy(tasks.named('qualityReportsIndex'))
+def shouldGenerateQualityIndexOnBuildFinish = false
+
+gradle.taskGraph.whenReady { graph ->
+    shouldGenerateQualityIndexOnBuildFinish = graph.hasTask(tasks.named('build').get())
+}
+
+gradle.buildFinished {
+    if (shouldGenerateQualityIndexOnBuildFinish) {
+        writeQualityReportsIndex()
+    }
 }
