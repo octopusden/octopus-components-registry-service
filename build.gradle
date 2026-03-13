@@ -10,6 +10,7 @@ buildscript {
 plugins {
     id 'io.github.gradle-nexus.publish-plugin'
     id 'org.octopusden.octopus-release-management'
+    id 'jacoco'
     id 'org.springframework.boot'                 apply false
     id 'org.jetbrains.kotlin.jvm'                 apply false
     id 'org.jetbrains.kotlin.plugin.spring'       apply false
@@ -115,6 +116,13 @@ def qualityFailOnViolation = { String propertyName, boolean defaultValue ->
 def javaQualityFailOnViolation = qualityFailOnViolation('quality.java.failOnViolation', true)
 def groovyQualityFailOnViolation = qualityFailOnViolation('quality.groovy.failOnViolation', false)
 def kotlinQualityFailOnViolation = qualityFailOnViolation('quality.kotlin.failOnViolation', true)
+def perModuleCoverageMinimum = (findProperty('quality.coverage.perModule.minimum')?.toString()?.toBigDecimal()) ?: 0.10
+def overallCoverageMinimum = (findProperty('quality.coverage.overall.minimum')?.toString()?.toBigDecimal()) ?: 0.70
+def qualityCoverageProjects = {
+    subprojects.findAll {
+        !['components-registry-automation', 'test-common'].contains(it.name)
+    }
+}
 
 subprojects {
     repositories {
@@ -293,7 +301,7 @@ configure(subprojects) {
                 limit {
                     counter = 'LINE'
                     value = 'COVEREDRATIO'
-                    minimum = 0.10
+                    minimum = perModuleCoverageMinimum
                 }
             }
         }
@@ -393,9 +401,7 @@ tasks.register('qualityStatic') {
 tasks.register('qualityCoverage') {
     group = 'verification'
     description = 'Runs test suites and coverage report generation for CI quality gate'
-    def coverageProjects = subprojects.findAll {
-        !['components-registry-automation', 'test-common'].contains(it.name)
-    }
+    def coverageProjects = qualityCoverageProjects()
     def integrationTestProjects = coverageProjects.findAll { project ->
         file("${project.projectDir}/src/integrationTest").exists()
     }
@@ -404,6 +410,70 @@ tasks.register('qualityCoverage') {
     dependsOn(coverageProjects.collect { "${it.path}:jacocoTestCoverageVerification" })
     dependsOn(integrationTestProjects.collect { "${it.path}:integrationTest" })
     dependsOn(integrationTestProjects.collect { "${it.path}:jacocoIntegrationTestReport" })
+    dependsOn(tasks.named('jacocoOverallCoverageReport'))
+    dependsOn(tasks.named('jacocoOverallCoverageVerification'))
+}
+
+tasks.register('jacocoOverallCoverageReport', org.gradle.testing.jacoco.tasks.JacocoReport) {
+    group = 'verification'
+    description = 'Generates an aggregated JaCoCo report for the quality coverage module set'
+
+    def coverageProjects = qualityCoverageProjects()
+    dependsOn(coverageProjects.collect { "${it.path}:test" })
+    executionData.from(files(coverageProjects.collect { project ->
+        project.fileTree(project.layout.buildDirectory) {
+            include 'jacoco/test.exec'
+        }
+    }))
+    sourceDirectories.from(files(coverageProjects.collect { project ->
+        project.sourceSets.main.allSource.srcDirs
+    }))
+    additionalSourceDirs.from(files(coverageProjects.collect { project ->
+        project.sourceSets.main.allSource.srcDirs
+    }))
+    classDirectories.from(files(coverageProjects.collect { project ->
+        project.sourceSets.main.output
+    }))
+
+    reports {
+        xml.required = true
+        html.required = true
+        xml.outputLocation.set(layout.buildDirectory.file('reports/jacoco/overallCoverage/jacocoOverallCoverageReport.xml'))
+        html.outputLocation.set(layout.buildDirectory.dir('reports/jacoco/overallCoverage/html'))
+    }
+}
+
+tasks.register('jacocoOverallCoverageVerification', org.gradle.testing.jacoco.tasks.JacocoCoverageVerification) {
+    group = 'verification'
+    description = 'Verifies aggregated JaCoCo coverage for the quality coverage module set'
+
+    def coverageProjects = qualityCoverageProjects()
+    dependsOn(coverageProjects.collect { "${it.path}:test" })
+    executionData.from(files(coverageProjects.collect { project ->
+        project.fileTree(project.layout.buildDirectory) {
+            include 'jacoco/test.exec'
+        }
+    }))
+    sourceDirectories.from(files(coverageProjects.collect { project ->
+        project.sourceSets.main.allSource.srcDirs
+    }))
+    additionalSourceDirs.from(files(coverageProjects.collect { project ->
+        project.sourceSets.main.allSource.srcDirs
+    }))
+    classDirectories.from(files(coverageProjects.collect { project ->
+        project.sourceSets.main.output
+    }))
+
+    violationRules {
+        rule {
+            element = 'BUNDLE'
+            limit {
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+                minimum = overallCoverageMinimum
+            }
+        }
+    }
 }
 
 tasks.register('qualityReportsIndex') {
