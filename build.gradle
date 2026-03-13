@@ -479,6 +479,42 @@ tasks.register('jacocoOverallCoverageVerification', org.gradle.testing.jacoco.ta
 tasks.register('qualityReportsIndex') {
     group = 'verification'
     description = 'Generates a single HTML entry point for all quality reports'
+    def groovyProjects = subprojects.findAll { project ->
+        file("${project.projectDir}/src/main/groovy").exists() || file("${project.projectDir}/src/test/groovy").exists()
+    }
+    def kotlinProjects = subprojects.findAll { project ->
+        file("${project.projectDir}/src/main/kotlin").exists() ||
+                file("${project.projectDir}/src/test/kotlin").exists() ||
+                file("${project.projectDir}/src/integrationTest/kotlin").exists() ||
+                file("${project.projectDir}/src/testFixtures/kotlin").exists()
+    }
+    def integrationTestProjects = qualityCoverageProjects().findAll { project ->
+        file("${project.projectDir}/src/integrationTest").exists()
+    }
+    dependsOn(subprojects.collectMany { project ->
+        [
+                "${project.path}:checkstyleMain",
+                "${project.path}:checkstyleTest",
+                "${project.path}:pmdMain",
+                "${project.path}:pmdTest",
+                "${project.path}:test"
+        ]
+    })
+    dependsOn(groovyProjects.collectMany { project ->
+        [
+                "${project.path}:codenarcMain",
+                "${project.path}:codenarcTest"
+        ]
+    })
+    dependsOn(kotlinProjects.collect { "${it.path}:detekt" })
+    dependsOn(qualityCoverageProjects().collect { "${it.path}:jacocoTestReport" })
+    dependsOn(integrationTestProjects.collectMany { project ->
+        [
+                "${project.path}:integrationTest",
+                "${project.path}:jacocoIntegrationTestReport"
+        ]
+    })
+    dependsOn(tasks.named('jacocoOverallCoverageReport'))
     outputs.file(layout.buildDirectory.file('reports/quality/index.html'))
     doLast {
         def indexFile = layout.buildDirectory.file('reports/quality/index.html').get().asFile
