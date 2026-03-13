@@ -105,7 +105,8 @@ class ApplicationTest {
         }
 
         @JvmStatic
-        fun componentWithCopyrightCommands(): Stream<Arguments> =
+        @Suppress("UnusedPrivateMember")
+        private fun componentWithCopyrightCommands(): Stream<Arguments> =
             Stream.of(
                 Arguments.of(
                     "Test downloading 'ee-component'",
@@ -113,8 +114,8 @@ class ApplicationTest {
                     CORRECT_EXIT_CODE,
                     arrayOf(
                         componentsRegistryCommandOptions,
-                        *createDownloadCopyrightCommandByComponentName("ee-component")
-                    )
+                        *createDownloadCopyrightCommandByComponentName("ee-component"),
+                    ),
                 ),
                 Arguments.of(
                     "Test downloading 'ee-client-specific-component'",
@@ -122,8 +123,8 @@ class ApplicationTest {
                     CORRECT_EXIT_CODE,
                     arrayOf(
                         componentsRegistryCommandOptions,
-                        *createDownloadCopyrightCommandByComponentName("ee-client-specific-component")
-                    )
+                        *createDownloadCopyrightCommandByComponentName("ee-client-specific-component"),
+                    ),
                 ),
                 Arguments.of(
                     "Test downloading 'dependency1'",
@@ -131,8 +132,8 @@ class ApplicationTest {
                     CORRECT_EXIT_CODE,
                     arrayOf(
                         componentsRegistryCommandOptions,
-                        *createDownloadCopyrightCommandByComponentName("dependency1")
-                    )
+                        *createDownloadCopyrightCommandByComponentName("dependency1"),
+                    ),
                 ),
                 Arguments.of(
                     "Test downloading 'dependency2'",
@@ -140,61 +141,64 @@ class ApplicationTest {
                     CORRECT_EXIT_CODE,
                     arrayOf(
                         componentsRegistryCommandOptions,
-                        *createDownloadCopyrightCommandByComponentName("dependency2")
-                    )
+                        *createDownloadCopyrightCommandByComponentName("dependency2"),
+                    ),
                 ),
             )
 
         @JvmStatic
-        fun componentWithoutCopyrightCommands(): Stream<Arguments> =
+        @Suppress("UnusedPrivateMember")
+        private fun componentWithoutCopyrightCommands(): Stream<Arguments> =
             Stream.of(
                 Arguments.of(
                     "Test downloading 'ie-component'",
                     arrayOf(
                         componentsRegistryCommandOptions,
-                        *createDownloadCopyrightCommandByComponentName("ie-component")
-                    )
+                        *createDownloadCopyrightCommandByComponentName("ie-component"),
+                    ),
                 ),
                 Arguments.of(
                     "Test downloading 'ei-component'",
                     arrayOf(
                         componentsRegistryCommandOptions,
-                        *createDownloadCopyrightCommandByComponentName("ei-component")
-                    )
+                        *createDownloadCopyrightCommandByComponentName("ei-component"),
+                    ),
                 ),
                 Arguments.of(
                     "Test downloading 'ii-component'",
                     arrayOf(
                         componentsRegistryCommandOptions,
-                        *createDownloadCopyrightCommandByComponentName("ii-component")
-                    )
+                        *createDownloadCopyrightCommandByComponentName("ii-component"),
+                    ),
                 ),
             )
 
         @JvmStatic
-        fun nonExistentComponentCommand(): Stream<Arguments> =
+        @Suppress("UnusedPrivateMember")
+        private fun nonExistentComponentCommand(): Stream<Arguments> =
             Stream.of(
                 Arguments.of(
                     "Test downloading 'non-existent-component'",
                     arrayOf(
                         componentsRegistryCommandOptions,
-                        *createDownloadCopyrightCommandByComponentName("non-existent-component")
-                    )
-                )
+                        *createDownloadCopyrightCommandByComponentName("non-existent-component"),
+                    ),
+                ),
             )
 
         @JvmStatic
-        fun differentArgumentsCommands(): Stream<Arguments> =
+        @Suppress("UnusedPrivateMember")
+        private fun differentArgumentsCommands(): Stream<Arguments> =
             Stream.of(
                 Arguments.of(
                     "Test help",
                     CORRECT_EXIT_CODE,
-                    arrayOf(HELP_OPTION)
+                    arrayOf(HELP_OPTION),
                 ),
                 Arguments.of(
                     "Test empty command",
                     INCORRECT_COMMAND_EXIT_CODE,
-                    arrayOf<String>()
+                    arrayOf<String>(),
                 ),
                 Arguments.of(
                     "Test '--component-name' not specified",
@@ -203,7 +207,7 @@ class ApplicationTest {
                         componentsRegistryCommandOptions,
                         COMMAND,
                         "${TARGET_PATH}=$TEST_TARGET_PATH",
-                    )
+                    ),
                 ),
                 Arguments.of(
                     "Test '--target-path' not specified",
@@ -212,7 +216,7 @@ class ApplicationTest {
                         componentsRegistryCommandOptions,
                         COMMAND,
                         "${COMPONENT_NAME}=ee-component",
-                    )
+                    ),
                 ),
             )
 

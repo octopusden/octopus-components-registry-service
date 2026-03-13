@@ -84,7 +84,8 @@ class GitVcsServiceImpl(
     }
 
     @PostConstruct
-    fun postGitVcsServiceImplConstruct() {
+    @Suppress("UnusedPrivateMember")
+    private fun postGitVcsServiceImplConstruct() {
         log.info("Service works in Version Control System mode")
     }
 
