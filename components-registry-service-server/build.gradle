@@ -82,8 +82,21 @@ task integrationTest(type: Test) {
     jvmArgs('--add-opens=java.base/java.util=ALL-UNNAMED')
 }
 
+tasks.register('jacocoIntegrationTestReport', org.gradle.testing.jacoco.tasks.JacocoReport) {
+    dependsOn integrationTest
+    executionData integrationTest
+    sourceDirectories.from = files(sourceSets.main.allSource.srcDirs)
+    additionalSourceDirs.from = files(sourceSets.main.allSource.srcDirs)
+    classDirectories.from = files(sourceSets.main.output)
+    reports {
+        xml.required = true
+        html.required = true
+    }
+}
+
 check.dependsOn integrationTest
 integrationTest.dependsOn bootJar
+integrationTest.finalizedBy jacocoIntegrationTestReport
 
 // Integration test inherits testImplementation configuration which includes transitive dependencies with resources.
 // Gradle's Copy task detects these as duplicates during resource processing.

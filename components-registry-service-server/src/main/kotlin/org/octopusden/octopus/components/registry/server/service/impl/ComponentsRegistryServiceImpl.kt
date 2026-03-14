@@ -38,6 +38,7 @@ class ComponentsRegistryServiceImpl(
     }
 
     @PostConstruct
+    @Suppress("UnusedPrivateMember")
     private fun cloneVcsData() {
         updateConfigCache()
     }
