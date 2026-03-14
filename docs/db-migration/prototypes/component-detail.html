@@ -39,6 +39,11 @@
         .theme-btn { width: 32px; height: 32px; border-radius: 6px; border: 1px solid var(--input); display: flex; align-items: center; justify-content: center; color: var(--muted-fg); cursor: pointer; background: transparent; }
         .theme-btn:hover { background: var(--accent); color: var(--fg); }
         .version-banner { background: var(--muted); border: 1px solid var(--border); }
+        .override-form { border: 1px solid var(--border); border-radius: 6px; padding: 8px; margin-top: 8px; display: flex; gap: 6px; align-items: end; }
+        .override-form input { height: 28px; padding: 0 8px; border-radius: 4px; border: 1px solid var(--input); background: transparent; font-size: 12px; color: var(--fg); font-family: monospace; }
+        .override-form input:focus { outline: none; box-shadow: 0 0 0 1px var(--ring); }
+        .override-form .of-label { font-size: 11px; color: var(--muted-fg); margin-bottom: 2px; }
+        .override-form button { height: 28px; padding: 0 10px; border-radius: 4px; font-size: 12px; cursor: pointer; }
         .table-inner { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
         .table-inner thead tr { background: var(--muted); border-bottom: 1px solid var(--border); }
         .table-inner thead th { color: var(--muted-fg); }
@@ -100,20 +105,6 @@
         </div>
     </div>
 
-    <!-- Version Context Banner -->
-    <div class="max-w-7xl mx-auto px-6 mb-2">
-        <div class="flex items-center gap-3 px-4 py-2.5 rounded-lg version-banner">
-            <span class="text-sm text-muted">Editing version:</span>
-            <span class="font-mono text-sm font-semibold" style="color:var(--badge-green-fg)">[3.0, )</span>
-            <span class="badge badge-green">HEAD</span>
-            <span class="text-xs text-muted">Tabs below show the resolved configuration for this version (component defaults + head overrides).</span>
-            <div class="ml-auto flex items-center gap-3 text-xs">
-                <span class="level-component override-indicator"><span class="override-dot"></span>component default</span>
-                <span class="level-override override-indicator"><span class="override-dot"></span>head override</span>
-            </div>
-        </div>
-    </div>
-
     <!-- Tabs -->
     <div class="max-w-7xl mx-auto px-6">
         <div class="flex gap-6" style="border-bottom:1px solid var(--border)" id="tabs">
@@ -123,7 +114,6 @@
             <button class="tab-inactive pb-3 text-sm font-medium transition-colors" onclick="showTab('distribution', event)">Distribution</button>
             <button class="tab-inactive pb-3 text-sm font-medium transition-colors" onclick="showTab('jira', event)">Jira</button>
             <button class="tab-inactive pb-3 text-sm font-medium transition-colors" onclick="showTab('escrow', event)">Escrow</button>
-            <button class="tab-inactive pb-3 text-sm font-medium transition-colors" onclick="showTab('versions', event)">Previous Versions <span class="ml-1 text-xs px-1.5 py-0.5 rounded-full" style="background:var(--muted);color:var(--muted-fg)">2</span></button>
         </div>
     </div>
 
@@ -147,10 +137,8 @@
                         <div class="field-group">
                             <div class="flex items-center justify-between">
                                 <label class="field-label">Group ID</label>
-                                <span class="level-override override-indicator" title="Overridden in head version [3.0, ). Component default: corp.domain"><span class="override-dot"></span>head override</span>
                             </div>
-                            <input type="text" value="corp.domain.v3" class="field-input" style="border-color: var(--override-dot);">
-                            <div class="text-xs text-muted mt-1">Component default: <code class="text-xs" style="background:var(--muted);padding:1px 4px;border-radius:3px">corp.domain</code> &middot; <button style="color:var(--override-dot)" class="hover:underline">Reset to default</button></div>
+                            <input type="text" value="corp.domain" class="field-input">
                         </div>
                         <div>
                             <label class="field-label">Parent Component</label>
@@ -213,31 +201,52 @@
             <div class="section-card">
                 <h3 class="text-sm font-semibold mb-4">Build Configuration</h3>
                 <div class="grid grid-cols-3 gap-4">
-                    <div>
+                    <div data-field="build.buildSystem">
                         <div class="flex items-center justify-between">
                             <label class="field-label">Build System</label>
-                            <span class="level-component override-indicator"><span class="override-dot"></span>default</span>
+                            <button class="text-xs text-link hover:underline" onclick="showOverrideForm(this)">+ version override</button>
                         </div>
                         <select class="field-input">
                             <option selected>GRADLE</option>
                             <option>MAVEN</option>
                             <option>PROVIDED</option>
                         </select>
+                        <div class="mt-2 space-y-1" data-overrides>
+                            <div data-override class="flex items-center gap-2 text-xs px-2 py-1 rounded" style="background:var(--muted)">
+                                <span class="font-mono" style="color:var(--link)">[1.0, 2.0)</span>
+                                <span class="text-muted">&rarr;</span>
+                                <span class="font-medium">MAVEN</span>
+                                <button class="ml-auto hover:underline" style="color:var(--badge-red-fg)" onclick="removeOverride(this)">remove</button>
+                            </div>
+                            <div data-override class="flex items-center gap-2 text-xs px-2 py-1 rounded" style="background:var(--muted)">
+                                <span class="font-mono" style="color:var(--link)">[2.0, 3.0)</span>
+                                <span class="text-muted">&rarr;</span>
+                                <span class="font-medium">GRADLE</span>
+                                <button class="ml-auto hover:underline" style="color:var(--badge-red-fg)" onclick="removeOverride(this)">remove</button>
+                            </div>
+                        </div>
                     </div>
-                    <div>
+                    <div data-field="build.javaVersion">
                         <div class="flex items-center justify-between">
                             <label class="field-label">Java Version</label>
-                            <span class="level-override override-indicator" title="Component default: 17"><span class="override-dot"></span>head override</span>
+                            <button class="text-xs text-link hover:underline" onclick="showOverrideForm(this)">+ version override</button>
                         </div>
-                        <input type="text" value="21" class="field-input" style="border-color: var(--override-dot);">
-                        <div class="text-xs text-muted mt-1">Component default: <code style="background:var(--muted);padding:1px 4px;border-radius:3px">17</code> &middot; <button style="color:var(--override-dot)" class="hover:underline">Reset to default</button></div>
+                        <input type="text" value="21" class="field-input">
                     </div>
-                    <div>
+                    <div data-field="build.gradleVersion">
                         <div class="flex items-center justify-between">
                             <label class="field-label">Gradle Version</label>
-                            <span class="level-component override-indicator"><span class="override-dot"></span>default</span>
+                            <button class="text-xs text-link hover:underline" onclick="showOverrideForm(this)">+ version override</button>
                         </div>
-                        <input type="text" value="8.6" class="field-input">
+                        <input type="text" value="8.5" class="field-input">
+                        <div class="mt-2 space-y-1" data-overrides>
+                            <div data-override class="flex items-center gap-2 text-xs px-2 py-1 rounded" style="background:var(--muted)">
+                                <span class="font-mono" style="color:var(--link)">[1.0, 2.0)</span>
+                                <span class="text-muted">&rarr;</span>
+                                <span class="font-medium">7.6</span>
+                                <button class="ml-auto hover:underline" style="color:var(--badge-red-fg)" onclick="removeOverride(this)">remove</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -286,18 +295,23 @@
                         </div>
                         <div class="grid grid-cols-2 gap-3">
                             <div>
-                                <div class="flex items-center justify-between">
-                                    <label class="field-label">Repository URL</label>
-                                    <span class="level-component override-indicator"><span class="override-dot"></span>default</span>
-                                </div>
+                                <label class="field-label">Repository URL</label>
                                 <input type="text" value="ssh://git@git.domain.corp/ee/ee-component.git" class="field-input font-mono text-xs">
                             </div>
-                            <div>
+                            <div data-field="vcs.branch">
                                 <div class="flex items-center justify-between">
                                     <label class="field-label">Branch</label>
-                                    <span class="level-component override-indicator"><span class="override-dot"></span>default</span>
+                                    <button class="text-xs text-link hover:underline" onclick="showOverrideForm(this)">+ version override</button>
                                 </div>
-                                <input type="text" value="master" class="field-input">
+                                <input type="text" value="main" class="field-input">
+                                <div class="mt-2 space-y-1" data-overrides>
+                                    <div data-override class="flex items-center gap-2 text-xs px-2 py-1 rounded" style="background:var(--muted)">
+                                        <span class="font-mono" style="color:var(--link)">[1.0, 2.0)</span>
+                                        <span class="text-muted">&rarr;</span>
+                                        <span class="font-medium">release/1.x</span>
+                                        <button class="ml-auto hover:underline" style="color:var(--badge-red-fg)" onclick="removeOverride(this)">remove</button>
+                                    </div>
+                                </div>
                             </div>
                             <div>
                                 <label class="field-label">Tag Pattern</label>
@@ -346,9 +360,20 @@
             <div class="section-card">
                 <h3 class="text-sm font-semibold mb-4">Jira Configuration</h3>
                 <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="field-label">Project Key</label>
-                        <input type="text" value="EE" class="field-input font-mono">
+                    <div data-field="jira.projectKey">
+                        <div class="flex items-center justify-between">
+                            <label class="field-label">Project Key</label>
+                            <button class="text-xs text-link hover:underline" onclick="showOverrideForm(this)">+ version override</button>
+                        </div>
+                        <input type="text" value="MYCOMP" class="field-input font-mono">
+                        <div class="mt-2 space-y-1" data-overrides>
+                            <div data-override class="flex items-center gap-2 text-xs px-2 py-1 rounded" style="background:var(--muted)">
+                                <span class="font-mono" style="color:var(--link)">[1.5, 2.5)</span>
+                                <span class="text-muted">&rarr;</span>
+                                <span class="font-medium">MYPRJ</span>
+                                <button class="ml-auto hover:underline" style="color:var(--badge-red-fg)" onclick="removeOverride(this)">remove</button>
+                            </div>
+                        </div>
                     </div>
                     <div>
                         <label class="field-label">Display Name</label>
@@ -405,108 +430,6 @@
             </div>
         </div>
 
-        <!-- Previous Versions Tab -->
-        <div id="tab-versions" class="hidden">
-            <div class="flex items-center justify-between mb-4">
-                <div>
-                    <h3 class="text-sm font-semibold">Previous Version Ranges</h3>
-                    <p class="text-xs text-muted mt-1">Older versions with overrides. Head version <code class="font-mono" style="color:var(--badge-green-fg)">[3.0, )</code> is edited in the main tabs above.</p>
-                </div>
-                <button class="inline-flex items-center rounded-md btn-outline px-3 py-1.5 text-sm transition-colors">
-                    <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                    Add Version Range
-                </button>
-            </div>
-
-            <div class="space-y-3">
-                <!-- Version [2.0, 3.0) -->
-                <div class="section-card">
-                    <div class="flex items-center justify-between cursor-pointer" onclick="this.parentElement.querySelector('.version-body').classList.toggle('hidden'); this.querySelector('.chevron').classList.toggle('rotate-90')">
-                        <div class="flex items-center gap-3">
-                            <svg class="chevron w-4 h-4 text-muted transition-transform rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-                            <span class="font-mono text-sm font-medium" style="color:var(--link)">[2.0, 3.0)</span>
-                            <span class="text-xs text-muted">2 overrides</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <button class="text-xs hover:underline" style="color:var(--badge-red-fg)" onclick="event.stopPropagation()">Delete range</button>
-                        </div>
-                    </div>
-                    <div class="version-body mt-4 pt-4" style="border-top:1px solid var(--border)">
-                        <p class="text-xs text-muted mb-3">Only overridden fields are shown. All other fields inherit from component defaults.</p>
-                        <div class="grid grid-cols-2 gap-x-6 gap-y-4">
-                            <div>
-                                <div class="flex items-center justify-between">
-                                    <label class="field-label">Java Version</label>
-                                    <button class="text-xs hover:underline" style="color:var(--badge-red-fg)">Remove override</button>
-                                </div>
-                                <input type="text" value="17" class="field-input" style="border-color: var(--override-dot);">
-                                <div class="text-xs text-muted mt-1">Component default: <code style="background:var(--muted);padding:1px 4px;border-radius:3px">17</code></div>
-                            </div>
-                            <div>
-                                <div class="flex items-center justify-between">
-                                    <label class="field-label">VCS Branch</label>
-                                    <button class="text-xs hover:underline" style="color:var(--badge-red-fg)">Remove override</button>
-                                </div>
-                                <input type="text" value="release/2.x" class="field-input" style="border-color: var(--override-dot);">
-                                <div class="text-xs text-muted mt-1">Component default: <code style="background:var(--muted);padding:1px 4px;border-radius:3px">master</code></div>
-                            </div>
-                        </div>
-                        <button class="mt-4 text-sm text-muted hover:underline flex items-center gap-1">
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                            Add override for this version
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Version [1.0, 2.0) -->
-                <div class="section-card">
-                    <div class="flex items-center justify-between cursor-pointer" onclick="this.parentElement.querySelector('.version-body').classList.toggle('hidden'); this.querySelector('.chevron').classList.toggle('rotate-90')">
-                        <div class="flex items-center gap-3">
-                            <svg class="chevron w-4 h-4 text-muted transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-                            <span class="font-mono text-sm font-medium" style="color:var(--link)">[1.0, 2.0)</span>
-                            <span class="badge badge-outline ml-1">legacy</span>
-                            <span class="text-xs text-muted">3 overrides</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <button class="text-xs hover:underline" style="color:var(--badge-red-fg)" onclick="event.stopPropagation()">Delete range</button>
-                        </div>
-                    </div>
-                    <div class="version-body hidden mt-4 pt-4" style="border-top:1px solid var(--border)">
-                        <p class="text-xs text-muted mb-3">Only overridden fields are shown.</p>
-                        <div class="grid grid-cols-2 gap-x-6 gap-y-4">
-                            <div>
-                                <div class="flex items-center justify-between">
-                                    <label class="field-label">Java Version</label>
-                                    <button class="text-xs hover:underline" style="color:var(--badge-red-fg)">Remove override</button>
-                                </div>
-                                <input type="text" value="11" class="field-input" style="border-color: var(--override-dot);">
-                            </div>
-                            <div>
-                                <div class="flex items-center justify-between">
-                                    <label class="field-label">Build System</label>
-                                    <button class="text-xs hover:underline" style="color:var(--badge-red-fg)">Remove override</button>
-                                </div>
-                                <select class="field-input" style="border-color: var(--override-dot);">
-                                    <option>GRADLE</option>
-                                    <option selected>MAVEN</option>
-                                </select>
-                            </div>
-                            <div>
-                                <div class="flex items-center justify-between">
-                                    <label class="field-label">VCS Branch</label>
-                                    <button class="text-xs hover:underline" style="color:var(--badge-red-fg)">Remove override</button>
-                                </div>
-                                <input type="text" value="release/1.x" class="field-input" style="border-color: var(--override-dot);">
-                            </div>
-                        </div>
-                        <button class="mt-4 text-sm text-muted hover:underline flex items-center gap-1">
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                            Add override for this version
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
     </main>
 
     <script>
@@ -517,6 +440,94 @@
                 btn.className = btn.className.replace('tab-active', 'tab-inactive');
             });
             event.target.className = event.target.className.replace('tab-inactive', 'tab-active');
+        }
+
+        function removeOverride(btn) {
+            const entry = btn.closest('[data-override]');
+            const container = entry.parentElement;
+            entry.remove();
+            if (!container.querySelector('[data-override]')) {
+                container.remove();
+            }
+        }
+
+        function showOverrideForm(btn) {
+            const fieldDiv = btn.closest('[data-field]');
+            if (fieldDiv.querySelector('.override-form')) return;
+            const form = document.createElement('div');
+            form.className = 'override-form';
+            form.innerHTML = `
+                <div>
+                    <div class="of-label">Version range</div>
+                    <input type="text" placeholder="[1.0, 2.0)" style="width:120px" data-range>
+                </div>
+                <div>
+                    <div class="of-label">Value</div>
+                    <input type="text" placeholder="override value" style="width:130px" data-value>
+                </div>
+                <button class="btn-primary" onclick="addOverride(this)">Add</button>
+                <button class="btn-outline" onclick="this.closest('.override-form').remove()">Cancel</button>
+            `;
+            fieldDiv.appendChild(form);
+            form.querySelector('[data-range]').focus();
+        }
+
+        function parseRange(str) {
+            const m = str.match(/^([(\[])([^,]*),([^)\]]*)([)\]])$/);
+            if (!m) return null;
+            const lo = m[2].trim() ? parseFloat(m[2].trim()) : -Infinity;
+            const hi = m[3].trim() ? parseFloat(m[3].trim()) : Infinity;
+            const loInc = m[1] === '[';
+            const hiInc = m[4] === ']';
+            return { lo, hi, loInc, hiInc };
+        }
+
+        function rangesOverlap(a, b) {
+            if (a.hi < b.lo || b.hi < a.lo) return false;
+            if (a.hi === b.lo && !(a.hiInc && b.loInc)) return false;
+            if (b.hi === a.lo && !(b.hiInc && a.loInc)) return false;
+            return true;
+        }
+
+        function addOverride(btn) {
+            const form = btn.closest('.override-form');
+            const fieldDiv = form.closest('[data-field]');
+            const range = form.querySelector('[data-range]').value.trim();
+            const value = form.querySelector('[data-value]').value.trim();
+            if (!range || !value) return;
+            const parsed = parseRange(range);
+            if (!parsed) {
+                alert('Invalid version range format. Use e.g. [1.0, 2.0)');
+                return;
+            }
+            // Overlap validation: check existing overrides for the same field
+            const existing = fieldDiv.querySelectorAll('[data-override] .font-mono');
+            for (const el of existing) {
+                const ex = parseRange(el.textContent);
+                if (ex && rangesOverlap(parsed, ex)) {
+                    alert('Overlapping range: ' + el.textContent + ' already exists for this field.');
+                    return;
+                }
+            }
+            let container = fieldDiv.querySelector('[data-overrides]');
+            if (!container) {
+                container = document.createElement('div');
+                container.className = 'mt-2 space-y-1';
+                container.setAttribute('data-overrides', '');
+                fieldDiv.querySelector('.field-input').after(container);
+            }
+            const entry = document.createElement('div');
+            entry.setAttribute('data-override', '');
+            entry.className = 'flex items-center gap-2 text-xs px-2 py-1 rounded';
+            entry.style.background = 'var(--muted)';
+            entry.innerHTML = `
+                <span class="font-mono" style="color:var(--link)">${range}</span>
+                <span class="text-muted">&rarr;</span>
+                <span class="font-medium">${value}</span>
+                <button class="ml-auto hover:underline" style="color:var(--badge-red-fg)" onclick="removeOverride(this)">remove</button>
+            `;
+            container.appendChild(entry);
+            form.remove();
         }
     </script>
 </body>

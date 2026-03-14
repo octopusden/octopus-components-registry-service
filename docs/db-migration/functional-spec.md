@@ -16,12 +16,15 @@
 ### 1.2 View / Edit Component
 
 - **Input**: Component ID or name
-- **Output**: Full component tree — general info, build config, escrow, VCS, distribution, jira, version ranges with overrides
+- **Output**: Full component tree — general info, build config, escrow, VCS, distribution, jira, per-field version overrides
 
-**UI layout — version-aware editing:**
-- **Head version** (latest open range, e.g., `[3.0, )`) — its resolved configuration (component defaults + head overrides) is shown in the main tabs (General, Build, VCS, Distribution, Jira, Escrow). Editing here modifies the head version.
-- **Previous versions** (e.g., `[2.0, 3.0)`, `[1.0, 2.0)`) — shown in a separate "Previous Versions" tab. Each version is a collapsible section showing only its overrides relative to component defaults. Old versions are read-only by default; overrides can be added/removed.
-- **Inheritance display**: Each field shows whether it uses the component default or is overridden in the current version (visual indicator + "Reset to default" action)
+**UI layout — per-field inline version overrides:**
+- Each field shows its **component default value** in the main tabs (General, Build, VCS, Distribution, Jira, Escrow)
+- Each field has a **"+ version override"** action to define value overrides for specific version ranges
+- Overrides are displayed **inline below the field** as `[range] → value` entries (e.g., `[1.0, 2.0) → MAVEN`)
+- Different fields can have **independent, potentially overlapping** version ranges (e.g., `buildSystem` overridden for `[1.0, 2.0)` while `jiraProjectKey` is overridden for `[1.5, 2.5)`)
+- **"Reset to default"** removes a version-level override for a specific field and range
+- There is no separate "Previous Versions" tab — all version-specific configuration is visible inline per field
 
 **Computed links (auto-generated, not stored):**
 
@@ -72,18 +75,31 @@ Base URLs for links are configurable per deployment via `registry_config` (same 
 
 ## 2. Version Range Management
 
-### 2.1 Add Version Range
-- **Input**: Component ID + version range string (e.g., `[1.0,2.0)`) + optional overrides
-- **Validation**: Version range format, uniqueness within component (409 if overlapping)
-- **Overridable sections**: build, escrow, VCS, distribution, jira, artifactIds, groupId
+Version overrides are **per-field**, not per-component-version. Each field in each parameter group (build, VCS, jira, distribution, escrow) can have its own independent set of version ranges.
 
-### 2.2 Update Version Range
-- **Input**: Version ID + update payload
-- **Behavior**: Merge update on version-specific overrides
+### 2.1 Overlap Validation
 
-### 2.3 Delete Version Range
-- **Behavior**: Hard delete of version and all its override configs
-- **Cascade**: Removes version's build, escrow, VCS, distribution, jira configs
+Version ranges for the **same field** must not overlap. This is enforced on create and update:
+
+- **Per-field non-overlap**: For any given field (e.g., `build.buildSystem`), the set of version ranges must be mutually exclusive. Attempting to add `[1.0, 3.0)` when `[2.0, 4.0)` already exists for the same field → **409 Conflict**
+- **Cross-field independence**: Ranges for different fields may freely overlap. E.g., `build.buildSystem` overridden for `[1.0, 2.0)` and `jira.projectKey` overridden for `[1.5, 2.5)` is valid
+- **Range format**: Maven version range syntax — `[` inclusive, `(` exclusive, e.g., `[1.0, 2.0)`, `(,3.0]`, `[4.0, )`
+- **Boundary precision**: Overlap is checked using proper boundary comparison — `[1.0, 2.0)` and `[2.0, 3.0)` do **not** overlap (2.0 is exclusive in the first, inclusive in the second); `[1.0, 2.0]` and `[2.0, 3.0)` **do** overlap (2.0 is inclusive in both)
+- **UI enforcement**: The "Add" action in the inline override form validates overlap client-side before submission; the server re-validates independently
+
+### 2.2 Add Field Version Override
+- **Input**: Component ID + field path (e.g., `build.buildSystem`) + version range string (e.g., `[1.0, 2.0)`) + override value
+- **Validation**: Version range format + per-field non-overlap (see section2.1)
+- **Overridable fields**: configurable per deployment via field configuration (see section7.1). By default, all fields within build, escrow, VCS, distribution, jira groups (plus `artifactIds` and `groupId`) are overridable. Admin can restrict which fields allow version overrides
+
+### 2.3 Update Field Version Override
+- **Input**: Override ID + new value (or new version range)
+- **Behavior**: Updates the override value or range for a specific field
+- **Validation**: If range is changed, per-field non-overlap is re-validated excluding the current override (see section2.1)
+
+### 2.4 Delete Field Version Override
+- **Behavior**: Removes the version override for a specific field and range
+- **Effect**: The field reverts to the component default for that version range
 
 ## 3. Search & Lookup (Existing API Behavior)
 
@@ -191,7 +207,16 @@ Admin controls per-field behavior:
 | `readonly` | Shown grayed out | Ignores client value; applies server-side value |
 | `hidden` | Not rendered | Ignores client value; applies default silently |
 
+**Version override eligibility** — an additional per-field flag:
+
+| Flag | UI | API |
+|---|---|---|
+| `overridable: true` (default) | Field shows "+" version override" button | Accepts version override creation for this field |
+| `overridable: false` | No override button, field value is the same across all versions | Rejects version override creation (400) |
+
 **Example:** Organization A always uses `system = "CLASSIC"` — admin sets `system` to `hidden` with default `"CLASSIC"`. Users never see it, but API always returns it.
+
+**Example:** Organization B does not want per-version Jira project key changes — admin sets `jira.projectKey` to `overridable: false`. The field is still editable at the component level, but cannot have version-specific overrides.
 
 ### 7.2 Component Defaults
 

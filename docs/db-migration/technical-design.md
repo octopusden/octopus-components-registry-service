@@ -104,6 +104,8 @@ CONSTRAINT chk_owner CHECK (
 )
 ```
 
+> **Note — per-field version overrides:** The schema will support independent version ranges per parameter field (e.g., `buildSystem` overridden for `[1.0, 2.0)` while `jiraProjectKey` is overridden for `[1.5, 2.5)`). Overlapping ranges across different fields are allowed; overlapping ranges for the same field are forbidden. The final schema design for per-field overrides is deferred to implementation.
+
 ### 3.3 Schema Extensibility
 
 Component properties are classified into three tiers by stability. See [ADR-010](adr/010-schema-extensibility.md) for full rationale.
@@ -239,18 +241,24 @@ DELETE /rest/api/4/components/{id}
   Auth:     DELETE_COMPONENTS
 ```
 
-#### Version Ranges
+#### Field Version Overrides
 ```
-POST   /rest/api/4/components/{id}/versions
-  Request:  VersionCreateRequest { versionRange, build, escrow, vcs, ... }
+POST   /rest/api/4/components/{id}/field-overrides
+  Request:  FieldOverrideCreateRequest { fieldPath, versionRange, value }
+  Example:  { "fieldPath": "build.buildSystem", "versionRange": "[1.0, 2.0)", "value": "MAVEN" }
+  Auth:     EDIT_COMPONENTS
+  Validation: No overlap with existing ranges for the same field (409 Conflict)
+
+PATCH  /rest/api/4/components/{id}/field-overrides/{overrideId}
+  Request:  FieldOverrideUpdateRequest { versionRange?, value? }
   Auth:     EDIT_COMPONENTS
 
-PATCH  /rest/api/4/components/{id}/versions/{versionId}
-  Request:  VersionUpdateRequest { version, build, escrow, vcs, distribution, jira }
+DELETE /rest/api/4/components/{id}/field-overrides/{overrideId}
   Auth:     EDIT_COMPONENTS
 
-DELETE /rest/api/4/components/{id}/versions/{versionId}
-  Auth:     EDIT_COMPONENTS
+GET    /rest/api/4/components/{id}/field-overrides
+  Response: List of all field overrides for the component, grouped by field path
+  Auth:     ACCESS_COMPONENTS
 ```
 
 #### Audit
