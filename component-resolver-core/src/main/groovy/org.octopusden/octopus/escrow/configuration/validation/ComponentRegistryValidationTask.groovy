@@ -32,7 +32,7 @@ class ComponentRegistryValidationTask {
     private static final def log = LoggerFactory.getLogger(ComponentRegistryValidationTask.class)
     static final String ARCHIVED_SUFFIX = "(archived)"
 
-    /** Escapes a string for use in TeamCity service message attribute value (|, ', ], newlines). */
+    /** Escapes a string for use in TeamCity service message attribute value (|, ', ], [, newlines). */
     private static String escapeTeamCityAttribute(String s) {
         if (s == null) return ''
         return s
