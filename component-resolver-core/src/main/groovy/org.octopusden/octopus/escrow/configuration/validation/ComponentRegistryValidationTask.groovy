@@ -35,7 +35,13 @@ class ComponentRegistryValidationTask {
     /** Escapes a string for use in TeamCity service message attribute value (|, ', ], newlines). */
     private static String escapeTeamCityAttribute(String s) {
         if (s == null) return ''
-        return s.replace('|', '||').replace("'", "|'").replace(']', '|]').replace('\n', '|n').replace('\r', '|r')
+        return s
+                .replace('|', '||')
+                .replace("'", "|'")
+                .replace('[', '|[')
+                .replace(']', '|]')
+                .replace('\n', '|n')
+                .replace('\r', '|r')
     }
 
     String basePath
