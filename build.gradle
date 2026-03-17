@@ -10,10 +10,13 @@ buildscript {
 plugins {
     id 'io.github.gradle-nexus.publish-plugin'
     id 'org.octopusden.octopus-release-management'
+    id 'jacoco'
     id 'org.springframework.boot'                 apply false
     id 'org.jetbrains.kotlin.jvm'                 apply false
     id 'org.jetbrains.kotlin.plugin.spring'       apply false
     id 'org.jetbrains.kotlin.plugin.jpa'          apply false
+    id 'io.gitlab.arturbosch.detekt'              apply false
+    id 'org.jlleitschuh.gradle.ktlint'            apply false
     id 'signing'
     id 'org.asciidoctor.jvm.convert' version '3.3.2'
     id 'com.platformlib.gradle-wrapper' version '0.2.6'
@@ -102,7 +105,30 @@ allprojects {
     group = 'org.octopusden.octopus.infrastructure'
 }
 
-subprojects {
+def qualityFailOnViolation = { String propertyName, boolean defaultValue ->
+    def value = findProperty(propertyName)?.toString()
+    if (value == null) {
+        return defaultValue
+    }
+    def normalized = value.trim().toLowerCase()
+    if (!(normalized in ['true', 'false'])) {
+        throw new GradleException("Property `${propertyName}` must be `true` or `false`, got `${value}`")
+    }
+    normalized.toBoolean()
+}
+
+def javaQualityFailOnViolation = qualityFailOnViolation('quality.java.failOnViolation', true)
+def groovyQualityFailOnViolation = qualityFailOnViolation('quality.groovy.failOnViolation', false)
+def kotlinQualityFailOnViolation = qualityFailOnViolation('quality.kotlin.failOnViolation', true)
+def perModuleCoverageMinimum = (findProperty('quality.coverage.perModule.minimum')?.toString()?.toBigDecimal()) ?: 0.10
+def overallCoverageMinimum = (findProperty('quality.coverage.overall.minimum')?.toString()?.toBigDecimal()) ?: 0.70
+def qualityCoverageProjects = {
+    subprojects.findAll {
+        !['components-registry-automation', 'test-common'].contains(it.name)
+    }
+}
+
+allprojects {
     repositories {
         mavenLocal()
         mavenCentral()
@@ -115,10 +141,17 @@ subprojects {
     }
 }
 
+def existingTaskPath = { Project project, String taskName ->
+    project.tasks.findByName(taskName) != null ? "${project.path}:${taskName}" : null
+}
+
 configure(subprojects) {
     apply plugin: 'signing'
     apply plugin: 'idea'
     apply plugin: 'java-library'
+    apply plugin: 'jacoco'
+    apply plugin: 'checkstyle'
+    apply plugin: 'pmd'
     apply plugin: 'org.jetbrains.kotlin.jvm'
     apply plugin: 'maven-publish'
 
@@ -141,6 +174,102 @@ configure(subprojects) {
         testRuntimeOnly "org.junit.vintage:junit-vintage-engine"
     }
 
+    checkstyle {
+        toolVersion = '10.17.0'
+        configFile = rootProject.file('config/checkstyle/checkstyle.xml')
+        ignoreFailures = !javaQualityFailOnViolation
+        showViolations = true
+    }
+
+    pmd {
+        toolVersion = '6.55.0'
+        consoleOutput = true
+        incrementalAnalysis = true
+        ignoreFailures = !javaQualityFailOnViolation
+        ruleSets = []
+        ruleSetFiles = files(rootProject.file('config/pmd/ruleset.xml'))
+    }
+
+    if (file("$projectDir/src/main/groovy").exists() || file("$projectDir/src/test/groovy").exists()) {
+        apply plugin: 'codenarc'
+        codenarc {
+            configFile = rootProject.file('config/codenarc/codenarc.groovy')
+            ignoreFailures = !groovyQualityFailOnViolation
+        }
+    }
+
+    if (
+            file("$projectDir/src/main/kotlin").exists() ||
+            file("$projectDir/src/test/kotlin").exists() ||
+            file("$projectDir/src/integrationTest/kotlin").exists() ||
+            file("$projectDir/src/testFixtures/kotlin").exists()
+    ) {
+        apply plugin: 'io.gitlab.arturbosch.detekt'
+        apply plugin: 'org.jlleitschuh.gradle.ktlint'
+
+        detekt {
+            buildUponDefaultConfig = true
+            allRules = false
+            config.setFrom(rootProject.file('config/detekt/detekt.yml'))
+            baseline = file("$projectDir/detekt-baseline.xml")
+            ignoreFailures = !kotlinQualityFailOnViolation
+        }
+
+        tasks.withType(io.gitlab.arturbosch.detekt.Detekt).configureEach {
+            reports {
+                xml.required.set(true)
+                html.required.set(true)
+                sarif.required.set(true)
+                txt.required.set(false)
+            }
+        }
+
+        ktlint {
+            ignoreFailures.set(!kotlinQualityFailOnViolation)
+            outputToConsole.set(true)
+            reporters {
+                reporter org.jlleitschuh.gradle.ktlint.reporter.ReporterType.PLAIN
+                reporter org.jlleitschuh.gradle.ktlint.reporter.ReporterType.CHECKSTYLE
+            }
+            baseline.set(file("$projectDir/ktlint-baseline.xml"))
+            filter {
+                exclude("**/generated/**")
+                exclude("**/build/**")
+                include("**/src/**/*.kt")
+            }
+        }
+
+        tasks.matching {
+            it.name == 'runKtlintCheckOverKotlinScripts' ||
+                    it.name == 'ktlintKotlinScriptCheck' ||
+                    it.name == 'runKtlintFormatOverKotlinScripts' ||
+                    it.name == 'ktlintKotlinScriptFormat'
+        }.configureEach {
+            enabled = false
+        }
+    }
+
+    tasks.withType(org.gradle.api.plugins.quality.Checkstyle).configureEach {
+        reports {
+            xml.required = true
+            html.required = true
+        }
+    }
+
+    tasks.withType(org.gradle.api.plugins.quality.Pmd).configureEach {
+        reports {
+            xml.required = true
+            html.required = true
+        }
+    }
+
+    tasks.withType(org.gradle.api.plugins.quality.CodeNarc).configureEach {
+        reports {
+            xml.required = true
+            html.required = true
+        }
+    }
+
     compileKotlin {
         kotlinOptions.jvmTarget = "21"
     }
@@ -161,6 +290,29 @@ configure(subprojects) {
         ]
         jvmArgs('--add-opens=java.base/java.lang=ALL-UNNAMED')
         jvmArgs('--add-opens=java.base/java.util=ALL-UNNAMED')
+        finalizedBy(tasks.named('jacocoTestReport'))
+    }
+
+    jacocoTestReport {
+        dependsOn(test)
+        reports {
+            xml.required = true
+            html.required = true
+        }
+    }
+
+    jacocoTestCoverageVerification {
+        dependsOn(test)
+        violationRules {
+            rule {
+                element = 'BUNDLE'
+                limit {
+                    counter = 'LINE'
+                    value = 'COVEREDRATIO'
+                    minimum = perModuleCoverageMinimum
+                }
+            }
+        }
     }
 
     java {
@@ -206,5 +358,246 @@ configure(subprojects) {
                 signingKey,
                 signingPassword
         )
+    }
+}
+
+tasks.register('qualityStatic') {
+    group = 'verification'
+    description = 'Runs static analysis and compile-time checks for CI quality gate'
+    def groovyProjects = subprojects.findAll { project ->
+        file("${project.projectDir}/src/main/groovy").exists() || file("${project.projectDir}/src/test/groovy").exists()
+    }
+    def integrationTestProjects = subprojects.findAll { project ->
+        file("${project.projectDir}/src/integrationTest").exists()
+    }
+    def kotlinProjects = subprojects.findAll { project ->
+        file("${project.projectDir}/src/main/kotlin").exists() ||
+                file("${project.projectDir}/src/test/kotlin").exists() ||
+                file("${project.projectDir}/src/integrationTest/kotlin").exists() ||
+                file("${project.projectDir}/src/testFixtures/kotlin").exists()
+    }
+    dependsOn(subprojects.collectMany { project ->
+        [
+                "${project.path}:checkstyleMain",
+                "${project.path}:checkstyleTest",
+                "${project.path}:pmdMain",
+                "${project.path}:pmdTest",
+                "${project.path}:classes",
+                "${project.path}:testClasses"
+        ]
+    })
+    dependsOn(groovyProjects.collectMany { project ->
+        [
+                "${project.path}:codenarcMain",
+                "${project.path}:codenarcTest"
+        ]
+    })
+    dependsOn(kotlinProjects.collectMany { project ->
+        [
+                "${project.path}:detekt",
+                "${project.path}:ktlintCheck"
+        ]
+    })
+    dependsOn(integrationTestProjects.collectMany { project ->
+        [
+                existingTaskPath(project, 'checkstyleIntegrationTest'),
+                existingTaskPath(project, 'pmdIntegrationTest')
+        ].findAll { it != null }
+    })
+}
+
+tasks.register('qualityCoverage') {
+    group = 'verification'
+    description = 'Runs test suites and coverage report generation for CI quality gate'
+    def coverageProjects = qualityCoverageProjects()
+    def integrationTestProjects = coverageProjects.findAll { project ->
+        file("${project.projectDir}/src/integrationTest").exists()
+    }
+    dependsOn(coverageProjects.collect { "${it.path}:test" })
+    dependsOn(coverageProjects.collect { "${it.path}:jacocoTestReport" })
+    dependsOn(coverageProjects.collect { "${it.path}:jacocoTestCoverageVerification" })
+    dependsOn(integrationTestProjects.collect { existingTaskPath(it, 'integrationTest') }.findAll { it != null })
+    dependsOn(integrationTestProjects.collect { existingTaskPath(it, 'jacocoIntegrationTestReport') }.findAll { it != null })
+    dependsOn(tasks.named('jacocoOverallCoverageReport'))
+    dependsOn(tasks.named('jacocoOverallCoverageVerification'))
+}
+
+tasks.register('jacocoOverallCoverageReport', org.gradle.testing.jacoco.tasks.JacocoReport) {
+    group = 'verification'
+    description = 'Generates an aggregated JaCoCo report for the quality coverage module set'
+
+    def coverageProjects = qualityCoverageProjects()
+    dependsOn(coverageProjects.collect { "${it.path}:test" })
+    executionData.from(files(coverageProjects.collect { project ->
+        project.fileTree(project.layout.buildDirectory) {
+            include 'jacoco/test.exec'
+        }
+    }))
+    sourceDirectories.from(files(coverageProjects.collect { project ->
+        project.sourceSets.main.allSource.srcDirs
+    }))
+    additionalSourceDirs.from(files(coverageProjects.collect { project ->
+        project.sourceSets.main.allSource.srcDirs
+    }))
+    classDirectories.from(files(coverageProjects.collect { project ->
+        project.sourceSets.main.output
+    }))
+
+    reports {
+        xml.required = true
+        html.required = true
+        xml.outputLocation.set(layout.buildDirectory.file('reports/jacoco/overallCoverage/jacocoOverallCoverageReport.xml'))
+        html.outputLocation.set(layout.buildDirectory.dir('reports/jacoco/overallCoverage/html'))
+    }
+}
+
+tasks.register('jacocoOverallCoverageVerification', org.gradle.testing.jacoco.tasks.JacocoCoverageVerification) {
+    group = 'verification'
+    description = 'Verifies aggregated JaCoCo coverage for the quality coverage module set'
+
+    def coverageProjects = qualityCoverageProjects()
+    dependsOn(coverageProjects.collect { "${it.path}:test" })
+    executionData.from(files(coverageProjects.collect { project ->
+        project.fileTree(project.layout.buildDirectory) {
+            include 'jacoco/test.exec'
+        }
+    }))
+    sourceDirectories.from(files(coverageProjects.collect { project ->
+        project.sourceSets.main.allSource.srcDirs
+    }))
+    additionalSourceDirs.from(files(coverageProjects.collect { project ->
+        project.sourceSets.main.allSource.srcDirs
+    }))
+    classDirectories.from(files(coverageProjects.collect { project ->
+        project.sourceSets.main.output
+    }))
+
+    violationRules {
+        rule {
+            element = 'BUNDLE'
+            limit {
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+                minimum = overallCoverageMinimum
+            }
+        }
+    }
+}
+
+def writeQualityReportsIndex = {
+    def indexFile = layout.buildDirectory.file('reports/quality/index.html').get().asFile
+    indexFile.parentFile.mkdirs()
+
+    def sections = [
+            'Static Analysis': [
+                    [pattern: '**/build/reports/checkstyle/*.html', artifactPrefix: 'checkstyle'],
+                    [pattern: '**/build/reports/pmd/*.html', artifactPrefix: 'pmd'],
+                    [pattern: '**/build/reports/codenarc/*.html', artifactPrefix: 'codenarc'],
+                    [pattern: '**/build/reports/detekt/*.html', artifactPrefix: 'detekt'],
+                    [pattern: '**/build/reports/ktlint/*.html', artifactPrefix: 'ktlint'],
+                    [pattern: '**/build/reports/spotbugs/*.html', artifactPrefix: 'spotbugs']
+            ],
+            'Coverage': [
+                    [pattern: '**/build/reports/jacoco/*/html/index.html', artifactPrefix: 'jacoco'],
+                    [pattern: '**/build/reports/kover/**/index.html', artifactPrefix: 'kover']
+            ],
+            'Tests': [
+                    [pattern: '**/build/reports/tests/**/index.html', artifactPrefix: 'tests']
+            ]
+    ]
+
+    def rootPath = projectDir.toPath()
+    def escape = { String value ->
+        value
+                .replace('&', '&amp;')
+                .replace('<', '&lt;')
+                .replace('>', '&gt;')
+                .replace('"', '&quot;')
+    }
+    def artifactHref = { File reportFile, String artifactPrefix ->
+        def relativePath = rootPath.relativize(reportFile.toPath()).toString().replace('\\', '/')
+        "../${artifactPrefix}/${relativePath}"
+    }
+
+    def sectionsHtml = sections.collect { sectionName, entries ->
+        def files = entries.collectMany { entry ->
+            fileTree(projectDir) {
+                include entry.pattern
+            }.files.collect { reportFile ->
+                [file: reportFile, artifactPrefix: entry.artifactPrefix]
+            }
+        }
+                .findAll { it.file.isFile() }
+                .unique { it.file.path }
+                .sort { it.file.path }
+
+        def items = files.collect { report ->
+            def href = artifactHref(report.file, report.artifactPrefix)
+            def label = rootPath.relativize(report.file.toPath()).toString().replace('\\', '/')
+            "<li><a href=\"${escape(href)}\">${escape(label)}</a></li>"
+        }
+
+        if (items.isEmpty()) {
+            items = ['<li>No reports generated for this section</li>']
+        }
+
+        """<section>
+  <h2>${escape(sectionName)}</h2>
+  <ul>
+    ${items.join('\n    ')}
+  </ul>
+</section>"""
+    }.join('\n')
+
+    indexFile.text = """<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>CRS Quality Reports</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 24px; color: #1f2937; }
+    h1 { margin-bottom: 0.25rem; }
+    .meta { color: #6b7280; margin-bottom: 1.25rem; }
+    section { margin-bottom: 1.5rem; }
+    ul { margin-top: 0.5rem; }
+    a { color: #0f62fe; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+<h1>CRS Quality Reports</h1>
+<div class="meta">Generated at ${new Date().format("yyyy-MM-dd HH:mm:ss Z")}</div>
+${sectionsHtml}
+</body>
+</html>
+"""
+}
+
+tasks.register('qualityReportsIndex') {
+    group = 'verification'
+    description = 'Generates a single HTML entry point for all quality reports'
+    outputs.file(layout.buildDirectory.file('reports/quality/index.html'))
+    doLast {
+        writeQualityReportsIndex()
+    }
+}
+
+tasks.named('qualityStatic') {
+    finalizedBy(tasks.named('qualityReportsIndex'))
+}
+
+tasks.named('qualityCoverage') {
+    finalizedBy(tasks.named('qualityReportsIndex'))
+}
+
+def shouldGenerateQualityIndexOnBuildFinish = false
+
+gradle.taskGraph.whenReady { graph ->
+    shouldGenerateQualityIndexOnBuildFinish = graph.hasTask(tasks.named('build').get())
+}
+
+gradle.buildFinished {
+    if (shouldGenerateQualityIndexOnBuildFinish) {
+        writeQualityReportsIndex()
     }
 }
