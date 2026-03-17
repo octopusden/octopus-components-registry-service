@@ -32,6 +32,18 @@ class ComponentRegistryValidationTask {
     private static final def log = LoggerFactory.getLogger(ComponentRegistryValidationTask.class)
     static final String ARCHIVED_SUFFIX = "(archived)"
 
+    /** Escapes a string for use in TeamCity service message attribute value (|, ', ], [, newlines). */
+    private static String escapeTeamCityAttribute(String s) {
+        if (s == null) return ''
+        return s
+                .replace('|', '||')
+                .replace("'", "|'")
+                .replace('[', '|[')
+                .replace(']', '|]')
+                .replace('\n', '|n')
+                .replace('\r', '|r')
+    }
+
     String basePath
     String mainConfigFileName
     String jiraHost
@@ -102,6 +114,10 @@ class ComponentRegistryValidationTask {
 
         } catch (Exception e) {
             log.error("=== Component Registry Validation Failed ===", e)
+            def msg = "=== Component Registry Validation Failed === : ${e.message ?: ''}"
+            def safe = escapeTeamCityAttribute(msg)
+            println "##teamcity[message text='${safe}' status='ERROR']"
+            println "##teamcity[buildProblem description='${safe}']"
             System.exit(1)
         }
     }
