@@ -33,7 +33,6 @@ Component {
         }
     }
     "(,03.51.29.15)" {
-        buildSystem = ESCROW_NOT_SUPPORTED
         escrow {
             generation = EscrowGenerationMode.UNSUPPORTED
         }
@@ -69,7 +68,6 @@ test {
         }
     }
     "(,03.51.29.15)" {
-        buildSystem = ESCROW_NOT_SUPPORTED
         escrow {
             generation = EscrowGenerationMode.UNSUPPORTED
         }
