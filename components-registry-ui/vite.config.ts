@@ -13,6 +13,10 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     exclude: ['e2e/**', 'node_modules/**'],
+    reporters: ['default', 'junit'],
+    outputFile: {
+      junit: 'build/test-results/test/TEST-vitest.xml',
+    },
   },
   resolve: {
     alias: {
