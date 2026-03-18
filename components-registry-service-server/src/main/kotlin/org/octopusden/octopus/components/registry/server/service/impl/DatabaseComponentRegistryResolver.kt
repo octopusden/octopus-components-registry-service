@@ -502,7 +502,8 @@ class DatabaseComponentRegistryResolver(
 
     private fun findComponentByArtifactOrNull(artifact: ArtifactDependency): VersionedComponent? {
         val matches =
-            componentArtifactIdRepository.findAll()
+            componentArtifactIdRepository
+                .findAll()
                 .mapNotNull { artifactIdEntity ->
                     toArtifactMatchOrNull(artifactIdEntity, artifact)
                 }
@@ -512,8 +513,13 @@ class DatabaseComponentRegistryResolver(
         }
 
         val preferredMatches = matches.filter { it.versionSpecific }.ifEmpty { matches }
-        val resolvedMatch = preferredMatches.maxWithOrNull(compareBy<ArtifactMatch>({ artifactSpecificity(it.artifactPattern, artifact.name) }, { it.artifactPattern.length }))
-            ?: return null
+        val resolvedMatch =
+            preferredMatches.maxWithOrNull(
+                compareBy<ArtifactMatch>(
+                    { artifactSpecificity(it.artifactPattern, artifact.name) },
+                    { it.artifactPattern.length },
+                ),
+            ) ?: return null
 
         return VersionedComponent(resolvedMatch.componentName, null, artifact.version, "")
     }

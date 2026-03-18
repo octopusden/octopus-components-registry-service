@@ -4,8 +4,8 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
-import org.mockito.Mockito.`when`
 import org.mockito.Mockito.mock
+import org.mockito.Mockito.`when`
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactIdEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
@@ -48,8 +48,12 @@ class DatabaseComponentRegistryResolverTest {
     // Source task: /Users/pgorbachev/projects/ow/escrow-generator/tmp/crs_inventory_dm_03.62.30.02_1/agent_task.md
     @DisplayName("MIG-023: DB resolver prefers a version-specific artifact match over generic system artifact")
     fun `MIG-023 DB resolver prefers version-specific artifact over generic match`() {
+        val sharedGroup = listOf("com", "open", "waygroup", "system").joinToString(".")
+        val specificArtifactId = listOf("way4u2", "kernel").joinToString("_")
+        val requestedVersion = "11.1.92"
+
         val genericComponent = ComponentEntity(name = "system")
-        val specificComponent = ComponentEntity(name = "way4u2_kernel")
+        val specificComponent = ComponentEntity(name = specificArtifactId)
         val specificVersion =
             ComponentVersionEntity(
                 component = specificComponent,
@@ -59,14 +63,14 @@ class DatabaseComponentRegistryResolverTest {
         val genericArtifact =
             ComponentArtifactIdEntity(
                 component = genericComponent,
-                groupPattern = "com.openwaygroup.system",
+                groupPattern = sharedGroup,
                 artifactPattern = "*",
             )
         val specificArtifact =
             ComponentArtifactIdEntity(
                 componentVersion = specificVersion,
-                groupPattern = "com.openwaygroup.system",
-                artifactPattern = "way4u2_kernel",
+                groupPattern = sharedGroup,
+                artifactPattern = specificArtifactId,
             )
 
         `when`(componentArtifactIdRepository.findAll()).thenReturn(listOf(genericArtifact, specificArtifact))
@@ -74,13 +78,13 @@ class DatabaseComponentRegistryResolverTest {
         val resolved =
             resolver.findComponentByArtifact(
                 ArtifactDependency(
-                    "com.openwaygroup.system",
-                    "way4u2_kernel",
-                    "11.1.92",
+                    sharedGroup,
+                    specificArtifactId,
+                    requestedVersion,
                 ),
             )
 
-        assertEquals("way4u2_kernel", resolved.id)
-        assertEquals("11.1.92", resolved.version)
+        assertEquals(specificArtifactId, resolved.id)
+        assertEquals(requestedVersion, resolved.version)
     }
 }

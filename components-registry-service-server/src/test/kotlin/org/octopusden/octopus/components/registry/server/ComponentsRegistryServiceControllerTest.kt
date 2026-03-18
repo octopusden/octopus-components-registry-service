@@ -435,7 +435,7 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
         expectedComponent.copyright = "companyName1"
         expectedComponent.labels = setOf("Label2")
 
-        Assertions.assertEquals(55, components.components.size)
+        Assertions.assertEquals(56, components.components.size)
         Assertions.assertTrue(expectedComponent in components.components) {
             components.components.toString()
         }
@@ -456,7 +456,7 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
         getAndCheckComponents(
             null,
             BuildSystem.MAVEN,
-            setOf("SUB_COMPONENT_TWO", "TEST_COMPONENT", "TEST-VERSION"),
+            setOf("SUB_COMPONENT_TWO", "TEST_COMPONENT", "TEST_COMPONENT_VERSIONED_ARTIFACT", "TEST-VERSION"),
         )
     }
 
