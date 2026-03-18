@@ -45,6 +45,7 @@ class DatabaseComponentRegistryResolverTest {
     }
 
     @Test
+    // Source task: /Users/pgorbachev/projects/ow/escrow-generator/tmp/crs_inventory_dm_03.62.30.02_1/agent_task.md
     @DisplayName("MIG-023: DB resolver prefers a version-specific artifact match over generic system artifact")
     fun `MIG-023 DB resolver prefers version-specific artifact over generic match`() {
         val genericComponent = ComponentEntity(name = "system")

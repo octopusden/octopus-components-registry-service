@@ -603,6 +603,7 @@ must return the same JSON when the component is routed to Git and when it is rou
 **Priority:** High
 **Test layer:** unit-test, integration-test
 **Status:** ✅ Tested
+**Source task:** `/Users/pgorbachev/projects/ow/escrow-generator/tmp/crs_inventory_dm_03.62.30.02_1/agent_task.md`
 
 **Description:**
 When multiple components share the same Maven group ID, DB-backed `find-by-artifact`

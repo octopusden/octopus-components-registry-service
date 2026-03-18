@@ -39,7 +39,7 @@ import org.testcontainers.containers.PostgreSQLContainer
 import java.nio.file.Paths
 
 /**
- * Integration tests for Git-to-DB migration requirements MIG-001..MIG-022.
+ * Integration tests for Git-to-DB migration requirements MIG-001..MIG-023.
  *
  * Uses Testcontainers PostgreSQL. Migrates all 55 test components from Groovy DSL
  * into the database, then verifies each migration requirement.
@@ -597,6 +597,7 @@ class MigrationIntegrationTest {
     }
 
     @Test
+    // Source task: /Users/pgorbachev/projects/ow/escrow-generator/tmp/crs_inventory_dm_03.62.30.02_1/agent_task.md
     @DisplayName("MIG-023: DB resolver resolves version-specific artifact mappings after migration")
     fun `MIG-023 version-specific artifact mapping parity`() {
         val artifact =
