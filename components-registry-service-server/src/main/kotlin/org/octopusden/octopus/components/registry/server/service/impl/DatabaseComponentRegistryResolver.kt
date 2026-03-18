@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
+import org.octopusden.octopus.components.registry.api.beans.PTCProductToolBean
 import org.octopusden.octopus.components.registry.api.build.tools.BuildTool
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
@@ -166,7 +167,20 @@ class DatabaseComponentRegistryResolver(
         component: String,
         version: String,
         ignoreRequired: Boolean?,
-    ): List<BuildTool> = throw UnsupportedOperationException("getBuildTools is not yet implemented for DB resolver")
+    ): List<BuildTool> {
+        val buildConfiguration = getResolvedComponentDefinition(component, version)?.buildConfiguration ?: return emptyList()
+        val resolvedBuildTools = mutableListOf<BuildTool>()
+
+        if (ignoreRequired != true && buildConfiguration.requiredProject) {
+            resolvedBuildTools +=
+                PTCProductToolBean().apply {
+                    setVersion(buildConfiguration.projectVersion)
+                }
+        }
+
+        buildConfiguration.buildTools?.let(resolvedBuildTools::addAll)
+        return resolvedBuildTools
+    }
 
     override fun getJiraComponentByProjectAndVersion(
         projectKey: String,

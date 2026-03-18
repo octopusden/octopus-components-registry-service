@@ -2,7 +2,10 @@
 
 package org.octopusden.octopus.components.registry.server.mapper
 
+import com.fasterxml.jackson.core.type.TypeReference
+import org.octopusden.octopus.components.registry.api.build.tools.BuildTool
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes
+import org.octopusden.octopus.components.registry.dsl.jackson.JacksonFactory
 import org.octopusden.octopus.components.registry.server.entity.BuildConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentVersionEntity
@@ -25,6 +28,8 @@ import org.octopusden.octopus.releng.dto.JiraComponent
 
 /** Must match EscrowConfigurationLoader.ALL_VERSIONS = "(,0),[0,)" */
 private const val ALL_VERSIONS = "(,0),[0,)"
+private val buildToolsObjectMapper = JacksonFactory.instance.objectMapper
+private val buildToolsType = object : TypeReference<List<BuildTool>>() {}
 
 // ============================================================
 // Entity → Domain Model mappers (DB → existing Groovy/Java DTOs)
@@ -198,6 +203,15 @@ fun BuildConfigurationEntity.toBuildParameters(): BuildParameters? {
                 toolMap["installScript"],
             )
         } ?: emptyList()
+    val buildTools =
+        this.metadata["buildTools"]?.let { rawBuildTools ->
+            runCatching {
+                when (rawBuildTools) {
+                    is String -> buildToolsObjectMapper.readValue(rawBuildTools, buildToolsType)
+                    else -> buildToolsObjectMapper.convertValue(rawBuildTools, buildToolsType)
+                }
+            }.getOrDefault(emptyList())
+        } ?: emptyList()
 
     return BuildParameters.create(
         javaVer,
@@ -208,7 +222,7 @@ fun BuildConfigurationEntity.toBuildParameters(): BuildParameters? {
         systemProperties,
         buildTasks,
         toolsList,
-        emptyList(),
+        buildTools,
     )
 }
 
@@ -548,6 +562,10 @@ private fun EscrowModuleConfig.toBuildConfigurationEntity(
                             )
                         },
                     )
+                }
+                val buildTools = this@toBuildConfigurationEntity.buildConfiguration.buildTools
+                if (buildTools != null && buildTools.isNotEmpty()) {
+                    put("buildTools", buildToolsObjectMapper.writerFor(buildToolsType).writeValueAsString(buildTools.toList()))
                 }
             }
     }

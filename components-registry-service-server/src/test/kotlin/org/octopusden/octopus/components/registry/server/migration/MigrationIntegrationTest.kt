@@ -16,6 +16,7 @@ import org.octopusden.octopus.components.registry.server.ComponentRegistryServic
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentDetailResponse
 import org.octopusden.octopus.components.registry.server.repository.ComponentSourceRepository
 import org.octopusden.octopus.components.registry.server.service.BatchMigrationResult
+import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
 import org.octopusden.octopus.components.registry.server.service.MigrationStatus
 import org.octopusden.octopus.components.registry.server.service.ValidationResult
@@ -34,7 +35,7 @@ import org.testcontainers.containers.PostgreSQLContainer
 import java.nio.file.Paths
 
 /**
- * Integration tests for Git-to-DB migration requirements MIG-001..MIG-020.
+ * Integration tests for Git-to-DB migration requirements MIG-001..MIG-022.
  *
  * Uses Testcontainers PostgreSQL. Migrates all 55 test components from Groovy DSL
  * into the database, then verifies each migration requirement.
@@ -60,6 +61,9 @@ class MigrationIntegrationTest {
 
     @Autowired
     private lateinit var componentSourceRepository: ComponentSourceRepository
+
+    @Autowired
+    private lateinit var sourceRegistry: ComponentSourceRegistry
 
     init {
         val testResourcesPath =
@@ -555,6 +559,30 @@ class MigrationIntegrationTest {
             ranges.any { it.contains("1.0.107") },
             "Expected version range containing '1.0.107', got: $ranges",
         )
+    }
+
+    // ---------------------------------------------------------------------------
+    // MIG-022: Migration preserves build-tools endpoint behavior
+    // ---------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("MIG-022: Build-tools endpoint returns identical JSON for Git and DB after migration")
+    fun `MIG-022 build-tools endpoint parity`() {
+        val component = "TEST_COMPONENT_BUILD_TOOLS"
+        val path = "/rest/api/2/components/$component/versions/1.0/build-tools?ignore-required=true"
+
+        try {
+            sourceRegistry.setComponentSource(component, "git")
+            val gitJson = getJson(path)
+
+            sourceRegistry.setComponentSource(component, "db")
+            val dbJson = getJson(path)
+
+            assertEquals(gitJson, dbJson, "build-tools response must be preserved after migration")
+            assertEquals(2, dbJson.size(), "Expected explicit build tools from DSL to be preserved")
+        } finally {
+            sourceRegistry.setComponentSource(component, "db")
+        }
     }
 
     companion object {

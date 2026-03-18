@@ -30,6 +30,8 @@
 | MIG-018 | Migration preserves jira version format defaults | High | integration-test | ✅ Tested |
 | MIG-019 | Migration preserves distribution defaults | High | integration-test | ✅ Tested |
 | MIG-020 | Migration preserves escrow generation default | Medium | integration-test | ✅ Tested |
+| MIG-021 | Version-range-only component inherits buildSystem from defaults | High | integration-test | ✅ Tested |
+| MIG-022 | Migration preserves build-tools endpoint behavior | High | integration-test | ✅ Tested |
 
 ---
 
@@ -542,3 +544,53 @@ escrow { generation = EscrowGenerationMode.AUTO }
 2. The value is distinguishable from `null` / absent
 
 **Test method:** `MigrationIntegrationTest.MIG-020 escrow generation`
+
+---
+
+### MIG-021: Version-range-only component inherits buildSystem from defaults
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Description:**
+A component that has only version-range blocks and no explicit component-level `buildSystem`
+must still inherit `buildSystem` from `Defaults.groovy`. Component-level build fields such as
+`javaVersion` must remain preserved.
+
+**Preconditions:**
+- `Defaults.groovy` contains `buildSystem = PROVIDED`
+- Component defines `build { javaVersion = "1.8" }`
+- Component has only version-range blocks and no `$ALL_VERSIONS` wrapper
+
+**Acceptance criteria:**
+1. After migration the component-level build configuration has `buildSystem = "PROVIDED"`
+2. `javaVersion = "1.8"` is preserved
+3. Version-range entries are still present in the migrated component
+
+**Test method:** `MigrationIntegrationTest.MIG-021 version-range-only component inherits buildSystem from defaults`
+
+---
+
+### MIG-022: Migration preserves build-tools endpoint behavior
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Description:**
+For a migrated component with explicit `build.tools` configuration, endpoint
+`GET /rest/api/2/components/{component}/versions/{version}/build-tools?ignore-required=true`
+must return the same JSON when the component is routed to Git and when it is routed to DB.
+
+**Preconditions:**
+- Component defines explicit `build.tools` in DSL
+- Component is migrated to DB
+- Component source can be switched between `git` and `db`
+
+**Acceptance criteria:**
+1. With source=`git`, the endpoint returns HTTP 200 and a non-empty build-tools array
+2. With source=`db`, the endpoint returns HTTP 200 for the same component/version
+3. Git and DB JSON responses are equal
+
+**Test method:** `MigrationIntegrationTest.MIG-022 build-tools endpoint parity`
