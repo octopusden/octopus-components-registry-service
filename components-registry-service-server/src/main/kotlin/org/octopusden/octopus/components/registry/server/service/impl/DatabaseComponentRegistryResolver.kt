@@ -501,19 +501,71 @@ class DatabaseComponentRegistryResolver(
     }
 
     private fun findComponentByArtifactOrNull(artifact: ArtifactDependency): VersionedComponent? {
-        val allArtifactIds = componentArtifactIdRepository.findAll()
-        for (artifactIdEntity in allArtifactIds) {
-            val groupPattern = artifactIdEntity.groupPattern
-            val artifactPattern = artifactIdEntity.artifactPattern
-            if (MavenArtifactMatcher.groupIdMatches(artifact.group, groupPattern) &&
-                MavenArtifactMatcher.artifactIdMatches(artifact.name, artifactPattern)
-            ) {
-                val componentName = artifactIdEntity.component?.name ?: continue
-                return VersionedComponent(componentName, null, artifact.version, "")
-            }
+        val matches =
+            componentArtifactIdRepository.findAll()
+                .mapNotNull { artifactIdEntity ->
+                    toArtifactMatchOrNull(artifactIdEntity, artifact)
+                }
+
+        if (matches.isEmpty()) {
+            return null
         }
-        return null
+
+        val preferredMatches = matches.filter { it.versionSpecific }.ifEmpty { matches }
+        val resolvedMatch = preferredMatches.maxWithOrNull(compareBy<ArtifactMatch>({ artifactSpecificity(it.artifactPattern, artifact.name) }, { it.artifactPattern.length }))
+            ?: return null
+
+        return VersionedComponent(resolvedMatch.componentName, null, artifact.version, "")
     }
+
+    private fun toArtifactMatchOrNull(
+        artifactIdEntity: org.octopusden.octopus.components.registry.server.entity.ComponentArtifactIdEntity,
+        artifact: ArtifactDependency,
+    ): ArtifactMatch? {
+        val groupPattern = artifactIdEntity.groupPattern
+        val artifactPattern = artifactIdEntity.artifactPattern
+        if (!MavenArtifactMatcher.groupIdMatches(artifact.group, groupPattern) ||
+            !MavenArtifactMatcher.artifactIdMatches(artifact.name, artifactPattern)
+        ) {
+            return null
+        }
+
+        val componentVersion = artifactIdEntity.componentVersion
+        return if (componentVersion != null) {
+            val numericVersion = numericVersionFactory.create(artifact.version)
+            val range =
+                try {
+                    versionRangeFactory.create(componentVersion.versionRange)
+                } catch (_: Exception) {
+                    return null
+                }
+            if (!range.containsVersion(numericVersion)) {
+                return null
+            }
+            val componentName = componentVersion.component?.name ?: return null
+            ArtifactMatch(componentName, artifactPattern, true)
+        } else {
+            val componentName = artifactIdEntity.component?.name ?: return null
+            ArtifactMatch(componentName, artifactPattern, false)
+        }
+    }
+
+    private fun artifactSpecificity(
+        artifactPattern: String,
+        artifactName: String,
+    ): Int =
+        when {
+            artifactPattern == artifactName -> 3
+            artifactPattern == "*" -> 0
+            artifactPattern.contains("|") || artifactPattern.contains(",") -> 1
+            else -> 2
+        }
+
+    private data class ArtifactMatch(
+        val componentName: String,
+        val artifactPattern: String,
+        val versionSpecific: Boolean,
+    )
 
     private fun buildImageToComponentMap(): Map<String, String> {
         val result = mutableMapOf<String, String>()

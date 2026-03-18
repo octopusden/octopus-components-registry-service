@@ -20,7 +20,11 @@ import org.octopusden.octopus.components.registry.server.service.ComponentManage
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
 import org.octopusden.octopus.components.registry.server.service.MigrationStatus
 import org.octopusden.octopus.components.registry.server.service.ValidationResult
+import org.octopusden.octopus.components.registry.server.service.impl.ComponentRegistryResolverImpl
+import org.octopusden.octopus.components.registry.server.service.impl.DatabaseComponentRegistryResolver
+import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.http.MediaType.APPLICATION_JSON
@@ -64,6 +68,13 @@ class MigrationIntegrationTest {
 
     @Autowired
     private lateinit var sourceRegistry: ComponentSourceRegistry
+
+    @Autowired
+    private lateinit var gitResolver: ComponentRegistryResolverImpl
+
+    @Autowired
+    @Qualifier("databaseComponentRegistryResolver")
+    private lateinit var dbResolver: DatabaseComponentRegistryResolver
 
     init {
         val testResourcesPath =
@@ -583,6 +594,26 @@ class MigrationIntegrationTest {
         } finally {
             sourceRegistry.setComponentSource(component, "db")
         }
+    }
+
+    @Test
+    @DisplayName("ART-001: DB resolver resolves version-specific artifact mappings after migration")
+    fun `ART-001 version-specific artifact mapping parity`() {
+        val artifact =
+            ArtifactDependency(
+                "org.octopusden.octopus.test.versioned-artifact",
+                "versioned-artifact-new",
+                "2.1",
+            )
+
+        val gitResult = gitResolver.findComponentByArtifact(artifact)
+        assertEquals(
+            "TEST_COMPONENT_VERSIONED_ARTIFACT",
+            gitResult.id,
+            "Git resolver must resolve the version-specific artifact to the component",
+        )
+        val dbResult = dbResolver.findComponentByArtifact(artifact)
+        assertEquals(gitResult, dbResult, "DB resolver must preserve version-specific artifact matching")
     }
 
     companion object {
