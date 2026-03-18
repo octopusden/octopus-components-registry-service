@@ -21,21 +21,21 @@ import java.nio.file.Paths
 @ExtendWith(SpringExtension::class)
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    classes = [ComponentRegistryServiceApplication::class]
+    classes = [ComponentRegistryServiceApplication::class],
 )
 @ActiveProfiles("common", "test")
 class MetricsTest {
-
     @Autowired
     private lateinit var mvc: MockMvc
 
     @Test
     fun shouldReturnMetrics() {
-        mvc.perform(
-            MockMvcRequestBuilders.get(URI.create("/actuator/metrics/components.buildsystem.count"))
-                .accept(MediaType.APPLICATION_JSON)
-        )
-            .andExpect(MockMvcResultMatchers.status().isOk)
+        mvc
+            .perform(
+                MockMvcRequestBuilders
+                    .get(URI.create("/actuator/metrics/components.buildsystem.count"))
+                    .accept(MediaType.APPLICATION_JSON),
+            ).andExpect(MockMvcResultMatchers.status().isOk)
             .andExpect(MockMvcResultMatchers.jsonPath("$.name").value("components.buildsystem.count"))
             .andExpect(MockMvcResultMatchers.jsonPath("$.measurements[0].statistic").value("VALUE"))
             .andExpect(MockMvcResultMatchers.jsonPath("$.measurements[0].value").value(53.0))
@@ -53,16 +53,15 @@ class MetricsTest {
                         "ESCROW_PROVIDED_MANUALLY",
                         "ECLIPSE_MAVEN",
                         "GRADLE",
-                        "IN_CONTAINER"
-                    )
-                )
+                        "IN_CONTAINER",
+                    ),
+                ),
             )
     }
 
     companion object {
         @JvmStatic
-        fun getTestResourcesPath(): Path =
-            Paths.get(MetricsTest::class.java.getResource("/expected-data")!!.toURI()).parent
+        fun getTestResourcesPath(): Path = Paths.get(MetricsTest::class.java.getResource("/expected-data")!!.toURI()).parent
 
         @BeforeAll
         @JvmStatic

@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.listener
 
+import jakarta.annotation.PreDestroy
 import org.slf4j.LoggerFactory
 import org.springframework.boot.context.event.ApplicationStartingEvent
 import org.springframework.context.ApplicationListener
@@ -11,7 +12,6 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.*
-import jakarta.annotation.PreDestroy
 import kotlin.collections.ArrayList
 import kotlin.streams.toList
 
@@ -27,7 +27,7 @@ import kotlin.streams.toList
  *
  */
 @Component
-class StartupApplicationListener: ApplicationListener<ApplicationStartingEvent> {
+class StartupApplicationListener : ApplicationListener<ApplicationStartingEvent> {
     companion object {
         private val LOG = LoggerFactory.getLogger(StartupApplicationListener::class.java)!!
         private val LIBRARY_VERSION_SPLIT_REGEXP = Regex("-[0-9]")
@@ -37,7 +37,7 @@ class StartupApplicationListener: ApplicationListener<ApplicationStartingEvent> 
     override fun onApplicationEvent(event: ApplicationStartingEvent) {
         val dslKotlinModule = Thread.currentThread().contextClassLoader.getResource("/components-registry-dsl.txt")
         LOG.debug("StartupApplicationListener running. dslKotlinModule={}", dslKotlinModule)
-        
+
         if (dslKotlinModule != null && dslKotlinModule.toString().contains("!BOOT-INF/")) {
             LOG.debug("Spring boot jar running mode detected")
             temporaryLibraryPath = Files.createTempDirectory("components-registry-dsl-" + UUID.randomUUID())
@@ -47,7 +47,7 @@ class StartupApplicationListener: ApplicationListener<ApplicationStartingEvent> 
                 Files.walk(fs.getPath("/BOOT-INF/lib")).use { filePath ->
                     libraryFiles.addAll(filePath.filter { it.toString().endsWith(".jar") }.toList())
                 }
-                
+
                 // Fix for kotlin.java.stdlib.jar property issue in fat jar
                 val stdlibJar = libraryFiles.find { it.fileName.toString().matches(Regex("kotlin-stdlib-\\d+.*\\.jar")) }
                 if (stdlibJar != null) {
@@ -61,10 +61,11 @@ class StartupApplicationListener: ApplicationListener<ApplicationStartingEvent> 
                     LOG.warn("Unable to find kotlin-stdlib jar in BOOT-INF/lib")
                 }
 
-                dslKotlinModule.openStream().use {inputStream ->
+                dslKotlinModule.openStream().use { inputStream ->
                     inputStream.reader().forEachLine { fileName ->
                         val libraryName = fileName.split(LIBRARY_VERSION_SPLIT_REGEXP, 2)[0]
-                        val srcPath = libraryFiles.findLast { it.fileName.toString().split(LIBRARY_VERSION_SPLIT_REGEXP, 2)[0] == libraryName }
+                        val srcPath =
+                            libraryFiles.findLast { it.fileName.toString().split(LIBRARY_VERSION_SPLIT_REGEXP, 2)[0] == libraryName }
                                 ?: throw IllegalStateException("Unable to match provided library $fileName")
                         val dstPath = temporaryLibraryPath!!.resolve(srcPath.fileName.toString())
                         if (!Files.exists(dstPath)) {

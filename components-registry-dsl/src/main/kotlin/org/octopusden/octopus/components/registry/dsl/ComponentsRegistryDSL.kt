@@ -30,7 +30,6 @@ import org.octopusden.octopus.components.registry.api.beans.OracleDatabaseToolBe
 import org.octopusden.octopus.components.registry.api.beans.SubComponentBean
 import org.octopusden.octopus.components.registry.api.beans.VersionedComponentConfigurationBean
 import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
-import java.util.Optional
 
 private val logger = Logger.getLogger("org.octopusden.octopus.components.registry.dsl.ComponentsRegistryDSL")
 
@@ -112,19 +111,23 @@ open class VersionedComponentDSL(private val versionedComponent: VersionedCompon
     }
 
     fun vcsSettings(vcsSettings: VcsSettingsDSL.() -> Unit) {
+        VcsSettingsDSL().apply(vcsSettings)
     }
 
     fun git(vcsSettings: GitSettingsDSL.() -> Unit) {
+        GitSettingsDSL().apply(vcsSettings)
     }
 
-    fun mercurial(vcsSettings: GitSettingsDSL.() -> Unit) {
-
+    fun mercurial(vcsSettings: MercurialSettingsDSL.() -> Unit) {
+        MercurialSettingsDSL().apply(vcsSettings)
     }
 
     fun jira(jira: JiraDSL.() -> Unit) {
+        JiraDSL().apply(jira)
     }
 
     fun distribution(distribution: Distribution.() -> Unit) {
+        Distribution(explicit = false, external = false).apply(distribution)
     }
 }
 
@@ -381,6 +384,7 @@ class JiraDSL {
     var buildVersionFormat: String? = null
     var technical = false
     fun component(jiraComponent: JiraComponent.()-> Unit) {
+        JiraComponent(versionPrefix = "", versionFormat = "").apply(jiraComponent)
     }
 }
 
@@ -389,6 +393,7 @@ class DistributionDSL {
     var majorVersionFormat: String? = null
     var releaseVersionFormat: String? = null
     fun component(jiraComponent: JiraComponent.()-> Unit) {
+        JiraComponent(versionPrefix = "", versionFormat = "").apply(jiraComponent)
     }
 }
 

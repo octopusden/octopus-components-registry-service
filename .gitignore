@@ -9,6 +9,9 @@ out/
 !*/src/**
 **/bin/**
 
+# Local environment overrides (developer-specific, never commit)
+**/application-local.yml
+
 # Test/debug files
 BOOT-INF/
 *.class

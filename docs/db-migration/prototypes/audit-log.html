@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audit Log - Components Registry</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="theme.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--fg); transition: background .2s, color .2s; }
+        header { border-bottom: 1px solid var(--border); }
+        .nav-active { background: var(--accent); color: var(--accent-fg); }
+        .nav-inactive { color: var(--muted-fg); }
+        .nav-inactive:hover { color: var(--fg); background: var(--accent); opacity: .6; }
+        .text-muted { color: var(--muted-fg); }
+        .text-link { color: var(--link); }
+        .badge { display: inline-flex; align-items: center; border-radius: 9999px; padding: 2px 10px; font-size: 12px; font-weight: 500; }
+        .badge-outline { border: 1px solid var(--border); color: var(--muted-fg); }
+        .badge-green { background: var(--badge-green-bg); color: var(--badge-green-fg); }
+        .badge-yellow { background: var(--badge-yellow-bg); color: var(--badge-yellow-fg); }
+        .badge-blue { background: var(--badge-blue-bg); color: var(--badge-blue-fg); }
+        .badge-red { background: var(--badge-red-bg); color: var(--badge-red-fg); }
+        .diff-add { color: var(--diff-add-fg); background: var(--diff-add-bg); }
+        .diff-remove { color: var(--diff-rm-fg); background: var(--diff-rm-bg); }
+        .section-card { border: 1px solid var(--border); border-radius: 8px; }
+        .field-input { width: 100%; height: 36px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--input); background: transparent; font-size: 14px; color: var(--fg); }
+        .field-input:focus { outline: none; box-shadow: 0 0 0 1px var(--ring); }
+        .btn-primary { background: var(--primary); color: var(--primary-fg); }
+        .page-btn { height: 32px; width: 32px; border-radius: 6px; border: 1px solid var(--input); color: var(--muted-fg); display: flex; align-items: center; justify-content: center; }
+        .page-btn:hover { background: var(--accent); }
+        .page-btn-active { background: var(--primary); color: var(--primary-fg); border-color: var(--primary); }
+        .theme-btn { width: 32px; height: 32px; border-radius: 6px; border: 1px solid var(--input); display: flex; align-items: center; justify-content: center; color: var(--muted-fg); cursor: pointer; background: transparent; }
+        .theme-btn:hover { background: var(--accent); color: var(--fg); }
+    </style>
+</head>
+<body class="min-h-screen">
+    <!-- Header -->
+    <header>
+        <div class="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
+            <div class="flex items-center gap-6">
+                <h1 class="text-base font-semibold tracking-tight">Components Registry</h1>
+                <nav class="flex items-center gap-1 text-sm">
+                    <a href="index.html" class="px-3 py-1.5 rounded-md nav-inactive transition-colors">Components</a>
+                    <a href="audit-log.html" class="px-3 py-1.5 rounded-md nav-active font-medium">Audit Log</a>
+                    <a href="admin-settings.html" class="px-3 py-1.5 rounded-md nav-inactive transition-colors">Settings</a>
+                </nav>
+            </div>
+            <div class="flex items-center gap-3">
+                <button class="theme-btn" onclick="toggleTheme()" title="Toggle theme">
+                    <svg class="theme-icon-sun w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                    <svg class="theme-icon-moon w-4 h-4" style="display:none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+                </button>
+                <div style="width:1px;height:16px;background:var(--border)"></div>
+                <div class="flex items-center gap-2">
+                    <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium" style="background:var(--accent);color:var(--accent-fg)">PG</div>
+                    <span class="text-sm text-muted">p.gorbachev</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-6 py-6">
+        <!-- Page Header -->
+        <div class="mb-6">
+            <h2 class="text-2xl font-semibold tracking-tight">Audit Log</h2>
+            <p class="text-sm text-muted mt-1">Track all configuration changes across components.</p>
+        </div>
+
+        <!-- Filters -->
+        <div class="flex items-center gap-3 mb-4">
+            <div class="relative flex-1 max-w-xs">
+                <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                <input type="text" placeholder="Filter by user..." class="field-input pl-9">
+            </div>
+            <select class="field-input" style="width: auto;">
+                <option value="">All Actions</option>
+                <option>CREATE</option>
+                <option>UPDATE</option>
+                <option>DELETE</option>
+            </select>
+            <select class="field-input" style="width: auto;">
+                <option value="">All Entity Types</option>
+                <option>component</option>
+                <option>version</option>
+                <option>build_config</option>
+                <option>vcs_settings</option>
+            </select>
+            <input type="date" class="field-input" style="width: auto;" value="2026-03-01">
+            <span class="text-sm text-muted">to</span>
+            <input type="date" class="field-input" style="width: auto;" value="2026-03-08">
+        </div>
+
+        <!-- Audit Entries -->
+        <div class="space-y-3">
+
+            <!-- Entry 1: UPDATE with diff -->
+            <div class="section-card overflow-hidden">
+                <div class="px-5 py-3 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <span class="badge badge-yellow">UPDATE</span>
+                        <a href="component-detail.html" class="text-sm font-medium text-link hover:underline">ee-component</a>
+                        <span class="text-xs text-muted">component</span>
+                    </div>
+                    <div class="flex items-center gap-4 text-sm text-muted">
+                        <span>p.gorbachev</span>
+                        <span>2026-03-08 14:23:11</span>
+                        <button class="text-xs text-muted hover:underline" onclick="this.closest('.section-card').querySelector('.diff-panel').classList.toggle('hidden')">
+                            Show diff
+                        </button>
+                    </div>
+                </div>
+                <div class="diff-panel px-5 py-3" style="border-top:1px solid var(--border);background:var(--muted)">
+                    <div class="font-mono text-xs space-y-1">
+                        <div class="text-muted mb-2">Changed fields:</div>
+                        <div class="flex gap-2">
+                            <span class="text-muted w-40 shrink-0 text-right">build.javaVersion</span>
+                            <span class="diff-remove px-2 py-0.5 rounded">"17"</span>
+                            <svg class="w-4 h-4 text-muted shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                            <span class="diff-add px-2 py-0.5 rounded">"21"</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <span class="text-muted w-40 shrink-0 text-right">displayName</span>
+                            <span class="diff-remove px-2 py-0.5 rounded">"EE Component"</span>
+                            <svg class="w-4 h-4 text-muted shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                            <span class="diff-add px-2 py-0.5 rounded">"EE Component v2"</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Entry 2: CREATE -->
+            <div class="section-card overflow-hidden">
+                <div class="px-5 py-3 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <span class="badge badge-green">CREATE</span>
+                        <span class="text-sm font-medium text-link">new-platform-service</span>
+                        <span class="text-xs text-muted">component</span>
+                    </div>
+                    <div class="flex items-center gap-4 text-sm text-muted">
+                        <span>a.petrov</span>
+                        <span>2026-03-08 11:05:33</span>
+                        <button class="text-xs text-muted hover:underline" onclick="this.closest('.section-card').querySelector('.diff-panel').classList.toggle('hidden')">
+                            Show diff
+                        </button>
+                    </div>
+                </div>
+                <div class="diff-panel hidden px-5 py-3" style="border-top:1px solid var(--border);background:var(--muted)">
+                    <div class="font-mono text-xs space-y-1">
+                        <div class="text-muted mb-2">Created with:</div>
+                        <div class="diff-add px-3 py-2 rounded text-xs leading-relaxed">
+                            <pre>{
+  "name": "new-platform-service",
+  "displayName": "New Platform Service",
+  "system": "PLATFORM",
+  "productType": "PT_K",
+  "componentOwner": "a.petrov",
+  "build": { "buildSystem": "GRADLE", "javaVersion": "21" },
+  "vcs": { "url": "ssh://git@git.domain.corp/platform/new-platform-service.git" }
+}</pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Entry 3: UPDATE version -->
+            <div class="section-card overflow-hidden">
+                <div class="px-5 py-3 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <span class="badge badge-yellow">UPDATE</span>
+                        <span class="text-sm font-medium text-link">octopus-dms-service</span>
+                        <span class="text-xs text-muted">version [2.0, 3.0)</span>
+                    </div>
+                    <div class="flex items-center gap-4 text-sm text-muted">
+                        <span>m.ivanova</span>
+                        <span>2026-03-07 16:42:18</span>
+                        <button class="text-xs text-muted hover:underline" onclick="this.closest('.section-card').querySelector('.diff-panel').classList.toggle('hidden')">
+                            Show diff
+                        </button>
+                    </div>
+                </div>
+                <div class="diff-panel hidden px-5 py-3" style="border-top:1px solid var(--border);background:var(--muted)">
+                    <div class="font-mono text-xs space-y-1">
+                        <div class="text-muted mb-2">Changed fields:</div>
+                        <div class="flex gap-2">
+                            <span class="text-muted w-40 shrink-0 text-right">escrow.buildTask</span>
+                            <span class="diff-remove px-2 py-0.5 rounded">"clean build"</span>
+                            <svg class="w-4 h-4 text-muted shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                            <span class="diff-add px-2 py-0.5 rounded">"clean build publishToMavenLocal"</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Entry 4: DELETE -->
+            <div class="section-card overflow-hidden">
+                <div class="px-5 py-3 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <span class="badge badge-red">DELETE</span>
+                        <span class="text-sm font-medium text-muted">legacy-bs2-component</span>
+                        <span class="text-xs text-muted">component (archived)</span>
+                    </div>
+                    <div class="flex items-center gap-4 text-sm text-muted">
+                        <span>j.smith</span>
+                        <span>2026-03-07 10:15:44</span>
+                        <button class="text-xs text-muted hover:underline" onclick="this.closest('.section-card').querySelector('.diff-panel').classList.toggle('hidden')">
+                            Show diff
+                        </button>
+                    </div>
+                </div>
+                <div class="diff-panel hidden px-5 py-3" style="border-top:1px solid var(--border);background:var(--muted)">
+                    <div class="font-mono text-xs space-y-1">
+                        <div class="text-muted mb-2">Changed fields:</div>
+                        <div class="flex gap-2">
+                            <span class="text-muted w-40 shrink-0 text-right">archived</span>
+                            <span class="diff-remove px-2 py-0.5 rounded">false</span>
+                            <svg class="w-4 h-4 text-muted shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                            <span class="diff-add px-2 py-0.5 rounded">true</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Entry 5: MIGRATE -->
+            <div class="section-card overflow-hidden">
+                <div class="px-5 py-3 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <span class="badge badge-blue">MIGRATE</span>
+                        <span class="text-sm font-medium text-link">octopus-jira-utils</span>
+                        <span class="text-xs text-muted">component_source</span>
+                    </div>
+                    <div class="flex items-center gap-4 text-sm text-muted">
+                        <span>system (import)</span>
+                        <span>2026-03-06 09:30:00</span>
+                        <button class="text-xs text-muted hover:underline" onclick="this.closest('.section-card').querySelector('.diff-panel').classList.toggle('hidden')">
+                            Show diff
+                        </button>
+                    </div>
+                </div>
+                <div class="diff-panel hidden px-5 py-3" style="border-top:1px solid var(--border);background:var(--muted)">
+                    <div class="font-mono text-xs space-y-1">
+                        <div class="text-muted mb-2">Migration:</div>
+                        <div class="flex gap-2">
+                            <span class="text-muted w-40 shrink-0 text-right">source</span>
+                            <span class="diff-remove px-2 py-0.5 rounded">"git"</span>
+                            <svg class="w-4 h-4 text-muted shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                            <span class="diff-add px-2 py-0.5 rounded">"db"</span>
+                        </div>
+                        <div class="mt-2 text-muted">Validation: PASSED (deep equals with Git resolver)</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Entry 6: UPDATE -->
+            <div class="section-card overflow-hidden">
+                <div class="px-5 py-3 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <span class="badge badge-yellow">UPDATE</span>
+                        <span class="text-sm font-medium text-link">build-integration-gradle-plugin</span>
+                        <span class="text-xs text-muted">distribution</span>
+                    </div>
+                    <div class="flex items-center gap-4 text-sm text-muted">
+                        <span>d.kuznetsov</span>
+                        <span>2026-03-05 18:20:05</span>
+                        <button class="text-xs text-muted hover:underline" onclick="this.closest('.section-card').querySelector('.diff-panel').classList.toggle('hidden')">
+                            Show diff
+                        </button>
+                    </div>
+                </div>
+                <div class="diff-panel hidden px-5 py-3" style="border-top:1px solid var(--border);background:var(--muted)">
+                    <div class="font-mono text-xs space-y-1">
+                        <div class="text-muted mb-2">Changed fields:</div>
+                        <div class="flex gap-2">
+                            <span class="text-muted w-40 shrink-0 text-right">docker</span>
+                            <span class="diff-remove px-2 py-0.5 rounded">null</span>
+                            <svg class="w-4 h-4 text-muted shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                            <span class="diff-add px-2 py-0.5 rounded">"octopus/build-integration-plugin"</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Pagination -->
+        <div class="flex items-center justify-between mt-6">
+            <p class="text-sm text-muted">Showing 6 of 142 entries</p>
+            <div class="flex items-center gap-1">
+                <button disabled class="page-btn opacity-50">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                </button>
+                <button class="page-btn page-btn-active text-sm font-medium">1</button>
+                <button class="page-btn text-sm">2</button>
+                <button class="page-btn text-sm">3</button>
+                <span class="text-muted px-1">...</span>
+                <button class="page-btn">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                </button>
+            </div>
+        </div>
+    </main>
+</body>
+</html>

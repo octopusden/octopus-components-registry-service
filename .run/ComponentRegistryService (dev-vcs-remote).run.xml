@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="ComponentRegistryService (dev-vcs-remote)" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
-    <option name="ACTIVE_PROFILES" value="dev,dev-vcs-remote" />
+    <option name="ACTIVE_PROFILES" value="dev,dev-vcs-remote,local" />
     <additionalParameters>
       <param>
         <option name="enabled" value="true" />

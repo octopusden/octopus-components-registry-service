@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
+import jakarta.annotation.PostConstruct
 import org.octopusden.octopus.components.registry.core.dto.ServiceStatusDTO
 import org.octopusden.octopus.components.registry.server.model.ServiceStatus
 import org.octopusden.octopus.components.registry.server.service.ComponentRegistryResolver
@@ -8,36 +9,35 @@ import org.octopusden.octopus.components.registry.server.service.VcsService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.util.Date
-import jakarta.annotation.PostConstruct
 import kotlin.system.measureTimeMillis
 
 @Service
 class ComponentsRegistryServiceImpl(
     private val vcsService: VcsService,
     private val componentRegistryResolver: ComponentRegistryResolver,
-    private val serviceStatus: ServiceStatus
+    private val serviceStatus: ServiceStatus,
 ) : ComponentsRegistryService {
-
     override fun updateConfigCache(): Long {
         log.info("Start update of Component Registry")
-        val executionTime = measureTimeMillis {
-            serviceStatus.versionControlRevision = vcsService.cloneComponentsRegistry()
-            componentRegistryResolver.updateCache()
-            serviceStatus.cacheUpdatedAt = Date()
-        }
+        val executionTime =
+            measureTimeMillis {
+                serviceStatus.versionControlRevision = vcsService.cloneComponentsRegistry()
+                componentRegistryResolver.updateCache()
+                serviceStatus.cacheUpdatedAt = Date()
+            }
         log.info("Finished update of Component Registry, execution time: ${executionTime}ms")
         return executionTime
     }
 
-    override fun getComponentsRegistryStatus(): ServiceStatusDTO {
-        return ServiceStatusDTO(
+    override fun getComponentsRegistryStatus(): ServiceStatusDTO =
+        ServiceStatusDTO(
             serviceStatus.cacheUpdatedAt,
             serviceStatus.serviceMode,
-            serviceStatus.versionControlRevision
+            serviceStatus.versionControlRevision,
         )
-    }
 
     @PostConstruct
+    @Suppress("UnusedPrivateMember")
     private fun cloneVcsData() {
         updateConfigCache()
     }
