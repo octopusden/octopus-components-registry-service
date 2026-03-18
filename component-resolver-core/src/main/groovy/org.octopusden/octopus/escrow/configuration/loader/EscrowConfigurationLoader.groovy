@@ -191,6 +191,13 @@ class EscrowConfigurationLoader {
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
+    DefaultConfigParameters loadCommonDefaults(Map<String, String> params) {
+        ConfigObject configObject = configLoader.loadModuleConfigWithoutValidationForUnknownAttributes(params)
+        List<Tool> toolsConfiguration = getToolsConfiguration(configObject)
+        return getCommonDefaultConfiguration(configObject, toolsConfiguration)
+    }
+
+    @TypeChecked(TypeCheckingMode.SKIP)
     private EscrowConfiguration parseAndValidateConfiguration(ConfigObject rootObject, boolean ignoreUnknownAttributes) {
         List<Tool> toolsConfiguration = getToolsConfiguration(rootObject)
         DefaultConfigParameters commonDefaultConfiguration = getCommonDefaultConfiguration(rootObject, toolsConfiguration)

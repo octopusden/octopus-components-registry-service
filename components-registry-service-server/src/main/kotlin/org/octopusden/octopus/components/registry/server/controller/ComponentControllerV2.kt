@@ -39,26 +39,28 @@ import org.springframework.web.bind.annotation.RestController
 class ComponentControllerV2(
     private val detailedComponentVersionMapper: Mapper<JiraComponentVersion, DetailedComponentVersion>,
 ) : BaseComponentController<ComponentV2>() {
-
     @GetMapping(
         "{component}/versions/{version}",
-        produces = [MediaType.APPLICATION_JSON_VALUE]
+        produces = [MediaType.APPLICATION_JSON_VALUE],
     )
     fun getDetailedComponent(
         @PathVariable("component") component: String,
-        @PathVariable("version") version: String
+        @PathVariable("version") version: String,
     ): DetailedComponent {
         LOG.info("Get Component: '$component:$version'")
         return createDetailedComponent(
             component,
             version,
             componentRegistryResolver.getResolvedComponentDefinition(component, version)
-                ?: throw NotFoundException("Component id $component:$version is not found")
+                ?: throw NotFoundException("Component id $component:$version is not found"),
         )
     }
 
-    private fun resolveVCSSettings(component: String, version: String): VCSSettingsDTO {
-        return with(componentRegistryResolver.getVCSSettings(component, version)) {
+    private fun resolveVCSSettings(
+        component: String,
+        version: String,
+    ): VCSSettingsDTO =
+        with(componentRegistryResolver.getVCSSettings(component, version)) {
             VCSSettingsDTO(
                 versionControlSystemRoots
                     .map {
@@ -74,28 +76,30 @@ class ComponentControllerV2(
                 externalRegistry,
             )
         }
-    }
 
-    private fun resolveJiraComponentVersion(component: String, version: String) =
-        componentRegistryResolver.getJiraComponentVersion(component, version).toDTO()
+    private fun resolveJiraComponentVersion(
+        component: String,
+        version: String,
+    ) = componentRegistryResolver.getJiraComponentVersion(component, version).toDTO()
 
     private fun createDetailedComponent(
         componentName: String,
         version: String,
-        escrowModuleConfig: EscrowModuleConfig
+        escrowModuleConfig: EscrowModuleConfig,
     ): DetailedComponent {
         val jiraComponentVersion = componentRegistryResolver.getJiraComponentVersion(componentName, version)
-        val detailedComponent = DetailedComponent(
-            id = componentName,
-            name = escrowModuleConfig.componentDisplayName,
-            componentOwner = escrowModuleConfig.componentOwner,
-            buildSystem = getBuildSystem(escrowModuleConfig.buildSystem),
-            vcsSettings = resolveVCSSettings(componentName, version),
-            jiraComponentVersion = jiraComponentVersion.toDTO(),
-            detailedComponentVersion = detailedComponentVersionMapper.convert(jiraComponentVersion),
-            deprecated = escrowModuleConfig.isDeprecated,
-            buildFilePath = escrowModuleConfig.buildFilePath,
-        )
+        val detailedComponent =
+            DetailedComponent(
+                id = componentName,
+                name = escrowModuleConfig.componentDisplayName,
+                componentOwner = escrowModuleConfig.componentOwner,
+                buildSystem = getBuildSystem(escrowModuleConfig.buildSystem),
+                vcsSettings = resolveVCSSettings(componentName, version),
+                jiraComponentVersion = jiraComponentVersion.toDTO(),
+                detailedComponentVersion = detailedComponentVersionMapper.convert(jiraComponentVersion),
+                deprecated = escrowModuleConfig.isDeprecated,
+                buildFilePath = escrowModuleConfig.buildFilePath,
+            )
         return with(detailedComponent) {
             releaseManager = escrowModuleConfig.releaseManager
             securityChampion = escrowModuleConfig.securityChampion
@@ -115,8 +119,8 @@ class ComponentControllerV2(
         }
     }
 
-    private fun getBuildSystem(escrowBuildSystem: org.octopusden.octopus.escrow.BuildSystem): BuildSystem {
-        return when (escrowBuildSystem) {
+    private fun getBuildSystem(escrowBuildSystem: org.octopusden.octopus.escrow.BuildSystem): BuildSystem =
+        when (escrowBuildSystem) {
             org.octopusden.octopus.escrow.BuildSystem.BS2_0 -> BuildSystem.BS2_0
             org.octopusden.octopus.escrow.BuildSystem.MAVEN -> BuildSystem.MAVEN
             org.octopusden.octopus.escrow.BuildSystem.ECLIPSE_MAVEN -> BuildSystem.ECLIPSE_MAVEN
@@ -128,10 +132,9 @@ class ComponentControllerV2(
             org.octopusden.octopus.escrow.BuildSystem.GOLANG -> BuildSystem.GOLANG
             org.octopusden.octopus.escrow.BuildSystem.IN_CONTAINER -> BuildSystem.IN_CONTAINER
         }
-    }
 
-    private fun getBuildParametersDTO(buildParameters: BuildParameters): BuildParametersDTO {
-        return BuildParametersDTO(
+    private fun getBuildParametersDTO(buildParameters: BuildParameters): BuildParametersDTO =
+        BuildParametersDTO(
             buildParameters.javaVersion,
             buildParameters.mavenVersion,
             buildParameters.gradleVersion,
@@ -140,29 +143,27 @@ class ComponentControllerV2(
             buildParameters.systemProperties,
             buildParameters.buildTasks,
             getToolsDTO(buildParameters.tools),
-            buildParameters.buildTools
+            buildParameters.buildTools,
         )
-    }
 
-    private fun getToolsDTO(tools: List<Tool>): List<ToolDTO> {
-        return tools.map { tool ->
+    private fun getToolsDTO(tools: List<Tool>): List<ToolDTO> =
+        tools.map { tool ->
             ToolDTO(
                 name = tool.name,
                 escrowEnvironmentVariable = tool.escrowEnvironmentVariable,
                 sourceLocation = tool.sourceLocation,
                 targetLocation = tool.targetLocation,
-                installScript = tool.installScript
+                installScript = tool.installScript,
             )
         }
-    }
 
     @GetMapping(
         "{component}/versions/{version}/detailed-version",
-        produces = [MediaType.APPLICATION_JSON_VALUE]
+        produces = [MediaType.APPLICATION_JSON_VALUE],
     )
     fun getComponentRegistryVersion(
         @PathVariable("component") component: String,
-        @PathVariable("version") version: String
+        @PathVariable("version") version: String,
     ): DetailedComponentVersion {
         LOG.info("Get Detailed Component Version: '$component:$version'")
         val jiraComponentVersion = componentRegistryResolver.getJiraComponentVersion(component, version)
@@ -170,16 +171,18 @@ class ComponentControllerV2(
     }
 
     @GetMapping("{component}/maven-artifacts", produces = [MediaType.APPLICATION_JSON_VALUE])
-    fun getComponentArtifactsParameters(@PathVariable("component") component: String): Map<String, ComponentArtifactConfigurationDTO> {
-        return componentRegistryResolver.getMavenArtifactParameters(component)
+    fun getComponentArtifactsParameters(
+        @PathVariable("component") component: String,
+    ): Map<String, ComponentArtifactConfigurationDTO> =
+        componentRegistryResolver
+            .getMavenArtifactParameters(component)
             .map { (versionRange, artifactConfiguration) -> versionRange to artifactConfiguration.toDTO() }
             .toMap()
-    }
 
     @GetMapping("{component}/versions/{version}/vcs-settings", produces = [MediaType.APPLICATION_JSON_VALUE])
     fun getVCSSettings(
         @PathVariable("component") component: String,
-        @PathVariable("version") version: String
+        @PathVariable("version") version: String,
     ): VCSSettingsDTO {
         LOG.info("Get VCS Settings: '$component:$version'")
         return resolveVCSSettings(component, version)
@@ -189,24 +192,23 @@ class ComponentControllerV2(
     fun getBuildTools(
         @PathVariable("component") component: String,
         @PathVariable("version") version: String,
-        @RequestParam(name = "ignore-required", required = false, defaultValue = "false") ignoreRequired: Boolean?
-    ): List<BuildTool> {
-        return componentRegistryResolver.getBuildTools(component, version, ignoreRequired)
-    }
+        @RequestParam(name = "ignore-required", required = false, defaultValue = "false") ignoreRequired: Boolean?,
+    ): List<BuildTool> = componentRegistryResolver.getBuildTools(component, version, ignoreRequired)
 
     @PostMapping(
         "{component}/detailed-versions",
         consumes = [MediaType.APPLICATION_JSON_VALUE],
-        produces = [MediaType.APPLICATION_JSON_VALUE]
+        produces = [MediaType.APPLICATION_JSON_VALUE],
     )
     fun getComponentDetailedComponentVersions(
         @PathVariable("component") component: String,
-        @RequestBody versionRequest: VersionRequest
+        @RequestBody versionRequest: VersionRequest,
     ): DetailedComponentVersions {
         LOG.info("Get Detailed Component Versions: '$component'")
         LOG.debug("Get Detailed Component Versions: '$component:${versionRequest.versions.joinToString()}'")
         val detailedComponentVersions =
-            componentRegistryResolver.getJiraComponentVersions(component, versionRequest.versions)
+            componentRegistryResolver
+                .getJiraComponentVersions(component, versionRequest.versions)
                 .map { it.key to detailedComponentVersionMapper.convert(it.value) }
                 .toMap()
         return DetailedComponentVersions(detailedComponentVersions)
@@ -214,31 +216,35 @@ class ComponentControllerV2(
 
     @GetMapping(
         "{component}/versions/{version}/jira-component",
-        produces = [MediaType.APPLICATION_JSON_VALUE]
+        produces = [MediaType.APPLICATION_JSON_VALUE],
     )
     fun getJiraComponent(
         @PathVariable("component") component: String,
-        @PathVariable("version") version: String
+        @PathVariable("version") version: String,
     ): JiraComponentVersionDTO {
         LOG.info("Get Jira ComponentVersion: '$component:$version'")
         return resolveJiraComponentVersion(component, version)
     }
 
-    @PostMapping("find-by-artifact")
     // todo - consider removing the whole endpoint or just version specific fields, like docker,
     //  because version is not provided in this context
-    fun findComponentByArtifact(@RequestBody artifact: ArtifactDependency): VersionedComponent =
-        componentRegistryResolver.findComponentByArtifact(artifact)
+    @PostMapping("find-by-artifact")
+    fun findComponentByArtifact(
+        @RequestBody artifact: ArtifactDependency,
+    ): VersionedComponent = componentRegistryResolver.findComponentByArtifact(artifact)
 
+    // todo - consider removing the whole endpoint or just version specific fields, like docker,
+    //  because version is not provided in this context
     @PostMapping(
         "findByArtifacts",
         consumes = [MediaType.APPLICATION_JSON_VALUE],
-        produces = [MediaType.APPLICATION_JSON_VALUE]
+        produces = [MediaType.APPLICATION_JSON_VALUE],
     )
-    // todo - consider removing the whole endpoint or just version specific fields, like docker,
-    //  because version is not provided in this context
-    fun findComponentByArtifact(@RequestBody artifacts: Collection<ArtifactDependency>): Collection<VersionedComponent> =
-        componentRegistryResolver.findComponentsByArtifact(artifacts.toSet())
+    fun findComponentByArtifact(
+        @RequestBody artifacts: Collection<ArtifactDependency>,
+    ): Collection<VersionedComponent> =
+        componentRegistryResolver
+            .findComponentsByArtifact(artifacts.toSet())
             .values
             .filterNotNull()
 

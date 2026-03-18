@@ -1,1 +1,10 @@
 pathToConfig: file://${components-registry.groovy-path}
+
+components-registry:
+  auto-migrate: false
+
+spring:
+  jpa:
+    open-in-view: false
+  flyway:
+    enabled: false

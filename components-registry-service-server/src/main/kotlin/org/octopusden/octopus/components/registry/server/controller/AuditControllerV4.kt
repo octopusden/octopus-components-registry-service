@@ -1,0 +1,26 @@
+package org.octopusden.octopus.components.registry.server.controller
+
+import org.octopusden.octopus.components.registry.server.dto.v4.AuditLogResponse
+import org.octopusden.octopus.components.registry.server.service.AuditService
+import org.springframework.data.domain.Page
+import org.springframework.data.domain.Pageable
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RestController
+
+@RestController
+@RequestMapping("rest/api/4/audit")
+class AuditControllerV4(
+    private val auditService: AuditService,
+) {
+    @GetMapping("/{entityType}/{entityId}")
+    fun getEntityHistory(
+        @PathVariable entityType: String,
+        @PathVariable entityId: String,
+        pageable: Pageable,
+    ): Page<AuditLogResponse> = auditService.getEntityHistory(entityType, entityId, pageable)
+
+    @GetMapping("/recent")
+    fun getRecentChanges(pageable: Pageable): Page<AuditLogResponse> = auditService.getRecentChanges(pageable)
+}

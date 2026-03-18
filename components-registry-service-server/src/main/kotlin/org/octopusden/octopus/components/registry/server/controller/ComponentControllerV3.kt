@@ -30,43 +30,47 @@ class ComponentControllerV3(
     /**
      * Get all components.
      */
-    @GetMapping(produces = [MediaType.APPLICATION_JSON_VALUE])
     // todo - consider removing the whole endpoint or just version specific fields, like docker,
     //  because version is not provided in this context
 
-    fun getAllComponents(): Collection<ComponentV3> {
-        return componentRegistryResolver.getComponents().map { escrowModule ->
-            //TODO Check/Discuss if display name and owner should be in escrowModule (not versioned part of Component)
-            val baseConfiguration  = escrowModule.moduleConfigurations.find { it.componentOwner != null }!!
+    @GetMapping(produces = [MediaType.APPLICATION_JSON_VALUE])
+    fun getAllComponents(): Collection<ComponentV3> =
+        componentRegistryResolver.getComponents().map { escrowModule ->
+            // TODO Check/Discuss if display name and owner should be in escrowModule (not versioned part of Component)
+            val baseConfiguration = escrowModule.moduleConfigurations.find { it.componentOwner != null }!!
 
-            val componentV2 = ComponentV2(
-                id = escrowModule.moduleName,
-                name = escrowModule.moduleName,
-                componentOwner = baseConfiguration.componentOwner,
-            ).apply {
-                copyright = baseConfiguration.copyright
-                labels = baseConfiguration.labels?.toSet() ?: emptySet()
-                escrow = baseConfiguration.escrow?.toDTO()
-            }
+            val componentV2 =
+                ComponentV2(
+                    id = escrowModule.moduleName,
+                    name = escrowModule.moduleName,
+                    componentOwner = baseConfiguration.componentOwner,
+                ).apply {
+                    copyright = baseConfiguration.copyright
+                    labels = baseConfiguration.labels?.toSet() ?: emptySet()
+                    escrow = baseConfiguration.escrow?.toDTO()
+                }
 
             ComponentV3(
                 componentV2,
                 escrowModule.moduleConfigurations
-                    .associate { it.versionRangeString to it.toVersionedComponent() }
+                    .associate { it.versionRangeString to it.toVersionedComponent() },
             )
         }
-    }
 
     @PostMapping(
         "find-by-artifacts",
         consumes = [MediaType.APPLICATION_JSON_VALUE],
-        produces = [MediaType.APPLICATION_JSON_VALUE]
+        produces = [MediaType.APPLICATION_JSON_VALUE],
     )
-    fun findByArtifacts(@RequestBody artifacts: Set<ArtifactDependency>): ArtifactComponentsDTO {
-        val artifactComponents = componentRegistryResolver.findComponentsByArtifact(artifacts)
-            .entries
-            .map { (artifact, component) -> ArtifactComponentDTO(artifact, component) }
-            .toSet()
+    fun findByArtifacts(
+        @RequestBody artifacts: Set<ArtifactDependency>,
+    ): ArtifactComponentsDTO {
+        val artifactComponents =
+            componentRegistryResolver
+                .findComponentsByArtifact(artifacts)
+                .entries
+                .map { (artifact, component) -> ArtifactComponentDTO(artifact, component) }
+                .toSet()
         // todo - recalc docker with component
         return ArtifactComponentsDTO(artifactComponents)
     }
@@ -74,25 +78,27 @@ class ComponentControllerV3(
     @PostMapping(
         "find-by-docker-images",
         consumes = [MediaType.APPLICATION_JSON_VALUE],
-        produces = [MediaType.APPLICATION_JSON_VALUE]
+        produces = [MediaType.APPLICATION_JSON_VALUE],
     )
-    fun findComponentsByDockerImages(@RequestBody images: Set<Image>): Set<ComponentImage> {
-        return componentRegistryResolver.findComponentsByDockerImages(images)
-    }
+    fun findComponentsByDockerImages(
+        @RequestBody images: Set<Image>,
+    ): Set<ComponentImage> = componentRegistryResolver.findComponentsByDockerImages(images)
 
     @GetMapping(
         "/{component}/copyright",
-        produces = [MediaType.APPLICATION_OCTET_STREAM_VALUE]
+        produces = [MediaType.APPLICATION_OCTET_STREAM_VALUE],
     )
-    fun getCopyrightByComponent(@PathVariable component: String): ResponseEntity<Resource> {
+    fun getCopyrightByComponent(
+        @PathVariable component: String,
+    ): ResponseEntity<Resource> {
         val resource = copyrightService.getCopyrightAsResource(component)
 
-        return ResponseEntity.ok()
+        return ResponseEntity
+            .ok()
             .header(
                 HttpHeaders.CONTENT_DISPOSITION,
-                "attachment; filename=$DOWNLOADING_COPYRIGHT_FILE_NAME"
-            )
-            .body(resource)
+                "attachment; filename=$DOWNLOADING_COPYRIGHT_FILE_NAME",
+            ).body(resource)
     }
 
     companion object {

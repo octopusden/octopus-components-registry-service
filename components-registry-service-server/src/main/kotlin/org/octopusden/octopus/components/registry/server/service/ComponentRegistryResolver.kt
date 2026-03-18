@@ -17,24 +17,42 @@ import org.octopusden.octopus.releng.dto.JiraComponentVersion
 import java.util.EnumMap
 
 interface ComponentRegistryResolver {
-
     fun updateCache()
 
     fun getComponents(): MutableCollection<EscrowModule>
 
     fun getComponentById(id: String): EscrowModule?
 
-    fun getResolvedComponentDefinition(id: String, version: String): EscrowModuleConfig?
+    fun getResolvedComponentDefinition(
+        id: String,
+        version: String,
+    ): EscrowModuleConfig?
 
-    fun getJiraComponentVersion(component: String, version: String): JiraComponentVersion
+    fun getJiraComponentVersion(
+        component: String,
+        version: String,
+    ): JiraComponentVersion
 
-    fun getJiraComponentVersions(component: String, versions: List<String>): Map<String, JiraComponentVersion>
+    fun getJiraComponentVersions(
+        component: String,
+        versions: List<String>,
+    ): Map<String, JiraComponentVersion>
 
-    fun getVCSSettings(component: String, version: String): VCSSettings
+    fun getVCSSettings(
+        component: String,
+        version: String,
+    ): VCSSettings
 
-    fun getBuildTools(component: String, version: String, ignoreRequired: Boolean?): List<BuildTool>
+    fun getBuildTools(
+        component: String,
+        version: String,
+        ignoreRequired: Boolean?,
+    ): List<BuildTool>
 
-    fun getJiraComponentByProjectAndVersion(projectKey: String, version: String): JiraComponentVersion
+    fun getJiraComponentByProjectAndVersion(
+        projectKey: String,
+        version: String,
+    ): JiraComponentVersion
 
     fun getJiraComponentsByProject(projectKey: String): Set<String>
 
@@ -42,9 +60,15 @@ interface ComponentRegistryResolver {
 
     fun getComponentsDistributionByJiraProject(projectKey: String): Map<String, Distribution>
 
-    fun getVCSSettingForProject(projectKey: String, version: String): VCSSettings
+    fun getVCSSettingForProject(
+        projectKey: String,
+        version: String,
+    ): VCSSettings
 
-    fun getDistributionForProject(projectKey: String, version: String): Distribution
+    fun getDistributionForProject(
+        projectKey: String,
+        version: String,
+    ): Distribution
 
     fun getAllJiraComponentVersionRanges(): Set<JiraComponentVersionRange>
 
@@ -61,5 +85,4 @@ interface ComponentRegistryResolver {
     fun getComponentProductMapping(): Map<String, ProductTypes>
 
     fun findComponentsByDockerImages(images: Set<Image>): Set<ComponentImage>
-
 }

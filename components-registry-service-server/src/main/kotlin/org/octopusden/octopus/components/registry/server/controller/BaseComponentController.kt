@@ -25,77 +25,85 @@ abstract class BaseComponentController<T : Component> {
 
     protected abstract val createComponentFunc: (escrowModule: EscrowModule) -> T
 
-    @GetMapping
     // todo - consider removing the whole endpoint or just version specific fields, like docker,
     //  because version is not provided in this context
+    @GetMapping
     fun getAllComponents(
         @RequestParam("vcs-path", required = false) vcsPath: String?,
         @RequestParam("build-system", required = false) buildSystem: BuildSystem?,
         @RequestParam("systems", required = false, defaultValue = "") systems: List<String>,
-        @RequestParam("solution", required = false) solution: Boolean?
+        @RequestParam("solution", required = false) solution: Boolean?,
     ): ComponentsDTO<T> {
+        val components =
+            componentRegistryResolver
+                .getComponents()
+                .filter { module ->
+                    module.moduleConfigurations.any { config ->
 
-        val components = componentRegistryResolver.getComponents().filter { module ->
-            module.moduleConfigurations.any { config ->
+                        val vcsPathEquals =
+                            vcsPath?.let { vcsPathValue ->
+                                config.vcsSettings
+                                    .versionControlSystemRoots
+                                    .any { vcsPathValue.equals(it.vcsPath, true) }
+                            } ?: true
 
-                val vcsPathEquals = vcsPath?.let { vcsPathValue ->
-                    config.vcsSettings
-                        .versionControlSystemRoots
-                        .any { vcsPathValue.equals(it.vcsPath, true) }
-                } ?: true
+                        val buildSystemEquals =
+                            buildSystem?.let { buildSystemValue ->
+                                config.buildSystem ==
+                                    org.octopusden.octopus.escrow.BuildSystem
+                                        .valueOf(buildSystemValue.name)
+                            } ?: true
 
-                val buildSystemEquals = buildSystem?.let { buildSystemValue ->
-                    config.buildSystem == org.octopusden.octopus.escrow.BuildSystem.valueOf(buildSystemValue.name)
-                } ?: true
+                        val solutionEquals =
+                            solution?.let { solutionValue ->
+                                config.solution == solutionValue
+                            } ?: true
 
-                val solutionEquals = solution?.let { solutionValue ->
-                    config.solution == solutionValue
-                } ?: true
-
-                vcsPathEquals && buildSystemEquals && solutionEquals
-            }
-        }
-            .map {
-                createComponent(it)
-            }
-            .filter { c ->
-                if (systems.isEmpty()) {
-                    true
-                } else {
-                    systems.any {
-                        c.system.contains(it)
+                        vcsPathEquals && buildSystemEquals && solutionEquals
+                    }
+                }.map {
+                    createComponent(it)
+                }.filter { c ->
+                    if (systems.isEmpty()) {
+                        true
+                    } else {
+                        systems.any {
+                            c.system.contains(it)
+                        }
                     }
                 }
-            }
 
         return ComponentsDTO(components)
     }
 
-    @GetMapping("{component}")
     // todo - consider removing the whole endpoint or just version specific fields, like docker,
     //  because version is not provided in this context
-    fun getComponentById(@PathVariable("component") component: String): T {
-        val escrowModule = componentRegistryResolver.getComponentById(component)
-            ?: throw NotFoundException("Component id $component is not found")
+    @GetMapping("{component}")
+    fun getComponentById(
+        @PathVariable("component") component: String,
+    ): T {
+        val escrowModule =
+            componentRegistryResolver.getComponentById(component)
+                ?: throw NotFoundException("Component id $component is not found")
         return createComponent(escrowModule)
     }
 
-    @GetMapping("{component}/distribution")
     // todo - consider removing the whole endpoint or just version specific fields, like docker,
     //  because version is not provided in this context
-    fun getComponentDistribution(@PathVariable("component") component: String): DistributionDTO =
-        getDistribution(component)
+    @GetMapping("{component}/distribution")
+    fun getComponentDistribution(
+        @PathVariable("component") component: String,
+    ): DistributionDTO = getDistribution(component)
 
     @GetMapping("{component}/versions/{version}/distribution")
     fun getComponentVersionDistribution(
         @PathVariable("component") component: String,
-        @PathVariable("version") version: String
-    ): DistributionDTO {
-        return getComponentDistribution(
+        @PathVariable("version") version: String,
+    ): DistributionDTO =
+        getComponentDistribution(
             componentRegistryResolver.getResolvedComponentDefinition(component, version)
-                ?: throw NotFoundException("Component id $component:$version is not found")
+                ?: throw NotFoundException("Component id $component:$version is not found"),
         )
-    }
 
     private fun createComponent(escrowModule: EscrowModule): T =
         with(createComponentFunc(escrowModule)) {
@@ -120,8 +128,8 @@ abstract class BaseComponentController<T : Component> {
         (getComponentById(component).distribution ?: throw IllegalStateException("Distribution can not be null"))
 
     companion object {
-        fun getComponentDistribution(escrowModuleConfig: EscrowModuleConfig): DistributionDTO {
-            return with(escrowModuleConfig) {
+        fun getComponentDistribution(escrowModuleConfig: EscrowModuleConfig): DistributionDTO =
+            with(escrowModuleConfig) {
                 DistributionDTO(
                     distribution != null && distribution.explicit(),
                     distribution != null && distribution.external(),
@@ -129,9 +137,8 @@ abstract class BaseComponentController<T : Component> {
                     distribution?.DEB(),
                     distribution?.RPM(),
                     SecurityGroupsDTO(distribution?.securityGroups?.read?.split(",") ?: emptyList()),
-                    distribution?.docker()
+                    distribution?.docker(),
                 )
             }
-        }
     }
 }

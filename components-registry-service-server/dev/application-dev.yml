@@ -22,6 +22,8 @@ components-registry:
     service-branch: serviceCBranch
     service: serviceC
     minor: minorC
+  # product-type mapping is environment-specific — configure in application-local.yml (gitignored).
+  # See application-local.yml.example for the format.
 
 supportedGroupIds: org.octopusden.octopus,io.bcomponent
 supportedSystems: NONE,CLASSIC,ALFA

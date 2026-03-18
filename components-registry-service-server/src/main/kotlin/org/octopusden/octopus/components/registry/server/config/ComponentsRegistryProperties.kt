@@ -1,8 +1,8 @@
 package org.octopusden.octopus.components.registry.server.config
 
+import jakarta.validation.constraints.NotBlank
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.validation.annotation.Validated
-import jakarta.validation.constraints.NotBlank
 
 @ConfigurationProperties(prefix = "components-registry")
 @Validated
@@ -17,18 +17,19 @@ class ComponentsRegistryProperties(
     val vcs: VcsSettings,
     val versionName: VersionNameSettings,
     val copyrightPath: String?,
+    val autoMigrate: Boolean = false,
 ) {
     data class VcsSettings(
         val enabled: Boolean = true,
         val root: String?,
         var username: String?,
         var password: String = "",
-        var tagVersionPrefix: String = ""
+        var tagVersionPrefix: String = "",
     )
 
     data class VersionNameSettings(
         val serviceBranch: String,
         val service: String,
-        val minor: String
+        val minor: String,
     )
 }

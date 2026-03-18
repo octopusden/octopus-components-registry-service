@@ -16,53 +16,66 @@ import org.springframework.web.bind.annotation.RestController
 @RestController
 @RequestMapping("rest/api/2/projects")
 class ProjectControllerV2(
-        private val componentRegistryResolver: ComponentRegistryResolver
+    private val componentRegistryResolver: ComponentRegistryResolver,
 ) {
-
     @GetMapping("{projectKey}/versions/{version}", produces = [MediaType.APPLICATION_JSON_VALUE])
-    fun getJiraComponentByProjectAndVersion(@PathVariable("projectKey") projectKey: String,
-                                            @PathVariable("version") version: String): JiraComponentVersionDTO {
+    fun getJiraComponentByProjectAndVersion(
+        @PathVariable("projectKey") projectKey: String,
+        @PathVariable("version") version: String,
+    ): JiraComponentVersionDTO {
         LOG.info("Get Jira Component Version: '$projectKey:$version'")
         return componentRegistryResolver.getJiraComponentByProjectAndVersion(projectKey, version).toDTO()
     }
 
     @GetMapping("{projectKey}/jira-components")
-    fun getJiraComponentsByProject(@PathVariable("projectKey") projectKey: String): Set<String> {
+    fun getJiraComponentsByProject(
+        @PathVariable("projectKey") projectKey: String,
+    ): Set<String> {
         LOG.info("Get Jira Components: '$projectKey'")
         return componentRegistryResolver.getJiraComponentsByProject(projectKey)
     }
 
-    @GetMapping("{projectKey}/jira-component-version-ranges", produces = [MediaType.APPLICATION_JSON_VALUE])
     // todo - consider removing the whole endpoint or just version specific fields, like docker,
     //  because version is not provided in this context
-    fun getJiraComponentVersionRangesByProject(@PathVariable("projectKey") projectKey: String): Set<JiraComponentVersionRangeDTO> {
+    @GetMapping("{projectKey}/jira-component-version-ranges", produces = [MediaType.APPLICATION_JSON_VALUE])
+    fun getJiraComponentVersionRangesByProject(
+        @PathVariable("projectKey") projectKey: String,
+    ): Set<JiraComponentVersionRangeDTO> {
         LOG.info("Get Jira Component Version Ranges: '$projectKey'")
-        return componentRegistryResolver.getJiraComponentVersionRangesByProject(projectKey)
-                .map { it.toDTO() }
-                .toSet()
+        return componentRegistryResolver
+            .getJiraComponentVersionRangesByProject(projectKey)
+            .map { it.toDTO() }
+            .toSet()
     }
 
-    @GetMapping("{projectKey}/component-distributions", produces = [MediaType.APPLICATION_JSON_VALUE])
     // todo - consider removing the whole endpoint or just version specific fields, like docker,
     //  because version is not provided in this context
-    fun getComponentsDistributionByJiraProject(@PathVariable("projectKey") projectKey: String): Map<String, DistributionDTO> {
+    @GetMapping("{projectKey}/component-distributions", produces = [MediaType.APPLICATION_JSON_VALUE])
+    fun getComponentsDistributionByJiraProject(
+        @PathVariable("projectKey") projectKey: String,
+    ): Map<String, DistributionDTO> {
         LOG.info("Get distributions: '$projectKey'")
-        return componentRegistryResolver.getComponentsDistributionByJiraProject(projectKey)
-                .map { it.key to it.value.toDTO() }
-                .toMap()
+        return componentRegistryResolver
+            .getComponentsDistributionByJiraProject(projectKey)
+            .map { it.key to it.value.toDTO() }
+            .toMap()
     }
 
     @GetMapping("{projectKey}/versions/{version}/vcs-settings", produces = [MediaType.APPLICATION_JSON_VALUE])
-    fun getVCSSettingForProject(@PathVariable("projectKey") projectKey: String,
-                                @PathVariable("version") version: String): VCSSettingsDTO {
+    fun getVCSSettingForProject(
+        @PathVariable("projectKey") projectKey: String,
+        @PathVariable("version") version: String,
+    ): VCSSettingsDTO {
         LOG.info("Get VCS Settings: '$projectKey:$version'")
         return componentRegistryResolver.getVCSSettingForProject(projectKey, version).toDTO()
     }
 
-    @GetMapping("{projectKey}/versions/{version}/distribution", produces = [MediaType.APPLICATION_JSON_VALUE])
     // todo - recalc docker with component
-    fun getDistributionForProject(@PathVariable("projectKey") projectKey: String,
-                                  @PathVariable("version") version: String): DistributionDTO {
+    @GetMapping("{projectKey}/versions/{version}/distribution", produces = [MediaType.APPLICATION_JSON_VALUE])
+    fun getDistributionForProject(
+        @PathVariable("projectKey") projectKey: String,
+        @PathVariable("version") version: String,
+    ): DistributionDTO {
         LOG.info("Get distribution: '$projectKey:$version'")
         return componentRegistryResolver.getDistributionForProject(projectKey, version).toDTO()
     }

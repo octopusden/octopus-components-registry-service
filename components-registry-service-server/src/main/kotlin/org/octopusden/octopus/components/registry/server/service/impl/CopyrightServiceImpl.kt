@@ -15,28 +15,32 @@ class CopyrightServiceImpl(
     private val componentRegistryResolver: ComponentRegistryResolver,
     private val configHelper: ConfigHelper,
 ) : CopyrightService {
-
     override fun getCopyrightAsResource(component: String): Resource {
         logger.info("Getting copyright for component '{}'", component)
 
-        val copyrightPath = configHelper.copyrightPath()
-            ?: throw NotFoundException("Copyright path is not configured")
+        val copyrightPath =
+            configHelper.copyrightPath()
+                ?: throw NotFoundException("Copyright path is not configured")
 
-        val escrowModule = componentRegistryResolver.getComponentById(component)
-            ?: throw NotFoundException("Component '$component' not found")
+        val escrowModule =
+            componentRegistryResolver.getComponentById(component)
+                ?: throw NotFoundException("Component '$component' not found")
 
-        val copyright = escrowModule.moduleConfigurations
-            .firstOrNull()
-            ?.copyright
-            ?: throw NotFoundException("Component '$component' does not contains copyright")
+        val copyright =
+            escrowModule.moduleConfigurations
+                .firstOrNull()
+                ?.copyright
+                ?: throw NotFoundException("Component '$component' does not contains copyright")
 
         if (!correctCopyrightFileRegex.matches(copyright)) {
             throw IllegalStateException("Component '$component' copyright has invalid name")
         }
 
-        val resolved = copyrightPath.resolve(copyright)
-            .toAbsolutePath()
-            .normalize()
+        val resolved =
+            copyrightPath
+                .resolve(copyright)
+                .toAbsolutePath()
+                .normalize()
 
         if (!Files.isRegularFile(resolved)) {
             throw IllegalStateException("Component '$component' copyright file is not a file")

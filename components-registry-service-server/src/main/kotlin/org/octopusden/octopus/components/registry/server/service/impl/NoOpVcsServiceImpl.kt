@@ -1,17 +1,15 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
+import jakarta.annotation.PostConstruct
 import org.octopusden.octopus.components.registry.server.service.VcsService
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Service
-import jakarta.annotation.PostConstruct
 
 @Service
 @ConditionalOnProperty(prefix = "components-registry.vcs", name = ["enabled"], havingValue = "false")
 class NoOpVcsServiceImpl : VcsService {
-
-    override fun cloneComponentsRegistry(): String? =
-        null.also { log.debug("Service in File System mode, do nothing") }
+    override fun cloneComponentsRegistry(): String? = null.also { log.debug("Service in File System mode, do nothing") }
 
     @PostConstruct
     fun postNoOpVcsServiceImplConstruct() {

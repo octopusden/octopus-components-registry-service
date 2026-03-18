@@ -14,7 +14,7 @@ class ComponentControllerV1 : BaseComponentController<ComponentV1>() {
         ComponentV1(
             moduleName,
             escrowModuleConfig.componentDisplayName ?: moduleName,
-            escrowModuleConfig.componentOwner
+            escrowModuleConfig.componentOwner,
         )
     }
 }

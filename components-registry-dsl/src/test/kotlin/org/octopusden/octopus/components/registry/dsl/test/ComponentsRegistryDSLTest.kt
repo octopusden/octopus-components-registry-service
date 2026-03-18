@@ -1,6 +1,10 @@
 package org.octopusden.octopus.components.registry.dsl.test
 
-import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.parallel.Execution
 import org.junit.jupiter.api.parallel.ExecutionMode
@@ -9,7 +13,12 @@ import org.octopusden.octopus.components.registry.api.build.tools.databases.Orac
 import org.octopusden.octopus.components.registry.api.build.tools.oracle.OdbcTool
 import org.octopusden.octopus.components.registry.api.enums.BuildToolTypes
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes
-import org.octopusden.octopus.components.registry.dsl.*
+import org.octopusden.octopus.components.registry.dsl.DependenciesDSL
+import org.octopusden.octopus.components.registry.dsl.PT_C
+import org.octopusden.octopus.components.registry.dsl.PT_D
+import org.octopusden.octopus.components.registry.dsl.PT_D_DB
+import org.octopusden.octopus.components.registry.dsl.PT_K
+import org.octopusden.octopus.components.registry.dsl.component
 
 /**
  * Parallel execution is not supported.

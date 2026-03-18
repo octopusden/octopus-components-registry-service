@@ -980,6 +980,26 @@ TEST_COMPONENT4 {
     build { }
 }
 
+"TEST_COMPONENT_VERSIONED_ARTIFACT" {
+    componentOwner = "user9"
+    buildSystem = MAVEN
+    repositoryType = MERCURIAL
+    vcsUrl = "ssh://hg@mercurial/test-versioned-artifact"
+    jira {
+        projectKey = "TVA"
+        majorVersionFormat = '$major'
+        releaseVersionFormat = '$major.$minor'
+    }
+    "(,2.0)" {
+        groupId = "org.octopusden.octopus.test.versioned-artifact"
+        artifactId = "versioned-artifact-old"
+    }
+    "[2.0,)" {
+        groupId = "org.octopusden.octopus.test.versioned-artifact"
+        artifactId = "versioned-artifact-new"
+    }
+}
+
 "TEST_PT_K_DB" {
     componentOwner = "user9"
     groupId = "org.octopusden.octopus.test"

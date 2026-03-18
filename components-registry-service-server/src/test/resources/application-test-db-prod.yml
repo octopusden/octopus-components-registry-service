@@ -1,0 +1,4 @@
+components-registry:
+  work-dir: ${COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR}/components-registry/production-like
+  main-groovy-file: Aggregator.groovy
+  groovy-path: ${components-registry.work-dir}

@@ -1,0 +1,7 @@
+# Local overrides — copy to application-local.yml (gitignored) and fill in values.
+components-registry:
+  product-type:
+    c: TYPE_C
+    k: KERNEL
+    d: TYPE_D
+    ddb: TYPE_DDB

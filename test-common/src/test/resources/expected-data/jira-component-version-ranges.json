@@ -1919,5 +1919,87 @@
       "versionControlSystemRoots": [],
       "externalRegistry": null
     }
+  },
+  {
+    "componentName": "TEST_COMPONENT_VERSIONED_ARTIFACT",
+    "versionRange": "(,2.0)",
+    "component": {
+      "projectKey": "TVA",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major",
+        "releaseVersionFormat": "$major.$minor",
+        "buildVersionFormat": "$major.$minor.$service-$fix",
+        "lineVersionFormat": "$major",
+        "hotfixVersionFormat": "$major.$minor.$service-$fix.$build"
+      },
+      "componentInfo": {
+        "versionPrefix": "",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [
+        {
+          "name": "main",
+          "vcsPath": "ssh://hg@mercurial/test-versioned-artifact",
+          "type": "MERCURIAL",
+          "tag": "$module-$version",
+          "branch": "default"
+        }
+      ],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "TEST_COMPONENT_VERSIONED_ARTIFACT",
+    "versionRange": "[2.0,)",
+    "component": {
+      "projectKey": "TVA",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major",
+        "releaseVersionFormat": "$major.$minor",
+        "buildVersionFormat": "$major.$minor.$service-$fix",
+        "lineVersionFormat": "$major",
+        "hotfixVersionFormat": "$major.$minor.$service-$fix.$build"
+      },
+      "componentInfo": {
+        "versionPrefix": "",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [
+        {
+          "name": "main",
+          "vcsPath": "ssh://hg@mercurial/test-versioned-artifact",
+          "type": "MERCURIAL",
+          "tag": "$module-$version",
+          "branch": "default"
+        }
+      ],
+      "externalRegistry": null
+    }
   }
 ]

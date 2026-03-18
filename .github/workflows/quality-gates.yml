@@ -1,0 +1,28 @@
+name: Quality Gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  quality:
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-quality-gates.yml@feature/common-quality-gates
+    with:
+      java-version: '21'
+      static-reports-path: |
+        **/build/reports/checkstyle/**
+        **/build/reports/pmd/**
+        **/build/reports/spotbugs/**
+        **/build/reports/codenarc/**
+        **/build/reports/detekt/**
+        **/build/reports/ktlint/**
+        build/reports/quality/**
+      coverage-reports-path: |
+        **/build/reports/kover/**
+        **/build/reports/jacoco/**
+        **/build/reports/tests/**
+        **/build/test-results/**
+        build/reports/quality/**

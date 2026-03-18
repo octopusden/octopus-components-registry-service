@@ -11,10 +11,9 @@ import org.springframework.stereotype.Component
 
 @Component
 class JiraComponentVersionToDetailedComponentVersionMapper(
-        private val jiraComponentVersionFormatter: JiraComponentVersionFormatter,
-        private val versionNumericVersionFactory: NumericVersionFactory
+    private val jiraComponentVersionFormatter: JiraComponentVersionFormatter,
+    private val versionNumericVersionFactory: NumericVersionFactory,
 ) : Mapper<JiraComponentVersion, DetailedComponentVersion> {
-
     override fun convert(src: JiraComponentVersion): DetailedComponentVersion {
         val componentVersionFormat = src.component.componentVersionFormat
         return DetailedComponentVersion(
@@ -22,35 +21,36 @@ class JiraComponentVersionToDetailedComponentVersionMapper(
             ComponentRegistryVersion(
                 ComponentVersionType.MINOR,
                 componentVersionFormat.majorVersionFormat.formatVersion(versionNumericVersionFactory, src.version),
-                src.majorVersion
+                src.majorVersion,
             ),
             ComponentRegistryVersion(
                 ComponentVersionType.LINE,
                 componentVersionFormat.lineVersionFormat.formatVersion(versionNumericVersionFactory, src.version),
-                jiraComponentVersionFormatter.getLineVersion(src)
+                jiraComponentVersionFormatter.getLineVersion(src),
             ),
             ComponentRegistryVersion(
                 ComponentVersionType.BUILD,
                 componentVersionFormat.buildVersionFormat.formatVersion(versionNumericVersionFactory, src.version),
-                src.buildVersion
+                src.buildVersion,
             ),
             ComponentRegistryVersion(
                 ComponentVersionType.RC,
-                componentVersionFormat.releaseVersionFormat.formatVersion(versionNumericVersionFactory, src.version) + JiraComponentVersion.RC_SUFFIX,
-                src.rcVersion
+                componentVersionFormat.releaseVersionFormat.formatVersion(versionNumericVersionFactory, src.version) +
+                    JiraComponentVersion.RC_SUFFIX,
+                src.rcVersion,
             ),
             ComponentRegistryVersion(
                 ComponentVersionType.RELEASE,
                 componentVersionFormat.releaseVersionFormat.formatVersion(versionNumericVersionFactory, src.version),
-                src.releaseVersion
+                src.releaseVersion,
             ),
             src.hotfixVersion?.let {
                 ComponentRegistryVersion(
                     ComponentVersionType.HOTFIX,
                     componentVersionFormat.hotfixVersionFormat.formatVersion(versionNumericVersionFactory, src.version),
-                    it
+                    it,
                 )
-            } ?: null
+            } ?: null,
         )
     }
 }

@@ -11,18 +11,14 @@ import org.springframework.web.bind.annotation.RestController
 @RestController
 @RequestMapping("rest/api/2/components-registry/service")
 class ComponentsRegistryServiceController(
-    private val componentsRegistryService: ComponentsRegistryService
+    private val componentsRegistryService: ComponentsRegistryService,
 ) {
-
     @PutMapping("updateCache")
     fun updateConfigCache() = componentsRegistryService.updateConfigCache()
 
     @GetMapping("status", produces = [MediaType.APPLICATION_JSON_VALUE])
-    fun getComponentsRegistryStatus(): ServiceStatusDTO =
-        componentsRegistryService.getComponentsRegistryStatus()
+    fun getComponentsRegistryStatus(): ServiceStatusDTO = componentsRegistryService.getComponentsRegistryStatus()
 
     @GetMapping("ping")
-    fun ping(): String {
-        return "Pong"
-    }
+    fun ping(): String = "Pong"
 }

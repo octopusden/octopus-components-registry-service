@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: crs-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: components_registry
+      POSTGRES_USER: crs
+      POSTGRES_PASSWORD: crs
+    volumes:
+      - crs-pgdata:/var/lib/postgresql/data
+
+volumes:
+  crs-pgdata:

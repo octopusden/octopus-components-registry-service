@@ -1,0 +1,16 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <CurrentIssues>
+    <ID>ClassOrdering:FileDistributionEntityBean.kt$FileDistributionEntityBean$Companion</ID>
+    <ID>MaxLineLength:ApiBeans.kt$EscrowBean$return "EscrowBean(buildTask=$buildTask, gradle=$gradle, providedDependencies=$providedDependencies, diskSpaceRequirement=$diskSpaceRequirement, additionalSources=$additionalSources, reusable=$reusable, generation=$generation)"</ID>
+    <ID>MaxLineLength:FileDistributionEntityBean.kt$FileDistributionEntityBean$+</ID>
+    <ID>MaxLineLength:FileDistributionEntityBean.kt$FileDistributionEntityBean$throw IllegalStateException("Unknown query attribute '" + queryAttributeParts[0] + "' in URI '" + distributionItem + "'")</ID>
+    <ID>MaxLineLength:FileDistributionEntityBeanTest.kt$FileDistributionEntityBeanTest$val fileDistributionEntity: FileDistributionEntity = FileDistributionEntityBean("file:///\${env.CONF_PATH}/tscomponent/Core/\${version}/ts-\${version}.zip?artifactId=ts")</ID>
+    <ID>NewLineAtEndOfFile:ApiBeans.kt$org.octopusden.octopus.components.registry.api.beans.ApiBeans.kt</ID>
+    <ID>NewLineAtEndOfFile:FileDistributionEntityBean.kt$org.octopusden.octopus.components.registry.api.beans.FileDistributionEntityBean.kt</ID>
+    <ID>NewLineAtEndOfFile:FileDistributionEntityBeanTest.kt$org.octopusden.octopus.components.registry.api.beans.FileDistributionEntityBeanTest.kt</ID>
+    <ID>TooManyFunctions:ApiBeans.kt$EscrowBean : Escrow</ID>
+    <ID>UseCheckOrError:FileDistributionEntityBean.kt$FileDistributionEntityBean$throw IllegalStateException("The query specification '$queryPart' doesn't contain value [$distributionItem]")</ID>
+  </CurrentIssues>
+</SmellBaseline>

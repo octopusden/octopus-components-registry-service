@@ -18,35 +18,30 @@ import org.springframework.web.bind.annotation.RestController
 class CommonControllerV2(
     private val componentRegistryResolver: ComponentRegistryResolver,
     private val environment: Environment,
-    private val versionNames: VersionNames
+    private val versionNames: VersionNames,
 ) {
-
     val configHelper: ConfigHelper =
         ConfigHelper(this.environment)
 
-    @GetMapping("jira-component-version-ranges", produces = [MediaType.APPLICATION_JSON_VALUE])
     // todo - consider removing the whole endpoint or just version specific fields, like docker,
     //  because version is not provided in this context
-    fun getAllJiraComponentVersionRanges(): Set<JiraComponentVersionRangeDTO> {
-        return componentRegistryResolver.getAllJiraComponentVersionRanges()
+    @GetMapping("jira-component-version-ranges", produces = [MediaType.APPLICATION_JSON_VALUE])
+    fun getAllJiraComponentVersionRanges(): Set<JiraComponentVersionRangeDTO> =
+        componentRegistryResolver
+            .getAllJiraComponentVersionRanges()
             .map { it.toDTO() }
             .toSet()
-    }
 
     @GetMapping("dependency-aliases", produces = [MediaType.APPLICATION_JSON_VALUE])
     fun getDependencyAliasToComponentMapping(): Map<String, String> = componentRegistryResolver.getDependencyMapping()
 
     @GetMapping("supported-groups", produces = [MediaType.APPLICATION_JSON_VALUE])
-    fun getSupportedGroupIds(): Set<String> {
-        return configHelper.supportedGroupIds().toSet()
-    }
+    fun getSupportedGroupIds(): Set<String> = configHelper.supportedGroupIds().toSet()
 
     @GetMapping("component-product-mapping", produces = [MediaType.APPLICATION_JSON_VALUE])
-    fun getComponentProductMapping(): Map<String, ProductTypes> {
-        return componentRegistryResolver.getComponentProductMapping()
-    }
+    fun getComponentProductMapping(): Map<String, ProductTypes> = componentRegistryResolver.getComponentProductMapping()
 
-    @Deprecated( replaceWith = ReplaceWith("getVersionNamesV2()"), message = "Use getVersionNamesV2() instead")
+    @Deprecated(replaceWith = ReplaceWith("getVersionNamesV2()"), message = "Use getVersionNamesV2() instead")
     @GetMapping("version-names", produces = [MediaType.APPLICATION_JSON_VALUE])
     fun getVersionNames(): VersionNamesDTO = VersionNamesDTO(versionNames.serviceBranch, versionNames.service, versionNames.minor)
 }

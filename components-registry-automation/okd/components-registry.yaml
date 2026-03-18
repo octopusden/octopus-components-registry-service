@@ -4,6 +4,52 @@ metadata:
   name: components-registry-template
 objects:
   - apiVersion: v1
+    kind: Pod
+    metadata:
+      name: ${DEPLOYMENT_PREFIX}-postgres
+      labels:
+        app.kubernetes.io/name: ${DEPLOYMENT_PREFIX}-postgres
+    spec:
+      restartPolicy: Never
+      activeDeadlineSeconds: ${{ACTIVE_DEADLINE_SECONDS}}
+      containers:
+        - name: postgres
+          image: ${DOCKER_REGISTRY}/postgres:16
+          ports:
+            - containerPort: 5432
+              protocol: TCP
+          env:
+            - name: POSTGRES_DB
+              value: "components_registry"
+            - name: POSTGRES_USER
+              value: "crs"
+            - name: POSTGRES_PASSWORD
+              value: "crs"
+            - name: PGDATA
+              value: "/var/lib/postgresql/data/pgdata"
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "crs", "-d", "components_registry"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: postgres-data
+          emptyDir: {}
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: ${DEPLOYMENT_PREFIX}-postgres-service
+    spec:
+      ports:
+        - port: 5432
+          protocol: TCP
+          targetPort: 5432
+      selector:
+        app.kubernetes.io/name: ${DEPLOYMENT_PREFIX}-postgres
+  - apiVersion: v1
     kind: ConfigMap
     metadata:
       name: ${DEPLOYMENT_PREFIX}-components-registry-config-data
@@ -33,6 +79,10 @@ objects:
     spec:
       restartPolicy: Never
       activeDeadlineSeconds: ${{ACTIVE_DEADLINE_SECONDS}}
+      initContainers:
+        - name: wait-for-postgres
+          image: ${DOCKER_REGISTRY}/postgres:16
+          command: ["sh", "-c", "until pg_isready -h ${DEPLOYMENT_PREFIX}-postgres-service -p 5432 -U crs; do sleep 2; done"]
       containers:
         - name: comp-reg
           image: ${DOCKER_REGISTRY}/octopusden/components-registry-service:${COMPONENTS_REGISTRY_SERVICE_VERSION}
@@ -52,6 +102,16 @@ objects:
               value: "test"
             - name: SPRING_CLOUD_CONFIG_ENABLED
               value: "false"
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:postgresql://${DEPLOYMENT_PREFIX}-postgres-service:5432/components_registry"
+            - name: SPRING_DATASOURCE_USERNAME
+              value: "crs"
+            - name: SPRING_DATASOURCE_PASSWORD
+              value: "crs"
+            - name: SPRING_FLYWAY_ENABLED
+              value: "true"
+            - name: SPRING_JPA_HIBERNATE_DDL_AUTO
+              value: "validate"
           volumeMounts:
             - name: components-registry-dir
               mountPath: /components-registry

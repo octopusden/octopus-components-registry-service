@@ -1,0 +1,22 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <CurrentIssues>
+    <ID>ClassOrdering:ClassicComponentsRegistryServiceClient.kt$ClassicComponentsRegistryServiceClient$private var client = createClient(apiUrlProvider.getApiUrl(), objectMapper)</ID>
+    <ID>CyclomaticComplexMethod:ComponentRegistryServiceClientTest.kt$ComponentRegistryServiceClientTest$@Test fun findComponentsByDockerImagesWithRanges()</ID>
+    <ID>MaxLineLength:ComponentRegistryServiceClientTest.kt$ComponentRegistryServiceClientTest$assert(components.any { it.image.name == "test-docker-1_1" &amp;&amp; it.component == "TEST_COMPONENT_WITH_DOCKER_1_1" &amp;&amp; it.version == "0.1" })</ID>
+    <ID>MaxLineLength:ComponentRegistryServiceClientTest.kt$ComponentRegistryServiceClientTest$assert(components.any { it.image.name == "test-docker-1_2" &amp;&amp; it.component == "TEST_COMPONENT_WITH_DOCKER_1_2" &amp;&amp; it.version == "0.1.2-3" })</ID>
+    <ID>MaxLineLength:ComponentRegistryServiceClientTest.kt$ComponentRegistryServiceClientTest$assert(components.any { it.image.name == "test-docker-3" &amp;&amp; it.component == "TEST_COMPONENT_WITH_DOCKER_3" &amp;&amp; it.version == "10.1" })</ID>
+    <ID>MaxLineLength:ComponentRegistryServiceClientTest.kt$ComponentRegistryServiceClientTest$assert(components.any { it.image.name == "test-docker-first" &amp;&amp; it.component == "TEST_COMPONENT_WITH_DOCKER_2" &amp;&amp; it.version == "0.0.5" })</ID>
+    <ID>MaxLineLength:ComponentRegistryServiceClientTest.kt$ComponentRegistryServiceClientTest$assert(components.any { it.image.name == "test-docker-second" &amp;&amp; it.component == "TEST_COMPONENT_WITH_DOCKER_2" &amp;&amp; it.version == "1.0.5" })</ID>
+    <ID>MaxLineLength:ComponentRegistryServiceClientTest.kt$ComponentRegistryServiceClientTest$assert(components.any { it.image.name == "test-docker-third" &amp;&amp; it.component == "TEST_COMPONENT_WITH_DOCKER_2" &amp;&amp; it.version == "2.0.5" })</ID>
+    <ID>MaxLineLength:ComponentRegistryServiceClientTest.kt$ComponentRegistryServiceClientTest$assert(components.none { it.image.name == "test-docker-first" &amp;&amp; it.component == "TEST_COMPONENT_WITH_DOCKER_2" &amp;&amp; it.version == "1.0.5" })</ID>
+    <ID>MaxLineLength:ComponentRegistryServiceClientTest.kt$ComponentRegistryServiceClientTest$assert(components.none { it.image.name == "test-docker-second" &amp;&amp; it.component == "TEST_COMPONENT_WITH_DOCKER_2" &amp;&amp; it.version == "0.0.5" })</ID>
+    <ID>MaxLineLength:ComponentRegistryServiceClientV3Test.kt$ComponentRegistryServiceClientV3Test$* Test [org.octopusden.octopus.components.registry.server.controller.ComponentControllerV3.getAllComponents] build.dependencies.autoUpdate attribute deserialization.</ID>
+    <ID>MaxLineLength:ComponentRegistryServiceClientV3Test.kt$ComponentRegistryServiceClientV3Test$assertThat(componentsRegistryClient.getComponents().find { it.component.id == componentKey }!!.variants.values.first().build?.dependencies?.autoUpdate)?.isEqualTo(expectedAutoUpdateValue)</ID>
+    <ID>SwallowedException:ComponentsRegistryServiceErrorDecoder.kt$ComponentsRegistryServiceErrorDecoder$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:ComponentsRegistryServiceErrorDecoder.kt$ComponentsRegistryServiceErrorDecoder$e: Exception</ID>
+    <ID>TooManyFunctions:ClassicComponentsRegistryServiceClient.kt$ClassicComponentsRegistryServiceClient : ComponentsRegistryServiceClient</ID>
+    <ID>TooManyFunctions:ComponentsRegistryServiceClient.kt$ComponentsRegistryServiceClient</ID>
+  </CurrentIssues>
+</SmellBaseline>
