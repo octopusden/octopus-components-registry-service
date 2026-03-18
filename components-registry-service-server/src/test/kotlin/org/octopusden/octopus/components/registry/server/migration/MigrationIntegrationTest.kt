@@ -597,8 +597,8 @@ class MigrationIntegrationTest {
     }
 
     @Test
-    @DisplayName("ART-001: DB resolver resolves version-specific artifact mappings after migration")
-    fun `ART-001 version-specific artifact mapping parity`() {
+    @DisplayName("MIG-023: DB resolver resolves version-specific artifact mappings after migration")
+    fun `MIG-023 version-specific artifact mapping parity`() {
         val artifact =
             ArtifactDependency(
                 "org.octopusden.octopus.test.versioned-artifact",

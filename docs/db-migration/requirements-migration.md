@@ -32,6 +32,7 @@
 | MIG-020 | Migration preserves escrow generation default | Medium | integration-test | ✅ Tested |
 | MIG-021 | Version-range-only component inherits buildSystem from defaults | High | integration-test | ✅ Tested |
 | MIG-022 | Migration preserves build-tools endpoint behavior | High | integration-test | ✅ Tested |
+| MIG-023 | DB artifact resolution preserves version-specific matches for shared group IDs | High | unit-test, integration-test | ✅ Tested |
 
 ---
 
@@ -594,3 +595,28 @@ must return the same JSON when the component is routed to Git and when it is rou
 3. Git and DB JSON responses are equal
 
 **Test method:** `MigrationIntegrationTest.MIG-022 build-tools endpoint parity`
+
+---
+
+### MIG-023: DB artifact resolution preserves version-specific matches for shared group IDs
+
+**Priority:** High
+**Test layer:** unit-test, integration-test
+**Status:** ✅ Tested
+
+**Description:**
+When multiple components share the same Maven group ID, DB-backed `find-by-artifact`
+must preserve Git resolver behavior and return the most specific version-aware match
+instead of falling back to a generic component-level artifact pattern.
+
+**Preconditions:**
+- A generic component-level artifact pattern exists for the shared group ID
+- A more specific version-range artifact mapping exists for the concrete component
+- The requested artifact version falls into the version-specific range
+
+**Acceptance criteria:**
+1. `DatabaseComponentRegistryResolver.findComponentByArtifact(...)` returns the concrete component for the matching version-specific artifact
+2. The generic component-level artifact mapping is not selected when a more specific version-specific match exists
+3. After migration, DB-backed artifact lookup is identical to Git-backed artifact lookup for the same request
+
+**Test method:** `DatabaseComponentRegistryResolverTest.MIG-023 DB resolver prefers version-specific artifact over generic match`; `MigrationIntegrationTest.MIG-023 version-specific artifact mapping parity`

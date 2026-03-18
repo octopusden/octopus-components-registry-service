@@ -74,7 +74,7 @@
 - PATCH response returning stale version — changed `save()` to `saveAndFlush()` (Phase 7)
 - Field override PATCH nulling value — changed to `request.value?.let { entity.value = it }` (Phase 8)
 - Migrated `build-tools` endpoint returned `500`/`[]` for DB components — implemented `DatabaseComponentRegistryResolver.getBuildTools()` and preserved polymorphic `buildTools` metadata during migration (Migration regression MIG-022)
-- DB `find-by-artifact` ignored version-specific artifact IDs — `DatabaseComponentRegistryResolver` now matches `componentVersion.artifactIds`, respects version ranges, and prefers version-specific matches over component-level ones (migration regression ART-001)
+- DB `find-by-artifact` ignored version-specific artifact IDs — `DatabaseComponentRegistryResolver` now matches `componentVersion.artifactIds`, respects version ranges, and prefers version-specific matches over component-level ones (migration regression MIG-023)
 
 ## Runtime Verification (Phase 7+8)
 
