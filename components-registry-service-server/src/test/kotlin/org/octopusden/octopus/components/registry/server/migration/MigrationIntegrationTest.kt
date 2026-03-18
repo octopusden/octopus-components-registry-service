@@ -16,8 +16,8 @@ import org.octopusden.octopus.components.registry.server.ComponentRegistryServic
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentDetailResponse
 import org.octopusden.octopus.components.registry.server.repository.ComponentSourceRepository
 import org.octopusden.octopus.components.registry.server.service.BatchMigrationResult
-import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
+import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
 import org.octopusden.octopus.components.registry.server.service.MigrationStatus
 import org.octopusden.octopus.components.registry.server.service.ValidationResult
 import org.springframework.beans.factory.annotation.Autowired
