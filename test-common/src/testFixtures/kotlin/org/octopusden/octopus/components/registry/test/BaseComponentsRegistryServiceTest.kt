@@ -9,6 +9,7 @@ import java.util.Arrays
 import java.util.stream.Collectors
 import java.util.stream.Stream
 import org.junit.jupiter.api.Assertions
+import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
@@ -133,6 +134,7 @@ abstract class BaseComponentsRegistryServiceTest {
     protected abstract fun getComponentArtifactsParameters(component: String): Map<String, ComponentArtifactConfigurationDTO>
 
     @Test
+    @DisplayName("RES-001: All Jira component version ranges returned correctly")
     fun testGetAllJiraComponentVersionRanges() {
         val expected = testDataDir.resolve("expected-data/jira-component-version-ranges.json")
             .toObject(object : TypeReference<Set<JiraComponentVersionRangeDTO>>() {})
@@ -147,11 +149,13 @@ abstract class BaseComponentsRegistryServiceTest {
     }
 
     @Test
+    @DisplayName("RES-002: Supported group IDs returned")
     fun testGetSupportedGroupIds() {
         Assertions.assertEquals(Arrays.asList("org.octopusden.octopus", "io.bcomponent").sorted(), getSupportedGroupIds().sorted())
     }
 
     @Test
+    @DisplayName("RES-003: Component-to-product-type mapping")
     fun testGetComponentProductMapping() {
         Assertions.assertEquals(
             mapOf("TEST_PT_K_DB" to ProductTypes.PT_K),
@@ -160,6 +164,7 @@ abstract class BaseComponentsRegistryServiceTest {
     }
 
     @Test
+    @DisplayName("RES-004: Version names configuration")
     fun testVersionNames() {
         val value = getVersionNames()
         Assertions.assertEquals("serviceCBranch", value.serviceBranch)
@@ -168,6 +173,7 @@ abstract class BaseComponentsRegistryServiceTest {
     }
 
     @Test
+    @DisplayName("RES-005: Dependency alias mapping")
     fun testGetDependencyAliasToComponentMapping() {
         Assertions.assertEquals(
             mapOf("alias1" to "sub1", "alias2" to "sub2").toSortedMap(),
@@ -176,6 +182,7 @@ abstract class BaseComponentsRegistryServiceTest {
     }
 
     @Test
+    @DisplayName("RES-006: Full component tree V1 API")
     fun testGetComponentV1() {
         val actualComponent = getComponentV1("TESTONE")
 
@@ -211,6 +218,7 @@ abstract class BaseComponentsRegistryServiceTest {
     }
 
     @Test
+    @DisplayName("RES-007: Sub-component with parent reference V1")
     fun testGetSubComponentV1() {
         val actualComponent = getComponentV1("versions-api")
 
@@ -230,6 +238,7 @@ abstract class BaseComponentsRegistryServiceTest {
     }
 
     @Test
+    @DisplayName("RES-008: Detailed component with build/VCS/Jira")
     fun testGetDetailedComponent() {
         val actualComponent = getDetailedComponent("TESTONE", "1")
         val expectedComponent = DetailedComponent(
@@ -333,12 +342,14 @@ abstract class BaseComponentsRegistryServiceTest {
     @ParameterizedTest
     @ValueSource(strings = [
         BUILD_VERSION, JIRA_BUILD_VERSION, LINE_VERSION, JIRA_LINE_VERSION, MINOR_VERSION, JIRA_MINOR_VERSION, RC_VERSION, JIRA_RC_VERSION, JIRA_RELEASE_VERSION, RELEASE_VERSION, HOTFIX_VERSION])
+    @DisplayName("RES-009: Versioned component across version formats")
     fun testGetDetailedComponentVersion(version: String) {
         val actualComponentVersion = getDetailedComponentVersion("SUB", version)
         Assertions.assertEquals(DETAILED_COMPONENT_VERSION, actualComponentVersion)
     }
 
     @Test
+    @DisplayName("RES-010: Batch version query")
     fun testGetDetailedComponentVersions() {
         val actualComponentVersions = getDetailedComponentVersions("SUB", listOf(BUILD_VERSION))
         Assertions.assertEquals(
@@ -349,17 +360,20 @@ abstract class BaseComponentsRegistryServiceTest {
 
     @ParameterizedTest
     @ValueSource(strings = [BUILD_VERSION, JIRA_BUILD_VERSION, LINE_VERSION, JIRA_LINE_VERSION, MINOR_VERSION, JIRA_MINOR_VERSION, RC_VERSION, JIRA_RC_VERSION, JIRA_RELEASE_VERSION, RELEASE_VERSION])
+    @DisplayName("RES-011: VCS settings across version formats")
     fun testGetVCSSettings(version: String) {
         Assertions.assertEquals(VCS_SETTINGS, getVcsSettings("SUB", version))
     }
 
     @ParameterizedTest
     @ValueSource(strings = [HOTFIX_VERSION, JIRA_HOTFIX_VERSION])
+    @DisplayName("RES-012: VCS settings for hotfix branches")
     fun testGetVCSSettingsForHotfix(version: String) {
         Assertions.assertEquals(VCS_SETTINGS_HOTFIX, getVcsSettings("SUB", version))
     }
 
     @Test
+    @DisplayName("RES-013: Distribution with GAV and security groups")
     fun testGetDistribution() {
         val actualDistribution = getDistribution("TEST_COMPONENT3", "1.0.108.11")
         Assertions.assertTrue(actualDistribution.explicit)
@@ -373,6 +387,7 @@ abstract class BaseComponentsRegistryServiceTest {
     }
 
     @Test
+    @DisplayName("RES-014: Build tools resolution")
     fun testGetBuildTools() {
         val buildTools = getBuildTools("TEST_COMPONENT_BUILD_TOOLS", "1.0.0")
         val oracle = OracleDatabaseToolBean()
@@ -385,6 +400,7 @@ abstract class BaseComponentsRegistryServiceTest {
 
     @ParameterizedTest
     @MethodSource("jiraComponentVersions")
+    @DisplayName("RES-015: Jira component version resolution")
     fun testGetJiraComponentVersion(component: String, version: String, path: String) {
         val jiraComponentVersion = getJiraComponentVersion(component, version)
         val expectedJiraComponentVersion = testDataDir.resolve(path)
@@ -395,6 +411,7 @@ abstract class BaseComponentsRegistryServiceTest {
 
     @ParameterizedTest
     @MethodSource("jiraComponentVersionsByProject")
+    @DisplayName("RES-016: Jira component by project key and version")
     fun testGetJiraComponentByProjectAndVersion(projectKey: String, version: String, path: String) {
         val jiraComponentVersion = getJiraComponentByProjectAndVersion(projectKey, version)
         val expectedJiraComponentVersion = testDataDir.resolve(path)
@@ -403,12 +420,14 @@ abstract class BaseComponentsRegistryServiceTest {
     }
 
     @Test
+    @DisplayName("RES-017: Jira components for project")
     fun testGetJiraComponentsByProject() {
         val jiraComponents = getJiraComponentsByProject("SUB")
         Assertions.assertIterableEquals(SUB_COMPONENTS, jiraComponents.sorted())
     }
 
     @Test
+    @DisplayName("RES-018: Jira version ranges by project")
     fun testGetJiraComponentVersionRangesByProject() {
         val jiraComponentVersionRanges = getJiraComponentVersionRangesByProject("SUB")
         val expectedJiraComponentVersionRanges =
@@ -421,6 +440,7 @@ abstract class BaseComponentsRegistryServiceTest {
     }
 
     @Test
+    @DisplayName("RES-019: Distributions by Jira project")
     fun testGetComponentsDistributionsByJiraProject() {
         val componentDistributions = getComponentsDistributionsByJiraProject("SUB")
 
@@ -435,6 +455,7 @@ abstract class BaseComponentsRegistryServiceTest {
 
     @ParameterizedTest
     @MethodSource("vcsSettings")
+    @DisplayName("RES-020: VCS settings by project")
     fun testGetVCSSettingForProject(projectKey: String, version: String, expectedPath: String) {
         val vcsSettings = getVCSSettingForProject(projectKey, version)
 
@@ -445,6 +466,7 @@ abstract class BaseComponentsRegistryServiceTest {
 
     @ParameterizedTest
     @MethodSource("distributions")
+    @DisplayName("RES-021: Distribution by project")
     fun testGetDistributionForProject(projectKey: String, version: String, path: String) {
         val distribution = getDistributionForProject(projectKey, version)
         val expectedDistribution = testDataDir.resolve(path)
@@ -454,6 +476,7 @@ abstract class BaseComponentsRegistryServiceTest {
 
     @ParameterizedTest
     @MethodSource("archived")
+    @DisplayName("RES-022: Archived flag per component")
     fun testGetArchivedForProject(componentName: String, version: String, archived: Boolean) {
         val componentDetail = getDetailedComponent(componentName, version)
         Assertions.assertEquals(archived, componentDetail.archived)
@@ -461,6 +484,7 @@ abstract class BaseComponentsRegistryServiceTest {
 
     @ParameterizedTest
     @MethodSource("mavenArtifacts")
+    @DisplayName("RES-023: Maven artifact parameters")
     fun testGetComponentArtifactsParameters(component: String, path: String) {
         val actualArtifacts = getComponentArtifactsParameters(component)
         val expectedArtifact = testDataDir.resolve(path)
@@ -469,6 +493,7 @@ abstract class BaseComponentsRegistryServiceTest {
     }
 
     @Test
+    @DisplayName("RES-024: Find component by single artifact")
     fun testFindByArtifact() {
         val artifact = testDataDir.resolve("sub-component2-artifact.json").toObject(ArtifactDependency::class.java)
         val actualComponent = findComponentByArtifact(artifact)
@@ -478,6 +503,7 @@ abstract class BaseComponentsRegistryServiceTest {
     }
 
     @Test
+    @DisplayName("RES-025: Find components by artifacts batch V3")
     fun testFindByArtifactsV3() {
         val artifacts = testDataDir.resolve("sub1-sub2-sub3-artifacts.json")
             .toObject(object : TypeReference<Set<ArtifactDependency>>() {})

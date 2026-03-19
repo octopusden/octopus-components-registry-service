@@ -75,6 +75,8 @@
 - Field override PATCH nulling value — changed to `request.value?.let { entity.value = it }` (Phase 8)
 - Migrated `build-tools` endpoint returned `500`/`[]` for DB components — implemented `DatabaseComponentRegistryResolver.getBuildTools()` and preserved polymorphic `buildTools` metadata during migration (Migration regression MIG-022)
 - DB `find-by-artifact` ignored version-specific artifact IDs — `DatabaseComponentRegistryResolver` now matches `componentVersion.artifactIds`, respects version ranges, and prefers version-specific matches over component-level ones (migration regression MIG-023)
+- DB migration lost `parentComponent` and `escrow.additionalSources` on resolver path — import/entity mappers now preserve both values for DB-backed V1/V2 responses, covered by DB-backed resolver regression suite (`RES-006`, `RES-007`, `RES-008`)
+- DB `jira-component-version-ranges` emitted entries with blank Jira project key — `DatabaseComponentRegistryResolver` now skips incomplete Jira configs so aggregate ranges match Git behavior (`RES-001`)
 
 ## Runtime Verification (Phase 7+8)
 
@@ -110,6 +112,6 @@ All verified on running server (localhost:4567) with 933 migrated components:
 ## What's Left (see todo.md)
 
 - Auth (Keycloak) — при деплое в OKD
-- Migration regression suite (replay prod traffic, diff responses)
+- Expand migration regression suite from local DB-backed resolver coverage to replayed prod traffic diff checks
 - Migration defaults application — some components (e.g. TEST_COMPONENT) may have empty fields that should inherit from Defaults.groovy
 - OverrideApplicator live version-range matching (Phase 1: scalar fields only, tested CRUD but not runtime application with version)

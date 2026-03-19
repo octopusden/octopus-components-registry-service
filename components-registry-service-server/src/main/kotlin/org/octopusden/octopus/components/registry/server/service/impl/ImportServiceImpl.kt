@@ -281,6 +281,9 @@ class ImportServiceImpl(
                                 escrow.providedDependencies.takeIf { it.isNotEmpty() }?.let {
                                     put("providedDependencies", it.toList())
                                 }
+                                escrow.additionalSources.takeIf { it.isNotEmpty() }?.let {
+                                    put("additionalSources", it.toList())
+                                }
                             }
                         if (escrowMap.isNotEmpty()) put("escrow", escrowMap)
                     } catch (e: Exception) {

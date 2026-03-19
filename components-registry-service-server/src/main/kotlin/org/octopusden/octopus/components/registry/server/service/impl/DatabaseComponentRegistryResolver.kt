@@ -384,6 +384,9 @@ class DatabaseComponentRegistryResolver(
         val componentDistribution = component.distributions.firstOrNull()?.toDistribution()
 
         for (jiraConfig in componentJiraConfigs) {
+            if (jiraConfig.projectKey.isNullOrBlank()) {
+                continue
+            }
             val jiraComponent = jiraConfig.toJiraComponent(componentHotfixEnabled)
             ranges.add(
                 buildJiraComponentVersionRange(
@@ -410,6 +413,9 @@ class DatabaseComponentRegistryResolver(
                     ?: componentDistribution
 
             for (jiraConfig in versionJiraConfigs) {
+                if (jiraConfig.projectKey.isNullOrBlank()) {
+                    continue
+                }
                 val jiraComponent = jiraConfig.toJiraComponent(versionHotfixEnabled)
                 ranges.add(
                     buildJiraComponentVersionRange(

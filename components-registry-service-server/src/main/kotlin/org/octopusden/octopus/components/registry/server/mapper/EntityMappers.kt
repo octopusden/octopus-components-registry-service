@@ -140,7 +140,11 @@ fun ComponentEntity.toEscrowModuleConfig(componentVersion: ComponentVersionEntit
     setEscrowModuleConfigField(config, "system", this.system.joinToString(","))
     setEscrowModuleConfigField(config, "clientCode", this.clientCode)
     setEscrowModuleConfigField(config, "solution", this.solution)
-    setEscrowModuleConfigField(config, "parentComponent", this.parentComponent?.name)
+    setEscrowModuleConfigField(
+        config,
+        "parentComponent",
+        this.parentComponent?.name ?: this.metadata["parentComponent"] as? String,
+    )
     setEscrowModuleConfigField(config, "archived", this.archived)
     config.productType = this.productType?.let { safeParseProductType(it) }
 
@@ -330,7 +334,12 @@ fun EscrowConfigurationEntity.toEscrowApi(): org.octopusden.octopus.components.r
 
         override fun getDiskSpaceRequirement() = java.util.Optional.ofNullable(entity.diskSpace?.toLongOrNull())
 
-        override fun getAdditionalSources(): Collection<String> = emptyList()
+        override fun getAdditionalSources(): Collection<String> =
+            when (val value = entity.metadata["additionalSources"]) {
+                is Collection<*> -> value.mapNotNull { it?.toString() }
+                is Array<*> -> value.mapNotNull { it?.toString() }
+                else -> emptyList()
+            }
 
         override fun isReusable() = entity.reusable ?: false
 
@@ -423,6 +432,7 @@ fun EscrowModule.toComponentEntity(): ComponentEntity {
             firstConfig.securityChampion?.let { put("securityChampion", it) }
             firstConfig.copyright?.let { put("copyright", it) }
             firstConfig.releasesInDefaultBranch?.let { put("releasesInDefaultBranch", it) }
+            firstConfig.parentComponent?.let { put("parentComponent", it) }
             firstConfig.labels?.let { put("labels", it.toList()) }
             firstConfig.doc?.let {
                 put("docUrl", it.component())
@@ -584,6 +594,13 @@ private fun org.octopusden.octopus.components.registry.api.escrow.Escrow.toEscro
         reusable = this.isReusable,
         generation = this.generation.orElse(null)?.name,
         diskSpace = this.diskSpaceRequirement.orElse(null)?.toString(),
+        metadata =
+            mutableMapOf<String, Any?>().apply {
+                this@toEscrowConfigEntity
+                    .additionalSources
+                    .takeIf { it.isNotEmpty() }
+                    ?.let { put("additionalSources", it.toList()) }
+            },
     )
 
 private fun VCSSettings.toVcsSettingsEntity(
