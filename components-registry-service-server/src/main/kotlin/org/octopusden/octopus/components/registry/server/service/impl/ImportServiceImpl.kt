@@ -109,6 +109,9 @@ class ImportServiceImpl(
             if (result.success) migrated++ else failed++
         }
 
+        // Resolve parent-child relationships (requires all components to be saved first)
+        resolveParentComponentReferences()
+
         return BatchMigrationResult(
             total = allComponents.size,
             migrated = migrated,
@@ -363,6 +366,31 @@ class ImportServiceImpl(
         }
 
         return discrepancies
+    }
+
+    /**
+     * Second pass: resolve parentComponent string references (stored in metadata)
+     * to actual JPA @ManyToOne relationships. Must run after all components are saved.
+     */
+    private fun resolveParentComponentReferences() {
+        val allComponents = componentRepository.findAll()
+        val componentByName = allComponents.associateBy { it.name }
+        var resolved = 0
+
+        for (component in allComponents) {
+            val parentName = component.metadata["parentComponent"] as? String ?: continue
+            val parent = componentByName[parentName]
+            if (parent != null && component.parentComponent == null) {
+                component.parentComponent = parent
+                componentRepository.save(component)
+                resolved++
+            }
+        }
+
+        if (resolved > 0) {
+            componentRepository.flush()
+            LOG.info("Resolved {} parent-component relationships", resolved)
+        }
     }
 
     companion object {

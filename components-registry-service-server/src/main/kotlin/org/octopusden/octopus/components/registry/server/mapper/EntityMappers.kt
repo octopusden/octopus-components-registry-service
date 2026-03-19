@@ -334,12 +334,17 @@ fun EscrowConfigurationEntity.toEscrowApi(): org.octopusden.octopus.components.r
 
         override fun getDiskSpaceRequirement() = java.util.Optional.ofNullable(entity.diskSpace?.toLongOrNull())
 
-        override fun getAdditionalSources(): Collection<String> =
-            when (val value = entity.metadata["additionalSources"]) {
-                is Collection<*> -> value.mapNotNull { it?.toString() }
-                is Array<*> -> value.mapNotNull { it?.toString() }
-                else -> emptyList()
+        @Suppress("UNCHECKED_CAST")
+        override fun getAdditionalSources(): Collection<String> {
+            val value = entity.metadata["additionalSources"] ?: return emptyList()
+            // After JSONB round-trip Jackson may return ArrayList, LinkedList, or other types
+            return try {
+                (value as? Iterable<*>)?.mapNotNull { it?.toString() }
+                    ?: listOf(value.toString())
+            } catch (_: Exception) {
+                emptyList()
             }
+        }
 
         override fun isReusable() = entity.reusable ?: false
 
