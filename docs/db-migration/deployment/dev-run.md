@@ -90,16 +90,8 @@ This is the profile used by downstream projects (DMS Service, Releng, Escrow Gen
 `components-registry.product-type` values are environment-specific and **must not be committed**.
 Create `components-registry-service-server/dev/application-local.yml` (gitignored):
 
-```yaml
-components-registry:
-  product-type:
-    c: CARDS
-    k: KERNEL
-    d: DWH
-    ddb: DWH_DB
-```
-
-See `application-local.yml.example` for the template. Without this file, server startup will fail with `Required key 'components-registry.product-type.c' not found`.
+See `application-local.yml.example` for the template and allowed values.
+Without this file, server startup will fail with `Required key 'components-registry.product-type.c' not found`.
 
 For downstream Docker Compose, pass via environment variables:
 `PRODUCT_TYPE_C`, `PRODUCT_TYPE_K`, `PRODUCT_TYPE_D`, `PRODUCT_TYPE_DDB`.
