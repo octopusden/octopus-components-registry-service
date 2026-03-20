@@ -1,0 +1,35 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <CurrentIssues>
+    <ID>ClassOrdering:ComponentControllerV2.kt$ComponentControllerV2$override var createComponentFunc: (EscrowModule) -&gt; ComponentV2 = { escrowModule -&gt; val moduleName = escrowModule.moduleName val escrowModuleConfig = escrowModule.moduleConfigurations[0] ComponentV2(moduleName, escrowModuleConfig.componentDisplayName, escrowModuleConfig.componentOwner) }</ID>
+    <ID>ClassOrdering:ComponentRegistryResolverImpl.kt$ComponentRegistryResolverImpl$private val buildSystemMetrics = ConcurrentHashMap&lt;BuildSystem, Int&gt;()</ID>
+    <ID>ClassOrdering:StartupApplicationListener.kt$StartupApplicationListener$Companion</ID>
+    <ID>ForbiddenComment:ComponentRegistryResolverImpl.kt$ComponentRegistryResolverImpl$// TODO: Remove archived suffix check when all archived components are marked with archived parameter</ID>
+    <ID>ForbiddenComment:ComponentRegistryResolverImpl.kt$ComponentRegistryResolverImpl$// TODO: should version be transformed to build/hotfix format in the same way as in getVCSSettings method?</ID>
+    <ID>FunctionOnlyReturningConstant:ComponentsRegistryServiceController.kt$ComponentsRegistryServiceController$@GetMapping("ping") fun ping(): String</ID>
+    <ID>LargeClass:ComponentsRegistryServiceControllerTest.kt$ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTest</ID>
+    <ID>MaxLineLength:ComponentRegistryResolverImpl.kt$ComponentRegistryResolverImpl$*</ID>
+    <ID>MaxLineLength:ComponentRegistryResolverImpl.kt$ComponentRegistryResolverImpl$return buildToolsResolver.getComponentBuildTools(ComponentVersion.create(component, version), null, ignoreRequired ?: false).toList()</ID>
+    <ID>MaxLineLength:JiraComponentVersionToDetailedComponentVersionMapper.kt$JiraComponentVersionToDetailedComponentVersionMapper$componentVersionFormat.releaseVersionFormat.formatVersion(versionNumericVersionFactory, src.version) + JiraComponentVersion.RC_SUFFIX</ID>
+    <ID>MaxLineLength:StartupApplicationListener.kt$StartupApplicationListener$*</ID>
+    <ID>MaxLineLength:StartupApplicationListener.kt$StartupApplicationListener$val</ID>
+    <ID>NewLineAtEndOfFile:ComponentsRegistryService.kt$org.octopusden.octopus.components.registry.server.service.ComponentsRegistryService.kt</ID>
+    <ID>NewLineAtEndOfFile:Mappers.kt$org.octopusden.octopus.components.registry.server.mapper.Mappers.kt</ID>
+    <ID>NewLineAtEndOfFile:MetricsTest.kt$org.octopusden.octopus.components.registry.server.MetricsTest.kt</ID>
+    <ID>NewLineAtEndOfFile:NoOpVcsServiceImpl.kt$org.octopusden.octopus.components.registry.server.service.impl.NoOpVcsServiceImpl.kt</ID>
+    <ID>NewLineAtEndOfFile:VcsService.kt$org.octopusden.octopus.components.registry.server.service.VcsService.kt</ID>
+    <ID>TooManyFunctions:ComponentControllerV2.kt$ComponentControllerV2 : BaseComponentController</ID>
+    <ID>TooManyFunctions:ComponentRegistryResolver.kt$ComponentRegistryResolver</ID>
+    <ID>TooManyFunctions:ComponentRegistryResolverImpl.kt$ComponentRegistryResolverImpl : ComponentRegistryResolver</ID>
+    <ID>UnusedPrivateProperty:BaseComponentController.kt$BaseComponentController$private val logger: Logger = LoggerFactory.getLogger(this::class.java)</ID>
+    <ID>UseCheckOrError:BaseComponentController.kt$BaseComponentController$throw IllegalStateException("Distribution can not be null")</ID>
+    <ID>UseCheckOrError:ComponentRegistryResolverImpl.kt$ComponentRegistryResolverImpl$throw IllegalStateException("Found ${it.size} configurations for version '$version' of component $component")</ID>
+    <ID>UseCheckOrError:ComponentRegistryResolverImpl.kt$ComponentRegistryResolverImpl$throw IllegalStateException("Found ${it.size} configurations for version '$version' of project $projectKey")</ID>
+    <ID>UseCheckOrError:ComponentRegistryResolverImpl.kt$ComponentRegistryResolverImpl$throw IllegalStateException("No module configurations available")</ID>
+    <ID>UseCheckOrError:CopyrightServiceImpl.kt$CopyrightServiceImpl$throw IllegalStateException("Component '$component' copyright file is not a file")</ID>
+    <ID>UseCheckOrError:CopyrightServiceImpl.kt$CopyrightServiceImpl$throw IllegalStateException("Component '$component' copyright has invalid name")</ID>
+    <ID>UseCheckOrError:GitVcsServiceImpl.kt$GitVcsServiceImpl$throw IllegalStateException("Components Registry is empty, can not continue")</ID>
+    <ID>UseCheckOrError:StartupApplicationListener.kt$StartupApplicationListener$throw IllegalStateException("Unable to match provided library $fileName")</ID>
+  </CurrentIssues>
+</SmellBaseline>

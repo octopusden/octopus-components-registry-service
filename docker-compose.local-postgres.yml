@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    ports:
+      - "${CRS_DB_PORT:-5432}:5432"
+    environment:
+      POSTGRES_DB: ${CRS_DB_NAME:-components_registry}
+      POSTGRES_USER: ${CRS_DB_USER:-crs}
+      POSTGRES_PASSWORD: ${CRS_DB_PASSWORD:-crs}
+    volumes:
+      - crs_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${CRS_DB_USER:-crs} -d ${CRS_DB_NAME:-components_registry}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  crs_postgres_data:

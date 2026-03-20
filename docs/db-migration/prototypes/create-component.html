@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Component - Components Registry</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="theme.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--fg); transition: background .2s, color .2s; }
+        header { border-bottom: 1px solid var(--border); }
+        .nav-active { background: var(--accent); color: var(--accent-fg); }
+        .nav-inactive { color: var(--muted-fg); }
+        .nav-inactive:hover { color: var(--fg); background: var(--accent); opacity: .6; }
+        .text-muted { color: var(--muted-fg); }
+        .text-link { color: var(--link); }
+        .btn-primary { background: var(--primary); color: var(--primary-fg); }
+        .btn-primary:hover { opacity: .9; }
+        .btn-outline { border: 1px solid var(--input); color: var(--muted-fg); }
+        .btn-outline:hover { background: var(--accent); color: var(--fg); }
+        .field-label { font-size: 13px; font-weight: 500; color: var(--muted-fg); margin-bottom: 4px; }
+        .field-input { width: 100%; height: 36px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--input); background: transparent; font-size: 14px; color: var(--fg); }
+        .field-input:focus { outline: none; box-shadow: 0 0 0 1px var(--ring); }
+        .field-input:disabled { opacity: 0.4; cursor: not-allowed; }
+        .section-card { border: 1px solid var(--border); border-radius: 8px; padding: 20px; }
+        .step-num { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; }
+        .step-active { background: var(--primary); color: var(--primary-fg); }
+        .step-pending { background: var(--muted); color: var(--muted-fg); }
+        .theme-btn { width: 32px; height: 32px; border-radius: 6px; border: 1px solid var(--input); display: flex; align-items: center; justify-content: center; color: var(--muted-fg); cursor: pointer; background: transparent; }
+        .theme-btn:hover { background: var(--accent); color: var(--fg); }
+        .badge { display: inline-flex; align-items: center; border-radius: 9999px; padding: 2px 10px; font-size: 12px; font-weight: 500; }
+        .badge-outline { border: 1px solid var(--border); color: var(--muted-fg); }
+        .badge-yellow { background: var(--badge-yellow-bg); color: var(--badge-yellow-fg); }
+        .tc-tree { border: 1px solid var(--border); border-radius: 6px; max-height: 200px; overflow-y: auto; }
+        .tc-tree-item { padding: 6px 12px; font-size: 13px; cursor: pointer; }
+        .tc-tree-item:hover { background: var(--accent); }
+        .tc-tree-item.selected { background: var(--accent); color: var(--fg); }
+        .tc-tree-indent { padding-left: 28px; }
+        .default-hint { font-size: 11px; color: var(--muted-fg); margin-top: 2px; }
+        .default-hint code { font-size: 11px; background: var(--muted); padding: 1px 4px; border-radius: 3px; }
+    </style>
+</head>
+<body class="min-h-screen">
+    <!-- Header -->
+    <header>
+        <div class="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
+            <div class="flex items-center gap-6">
+                <h1 class="text-base font-semibold tracking-tight">Components Registry</h1>
+                <nav class="flex items-center gap-1 text-sm">
+                    <a href="index.html" class="px-3 py-1.5 rounded-md nav-active font-medium">Components</a>
+                    <a href="audit-log.html" class="px-3 py-1.5 rounded-md nav-inactive transition-colors">Audit Log</a>
+                    <a href="admin-settings.html" class="px-3 py-1.5 rounded-md nav-inactive transition-colors">Settings</a>
+                </nav>
+            </div>
+            <div class="flex items-center gap-3">
+                <button class="theme-btn" onclick="toggleTheme()" title="Toggle theme">
+                    <svg class="theme-icon-sun w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                    <svg class="theme-icon-moon w-4 h-4" style="display:none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+                </button>
+                <div style="width:1px;height:16px;background:var(--border)"></div>
+                <div class="flex items-center gap-2">
+                    <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium" style="background:var(--accent);color:var(--accent-fg)">PG</div>
+                    <span class="text-sm text-muted">p.gorbachev</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Breadcrumb -->
+    <div class="max-w-3xl mx-auto px-6 py-4 flex items-center gap-2 text-sm">
+        <a href="index.html" class="text-muted hover:underline">Components</a>
+        <svg class="w-4 h-4 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        <span class="font-medium">New Component</span>
+    </div>
+
+    <!-- Main Content -->
+    <main class="max-w-3xl mx-auto px-6 pb-12">
+        <div class="mb-6">
+            <h2 class="text-2xl font-semibold tracking-tight">Create Component</h2>
+            <p class="text-sm text-muted mt-1">Register a new component in the Components Registry.</p>
+        </div>
+
+        <!-- Step 1: Profile (future feature) -->
+        <div class="section-card mb-4" style="opacity: 0.5;">
+            <div class="flex items-center gap-3 mb-3">
+                <span class="step-num step-pending">1</span>
+                <h3 class="text-sm font-semibold">Component Profile</h3>
+                <span class="badge badge-yellow">Future Feature</span>
+            </div>
+            <p class="text-xs text-muted mb-3 ml-9">Pre-defined profiles that auto-fill build, VCS, and escrow settings. Currently, component defaults serve as a single implicit profile.</p>
+            <div class="ml-9">
+                <select class="field-input" disabled style="max-width: 320px;">
+                    <option>Default Profile (component defaults)</option>
+                    <option>Gradle Library</option>
+                    <option>Spring Boot Service</option>
+                    <option>Kotlin DSL Plugin</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Step 2: Identity -->
+        <div class="section-card mb-4">
+            <div class="flex items-center gap-3 mb-4">
+                <span class="step-num step-active">2</span>
+                <h3 class="text-sm font-semibold">Component Identity</h3>
+            </div>
+            <div class="ml-9 space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="field-label">Component Name <span style="color:var(--badge-red-fg)">*</span></label>
+                        <input type="text" placeholder="e.g. octopus-auth-service" class="field-input font-mono text-xs" id="comp-name">
+                        <div class="default-hint">Unique identifier. Lowercase, alphanumeric, hyphens, underscores.</div>
+                    </div>
+                    <div>
+                        <label class="field-label">Display Name</label>
+                        <input type="text" placeholder="e.g. Auth Service" class="field-input" id="comp-display">
+                        <div class="default-hint">Human-readable name. Used in Jira links.</div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="field-label">Component Owner</label>
+                        <input type="text" value="p.gorbachev" class="field-input">
+                        <div class="default-hint">Pre-filled with current user</div>
+                    </div>
+                    <div>
+                        <label class="field-label">Group ID</label>
+                        <input type="text" value="corp.domain" class="field-input font-mono text-xs">
+                        <div class="default-hint">From defaults: <code>corp.domain</code></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 3: VCS Repository -->
+        <div class="section-card mb-4">
+            <div class="flex items-center gap-3 mb-4">
+                <span class="step-num step-active">3</span>
+                <h3 class="text-sm font-semibold">VCS Repository</h3>
+                <span class="text-xs text-muted">(optional)</span>
+            </div>
+            <div class="ml-9 space-y-4">
+                <div>
+                    <label class="field-label">Repository URL</label>
+                    <input type="text" placeholder="ssh://git@git.domain.corp/team/repo.git" class="field-input font-mono text-xs">
+                    <div class="default-hint">Link to existing VCS repository. Leave empty to add later.</div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="field-label">Branch</label>
+                        <input type="text" value="master" class="field-input">
+                        <div class="default-hint">From defaults: <code>master</code></div>
+                    </div>
+                    <div>
+                        <label class="field-label">Tag Pattern</label>
+                        <input type="text" value="v${version}" class="field-input font-mono text-xs">
+                        <div class="default-hint">From defaults: <code>v${version}</code></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 4: TeamCity Integration -->
+        <div class="section-card mb-4">
+            <div class="flex items-center gap-3 mb-4">
+                <span class="step-num step-active">4</span>
+                <h3 class="text-sm font-semibold">TeamCity Integration</h3>
+                <span class="badge badge-yellow">Future Feature</span>
+            </div>
+            <div class="ml-9">
+                <label class="flex items-center gap-3 cursor-pointer mb-4">
+                    <input type="checkbox" id="tc-checkbox" onchange="document.getElementById('tc-config').classList.toggle('hidden', !this.checked)" class="rounded w-4 h-4">
+                    <span class="text-sm">Create TeamCity project on component creation</span>
+                </label>
+                <div id="tc-config" class="hidden space-y-4">
+                    <div>
+                        <label class="field-label">Parent Project</label>
+                        <div class="relative">
+                            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                            <input type="text" placeholder="Search parent project..." class="field-input pl-9" id="tc-search" oninput="filterProjects(this.value)">
+                        </div>
+                    </div>
+                    <div class="tc-tree" id="tc-tree">
+                        <div class="tc-tree-item font-medium" onclick="selectProject(this, 'Root Project')">
+                            <svg class="w-3.5 h-3.5 inline mr-1 -mt-0.5 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+                            Root Project
+                        </div>
+                        <div class="tc-tree-item tc-tree-indent" onclick="selectProject(this, 'Platform')">
+                            <svg class="w-3.5 h-3.5 inline mr-1 -mt-0.5 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+                            Platform
+                        </div>
+                        <div class="tc-tree-item tc-tree-indent selected" onclick="selectProject(this, 'Platform :: Services')">
+                            <svg class="w-3.5 h-3.5 inline mr-1 -mt-0.5 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+                            Platform :: Services
+                        </div>
+                        <div class="tc-tree-item tc-tree-indent" onclick="selectProject(this, 'Platform :: Libraries')">
+                            <svg class="w-3.5 h-3.5 inline mr-1 -mt-0.5 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+                            Platform :: Libraries
+                        </div>
+                        <div class="tc-tree-item tc-tree-indent" onclick="selectProject(this, 'EE')">
+                            <svg class="w-3.5 h-3.5 inline mr-1 -mt-0.5 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+                            EE
+                        </div>
+                        <div class="tc-tree-item tc-tree-indent" onclick="selectProject(this, 'Integrations')">
+                            <svg class="w-3.5 h-3.5 inline mr-1 -mt-0.5 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+                            Integrations
+                        </div>
+                    </div>
+                    <div class="p-3 rounded-md border" style="border-color:var(--border);background:var(--muted)">
+                        <div class="flex items-center gap-2 text-sm">
+                            <svg class="w-4 h-4 text-muted shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            <span class="text-muted">A new sub-project <strong id="tc-preview" style="color:var(--fg)">Platform :: Services :: &lt;component-name&gt;</strong> will be created in TeamCity.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 5: Pre-filled defaults (collapsed) -->
+        <div class="section-card mb-6">
+            <div class="flex items-center gap-3 cursor-pointer" onclick="document.getElementById('defaults-body').classList.toggle('hidden'); this.querySelector('.chevron').classList.toggle('rotate-90')">
+                <span class="step-num step-active">5</span>
+                <h3 class="text-sm font-semibold">Build & Configuration Defaults</h3>
+                <svg class="chevron w-4 h-4 text-muted transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                <span class="text-xs text-muted">Pre-filled from component defaults. Click to customize.</span>
+            </div>
+            <div id="defaults-body" class="hidden mt-4 pt-4 ml-9" style="border-top: 1px solid var(--border);">
+                <div class="grid grid-cols-2 gap-6">
+                    <!-- Build -->
+                    <div>
+                        <h4 class="text-xs font-medium text-muted uppercase tracking-wider mb-3">Build</h4>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="field-label">Build System</label>
+                                <select class="field-input">
+                                    <option selected>GRADLE</option>
+                                    <option>MAVEN</option>
+                                    <option>PROVIDED</option>
+                                </select>
+                                <div class="default-hint">Default: <code>GRADLE</code></div>
+                            </div>
+                            <div>
+                                <label class="field-label">Java Version</label>
+                                <input type="text" value="21" class="field-input">
+                                <div class="default-hint">Default: <code>21</code></div>
+                            </div>
+                            <div>
+                                <label class="field-label">Gradle Version</label>
+                                <input type="text" value="8.6" class="field-input">
+                                <div class="default-hint">Default: <code>8.6</code></div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Escrow -->
+                    <div>
+                        <h4 class="text-xs font-medium text-muted uppercase tracking-wider mb-3">Escrow</h4>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="field-label">Generation Mode</label>
+                                <select class="field-input">
+                                    <option selected>AUTO</option>
+                                    <option>MANUAL</option>
+                                    <option>UNSUPPORTED</option>
+                                </select>
+                                <div class="default-hint">Default: <code>AUTO</code></div>
+                            </div>
+                            <div>
+                                <label class="field-label">Build Task</label>
+                                <input type="text" value="clean build" class="field-input font-mono text-xs">
+                                <div class="default-hint">Default: <code>clean build</code></div>
+                            </div>
+                            <div class="flex items-center gap-4 pt-1">
+                                <label class="flex items-center gap-2 text-sm cursor-pointer">
+                                    <input type="checkbox" checked class="rounded"> Reusable
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Jira -->
+                    <div>
+                        <h4 class="text-xs font-medium text-muted uppercase tracking-wider mb-3">Jira</h4>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="field-label">Project Key</label>
+                                <input type="text" placeholder="e.g. AUTH" class="field-input font-mono">
+                            </div>
+                            <div>
+                                <label class="field-label">Line Version Format</label>
+                                <input type="text" value="$major02.$minor02" class="field-input font-mono text-xs">
+                                <div class="default-hint">Default: <code>$major02.$minor02</code></div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Metadata -->
+                    <div>
+                        <h4 class="text-xs font-medium text-muted uppercase tracking-wider mb-3">Metadata</h4>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="field-label">Copyright</label>
+                                <input type="text" value="Copyright (c) 2026 ACME Corp." class="field-input text-xs">
+                                <div class="default-hint">Default: <code>Copyright (c) 2026 ACME Corp.</code></div>
+                            </div>
+                            <div>
+                                <label class="field-label">Labels</label>
+                                <input type="text" placeholder="Add labels (comma-separated)" class="field-input text-xs">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center justify-between pt-4" style="border-top: 1px solid var(--border);">
+            <a href="index.html" class="inline-flex items-center rounded-md btn-outline px-4 py-2 text-sm transition-colors">Cancel</a>
+            <div class="flex items-center gap-3">
+                <span class="text-xs text-muted">Fields marked with <span style="color:var(--badge-red-fg)">*</span> are required</span>
+                <button class="inline-flex items-center rounded-md btn-primary px-6 py-2 text-sm font-medium transition-opacity">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                    Create Component
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        function selectProject(el, name) {
+            document.querySelectorAll('.tc-tree-item').forEach(i => i.classList.remove('selected'));
+            el.classList.add('selected');
+            const compName = document.getElementById('comp-name').value || '<component-name>';
+            document.getElementById('tc-preview').textContent = name + ' :: ' + compName;
+        }
+        function filterProjects(query) {
+            const q = query.toLowerCase();
+            document.querySelectorAll('.tc-tree-item').forEach(item => {
+                item.style.display = item.textContent.toLowerCase().includes(q) ? '' : 'none';
+            });
+        }
+        // Update TC preview when component name changes
+        document.getElementById('comp-name').addEventListener('input', function() {
+            const selected = document.querySelector('.tc-tree-item.selected');
+            if (selected) {
+                const parentName = selected.textContent.trim();
+                document.getElementById('tc-preview').textContent = parentName + ' :: ' + (this.value || '<component-name>');
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <CurrentIssues>
+    <ID>CyclomaticComplexMethod:Component.kt$Component$override fun equals(other: Any?): Boolean</ID>
+    <ID>EqualsWithHashCodeExist:ComponentV1.kt$ComponentV1 : Component</ID>
+    <ID>EqualsWithHashCodeExist:ComponentV2.kt$ComponentV2 : Component</ID>
+    <ID>MatchingDeclarationName:ComponentVersionFormat.kt$ComponentVersionFormatDTO</ID>
+    <ID>NewLineAtEndOfFile:BuildParametersDTO.kt$org.octopusden.octopus.components.registry.core.dto.BuildParametersDTO.kt</ID>
+    <ID>NewLineAtEndOfFile:ComponentV3.kt$org.octopusden.octopus.components.registry.core.dto.ComponentV3.kt</ID>
+    <ID>NewLineAtEndOfFile:DocDTO.kt$org.octopusden.octopus.components.registry.core.dto.DocDTO.kt</ID>
+    <ID>NewLineAtEndOfFile:EscrowDTO.kt$org.octopusden.octopus.components.registry.core.dto.EscrowDTO.kt</ID>
+    <ID>NewLineAtEndOfFile:EscrowGenerationMode.kt$org.octopusden.octopus.components.registry.core.dto.EscrowGenerationMode.kt</ID>
+    <ID>NewLineAtEndOfFile:ServiceMode.kt$org.octopusden.octopus.components.registry.core.dto.ServiceMode.kt</ID>
+    <ID>NewLineAtEndOfFile:VCSConfigurationException.kt$org.octopusden.octopus.components.registry.core.exceptions.VCSConfigurationException.kt</ID>
+    <ID>NewLineAtEndOfFile:VCSSettingsDTO.kt$org.octopusden.octopus.components.registry.core.dto.VCSSettingsDTO.kt</ID>
+    <ID>NewLineAtEndOfFile:VersionNamesDTO.kt$org.octopusden.octopus.components.registry.core.dto.VersionNamesDTO.kt</ID>
+  </CurrentIssues>
+</SmellBaseline>

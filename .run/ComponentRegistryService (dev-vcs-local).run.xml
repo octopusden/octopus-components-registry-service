@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="ComponentRegistryService (dev-vcs-local)" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
-    <option name="ACTIVE_PROFILES" value="dev,dev-vcs-local" />
+    <option name="ACTIVE_PROFILES" value="dev,dev-vcs-local,local" />
     <additionalParameters>
       <param>
         <option name="enabled" value="true" />

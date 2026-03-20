@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="ComponentRegistryService (dev-fs)" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
-    <option name="ACTIVE_PROFILES" value="dev,dev-fs" />
+    <option name="ACTIVE_PROFILES" value="dev,dev-fs,local" />
     <additionalParameters>
       <param>
         <option name="enabled" value="true" />
