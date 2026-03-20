@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.light.client.dto;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
@@ -7,15 +8,19 @@ import java.util.Objects;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class VersionedComponent extends Component {
-    @JsonProperty
-    private String version;
+    private final String version;
+
+    @JsonCreator
+    public VersionedComponent(
+            @JsonProperty("id") String id,
+            @JsonProperty("name") String name,
+            @JsonProperty("version") String version) {
+        super(id, name);
+        this.version = version;
+    }
 
     public String getVersion() {
         return version;
-    }
-
-    public void setVersion(String version) {
-        this.version = version;
     }
 
     @Override

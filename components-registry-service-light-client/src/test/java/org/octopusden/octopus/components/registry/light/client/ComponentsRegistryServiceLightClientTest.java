@@ -27,8 +27,6 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static org.octopusden.octopus.components.registry.test.BaseComponentsRegistryServiceTest.configureSpringAppTestDataDir;
 import static org.octopusden.octopus.components.registry.test.BaseComponentsRegistryServiceTest.getTestResourcesPath;

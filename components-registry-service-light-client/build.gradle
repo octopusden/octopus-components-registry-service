@@ -2,7 +2,6 @@
  * Lightweight client for use in Gradle plugins that support older versions.
  */
 plugins {
-    id 'org.springframework.boot'
     id 'java-test-fixtures'
 }
 
@@ -35,16 +34,7 @@ dependencies {
     testImplementation platform("org.springframework.boot:spring-boot-dependencies:${project['spring-boot-legacy.version']}")
     testImplementation ("org.springframework.boot:spring-boot-starter-test")
 
-    testImplementation("ch.qos.logback:logback-classic:1.2.7")
-}
-
-bootJar {
-    enabled = false
-}
-
-jar {
-    enabled = true
-    archiveClassifier = ''
+    testImplementation('ch.qos.logback:logback-classic:1.5.13')
 }
 
 sourceSets {

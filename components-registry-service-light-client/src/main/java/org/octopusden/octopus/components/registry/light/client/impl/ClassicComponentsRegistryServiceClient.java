@@ -20,7 +20,7 @@ public class ClassicComponentsRegistryServiceClient implements ComponentsRegistr
     private static final ObjectMapper DEFAULT_OBJECT_MAPPER = configureObjectMapper(new ObjectMapper());
 
     private final ObjectMapper objectMapper;
-    private ComponentsRegistryServiceClient client;
+    private volatile ComponentsRegistryServiceClient client;
 
     public ClassicComponentsRegistryServiceClient(ClassicComponentsRegistryServiceClientUrlProvider apiUrlProvider) {
         this(apiUrlProvider, DEFAULT_OBJECT_MAPPER);

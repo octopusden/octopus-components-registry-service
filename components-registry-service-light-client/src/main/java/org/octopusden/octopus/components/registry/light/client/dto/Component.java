@@ -1,36 +1,28 @@
 package org.octopusden.octopus.components.registry.light.client.dto;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.Objects;
 
 public class Component {
-    @JsonProperty
-    private String id;
+    private final String id;
+    private final String name;
 
-    @JsonProperty
-    private String name;
+    @JsonCreator
+    public Component(
+            @JsonProperty("id") String id,
+            @JsonProperty("name") String name) {
+        this.id = id;
+        this.name = name;
+    }
 
     public String getId() {
         return id;
     }
 
-    public void setId(String id) {
-        this.id = id;
-    }
-
     public String getName() {
         return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    @JsonIgnore
-    public String getComponentKey() {
-        return id == null ? name : id;
     }
 
     @Override
