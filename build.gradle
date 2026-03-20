@@ -380,13 +380,13 @@ tasks.register('qualityStatic') {
     }
     dependsOn(subprojects.collectMany { project ->
         [
-                "${project.path}:checkstyleMain",
-                "${project.path}:checkstyleTest",
-                "${project.path}:pmdMain",
-                "${project.path}:pmdTest",
-                "${project.path}:classes",
-                "${project.path}:testClasses"
-        ]
+                existingTaskPath(project, 'checkstyleMain'),
+                existingTaskPath(project, 'checkstyleTest'),
+                existingTaskPath(project, 'pmdMain'),
+                existingTaskPath(project, 'pmdTest'),
+                existingTaskPath(project, 'classes'),
+                existingTaskPath(project, 'testClasses')
+        ].findAll { it != null }
     })
     dependsOn(groovyProjects.collectMany { project ->
         [

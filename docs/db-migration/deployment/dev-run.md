@@ -71,6 +71,39 @@ docker compose -f docker-compose.local-postgres.yml up -d
 Then restart server — Flyway applies migrations automatically.
 Then repeat migration workflow above.
 
+## Auto-Migrate Mode
+
+Starts server and automatically migrates all components to DB (no manual curl needed).
+Use profile `dev-db-automigrate` instead of `dev-db`:
+
+```bash
+./gradlew :components-registry-service-server:bootRun \
+  --args="--spring.profiles.active=dev,dev-vcs-local,dev-db-automigrate \
+  --spring.config.additional-location=file:components-registry-service-server/dev/ \
+  --components-registry.vcs.root=file:///Users/pgorbachev/projects/ow/components-registry"
+```
+
+This is the profile used by downstream projects (DMS Service, Releng, Escrow Generator) in their Docker Compose setups.
+
+## Product Type Configuration
+
+`components-registry.product-type` values are environment-specific and **must not be committed**.
+Create `components-registry-service-server/dev/application-local.yml` (gitignored):
+
+```yaml
+components-registry:
+  product-type:
+    c: CARDS
+    k: KERNEL
+    d: DWH
+    ddb: DWH_DB
+```
+
+See `application-local.yml.example` for the template. Without this file, server startup will fail with `Required key 'components-registry.product-type.c' not found`.
+
+For downstream Docker Compose, pass via environment variables:
+`PRODUCT_TYPE_C`, `PRODUCT_TYPE_K`, `PRODUCT_TYPE_D`, `PRODUCT_TYPE_DDB`.
+
 ## UI
 
 After server is running: http://localhost:4567/ui

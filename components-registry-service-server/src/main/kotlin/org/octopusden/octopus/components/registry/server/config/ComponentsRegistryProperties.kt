@@ -17,6 +17,7 @@ class ComponentsRegistryProperties(
     val vcs: VcsSettings,
     val versionName: VersionNameSettings,
     val copyrightPath: String?,
+    val autoMigrate: Boolean = false,
 ) {
     data class VcsSettings(
         val enabled: Boolean = true,

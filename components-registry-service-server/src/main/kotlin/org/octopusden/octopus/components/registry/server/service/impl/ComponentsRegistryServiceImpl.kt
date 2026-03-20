@@ -2,9 +2,11 @@ package org.octopusden.octopus.components.registry.server.service.impl
 
 import jakarta.annotation.PostConstruct
 import org.octopusden.octopus.components.registry.core.dto.ServiceStatusDTO
+import org.octopusden.octopus.components.registry.server.config.ComponentsRegistryProperties
 import org.octopusden.octopus.components.registry.server.model.ServiceStatus
 import org.octopusden.octopus.components.registry.server.service.ComponentRegistryResolver
 import org.octopusden.octopus.components.registry.server.service.ComponentsRegistryService
+import org.octopusden.octopus.components.registry.server.service.ImportService
 import org.octopusden.octopus.components.registry.server.service.VcsService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -16,6 +18,8 @@ class ComponentsRegistryServiceImpl(
     private val vcsService: VcsService,
     private val componentRegistryResolver: ComponentRegistryResolver,
     private val serviceStatus: ServiceStatus,
+    private val properties: ComponentsRegistryProperties,
+    private val importService: ImportService,
 ) : ComponentsRegistryService {
     override fun updateConfigCache(): Long {
         log.info("Start update of Component Registry")
@@ -40,6 +44,14 @@ class ComponentsRegistryServiceImpl(
     @Suppress("UnusedPrivateMember")
     private fun cloneVcsData() {
         updateConfigCache()
+        if (properties.autoMigrate) {
+            log.info("Auto-migrate enabled, migrating all components to database...")
+            val result = importService.migrate()
+            log.info(
+                "Auto-migrate complete: ${result.components.migrated} migrated, " +
+                    "${result.components.skipped} skipped, ${result.components.failed} failed",
+            )
+        }
     }
 
     companion object {
