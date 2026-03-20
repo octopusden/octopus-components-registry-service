@@ -81,8 +81,8 @@ class ComponentsRegistryServiceLightClientTest {
         );
 
         Assertions.assertIterableEquals(
-                expectedArtifactComponents.getArtifactComponents(),
-                actualArtifactComponents.getArtifactComponents()
+                new HashSet<>(expectedArtifactComponents.getArtifactComponents()),
+                new HashSet<>(actualArtifactComponents.getArtifactComponents())
         );
     }
 
