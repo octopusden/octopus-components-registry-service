@@ -1,0 +1,47 @@
+/**
+ * Lightweight client for use in Gradle plugins that support older versions.
+ */
+plugins {
+    id 'org.springframework.boot'
+    id 'java-test-fixtures'
+}
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+configurations {
+    [testCompileClasspath, testRuntimeClasspath].each { cfg ->
+        // This parameter is necessary to support the ability to run tests.
+        // In the future need to create separate ft module.
+        cfg?.attributes?.attribute(org.gradle.api.attributes.java.TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE, 21)
+    }
+}
+
+dependencies {
+    String legacyJacksonVersion = "2.12.3"
+    implementation(platform("com.fasterxml.jackson:jackson-bom:$legacyJacksonVersion"))
+    implementation('com.fasterxml.jackson.core:jackson-core')
+    implementation('com.fasterxml.jackson.core:jackson-databind')
+    implementation(platform("io.github.openfeign:feign-bom:12.2"))
+    implementation("io.github.openfeign:feign-core")
+    implementation("io.github.openfeign:feign-httpclient")
+    implementation("io.github.openfeign:feign-jackson")
+    implementation("io.github.openfeign:feign-slf4j")
+
+    testImplementation project(":components-registry-service-server")
+    testImplementation platform("org.junit:junit-bom:${project['junit-jupiter.version']}")
+    testImplementation "org.junit.jupiter:junit-jupiter-engine"
+    testImplementation testFixtures(project(":test-common"))
+    testImplementation platform("org.springframework.boot:spring-boot-dependencies:${project['spring-boot-legacy.version']}")
+    testImplementation ("org.springframework.boot:spring-boot-starter-test")
+
+    testImplementation("ch.qos.logback:logback-classic:1.2.7")
+}
+
+sourceSets {
+    test {
+        resources {
+            srcDirs += [ project(':test-common').sourceSets.test.resources ]
+        }
+    }
+}
