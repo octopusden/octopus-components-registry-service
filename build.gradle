@@ -119,44 +119,47 @@ configure(subprojects) {
     apply plugin: 'signing'
     apply plugin: 'idea'
     apply plugin: 'java-library'
-    apply plugin: 'org.jetbrains.kotlin.jvm'
     apply plugin: 'maven-publish'
 
-    configurations.matching { cfg ->
-        cfg?.name?.toLowerCase()?.contains('test')
-    }.all { cfg ->
-        cfg.exclude group: 'org.jetbrains.kotlin', module: 'kotlin-main-kts'
-    }
+    if (!project.name.equalsIgnoreCase("components-registry-service-light-client")) {
+        apply plugin: 'org.jetbrains.kotlin.jvm'
 
-    dependencies {
-        api "org.jetbrains.kotlin:kotlin-stdlib"
-        implementation "org.jetbrains.kotlin:kotlin-reflect"
-        implementation platform("org.jetbrains.kotlin:kotlin-bom:${project['kotlin.version']}")
-        implementation platform("com.fasterxml.jackson:jackson-bom:${project['jackson.version']}")
-        testImplementation platform("org.junit:junit-bom:${project['junit-jupiter.version']}")
-        testImplementation "org.jetbrains.kotlin:kotlin-test-junit5"
-        testImplementation "org.junit.jupiter:junit-jupiter-engine"
-        testImplementation "org.junit.jupiter:junit-jupiter-params"
-        testImplementation "junit:junit:4.12"
-        testRuntimeOnly "org.junit.vintage:junit-vintage-engine"
-    }
+        configurations.matching { cfg ->
+            cfg?.name?.toLowerCase()?.contains('test')
+        }.all { cfg ->
+            cfg.exclude group: 'org.jetbrains.kotlin', module: 'kotlin-main-kts'
+        }
 
-    compileKotlin {
-        kotlinOptions.jvmTarget = "21"
-    }
+        dependencies {
+            api "org.jetbrains.kotlin:kotlin-stdlib"
+            implementation "org.jetbrains.kotlin:kotlin-reflect"
+            implementation platform("org.jetbrains.kotlin:kotlin-bom:${project['kotlin.version']}")
+            implementation platform("com.fasterxml.jackson:jackson-bom:${project['jackson.version']}")
+            testImplementation platform("org.junit:junit-bom:${project['junit-jupiter.version']}")
+            testImplementation "org.jetbrains.kotlin:kotlin-test-junit5"
+            testImplementation "org.junit.jupiter:junit-jupiter-engine"
+            testImplementation "org.junit.jupiter:junit-jupiter-params"
+            testImplementation "junit:junit:4.12"
+            testRuntimeOnly "org.junit.vintage:junit-vintage-engine"
+        }
 
-    compileTestKotlin {
-        kotlinOptions.jvmTarget = "21"
-    }
+        compileKotlin {
+            kotlinOptions.jvmTarget = "21"
+        }
 
-    sourceCompatibility = 21
-    targetCompatibility = 21
+        compileTestKotlin {
+            kotlinOptions.jvmTarget = "21"
+        }
+
+        sourceCompatibility = 21
+        targetCompatibility = 21
+    }
 
     test {
         useJUnitPlatform()
         systemProperties = [
-                //NOTE: when parallel.enabled = true EscrowConfigurationLoaderTest + BuildToolResolverTest
-                // can fail sporadically on GH
+            //NOTE: when parallel.enabled = true EscrowConfigurationLoaderTest + BuildToolResolverTest
+            // can fail sporadically on GH
             'junit.jupiter.execution.parallel.enabled': false
         ]
         jvmArgs('--add-opens=java.base/java.lang=ALL-UNNAMED')
