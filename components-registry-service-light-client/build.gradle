@@ -38,6 +38,15 @@ dependencies {
     testImplementation("ch.qos.logback:logback-classic:1.2.7")
 }
 
+bootJar {
+    enabled = false
+}
+
+jar {
+    enabled = true
+    archiveClassifier = ''
+}
+
 sourceSets {
     test {
         resources {
