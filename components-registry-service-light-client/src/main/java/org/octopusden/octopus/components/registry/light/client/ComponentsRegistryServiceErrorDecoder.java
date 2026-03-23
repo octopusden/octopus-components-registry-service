@@ -10,6 +10,7 @@ import feign.codec.ErrorDecoder;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
@@ -45,11 +46,7 @@ public class ComponentsRegistryServiceErrorDecoder extends ErrorDecoder.Default 
     }
 
     private ErrorResponse getErrorResponse(Response response) {
-        if (response == null) {
-            return null;
-        }
-
-        Collection<String> contentTypes = response.headers().get("content-type");
+        Collection<String> contentTypes = response.headers().getOrDefault("content-type", Collections.emptyList());
         if (contentTypes != null) {
             for (String contentType : contentTypes) {
                 if (contentType.contains("application/json")) {
