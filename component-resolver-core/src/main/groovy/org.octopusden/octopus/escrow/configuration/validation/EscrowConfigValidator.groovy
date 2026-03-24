@@ -391,7 +391,7 @@ class EscrowConfigValidator {
 
     def validateVcsSettings(EscrowModuleConfig moduleConfig, String component) {
         if (!(moduleConfig.getBuildSystem() in [BuildSystem.ESCROW_PROVIDED_MANUALLY, BuildSystem.ESCROW_NOT_SUPPORTED, BuildSystem.PROVIDED, BuildSystem.WHISKEY]) &&
-                moduleConfig.getVcsSettings().getVersionControlSystemRoots().isEmpty()) {
+                moduleConfig.getVcsSettings().getVersionControlSystemRoots().isEmpty() && !moduleConfig.getVcsSettings().notAvailable()) {
             registerError("No VCS roots is configured for component '$component' (type=$moduleConfig.buildSystem)")
             return
         }
