@@ -176,6 +176,18 @@ configure(subprojects.findAll { it.name != 'components-registry-ui' }) {
             testRuntimeOnly "org.junit.vintage:junit-vintage-engine"
         }
 
+        compileKotlin {
+            kotlinOptions.jvmTarget = "21"
+        }
+
+        compileTestKotlin {
+            kotlinOptions.jvmTarget = "21"
+        }
+
+        sourceCompatibility = 21
+        targetCompatibility = 21
+    }
+
     checkstyle {
         toolVersion = '10.17.0'
         configFile = rootProject.file('config/checkstyle/checkstyle.xml')
@@ -270,18 +282,6 @@ configure(subprojects.findAll { it.name != 'components-registry-ui' }) {
             xml.required = true
             html.required = true
         }
-    }
-
-        compileKotlin {
-            kotlinOptions.jvmTarget = "21"
-        }
-
-        compileTestKotlin {
-            kotlinOptions.jvmTarget = "21"
-        }
-
-        sourceCompatibility = 21
-        targetCompatibility = 21
     }
 
     test {
