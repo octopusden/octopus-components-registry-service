@@ -152,27 +152,29 @@ configure(subprojects.findAll { it.name != 'components-registry-ui' }) {
     apply plugin: 'jacoco'
     apply plugin: 'checkstyle'
     apply plugin: 'pmd'
-    apply plugin: 'org.jetbrains.kotlin.jvm'
     apply plugin: 'maven-publish'
 
-    configurations.matching { cfg ->
-        cfg?.name?.toLowerCase()?.contains('test')
-    }.all { cfg ->
-        cfg.exclude group: 'org.jetbrains.kotlin', module: 'kotlin-main-kts'
-    }
+    if (!project.name.equalsIgnoreCase("components-registry-service-light-client")) {
+        apply plugin: 'org.jetbrains.kotlin.jvm'
 
-    dependencies {
-        api "org.jetbrains.kotlin:kotlin-stdlib"
-        implementation "org.jetbrains.kotlin:kotlin-reflect"
-        implementation platform("org.jetbrains.kotlin:kotlin-bom:${project['kotlin.version']}")
-        implementation platform("com.fasterxml.jackson:jackson-bom:${project['jackson.version']}")
-        testImplementation platform("org.junit:junit-bom:${project['junit-jupiter.version']}")
-        testImplementation "org.jetbrains.kotlin:kotlin-test-junit5"
-        testImplementation "org.junit.jupiter:junit-jupiter-engine"
-        testImplementation "org.junit.jupiter:junit-jupiter-params"
-        testImplementation "junit:junit:4.12"
-        testRuntimeOnly "org.junit.vintage:junit-vintage-engine"
-    }
+        configurations.matching { cfg ->
+            cfg?.name?.toLowerCase()?.contains('test')
+        }.all { cfg ->
+            cfg.exclude group: 'org.jetbrains.kotlin', module: 'kotlin-main-kts'
+        }
+
+        dependencies {
+            api "org.jetbrains.kotlin:kotlin-stdlib"
+            implementation "org.jetbrains.kotlin:kotlin-reflect"
+            implementation platform("org.jetbrains.kotlin:kotlin-bom:${project['kotlin.version']}")
+            implementation platform("com.fasterxml.jackson:jackson-bom:${project['jackson.version']}")
+            testImplementation platform("org.junit:junit-bom:${project['junit-jupiter.version']}")
+            testImplementation "org.jetbrains.kotlin:kotlin-test-junit5"
+            testImplementation "org.junit.jupiter:junit-jupiter-engine"
+            testImplementation "org.junit.jupiter:junit-jupiter-params"
+            testImplementation "junit:junit:4.12"
+            testRuntimeOnly "org.junit.vintage:junit-vintage-engine"
+        }
 
     checkstyle {
         toolVersion = '10.17.0'
@@ -270,22 +272,23 @@ configure(subprojects.findAll { it.name != 'components-registry-ui' }) {
         }
     }
 
-    compileKotlin {
-        kotlinOptions.jvmTarget = "21"
-    }
+        compileKotlin {
+            kotlinOptions.jvmTarget = "21"
+        }
 
-    compileTestKotlin {
-        kotlinOptions.jvmTarget = "21"
-    }
+        compileTestKotlin {
+            kotlinOptions.jvmTarget = "21"
+        }
 
-    sourceCompatibility = 21
-    targetCompatibility = 21
+        sourceCompatibility = 21
+        targetCompatibility = 21
+    }
 
     test {
         useJUnitPlatform()
         systemProperties = [
-                //NOTE: when parallel.enabled = true EscrowConfigurationLoaderTest + BuildToolResolverTest
-                // can fail sporadically on GH
+            //NOTE: when parallel.enabled = true EscrowConfigurationLoaderTest + BuildToolResolverTest
+            // can fail sporadically on GH
             'junit.jupiter.execution.parallel.enabled': false
         ]
         // Testcontainers + Colima: override socket path mounted into Ryuk container
