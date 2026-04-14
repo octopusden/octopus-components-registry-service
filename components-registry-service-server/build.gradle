@@ -140,16 +140,6 @@ bootJar  {
     requiresUnpack '**/kotlin-compiler-*.jar'
 }
 
-// Sync UI dist to static resources (Sync removes stale files from old builds)
-task copyUiDist(type: Sync) {
-    dependsOn ':components-registry-ui:npmBuild'
-    from project(':components-registry-ui').file('dist')
-    into "${buildDir}/resources/main/static"
-}
-
-processResources.dependsOn copyUiDist
-bootJar.dependsOn copyUiDist
-
 springBoot {
     buildInfo()
 }

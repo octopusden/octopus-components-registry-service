@@ -98,4 +98,5 @@ For downstream Docker Compose, pass via environment variables:
 
 ## UI
 
-After server is running: http://localhost:4567/ui
+UI has been extracted to a separate repository: `octopus-components-management-portal`.
+See that repo's README for instructions on running the management portal.
