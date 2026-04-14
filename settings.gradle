@@ -34,8 +34,6 @@ include ':components-registry-service-light-client'
 include ':components-registry-service-client'
 include ':components-registry-service-server'
 include ':test-common'
-include ':components-registry-ui'
-
 def defaultVersion = {
     def crc = new CRC32()
     crc.update(InetAddress.localHost.hostName.bytes)

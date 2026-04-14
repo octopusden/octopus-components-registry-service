@@ -124,7 +124,7 @@ def perModuleCoverageMinimum = (findProperty('quality.coverage.perModule.minimum
 def overallCoverageMinimum = (findProperty('quality.coverage.overall.minimum')?.toString()?.toBigDecimal()) ?: 0.70
 def qualityCoverageProjects = {
     subprojects.findAll {
-        !['components-registry-automation', 'test-common', 'components-registry-ui'].contains(it.name)
+        !['components-registry-automation', 'test-common'].contains(it.name)
     }
 }
 
@@ -145,7 +145,7 @@ def existingTaskPath = { Project project, String taskName ->
     project.tasks.findByName(taskName) != null ? "${project.path}:${taskName}" : null
 }
 
-configure(subprojects.findAll { it.name != 'components-registry-ui' }) {
+configure(subprojects) {
     apply plugin: 'signing'
     apply plugin: 'idea'
     apply plugin: 'java-library'
