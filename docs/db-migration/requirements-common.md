@@ -35,7 +35,7 @@
 | SYS-023 | UI: Navigation between pages | High | e2e-test | ❌ Not tested |
 | SYS-024 | UI: Editable tabs have Save button | Medium | e2e-test | ❌ Not tested |
 | SYS-025 | DatabaseComponentRegistryResolver applies field overrides | High | integration-test | ❌ Not tested |
-| SYS-027 | ft-db profile supports writes against jsonb columns | High | integration-test | ❌ Not tested |
+| SYS-027 | ft-db profile supports writes against jsonb columns | High | integration-test | ✅ Tested |
 
 ---
 
@@ -623,7 +623,7 @@ values with override values when the version falls within the range.
 
 **Priority:** High
 **Test layer:** integration-test
-**Status:** ❌ Not tested
+**Status:** ✅ Tested
 
 **Description:**
 Under the `ft-db` profile (H2 in-memory, PostgreSQL compatibility mode, `ddl-auto=create-drop`,
@@ -649,4 +649,5 @@ Flyway disabled), write operations against entity columns declared with
 4. Follow-up `GET /rest/api/4/components/{id}/field-overrides` contains the created override
    with the exact `value` that was written.
 
-**Test method:** —
+**Test method:** `FtDbProfileWriteTest` (`SYS-027 PATCH buildConfiguration metadata round-trips`,
+`SYS-027 POST field override value round-trips`)
