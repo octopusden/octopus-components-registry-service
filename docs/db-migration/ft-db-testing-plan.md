@@ -37,7 +37,7 @@ build of the CRS image needed.
 | T4a | DMS Service | OKD (oc-template) | `octopus-dms-service/okd/components-registry.yaml` — profile `dev` (not `ft`) | ✅ PR [#83](https://github.com/octopusden/octopus-dms-service/pull/83) |
 | T4b | Releng (jira-releng-plugin-ft) | fabric8 docker-maven-plugin | `ow/releng/ft/jira-releng-plugin-ft/pom.xml` | ⏳ Pending |
 | T4c | Releng (maven-crm-plugin-ft) | fabric8 docker-maven-plugin | `ow/releng/ft/maven-crm-plugin-ft/pom.xml` | ⏳ Pending |
-| T4d | ORMS (release-management-service) | docker-compose | `octopus-release-management-service/ft/docker/docker-compose.yml` + `components-registry-service.yaml` | ⏳ Pending |
+| T4d | ORMS (release-management-service) | docker-compose | `octopus-release-management-service/ft/docker/docker-compose.yml` + `components-registry-service.yaml` | ✅ PR [#59](https://github.com/octopusden/octopus-release-management-service/pull/59) |
 
 Current state per downstream:
 - **DMS:** OKD deployment via `oc-template`; `SPRING_PROFILES_ACTIVE=dev`; mounts custom
@@ -45,7 +45,11 @@ Current state per downstream:
 - **Releng (both FT modules):** fabric8 docker-maven-plugin; `SPRING_PROFILES_ACTIVE=ft`;
   mounts custom `application-ft.yml`; CRS image at release `2.0.78`.
 - **ORMS:** docker-compose; `SPRING_PROFILES_ACTIVE=ft`; mounts custom
-  `components-registry-service.yaml` as `application-ft.yaml`; CRS image at release `2.0.78`.
+  `components-registry-service.yaml` as `application-ft.yaml`; committed CRS version
+  `2.0.52`. Note: ORMS uses the same Gradle property
+  `octopus-components-registry.version` for both the image tag AND the
+  `components-registry-service-client` Maven dep — override only the Docker image via the
+  `OCTOPUS_COMPONENTS_REGISTRY_SERVICE_VERSION` env var (documented in the PR test plan).
 
 Each T4x sub-agent task:
 1. In the downstream's CRS block, change `SPRING_PROFILES_ACTIVE=<existing>` to
