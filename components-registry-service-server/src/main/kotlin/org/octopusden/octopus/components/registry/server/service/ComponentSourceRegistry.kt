@@ -12,6 +12,11 @@ interface ComponentSourceRegistry {
         source: String,
     )
 
+    fun renameComponent(
+        oldName: String,
+        newName: String,
+    )
+
     fun getDbComponentNames(): Set<String>
 
     fun getGitComponentNames(): Set<String>

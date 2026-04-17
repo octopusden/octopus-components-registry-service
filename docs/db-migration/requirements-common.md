@@ -37,7 +37,7 @@
 | SYS-025 | DatabaseComponentRegistryResolver applies field overrides | High | integration-test | ❌ Not tested |
 | SYS-026 | Flyway-managed PostgreSQL schema passes Hibernate validate | High | integration-test | ✅ Tested |
 | SYS-027 | ft-db profile supports writes against jsonb columns | High | integration-test | ✅ Tested |
-| SYS-028 | v4 API supports component rename | High | integration-test | ⏳ Red (spec only) |
+| SYS-028 | v4 API supports component rename | High | integration-test | ✅ Tested |
 
 ---
 
@@ -693,7 +693,7 @@ Flyway disabled), write operations against entity columns declared with
 
 **Priority:** High
 **Test layer:** integration-test
-**Status:** ⏳ Red (spec + red test landed; implementation pending)
+**Status:** ✅ Tested
 
 **Motivation:**
 Under the legacy git-resolver flow, downstream tooling (e.g. Releng's Jira workflow)

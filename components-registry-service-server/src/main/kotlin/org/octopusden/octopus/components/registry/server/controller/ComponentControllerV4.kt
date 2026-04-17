@@ -3,6 +3,7 @@ package org.octopusden.octopus.components.registry.server.controller
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentCreateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentDetailResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentFilter
+import org.octopusden.octopus.components.registry.server.dto.v4.ComponentRenameRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentSummaryResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentUpdateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideCreateRequest
@@ -27,6 +28,7 @@ import java.util.UUID
 
 @RestController
 @RequestMapping("rest/api/4/components")
+@Suppress("TooManyFunctions")
 class ComponentControllerV4(
     private val componentManagementService: ComponentManagementService,
     private val componentRepository: ComponentRepository,
@@ -68,6 +70,12 @@ class ComponentControllerV4(
         @PathVariable id: UUID,
         @RequestBody request: ComponentUpdateRequest,
     ): ComponentDetailResponse = componentManagementService.updateComponent(id, request)
+
+    @PostMapping("/{name}/rename")
+    fun renameComponent(
+        @PathVariable name: String,
+        @RequestBody request: ComponentRenameRequest,
+    ): ComponentDetailResponse = componentManagementService.renameComponent(name, request.newName)
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)

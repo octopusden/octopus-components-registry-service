@@ -45,6 +45,26 @@ class ComponentSourceRegistryImpl(
         sourceCache.put(name, source)
     }
 
+    override fun renameComponent(
+        oldName: String,
+        newName: String,
+    ) {
+        val existing = componentSourceRepository.findById(oldName).orElse(null) ?: return
+        // component_source PK is the component name; replace the row atomically.
+        componentSourceRepository.delete(existing)
+        componentSourceRepository.flush()
+        componentSourceRepository.save(
+            ComponentSourceEntity(
+                componentName = newName,
+                source = existing.source,
+                migratedAt = existing.migratedAt,
+                migratedBy = existing.migratedBy,
+            ),
+        )
+        sourceCache.invalidate(oldName)
+        sourceCache.put(newName, existing.source)
+    }
+
     override fun getDbComponentNames(): Set<String> = componentSourceRepository.findBySource("db").map { it.componentName }.toSet()
 
     override fun getGitComponentNames(): Set<String> = componentSourceRepository.findBySource("git").map { it.componentName }.toSet()

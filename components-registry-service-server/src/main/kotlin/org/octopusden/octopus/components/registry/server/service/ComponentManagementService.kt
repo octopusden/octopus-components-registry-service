@@ -12,6 +12,7 @@ import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import java.util.UUID
 
+@Suppress("TooManyFunctions")
 interface ComponentManagementService {
     fun createComponent(request: ComponentCreateRequest): ComponentDetailResponse
 
@@ -22,6 +23,11 @@ interface ComponentManagementService {
     fun updateComponent(
         id: UUID,
         request: ComponentUpdateRequest,
+    ): ComponentDetailResponse
+
+    fun renameComponent(
+        oldName: String,
+        newName: String,
     ): ComponentDetailResponse
 
     fun deleteComponent(id: UUID)

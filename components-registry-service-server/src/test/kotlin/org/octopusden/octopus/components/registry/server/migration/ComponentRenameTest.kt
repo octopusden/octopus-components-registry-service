@@ -61,6 +61,17 @@ class ComponentRenameTest {
         return node.path("name").asText()
     }
 
+    private fun componentExistsByName(name: String): Boolean {
+        val body =
+            mvc
+                .perform(get("/rest/api/4/components").param("search", name).param("size", "200"))
+                .andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString
+        val content = objectMapper.readTree(body).path("content")
+        return (0 until content.size()).any { content.get(it).path("name").asText() == name }
+    }
+
     @Test
     @DisplayName("SYS-028: rename endpoint moves a DB component to a new name")
     fun rename_happyPath() {
@@ -74,8 +85,8 @@ class ComponentRenameTest {
                     .content("""{"newName":"$newName"}"""),
             ).andExpect(status().isOk)
 
-        mvc.perform(get("/rest/api/4/components/$newName")).andExpect(status().isOk)
-        mvc.perform(get("/rest/api/4/components/$oldName")).andExpect(status().isNotFound)
+        assertEquals(true, componentExistsByName(newName), "Component should exist under newName=$newName")
+        assertEquals(false, componentExistsByName(oldName), "Component should NOT exist under oldName=$oldName")
     }
 
     @Test
@@ -128,16 +139,20 @@ class ComponentRenameTest {
         val oldName = firstDbComponentName()
         val newName = "${oldName}_RENAMED_AUDIT"
 
-        mvc
-            .perform(
-                post("/rest/api/4/components/$oldName/rename")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"newName":"$newName"}"""),
-            ).andExpect(status().isOk)
+        val renamedBody =
+            mvc
+                .perform(
+                    post("/rest/api/4/components/$oldName/rename")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""{"newName":"$newName"}"""),
+                ).andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString
+        val entityId = objectMapper.readTree(renamedBody).path("id").asText()
 
         val audit =
             mvc
-                .perform(get("/rest/api/4/audit").param("componentName", newName))
+                .perform(get("/rest/api/4/audit/Component/$entityId"))
                 .andExpect(status().isOk)
                 .andReturn()
                 .response.contentAsString
@@ -146,7 +161,7 @@ class ComponentRenameTest {
         assertEquals(
             true,
             actions.contains("RENAME"),
-            "Expected audit_log to contain a RENAME action for $newName; got $actions",
+            "Expected audit_log to contain a RENAME action for $entityId; got $actions",
         )
     }
 }

@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
+import org.octopusden.octopus.components.registry.core.exceptions.ComponentNameConflictException
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentCreateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentDetailResponse
@@ -26,6 +27,7 @@ import org.octopusden.octopus.components.registry.server.mapper.toSummaryRespons
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.FieldOverrideRepository
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
+import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
@@ -40,6 +42,7 @@ import java.util.UUID
 class ComponentManagementServiceImpl(
     private val componentRepository: ComponentRepository,
     private val fieldOverrideRepository: FieldOverrideRepository,
+    private val sourceRegistry: ComponentSourceRegistry,
     private val applicationEventPublisher: ApplicationEventPublisher,
 ) : ComponentManagementService {
     @Suppress("CyclomaticComplexMethod")
@@ -262,6 +265,44 @@ class ComponentManagementServiceImpl(
                 action = "UPDATE",
                 oldValue = oldValue,
                 newValue = newValue,
+            ),
+        )
+
+        return saved.toDetailResponse()
+    }
+
+    override fun renameComponent(
+        oldName: String,
+        newName: String,
+    ): ComponentDetailResponse {
+        val trimmed = newName.trim()
+        require(trimmed.isNotBlank()) { "newName must not be blank" }
+
+        val entity =
+            componentRepository.findByName(oldName)
+                ?: throw NotFoundException("Component with name '$oldName' not found")
+
+        if (trimmed == oldName) {
+            return entity.toDetailResponse()
+        }
+
+        if (componentRepository.existsByName(trimmed)) {
+            throw ComponentNameConflictException("Component with name '$trimmed' already exists")
+        }
+
+        entity.name = trimmed
+        entity.updatedAt = java.time.Instant.now()
+        val saved = componentRepository.saveAndFlush(entity)
+
+        sourceRegistry.renameComponent(oldName, trimmed)
+
+        applicationEventPublisher.publishEvent(
+            AuditEvent(
+                entityType = "Component",
+                entityId = saved.id.toString(),
+                action = "RENAME",
+                oldValue = mapOf("name" to oldName),
+                newValue = mapOf("name" to trimmed),
             ),
         )
 
