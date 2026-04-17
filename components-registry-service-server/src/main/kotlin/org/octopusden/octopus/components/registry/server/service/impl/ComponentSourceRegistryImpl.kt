@@ -1,6 +1,7 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
 import com.github.benmanes.caffeine.cache.Caffeine
+import org.octopusden.octopus.components.registry.server.config.ComponentsRegistryProperties
 import org.octopusden.octopus.components.registry.server.entity.ComponentSourceEntity
 import org.octopusden.octopus.components.registry.server.repository.ComponentSourceRepository
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
@@ -11,6 +12,7 @@ import java.util.concurrent.TimeUnit
 @Service
 class ComponentSourceRegistryImpl(
     private val componentSourceRepository: ComponentSourceRepository,
+    private val properties: ComponentsRegistryProperties,
 ) : ComponentSourceRegistry {
     private val sourceCache =
         Caffeine
@@ -19,16 +21,25 @@ class ComponentSourceRegistryImpl(
             .expireAfterWrite(5, TimeUnit.MINUTES)
             .build<String, String>()
 
-    override fun isDbComponent(name: String): Boolean = getSource(name) == "db"
+    // isDbComponent / isGitComponent check the component_source row literally and
+    // return false when the row is missing. Migration code (ImportServiceImpl) uses
+    // these to decide whether a component still needs to be migrated.
+    override fun isDbComponent(name: String): Boolean =
+        componentSourceRepository.findById(name).map { it.source == "db" }.orElse(false)
 
-    override fun isGitComponent(name: String): Boolean = getSource(name) != "db"
+    override fun isGitComponent(name: String): Boolean =
+        componentSourceRepository.findById(name).map { it.source == "git" }.orElse(false)
 
+    // getSource returns the effective source for routing, applying the configured
+    // default when no row exists. Used by ComponentRoutingResolver so that, once
+    // everything is migrated (ft-db), unknown/renamed-away names route to the DB
+    // resolver and don't leak DSL ghosts via the git resolver.
     override fun getSource(name: String): String =
         sourceCache.get(name) { key ->
             componentSourceRepository
                 .findById(key)
                 .map { it.source }
-                .orElse("git")
+                .orElse(properties.defaultSource)
         }!!
 
     override fun setComponentSource(

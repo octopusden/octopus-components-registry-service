@@ -38,6 +38,7 @@
 | SYS-026 | Flyway-managed PostgreSQL schema passes Hibernate validate | High | integration-test | ✅ Tested |
 | SYS-027 | ft-db profile supports writes against jsonb columns | High | integration-test | ✅ Tested |
 | SYS-028 | v4 API supports component rename | High | integration-test | ✅ Tested |
+| SYS-029 | Renamed-away name no longer resolvable via v1/v2/v3 under ft-db | High | integration-test | ✅ Tested |
 
 ---
 
@@ -750,3 +751,63 @@ against an ft-db H2 fixture. Each test creates its own throwaway component via
   change in the downstream repo, tracked outside CRS.
 - Renaming a git-sourced component — only DB-sourced components are in scope; a
   git-sourced rename would still need migration-to-DB first.
+
+### SYS-029: Renamed-away name no longer resolvable via v1/v2/v3 under ft-db
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+After a successful `PATCH /rest/api/4/components/{id}` rename under the ft-db
+profile, downstream FT (Releng JIRA-Releng-Plugin build 8.5138) still saw the
+OLD name when it called CRS v1 to validate the rename. The plugin's internal
+post-rename check (`ComponentManagementRestService.renameComponent`) then
+refused to update its own DB with 400 "The component X still exists in CR".
+
+The root cause was in `ComponentRoutingResolver`. It routes a lookup to the
+DB or Git resolver via `sourceRegistry.isDbComponent(name)`. After rename,
+the `component_source` row is rewritten atomically from the old name to the
+new name — so the OLD name no longer has a row. `isDbComponent(OLD)` then
+returned false, the request was routed to the Git resolver, and the Git
+resolver's in-memory `configuration` — loaded from the mounted DSL once at
+startup and never updated during the run — still contained the pre-rename
+entry. The resolver happily returned that stale DSL entity.
+
+Under ft-db (where auto-migrate has moved everything to the DB), the Git
+resolver should never be consulted for post-rename or post-delete lookups.
+
+**Description:**
+A `components-registry.default-source` config property, default `"git"`,
+sets the effective source for names without a `component_source` row. The
+`ft-db` profile sets it to `"db"` so:
+
+- All unknown / renamed-away / deleted names route to the DB resolver, which
+  correctly returns `null` (→ 404) instead of falling back to the DSL.
+- Mixed-source deployments (git-sourced DSL, incrementally migrating to DB)
+  leave the default as `"git"` and behavior is unchanged.
+
+The migration code in `ImportServiceImpl` must continue to treat "no row"
+as "not yet migrated" (otherwise auto-migrate would skip everything under
+ft-db). `ComponentSourceRegistryImpl.isDbComponent` and `isGitComponent`
+therefore check the row literally, while `getSource` applies the
+`default-source` fallback for routing.
+
+**Acceptance criteria:**
+1. After `PATCH /rest/api/4/components/{id} {"name":"NEW"}` on a DSL-migrated
+   component under ft-db, `GET /rest/api/1/components/OLD` returns 404.
+2. Under the ft-db profile with `default-source: db`, auto-migrate on a cold
+   boot still migrates every DSL component to the DB (not a no-op).
+3. Under the default profile (`default-source` unset → "git"), routing and
+   migration behavior is byte-for-byte identical to before.
+
+**Test method:** `GhostComponentAfterRenameTest.SYS-029: v1 GET must return
+404 for a name that was renamed away under ft-db`. Regression coverage for
+auto-migrate comes from `FtDbProfileTest.all components are in DB after
+startup with ft-db profile`.
+
+**Out of scope for this requirement:**
+- Propagating renames through downstream caches that CRS does not own (Releng
+  `ComponentRegistryService`, DMS client cache) — callers must invalidate on
+  their side. CRS's contribution is to expose a consistent view across API
+  versions.

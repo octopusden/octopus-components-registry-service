@@ -31,7 +31,7 @@ class ComponentRoutingResolver(
     private val sourceRegistry: ComponentSourceRegistry,
 ) : ComponentRegistryResolver {
     private fun resolverFor(componentName: String): ComponentRegistryResolver =
-        if (sourceRegistry.isDbComponent(componentName)) dbResolver else gitResolver
+        if (sourceRegistry.getSource(componentName) == "db") dbResolver else gitResolver
 
     override fun updateCache() {
         gitResolver.updateCache()

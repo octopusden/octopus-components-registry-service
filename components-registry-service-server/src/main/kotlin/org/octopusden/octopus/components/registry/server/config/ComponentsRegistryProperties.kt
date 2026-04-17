@@ -18,6 +18,11 @@ class ComponentsRegistryProperties(
     val versionName: VersionNameSettings,
     val copyrightPath: String?,
     val autoMigrate: Boolean = false,
+    // Source to assume when a component has no component_source row. Default "git"
+    // keeps the mixed-source routing working for DSL-backed deployments; ft-db
+    // sets this to "db" so that renamed/deleted names don't leak DSL ghosts through
+    // the git resolver after all components have been migrated to the database.
+    val defaultSource: String = "git",
 ) {
     data class VcsSettings(
         val enabled: Boolean = true,

@@ -9,3 +9,5 @@ spring:
 
 components-registry:
   auto-migrate: true
+  default-source: db
+
