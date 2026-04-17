@@ -37,30 +37,24 @@ a container with `SPRING_PROFILES_ACTIVE=common,…` would have no config for it
 
 ## Build inputs for the sub-agent
 
-**CRS worktree:** `/Users/pgorbachev/projects/octopus/octopus-components-registry-service/_wt/ft-db-testing`
+**CRS image to use for FT:** `2.0.84-3097` — a TeamCity-published branch snapshot of
+`feature/ft-db-testing`. Pull from the team's registry (e.g.
+`ghcr.io/octopusden/components-registry-service:2.0.84-3097` or
+`docker.artifactory.openwaygroup.com/...`). **Do NOT commit this version** in the downstream
+repo — the committed `OCTOPUS_COMPONENTS_REGISTRY_SERVICE_VERSION` (or equivalent) should
+stay at whatever release version the downstream ships today (usually `2.0.78`). Use
+`2.0.84-3097` only for your local FT run — either via env var override or a local-only
+compose overlay. Document the opt-in in the PR description so reviewers can run it too.
+
+No `./gradlew dockerBuildImage` is needed — the image is already built and published.
 
 **Known gotchas (observed in prior runs):**
-- **Architecture.** On Apple Silicon, `./gradlew dockerBuildImage` produces an `arm64` image
-  by default, but downstream runtime configs may pin `<platform>linux/amd64</platform>`.
-  Pass `-Pdocker.platform=linux/amd64` to the gradle task (if the task supports it) or
-  run `docker buildx` with `--platform=linux/amd64`. Alternatively leave the image arm64
-  and only remove the `<platform>` pin in the downstream config for your local test run —
-  don't commit the pin removal.
 - **Releng bitbucket license.** The `bitbucket` Maven profile in releng FT pom needs a
   commercial license. Use the `gitea` profile instead (it is `activeByDefault` and does
   not require the license) for local FT runs.
-
-**Build image from that worktree (must be on branch `feature/ft-db-testing`):**
-```
-./gradlew :components-registry-service-server:dockerBuildImage
-```
-This tags locally as `ghcr.io/octopusden/components-registry-service:1.0-SNAPSHOT`.
-Re-tag with a unique tag to avoid clashing with the default `1.0-SNAPSHOT` tag on other
-branches:
-```
-docker tag ghcr.io/octopusden/components-registry-service:1.0-SNAPSHOT \
-          ghcr.io/octopusden/components-registry-service:1.0-SNAPSHOT-ft-db
-```
+- **DMS uses OKD**, not docker-compose. Its FT runner is `oc-template`. The relevant CRS
+  config file is `okd/components-registry.yaml`, and its downstream profile is `dev`, not
+  `ft`. The generic "layer ft-db on top of existing profile" principle still applies.
 
 **Plan doc this task belongs to:** `docs/db-migration/ft-db-testing-plan.md`
 
@@ -105,9 +99,10 @@ keeps the plan doc in sync.
   - `ft/src/ft/docker/docker-compose.yaml` (the `components-registry-service` block)
   - `ft/src/ft/docker/components-registry-service.yaml` (current override)
 - FT runner: `./gradlew :ft:ft` (or equivalent — confirm from `ft/build.gradle.kts`)
-- Old image env: `OCTOPUS_COMPONENTS_REGISTRY_SERVICE_VERSION` — override to the locally
-  tagged `1.0-SNAPSHOT-ft-db` for the duration of this test; do not hardcode the override
-  into repo files. The PR should show how to opt-in (env var or a new compose variant).
+- Image env: `OCTOPUS_COMPONENTS_REGISTRY_SERVICE_VERSION` — for the FT run, override to the
+  TC-published branch snapshot `2.0.84-3097`. Do not hardcode this value in committed files;
+  the committed version property stays at the current release (e.g. `2.0.78`). The PR
+  should document the opt-in in the description.
 
 ### T4b — Releng (jira-releng-plugin-ft)
 

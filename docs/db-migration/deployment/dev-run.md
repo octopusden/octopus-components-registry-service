@@ -118,17 +118,28 @@ Use `ft-db` for read-only FT consumption, not for development.
 
 ```yaml
 components-registry-service:
-  image: ghcr.io/octopusden/components-registry-service:1.0-SNAPSHOT-ft-db
+  image: ghcr.io/octopusden/components-registry-service:${OCTOPUS_COMPONENTS_REGISTRY_SERVICE_VERSION}
   ports:
     - "4567:4567"
   environment:
-    SPRING_PROFILES_ACTIVE: ft,ft-db
+    SPRING_PROFILES_ACTIVE: ft,ft-db   # or <existing>,ft-db — see Downstream wiring note below
     SPRING_CONFIG_ADDITIONAL_LOCATION: /
     SPRING_CLOUD_CONFIG_ENABLED: "false"
   volumes:
     - ./components-registry:/components-registry:ro
     - ./application-ft.yaml:/application-ft.yaml:ro
 ```
+
+For integration with a branch of `components-registry-service`, set
+`OCTOPUS_COMPONENTS_REGISTRY_SERVICE_VERSION` to the TeamCity-published branch snapshot
+(e.g. `2.0.84-3097` for `feature/ft-db-testing`) — override only in the FT run, do not
+commit that value. The committed default stays at the current release version.
+
+**Downstream wiring note:** the first profile in the list is whatever profile your
+downstream already uses so Spring picks up the mounted `application-<profile>.yaml`.
+DMS uses `dev`; Releng and ORMS use `ft`. Layer `ft-db` on top — e.g. `dev,ft-db` or
+`ft,ft-db`. Do **not** use `common` — it is a CRS test-resource fixture, not shipped in
+the runtime image.
 
 `application-ft.yaml` is the downstream's existing override file — keep it as-is, it
 supplies `work-dir`, `groovy-path`, `supportedGroupIds`, `supportedSystems`, `version-name`,

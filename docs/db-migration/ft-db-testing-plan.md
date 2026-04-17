@@ -22,7 +22,7 @@ When a problem is identified in CRS:
 | **T3** | Add H2 write-path sanity test — POST/PATCH against ft-db profile. Uncovered real bug: Hibernate 6.4.1 `JacksonJsonFormatMapper` did unsafe `(String)value` cast for `Any?`-typed `@JdbcTypeCode(SqlTypes.JSON)` fields holding a Map. Not H2-specific (PG affected too). Fix: `SafeJsonFormatMapper` routes non-String Any values via Jackson. | SYS-027 | ✅ Done | ✅ | — |
 | T4 | Update downstream docker-compose / OKD / Maven-docker-plugin configs to use `ft-db`. Split into T4a–T4d (see below). | — | 🔄 T4a done | ✅ | CRS jar/image built from `feature/ft-db-testing` (local for now; see T6) |
 | T5 | Extend `FtDbProfileTest` to cover more read endpoints (build-tools, find-by-artifact, VCS). | — | ⏳ Pending | ❌ | T1 result |
-| **T6** | **Branch-snapshot publishing** for downstream FT integration on TeamCity. CRS Docker image from `feature/ft-db-testing` should be pushed to a shared registry (e.g. `ghcr.io/octopusden/components-registry-service:pr-148` or `:branch-ft-db-testing`) so downstream FT can pull a reproducible artifact instead of relying on a local build. Raised by CodeRabbit P2. Required for cross-repo branch-based validation on TC. | — | ⏳ Pending | ✅ | — |
+| **T6** | Branch-snapshot publishing — already in place. TeamCity publishes branch builds as `2.0.84-3097` (snapshot of `feature/ft-db-testing`). Downstream FT runs should use this tag via `OCTOPUS_COMPONENTS_REGISTRY_SERVICE_VERSION=2.0.84-3097`. **Do not commit this value** in downstream repos — it is a branch snapshot, not a release. Closes CodeRabbit P2. | — | ✅ Done | — | — |
 
 ### T4 — downstream updates (one sub-agent per repo)
 
