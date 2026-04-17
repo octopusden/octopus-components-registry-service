@@ -35,6 +35,7 @@
 | SYS-023 | UI: Navigation between pages | High | e2e-test | ❌ Not tested |
 | SYS-024 | UI: Editable tabs have Save button | Medium | e2e-test | ❌ Not tested |
 | SYS-025 | DatabaseComponentRegistryResolver applies field overrides | High | integration-test | ❌ Not tested |
+| SYS-026 | Flyway-managed PostgreSQL schema passes Hibernate validate | High | integration-test | ❌ Not tested |
 
 ---
 
@@ -615,3 +616,36 @@ values with override values when the version falls within the range.
 4. `getComponent("comp", "2.0")` returns `"MAVEN"` (exclusive boundary)
 
 **Test method:** —
+
+---
+
+### SYS-026: Flyway-managed PostgreSQL schema passes Hibernate validate
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ❌ Not tested
+
+**Description:**
+Starting the server against a PostgreSQL database where Flyway has applied all
+migrations (V1–VN) under `spring.jpa.hibernate.ddl-auto=validate` must succeed.
+This guards against silent drift between Flyway DDL and the DDL Hibernate would
+derive from the entity mapping — e.g. when a column's `@Column(columnDefinition = ...)`
+is removed or loosened and the dialect-resolved default no longer matches the
+Flyway-created column type (PR #148 removed `columnDefinition = "text[]"` from
+`ComponentEntity.system`; this requirement pins the assumption that the default
+Hibernate type for `@JdbcTypeCode(SqlTypes.ARRAY) Array<String>` under PostgreSQL
+dialect resolves to `text[]` — or fails loudly if it does not).
+
+**Preconditions:**
+- PostgreSQL 16 instance (testcontainer) with Flyway-applied migrations V1→VN.
+- Spring profile enables JPA with `ddl-auto=validate` and `dialect=PostgreSQLDialect`.
+
+**Acceptance criteria:**
+1. Spring context starts successfully with Flyway-applied schema + `ddl-auto=validate`.
+2. Every `@Entity` whose table is present in the Flyway schema passes Hibernate's
+   schema validation (`SchemaManagementException` is NOT thrown during startup).
+3. If a mapping/column mismatch is introduced (e.g. removing `columnDefinition`
+   on `system` causes Hibernate to infer `varchar[]` instead of `text[]`), the
+   test fails with a clear error naming the offending column.
+
+**Test method:** `FlywayValidatePostgresStartupTest.SYS-026 Flyway-managed PostgreSQL schema passes Hibernate validate`
