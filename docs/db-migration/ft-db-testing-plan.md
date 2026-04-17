@@ -26,11 +26,22 @@ When a problem is identified in CRS:
 
 ### T4 — downstream updates (one sub-agent per repo)
 
-All four run in parallel. Downstreams consume the TeamCity-published branch snapshot of
-`feature/ft-db-testing` — currently `2.0.84-3110`. At FT-run time override
-`OCTOPUS_COMPONENTS_REGISTRY_SERVICE_VERSION` (or equivalent property) to that tag; do not
-commit the branch snapshot value in downstream repos. No wait on PR #148 merge, no local
-build of the CRS image needed.
+**Scope:** T4 PRs are **validation artifacts**, not merge candidates. The goal is to
+confirm that the `ft-db` profile integrates correctly with each downstream's FT setup
+— container starts, auto-migrate runs, endpoints return DB data. Continuous integration
+testing (TC pipeline bumps, CI-level reproducibility) is **out of scope**. We do not plan
+to merge T4a/T4b/T4c/T4d. Once integration is confirmed, the PRs can stay open for
+reference or be closed without merging.
+
+Because the PRs are throwaway validation, **committing the concrete CRS branch snapshot
+version** (e.g. `2.0.84-3110`) in each downstream's version property is the preferred
+approach — anyone can clone the branch and run the FT without remembering to set an env
+var. The usual "don't commit snapshot versions" hygiene doesn't apply here since the PR
+isn't going to main.
+
+Caveat: some downstreams (ORMS) use one Gradle property for both the Docker image tag
+and a Maven client dep. Committing the snapshot tag there breaks compile if the Maven
+artifact isn't published for that snapshot. Verify per-downstream before committing.
 
 | ID | Downstream | Runner | CRS config location | Status |
 |----|------------|--------|---------------------|--------|
