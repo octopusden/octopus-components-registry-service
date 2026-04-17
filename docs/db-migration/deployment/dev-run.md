@@ -132,7 +132,7 @@ components-registry-service:
 
 For integration with a branch of `components-registry-service`, set
 `OCTOPUS_COMPONENTS_REGISTRY_SERVICE_VERSION` to the TeamCity-published branch snapshot
-(e.g. `2.0.84-3120` for `feature/ft-db-testing`) — override only in the FT run, do not
+(e.g. `2.0.84-3122` for `feature/ft-db-testing`) — override only in the FT run, do not
 commit that value. The committed default stays at the current release version.
 
 **Downstream wiring note:** the first profile in the list is whatever profile your
