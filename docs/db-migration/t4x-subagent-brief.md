@@ -40,17 +40,22 @@ docker tag ghcr.io/octopusden/components-registry-service:1.0-SNAPSHOT \
 
 ## Guardrails
 
-1. **Do NOT merge** anything. End with an open PR in the downstream repo.
-2. **Do NOT change application logic** in the downstream — the only scope is CRS wiring.
-3. **Do NOT skip failing downstream FT** — if something breaks, diagnose. If the root
+1. **Branch from fresh `origin/main`.** Before starting: `git fetch origin && git switch -c
+   feature/crs-ft-db origin/main`. Do not branch off a stale local `main`, a feature
+   branch, or a worktree that is behind upstream. If the downstream repo uses a different
+   default branch (e.g. `master` or `develop`), branch from that — but always from the
+   latest `origin/<default>` after `git fetch`.
+2. **Do NOT merge** anything. End with an open PR in the downstream repo.
+3. **Do NOT change application logic** in the downstream — the only scope is CRS wiring.
+4. **Do NOT skip failing downstream FT** — if something breaks, diagnose. If the root
    cause is in CRS, stop and report; create a requirement in
    `octopus-components-registry-service/docs/db-migration/requirements-*.md` and a failing
    test in that repo (see "TDD rule on problems" below). Do not patch around it in the
    downstream.
-4. **Do NOT delete** the existing `application-ft.yaml` / custom YAML overrides reflexively.
+5. **Do NOT delete** the existing `application-ft.yaml` / custom YAML overrides reflexively.
    Read them, decide which keys still matter, and either keep the mount or fold keys into
    environment variables on the CRS container. Justify the choice in the PR description.
-5. **Commit messages:** `chore(ft): switch CRS to ft-db profile`. PR title mirrors that.
+6. **Commit messages:** `chore(ft): switch CRS to ft-db profile`. PR title mirrors that.
 
 ## TDD rule on problems
 
