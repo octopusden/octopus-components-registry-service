@@ -36,6 +36,7 @@
 | SYS-024 | UI: Editable tabs have Save button | Medium | e2e-test | ❌ Not tested |
 | SYS-025 | DatabaseComponentRegistryResolver applies field overrides | High | integration-test | ❌ Not tested |
 | SYS-026 | Flyway-managed PostgreSQL schema passes Hibernate validate | High | integration-test | ✅ Tested |
+| SYS-027 | ft-db profile supports writes against jsonb columns | High | integration-test | ✅ Tested |
 
 ---
 
@@ -649,3 +650,38 @@ dialect resolves to `text[]` — or fails loudly if it does not).
    test fails with a clear error naming the offending column.
 
 **Test method:** `FlywayValidatePostgresStartupTest.SYS-026 Flyway-managed PostgreSQL schema passes Hibernate validate`
+
+---
+
+### SYS-027: ft-db profile supports writes against jsonb columns
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Description:**
+Under the `ft-db` profile (H2 in-memory, PostgreSQL compatibility mode, `ddl-auto=create-drop`,
+Flyway disabled), write operations against entity columns declared with
+`columnDefinition = "jsonb"` succeed and round-trip. Entities in scope include
+`ComponentEntity.metadata`, `BuildConfigurationEntity.metadata`,
+`FieldOverrideEntity.value`, `JiraComponentConfigEntity.metadata`,
+`EscrowConfigurationEntity.metadata`, `DistributionEntity.metadata`,
+`ComponentVersionEntity.metadata`, `RegistryConfigEntity.value`, and
+`AuditLogEntity.oldValue/newValue/changeDiff`. Guards against DDL failures
+(unknown type `jsonb` under H2) or Hibernate type-mapping drift on the H2 dialect.
+
+**Preconditions:**
+- Spring profiles `common,ft-db` are active.
+- Auto-migrate has populated the DB — `GET /rest/api/4/components` returns at least one component.
+
+**Acceptance criteria:**
+1. `PATCH /rest/api/4/components/{id}` with a `buildConfiguration.metadata` map returns 2xx.
+2. Follow-up `GET /rest/api/4/components/{id}` reflects the written `buildConfiguration.metadata`
+   values (non-string scalars and nested structures round-trip).
+3. `POST /rest/api/4/components/{id}/field-overrides` with a non-trivial `value` (nested map)
+   returns 2xx.
+4. Follow-up `GET /rest/api/4/components/{id}/field-overrides` contains the created override
+   with the exact `value` that was written.
+
+**Test method:** `FtDbProfileWriteTest` (`SYS-027 PATCH buildConfiguration metadata round-trips`,
+`SYS-027 POST field override value round-trips`)
