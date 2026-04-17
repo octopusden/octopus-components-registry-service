@@ -39,8 +39,9 @@ a container with `SPRING_PROFILES_ACTIVE=common,…` would have no config for it
 
 **CRS image to use for FT:** `2.0.84-3097` — a TeamCity-published branch snapshot of
 `feature/ft-db-testing`. Pull from the team's registry (e.g.
-`ghcr.io/octopusden/components-registry-service:2.0.84-3097` or
-`docker.artifactory.openwaygroup.com/...`). **Do NOT commit this version** in the downstream
+`ghcr.io/octopusden/components-registry-service:2.0.84-3097` or the internal Docker
+registry configured in the downstream's `docker.registry` property). **Do NOT commit this
+version** in the downstream
 repo — the committed `OCTOPUS_COMPONENTS_REGISTRY_SERVICE_VERSION` (or equivalent) should
 stay at whatever release version the downstream ships today (usually `2.0.78`). Use
 `2.0.84-3097` only for your local FT run — either via env var override or a local-only
