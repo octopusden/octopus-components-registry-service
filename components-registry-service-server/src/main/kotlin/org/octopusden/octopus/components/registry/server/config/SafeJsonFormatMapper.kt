@@ -66,7 +66,8 @@ class SafeJsonFormatMapper(
             return value as String
         }
         return try {
-            objectMapper.writerFor(objectMapper.constructType(javaType.javaType))
+            objectMapper
+                .writerFor(objectMapper.constructType(javaType.javaType))
                 .writeValueAsString(value)
         } catch (e: JsonProcessingException) {
             throw IllegalArgumentException("Could not serialize object of java type: $javaType", e)
