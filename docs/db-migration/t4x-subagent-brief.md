@@ -142,5 +142,5 @@ Under 300 words, covering:
 ## Out of scope
 
 - TeamCity / CI definitions (will happen after downstream PRs land)
-- Moving CRS image to a registry (we consume locally tagged image)
-- Cleaning up old `application-ft.yaml` files (do minimal change)
+- Cleaning up old `application-ft.yaml` / `application-dev.yaml` override files (do minimal change)
+- Bumping the committed CRS image version in downstream repos — that happens in a follow-up PR after CRS `feature/ft-db-testing` merges and a release is cut. This PR only switches the profile.

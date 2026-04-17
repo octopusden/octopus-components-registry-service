@@ -20,16 +20,17 @@ When a problem is identified in CRS:
 | **T1** | Added `FlywayValidatePostgresStartupTest` — PostgreSQL testcontainer + Flyway V1–V4 + `ddl-auto=validate`. Addresses CodeRabbit P1 concern: Hibernate's dialect-derived DDL for `system` without `columnDefinition` DOES resolve to `text[]` on PostgreSQL dialect — **P1 not reproduced**. Test kept as regression coverage. | SYS-026 | ✅ Done | ✅ | — |
 | **T2** | Documented `ft-db` profile in `docs/db-migration/deployment/dev-run.md` (new "FT DB Mode" section). | — | ✅ Done | ✅ | — |
 | **T3** | Add H2 write-path sanity test — POST/PATCH against ft-db profile. Uncovered real bug: Hibernate 6.4.1 `JacksonJsonFormatMapper` did unsafe `(String)value` cast for `Any?`-typed `@JdbcTypeCode(SqlTypes.JSON)` fields holding a Map. Not H2-specific (PG affected too). Fix: `SafeJsonFormatMapper` routes non-String Any values via Jackson. | SYS-027 | ✅ Done | ✅ | — |
-| T4 | Update downstream docker-compose / OKD / Maven-docker-plugin configs to use `ft-db`. Split into T4a–T4d (see below). | — | 🔄 T4a done | ✅ | CRS jar/image built from `feature/ft-db-testing` (local for now; see T6) |
+| T4 | Update downstream docker-compose / OKD / Maven-docker-plugin configs to use `ft-db`. Split into T4a–T4d (see below). | — | 🔄 T4a done | ✅ | TC-published branch snapshot `2.0.84-3097` (see T6) |
 | T5 | Extend `FtDbProfileTest` to cover more read endpoints (build-tools, find-by-artifact, VCS). | — | ⏳ Pending | ❌ | T1 result |
 | **T6** | Branch-snapshot publishing — already in place. TeamCity publishes branch builds as `2.0.84-3097` (snapshot of `feature/ft-db-testing`). Downstream FT runs should use this tag via `OCTOPUS_COMPONENTS_REGISTRY_SERVICE_VERSION=2.0.84-3097`. **Do not commit this value** in downstream repos — it is a branch snapshot, not a release. Closes CodeRabbit P2. | — | ✅ Done | — | — |
 
 ### T4 — downstream updates (one sub-agent per repo)
 
-All four run in parallel. Downstreams consume CRS **built from this branch** — either the
-locally built Docker image (`./gradlew :components-registry-service-server:dockerBuildImage`
-on `feature/ft-db-testing`, tagged `ghcr.io/octopusden/components-registry-service:1.0-SNAPSHOT`)
-or a jar published to a local Maven cache. No wait on PR #148 merge.
+All four run in parallel. Downstreams consume the TeamCity-published branch snapshot of
+`feature/ft-db-testing` — currently `2.0.84-3097`. At FT-run time override
+`OCTOPUS_COMPONENTS_REGISTRY_SERVICE_VERSION` (or equivalent property) to that tag; do not
+commit the branch snapshot value in downstream repos. No wait on PR #148 merge, no local
+build of the CRS image needed.
 
 | ID | Downstream | Runner | CRS config location | Status |
 |----|------------|--------|---------------------|--------|
@@ -38,19 +39,27 @@ or a jar published to a local Maven cache. No wait on PR #148 merge.
 | T4c | Releng (maven-crm-plugin-ft) | fabric8 docker-maven-plugin | `ow/releng/ft/maven-crm-plugin-ft/pom.xml` | ⏳ Pending |
 | T4d | ORMS (release-management-service) | docker-compose | `octopus-release-management-service/ft/docker/docker-compose.yml` + `components-registry-service.yaml` | ⏳ Pending |
 
-Current state (both DMS and Releng): `SPRING_PROFILES_ACTIVE=ft`, mounts a custom
-`application-ft.yaml` that disables VCS and points to a volume-mounted `/components-registry`
-DSL tree, with CRS image at version `2.0.78` (pre-v3).
+Current state per downstream:
+- **DMS:** OKD deployment via `oc-template`; `SPRING_PROFILES_ACTIVE=dev`; mounts custom
+  `application-dev.yaml`; CRS image at release `2.0.78`.
+- **Releng (both FT modules):** fabric8 docker-maven-plugin; `SPRING_PROFILES_ACTIVE=ft`;
+  mounts custom `application-ft.yml`; CRS image at release `2.0.78`.
+- **ORMS:** docker-compose; `SPRING_PROFILES_ACTIVE=ft`; mounts custom
+  `components-registry-service.yaml` as `application-ft.yaml`; CRS image at release `2.0.78`.
 
 Each T4x sub-agent task:
-1. Build CRS locally from `feature/ft-db-testing` → tag `ghcr.io/octopusden/components-registry-service:1.0-SNAPSHOT-ft-db`.
-2. Switch the downstream's CRS block to that tag + `SPRING_PROFILES_ACTIVE=ft,ft-db` — keep the existing `ft` profile so the mounted `application-ft.yaml` still applies; add `ft-db` for H2 + auto-migrate. (`common` is a test-only profile in CRS, not in the runtime image.)
-3. Keep the `/components-registry` DSL mount (auto-migrate reads from it at startup).
-4. Reconcile settings from the old `application-ft.yaml` (product-type, supportedGroupIds,
-   version-name, vcs-enabled=false) — either keep the override file or fold needed keys into
-   a new environment block; decide per downstream.
-5. Run the downstream's FT suite locally — confirm registry boots (H2 in-memory + auto-migrate)
-   and downstream tests pass end-to-end.
+1. In the downstream's CRS block, change `SPRING_PROFILES_ACTIVE=<existing>` to
+   `<existing>,ft-db` — e.g. `dev,ft-db` for DMS, `ft,ft-db` for Releng and ORMS. The
+   existing profile keeps Spring loading the downstream's mounted override file; `ft-db`
+   layers H2 + auto-migrate on top. (`common` is a CRS test-only profile, not in the
+   runtime image — do not use it.)
+2. Do NOT change the committed CRS image version. At FT-run time override the version to
+   TC branch snapshot `2.0.84-3097` via command-line property or env var — not in
+   committed files.
+3. Keep the existing `/components-registry` DSL mount (auto-migrate reads from it at
+   startup) and the downstream's custom `application-<profile>.yaml` mount.
+4. Run the downstream's FT suite locally with the override — confirm registry boots
+   (H2 in-memory + auto-migrate) and downstream tests pass end-to-end.
 6. Open a PR in the downstream repo (do NOT merge). If something breaks in CRS, stop and
    file it back to CRS plan per the TDD rule (requirement → red test → fix).
 
