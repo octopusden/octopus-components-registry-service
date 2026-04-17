@@ -35,7 +35,7 @@
 | SYS-023 | UI: Navigation between pages | High | e2e-test | ❌ Not tested |
 | SYS-024 | UI: Editable tabs have Save button | Medium | e2e-test | ❌ Not tested |
 | SYS-025 | DatabaseComponentRegistryResolver applies field overrides | High | integration-test | ❌ Not tested |
-| SYS-026 | Flyway-managed PostgreSQL schema passes Hibernate validate | High | integration-test | ❌ Not tested |
+| SYS-026 | Flyway-managed PostgreSQL schema passes Hibernate validate | High | integration-test | ✅ Tested |
 
 ---
 
@@ -623,7 +623,7 @@ values with override values when the version falls within the range.
 
 **Priority:** High
 **Test layer:** integration-test
-**Status:** ❌ Not tested
+**Status:** ✅ Tested
 
 **Description:**
 Starting the server against a PostgreSQL database where Flyway has applied all
