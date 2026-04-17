@@ -20,13 +20,15 @@ When a problem is identified in CRS:
 | **T1** | Add `FlywayValidatePostgresStartupTest` — PostgreSQL testcontainer + Flyway V1–V3 + `ddl-auto=validate`. Addresses CodeRabbit P1 concern: does Hibernate's dialect-derived DDL for `system` (`@JdbcTypeCode(SqlTypes.ARRAY)` without `columnDefinition`) match the `text[]` column created by V1? | SYS-026 (new) | ⏳ Pending | ✅ | — |
 | **T2** | Document `ft-db` profile in `docs/db-migration/deployment/dev-run.md` (section alongside "Auto-Migrate Mode"). | — | ⏳ Pending | ✅ | — |
 | **T3** | Add H2 write-path sanity test — POST/PATCH against ft-db profile to verify `jsonb` columnDefinitions survive on H2 in PostgreSQL mode. | SYS-027 (new) | ⏳ Pending | ✅ | — |
-| T4 | Update downstream docker-compose to use `ft-db`. Split into T4a–T4d (see below). | — | ⏳ Pending | ✅ | PR #148 merged |
+| T4 | Update downstream docker-compose to use `ft-db`. Split into T4a–T4d (see below). | — | ⏳ Pending | ✅ | CRS jar/image built from `feature/ft-db-testing` |
 | T5 | Extend `FtDbProfileTest` to cover more read endpoints (build-tools, find-by-artifact, VCS). | — | ⏳ Pending | ❌ | T1 result |
 
 ### T4 — downstream updates (one sub-agent per repo)
 
-All four run in parallel after PR #148 is merged and the Docker image with embedded
-`application-ft-db.yml` is published.
+All four run in parallel. Downstreams consume CRS **built from this branch** — either the
+locally built Docker image (`./gradlew :components-registry-service-server:dockerBuildImage`
+on `feature/ft-db-testing`, tagged `ghcr.io/octopusden/components-registry-service:1.0-SNAPSHOT`)
+or a jar published to a local Maven cache. No wait on PR #148 merge.
 
 | ID | Downstream | Repo path | Status |
 |----|------------|-----------|--------|
