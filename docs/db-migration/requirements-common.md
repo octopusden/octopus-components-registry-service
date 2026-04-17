@@ -37,6 +37,7 @@
 | SYS-025 | DatabaseComponentRegistryResolver applies field overrides | High | integration-test | ❌ Not tested |
 | SYS-026 | Flyway-managed PostgreSQL schema passes Hibernate validate | High | integration-test | ✅ Tested |
 | SYS-027 | ft-db profile supports writes against jsonb columns | High | integration-test | ✅ Tested |
+| SYS-028 | v4 API supports component rename | High | integration-test | ⏳ Red (spec only) |
 
 ---
 
@@ -685,3 +686,61 @@ Flyway disabled), write operations against entity columns declared with
 
 **Test method:** `FtDbProfileWriteTest` (`SYS-027 PATCH buildConfiguration metadata round-trips`,
 `SYS-027 POST field override value round-trips`)
+
+---
+
+### SYS-028: v4 API supports component rename
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ⏳ Red (spec + red test landed; implementation pending)
+
+**Motivation:**
+Under the legacy git-resolver flow, downstream tooling (e.g. Releng's Jira workflow)
+renamed components by editing Groovy DSL files in the mounted `/components-registry`
+volume and relying on CRS to re-read DSL on the next request. Under `ft-db` (and, by
+extension, any DB-backed deployment) CRS loads DSL only once at startup and serves
+from the DB thereafter — DSL edits during the run are ignored by design. Without a
+rename endpoint, downstream rename workflows silently break once CRS moves to DB.
+
+**Description:**
+CRS v4 exposes `POST /rest/api/4/components/{name}/rename` with body
+`{"newName": "<string>"}`. Success returns 200 with the renamed component's summary.
+The operation is transactional and cascades the name change through every related
+aggregate so subsequent queries under either the old or new name behave correctly.
+
+**Preconditions:**
+- Component with the given `name` exists in the DB (i.e. `component_source.source = 'db'`
+  for that name).
+- `newName` is non-blank, matches the component name pattern, and does not collide
+  with an existing component name.
+
+**Acceptance criteria:**
+1. Happy path: `POST /rest/api/4/components/OLD/rename {"newName":"NEW"}` returns 200;
+   `GET /rest/api/4/components/NEW` returns the component; `GET /rest/api/4/components/OLD`
+   returns 404.
+2. Cascade: all rows in `component_versions`, `component_artifact_ids`, `component_source`,
+   `vcs_settings`, `jira_component_configs`, `escrow_configurations`, `distributions`,
+   `distribution_artifacts`, `build_configurations`, and `field_overrides` that referenced
+   the old name now reference the new name. Sub-component `parent` references update too.
+3. Conflict: `POST /rest/api/4/components/OLD/rename {"newName":"EXISTING"}` where `EXISTING`
+   is another component returns 409.
+4. Missing source: `POST /rest/api/4/components/NOT_FOUND/rename {"newName":"X"}` returns
+   404.
+5. Validation: empty / whitespace / pattern-violating `newName` returns 400 with a
+   descriptive message.
+6. Audit: the operation writes one `audit_log` entry with `action = "RENAME"`,
+   `oldValue.name = OLD`, `newValue.name = NEW`, current actor, and timestamp.
+7. Concurrency: second rename attempt using the stale OLD name returns 404 (not a silent
+   success or partial update).
+
+**Test method:** `ComponentRenameTest` — parametrised around an H2 fixture (ft-db or the
+generic `test-db` profile) covering each acceptance criterion; landed RED first
+(endpoint absent → 404 on the POST); turns GREEN when the endpoint + service layer is
+implemented.
+
+**Out of scope for this requirement:**
+- Releng's Jira workflow switching from DSL-edit to the new API — that is a separate
+  change in the downstream repo, tracked outside CRS.
+- Renaming a git-sourced component — only DB-sourced components are in scope; a
+  git-sourced rename would still need migration-to-DB first.
