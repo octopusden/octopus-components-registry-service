@@ -37,14 +37,14 @@ a container with `SPRING_PROFILES_ACTIVE=common,…` would have no config for it
 
 ## Build inputs for the sub-agent
 
-**CRS image to use for FT:** `2.0.84-3097` — a TeamCity-published branch snapshot of
+**CRS image to use for FT:** `2.0.84-3110` — a TeamCity-published branch snapshot of
 `feature/ft-db-testing`. Pull from the team's registry (e.g.
-`ghcr.io/octopusden/components-registry-service:2.0.84-3097` or the internal Docker
+`ghcr.io/octopusden/components-registry-service:2.0.84-3110` or the internal Docker
 registry configured in the downstream's `docker.registry` property). **Do NOT commit this
 version** in the downstream
 repo — the committed `OCTOPUS_COMPONENTS_REGISTRY_SERVICE_VERSION` (or equivalent) should
 stay at whatever release version the downstream ships today (usually `2.0.78`). Use
-`2.0.84-3097` only for your local FT run — either via env var override or a local-only
+`2.0.84-3110` only for your local FT run — either via env var override or a local-only
 compose overlay. Document the opt-in in the PR description so reviewers can run it too.
 
 No `./gradlew dockerBuildImage` is needed — the image is already built and published.
@@ -101,7 +101,7 @@ keeps the plan doc in sync.
   - `ft/src/ft/docker/components-registry-service.yaml` (current override)
 - FT runner: `./gradlew :ft:ft` (or equivalent — confirm from `ft/build.gradle.kts`)
 - Image env: `OCTOPUS_COMPONENTS_REGISTRY_SERVICE_VERSION` — for the FT run, override to the
-  TC-published branch snapshot `2.0.84-3097`. Do not hardcode this value in committed files;
+  TC-published branch snapshot `2.0.84-3110`. Do not hardcode this value in committed files;
   the committed version property stays at the current release (e.g. `2.0.78`). The PR
   should document the opt-in in the description.
 

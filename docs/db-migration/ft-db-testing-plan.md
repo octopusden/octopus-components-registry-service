@@ -20,14 +20,14 @@ When a problem is identified in CRS:
 | **T1** | Added `FlywayValidatePostgresStartupTest` — PostgreSQL testcontainer + Flyway V1–V4 + `ddl-auto=validate`. Addresses CodeRabbit P1 concern: Hibernate's dialect-derived DDL for `system` without `columnDefinition` DOES resolve to `text[]` on PostgreSQL dialect — **P1 not reproduced**. Test kept as regression coverage. | SYS-026 | ✅ Done | ✅ | — |
 | **T2** | Documented `ft-db` profile in `docs/db-migration/deployment/dev-run.md` (new "FT DB Mode" section). | — | ✅ Done | ✅ | — |
 | **T3** | Add H2 write-path sanity test — POST/PATCH against ft-db profile. Uncovered real bug: Hibernate 6.4.1 `JacksonJsonFormatMapper` did unsafe `(String)value` cast for `Any?`-typed `@JdbcTypeCode(SqlTypes.JSON)` fields holding a Map. Not H2-specific (PG affected too). Fix: `SafeJsonFormatMapper` routes non-String Any values via Jackson. | SYS-027 | ✅ Done | ✅ | — |
-| T4 | Update downstream docker-compose / OKD / Maven-docker-plugin configs to use `ft-db`. Split into T4a–T4d (see below). | — | 🔄 T4a done | ✅ | TC-published branch snapshot `2.0.84-3097` (see T6) |
+| T4 | Update downstream docker-compose / OKD / Maven-docker-plugin configs to use `ft-db`. Split into T4a–T4d (see below). | — | 🔄 T4a done | ✅ | TC-published branch snapshot `2.0.84-3110` (see T6) |
 | T5 | Extend `FtDbProfileTest` to cover more read endpoints (build-tools, find-by-artifact, VCS). | — | ⏳ Pending | ❌ | T1 result |
-| **T6** | Branch-snapshot publishing — already in place. TeamCity publishes branch builds as `2.0.84-3097` (snapshot of `feature/ft-db-testing`). Downstream FT runs should use this tag via `OCTOPUS_COMPONENTS_REGISTRY_SERVICE_VERSION=2.0.84-3097`. **Do not commit this value** in downstream repos — it is a branch snapshot, not a release. Closes CodeRabbit P2. | — | ✅ Done | — | — |
+| **T6** | Branch-snapshot publishing — already in place. TeamCity publishes branch builds as `2.0.84-3110` (snapshot of `feature/ft-db-testing`). Downstream FT runs should use this tag via `OCTOPUS_COMPONENTS_REGISTRY_SERVICE_VERSION=2.0.84-3110`. **Do not commit this value** in downstream repos — it is a branch snapshot, not a release. Closes CodeRabbit P2. | — | ✅ Done | — | — |
 
 ### T4 — downstream updates (one sub-agent per repo)
 
 All four run in parallel. Downstreams consume the TeamCity-published branch snapshot of
-`feature/ft-db-testing` — currently `2.0.84-3097`. At FT-run time override
+`feature/ft-db-testing` — currently `2.0.84-3110`. At FT-run time override
 `OCTOPUS_COMPONENTS_REGISTRY_SERVICE_VERSION` (or equivalent property) to that tag; do not
 commit the branch snapshot value in downstream repos. No wait on PR #148 merge, no local
 build of the CRS image needed.
@@ -58,7 +58,7 @@ Each T4x sub-agent task:
    layers H2 + auto-migrate on top. (`common` is a CRS test-only profile, not in the
    runtime image — do not use it.)
 2. Do NOT change the committed CRS image version. At FT-run time override the version to
-   TC branch snapshot `2.0.84-3097` via command-line property or env var — not in
+   TC branch snapshot `2.0.84-3110` via command-line property or env var — not in
    committed files.
 3. Keep the existing `/components-registry` DSL mount (auto-migrate reads from it at
    startup) and the downstream's custom `application-<profile>.yaml` mount.
