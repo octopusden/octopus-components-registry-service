@@ -121,8 +121,19 @@ class ComponentManagementServiceImpl(
             "Optimistic locking conflict: expected version ${request.version} but found ${entity.version}"
         }
 
+        val oldName = entity.name
+        val renameTarget =
+            request.name?.trim()?.takeIf { it.isNotBlank() && it != oldName }
+        if (request.name != null) {
+            require(request.name.isNotBlank()) { "name must not be blank" }
+            if (renameTarget != null && componentRepository.existsByName(renameTarget)) {
+                throw ComponentNameConflictException("Component with name '$renameTarget' already exists")
+            }
+        }
+
         val oldValue =
             mapOf(
+                "name" to oldName,
                 "displayName" to entity.displayName,
                 "componentOwner" to entity.componentOwner,
                 "productType" to entity.productType,
@@ -134,6 +145,7 @@ class ComponentManagementServiceImpl(
                 "metadata" to entity.metadata.toMap(),
             )
 
+        renameTarget?.let { entity.name = it }
         request.displayName?.let { entity.displayName = it }
         request.componentOwner?.let { entity.componentOwner = it }
         request.productType?.let { entity.productType = it }
@@ -245,8 +257,13 @@ class ComponentManagementServiceImpl(
 
         val saved = componentRepository.saveAndFlush(entity)
 
+        if (renameTarget != null) {
+            sourceRegistry.renameComponent(oldName, saved.name)
+        }
+
         val newValue =
             mapOf(
+                "name" to saved.name,
                 "displayName" to saved.displayName,
                 "componentOwner" to saved.componentOwner,
                 "productType" to saved.productType,
@@ -262,47 +279,9 @@ class ComponentManagementServiceImpl(
             AuditEvent(
                 entityType = "Component",
                 entityId = saved.id.toString(),
-                action = "UPDATE",
+                action = if (renameTarget != null) "RENAME" else "UPDATE",
                 oldValue = oldValue,
                 newValue = newValue,
-            ),
-        )
-
-        return saved.toDetailResponse()
-    }
-
-    override fun renameComponent(
-        oldName: String,
-        newName: String,
-    ): ComponentDetailResponse {
-        val trimmed = newName.trim()
-        require(trimmed.isNotBlank()) { "newName must not be blank" }
-
-        val entity =
-            componentRepository.findByName(oldName)
-                ?: throw NotFoundException("Component with name '$oldName' not found")
-
-        if (trimmed == oldName) {
-            return entity.toDetailResponse()
-        }
-
-        if (componentRepository.existsByName(trimmed)) {
-            throw ComponentNameConflictException("Component with name '$trimmed' already exists")
-        }
-
-        entity.name = trimmed
-        entity.updatedAt = java.time.Instant.now()
-        val saved = componentRepository.saveAndFlush(entity)
-
-        sourceRegistry.renameComponent(oldName, trimmed)
-
-        applicationEventPublisher.publishEvent(
-            AuditEvent(
-                entityType = "Component",
-                entityId = saved.id.toString(),
-                action = "RENAME",
-                oldValue = mapOf("name" to oldName),
-                newValue = mapOf("name" to trimmed),
             ),
         )
 

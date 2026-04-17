@@ -25,11 +25,6 @@ interface ComponentManagementService {
         request: ComponentUpdateRequest,
     ): ComponentDetailResponse
 
-    fun renameComponent(
-        oldName: String,
-        newName: String,
-    ): ComponentDetailResponse
-
     fun deleteComponent(id: UUID)
 
     fun listComponents(

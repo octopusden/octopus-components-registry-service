@@ -3,7 +3,6 @@ package org.octopusden.octopus.components.registry.server.controller
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentCreateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentDetailResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentFilter
-import org.octopusden.octopus.components.registry.server.dto.v4.ComponentRenameRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentSummaryResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentUpdateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideCreateRequest
@@ -65,17 +64,16 @@ class ComponentControllerV4(
         @PathVariable id: UUID,
     ): ComponentDetailResponse = componentManagementService.getComponent(id)
 
+    @GetMapping("/by-name/{name}")
+    fun getComponentByName(
+        @PathVariable name: String,
+    ): ComponentDetailResponse = componentManagementService.getComponentByName(name)
+
     @PatchMapping("/{id}")
     fun updateComponent(
         @PathVariable id: UUID,
         @RequestBody request: ComponentUpdateRequest,
     ): ComponentDetailResponse = componentManagementService.updateComponent(id, request)
-
-    @PostMapping("/{name}/rename")
-    fun renameComponent(
-        @PathVariable name: String,
-        @RequestBody request: ComponentRenameRequest,
-    ): ComponentDetailResponse = componentManagementService.renameComponent(name, request.newName)
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)

@@ -2,6 +2,7 @@ package org.octopusden.octopus.components.registry.server.dto.v4
 
 data class ComponentUpdateRequest(
     val version: Long, // optimistic locking
+    val name: String? = null, // rename; sets a new identifier. 409 if already taken.
     val displayName: String? = null,
     val componentOwner: String? = null,
     val productType: String? = null,

@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.migration
 
+import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.DisplayName
@@ -10,25 +11,28 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.http.MediaType
+import org.springframework.test.annotation.DirtiesContext
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.nio.file.Paths
+import java.util.UUID
 
 /**
- * SYS-028 — `POST /rest/api/4/components/{name}/rename` renames a DB-sourced component.
+ * SYS-028 — `PATCH /rest/api/4/components/{id}` with a `name` field renames the component,
+ * per Octopus REST API Guidelines (PATCH = partial update of a resource field). Plus the
+ * name-based lookup `GET /rest/api/4/components/by-name/{name}` needed so downstream
+ * callers that only know components by name can resolve the id before PATCH.
  *
- * Motivation: under ft-db (and any DB-backed deployment) CRS does not re-read DSL after
- * startup. Downstream rename workflows that relied on editing the Groovy DSL and letting
- * CRS pick it up (legacy git-resolver flow) silently break. Rename must be a first-class
- * API operation on the DB.
+ * Covers: happy path, blank name → 400, conflict 409, not-found 404, audit RENAME action
+ * emitted, stale optimistic-lock version, and combined rename + field update in one PATCH.
  *
- * This test lands RED first — the endpoint is not yet implemented, so the POST returns
- * 404 or 405 — and turns GREEN when the endpoint + service cascade + audit entry are in
- * place (see requirement SYS-028 in docs/db-migration/requirements-common.md for
- * the full acceptance criteria).
+ * Each test creates its own throwaway component through the v4 create endpoint so they
+ * are isolated from each other (H2 in-memory state persists across methods in the same
+ * @SpringBootTest context).
  */
 @AutoConfigureMockMvc
 @SpringBootTest(
@@ -36,6 +40,7 @@ import java.nio.file.Paths
     classes = [ComponentRegistryServiceApplication::class],
 )
 @ActiveProfiles("common", "ft-db")
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Timeout(120)
 class ComponentRenameTest {
     @Autowired
@@ -50,109 +55,107 @@ class ComponentRenameTest {
         System.setProperty("COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR", testResourcesPath.toString())
     }
 
-    private fun firstDbComponentName(): String {
+    private fun uniqueName(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(8)}"
+
+    private fun createComponent(name: String): JsonNode {
         val body =
-            mvc
-                .perform(get("/rest/api/4/components").param("page", "0").param("size", "1"))
-                .andExpect(status().isOk)
-                .andReturn()
-                .response.contentAsString
-        val node = objectMapper.readTree(body).path("content").get(0)
-        return node.path("name").asText()
-    }
-
-    private fun componentExistsByName(name: String): Boolean {
-        val body =
-            mvc
-                .perform(get("/rest/api/4/components").param("search", name).param("size", "200"))
-                .andExpect(status().isOk)
-                .andReturn()
-                .response.contentAsString
-        val content = objectMapper.readTree(body).path("content")
-        return (0 until content.size()).any { content.get(it).path("name").asText() == name }
-    }
-
-    @Test
-    @DisplayName("SYS-028: rename endpoint moves a DB component to a new name")
-    fun rename_happyPath() {
-        val oldName = firstDbComponentName()
-        val newName = "${oldName}_RENAMED_SYS028"
-
-        mvc
-            .perform(
-                post("/rest/api/4/components/$oldName/rename")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"newName":"$newName"}"""),
-            ).andExpect(status().isOk)
-
-        assertEquals(true, componentExistsByName(newName), "Component should exist under newName=$newName")
-        assertEquals(false, componentExistsByName(oldName), "Component should NOT exist under oldName=$oldName")
-    }
-
-    @Test
-    @DisplayName("SYS-028: rename with blank newName returns 400")
-    fun rename_blankNewName() {
-        val oldName = firstDbComponentName()
-        mvc
-            .perform(
-                post("/rest/api/4/components/$oldName/rename")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"newName":"   "}"""),
-            ).andExpect(status().isBadRequest)
-    }
-
-    @Test
-    @DisplayName("SYS-028: rename to an already-existing name returns 409")
-    fun rename_conflict() {
-        val body =
-            mvc
-                .perform(get("/rest/api/4/components").param("page", "0").param("size", "2"))
-                .andExpect(status().isOk)
-                .andReturn()
-                .response.contentAsString
-        val content = objectMapper.readTree(body).path("content")
-        val first = content.get(0).path("name").asText()
-        val second = content.get(1).path("name").asText()
-
-        mvc
-            .perform(
-                post("/rest/api/4/components/$first/rename")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"newName":"$second"}"""),
-            ).andExpect(status().isConflict)
-    }
-
-    @Test
-    @DisplayName("SYS-028: rename of a non-existing component returns 404")
-    fun rename_notFound() {
-        mvc
-            .perform(
-                post("/rest/api/4/components/DOES_NOT_EXIST_SYS028/rename")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"newName":"ANY_NAME"}"""),
-            ).andExpect(status().isNotFound)
-    }
-
-    @Test
-    @DisplayName("SYS-028: rename writes an audit_log RENAME entry")
-    fun rename_emitsAudit() {
-        val oldName = firstDbComponentName()
-        val newName = "${oldName}_RENAMED_AUDIT"
-
-        val renamedBody =
             mvc
                 .perform(
-                    post("/rest/api/4/components/$oldName/rename")
+                    post("/rest/api/4/components")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""{"newName":"$newName"}"""),
-                ).andExpect(status().isOk)
+                        .content("""{"name":"$name","displayName":"$name"}"""),
+                ).andExpect(status().isCreated)
                 .andReturn()
                 .response.contentAsString
-        val entityId = objectMapper.readTree(renamedBody).path("id").asText()
+        return objectMapper.readTree(body)
+    }
+
+    private fun fetchById(id: String): JsonNode {
+        val body =
+            mvc
+                .perform(get("/rest/api/4/components/$id"))
+                .andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString
+        return objectMapper.readTree(body)
+    }
+
+    private fun patch(
+        id: String,
+        body: String,
+    ) = mvc.perform(
+        patch("/rest/api/4/components/$id")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(body),
+    )
+
+    @Test
+    @DisplayName("SYS-028: PATCH with new name renames the component")
+    fun rename_happyPath() {
+        val created = createComponent(uniqueName("SYS028_HAPPY"))
+        val id = created.path("id").asText()
+        val oldName = created.path("name").asText()
+        val version = created.path("version").asLong()
+        val newName = uniqueName("SYS028_HAPPY_NEW")
+
+        patch(id, """{"version":$version,"name":"$newName"}""").andExpect(status().isOk)
+
+        mvc.perform(get("/rest/api/4/components/by-name/$newName")).andExpect(status().isOk)
+        mvc.perform(get("/rest/api/4/components/by-name/$oldName")).andExpect(status().isNotFound)
+    }
+
+    @Test
+    @DisplayName("SYS-028: GET /by-name/{name} returns 404 for a missing name")
+    fun byName_notFound() {
+        mvc
+            .perform(get("/rest/api/4/components/by-name/${uniqueName("SYS028_MISSING")}"))
+            .andExpect(status().isNotFound)
+    }
+
+    @Test
+    @DisplayName("SYS-028: PATCH with blank name returns 400")
+    fun rename_blankName() {
+        val created = createComponent(uniqueName("SYS028_BLANK"))
+        val id = created.path("id").asText()
+        val version = created.path("version").asLong()
+
+        patch(id, """{"version":$version,"name":"   "}""").andExpect(status().isBadRequest)
+    }
+
+    @Test
+    @DisplayName("SYS-028: PATCH name-to-existing returns 409")
+    fun rename_conflict() {
+        val firstCreated = createComponent(uniqueName("SYS028_SRC"))
+        val secondCreated = createComponent(uniqueName("SYS028_DST"))
+
+        patch(
+            firstCreated.path("id").asText(),
+            """{"version":${firstCreated.path("version").asLong()},"name":"${secondCreated.path("name").asText()}"}""",
+        ).andExpect(status().isConflict)
+    }
+
+    @Test
+    @DisplayName("SYS-028: PATCH on a non-existing id returns 404")
+    fun rename_notFound() {
+        patch(
+            "00000000-0000-0000-0000-000000000000",
+            """{"version":0,"name":"${uniqueName("SYS028_404")}"}""",
+        ).andExpect(status().isNotFound)
+    }
+
+    @Test
+    @DisplayName("SYS-028: rename emits an audit_log RENAME entry")
+    fun rename_emitsAuditRename() {
+        val created = createComponent(uniqueName("SYS028_AUDIT"))
+        val id = created.path("id").asText()
+        val version = created.path("version").asLong()
+        val newName = uniqueName("SYS028_AUDIT_NEW")
+
+        patch(id, """{"version":$version,"name":"$newName"}""").andExpect(status().isOk)
 
         val audit =
             mvc
-                .perform(get("/rest/api/4/audit/Component/$entityId"))
+                .perform(get("/rest/api/4/audit/Component/$id"))
                 .andExpect(status().isOk)
                 .andReturn()
                 .response.contentAsString
@@ -161,7 +164,39 @@ class ComponentRenameTest {
         assertEquals(
             true,
             actions.contains("RENAME"),
-            "Expected audit_log to contain a RENAME action for $entityId; got $actions",
+            "Expected audit_log to contain a RENAME action for $id; got $actions",
         )
+    }
+
+    @Test
+    @DisplayName("SYS-028: PATCH with stale version returns 5xx (optimistic lock)")
+    fun rename_staleVersion() {
+        val created = createComponent(uniqueName("SYS028_STALE"))
+        val id = created.path("id").asText()
+        val staleVersion = created.path("version").asLong() + 100
+
+        // Existing updateComponent maps a version mismatch to IllegalStateException → 5xx.
+        // Pin that behaviour here; a follow-up may map it to 409 specifically.
+        patch(id, """{"version":$staleVersion,"name":"${uniqueName("SYS028_STALE_NEW")}"}""")
+            .andExpect(status().is5xxServerError)
+    }
+
+    @Test
+    @DisplayName("SYS-028: PATCH can rename and update another field in one call")
+    fun rename_combinedWithFieldUpdate() {
+        val created = createComponent(uniqueName("SYS028_COMBO"))
+        val id = created.path("id").asText()
+        val version = created.path("version").asLong()
+        val newName = uniqueName("SYS028_COMBO_NEW")
+        val newOwner = "sys028-owner@example.org"
+
+        patch(
+            id,
+            """{"version":$version,"name":"$newName","componentOwner":"$newOwner"}""",
+        ).andExpect(status().isOk)
+
+        val after = fetchById(id)
+        assertEquals(newName, after.path("name").asText())
+        assertEquals(newOwner, after.path("componentOwner").asText())
     }
 }
