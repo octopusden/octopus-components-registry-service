@@ -33,6 +33,17 @@ class SafeJsonFormatMapper(
         charSequence: CharSequence,
         javaType: JavaType<T>,
         wrapperOptions: WrapperOptions,
+    ): T = readJson(charSequence, javaType)
+
+    override fun <T> toString(
+        value: T,
+        javaType: JavaType<T>,
+        wrapperOptions: WrapperOptions,
+    ): String = writeJson(value, javaType)
+
+    private fun <T> readJson(
+        charSequence: CharSequence,
+        javaType: JavaType<T>,
     ): T {
         if (javaType.javaType === String::class.java) {
             return charSequence.toString() as T
@@ -47,10 +58,9 @@ class SafeJsonFormatMapper(
         }
     }
 
-    override fun <T> toString(
+    private fun <T> writeJson(
         value: T,
         javaType: JavaType<T>,
-        wrapperOptions: WrapperOptions,
     ): String {
         if (javaType.javaType === String::class.java) {
             return value as String
