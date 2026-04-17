@@ -85,6 +85,53 @@ Use profile `dev-db-automigrate` instead of `dev-db`:
 
 This is the profile used by downstream projects (DMS Service, Releng, Escrow Generator) in their Docker Compose setups.
 
+## FT DB Mode (H2 in-memory)
+
+Self-contained CRS backed by H2 — no PostgreSQL, no Flyway, no external deps. Intended
+for downstream FT suites (DMS, ORMS, Releng) that need a read-only registry spun up fast.
+
+- **H2 in-memory** datasource (`jdbc:h2:mem:crs;DB_CLOSE_DELAY=-1;MODE=PostgreSQL;NON_KEYWORDS=KEY,VALUE`)
+- **Flyway disabled**; Hibernate `ddl-auto=create-drop` creates the schema on boot
+- **Auto-migrate on startup** (`components-registry.auto-migrate=true`) — reads Git DSL
+  from `components-registry.vcs.root`, loads components + defaults into H2, then serves
+  reads from the DB
+- Source: `application-ft-db.yml` (main config) + `bootstrap-ft-db.yml` (disables Spring
+  Cloud Config)
+
+Activate with `SPRING_PROFILES_ACTIVE=common,ft-db`. The `common` base profile is
+**required** — it supplies `eureka.client.enabled=false`, `supportedGroupIds`, version-name
+mapping, etc. `ft-db` alone will not boot.
+
+The DSL tree must still be mounted where `components-registry.work-dir` points (default
+`/components-registry`) — auto-migrate reads DSL files from there at startup.
+
+**Warning:** all data lives in RAM. Any POST/PATCH via the API disappears on restart.
+Use `ft-db` for read-only FT consumption, not for development.
+
+### Downstream Docker Compose example
+
+```yaml
+components-registry-service:
+  image: ghcr.io/octopusden/components-registry-service:1.0-SNAPSHOT-ft-db
+  ports:
+    - "4567:4567"
+  environment:
+    SPRING_PROFILES_ACTIVE: common,ft-db
+    SPRING_CONFIG_ADDITIONAL_LOCATION: /
+    SPRING_CLOUD_CONFIG_ENABLED: "false"
+    PRODUCT_TYPE_C: PT_C
+    PRODUCT_TYPE_K: PT_K
+    PRODUCT_TYPE_D: PT_D
+    PRODUCT_TYPE_DDB: PT_D_DB
+  volumes:
+    - ./components-registry:/components-registry:ro
+    - ./application-dev.yaml:/application-dev.yaml:ro
+```
+
+`application-dev.yaml` keeps the downstream-specific overrides (work-dir, groovy-path,
+supportedGroupIds, vcs.enabled=false). See `octopus-dms-service/test-common/src/main/config/components-registry-service.yaml`
+for a concrete example.
+
 ## Product Type Configuration
 
 `components-registry.product-type` values are environment-specific and **must not be committed**.
