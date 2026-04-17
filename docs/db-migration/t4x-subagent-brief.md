@@ -93,10 +93,14 @@ keeps the plan doc in sync.
 - T4b and T4c should be ONE PR in `ow/releng` (same repo) — confirm with the parent before
   splitting into two PRs.
 
-### T4d — ORMS
+### T4d — ORMS (release-management-service)
 
-- Repo path: **unknown — confirm with parent before starting**.
-- Once located, follow the same shape as T4a/T4b.
+- Repo: `/Users/pgorbachev/projects/octopus/octopus-release-management-service`
+- Files to touch:
+  - `ft/docker/docker-compose.yml` (the `components-registry-service` block ~line 30)
+  - `ft/docker/components-registry-service.yaml` (current override)
+- FT runner: confirm from `ft/build.gradle.kts` (likely `./gradlew :ft:ft`)
+- Version property: `OCTOPUS_COMPONENTS_REGISTRY_SERVICE_VERSION` env var
 
 ## Expected report back to parent
 

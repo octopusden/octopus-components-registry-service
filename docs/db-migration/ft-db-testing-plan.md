@@ -35,7 +35,7 @@ or a jar published to a local Maven cache. No wait on PR #148 merge.
 | T4a | DMS Service | docker-compose | `octopus-dms-service/ft/src/ft/docker/docker-compose.yaml` + `components-registry-service.yaml` | ⏳ Pending |
 | T4b | Releng (jira-releng-plugin-ft) | fabric8 docker-maven-plugin | `ow/releng/ft/jira-releng-plugin-ft/pom.xml` | ⏳ Pending |
 | T4c | Releng (maven-crm-plugin-ft) | fabric8 docker-maven-plugin | `ow/releng/ft/maven-crm-plugin-ft/pom.xml` | ⏳ Pending |
-| T4d | ORMS | TBD | repo path TBD — not on local disk | ⏳ Blocked on repo info |
+| T4d | ORMS (release-management-service) | docker-compose | `octopus-release-management-service/ft/docker/docker-compose.yml` + `components-registry-service.yaml` | ⏳ Pending |
 
 Current state (both DMS and Releng): `SPRING_PROFILES_ACTIVE=ft`, mounts a custom
 `application-ft.yaml` that disables VCS and points to a volume-mounted `/components-registry`
