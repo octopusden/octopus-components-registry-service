@@ -9,7 +9,7 @@ on:
 
 jobs:
   run-build-and-deploy:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-build.yml@feature/common-quality-gates
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-build.yml@v2.2.1
     with:
       flow-type: hybrid
       java-version: '21'
