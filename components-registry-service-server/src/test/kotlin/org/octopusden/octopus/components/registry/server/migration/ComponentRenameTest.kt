@@ -24,8 +24,9 @@ import java.util.UUID
 /**
  * SYS-028 — `PATCH /rest/api/4/components/{id}` with a `name` field renames the component,
  * per Octopus REST API Guidelines (PATCH = partial update of a resource field). Plus the
- * name-based lookup `GET /rest/api/4/components/by-name/{name}` needed so downstream
- * callers that only know components by name can resolve the id before PATCH.
+ * existing `GET /rest/api/4/components/{idOrName}` now accepts either a UUID or a name so
+ * downstream callers that only know components by name can resolve the id before PATCH.
+ * The polymorphic path matches peer services (DMS, ORMS, Releng, CRS v1-v3).
  *
  * Covers: happy path, blank name → 400, conflict 409, not-found 404, audit RENAME action
  * emitted, stale optimistic-lock version, and combined rename + field update in one PATCH.
@@ -100,15 +101,15 @@ class ComponentRenameTest {
 
         patch(id, """{"version":$version,"name":"$newName"}""").andExpect(status().isOk)
 
-        mvc.perform(get("/rest/api/4/components/by-name/$newName")).andExpect(status().isOk)
-        mvc.perform(get("/rest/api/4/components/by-name/$oldName")).andExpect(status().isNotFound)
+        mvc.perform(get("/rest/api/4/components/$newName")).andExpect(status().isOk)
+        mvc.perform(get("/rest/api/4/components/$oldName")).andExpect(status().isNotFound)
     }
 
     @Test
-    @DisplayName("SYS-028: GET /by-name/{name} returns 404 for a missing name")
-    fun byName_notFound() {
+    @DisplayName("SYS-028: GET /{idOrName} returns 404 for a missing name")
+    fun lookupByName_notFound() {
         mvc
-            .perform(get("/rest/api/4/components/by-name/${uniqueName("SYS028_MISSING")}"))
+            .perform(get("/rest/api/4/components/${uniqueName("SYS028_MISSING")}"))
             .andExpect(status().isNotFound)
     }
 

@@ -59,15 +59,17 @@ class ComponentControllerV4(
         return componentManagementService.listComponents(filter, pageable)
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/{idOrName}")
     fun getComponent(
-        @PathVariable id: UUID,
-    ): ComponentDetailResponse = componentManagementService.getComponent(id)
-
-    @GetMapping("/by-name/{name}")
-    fun getComponentByName(
-        @PathVariable name: String,
-    ): ComponentDetailResponse = componentManagementService.getComponentByName(name)
+        @PathVariable idOrName: String,
+    ): ComponentDetailResponse {
+        val asUuid = runCatching { UUID.fromString(idOrName) }.getOrNull()
+        return if (asUuid != null) {
+            componentManagementService.getComponent(asUuid)
+        } else {
+            componentManagementService.getComponentByName(idOrName)
+        }
+    }
 
     @PatchMapping("/{id}")
     fun updateComponent(

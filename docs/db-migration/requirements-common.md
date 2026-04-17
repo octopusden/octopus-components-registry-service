@@ -704,40 +704,46 @@ from the DB thereafter — DSL edits during the run are ignored by design. Witho
 rename endpoint, downstream rename workflows silently break once CRS moves to DB.
 
 **Description:**
-CRS v4 exposes `POST /rest/api/4/components/{name}/rename` with body
-`{"newName": "<string>"}`. Success returns 200 with the renamed component's summary.
-The operation is transactional and cascades the name change through every related
-aggregate so subsequent queries under either the old or new name behave correctly.
+Renaming is a partial field update, so per Octopus REST API Guidelines § 1.3 it is
+exposed as `PATCH /rest/api/4/components/{id}` with body
+`{"version": N, "name": "<new>"}`. The operation is transactional; related aggregates
+(`component_versions`, `component_artifact_ids`, `vcs_settings`, `jira_component_configs`,
+`escrow_configurations`, `distributions`, `distribution_artifacts`, `build_configurations`,
+`field_overrides`) all key by `component_id` (UUID) and therefore cascade automatically
+through Hibernate. The only name-keyed row — `component_source` — is rewritten
+atomically by `ComponentSourceRegistry.renameComponent`.
+
+For callers that only know the component by name (releng, DMS, ORMS conventions) the
+existing `GET /rest/api/4/components/{idOrName}` accepts either a UUID or a name and
+dispatches accordingly — matching peer-service and CRS v1–v3 convention.
 
 **Preconditions:**
-- Component with the given `name` exists in the DB (i.e. `component_source.source = 'db'`
-  for that name).
-- `newName` is non-blank, matches the component name pattern, and does not collide
-  with an existing component name.
+- Component with the given `id` exists.
+- Request `version` matches the entity's current `@Version` (optimistic lock).
+- `name` (when present) is non-blank and does not collide with another component.
 
 **Acceptance criteria:**
-1. Happy path: `POST /rest/api/4/components/OLD/rename {"newName":"NEW"}` returns 200;
-   `GET /rest/api/4/components/NEW` returns the component; `GET /rest/api/4/components/OLD`
+1. Happy path: `PATCH /rest/api/4/components/{id} {"version":N,"name":"NEW"}` returns 200.
+   Subsequent `GET /rest/api/4/components/NEW` returns the component; `GET /rest/api/4/components/OLD`
    returns 404.
-2. Cascade: all rows in `component_versions`, `component_artifact_ids`, `component_source`,
-   `vcs_settings`, `jira_component_configs`, `escrow_configurations`, `distributions`,
-   `distribution_artifacts`, `build_configurations`, and `field_overrides` that referenced
-   the old name now reference the new name. Sub-component `parent` references update too.
-3. Conflict: `POST /rest/api/4/components/OLD/rename {"newName":"EXISTING"}` where `EXISTING`
-   is another component returns 409.
-4. Missing source: `POST /rest/api/4/components/NOT_FOUND/rename {"newName":"X"}` returns
-   404.
-5. Validation: empty / whitespace / pattern-violating `newName` returns 400 with a
-   descriptive message.
-6. Audit: the operation writes one `audit_log` entry with `action = "RENAME"`,
-   `oldValue.name = OLD`, `newValue.name = NEW`, current actor, and timestamp.
-7. Concurrency: second rename attempt using the stale OLD name returns 404 (not a silent
-   success or partial update).
+2. Cascade: all related rows continue to resolve from either id or new name.
+3. Conflict: PATCH with `name` equal to an existing component's name returns 409.
+4. Missing id: PATCH on a non-existing UUID returns 404.
+5. Validation: blank / whitespace `name` returns 400.
+6. Audit: when `name` actually changes, writes one `audit_log` entry with
+   `action = "RENAME"`, `oldValue.name = OLD`, `newValue.name = NEW`, current actor,
+   and timestamp. Other field updates in the same PATCH are folded into the same entry.
+   If `name` does not change, action stays `"UPDATE"` as before.
+7. Concurrency: PATCH with a stale `version` rejects the change via optimistic-lock
+   semantics.
+8. Combined update: a single PATCH may rename AND update other fields in one call;
+   both are applied transactionally and a single audit event is emitted.
 
-**Test method:** `ComponentRenameTest` — parametrised around an H2 fixture (ft-db or the
-generic `test-db` profile) covering each acceptance criterion; landed RED first
-(endpoint absent → 404 on the POST); turns GREEN when the endpoint + service layer is
-implemented.
+**Test method:** `ComponentRenameTest` — 8 cases covering each acceptance criterion
+against an ft-db H2 fixture. Each test creates its own throwaway component via
+`POST /rest/api/4/components` to stay isolated; the class uses
+`@DirtiesContext(AFTER_CLASS)` so those throwaway rows do not bleed into
+`FtDbProfileTest` (which asserts on DSL-backed v1/v3 response shape).
 
 **Out of scope for this requirement:**
 - Releng's Jira workflow switching from DSL-edit to the new API — that is a separate
