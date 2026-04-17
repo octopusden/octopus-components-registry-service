@@ -98,12 +98,18 @@ for downstream FT suites (DMS, ORMS, Releng) that need a read-only registry spun
 - Source: `application-ft-db.yml` (main config) + `bootstrap-ft-db.yml` (disables Spring
   Cloud Config)
 
-Activate with `SPRING_PROFILES_ACTIVE=common,ft-db`. The `common` base profile is
-**required** — it supplies `eureka.client.enabled=false`, `supportedGroupIds`, version-name
-mapping, etc. `ft-db` alone will not boot.
+Activate with `SPRING_PROFILES_ACTIVE=ft,ft-db`. The `ft` profile is **required** — it
+causes Spring to load the downstream-provided `application-ft.yaml` (mounted via
+`SPRING_CONFIG_ADDITIONAL_LOCATION=/`), which supplies downstream-specific overrides like
+`components-registry.supportedGroupIds`, `supportedSystems`, `version-name`, `product-type`,
+and the `work-dir`. `ft-db` alone boots with H2 but has no meaningful content.
+(Note: there is no published `application-common.yml` in the runtime image — the `common`
+profile used in CRS's own test suite is a test-resource fixture, not something downstream
+projects can consume.)
 
-The DSL tree must still be mounted where `components-registry.work-dir` points (default
-`/components-registry`) — auto-migrate reads DSL files from there at startup.
+The DSL tree must still be mounted where `components-registry.work-dir` points (the value
+comes from the downstream's `application-ft.yaml`) — auto-migrate reads DSL files from
+there at startup.
 
 **Warning:** all data lives in RAM. Any POST/PATCH via the API disappears on restart.
 Use `ft-db` for read-only FT consumption, not for development.
@@ -116,21 +122,20 @@ components-registry-service:
   ports:
     - "4567:4567"
   environment:
-    SPRING_PROFILES_ACTIVE: common,ft-db
+    SPRING_PROFILES_ACTIVE: ft,ft-db
     SPRING_CONFIG_ADDITIONAL_LOCATION: /
     SPRING_CLOUD_CONFIG_ENABLED: "false"
-    PRODUCT_TYPE_C: PT_C
-    PRODUCT_TYPE_K: PT_K
-    PRODUCT_TYPE_D: PT_D
-    PRODUCT_TYPE_DDB: PT_D_DB
   volumes:
     - ./components-registry:/components-registry:ro
-    - ./application-dev.yaml:/application-dev.yaml:ro
+    - ./application-ft.yaml:/application-ft.yaml:ro
 ```
 
-`application-dev.yaml` keeps the downstream-specific overrides (work-dir, groovy-path,
-supportedGroupIds, vcs.enabled=false). See `octopus-dms-service/test-common/src/main/config/components-registry-service.yaml`
-for a concrete example.
+`application-ft.yaml` is the downstream's existing override file — keep it as-is, it
+supplies `work-dir`, `groovy-path`, `supportedGroupIds`, `supportedSystems`, `version-name`,
+`product-type`, and `components-registry.vcs.enabled=false`. Activating `ft-db` alongside
+`ft` layers H2 + auto-migrate on top without disturbing those settings. See
+`octopus-dms-service/ft/src/ft/docker/components-registry-service.yaml` for a concrete
+example.
 
 ## Product Type Configuration
 

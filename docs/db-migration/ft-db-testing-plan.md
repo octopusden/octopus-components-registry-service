@@ -43,7 +43,7 @@ DSL tree, with CRS image at version `2.0.78` (pre-v3).
 
 Each T4x sub-agent task:
 1. Build CRS locally from `feature/ft-db-testing` → tag `ghcr.io/octopusden/components-registry-service:1.0-SNAPSHOT-ft-db`.
-2. Switch the downstream's CRS block to that tag + `SPRING_PROFILES_ACTIVE=common,ft-db`.
+2. Switch the downstream's CRS block to that tag + `SPRING_PROFILES_ACTIVE=ft,ft-db` — keep the existing `ft` profile so the mounted `application-ft.yaml` still applies; add `ft-db` for H2 + auto-migrate. (`common` is a test-only profile in CRS, not in the runtime image.)
 3. Keep the `/components-registry` DSL mount (auto-migrate reads from it at startup).
 4. Reconcile settings from the old `application-ft.yaml` (product-type, supportedGroupIds,
    version-name, vcs-enabled=false) — either keep the override file or fold needed keys into

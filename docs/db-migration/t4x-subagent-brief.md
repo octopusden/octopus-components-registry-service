@@ -17,12 +17,33 @@ and a volume-mounted `application-ft.yaml` that disables VCS and points to a
 `/components-registry` DSL tree. They use old CRS versions (e.g. 2.0.78 in releng).
 
 Goal: switch each downstream to use CRS from this branch with profile
-`SPRING_PROFILES_ACTIVE=common,ft-db`, while keeping the DSL mount so auto-migrate
+`SPRING_PROFILES_ACTIVE=ft,ft-db`, while keeping the DSL mount so auto-migrate
 has something to populate the DB from.
+
+**Why `ft,ft-db` and not `common,ft-db`:** `ft` is the downstream's existing profile that
+causes Spring to load their mounted `application-ft.yaml` (with `supportedGroupIds`,
+`supportedSystems`, `work-dir`, `version-name`, `product-type`, `vcs.enabled=false`). That
+file is not published inside the CRS image — it lives in the downstream repo and is mounted
+via `SPRING_CONFIG_ADDITIONAL_LOCATION=/`. The `common` profile exists only in CRS test
+resources (`src/test/resources/application-common.yml`) and is NOT shipped in the runtime
+jar, so a container with `SPRING_PROFILES_ACTIVE=common,…` would have no config for it.
+Keeping `ft` preserves the existing override, and stacking `ft-db` on top adds
+H2 + auto-migrate without touching anything else.
 
 ## Build inputs for the sub-agent
 
 **CRS worktree:** `/Users/pgorbachev/projects/octopus/octopus-components-registry-service/_wt/ft-db-testing`
+
+**Known gotchas (observed in prior runs):**
+- **Architecture.** On Apple Silicon, `./gradlew dockerBuildImage` produces an `arm64` image
+  by default, but downstream runtime configs may pin `<platform>linux/amd64</platform>`.
+  Pass `-Pdocker.platform=linux/amd64` to the gradle task (if the task supports it) or
+  run `docker buildx` with `--platform=linux/amd64`. Alternatively leave the image arm64
+  and only remove the `<platform>` pin in the downstream config for your local test run —
+  don't commit the pin removal.
+- **Releng bitbucket license.** The `bitbucket` Maven profile in releng FT pom needs a
+  commercial license. Use the `gitea` profile instead (it is `activeByDefault` and does
+  not require the license) for local FT runs.
 
 **Build image from that worktree (must be on branch `feature/ft-db-testing`):**
 ```
