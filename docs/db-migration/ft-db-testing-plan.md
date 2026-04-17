@@ -46,8 +46,7 @@ artifact isn't published for that snapshot. Verify per-downstream before committ
 | ID | Downstream | Runner | CRS config location | Status |
 |----|------------|--------|---------------------|--------|
 | T4a | DMS Service | OKD (oc-template) | `octopus-dms-service/okd/components-registry.yaml` — profile `dev` (not `ft`) | ✅ PR [#83](https://github.com/octopusden/octopus-dms-service/pull/83) |
-| T4b | Releng (jira-releng-plugin-ft) | fabric8 docker-maven-plugin | `ow/releng/ft/jira-releng-plugin-ft/pom.xml` | ⏳ Pending |
-| T4c | Releng (maven-crm-plugin-ft) | fabric8 docker-maven-plugin | `ow/releng/ft/maven-crm-plugin-ft/pom.xml` | ⏳ Pending |
+| T4b+c | Releng (jira-releng-plugin-ft + maven-crm-plugin-ft) | fabric8 docker-maven-plugin | `ow/releng/ft/{jira-releng-plugin-ft,maven-crm-plugin-ft}/pom.xml` | ✅ branch `chore/crs-ft-db` pushed ([RELENG-3471](https://bitbucket.spb.openwaygroup.com/projects/RELENG/repos/releng/pull-requests?create&sourceBranch=refs/heads/chore/crs-ft-db)). Commit includes profile edit + version bump + CRS JVM bump to 512m/256m metaspace (100m OOMed during Groovy DSL compile). Local FT run not completed on this machine. PR needs manual creation from the bitbucket URL. |
 | T4d | ORMS (release-management-service) | docker-compose | `octopus-release-management-service/ft/docker/docker-compose.yml` + `components-registry-service.yaml` | ✅ PR [#59](https://github.com/octopusden/octopus-release-management-service/pull/59) |
 
 Current state per downstream:
