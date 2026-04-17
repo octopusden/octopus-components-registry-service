@@ -16,19 +16,24 @@ Downstream FT suites currently run CRS as a container with `SPRING_PROFILES_ACTI
 and a volume-mounted `application-ft.yaml` that disables VCS and points to a
 `/components-registry` DSL tree. They use old CRS versions (e.g. 2.0.78 in releng).
 
-Goal: switch each downstream to use CRS from this branch with profile
-`SPRING_PROFILES_ACTIVE=ft,ft-db`, while keeping the DSL mount so auto-migrate
-has something to populate the DB from.
+Goal: switch each downstream to use CRS from this branch with the profile **layered** on
+top of whatever profile the downstream already uses for CRS. Specifically:
 
-**Why `ft,ft-db` and not `common,ft-db`:** `ft` is the downstream's existing profile that
-causes Spring to load their mounted `application-ft.yaml` (with `supportedGroupIds`,
-`supportedSystems`, `work-dir`, `version-name`, `product-type`, `vcs.enabled=false`). That
-file is not published inside the CRS image — it lives in the downstream repo and is mounted
-via `SPRING_CONFIG_ADDITIONAL_LOCATION=/`. The `common` profile exists only in CRS test
-resources (`src/test/resources/application-common.yml`) and is NOT shipped in the runtime
-jar, so a container with `SPRING_PROFILES_ACTIVE=common,…` would have no config for it.
-Keeping `ft` preserves the existing override, and stacking `ft-db` on top adds
-H2 + auto-migrate without touching anything else.
+```
+SPRING_PROFILES_ACTIVE=<existing>,ft-db
+```
+
+where `<existing>` is the profile name the downstream uses today — usually `ft`, but
+**verify per repo**: DMS uses `dev`, Releng and ORMS use `ft`. The existing profile
+causes Spring to load the downstream's own override file (like `application-ft.yaml` /
+`application-dev.yaml`) via `SPRING_CONFIG_ADDITIONAL_LOCATION=/`. That file supplies
+downstream-specific keys like `supportedGroupIds`, `supportedSystems`, `work-dir`,
+`version-name`, `product-type`, `components-registry.vcs.enabled=false`. Don't rename
+or replace it — just add `ft-db` as a second active profile.
+
+**Do NOT use `common`.** `common` exists only in CRS test resources
+(`src/test/resources/application-common.yml`) and is NOT shipped in the runtime jar, so
+a container with `SPRING_PROFILES_ACTIVE=common,…` would have no config for it.
 
 ## Build inputs for the sub-agent
 

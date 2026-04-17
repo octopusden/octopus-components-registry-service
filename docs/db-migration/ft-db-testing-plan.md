@@ -17,11 +17,12 @@ When a problem is identified in CRS:
 
 | ID | Task | Req ID | Status | Parallel | Dependency |
 |----|------|--------|--------|:---:|------------|
-| **T1** | Add `FlywayValidatePostgresStartupTest` — PostgreSQL testcontainer + Flyway V1–V3 + `ddl-auto=validate`. Addresses CodeRabbit P1 concern: does Hibernate's dialect-derived DDL for `system` (`@JdbcTypeCode(SqlTypes.ARRAY)` without `columnDefinition`) match the `text[]` column created by V1? | SYS-026 (new) | ⏳ Pending | ✅ | — |
-| **T2** | Document `ft-db` profile in `docs/db-migration/deployment/dev-run.md` (section alongside "Auto-Migrate Mode"). | — | ⏳ Pending | ✅ | — |
-| **T3** | Add H2 write-path sanity test — POST/PATCH against ft-db profile to verify `jsonb` columnDefinitions survive on H2 in PostgreSQL mode. | SYS-027 (new) | ⏳ Pending | ✅ | — |
-| T4 | Update downstream docker-compose to use `ft-db`. Split into T4a–T4d (see below). | — | ⏳ Pending | ✅ | CRS jar/image built from `feature/ft-db-testing` |
+| **T1** | Added `FlywayValidatePostgresStartupTest` — PostgreSQL testcontainer + Flyway V1–V4 + `ddl-auto=validate`. Addresses CodeRabbit P1 concern: Hibernate's dialect-derived DDL for `system` without `columnDefinition` DOES resolve to `text[]` on PostgreSQL dialect — **P1 not reproduced**. Test kept as regression coverage. | SYS-026 | ✅ Done | ✅ | — |
+| **T2** | Documented `ft-db` profile in `docs/db-migration/deployment/dev-run.md` (new "FT DB Mode" section). | — | ✅ Done | ✅ | — |
+| **T3** | Add H2 write-path sanity test — POST/PATCH against ft-db profile. Uncovered real bug: Hibernate 6.4.1 `JacksonJsonFormatMapper` did unsafe `(String)value` cast for `Any?`-typed `@JdbcTypeCode(SqlTypes.JSON)` fields holding a Map. Not H2-specific (PG affected too). Fix: `SafeJsonFormatMapper` routes non-String Any values via Jackson. | SYS-027 | ✅ Done | ✅ | — |
+| T4 | Update downstream docker-compose / OKD / Maven-docker-plugin configs to use `ft-db`. Split into T4a–T4d (see below). | — | 🔄 T4a done | ✅ | CRS jar/image built from `feature/ft-db-testing` (local for now; see T6) |
 | T5 | Extend `FtDbProfileTest` to cover more read endpoints (build-tools, find-by-artifact, VCS). | — | ⏳ Pending | ❌ | T1 result |
+| **T6** | **Branch-snapshot publishing** for downstream FT integration on TeamCity. CRS Docker image from `feature/ft-db-testing` should be pushed to a shared registry (e.g. `ghcr.io/octopusden/components-registry-service:pr-148` or `:branch-ft-db-testing`) so downstream FT can pull a reproducible artifact instead of relying on a local build. Raised by CodeRabbit P2. Required for cross-repo branch-based validation on TC. | — | ⏳ Pending | ✅ | — |
 
 ### T4 — downstream updates (one sub-agent per repo)
 
@@ -32,7 +33,7 @@ or a jar published to a local Maven cache. No wait on PR #148 merge.
 
 | ID | Downstream | Runner | CRS config location | Status |
 |----|------------|--------|---------------------|--------|
-| T4a | DMS Service | docker-compose | `octopus-dms-service/ft/src/ft/docker/docker-compose.yaml` + `components-registry-service.yaml` | ⏳ Pending |
+| T4a | DMS Service | OKD (oc-template) | `octopus-dms-service/okd/components-registry.yaml` — profile `dev` (not `ft`) | ✅ PR [#83](https://github.com/octopusden/octopus-dms-service/pull/83) |
 | T4b | Releng (jira-releng-plugin-ft) | fabric8 docker-maven-plugin | `ow/releng/ft/jira-releng-plugin-ft/pom.xml` | ⏳ Pending |
 | T4c | Releng (maven-crm-plugin-ft) | fabric8 docker-maven-plugin | `ow/releng/ft/maven-crm-plugin-ft/pom.xml` | ⏳ Pending |
 | T4d | ORMS (release-management-service) | docker-compose | `octopus-release-management-service/ft/docker/docker-compose.yml` + `components-registry-service.yaml` | ⏳ Pending |
