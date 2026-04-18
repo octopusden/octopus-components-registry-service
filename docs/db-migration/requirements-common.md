@@ -39,6 +39,7 @@
 | SYS-027 | ft-db profile supports writes against jsonb columns | High | integration-test | ✅ Tested |
 | SYS-028 | v4 API supports component rename | High | integration-test | ✅ Tested |
 | SYS-029 | Renamed-away name no longer resolvable via v1/v2/v3 under ft-db | High | integration-test | ✅ Tested |
+| SYS-030 | DistributionEntity round-trips groupId-only GAV without `:null` suffix | High | unit-test | ✅ Tested |
 
 ---
 
@@ -811,3 +812,48 @@ startup with ft-db profile`.
   `ComponentRegistryService`, DMS client cache) — callers must invalidate on
   their side. CRS's contribution is to expose a consistent view across API
   versions.
+
+### SYS-030: DistributionEntity round-trips groupId-only GAV without `:null` suffix
+
+**Priority:** High
+**Test layer:** unit-test
+**Status:** ✅ Tested
+
+**Motivation:**
+Releng Maven-CRM-Plugin IT build 8.5138 surfaced
+`SetDistributionParametersTest.testDefaultParameters` and `testExplicitExternal`
+failing with assertion `'...ee:null' must contain '...ee'`. The maven-crm-plugin
+emits `##teamcity[setParameter name='DISTRIBUTION_ARTIFACTS_COORDINATES'
+value='org.example.teamcity.ee:null']` when the DSL fixture specifies
+`GAV = "org.example.teamcity.ee"` (groupId-only, no `:artifact`).
+
+The root cause is in `DistributionEntity.toDistribution()` (EntityMappers.kt).
+The read-back builds the GAV as
+`"${groupPattern}:${artifactPattern}"` plus optional `:extension` / `:classifier`.
+Kotlin string templates render `null` as the literal string `"null"`, so a
+groupId-only entity — where `artifactPattern`, `extension`, and `classifier`
+are all null — came back as `"org.example.teamcity.ee:null"`.
+
+Under the git-sourced profile the DSL never passes through DB mappers, so the
+bug was invisible. Under `ft-db` auto-migrate writes to the DB and v1 reads
+come back via the DB path — surfacing the defect the moment a downstream
+uses v1 distribution lookups.
+
+**Description:**
+`DistributionEntity.toDistribution()` must produce the exact GAV string that
+was stored, for every shape the write-side mapper supports:
+- `groupId` alone
+- `group:artifact`
+- `group:artifact:extension`
+- `group:artifact:extension:classifier`
+- multi-GAV strings stored in `name`
+
+**Acceptance criteria:**
+1. All five shapes round-trip byte-for-byte.
+2. No new string contains the literal `":null"`.
+
+**Test method:** `DistributionEntityMapperTest` — one test per shape.
+
+**Out of scope:**
+- Migrating historical rows that were ingested with `:null` baked into `name`
+  (none observed; write-side doesn't produce this for non-raw storage).

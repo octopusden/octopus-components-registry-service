@@ -259,7 +259,8 @@ fun DistributionEntity.toDistribution(): Distribution {
                 it.name
             } else {
                 buildString {
-                    append("${it.groupPattern}:${it.artifactPattern}")
+                    append(it.groupPattern.orEmpty())
+                    it.artifactPattern?.let { ap -> append(":$ap") }
                     it.extension?.let { ext -> append(":$ext") }
                     it.classifier?.let { cls -> append(":$cls") }
                 }
