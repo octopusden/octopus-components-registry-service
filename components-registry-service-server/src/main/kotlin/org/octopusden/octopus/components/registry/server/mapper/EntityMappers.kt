@@ -683,15 +683,28 @@ internal fun Distribution.toDistributionEntity(
         )
     }
     this.docker()?.let { docker ->
-        val dockerParts = docker.split(":")
-        entity.artifacts.add(
-            DistributionArtifactEntity(
-                distribution = entity,
-                artifactType = "DOCKER",
-                name = dockerParts.getOrNull(0),
-                tag = dockerParts.getOrNull(1),
-            ),
-        )
+        if (docker.contains(",")) {
+            // Multi-docker (comma-separated list of image:tag pairs): store raw,
+            // symmetric with multi-GAV. toDistribution() reads `name` as-is when
+            // `tag` is null.
+            entity.artifacts.add(
+                DistributionArtifactEntity(
+                    distribution = entity,
+                    artifactType = "DOCKER",
+                    name = docker,
+                ),
+            )
+        } else {
+            val dockerParts = docker.split(":")
+            entity.artifacts.add(
+                DistributionArtifactEntity(
+                    distribution = entity,
+                    artifactType = "DOCKER",
+                    name = dockerParts.getOrNull(0),
+                    tag = dockerParts.getOrNull(1),
+                ),
+            )
+        }
     }
 
     this.securityGroups?.read?.split(",")?.filter { it.isNotBlank() }?.forEach { group ->

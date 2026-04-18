@@ -40,6 +40,7 @@
 | SYS-028 | v4 API supports component rename | High | integration-test | ✅ Tested |
 | SYS-029 | Renamed-away name no longer resolvable via v1/v2/v3 under ft-db | High | integration-test | ✅ Tested |
 | SYS-030 | DistributionEntity round-trips groupId-only GAV without `:null` suffix | High | unit-test | ✅ Tested |
+| SYS-031 | DistributionEntity round-trips multi-image docker coordinates verbatim | High | unit-test | ✅ Tested |
 
 ---
 
@@ -857,3 +858,46 @@ was stored, for every shape the write-side mapper supports:
 **Out of scope:**
 - Migrating historical rows that were ingested with `:null` baked into `name`
   (none observed; write-side doesn't produce this for non-raw storage).
+
+### SYS-031: DistributionEntity round-trips multi-image docker coordinates verbatim
+
+**Priority:** High
+**Test layer:** unit-test
+**Status:** ✅ Tested
+
+**Motivation:**
+The DSL allows multiple docker images in a single `docker` declaration via a
+comma-separated list like `"image:tag1,image:tag2"`. The original
+`toDistributionEntity` mapper split the value on `:` and kept only
+`getOrNull(0)` and `getOrNull(1)` — for the multi-image string above the
+first `:tag1,image` ended up in `tag`, and everything after the second `:`
+was dropped on write. Read-back therefore returned `"image:tag1,image"`.
+
+Surfaced downstream in a Maven-CRM-Plugin IT
+(`SetDistributionParametersTest.testDefaultParameters` / `testExplicitExternal`)
+where `DISTRIBUTION_ARTIFACTS_COORDINATES_DOCKER` came back one suffix short
+of the DSL value after the CRS container loaded its DSL through ft-db.
+
+The GAV side already had the same problem (SYS-030 / multi-GAV raw-string
+storage); docker simply didn't inherit the treatment.
+
+**Description:**
+`toDistributionEntity` stores a multi-image docker string (contains `,`) as a
+single artifact row with `name = <raw string>` and `tag = null`, symmetric
+with multi-GAV. `toDistribution` already returns `name` verbatim when `tag`
+is null — no read-side change needed.
+
+**Acceptance criteria:**
+1. Single-image `image:tag` round-trips verbatim.
+2. Multi-image `img1:t1,img2:t2` round-trips verbatim.
+3. Existing single-image behavior is unchanged.
+
+**Test method:** `DistributionEntityMapperTest.singleDocker_roundtrip` and
+`.multiDocker_roundtrip`. Both exercise the write-side (`toDistributionEntity`)
+and the read-side (`toDistribution`). Visibility of `toDistributionEntity` was
+relaxed from `private` to `internal` for these tests.
+
+**Out of scope:**
+- Validating the structural contents of each image entry (name format, tag
+  constraints). The mapper only guarantees verbatim round-trip; callers
+  parse individual entries.
