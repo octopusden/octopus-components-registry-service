@@ -1,44 +1,35 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
-import com.github.benmanes.caffeine.cache.Caffeine
 import org.octopusden.octopus.components.registry.server.config.ComponentsRegistryProperties
 import org.octopusden.octopus.components.registry.server.entity.ComponentSourceEntity
 import org.octopusden.octopus.components.registry.server.repository.ComponentSourceRepository
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
 import org.springframework.stereotype.Service
 import java.time.Instant
-import java.util.concurrent.TimeUnit
 
 @Service
 class ComponentSourceRegistryImpl(
     private val componentSourceRepository: ComponentSourceRepository,
     private val properties: ComponentsRegistryProperties,
 ) : ComponentSourceRegistry {
-    private val sourceCache =
-        Caffeine
-            .newBuilder()
-            .maximumSize(10_000)
-            .expireAfterWrite(5, TimeUnit.MINUTES)
-            .build<String, String>()
+    // All reads go through the repository. The earlier Caffeine cache was per-JVM,
+    // so a `component_source` rewrite on pod A was invisible to pod B until the
+    // 5-minute write-expiry elapsed — that re-introduced the ghost SYS-029
+    // eliminated on a single-JVM setup (SYS-032). `component_source.name` is the
+    // primary key and backed by the default unique index, so `findById` is a
+    // single PK seek — sub-millisecond on H2 and indexed disk reads on Postgres.
+    // If the hot path becomes a bottleneck the route to scale is a Hibernate L2
+    // cache with cluster-aware invalidation, not a per-JVM Caffeine cache.
 
-    // isDbComponent / isGitComponent check the component_source row literally and
-    // return false when the row is missing. Migration code (ImportServiceImpl) uses
-    // these to decide whether a component still needs to be migrated.
     override fun isDbComponent(name: String): Boolean = componentSourceRepository.findById(name).map { it.source == "db" }.orElse(false)
 
     override fun isGitComponent(name: String): Boolean = componentSourceRepository.findById(name).map { it.source == "git" }.orElse(false)
 
-    // getSource returns the effective source for routing, applying the configured
-    // default when no row exists. Used by ComponentRoutingResolver so that, once
-    // everything is migrated (ft-db), unknown/renamed-away names route to the DB
-    // resolver and don't leak DSL ghosts via the git resolver.
     override fun getSource(name: String): String =
-        sourceCache.get(name) { key ->
-            componentSourceRepository
-                .findById(key)
-                .map { it.source }
-                .orElse(properties.defaultSource)
-        }!!
+        componentSourceRepository
+            .findById(name)
+            .map { it.source }
+            .orElse(properties.defaultSource)
 
     override fun setComponentSource(
         name: String,
@@ -51,7 +42,6 @@ class ComponentSourceRegistryImpl(
         entity.source = source
         entity.migratedAt = Instant.now()
         componentSourceRepository.save(entity)
-        sourceCache.put(name, source)
     }
 
     override fun renameComponent(
@@ -70,8 +60,6 @@ class ComponentSourceRegistryImpl(
                 migratedBy = existing.migratedBy,
             ),
         )
-        sourceCache.invalidate(oldName)
-        sourceCache.put(newName, existing.source)
     }
 
     override fun getDbComponentNames(): Set<String> = componentSourceRepository.findBySource("db").map { it.componentName }.toSet()

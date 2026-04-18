@@ -41,6 +41,7 @@
 | SYS-029 | Renamed-away name no longer resolvable via v1/v2/v3 under ft-db | High | integration-test | ✅ Tested |
 | SYS-030 | DistributionEntity round-trips groupId-only GAV without `:null` suffix | High | unit-test | ✅ Tested |
 | SYS-031 | DistributionEntity round-trips multi-image docker coordinates verbatim | High | unit-test | ✅ Tested |
+| SYS-032 | ComponentSourceRegistry reads reflect cross-pod DB changes on every call | High | integration-test | ✅ Tested |
 
 ---
 
@@ -901,3 +902,54 @@ relaxed from `private` to `internal` for these tests.
 - Validating the structural contents of each image entry (name format, tag
   constraints). The mapper only guarantees verbatim round-trip; callers
   parse individual entries.
+
+### SYS-032: ComponentSourceRegistry reads reflect cross-pod DB changes on every call
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+CRS is deployed behind a horizontally-scaled pod set against one shared
+database. The original `ComponentSourceRegistryImpl` wrapped every
+`getSource(name)` read in a per-JVM Caffeine cache with a 5-minute
+write-expiry. A `component_source` rewrite (rename / delete / insert) on
+pod A was therefore invisible to pod B's `ComponentRoutingResolver.resolverFor`
+— which calls `getSource` — until that pod's cache entry expired. For
+those five minutes pod B continued to route the old name through the DB
+resolver (or the git resolver, depending on which side cached first),
+re-introducing the exact ghost SYS-029 eliminated on a single-JVM setup.
+
+`isDbComponent` / `isGitComponent` were already on a cache-free path since
+the SYS-029 fix (literal `findById` row check), so migration bookkeeping
+stayed correct. The hot cached path was routing only.
+
+**Description:**
+Drop the Caffeine cache entirely from `ComponentSourceRegistryImpl`. The
+`component_source.name` column is a primary key with a unique index, so
+`findById` is a sub-millisecond PK seek on H2 and an indexed disk read on
+Postgres — acceptable per-request overhead for a metadata service, and
+the only correct baseline for multi-pod deployments.
+
+If this hot path later becomes a measured bottleneck, the right next step
+is a Hibernate L2 cache with cluster-aware invalidation (e.g.
+Infinispan / Hazelcast), not a per-JVM Caffeine cache.
+
+**Acceptance criteria:**
+1. `getSource(name)` reflects a direct repository delete on the very next
+   call (no stale routing).
+2. `getSource(name)` reflects a direct repository insert on the very next
+   call.
+3. `getSource(oldName)` / `getSource(newName)` reflect a direct repository
+   rename on the very next call.
+4. Existing SYS-029 / SYS-030 / SYS-031 coverage continues to pass.
+
+**Test method:** `ComponentSourceRegistryMultiPodTest` — three scenarios
+(`_reflectsExternalDelete`, `_reflectsExternalInsert`,
+`_reflectsExternalRename`) that simulate a second pod by writing directly
+through the shared `ComponentSourceRepository`.
+
+**Out of scope:**
+- Designing the cluster-aware L2 cache for later performance work.
+- In-flight writes and isolation semantics (covered by ordinary JPA
+  transaction / optimistic-lock mechanics).
