@@ -24,11 +24,9 @@ class ComponentSourceRegistryImpl(
     // isDbComponent / isGitComponent check the component_source row literally and
     // return false when the row is missing. Migration code (ImportServiceImpl) uses
     // these to decide whether a component still needs to be migrated.
-    override fun isDbComponent(name: String): Boolean =
-        componentSourceRepository.findById(name).map { it.source == "db" }.orElse(false)
+    override fun isDbComponent(name: String): Boolean = componentSourceRepository.findById(name).map { it.source == "db" }.orElse(false)
 
-    override fun isGitComponent(name: String): Boolean =
-        componentSourceRepository.findById(name).map { it.source == "git" }.orElse(false)
+    override fun isGitComponent(name: String): Boolean = componentSourceRepository.findById(name).map { it.source == "git" }.orElse(false)
 
     // getSource returns the effective source for routing, applying the configured
     // default when no row exists. Used by ComponentRoutingResolver so that, once
