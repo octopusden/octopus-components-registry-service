@@ -636,7 +636,7 @@ private fun VCSSettings.toVcsSettingsEntity(
     return entity
 }
 
-private fun Distribution.toDistributionEntity(
+internal fun Distribution.toDistributionEntity(
     component: ComponentEntity?,
     version: ComponentVersionEntity?,
 ): DistributionEntity {

@@ -5,6 +5,7 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.octopusden.octopus.components.registry.server.entity.DistributionArtifactEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionEntity
+import org.octopusden.octopus.escrow.model.Distribution
 
 /**
  * SYS-030 — `DistributionEntity.toDistribution()` must reconstruct the original GAV
@@ -109,5 +110,27 @@ class DistributionEntityMapperTest {
             )
 
         assertEquals(raw, entity.toDistribution().GAV())
+    }
+
+    // --- SYS-031: multi-docker full round-trip (write-side + read-side) ---
+
+    @Test
+    @DisplayName("SYS-031: single-image docker `name:tag` round-trips verbatim through the write/read mapper")
+    fun singleDocker_roundtrip() {
+        val raw = "image:flavour1"
+        val distribution = Distribution(true, true, null, null, null, raw, null)
+
+        val entity = distribution.toDistributionEntity(null, null)
+        assertEquals(raw, entity.toDistribution().docker())
+    }
+
+    @Test
+    @DisplayName("SYS-031: multi-image docker `img:t1,img:t2` must round-trip verbatim (currently loses `:t2`)")
+    fun multiDocker_roundtrip() {
+        val raw = "image:flavour1,image:flavour2"
+        val distribution = Distribution(true, true, null, null, null, raw, null)
+
+        val entity = distribution.toDistributionEntity(null, null)
+        assertEquals(raw, entity.toDistribution().docker())
     }
 }
