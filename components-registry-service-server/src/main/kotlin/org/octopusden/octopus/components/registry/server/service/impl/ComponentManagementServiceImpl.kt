@@ -122,14 +122,14 @@ class ComponentManagementServiceImpl(
         }
 
         val oldName = entity.name
-        val renameTarget =
-            request.name?.trim()?.takeIf { it.isNotBlank() && it != oldName }
+        val normalizedName = request.name?.trim()
         if (request.name != null) {
-            require(request.name.isNotBlank()) { "name must not be blank" }
-            if (renameTarget != null && componentRepository.existsByName(renameTarget)) {
-                throw ComponentNameConflictException("Component with name '$renameTarget' already exists")
+            require(!normalizedName.isNullOrEmpty()) { "name must not be blank" }
+            if (normalizedName != oldName && componentRepository.existsByName(normalizedName)) {
+                throw ComponentNameConflictException("Component with name '$normalizedName' already exists")
             }
         }
+        val isRename = normalizedName != null && normalizedName != oldName
 
         val oldValue =
             mapOf(
@@ -145,7 +145,9 @@ class ComponentManagementServiceImpl(
                 "metadata" to entity.metadata.toMap(),
             )
 
-        renameTarget?.let { entity.name = it }
+        if (isRename) {
+            entity.name = normalizedName!!
+        }
         request.displayName?.let { entity.displayName = it }
         request.componentOwner?.let { entity.componentOwner = it }
         request.productType?.let { entity.productType = it }
@@ -257,7 +259,7 @@ class ComponentManagementServiceImpl(
 
         val saved = componentRepository.saveAndFlush(entity)
 
-        if (renameTarget != null) {
+        if (isRename) {
             sourceRegistry.renameComponent(oldName, saved.name)
         }
 
@@ -279,7 +281,7 @@ class ComponentManagementServiceImpl(
             AuditEvent(
                 entityType = "Component",
                 entityId = saved.id.toString(),
-                action = if (renameTarget != null) "RENAME" else "UPDATE",
+                action = if (isRename) "RENAME" else "UPDATE",
                 oldValue = oldValue,
                 newValue = newValue,
             ),
