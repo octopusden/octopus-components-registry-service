@@ -50,7 +50,8 @@ class ListComponentsSystemFilterTest {
     @Test
     @DisplayName("listComponents with filter.system must return 400 until native array-contains is implemented")
     fun listComponents_withSystemFilter_rejected() {
-        mvc.perform(get("/rest/api/4/components").param("system", "ANYSYSTEM"))
+        mvc
+            .perform(get("/rest/api/4/components").param("system", "ANYSYSTEM"))
             .andExpect(status().isBadRequest)
     }
 }
