@@ -48,18 +48,11 @@ class ComponentSourceRegistryImpl(
         oldName: String,
         newName: String,
     ) {
-        val existing = componentSourceRepository.findById(oldName).orElse(null) ?: return
-        // component_source PK is the component name; replace the row atomically.
-        componentSourceRepository.delete(existing)
-        componentSourceRepository.flush()
-        componentSourceRepository.save(
-            ComponentSourceEntity(
-                componentName = newName,
-                source = existing.source,
-                migratedAt = existing.migratedAt,
-                migratedBy = existing.migratedBy,
-            ),
-        )
+        // component_source PK is the component name; rewrite the row via a single
+        // bulk UPDATE so the rename is one atomic statement (no mid-tx flush, no
+        // delete/insert two-step). Returns 0 when no row exists, which is the
+        // correct no-op for a git-sourced component that was never migrated.
+        componentSourceRepository.renameComponentName(oldName, newName)
     }
 
     override fun getDbComponentNames(): Set<String> = componentSourceRepository.findBySource("db").map { it.componentName }.toSet()
