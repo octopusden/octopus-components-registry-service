@@ -117,8 +117,10 @@ class ComponentManagementServiceImpl(
             componentRepository.findById(id).orElse(null)
                 ?: throw NotFoundException("Component with id '$id' not found")
 
-        check(entity.version == request.version) {
-            "Optimistic locking conflict: expected version ${request.version} but found ${entity.version}"
+        if (entity.version != request.version) {
+            throw jakarta.persistence.OptimisticLockException(
+                "Optimistic locking conflict: expected version ${request.version} but found ${entity.version}",
+            )
         }
 
         val oldName = entity.name
