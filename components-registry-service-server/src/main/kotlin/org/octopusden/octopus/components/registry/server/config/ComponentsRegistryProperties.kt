@@ -1,6 +1,7 @@
 package org.octopusden.octopus.components.registry.server.config
 
 import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.Pattern
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.validation.annotation.Validated
 
@@ -22,6 +23,10 @@ class ComponentsRegistryProperties(
     // keeps the mixed-source routing working for DSL-backed deployments; ft-db
     // sets this to "db" so that renamed/deleted names don't leak DSL ghosts through
     // the git resolver after all components have been migrated to the database.
+    // Restrict to the exact set ComponentRoutingResolver understands so a typo
+    // ("DB", "database", "Git") fails the bootstrap instead of silently routing
+    // every component to the git resolver.
+    @field:Pattern(regexp = "git|db", message = "default-source must be exactly 'git' or 'db'")
     val defaultSource: String = "git",
 ) {
     data class VcsSettings(
