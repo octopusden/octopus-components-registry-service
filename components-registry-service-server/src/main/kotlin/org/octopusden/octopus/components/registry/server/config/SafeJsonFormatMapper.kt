@@ -45,6 +45,10 @@ class SafeJsonFormatMapper(
         charSequence: CharSequence,
         javaType: JavaType<T>,
     ): T {
+        // Only String is short-circuited; no entity in this project declares a
+        // jsonb column as CharSequence / ByteArray / ByteBuffer. If one is added,
+        // mirror the stock Hibernate mapper's extra fast-paths here before the
+        // Jackson fallback silently wraps them.
         if (javaType.javaType === String::class.java) {
             return charSequence.toString() as T
         }
