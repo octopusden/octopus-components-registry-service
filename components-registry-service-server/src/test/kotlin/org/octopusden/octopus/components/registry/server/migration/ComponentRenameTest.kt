@@ -170,16 +170,14 @@ class ComponentRenameTest {
     }
 
     @Test
-    @DisplayName("SYS-028: PATCH with stale version returns 5xx (optimistic lock)")
+    @DisplayName("SYS-028: PATCH with stale version returns 409 (optimistic lock)")
     fun rename_staleVersion() {
         val created = createComponent(uniqueName("SYS028_STALE"))
         val id = created.path("id").asText()
         val staleVersion = created.path("version").asLong() + 100
 
-        // Existing updateComponent maps a version mismatch to IllegalStateException → 5xx.
-        // Pin that behaviour here; a follow-up may map it to 409 specifically.
         patch(id, """{"version":$staleVersion,"name":"${uniqueName("SYS028_STALE_NEW")}"}""")
-            .andExpect(status().is5xxServerError)
+            .andExpect(status().isConflict)
     }
 
     @Test
