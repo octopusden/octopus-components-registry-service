@@ -411,17 +411,15 @@ class ComponentManagementServiceImpl(
                 )
         }
 
-        // For the text[] system column, filter in memory after query if system filter is specified.
-        // JPA Specification does not natively support PostgreSQL array contains, so we apply a post-filter
-        // via an in-memory approach by fetching all matching on other criteria and filtering on system.
-        // Note: for production use, a native @Query would be preferred for performance.
-        return if (filter.system != null) {
-            val baseSpec = spec
-            Specification { root, query, cb ->
-                baseSpec.toPredicate(root, query, cb)
-            }
-        } else {
-            spec
+        // filter.system is not yet supported against the text[] column. JPA Criteria
+        // can't portably express "array contains" across H2 PG-compat and PostgreSQL,
+        // and we don't have a native query for it yet. The earlier implementation
+        // silently accepted the parameter and returned unfiltered results, which is
+        // worse than a clear rejection. Callers that need the filter should either
+        // drop the parameter or wait for the native-query follow-up.
+        require(filter.system == null) {
+            "filter.system is not yet supported; omit the parameter or filter client-side"
         }
+        return spec
     }
 }
