@@ -5,20 +5,19 @@ components-registry:
 
 # auth-server.url and auth-server.realm bind from AUTH_SERVER_URL / AUTH_SERVER_REALM
 # env vars via Spring Boot's relaxed binding. Production and dev profiles must
-# supply them. Tests override with stub URLs in application-common.yml because
-# NimbusJwtDecoder validates the URL at bean construction.
+# supply them; WebSecurityConfig.jwtDecoder() fails fast if either is missing.
+# Tests override with stub URLs in application-common.yml so the decoder bean can
+# be constructed without Keycloak running — MockMvc jwt() post-processor bypasses
+# the decoder entirely.
 auth-server:
   url:
   realm:
 
+# No spring.security.oauth2.resourceserver.jwt.* here: the auto-configured decoder
+# either forces eager OIDC discovery (issuer-uri) or skips issuer validation
+# (jwk-set-uri alone). Instead WebSecurityConfig provides a custom JwtDecoder
+# that is lazy on JWKS fetch AND explicitly enforces the issuer claim.
 spring:
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          # jwk-set-uri is lazy: NimbusJwtDecoder does not fetch until decode,
-          # which the MockMvc jwt() post-processor bypasses entirely.
-          jwk-set-uri: ${auth-server.url}/realms/${auth-server.realm}/protocol/openid-connect/certs
   jpa:
     open-in-view: false
     properties:

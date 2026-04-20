@@ -1,6 +1,7 @@
 package org.octopusden.octopus.components.registry.server.config
 
 import org.octopusden.cloud.commons.security.client.AuthServerClient
+import org.octopusden.cloud.commons.security.config.AuthServerProperties
 import org.octopusden.cloud.commons.security.config.CloudCommonWebSecurityConfig
 import org.octopusden.cloud.commons.security.config.SecurityProperties
 import org.octopusden.cloud.commons.security.converter.UserInfoGrantedAuthoritiesConverter
@@ -9,6 +10,11 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Import
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator
+import org.springframework.security.oauth2.jwt.JwtDecoder
+import org.springframework.security.oauth2.jwt.JwtIssuerValidator
+import org.springframework.security.oauth2.jwt.JwtValidators
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter
 import org.springframework.security.web.SecurityFilterChain
 
@@ -17,6 +23,7 @@ import org.springframework.security.web.SecurityFilterChain
 @EnableConfigurationProperties(SecurityProperties::class)
 class WebSecurityConfig(
     private val authServerClient: AuthServerClient,
+    private val authServerProperties: AuthServerProperties,
     securityProperties: SecurityProperties,
 ) : CloudCommonWebSecurityConfig(authServerClient, securityProperties) {
     @Bean
@@ -58,5 +65,33 @@ class WebSecurityConfig(
             }.cors { it.disable() }
             .csrf { it.disable() }
         return http.build()
+    }
+
+    /**
+     * Custom JwtDecoder: lazy JWKS fetch (so context init survives a temporarily unreachable
+     * Keycloak) **plus** explicit issuer validation against `auth-server.url`/`realm`.
+     *
+     * Why not use `spring.security.oauth2.resourceserver.jwt.issuer-uri`:
+     * that config forces an OIDC discovery HTTP call at context refresh, which would crash
+     * startup if Keycloak is momentarily down and would also complicate `@SpringBootTest`.
+     *
+     * Why not rely on the auto-configured `jwk-set-uri`-only decoder: it validates the
+     * signature and timestamps but does NOT enforce the `iss` claim, so the service would
+     * accept any JWT signed by the configured JWK set regardless of issuer.
+     */
+    @Bean
+    fun jwtDecoder(): JwtDecoder {
+        val issuer =
+            authServerProperties.issuerUrl
+                ?: error("auth-server.url and auth-server.realm must be set for JwtDecoder configuration")
+        val jwkSetUri = "$issuer/protocol/openid-connect/certs"
+        val decoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build()
+        decoder.setJwtValidator(
+            DelegatingOAuth2TokenValidator(
+                JwtValidators.createDefault(),
+                JwtIssuerValidator(issuer),
+            ),
+        )
+        return decoder
     }
 }
