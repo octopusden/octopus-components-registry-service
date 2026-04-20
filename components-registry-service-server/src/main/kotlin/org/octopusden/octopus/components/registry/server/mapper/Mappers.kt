@@ -24,49 +24,52 @@ import org.octopusden.octopus.escrow.model.VersionControlSystemRoot
 import org.octopusden.octopus.releng.dto.JiraComponent
 import org.octopusden.octopus.releng.dto.JiraComponentVersion
 
-fun JiraComponentVersion.toDTO(): JiraComponentVersionDTO {
-    return JiraComponentVersionDTO(componentVersion.componentName, componentVersion.version, component.toDTO())
-}
+fun JiraComponentVersion.toDTO(): JiraComponentVersionDTO =
+    JiraComponentVersionDTO(componentVersion.componentName, componentVersion.version, component.toDTO())
 
 fun JiraComponent.toDTO(): JiraComponentDTO {
-    val cvFormat = ComponentVersionFormatDTO(
-        componentVersionFormat.majorVersionFormat, componentVersionFormat.releaseVersionFormat,
-        componentVersionFormat.buildVersionFormat, componentVersionFormat.lineVersionFormat,
-        componentVersionFormat.hotfixVersionFormat
-    )
+    val cvFormat =
+        ComponentVersionFormatDTO(
+            componentVersionFormat.majorVersionFormat,
+            componentVersionFormat.releaseVersionFormat,
+            componentVersionFormat.buildVersionFormat,
+            componentVersionFormat.lineVersionFormat,
+            componentVersionFormat.hotfixVersionFormat,
+        )
     val componentInfo = componentInfo.let { ComponentInfoDTO(it.versionPrefix ?: "", it.versionFormat ?: "") }
     return JiraComponentDTO(projectKey, displayName, cvFormat, componentInfo, isTechnical)
 }
 
-fun JiraComponentVersionRange.toDTO() = JiraComponentVersionRangeDTO(
-    componentName,
-    versionRange,
-    component.toDTO(),
-    distribution?.toDTO() ?: DistributionDTO(false, false, securityGroups = SecurityGroupsDTO()),
-    vcsSettings.toDTO()
-)
+fun JiraComponentVersionRange.toDTO() =
+    JiraComponentVersionRangeDTO(
+        componentName,
+        versionRange,
+        component.toDTO(),
+        distribution?.toDTO() ?: DistributionDTO(false, false, securityGroups = SecurityGroupsDTO()),
+        vcsSettings.toDTO(),
+    )
 
-fun Distribution.toDTO() = DistributionDTO(
-    explicit(),
-    external(),
-    GAV(),
-    DEB(),
-    RPM(),
-    SecurityGroupsDTO(securityGroups?.read?.split(",")?.toList() ?: emptyList()),
-    docker()
-)
-
+fun Distribution.toDTO() =
+    DistributionDTO(
+        explicit(),
+        external(),
+        GAV(),
+        DEB(),
+        RPM(),
+        SecurityGroupsDTO(securityGroups?.read?.split(",")?.toList() ?: emptyList()),
+        docker(),
+    )
 
 fun VCSSettings.toDTO(): VCSSettingsDTO {
-    val vcsRoots = versionControlSystemRoots.map {
-        it.toDTO()
-    }
+    val vcsRoots =
+        versionControlSystemRoots.map {
+            it.toDTO()
+        }
     return VCSSettingsDTO(vcsRoots, externalRegistry)
 }
 
-fun VersionControlSystemRoot.toDTO(): VersionControlSystemRootDTO {
-    return VersionControlSystemRootDTO(name, vcsPath, RepositoryType.valueOf(repositoryType.name), tag, branch, hotfixBranch)
-}
+fun VersionControlSystemRoot.toDTO(): VersionControlSystemRootDTO =
+    VersionControlSystemRootDTO(name, vcsPath, RepositoryType.valueOf(repositoryType.name), tag, branch, hotfixBranch)
 
 fun ComponentArtifactConfiguration.toDTO(): ComponentArtifactConfigurationDTO =
     ComponentArtifactConfigurationDTO(this.groupPattern, this.artifactPattern)
@@ -85,11 +88,11 @@ fun Escrow.toDTO(): EscrowDTO =
         this.diskSpaceRequirement.orElse(null),
         this.additionalSources.toList(),
         this.isReusable,
-        this.generation.map { it.toDTO() }.orElse(null)
+        this.generation.map { it.toDTO() }.orElse(null),
     )
 
 fun Doc.toDTO(): DocDTO =
     DocDTO(
         this.component(),
-        this.majorVersion()
+        this.majorVersion(),
     )

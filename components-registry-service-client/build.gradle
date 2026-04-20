@@ -39,6 +39,9 @@ dependencies {
     testImplementation platform("org.springframework.boot:spring-boot-dependencies:${project['spring-boot-legacy.version']}")
     testImplementation ("org.springframework.boot:spring-boot-starter-test")
 
+    testImplementation(platform("org.testcontainers:testcontainers-bom:1.19.3"))
+    testImplementation("org.testcontainers:postgresql")
+
     testImplementation("org.assertj:assertj-core:3.21.0")
     testImplementation("ch.qos.logback:logback-classic:1.2.7")
 }
@@ -57,4 +60,10 @@ sourceSets {
             srcDirs += [ project(':test-common').sourceSets.test.resources ]
         }
     }
+}
+
+test {
+    // Ryuk (Testcontainers resource reaper) requires mounting /var/run/docker.sock inside itself,
+    // which Podman rootless forbids on CI. Disable Ryuk so PostgreSQLContainer can start normally.
+    environment 'TESTCONTAINERS_RYUK_DISABLED', 'true'
 }

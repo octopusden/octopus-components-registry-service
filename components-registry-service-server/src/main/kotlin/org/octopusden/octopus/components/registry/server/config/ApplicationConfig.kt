@@ -10,15 +10,15 @@ import java.util.concurrent.ConcurrentHashMap
 
 @Configuration
 @EnableConfigurationProperties(ComponentsRegistryProperties::class)
-class ApplicationConfig(val componentsRegistryProperties: ComponentsRegistryProperties) {
-
+class ApplicationConfig(
+    val componentsRegistryProperties: ComponentsRegistryProperties,
+) {
     @Bean
-    fun cacheStatus(): ServiceStatus {
-        return ServiceStatus(
+    fun cacheStatus(): ServiceStatus =
+        ServiceStatus(
             ServiceMode.byVcsEnabled(componentsRegistryProperties.vcs.enabled),
-            Date()
+            Date(),
         )
-    }
 
     @Bean(name = ["dependencyMapping"])
     fun dependencyMapping(): MutableMap<String, String> = ConcurrentHashMap<String, String>()

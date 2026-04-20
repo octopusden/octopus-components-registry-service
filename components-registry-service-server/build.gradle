@@ -2,6 +2,7 @@
 plugins {
     id 'org.springframework.boot'
     id 'org.jetbrains.kotlin.plugin.spring'
+    id 'org.jetbrains.kotlin.plugin.jpa'
     id 'java-test-fixtures'
     id 'com.bmuschko.docker-java-application'
 }
@@ -35,10 +36,35 @@ dependencies {
 
     implementation("org.eclipse.jgit:org.eclipse.jgit:5.13.0.202109080827-r")
 
+    // Database (JPA + PostgreSQL + Flyway)
+    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+    runtimeOnly("org.postgresql:postgresql")
+    runtimeOnly("com.h2database:h2")
+    implementation("org.flywaydb:flyway-core")
+
+    // Cache
+    implementation("org.springframework.boot:spring-boot-starter-cache")
+    implementation("com.github.ben-manes.caffeine:caffeine")
+
+    // Test - Testcontainers
+    testImplementation("org.testcontainers:postgresql")
+    testImplementation("org.testcontainers:junit-jupiter")
+    testImplementation("org.springframework.boot:spring-boot-testcontainers")
+
     testImplementation "com.github.kittinunf.fuel:fuel:2.3.1"
     testImplementation group: 'org.skyscreamer', name: 'jsonassert', version: '1.5.0'
     testImplementation('org.springframework.boot:spring-boot-starter-test')
     testImplementation testFixtures(project(":test-common"))
+}
+
+test {
+    // Ryuk (Testcontainers resource reaper) requires mounting /var/run/docker.sock inside itself,
+    // which Podman rootless forbids on CI. Disable Ryuk so containers can start normally.
+    environment 'TESTCONTAINERS_RYUK_DISABLED', 'true'
+    // Expose DOCKER_REGISTRY so DockerRegistryImageSubstitutor can redirect image pulls
+    // through the internal registry mirror (avoids Docker Hub anonymous rate limits).
+    def registry = System.getenv().getOrDefault("DOCKER_REGISTRY", project.findProperty("docker.registry")?.toString() ?: "")
+    if (registry) environment 'DOCKER_REGISTRY', registry
 }
 
 sourceSets {
@@ -82,8 +108,21 @@ task integrationTest(type: Test) {
     jvmArgs('--add-opens=java.base/java.util=ALL-UNNAMED')
 }
 
+tasks.register('jacocoIntegrationTestReport', org.gradle.testing.jacoco.tasks.JacocoReport) {
+    dependsOn integrationTest
+    executionData integrationTest
+    sourceDirectories.from = files(sourceSets.main.allSource.srcDirs)
+    additionalSourceDirs.from = files(sourceSets.main.allSource.srcDirs)
+    classDirectories.from = files(sourceSets.main.output)
+    reports {
+        xml.required = true
+        html.required = true
+    }
+}
+
 check.dependsOn integrationTest
 integrationTest.dependsOn bootJar
+integrationTest.finalizedBy jacocoIntegrationTestReport
 
 // Integration test inherits testImplementation configuration which includes transitive dependencies with resources.
 // Gradle's Copy task detects these as duplicates during resource processing.

@@ -2,6 +2,8 @@ package org.octopusden.octopus.components.registry.server.service.impl
 
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
+import jakarta.annotation.PostConstruct
+import jakarta.annotation.Resource
 import org.apache.maven.artifact.DefaultArtifact
 import org.jetbrains.kotlin.utils.keysToMap
 import org.octopusden.octopus.components.registry.api.build.tools.BuildTool
@@ -44,13 +46,10 @@ import java.nio.file.Paths
 import java.util.EnumMap
 import java.util.Properties
 import java.util.concurrent.ConcurrentHashMap
-import jakarta.annotation.PostConstruct
-import jakarta.annotation.Resource
 import kotlin.io.path.exists
 import kotlin.io.path.inputStream
 import kotlin.io.path.isRegularFile
 import kotlin.system.measureTimeMillis
-
 
 @Service
 @EnableConfigurationProperties(ComponentsRegistryProperties::class)
@@ -64,15 +63,15 @@ class ComponentRegistryResolverImpl(
     private val numericVersionFactory: NumericVersionFactory,
     private val versionRangeFactory: VersionRangeFactory,
     private val meterRegistry: MeterRegistry,
-    @Resource(name = "dependencyMapping") private val dependencyMapping: MutableMap<String, String>
+    @Resource(name = "dependencyMapping") private val dependencyMapping: MutableMap<String, String>,
 ) : ComponentRegistryResolver {
-
     private lateinit var configuration: EscrowConfiguration
-    private val versionNames = VersionNames(
-        componentsRegistryProperties.versionName.serviceBranch,
-        componentsRegistryProperties.versionName.service,
-        componentsRegistryProperties.versionName.minor
-    )
+    private val versionNames =
+        VersionNames(
+            componentsRegistryProperties.versionName.serviceBranch,
+            componentsRegistryProperties.versionName.service,
+            componentsRegistryProperties.versionName.minor,
+        )
 
     override fun updateCache() {
         configuration = configurationLoader.loadFullConfigurationWithoutValidationForUnknownAttributes(emptyMap())
@@ -87,26 +86,37 @@ class ComponentRegistryResolverImpl(
 
     override fun getComponentById(id: String) = getComponents().find { it.moduleName == id }
 
-    override fun getResolvedComponentDefinition(id: String, version: String): EscrowModuleConfig? {
-        return EscrowConfigurationLoader.getEscrowModuleConfig(configuration, ComponentVersion.create(id, version))
-    }
+    override fun getResolvedComponentDefinition(
+        id: String,
+        version: String,
+    ): EscrowModuleConfig? = EscrowConfigurationLoader.getEscrowModuleConfig(configuration, ComponentVersion.create(id, version))
 
-    override fun getJiraComponentVersion(component: String, version: String) =
-        getJiraComponentVersionToRangeByComponentAndVersion(component, version).first
+    override fun getJiraComponentVersion(
+        component: String,
+        version: String,
+    ) = getJiraComponentVersionToRangeByComponentAndVersion(component, version).first
 
     override fun getJiraComponentVersions(
-        component: String, versions: List<String>
+        component: String,
+        versions: List<String>,
     ) = try {
-        versions.keysToMap { version ->
-            getJiraComponentVersionsToRanges(
-                version, getJiraComponentVersionRangesByComponent(component), false
-            ).map { it.first }
-        }.filterValues { it.isNotEmpty() }.mapValues { it.value.first() }
+        versions
+            .keysToMap { version ->
+                getJiraComponentVersionsToRanges(
+                    version,
+                    getJiraComponentVersionRangesByComponent(component),
+                    false,
+                ).map { it.first }
+            }.filterValues { it.isNotEmpty() }
+            .mapValues { it.value.first() }
     } catch (_: NotFoundException) {
         emptyMap()
     }
 
-    override fun getVCSSettings(component: String, version: String): VCSSettings {
+    override fun getVCSSettings(
+        component: String,
+        version: String,
+    ): VCSSettings {
         val (jiraComponentVersion, jiraComponentVersionRange) =
             getJiraComponentVersionToRangeByComponentAndVersion(component, version)
         val versionFormat = jiraComponentVersion.component.componentVersionFormat
@@ -126,12 +136,17 @@ class ComponentRegistryResolverImpl(
             .resolveVariables(jiraComponentVersionRange.vcsSettings)
     }
 
-    override fun getBuildTools(component: String, version: String, ignoreRequired: Boolean?): List<BuildTool> {
-        return buildToolsResolver.getComponentBuildTools(ComponentVersion.create(component, version), null, ignoreRequired ?: false).toList()
-    }
+    override fun getBuildTools(
+        component: String,
+        version: String,
+        ignoreRequired: Boolean?,
+    ): List<BuildTool> =
+        buildToolsResolver.getComponentBuildTools(ComponentVersion.create(component, version), null, ignoreRequired ?: false).toList()
 
-    override fun getJiraComponentByProjectAndVersion(projectKey: String, version: String) =
-        getJiraComponentVersionToRangeByProjectAndVersion(projectKey, version).first
+    override fun getJiraComponentByProjectAndVersion(
+        projectKey: String,
+        version: String,
+    ) = getJiraComponentVersionToRangeByProjectAndVersion(projectKey, version).first
 
     override fun getJiraComponentsByProject(projectKey: String) =
         getJiraComponentVersionRangesByProject(projectKey).map { it.componentName }.toSet()
@@ -140,8 +155,8 @@ class ComponentRegistryResolverImpl(
         jiraParametersResolver.componentConfig.projectKeyToJiraComponentVersionRangeMap[projectKey]?.toSet()
             ?: throw NotFoundException("Project '$projectKey' is not found")
 
-    override fun getComponentsDistributionByJiraProject(projectKey: String): Map<String, Distribution> {
-        return getJiraComponentVersionRangesByProject(projectKey)
+    override fun getComponentsDistributionByJiraProject(projectKey: String): Map<String, Distribution> =
+        getJiraComponentVersionRangesByProject(projectKey)
             .groupBy { it.componentName }
             .mapValues { (_, versionRange) ->
                 Distribution(
@@ -155,33 +170,40 @@ class ComponentRegistryResolverImpl(
                         ?: SecurityGroups(null),
                 )
             }
-    }
 
-    override fun getVCSSettingForProject(projectKey: String, version: String): VCSSettings {
+    override fun getVCSSettingForProject(
+        projectKey: String,
+        version: String,
+    ): VCSSettings {
         val jiraComponentVersionRange = getJiraComponentVersionToRangeByProjectAndVersion(projectKey, version).second
-        //TODO: should version be transformed to build/hotfix format in the same way as in getVCSSettings method?
+        // TODO: should version be transformed to build/hotfix format in the same way as in getVCSSettings method?
         // Usage of rc/release version may lead to invalid variables resolution (tag/branch/etc.)
         return ModelConfigPostProcessor(
             ComponentVersion.create(
                 jiraComponentVersionRange.componentName,
-                version
-            ), versionNames
+                version,
+            ),
+            versionNames,
         ).resolveVariables(jiraComponentVersionRange.vcsSettings)
     }
 
-    override fun getDistributionForProject(projectKey: String, version: String): Distribution {
+    override fun getDistributionForProject(
+        projectKey: String,
+        version: String,
+    ): Distribution {
         LOG.info("Get distribution for project: {} version: {}", projectKey, version)
         val found = getJiraComponentVersionToRangeByProjectAndVersion(projectKey, version)
         return calculateDistribution(found.second.distribution, found.first.version)
     }
 
     override fun getAllJiraComponentVersionRanges() =
-        jiraParametersResolver.componentConfig.projectKeyToJiraComponentVersionRangeMap.values.flatten().toSet()
+        jiraParametersResolver.componentConfig.projectKeyToJiraComponentVersionRangeMap.values
+            .flatten()
+            .toSet()
 
-    override fun findComponentByArtifact(artifact: ArtifactDependency): VersionedComponent {
-        return findComponentByArtifactOrNull(artifact)
+    override fun findComponentByArtifact(artifact: ArtifactDependency): VersionedComponent =
+        findComponentByArtifactOrNull(artifact)
             ?: throw NotFoundException("No component found for artifact=$artifact")
-    }
 
     override fun findComponentsByArtifact(artifacts: Set<ArtifactDependency>): Map<ArtifactDependency, VersionedComponent?> {
         LOG.debug("Find components by artifacts: {}", artifacts)
@@ -190,97 +212,106 @@ class ComponentRegistryResolverImpl(
         }
     }
 
-    override fun getMavenArtifactParameters(component: String): Map<String, ComponentArtifactConfiguration> {
-        return jiraParametersResolver.getMavenArtifactParameters(component)
-    }
+    override fun getMavenArtifactParameters(component: String): Map<String, ComponentArtifactConfiguration> =
+        jiraParametersResolver.getMavenArtifactParameters(component)
 
-    override fun getDependencyMapping(): Map<String, String> {
-        return dependencyMapping
-    }
+    override fun getDependencyMapping(): Map<String, String> = dependencyMapping
 
     /**
      * Get components count by build system
      */
     override fun getComponentsCountByBuildSystem(): EnumMap<BuildSystem, Int> {
         LOG.debug("Get components count by build system")
-        val result = getComponents()
-            .filterNot { it.isArchived() }
-            .fold(EnumMap<BuildSystem, Int>(BuildSystem::class.java)) { acc, component ->
-                val buildSystem = component.getBuildSystem()
-                acc[buildSystem] = acc.getOrDefault(buildSystem, 0) + 1
-                acc
-            }
+        val result =
+            getComponents()
+                .filterNot { it.isArchived() }
+                .fold(EnumMap<BuildSystem, Int>(BuildSystem::class.java)) { acc, component ->
+                    val buildSystem = component.getBuildSystem()
+                    acc[buildSystem] = acc.getOrDefault(buildSystem, 0) + 1
+                    acc
+                }
         LOG.debug("Components count by build system: {}", result)
         return result
     }
 
-    override fun getComponentProductMapping(): Map<String, ProductTypes> {
-        return buildToolsResolver.componentProductMapping
-    }
+    override fun getComponentProductMapping(): Map<String, ProductTypes> = buildToolsResolver.componentProductMapping
 
     override fun findComponentsByDockerImages(images: Set<Image>): Set<ComponentImage> {
         val imageNames = images.map { it.name }.toSet()
-        return buildImageToComponentMap().filterKeys(imageNames::contains).mapNotNull { (imgName, component) ->
-            images.find { it.name == imgName }?.let { requiredImage ->
-                findConfigurationByImage(imgName, requiredImage.tag, component)
-            }
-        }.toSet()
+        return buildImageToComponentMap()
+            .filterKeys(imageNames::contains)
+            .mapNotNull { (imgName, component) ->
+                images.find { it.name == imgName }?.let { requiredImage ->
+                    findConfigurationByImage(imgName, requiredImage.tag, component)
+                }
+            }.toSet()
     }
 
-    private fun findConfigurationByImage(imageName: String, imageTag: String, compId: String): ComponentImage? {
+    private fun findConfigurationByImage(
+        imageName: String,
+        imageTag: String,
+        compId: String,
+    ): ComponentImage? {
+        val versionString =
+            try {
+                getJiraComponentVersion(compId, imageTag).version
+            } catch (_: NotFoundException) {
+                return null
+            }
 
-        val versionString = try {
-            getJiraComponentVersion(compId, imageTag).version
-        } catch (_: NotFoundException) {
-            return null
-        }
-
-        return EscrowConfigurationLoader.getEscrowModuleConfig(
-            configuration,
-            ComponentVersion.create(compId, versionString)
-        )?.distribution?.let {
-            if (it.docker()?.split(',')?.contains("$imageName:$imageTag") == true) {
-                ComponentImage(compId, versionString, Image(imageName, imageTag))
-            } else null
-        }
+        return EscrowConfigurationLoader
+            .getEscrowModuleConfig(
+                configuration,
+                ComponentVersion.create(compId, versionString),
+            )?.distribution
+            ?.let {
+                if (it.docker()?.split(',')?.contains("$imageName:$imageTag") == true) {
+                    ComponentImage(compId, versionString, Image(imageName, imageTag))
+                } else {
+                    null
+                }
+            }
     }
 
     private fun buildImageToComponentMap(): Map<String, String> {
         val dockerImageName2ComponentMap = mutableMapOf<String, String>()
-        val timeTaken = measureTimeMillis {
-            getComponents().forEach { comp ->
-                comp.moduleConfigurations.forEach { moduleConfig ->
-                    moduleConfig.distribution?.docker()?.let { dockersString ->
-                        dockersString.split(",").map { it.substringBefore(":") }.forEach { dockerImgName ->
-                            dockerImageName2ComponentMap[dockerImgName] = comp.moduleName
+        val timeTaken =
+            measureTimeMillis {
+                getComponents().forEach { comp ->
+                    comp.moduleConfigurations.forEach { moduleConfig ->
+                        moduleConfig.distribution?.docker()?.let { dockersString ->
+                            dockersString.split(",").map { it.substringBefore(":") }.forEach { dockerImgName ->
+                                dockerImageName2ComponentMap[dockerImgName] = comp.moduleName
+                            }
                         }
                     }
                 }
             }
-        }
         LOG.info(
             "Time taken to buildImageToComponentMap {} ms, read {} images",
             timeTaken,
-            dockerImageName2ComponentMap.size
+            dockerImageName2ComponentMap.size,
         )
 
         return dockerImageName2ComponentMap
     }
 
-    private fun EscrowModule.getBuildSystem(): BuildSystem {
-        return moduleConfigurations.firstOrNull()?.buildSystem?.toDTO()
+    private fun EscrowModule.getBuildSystem(): BuildSystem =
+        moduleConfigurations.firstOrNull()?.buildSystem?.toDTO()
             ?: throw IllegalStateException("No module configurations available")
-    }
 
     private fun EscrowModule.isArchived(): Boolean {
         val moduleConfig = moduleConfigurations.firstOrNull() ?: return false
-        //TODO: Remove archived suffix check when all archived components are marked with archived parameter
-        return moduleConfig.archived || (moduleConfig.componentDisplayName
-            ?.endsWith(EscrowConfigValidator.ARCHIVED_SUFFIX, ignoreCase = true) ?: false)
+        // TODO: Remove archived suffix check when all archived components are marked with archived parameter
+        return moduleConfig.archived ||
+            (
+                moduleConfig.componentDisplayName
+                    ?.endsWith(EscrowConfigValidator.ARCHIVED_SUFFIX, ignoreCase = true) ?: false
+            )
     }
 
-    private fun org.octopusden.octopus.escrow.BuildSystem.toDTO(): BuildSystem {
-        return when (this) {
+    private fun org.octopusden.octopus.escrow.BuildSystem.toDTO(): BuildSystem =
+        when (this) {
             org.octopusden.octopus.escrow.BuildSystem.BS2_0 -> BuildSystem.BS2_0
             org.octopusden.octopus.escrow.BuildSystem.MAVEN -> BuildSystem.MAVEN
             org.octopusden.octopus.escrow.BuildSystem.ECLIPSE_MAVEN -> BuildSystem.ECLIPSE_MAVEN
@@ -292,7 +323,6 @@ class ComponentRegistryResolverImpl(
             org.octopusden.octopus.escrow.BuildSystem.GOLANG -> BuildSystem.GOLANG
             org.octopusden.octopus.escrow.BuildSystem.IN_CONTAINER -> BuildSystem.IN_CONTAINER
         }
-    }
 
     private fun updateMetrics() {
         LOG.info("Update metrics build system count")
@@ -310,33 +340,34 @@ class ComponentRegistryResolverImpl(
         BuildSystem.values().forEach { buildSystem ->
             buildSystemMetrics[buildSystem] = 0
 
-            Gauge.builder("components.buildsystem.count") {
-                buildSystemMetrics[buildSystem] ?: 0
-            }
-                .tag("buildSystem", buildSystem.name)
+            Gauge
+                .builder("components.buildsystem.count") {
+                    buildSystemMetrics[buildSystem] ?: 0
+                }.tag("buildSystem", buildSystem.name)
                 .register(meterRegistry)
         }
     }
 
     private fun findComponentByArtifactOrNull(artifact: ArtifactDependency): VersionedComponent? =
-        moduleByArtifactResolver.resolveComponentByArtifact(
-            DefaultArtifact(
-                artifact.group,
-                artifact.name,
-                artifact.version,
-                null,
-                "jar",
-                "N/A",
-                null
-            )
-        )?.let { resolvedComponent ->
-            VersionedComponent(
-                resolvedComponent.componentName,
-                null,
-                resolvedComponent.version,
-                ""
-            )
-        }
+        moduleByArtifactResolver
+            .resolveComponentByArtifact(
+                DefaultArtifact(
+                    artifact.group,
+                    artifact.name,
+                    artifact.version,
+                    null,
+                    "jar",
+                    "N/A",
+                    null,
+                ),
+            )?.let { resolvedComponent ->
+                VersionedComponent(
+                    resolvedComponent.componentName,
+                    null,
+                    resolvedComponent.version,
+                    "",
+                )
+            }
 
     private fun loadDependencyMapping() {
         dependencyMapping.clear()
@@ -346,7 +377,8 @@ class ComponentRegistryResolverImpl(
             ?.let { dependencyMappingFileName ->
                 val dependencyMappingPath = groovyPath.resolve(dependencyMappingFileName)
                 if (dependencyMappingPath.isRegularFile() && dependencyMappingPath.exists()) {
-                    dependencyMappingPath.inputStream()
+                    dependencyMappingPath
+                        .inputStream()
                         .use { inputStream ->
                             mappingProperties.load(inputStream)
                         }
@@ -367,9 +399,12 @@ class ComponentRegistryResolverImpl(
      * @return JiraComponentVersion to JiraComponentVersionRange pair
      */
     private fun getJiraComponentVersionToRangeByComponentAndVersion(
-        component: String, version: String
+        component: String,
+        version: String,
     ) = getJiraComponentVersionsToRanges(
-        version, getJiraComponentVersionRangesByComponent(component), false
+        version,
+        getJiraComponentVersionRangesByComponent(component),
+        false,
     ).let {
         when (it.size) {
             1 -> it.first()
@@ -390,9 +425,11 @@ class ComponentRegistryResolverImpl(
      * @return JiraComponentVersion to JiraComponentVersionRange pair
      */
     private fun getJiraComponentVersionToRangeByProjectAndVersion(
-        projectKey: String, version: String
+        projectKey: String,
+        version: String,
     ) = getJiraComponentVersionsToRanges(
-        version, getJiraComponentVersionRangesByProject(projectKey)
+        version,
+        getJiraComponentVersionRangesByProject(projectKey),
     ).let {
         when (it.size) {
             1 -> it.first()
@@ -402,24 +439,29 @@ class ComponentRegistryResolverImpl(
     }
 
     private fun getJiraComponentVersionsToRanges(
-        version: String, versionRanges: Set<JiraComponentVersionRange>, strict: Boolean = true
+        version: String,
+        versionRanges: Set<JiraComponentVersionRange>,
+        strict: Boolean = true,
     ) = with(numericVersionFactory.create(version)) {
         val componentHotfixSupportResolver = ComponentHotfixSupportResolver()
 
-        versionRanges.filter { versionRangeFactory.create(it.versionRange).containsVersion(this) }
+        versionRanges
+            .filter { versionRangeFactory.create(it.versionRange).containsVersion(this) }
             .mapNotNull { versionRange ->
                 val component = versionRange.jiraComponentVersion.component
                 val vcsSettings = versionRange.vcsSettings
 
-                jiraComponentVersionFormatter.normalizeVersion(
-                    component, version, strict,
-                    componentHotfixSupportResolver.isHotFixEnabled(vcsSettings)
-                )
-                    ?.let { cleanVersion ->
+                jiraComponentVersionFormatter
+                    .normalizeVersion(
+                        component,
+                        version,
+                        strict,
+                        componentHotfixSupportResolver.isHotFixEnabled(vcsSettings),
+                    )?.let { cleanVersion ->
                         JiraComponentVersion(
                             ComponentVersion.create(versionRange.componentName, cleanVersion),
                             versionRange.component,
-                            jiraComponentVersionFormatter
+                            jiraComponentVersionFormatter,
                         ) to versionRange
                     }
             }
