@@ -2,6 +2,7 @@ package org.octopusden.octopus.components.registry.server.controller
 
 import org.octopusden.octopus.components.registry.core.dto.ErrorResponse
 import org.octopusden.octopus.components.registry.core.exceptions.BaseComponentsRegistryException
+import org.octopusden.octopus.components.registry.core.exceptions.ComponentNameConflictException
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.core.exceptions.RepositoryNotPreparedException
 import org.slf4j.Logger
@@ -58,6 +59,20 @@ class ControllerExceptionHandler {
         val errors = e.bindingResult.fieldErrors.joinToString(", ") { "${it.field}: ${it.defaultMessage}" }
         log.warn("Validation failed: {}", errors)
         return HttpEntity(ErrorResponse("Validation failed: $errors"))
+    }
+
+    @ExceptionHandler(IllegalArgumentException::class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    fun illegalArgumentExceptionHandler(e: IllegalArgumentException): HttpEntity<ErrorResponse> {
+        log.warn(e.localizedMessage)
+        return HttpEntity(ErrorResponse(e.localizedMessage ?: "Invalid request"))
+    }
+
+    @ExceptionHandler(ComponentNameConflictException::class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    fun componentNameConflictExceptionHandler(e: ComponentNameConflictException): HttpEntity<ErrorResponse> {
+        log.warn(e.localizedMessage)
+        return HttpEntity(ErrorResponse(e.localizedMessage))
     }
 
     companion object {

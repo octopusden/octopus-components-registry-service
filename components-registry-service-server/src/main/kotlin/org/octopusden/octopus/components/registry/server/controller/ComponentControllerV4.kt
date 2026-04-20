@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.controller
 
+import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentCreateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentDetailResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentFilter
@@ -10,6 +11,7 @@ import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideRes
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideUpdateRequest
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
+import org.slf4j.LoggerFactory
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.http.HttpStatus
@@ -27,10 +29,13 @@ import java.util.UUID
 
 @RestController
 @RequestMapping("rest/api/4/components")
+@Suppress("TooManyFunctions")
 class ComponentControllerV4(
     private val componentManagementService: ComponentManagementService,
     private val componentRepository: ComponentRepository,
 ) {
+    private val log = LoggerFactory.getLogger(ComponentControllerV4::class.java)
+
     @GetMapping("/meta/owners")
     fun getDistinctOwners(): List<String> = componentRepository.findDistinctOwners()
 
@@ -58,10 +63,30 @@ class ComponentControllerV4(
         return componentManagementService.listComponents(filter, pageable)
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/{idOrName}")
     fun getComponent(
-        @PathVariable id: UUID,
-    ): ComponentDetailResponse = componentManagementService.getComponent(id)
+        @PathVariable idOrName: String,
+    ): ComponentDetailResponse {
+        // Prefer UUID lookup when the path parses as one, but fall through to the
+        // name lookup ONLY for NotFoundException — the sentinel for "no row with
+        // this id". Infra / server-side errors (DB down, NPE, etc.) must surface
+        // to the caller instead of silently being re-routed to a name lookup
+        // that would mask the real failure. Ensures a component whose `name`
+        // happens to parse as a UUID still resolves by name.
+        val asUuid = runCatching { UUID.fromString(idOrName) }.getOrNull()
+        if (asUuid != null) {
+            try {
+                return componentManagementService.getComponent(asUuid)
+            } catch (e: NotFoundException) {
+                // Id not found — continue to the name lookup below. Log at debug
+                // so unrelated callers aren't noisy in production; the name
+                // lookup will either succeed or raise its own NotFoundException
+                // which the handler maps to the 404 the caller sees.
+                log.debug("id lookup missed for '{}', falling back to name lookup: {}", idOrName, e.message)
+            }
+        }
+        return componentManagementService.getComponentByName(idOrName)
+    }
 
     @PatchMapping("/{id}")
     fun updateComponent(

@@ -33,7 +33,6 @@ class ComponentEntity(
     var displayName: String? = null,
     @Column(name = "product_type")
     var productType: String? = null,
-    @Column(columnDefinition = "text[]")
     @JdbcTypeCode(SqlTypes.ARRAY)
     var system: Array<String> = emptyArray(),
     @Column(name = "client_code")

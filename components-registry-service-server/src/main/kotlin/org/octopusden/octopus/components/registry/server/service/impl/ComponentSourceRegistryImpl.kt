@@ -1,35 +1,35 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
-import com.github.benmanes.caffeine.cache.Caffeine
+import org.octopusden.octopus.components.registry.server.config.ComponentsRegistryProperties
 import org.octopusden.octopus.components.registry.server.entity.ComponentSourceEntity
 import org.octopusden.octopus.components.registry.server.repository.ComponentSourceRepository
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
 import org.springframework.stereotype.Service
 import java.time.Instant
-import java.util.concurrent.TimeUnit
 
 @Service
 class ComponentSourceRegistryImpl(
     private val componentSourceRepository: ComponentSourceRepository,
+    private val properties: ComponentsRegistryProperties,
 ) : ComponentSourceRegistry {
-    private val sourceCache =
-        Caffeine
-            .newBuilder()
-            .maximumSize(10_000)
-            .expireAfterWrite(5, TimeUnit.MINUTES)
-            .build<String, String>()
+    // All reads go through the repository. The earlier Caffeine cache was per-JVM,
+    // so a `component_source` rewrite on pod A was invisible to pod B until the
+    // 5-minute write-expiry elapsed — that re-introduced the ghost SYS-029
+    // eliminated on a single-JVM setup (SYS-032). `component_source.name` is the
+    // primary key and backed by the default unique index, so `findById` is a
+    // single PK seek — sub-millisecond on H2 and indexed disk reads on Postgres.
+    // If the hot path becomes a bottleneck the route to scale is a Hibernate L2
+    // cache with cluster-aware invalidation, not a per-JVM Caffeine cache.
 
-    override fun isDbComponent(name: String): Boolean = getSource(name) == "db"
+    override fun isDbComponent(name: String): Boolean = componentSourceRepository.findById(name).map { it.source == "db" }.orElse(false)
 
-    override fun isGitComponent(name: String): Boolean = getSource(name) != "db"
+    override fun isGitComponent(name: String): Boolean = componentSourceRepository.findById(name).map { it.source == "git" }.orElse(false)
 
     override fun getSource(name: String): String =
-        sourceCache.get(name) { key ->
-            componentSourceRepository
-                .findById(key)
-                .map { it.source }
-                .orElse("git")
-        }!!
+        componentSourceRepository
+            .findById(name)
+            .map { it.source }
+            .orElse(properties.defaultSource)
 
     override fun setComponentSource(
         name: String,
@@ -42,7 +42,17 @@ class ComponentSourceRegistryImpl(
         entity.source = source
         entity.migratedAt = Instant.now()
         componentSourceRepository.save(entity)
-        sourceCache.put(name, source)
+    }
+
+    override fun renameComponent(
+        oldName: String,
+        newName: String,
+    ) {
+        // component_source PK is the component name; rewrite the row via a single
+        // bulk UPDATE so the rename is one atomic statement (no mid-tx flush, no
+        // delete/insert two-step). Returns 0 when no row exists, which is the
+        // correct no-op for a git-sourced component that was never migrated.
+        componentSourceRepository.renameComponentName(oldName, newName)
     }
 
     override fun getDbComponentNames(): Set<String> = componentSourceRepository.findBySource("db").map { it.componentName }.toSet()

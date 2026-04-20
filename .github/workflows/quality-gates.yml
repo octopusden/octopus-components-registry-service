@@ -9,7 +9,7 @@ on:
 
 jobs:
   quality:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-quality-gates.yml@feature/common-quality-gates
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-quality-gates.yml@v2.2.1
     with:
       java-version: '21'
       static-reports-path: |
