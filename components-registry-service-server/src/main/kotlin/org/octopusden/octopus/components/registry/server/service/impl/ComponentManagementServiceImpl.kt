@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
+import org.octopusden.octopus.components.registry.core.exceptions.ComponentNameConflictException
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentCreateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentDetailResponse
@@ -26,6 +27,7 @@ import org.octopusden.octopus.components.registry.server.mapper.toSummaryRespons
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.FieldOverrideRepository
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
+import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
@@ -40,6 +42,7 @@ import java.util.UUID
 class ComponentManagementServiceImpl(
     private val componentRepository: ComponentRepository,
     private val fieldOverrideRepository: FieldOverrideRepository,
+    private val sourceRegistry: ComponentSourceRegistry,
     private val applicationEventPublisher: ApplicationEventPublisher,
 ) : ComponentManagementService {
     @Suppress("CyclomaticComplexMethod")
@@ -114,12 +117,25 @@ class ComponentManagementServiceImpl(
             componentRepository.findById(id).orElse(null)
                 ?: throw NotFoundException("Component with id '$id' not found")
 
-        check(entity.version == request.version) {
-            "Optimistic locking conflict: expected version ${request.version} but found ${entity.version}"
+        if (entity.version != request.version) {
+            throw jakarta.persistence.OptimisticLockException(
+                "Optimistic locking conflict: expected version ${request.version} but found ${entity.version}",
+            )
         }
+
+        val oldName = entity.name
+        val normalizedName = request.name?.trim()
+        if (request.name != null) {
+            require(!normalizedName.isNullOrEmpty()) { "name must not be blank" }
+            if (normalizedName != oldName && componentRepository.existsByName(normalizedName)) {
+                throw ComponentNameConflictException("Component with name '$normalizedName' already exists")
+            }
+        }
+        val isRename = normalizedName != null && normalizedName != oldName
 
         val oldValue =
             mapOf(
+                "name" to oldName,
                 "displayName" to entity.displayName,
                 "componentOwner" to entity.componentOwner,
                 "productType" to entity.productType,
@@ -131,6 +147,9 @@ class ComponentManagementServiceImpl(
                 "metadata" to entity.metadata.toMap(),
             )
 
+        if (isRename) {
+            entity.name = normalizedName!!
+        }
         request.displayName?.let { entity.displayName = it }
         request.componentOwner?.let { entity.componentOwner = it }
         request.productType?.let { entity.productType = it }
@@ -242,8 +261,13 @@ class ComponentManagementServiceImpl(
 
         val saved = componentRepository.saveAndFlush(entity)
 
+        if (isRename) {
+            sourceRegistry.renameComponent(oldName, saved.name)
+        }
+
         val newValue =
             mapOf(
+                "name" to saved.name,
                 "displayName" to saved.displayName,
                 "componentOwner" to saved.componentOwner,
                 "productType" to saved.productType,
@@ -259,7 +283,7 @@ class ComponentManagementServiceImpl(
             AuditEvent(
                 entityType = "Component",
                 entityId = saved.id.toString(),
-                action = "UPDATE",
+                action = if (isRename) "RENAME" else "UPDATE",
                 oldValue = oldValue,
                 newValue = newValue,
             ),
@@ -387,17 +411,15 @@ class ComponentManagementServiceImpl(
                 )
         }
 
-        // For the text[] system column, filter in memory after query if system filter is specified.
-        // JPA Specification does not natively support PostgreSQL array contains, so we apply a post-filter
-        // via an in-memory approach by fetching all matching on other criteria and filtering on system.
-        // Note: for production use, a native @Query would be preferred for performance.
-        return if (filter.system != null) {
-            val baseSpec = spec
-            Specification { root, query, cb ->
-                baseSpec.toPredicate(root, query, cb)
-            }
-        } else {
-            spec
+        // filter.system is not yet supported against the text[] column. JPA Criteria
+        // can't portably express "array contains" across H2 PG-compat and PostgreSQL,
+        // and we don't have a native query for it yet. The earlier implementation
+        // silently accepted the parameter and returned unfiltered results, which is
+        // worse than a clear rejection. Callers that need the filter should either
+        // drop the parameter or wait for the native-query follow-up.
+        require(filter.system == null) {
+            "filter.system is not yet supported; omit the parameter or filter client-side"
         }
+        return spec
     }
 }

@@ -2,6 +2,16 @@
 
 ## Deferred (out of MVP scope)
 - [ ] Keycloak integration (auth для v4, role-based access) — при деплое в OKD
+  - [ ] **Wire `AuditEvent.changedBy`** from `SecurityService.getCurrentUser().username`
+    at every `applicationEventPublisher.publishEvent(AuditEvent(...))` call site in
+    `ComponentManagementServiceImpl` (create / update / delete / rename) and any
+    future write services. Currently every audit row is inserted with
+    `changed_by = null`. SYS-019 acceptance criterion #5 depends on this
+    (`changed_by contains the username`). Review finding #5 on PR #148 was
+    deferred on the premise the wiring would land with Keycloak — if Keycloak
+    slips, land this first with a placeholder like
+    `SecurityContextHolder.getContext().authentication?.name ?: "system"` so the
+    audit log is usable from day one.
 - [ ] Port migration 4567 → 8080 — при OKD
 - [ ] Profile selection для новых компонентов (pre-fill templates)
 - [ ] TeamCity integration (create projects from UI)

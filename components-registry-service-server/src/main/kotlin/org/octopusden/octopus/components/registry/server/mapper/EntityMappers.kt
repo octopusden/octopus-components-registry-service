@@ -259,7 +259,8 @@ fun DistributionEntity.toDistribution(): Distribution {
                 it.name
             } else {
                 buildString {
-                    append("${it.groupPattern}:${it.artifactPattern}")
+                    append(it.groupPattern.orEmpty())
+                    it.artifactPattern?.let { ap -> append(":$ap") }
                     it.extension?.let { ext -> append(":$ext") }
                     it.classifier?.let { cls -> append(":$cls") }
                 }
@@ -635,7 +636,7 @@ private fun VCSSettings.toVcsSettingsEntity(
     return entity
 }
 
-private fun Distribution.toDistributionEntity(
+internal fun Distribution.toDistributionEntity(
     component: ComponentEntity?,
     version: ComponentVersionEntity?,
 ): DistributionEntity {
@@ -682,15 +683,28 @@ private fun Distribution.toDistributionEntity(
         )
     }
     this.docker()?.let { docker ->
-        val dockerParts = docker.split(":")
-        entity.artifacts.add(
-            DistributionArtifactEntity(
-                distribution = entity,
-                artifactType = "DOCKER",
-                name = dockerParts.getOrNull(0),
-                tag = dockerParts.getOrNull(1),
-            ),
-        )
+        if (docker.contains(",")) {
+            // Multi-docker (comma-separated list of image:tag pairs): store raw,
+            // symmetric with multi-GAV. toDistribution() reads `name` as-is when
+            // `tag` is null.
+            entity.artifacts.add(
+                DistributionArtifactEntity(
+                    distribution = entity,
+                    artifactType = "DOCKER",
+                    name = docker,
+                ),
+            )
+        } else {
+            val dockerParts = docker.split(":")
+            entity.artifacts.add(
+                DistributionArtifactEntity(
+                    distribution = entity,
+                    artifactType = "DOCKER",
+                    name = dockerParts.getOrNull(0),
+                    tag = dockerParts.getOrNull(1),
+                ),
+            )
+        }
     }
 
     this.securityGroups?.read?.split(",")?.filter { it.isNotBlank() }?.forEach { group ->

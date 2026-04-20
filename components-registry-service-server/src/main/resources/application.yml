@@ -6,5 +6,10 @@ components-registry:
 spring:
   jpa:
     open-in-view: false
+    properties:
+      # SYS-027: Hibernate 6.4's default JacksonJsonFormatMapper short-circuits for
+      # `Object.class` fields with an unsafe `(String) value` cast that blows up on any
+      # non-String value (e.g. Map). Our SafeJsonFormatMapper always routes through Jackson.
+      hibernate.type.json_format_mapper: org.octopusden.octopus.components.registry.server.config.SafeJsonFormatMapper
   flyway:
     enabled: false
