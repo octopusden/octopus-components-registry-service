@@ -63,12 +63,17 @@ class ComponentControllerV4(
     fun getComponent(
         @PathVariable idOrName: String,
     ): ComponentDetailResponse {
+        // Prefer UUID lookup when the path parses as one, but fall through to the
+        // name lookup if the id misses — otherwise a component whose `name`
+        // happens to parse as a UUID (a 36-char string with the canonical hyphen
+        // pattern) would be unreachable by name, because the auto-generated id
+        // won't match the name.
         val asUuid = runCatching { UUID.fromString(idOrName) }.getOrNull()
-        return if (asUuid != null) {
-            componentManagementService.getComponent(asUuid)
-        } else {
-            componentManagementService.getComponentByName(idOrName)
+        if (asUuid != null) {
+            runCatching { componentManagementService.getComponent(asUuid) }
+                .onSuccess { return it }
         }
+        return componentManagementService.getComponentByName(idOrName)
     }
 
     @PatchMapping("/{id}")
