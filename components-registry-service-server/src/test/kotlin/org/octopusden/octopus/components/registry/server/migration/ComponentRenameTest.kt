@@ -121,7 +121,7 @@ class ComponentRenameTest {
         // polymorphic dispatch parses the path as a UUID first; that UUID won't
         // match the entity's auto-generated id, so the fallback to
         // getComponentByName() is the only way this resolves.
-        val uuidShapedName = java.util.UUID.randomUUID().toString()
+        val uuidShapedName = UUID.randomUUID().toString()
         val created = createComponent(uuidShapedName)
         val id = created.path("id").asText()
 
