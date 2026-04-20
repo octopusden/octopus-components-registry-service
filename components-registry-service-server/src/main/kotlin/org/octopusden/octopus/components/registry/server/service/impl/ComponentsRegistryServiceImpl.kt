@@ -51,6 +51,7 @@ class ComponentsRegistryServiceImpl(
                 "Auto-migrate complete: ${result.components.migrated} migrated, " +
                     "${result.components.skipped} skipped, ${result.components.failed} failed",
             )
+            requireMigrationSucceeded(result)
         }
     }
 
@@ -66,5 +67,8 @@ class ComponentsRegistryServiceImpl(
  * `default-source=db`.
  */
 internal fun requireMigrationSucceeded(result: org.octopusden.octopus.components.registry.server.service.FullMigrationResult) {
-    // Placeholder — enforcement added in the next commit.
+    check(result.components.failed == 0) {
+        "Auto-migrate reported ${result.components.failed} of ${result.components.total} components failed; " +
+            "refusing to start under ft-db — see the Auto-migrate log for the failure reasons per component"
+    }
 }
