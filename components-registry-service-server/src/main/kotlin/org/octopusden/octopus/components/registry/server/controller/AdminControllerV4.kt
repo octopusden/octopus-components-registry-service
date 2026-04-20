@@ -1,7 +1,9 @@
 package org.octopusden.octopus.components.registry.server.controller
 
+import org.octopusden.octopus.components.registry.server.dto.v4.HistoryImportResult
 import org.octopusden.octopus.components.registry.server.service.BatchMigrationResult
 import org.octopusden.octopus.components.registry.server.service.FullMigrationResult
+import org.octopusden.octopus.components.registry.server.service.GitHistoryImportService
 import org.octopusden.octopus.components.registry.server.service.ImportService
 import org.octopusden.octopus.components.registry.server.service.MigrationResult
 import org.octopusden.octopus.components.registry.server.service.MigrationStatus
@@ -18,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController
 @RequestMapping("rest/api/4/admin")
 class AdminControllerV4(
     private val importService: ImportService,
+    private val gitHistoryImportService: GitHistoryImportService,
 ) {
     @PostMapping("/migrate-component/{name}")
     fun migrateComponent(
@@ -47,4 +50,10 @@ class AdminControllerV4(
 
     @GetMapping("/export")
     fun exportComponents(): ResponseEntity<Map<String, String>> = ResponseEntity.ok(mapOf("status" to "not_implemented"))
+
+    @PostMapping("/migrate-history")
+    fun migrateHistory(
+        @RequestParam(required = false) toRef: String?,
+        @RequestParam(defaultValue = "false") reset: Boolean,
+    ): ResponseEntity<HistoryImportResult> = ResponseEntity.ok(gitHistoryImportService.importHistory(toRef, reset))
 }
