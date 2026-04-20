@@ -17,6 +17,7 @@ import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.nio.file.Paths
 import java.util.UUID
@@ -111,6 +112,24 @@ class ComponentRenameTest {
         mvc
             .perform(get("/rest/api/4/components/${uniqueName("SYS028_MISSING")}"))
             .andExpect(status().isNotFound)
+    }
+
+    @Test
+    @DisplayName("SYS-028: GET /{idOrName} resolves a UUID-shaped name by name after UUID lookup misses")
+    fun lookupByName_uuidShaped_fallsBackToNameLookup() {
+        // Component whose `name` happens to parse as a UUID. The controller's
+        // polymorphic dispatch parses the path as a UUID first; that UUID won't
+        // match the entity's auto-generated id, so the fallback to
+        // getComponentByName() is the only way this resolves.
+        val uuidShapedName = java.util.UUID.randomUUID().toString()
+        val created = createComponent(uuidShapedName)
+        val id = created.path("id").asText()
+
+        mvc
+            .perform(get("/rest/api/4/components/$uuidShapedName"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.id").value(id))
+            .andExpect(jsonPath("$.name").value(uuidShapedName))
     }
 
     @Test
