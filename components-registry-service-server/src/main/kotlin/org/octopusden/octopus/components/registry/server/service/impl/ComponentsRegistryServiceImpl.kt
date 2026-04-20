@@ -58,3 +58,13 @@ class ComponentsRegistryServiceImpl(
         private val log = LoggerFactory.getLogger(ComponentsRegistryServiceImpl::class.java)
     }
 }
+
+/**
+ * Enforce the `ft-db` binary contract: if auto-migrate reports any failures,
+ * abort. Otherwise the service would serve traffic in a partially-migrated
+ * state where failed-to-migrate components are silently invisible under
+ * `default-source=db`.
+ */
+internal fun requireMigrationSucceeded(result: org.octopusden.octopus.components.registry.server.service.FullMigrationResult) {
+    // Placeholder — enforcement added in the next commit.
+}
