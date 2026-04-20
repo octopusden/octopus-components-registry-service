@@ -9,6 +9,7 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpEntity
 import org.springframework.http.HttpStatus
+import org.springframework.security.access.AccessDeniedException
 import org.springframework.web.bind.annotation.ControllerAdvice
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.ResponseStatus
@@ -73,6 +74,13 @@ class ControllerExceptionHandler {
     fun componentNameConflictExceptionHandler(e: ComponentNameConflictException): HttpEntity<ErrorResponse> {
         log.warn(e.localizedMessage)
         return HttpEntity(ErrorResponse(e.localizedMessage))
+    }
+
+    @ExceptionHandler(AccessDeniedException::class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    fun accessDeniedExceptionHandler(e: AccessDeniedException): HttpEntity<ErrorResponse> {
+        log.warn("Access denied: {}", e.localizedMessage)
+        return HttpEntity(ErrorResponse(e.localizedMessage ?: "Forbidden"))
     }
 
     companion object {

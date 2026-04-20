@@ -6,10 +6,13 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
+import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
+import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.http.MediaType
 import org.springframework.test.annotation.DirtiesContext
 import org.springframework.test.context.ActiveProfiles
@@ -45,6 +48,10 @@ import java.util.UUID
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Timeout(120)
 class ComponentRenameTest {
+    @MockBean
+    @Suppress("UnusedPrivateProperty")
+    private lateinit var authServerClient: AuthServerClient
+
     @Autowired
     private lateinit var mvc: MockMvc
 
@@ -64,6 +71,7 @@ class ComponentRenameTest {
             mvc
                 .perform(
                     post("/rest/api/4/components")
+                        .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""{"name":"$name","displayName":"$name"}"""),
                 ).andExpect(status().isCreated)
@@ -75,7 +83,7 @@ class ComponentRenameTest {
     private fun fetchById(id: String): JsonNode {
         val body =
             mvc
-                .perform(get("/rest/api/4/components/$id"))
+                .perform(get("/rest/api/4/components/$id").with(adminJwt()))
                 .andExpect(status().isOk)
                 .andReturn()
                 .response.contentAsString
@@ -87,6 +95,7 @@ class ComponentRenameTest {
         body: String,
     ) = mvc.perform(
         patch("/rest/api/4/components/$id")
+            .with(adminJwt())
             .contentType(MediaType.APPLICATION_JSON)
             .content(body),
     )
@@ -102,15 +111,15 @@ class ComponentRenameTest {
 
         patch(id, """{"version":$version,"name":"$newName"}""").andExpect(status().isOk)
 
-        mvc.perform(get("/rest/api/4/components/$newName")).andExpect(status().isOk)
-        mvc.perform(get("/rest/api/4/components/$oldName")).andExpect(status().isNotFound)
+        mvc.perform(get("/rest/api/4/components/$newName").with(adminJwt())).andExpect(status().isOk)
+        mvc.perform(get("/rest/api/4/components/$oldName").with(adminJwt())).andExpect(status().isNotFound)
     }
 
     @Test
     @DisplayName("SYS-028: GET /{idOrName} returns 404 for a missing name")
     fun lookupByName_notFound() {
         mvc
-            .perform(get("/rest/api/4/components/${uniqueName("SYS028_MISSING")}"))
+            .perform(get("/rest/api/4/components/${uniqueName("SYS028_MISSING")}").with(adminJwt()))
             .andExpect(status().isNotFound)
     }
 
@@ -126,7 +135,7 @@ class ComponentRenameTest {
         val id = created.path("id").asText()
 
         mvc
-            .perform(get("/rest/api/4/components/$uuidShapedName"))
+            .perform(get("/rest/api/4/components/$uuidShapedName").with(adminJwt()))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.id").value(id))
             .andExpect(jsonPath("$.name").value(uuidShapedName))
@@ -175,7 +184,7 @@ class ComponentRenameTest {
 
         val audit =
             mvc
-                .perform(get("/rest/api/4/audit/Component/$id"))
+                .perform(get("/rest/api/4/audit/Component/$id").with(adminJwt()))
                 .andExpect(status().isOk)
                 .andReturn()
                 .response.contentAsString

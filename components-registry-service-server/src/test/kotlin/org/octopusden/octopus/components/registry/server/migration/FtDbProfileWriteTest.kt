@@ -9,10 +9,13 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
+import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
+import org.octopusden.octopus.components.registry.server.support.editorJwt
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.http.MediaType
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.servlet.MockMvc
@@ -37,6 +40,10 @@ import java.nio.file.Paths
 @ActiveProfiles("common", "ft-db")
 @Timeout(120)
 class FtDbProfileWriteTest {
+    @MockBean
+    @Suppress("UnusedPrivateProperty")
+    private lateinit var authServerClient: AuthServerClient
+
     @Autowired
     private lateinit var mvc: MockMvc
 
@@ -52,7 +59,7 @@ class FtDbProfileWriteTest {
     private fun firstComponent(): JsonNode {
         val body =
             mvc
-                .perform(get("/rest/api/4/components").param("page", "0").param("size", "1"))
+                .perform(get("/rest/api/4/components").with(editorJwt()).param("page", "0").param("size", "1"))
                 .andExpect(status().isOk)
                 .andReturn()
                 .response.contentAsString
@@ -65,7 +72,7 @@ class FtDbProfileWriteTest {
     private fun getComponent(id: String): JsonNode {
         val body =
             mvc
-                .perform(get("/rest/api/4/components/$id"))
+                .perform(get("/rest/api/4/components/$id").with(editorJwt()))
                 .andExpect(status().isOk)
                 .andReturn()
                 .response.contentAsString
@@ -97,6 +104,7 @@ class FtDbProfileWriteTest {
         mvc
             .perform(
                 patch("/rest/api/4/components/$id")
+                    .with(editorJwt())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(payload)),
             ).andExpect(status().is2xxSuccessful)
@@ -143,6 +151,7 @@ class FtDbProfileWriteTest {
             mvc
                 .perform(
                     post("/rest/api/4/components/$id/field-overrides")
+                        .with(editorJwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(request)),
                 ).andExpect(status().is2xxSuccessful)
@@ -155,7 +164,7 @@ class FtDbProfileWriteTest {
 
         val listBody =
             mvc
-                .perform(get("/rest/api/4/components/$id/field-overrides"))
+                .perform(get("/rest/api/4/components/$id/field-overrides").with(editorJwt()))
                 .andExpect(status().isOk)
                 .andReturn()
                 .response.contentAsString

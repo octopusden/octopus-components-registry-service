@@ -3,7 +3,22 @@ pathToConfig: file://${components-registry.groovy-path}
 components-registry:
   auto-migrate: false
 
+# auth-server.url and auth-server.realm bind from AUTH_SERVER_URL / AUTH_SERVER_REALM
+# env vars via Spring Boot's relaxed binding. Production and dev profiles must
+# supply them. Tests override with stub URLs in application-common.yml because
+# NimbusJwtDecoder validates the URL at bean construction.
+auth-server:
+  url:
+  realm:
+
 spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # jwk-set-uri is lazy: NimbusJwtDecoder does not fetch until decode,
+          # which the MockMvc jwt() post-processor bypasses entirely.
+          jwk-set-uri: ${auth-server.url}/realms/${auth-server.realm}/protocol/openid-connect/certs
   jpa:
     open-in-view: false
     properties:
@@ -13,3 +28,19 @@ spring:
       hibernate.type.json_format_mapper: org.octopusden.octopus.components.registry.server.config.SafeJsonFormatMapper
   flyway:
     enabled: false
+
+octopus-security:
+  roles:
+    ROLE_F1_ADMIN:
+      - ACCESS_COMPONENTS
+      - EDIT_COMPONENTS
+      - DELETE_COMPONENTS
+      - IMPORT_DATA
+      - ACCESS_AUDIT
+    ROLE_REGISTRY_EDITOR:
+      - ACCESS_COMPONENTS
+      - EDIT_COMPONENTS
+      - ACCESS_AUDIT
+    ROLE_REGISTRY_VIEWER:
+      - ACCESS_COMPONENTS
+      - ACCESS_AUDIT

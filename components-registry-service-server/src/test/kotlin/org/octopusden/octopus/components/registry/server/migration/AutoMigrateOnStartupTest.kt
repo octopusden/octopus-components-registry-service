@@ -6,11 +6,14 @@ import org.hamcrest.Matchers.greaterThan
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
 import org.octopusden.octopus.components.registry.server.service.MigrationStatus
+import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
@@ -29,6 +32,10 @@ import java.nio.file.Paths
 )
 @ActiveProfiles("common", "test-db")
 class AutoMigrateOnStartupTest {
+    @MockBean
+    @Suppress("UnusedPrivateProperty")
+    private lateinit var authServerClient: AuthServerClient
+
     @Autowired
     private lateinit var mvc: MockMvc
 
@@ -45,7 +52,7 @@ class AutoMigrateOnStartupTest {
     fun `all components are in DB after startup with auto-migrate`() {
         val body =
             mvc
-                .perform(get("/rest/api/4/admin/migration-status"))
+                .perform(get("/rest/api/4/admin/migration-status").with(adminJwt()))
                 .andExpect(status().isOk)
                 .andReturn()
                 .response.contentAsString

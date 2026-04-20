@@ -1,0 +1,12 @@
+auth-server:
+  url: http://localhost:8180
+  realm: f1
+
+octopus-security:
+  roles:
+    ROLE_F1_ADMIN:
+      - ACCESS_COMPONENTS
+      - EDIT_COMPONENTS
+      - DELETE_COMPONENTS
+      - IMPORT_DATA
+      - ACCESS_AUDIT

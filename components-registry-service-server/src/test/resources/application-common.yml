@@ -32,3 +32,27 @@ management:
         include: metrics
     loggers:
       enabled: true
+
+# Stub auth-server URL so NimbusJwtDecoder gets a well-formed jwk-set-uri at
+# context init. AuthServerClient is replaced with a Mockito mock via @MockBean
+# in every @SpringBootTest, so no HTTP call is actually made against this URL;
+# MockMvc jwt() post-processor bypasses the decoder entirely.
+auth-server:
+  url: http://localhost:0
+  realm: test
+
+octopus-security:
+  roles:
+    ROLE_F1_ADMIN:
+      - ACCESS_COMPONENTS
+      - EDIT_COMPONENTS
+      - DELETE_COMPONENTS
+      - IMPORT_DATA
+      - ACCESS_AUDIT
+    ROLE_REGISTRY_EDITOR:
+      - ACCESS_COMPONENTS
+      - EDIT_COMPONENTS
+      - ACCESS_AUDIT
+    ROLE_REGISTRY_VIEWER:
+      - ACCESS_COMPONENTS
+      - ACCESS_AUDIT

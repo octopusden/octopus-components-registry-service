@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.http.HttpStatus
+import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
@@ -29,6 +30,7 @@ import java.util.UUID
 
 @RestController
 @RequestMapping("rest/api/4/components")
+@PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
 @Suppress("TooManyFunctions")
 class ComponentControllerV4(
     private val componentManagementService: ComponentManagementService,
@@ -41,6 +43,7 @@ class ComponentControllerV4(
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("@permissionEvaluator.hasPermission('EDIT_COMPONENTS')")
     fun createComponent(
         @RequestBody request: ComponentCreateRequest,
     ): ComponentDetailResponse = componentManagementService.createComponent(request)
@@ -89,6 +92,7 @@ class ComponentControllerV4(
     }
 
     @PatchMapping("/{id}")
+    @PreAuthorize("@permissionEvaluator.canEditComponent(#id.toString())")
     fun updateComponent(
         @PathVariable id: UUID,
         @RequestBody request: ComponentUpdateRequest,
@@ -96,6 +100,7 @@ class ComponentControllerV4(
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("@permissionEvaluator.canDeleteComponent(#id.toString())")
     fun deleteComponent(
         @PathVariable id: UUID,
     ) {
@@ -104,12 +109,14 @@ class ComponentControllerV4(
 
     @PostMapping("/{id}/field-overrides")
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("@permissionEvaluator.hasPermission('EDIT_COMPONENTS')")
     fun createFieldOverride(
         @PathVariable id: UUID,
         @RequestBody request: FieldOverrideCreateRequest,
     ): FieldOverrideResponse = componentManagementService.createFieldOverride(id, request)
 
     @PatchMapping("/{id}/field-overrides/{overrideId}")
+    @PreAuthorize("@permissionEvaluator.hasPermission('EDIT_COMPONENTS')")
     fun updateFieldOverride(
         @PathVariable id: UUID,
         @PathVariable overrideId: UUID,
@@ -118,6 +125,7 @@ class ComponentControllerV4(
 
     @DeleteMapping("/{id}/field-overrides/{overrideId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("@permissionEvaluator.hasPermission('EDIT_COMPONENTS')")
     fun deleteFieldOverride(
         @PathVariable id: UUID,
         @PathVariable overrideId: UUID,
