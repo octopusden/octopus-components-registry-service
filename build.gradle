@@ -293,6 +293,16 @@ configure(subprojects) {
         ]
         // Testcontainers + Colima: override socket path mounted into Ryuk container
         environment 'TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE', '/var/run/docker.sock'
+        // Route Testcontainers image pulls through the internal Docker registry when
+        // -Pdocker.registry is set (CI path). Without this, unauthenticated agents
+        // hit docker.io's 100-pulls/6h limit and Testcontainers fails with 429
+        // ("You have reached your unauthenticated pull rate limit"), e.g. build
+        // 2.0.84-3143 on :components-registry-service-client:test. Leaves local dev
+        // untouched (docker.io as before).
+        def dockerRegistry = project.findProperty('docker.registry')
+        if (dockerRegistry) {
+            environment 'TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX', "${dockerRegistry}/"
+        }
         jvmArgs('--add-opens=java.base/java.lang=ALL-UNNAMED')
         jvmArgs('--add-opens=java.base/java.util=ALL-UNNAMED')
         finalizedBy(tasks.named('jacocoTestReport'))
