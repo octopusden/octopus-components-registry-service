@@ -75,12 +75,20 @@ class WebSecurityConfig(
     }
 
     /**
-     * Custom JwtDecoder: lazy JWKS fetch (so context init survives a temporarily unreachable
-     * Keycloak) **plus** explicit issuer validation against `auth-server.url`/`realm`.
+     * Custom JwtDecoder: lazy JWKS fetch **plus** explicit issuer validation against
+     * `auth-server.url`/`realm`.
      *
-     * Why not use `spring.security.oauth2.resourceserver.jwt.issuer-uri`:
-     * that config forces an OIDC discovery HTTP call at context refresh, which would crash
-     * startup if Keycloak is momentarily down and would also complicate `@SpringBootTest`.
+     * Startup tolerance to an unreachable Keycloak is **only partial**: this decoder does
+     * not hit the network at bean init, but the cloud-commons `AuthServerClient` (imported
+     * above) performs eager OIDC discovery in its own `init{}` block. So the pod still
+     * fail-fasts if `auth-server.url` is blank or the `/.well-known/openid-configuration`
+     * endpoint is unreachable at context refresh. That is intentional: we'd rather crash
+     * at deploy time with a clear error than serve traffic while silently unable to
+     * authenticate. Tests and the fat-jar smoke run stub discovery accordingly
+     * (`@MockBean AuthServerClient` in unit tests, WireMock in `FatJarStartupIntegrationTest`).
+     *
+     * Why not use `spring.security.oauth2.resourceserver.jwt.issuer-uri`: it forces a second
+     * OIDC discovery HTTP call at context refresh, doubling the startup attack surface.
      *
      * Why not rely on the auto-configured `jwk-set-uri`-only decoder: it validates the
      * signature and timestamps but does NOT enforce the `iss` claim, so the service would
