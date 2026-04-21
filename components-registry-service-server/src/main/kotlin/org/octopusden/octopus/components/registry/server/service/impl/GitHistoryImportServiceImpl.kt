@@ -12,7 +12,6 @@ import org.eclipse.jgit.treewalk.CanonicalTreeParser
 import org.octopusden.octopus.components.registry.server.config.ComponentsRegistryProperties
 import org.octopusden.octopus.components.registry.server.dto.v4.HistoryImportResult
 import org.octopusden.octopus.components.registry.server.entity.AuditLogEntity
-import org.octopusden.octopus.components.registry.server.entity.GitHistoryImportStateEntity
 import org.octopusden.octopus.components.registry.server.entity.GitHistoryImportStatus
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.GitHistoryImportStateRepository
@@ -86,14 +85,25 @@ class GitHistoryImportServiceImpl(
     private fun preflight(reset: Boolean) {
         if (reset) {
             commitWriter.resetHistoryRowsAndState()
-        } else {
-            stateRepository.findById(IMPORT_KEY).ifPresent { existing ->
-                throw ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "git history import already ran (status=${existing.status}, " +
-                        "target=${existing.targetRef}@${existing.targetSha}); use reset=true to re-run",
-                )
-            }
+        }
+        // Atomic claim: whichever caller's INSERT lands first owns the run;
+        // every other concurrent POST gets 409. Target is inserted as empty
+        // placeholders and filled in by runImport once the clone has resolved
+        // the real tag/sha.
+        val claimed =
+            stateRepository.tryInsert(
+                importKey = IMPORT_KEY,
+                targetRef = "",
+                targetSha = "",
+                status = GitHistoryImportStatus.IN_PROGRESS.name,
+            )
+        if (claimed == 0) {
+            val existing = stateRepository.findById(IMPORT_KEY).orElseThrow()
+            throw ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "git history import already ran (status=${existing.status}, " +
+                    "target=${existing.targetRef}@${existing.targetSha}); use reset=true to re-run",
+            )
         }
     }
 
@@ -107,14 +117,11 @@ class GitHistoryImportServiceImpl(
         val target = resolveTarget(git, toRef)
         log.info("History import target: {}@{}", target.ref, target.sha)
 
-        commitWriter.saveState(
-            GitHistoryImportStateEntity(
-                importKey = IMPORT_KEY,
-                targetRef = target.ref,
-                targetSha = target.sha,
-                status = GitHistoryImportStatus.IN_PROGRESS.name,
-            ),
-        )
+        // Fill in the real target on the claimed state row (inserted empty by preflight).
+        val state = stateRepository.findById(IMPORT_KEY).orElseThrow()
+        state.targetRef = target.ref
+        state.targetSha = target.sha
+        commitWriter.saveState(state)
 
         val loader = historyLoaderFactory.build(historyWorkDir)
         val repo = git.repository

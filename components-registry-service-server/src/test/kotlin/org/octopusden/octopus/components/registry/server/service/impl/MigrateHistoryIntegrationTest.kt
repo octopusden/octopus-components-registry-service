@@ -53,11 +53,11 @@ class MigrateHistoryIntegrationTest {
     private lateinit var stateRepository: GitHistoryImportStateRepository
 
     @Test
-    fun `migrate-history end-to-end - write, 409 on repeat, reset re-runs`() {
-        // Seed at least one component we expect to see in history snapshots so findByName resolves.
+    @Suppress("LongMethod")
+    fun `migrate-history end-to-end covers write, 409, reset, parse-error, DELETE, default toRef`() {
         componentRepository.save(ComponentEntity(name = "ARCHIVED_TEST_COMPONENT"))
 
-        // Initial import
+        // Phase 1: explicit toRef to 1.1 (only c1..c3 in scope).
         val firstBody =
             mvc
                 .perform(post("/rest/api/4/admin/migrate-history?toRef=components-registry-1.1"))
@@ -72,27 +72,43 @@ class MigrateHistoryIntegrationTest {
         assertTrue(auditAfterFirst.isNotEmpty(), "expected at least one git-history audit row")
         assertTrue(auditAfterFirst.all { it.correlationId != null }, "every history row carries a commit SHA")
         assertTrue(auditAfterFirst.all { it.changedBy == "Tester <test@example.com>" })
+        assertEquals(GitHistoryImportStatus.COMPLETED.name, stateRepository.findById("component-history").orElseThrow().status)
 
-        val state = stateRepository.findById("component-history").orElseThrow()
-        assertEquals(GitHistoryImportStatus.COMPLETED.name, state.status)
-
-        // Repeat without reset → 409, audit_log unchanged.
+        // Phase 2: repeat without reset → 409, audit_log unchanged.
         mvc
             .perform(post("/rest/api/4/admin/migrate-history?toRef=components-registry-1.1"))
             .andExpect(status().isConflict)
         val auditAfterRepeat = auditLogRepository.findAll().filter { it.source == "git-history" }
         assertEquals(auditAfterFirst.size, auditAfterRepeat.size)
 
-        // reset=true → wipes and re-runs.
-        mvc
-            .perform(post("/rest/api/4/admin/migrate-history?toRef=components-registry-1.1&reset=true"))
-            .andExpect(status().isOk)
-        val auditAfterReset = auditLogRepository.findAll().filter { it.source == "git-history" }
-        assertEquals(auditAfterFirst.size, auditAfterReset.size)
-        // Different row IDs — the rows were physically re-created.
+        // Phase 3: reset=true, no toRef → auto-resolves to latest tag (components-registry-1.2),
+        // covers the unparseable commit (c4) and the DELETE of ARCHIVED_TEST_COMPONENT at c5.
+        val secondBody =
+            mvc
+                .perform(post("/rest/api/4/admin/migrate-history?reset=true"))
+                .andExpect(status().isOk)
+                .andReturn()
+                .response
+                .contentAsString
+        val second = objectMapper.readTree(secondBody)
+        assertEquals("refs/tags/components-registry-1.2", second["targetRef"].asText())
+        assertTrue(
+            second["skippedParseError"].asInt() >= 1,
+            "c4 is deliberately unparseable, expected skippedParseError >= 1, got $second",
+        )
+
+        val auditFinal = auditLogRepository.findAll().filter { it.source == "git-history" }
+        val deleteRows = auditFinal.filter { it.action == "DELETE" && (it.oldValue?.get("moduleName") == "ARCHIVED_TEST_COMPONENT") }
+        assertTrue(
+            deleteRows.isNotEmpty(),
+            "expected a DELETE row for ARCHIVED_TEST_COMPONENT at c5, got actions=" +
+                auditFinal.map { it.action to it.oldValue?.get("moduleName") },
+        )
+
+        // Row ids differ from phase 1 because reset=true wiped and re-inserted everything.
         val firstIds = auditAfterFirst.map { it.id }.toSet()
-        val resetIds = auditAfterReset.map { it.id }.toSet()
-        assertNotEquals(firstIds, resetIds, "reset=true should re-create rows with new ids")
+        val finalIds = auditFinal.map { it.id }.toSet()
+        assertNotEquals(firstIds, finalIds, "reset=true should re-create rows with new ids")
     }
 
     companion object {
@@ -109,18 +125,16 @@ class MigrateHistoryIntegrationTest {
             workDir = base.resolve("work")
             gitRoot = base.resolve("source.git")
 
-            // Seed workDir with the common fixture so the live ConfigLoader boots, then git-init
-            // a SECOND directory as the clone source for the history endpoint.
             val fixture =
                 Paths
                     .get(System.getProperty("user.dir"))
                     .resolve("../test-common/src/test/resources/components-registry/common")
                     .normalize()
             copyTree(fixture, workDir)
-
-            // The 'source' registry — this is what the endpoint clones from.
             copyTree(fixture, gitRoot)
+
             Git.init().setDirectory(gitRoot.toFile()).call().use { git ->
+                // c1: initial import
                 git.add().addFilepattern(".").call()
                 git
                     .commit()
@@ -128,10 +142,10 @@ class MigrateHistoryIntegrationTest {
                     .setAuthor("Tester", "test@example.com")
                     .call()
 
-                // c2: toggle archived on ARCHIVED_TEST_COMPONENT (textual: archived = true -> false)
-                val tc = gitRoot.resolve("TestComponents.groovy")
-                tc.writeText(
-                    Files.readString(tc).replaceFirst("archived = true", "archived = false"),
+                // c2: toggle archived on ARCHIVED_TEST_COMPONENT
+                val testComponents = gitRoot.resolve("TestComponents.groovy")
+                testComponents.writeText(
+                    Files.readString(testComponents).replaceFirst("archived = true", "archived = false"),
                 )
                 git.add().addFilepattern(".").call()
                 git
@@ -149,11 +163,43 @@ class MigrateHistoryIntegrationTest {
                         .setMessage("README only, no groovy change")
                         .setAuthor("Tester", "test@example.com")
                         .call()
-
                 git
                     .tag()
                     .setName("components-registry-1.1")
                     .setObjectId(c3)
+                    .call()
+
+                // c4: break the DSL so EscrowConfigurationLoader throws → skippedParseError path
+                val aggregator = gitRoot.resolve("Aggregator.groovy")
+                val savedAggregator = Files.readString(aggregator)
+                aggregator.writeText(savedAggregator + "\n}}}invalid<<<groovy>>>syntax{{{\n")
+                git.add().addFilepattern(".").call()
+                git
+                    .commit()
+                    .setMessage("break Aggregator.groovy to exercise parse-error path")
+                    .setAuthor("Tester", "test@example.com")
+                    .call()
+
+                // c5: restore Aggregator + rename ARCHIVED_TEST_COMPONENT so the old name
+                // disappears from the snapshot → DELETE action for the seeded UUID.
+                aggregator.writeText(savedAggregator)
+                testComponents.writeText(
+                    Files.readString(testComponents).replaceFirst(
+                        "ARCHIVED_TEST_COMPONENT {",
+                        "_RENAMED_ARCHIVED_TEST_COMPONENT {",
+                    ),
+                )
+                git.add().addFilepattern(".").call()
+                val c5 =
+                    git
+                        .commit()
+                        .setMessage("fix Aggregator and rename ARCHIVED_TEST_COMPONENT (simulates delete)")
+                        .setAuthor("Tester", "test@example.com")
+                        .call()
+                git
+                    .tag()
+                    .setName("components-registry-1.2")
+                    .setObjectId(c5)
                     .call()
             }
 
