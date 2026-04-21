@@ -28,9 +28,16 @@ import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 import java.util.UUID
 
+/**
+ * `@PreAuthorize` is applied method-by-method rather than at class level because
+ * Spring Security 6's method-level annotation **replaces** a class-level one instead
+ * of AND-ing with it. A class-level `ACCESS_COMPONENTS` + method-level
+ * `EDIT_COMPONENTS` would silently let a user with only `EDIT_COMPONENTS` bypass the
+ * read gate, which is the opposite of what "class-level default" suggests. Every
+ * endpoint now declares the full set of permissions it requires.
+ */
 @RestController
 @RequestMapping("rest/api/4/components")
-@PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
 @Suppress("TooManyFunctions")
 class ComponentControllerV4(
     private val componentManagementService: ComponentManagementService,
@@ -39,16 +46,21 @@ class ComponentControllerV4(
     private val log = LoggerFactory.getLogger(ComponentControllerV4::class.java)
 
     @GetMapping("/meta/owners")
+    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
     fun getDistinctOwners(): List<String> = componentRepository.findDistinctOwners()
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("@permissionEvaluator.hasPermission('EDIT_COMPONENTS')")
+    @PreAuthorize(
+        "@permissionEvaluator.hasPermission('ACCESS_COMPONENTS') " +
+            "and @permissionEvaluator.hasPermission('EDIT_COMPONENTS')",
+    )
     fun createComponent(
         @RequestBody request: ComponentCreateRequest,
     ): ComponentDetailResponse = componentManagementService.createComponent(request)
 
     @GetMapping
+    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
     fun listComponents(
         @RequestParam(required = false) system: String?,
         @RequestParam(required = false) productType: String?,
@@ -67,6 +79,7 @@ class ComponentControllerV4(
     }
 
     @GetMapping("/{idOrName}")
+    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
     fun getComponent(
         @PathVariable idOrName: String,
     ): ComponentDetailResponse {
@@ -92,7 +105,10 @@ class ComponentControllerV4(
     }
 
     @PatchMapping("/{id}")
-    @PreAuthorize("@permissionEvaluator.canEditComponent(#id.toString())")
+    @PreAuthorize(
+        "@permissionEvaluator.hasPermission('ACCESS_COMPONENTS') " +
+            "and @permissionEvaluator.canEditComponent(#id.toString())",
+    )
     fun updateComponent(
         @PathVariable id: UUID,
         @RequestBody request: ComponentUpdateRequest,
@@ -100,7 +116,10 @@ class ComponentControllerV4(
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @PreAuthorize("@permissionEvaluator.canDeleteComponent(#id.toString())")
+    @PreAuthorize(
+        "@permissionEvaluator.hasPermission('ACCESS_COMPONENTS') " +
+            "and @permissionEvaluator.canDeleteComponent(#id.toString())",
+    )
     fun deleteComponent(
         @PathVariable id: UUID,
     ) {
@@ -109,14 +128,20 @@ class ComponentControllerV4(
 
     @PostMapping("/{id}/field-overrides")
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("@permissionEvaluator.hasPermission('EDIT_COMPONENTS')")
+    @PreAuthorize(
+        "@permissionEvaluator.hasPermission('ACCESS_COMPONENTS') " +
+            "and @permissionEvaluator.hasPermission('EDIT_COMPONENTS')",
+    )
     fun createFieldOverride(
         @PathVariable id: UUID,
         @RequestBody request: FieldOverrideCreateRequest,
     ): FieldOverrideResponse = componentManagementService.createFieldOverride(id, request)
 
     @PatchMapping("/{id}/field-overrides/{overrideId}")
-    @PreAuthorize("@permissionEvaluator.hasPermission('EDIT_COMPONENTS')")
+    @PreAuthorize(
+        "@permissionEvaluator.hasPermission('ACCESS_COMPONENTS') " +
+            "and @permissionEvaluator.hasPermission('EDIT_COMPONENTS')",
+    )
     fun updateFieldOverride(
         @PathVariable id: UUID,
         @PathVariable overrideId: UUID,
@@ -125,7 +150,10 @@ class ComponentControllerV4(
 
     @DeleteMapping("/{id}/field-overrides/{overrideId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @PreAuthorize("@permissionEvaluator.hasPermission('EDIT_COMPONENTS')")
+    @PreAuthorize(
+        "@permissionEvaluator.hasPermission('ACCESS_COMPONENTS') " +
+            "and @permissionEvaluator.hasPermission('EDIT_COMPONENTS')",
+    )
     fun deleteFieldOverride(
         @PathVariable id: UUID,
         @PathVariable overrideId: UUID,
@@ -134,6 +162,7 @@ class ComponentControllerV4(
     }
 
     @GetMapping("/{id}/field-overrides")
+    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
     fun listFieldOverrides(
         @PathVariable id: UUID,
     ): List<FieldOverrideResponse> = componentManagementService.listFieldOverrides(id)

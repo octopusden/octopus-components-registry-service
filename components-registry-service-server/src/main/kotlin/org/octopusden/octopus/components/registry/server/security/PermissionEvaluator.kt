@@ -8,11 +8,17 @@ import org.springframework.stereotype.Component
 class PermissionEvaluator(
     securityService: SecurityService,
 ) : BasePermissionEvaluator(securityService) {
+    /**
+     * Edit gate for a specific component. Param is the path variable verbatim —
+     * today callers pass either a component name (`String`) or a UUID via `#id.toString()`
+     * because v4 controllers mix both path schemes. Until component-level ownership
+     * (ADR-004, Phase 2) lands, this reduces to the `EDIT_COMPONENTS` permission check.
+     */
     @Suppress("UnusedParameter")
-    fun canEditComponent(componentName: String): Boolean = hasPermission(EDIT_COMPONENTS)
+    fun canEditComponent(componentIdOrName: String): Boolean = hasPermission(EDIT_COMPONENTS)
 
     @Suppress("UnusedParameter")
-    fun canDeleteComponent(componentName: String): Boolean = hasPermission(DELETE_COMPONENTS)
+    fun canDeleteComponent(componentIdOrName: String): Boolean = hasPermission(DELETE_COMPONENTS)
 
     fun canImport(): Boolean = hasPermission(IMPORT_DATA)
 

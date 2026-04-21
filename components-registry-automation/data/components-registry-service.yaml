@@ -28,6 +28,31 @@ repositoryPath: /whiskey-builds
 supportedGroupIds: corp.domain
 supportedSystems: NONE,CLASSIC
 
+# Stub auth-server so WebSecurityConfig.jwtDecoder() constructs without a reachable
+# Keycloak: the automation test suite only exercises permit-all v1/v2/v3 endpoints
+# via the Feign client, so the lazy JWKS fetch never fires. If a test is ever added
+# against /rest/api/4/**, this block must be swapped for the real dev Keycloak URL
+# and the pod env augmented with real credentials.
+auth-server:
+  url: http://localhost:0
+  realm: test
+
+octopus-security:
+  roles:
+    ROLE_F1_ADMIN:
+      - ACCESS_COMPONENTS
+      - EDIT_COMPONENTS
+      - DELETE_COMPONENTS
+      - IMPORT_DATA
+      - ACCESS_AUDIT
+    ROLE_REGISTRY_EDITOR:
+      - ACCESS_COMPONENTS
+      - EDIT_COMPONENTS
+      - ACCESS_AUDIT
+    ROLE_REGISTRY_VIEWER:
+      - ACCESS_COMPONENTS
+      - ACCESS_AUDIT
+
 logging:
   level:
     org.octopusden.octopus.escrow: DEBUG

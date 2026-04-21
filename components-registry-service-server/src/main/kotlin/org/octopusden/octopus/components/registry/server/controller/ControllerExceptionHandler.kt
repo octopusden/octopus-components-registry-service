@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.http.HttpEntity
 import org.springframework.http.HttpStatus
 import org.springframework.security.access.AccessDeniedException
+import org.springframework.security.core.AuthenticationException
 import org.springframework.web.bind.annotation.ControllerAdvice
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.ResponseStatus
@@ -80,7 +81,14 @@ class ControllerExceptionHandler {
     @ResponseStatus(HttpStatus.FORBIDDEN)
     fun accessDeniedExceptionHandler(e: AccessDeniedException): HttpEntity<ErrorResponse> {
         log.warn("Access denied: {}", e.localizedMessage)
-        return HttpEntity(ErrorResponse(e.localizedMessage ?: "Forbidden"))
+        return HttpEntity(ErrorResponse("Forbidden"))
+    }
+
+    @ExceptionHandler(AuthenticationException::class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    fun authenticationExceptionHandler(e: AuthenticationException): HttpEntity<ErrorResponse> {
+        log.warn("Authentication failed: {}", e.localizedMessage)
+        return HttpEntity(ErrorResponse("Unauthorized"))
     }
 
     companion object {

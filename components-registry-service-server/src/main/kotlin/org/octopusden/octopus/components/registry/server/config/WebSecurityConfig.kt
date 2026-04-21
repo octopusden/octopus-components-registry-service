@@ -5,6 +5,7 @@ import org.octopusden.cloud.commons.security.config.AuthServerProperties
 import org.octopusden.cloud.commons.security.config.CloudCommonWebSecurityConfig
 import org.octopusden.cloud.commons.security.config.SecurityProperties
 import org.octopusden.cloud.commons.security.converter.UserInfoGrantedAuthoritiesConverter
+import org.springframework.beans.factory.BeanInitializationException
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -35,11 +36,17 @@ class WebSecurityConfig(
                         "/",
                         "/error",
                         "/actuator/**",
+                        // springdoc-openapi + swagger-ui: cover the group docs,
+                        // YAML variant, web-jars (swagger-ui assets) — otherwise
+                        // docs render as 401 for web-jars stylesheets/JS.
                         "/v2/api-docs",
                         "/v3/api-docs",
+                        "/v3/api-docs/**",
+                        "/v3/api-docs.yaml",
                         "/v3/api-docs/swagger-config",
                         "/swagger-resources/**",
                         "/swagger-ui/**",
+                        "/webjars/**",
                     ).permitAll()
                     // Legacy read-only APIs — public (Phase 1 from ADR-004).
                     .requestMatchers("/rest/api/1/**", "/rest/api/2/**", "/rest/api/3/**")
@@ -81,9 +88,16 @@ class WebSecurityConfig(
      */
     @Bean
     fun jwtDecoder(): JwtDecoder {
-        val issuer =
-            authServerProperties.issuerUrl
-                ?: error("auth-server.url and auth-server.realm must be set for JwtDecoder configuration")
+        val url = authServerProperties.url
+        val realm = authServerProperties.realm
+        if (url.isNullOrBlank() || realm.isNullOrBlank()) {
+            throw BeanInitializationException(
+                "auth-server.url and auth-server.realm must both be set (got url='$url', realm='$realm')",
+            )
+        }
+        // Normalize trailing slash — otherwise issuer becomes "http://host//realms/..."
+        // and the JwtIssuerValidator string-compare silently rejects every token.
+        val issuer = "${url.trimEnd('/')}/realms/$realm"
         val jwkSetUri = "$issuer/protocol/openid-connect/certs"
         val decoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build()
         decoder.setJwtValidator(

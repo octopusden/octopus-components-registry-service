@@ -96,7 +96,9 @@ configurations {
 }
 
 dependencies {
-    integrationTestImplementation "org.wiremock:wiremock-standalone:3.9.1"
+    // wiremock-standalone is shared between unit tests (security converter integration test)
+    // and the integrationTest source set (FatJarStartupIntegrationTest OIDC discovery stub).
+    testImplementation "org.wiremock:wiremock-standalone:3.9.1"
 }
 
 task integrationTest(type: Test) {
