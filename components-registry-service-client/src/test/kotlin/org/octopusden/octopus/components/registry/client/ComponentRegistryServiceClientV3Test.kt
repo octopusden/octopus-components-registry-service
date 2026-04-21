@@ -33,7 +33,7 @@ import java.util.stream.Stream
 @ExtendWith(SpringExtension::class)
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    classes = [ComponentRegistryServiceApplication::class]
+    classes = [ComponentRegistryServiceApplication::class],
 )
 @ActiveProfiles("v3", "test")
 @ResourceLock(value = "SYSTEM_PROPERTIES")
@@ -55,13 +55,12 @@ class ComponentRegistryServiceClientV3Test {
 
     @BeforeAll
     internal fun startupServer() {
-        componentsRegistryClient = ClassicComponentsRegistryServiceClient(
-            object : ClassicComponentsRegistryServiceClientUrlProvider {
-                override fun getApiUrl(): String {
-                    return "http://localhost:$port"
-                }
-            }
-        )
+        componentsRegistryClient =
+            ClassicComponentsRegistryServiceClient(
+                object : ClassicComponentsRegistryServiceClientUrlProvider {
+                    override fun getApiUrl(): String = "http://localhost:$port"
+                },
+            )
     }
 
     /**
@@ -76,15 +75,26 @@ class ComponentRegistryServiceClientV3Test {
         buildSystemType: BuildSystemType,
         versionControlSystem: VersionControlSystem,
         escrowGenerationMode: EscrowGenerationMode,
-        escrowGenerationModeDTO: org.octopusden.octopus.components.registry.core.dto.EscrowGenerationMode
-        ) {
+        escrowGenerationModeDTO: org.octopusden.octopus.components.registry.core.dto.EscrowGenerationMode,
+    ) {
         val component = componentsRegistryClient.getComponents().find { it.component.id == componentKey }
         assertThat(component).isNotNull
         assertThat(component?.variants?.get(versionRange)).isNotNull
         assertThat(component?.component?.escrow?.generation).isEqualTo(escrowGenerationModeDTO)
-        assertThat(component!!.variants[versionRange]?.build?.buildSystem?.type).isEqualTo(buildSystemType)
+        assertThat(
+            component!!
+                .variants[versionRange]
+                ?.build
+                ?.buildSystem
+                ?.type,
+        ).isEqualTo(buildSystemType)
         assertThat(component.variants[versionRange]?.vcs).isEqualTo(versionControlSystem)
-        assertThat(component.variants[versionRange]?.escrow?.generation?.get()).isEqualTo(escrowGenerationMode)
+        assertThat(
+            component.variants[versionRange]
+                ?.escrow
+                ?.generation
+                ?.get(),
+        ).isEqualTo(escrowGenerationMode)
     }
 
     /**
@@ -95,9 +105,20 @@ class ComponentRegistryServiceClientV3Test {
     @DisplayName("Test component build->dependencies->autoUpdate attribute deserialization")
     fun testComponentAutoUpdateDeserialization(
         componentKey: String,
-        expectedAutoUpdateValue: Boolean?
+        expectedAutoUpdateValue: Boolean?,
     ) {
-        assertThat(componentsRegistryClient.getComponents().find { it.component.id == componentKey }!!.variants.values.first().build?.dependencies?.autoUpdate)?.isEqualTo(expectedAutoUpdateValue)
+        assertThat(
+            componentsRegistryClient
+                .getComponents()
+                .find {
+                    it.component.id == componentKey
+                }!!
+                .variants.values
+                .first()
+                .build
+                ?.dependencies
+                ?.autoUpdate,
+        )?.isEqualTo(expectedAutoUpdateValue)
     }
 
     @ParameterizedTest(name = "Downloading copyright file of {0} component")
@@ -111,63 +132,67 @@ class ComponentRegistryServiceClientV3Test {
         assertThat(response.status()).isEqualTo(200)
         val body = response.body()
         assertThat(body).isNotNull
-        val actualCopyrightText = body.asInputStream().use {
-            it.reader(StandardCharsets.UTF_8).readText()
-        }
+        val actualCopyrightText =
+            body.asInputStream().use {
+                it.reader(StandardCharsets.UTF_8).readText()
+            }
         assertThat(actualCopyrightText).isEqualTo(expectedCopyrightText)
     }
 
     companion object {
         @JvmStatic
-        fun componentsData(): Stream<Arguments> = Stream.of(
-            Arguments.of(
-                "gradle-staging-plugin",
-                "[1.200, 2)",
-                BuildSystemType.GRADLE,
-                GitVersionControlSystemBean(
-                    "ssh://git@github.com:octopusden/archive/gradle-staging-plugin.git",
-                    "\$module-\$version",
-                    "master"
+        fun componentsData(): Stream<Arguments> =
+            Stream.of(
+                Arguments.of(
+                    "gradle-staging-plugin",
+                    "[1.200, 2)",
+                    BuildSystemType.GRADLE,
+                    GitVersionControlSystemBean(
+                        "ssh://git@github.com:octopusden/archive/gradle-staging-plugin.git",
+                        "\$module-\$version",
+                        "master",
+                    ),
+                    EscrowGenerationMode.AUTO,
+                    org.octopusden.octopus.components.registry.core.dto.EscrowGenerationMode.AUTO,
                 ),
-                EscrowGenerationMode.AUTO,
-                org.octopusden.octopus.components.registry.core.dto.EscrowGenerationMode.AUTO
-            ),
-            Arguments.of(
-                "gradle-staging-plugin",
-                "(,1.200),[2,)",
-                BuildSystemType.GRADLE,
-                GitVersionControlSystemBean(
-                    "ssh://git@github.com:octopusden/octopus-rm-gradle-plugin.git",
-                    "release-management-gradle-plugin-\$version",
-                    "master"
+                Arguments.of(
+                    "gradle-staging-plugin",
+                    "(,1.200),[2,)",
+                    BuildSystemType.GRADLE,
+                    GitVersionControlSystemBean(
+                        "ssh://git@github.com:octopusden/octopus-rm-gradle-plugin.git",
+                        "release-management-gradle-plugin-\$version",
+                        "master",
+                    ),
+                    EscrowGenerationMode.AUTO,
+                    org.octopusden.octopus.components.registry.core.dto.EscrowGenerationMode.AUTO,
                 ),
-                EscrowGenerationMode.AUTO,
-                org.octopusden.octopus.components.registry.core.dto.EscrowGenerationMode.AUTO
             )
-        )
 
         @JvmStatic
-        fun componentsAutoUpdate(): Stream<Arguments> = Stream.of(
-            Arguments.of(
-                "gradle-staging-plugin",
-                null
-            ),
-            Arguments.of(
-                "SMComponent",
-                true
+        fun componentsAutoUpdate(): Stream<Arguments> =
+            Stream.of(
+                Arguments.of(
+                    "gradle-staging-plugin",
+                    null,
+                ),
+                Arguments.of(
+                    "SMComponent",
+                    true,
+                ),
             )
-        )
 
         @JvmStatic
-        fun componentsCopyright(): Stream<Arguments> = Stream.of(
-            Arguments.of(
-                "gradle-staging-plugin",
-                "CompanyName1 copyright text"
-            ),
-            Arguments.of(
-                "SMComponent",
-                "CompanyName2 another copyright text"
+        fun componentsCopyright(): Stream<Arguments> =
+            Stream.of(
+                Arguments.of(
+                    "gradle-staging-plugin",
+                    "CompanyName1 copyright text",
+                ),
+                Arguments.of(
+                    "SMComponent",
+                    "CompanyName2 another copyright text",
+                ),
             )
-        )
     }
 }
