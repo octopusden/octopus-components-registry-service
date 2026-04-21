@@ -2,6 +2,7 @@ package org.octopusden.octopus.components.registry.server.service.impl
 
 import org.octopusden.octopus.components.registry.server.entity.AuditLogEntity
 import org.octopusden.octopus.components.registry.server.entity.GitHistoryImportStateEntity
+import org.octopusden.octopus.components.registry.server.entity.GitHistoryImportStatus
 import org.octopusden.octopus.components.registry.server.repository.AuditLogRepository
 import org.octopusden.octopus.components.registry.server.repository.GitHistoryImportStateRepository
 import org.springframework.stereotype.Component
@@ -32,9 +33,20 @@ class GitHistoryCommitWriter(
         stateRepository.save(state)
     }
 
+    /**
+     * Atomic reset: deletes git-history audit rows and the state row
+     * unless the state is IN_PROGRESS. Returning `false` signals that a
+     * live import is still running and the caller should 409 instead of
+     * stomping on its writes.
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    fun resetHistoryRowsAndState() {
+    fun resetIfNotInProgress(): Boolean {
+        val existing = stateRepository.findById("component-history").orElse(null)
+        if (existing != null && existing.status == GitHistoryImportStatus.IN_PROGRESS.name) {
+            return false
+        }
         auditLogRepository.deleteBySource("git-history")
         stateRepository.deleteAll()
+        return true
     }
 }

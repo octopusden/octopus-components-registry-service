@@ -9,6 +9,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
+import org.octopusden.octopus.components.registry.server.entity.GitHistoryImportStateEntity
 import org.octopusden.octopus.components.registry.server.entity.GitHistoryImportStatus
 import org.octopusden.octopus.components.registry.server.repository.AuditLogRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
@@ -109,6 +110,29 @@ class MigrateHistoryIntegrationTest {
         val firstIds = auditAfterFirst.map { it.id }.toSet()
         val finalIds = auditFinal.map { it.id }.toSet()
         assertNotEquals(firstIds, finalIds, "reset=true should re-create rows with new ids")
+    }
+
+    @Test
+    fun `reset=true refuses to stomp on an IN_PROGRESS claim`() {
+        auditLogRepository.deleteAll()
+        stateRepository.deleteAll()
+        stateRepository.save(
+            GitHistoryImportStateEntity(
+                importKey = "component-history",
+                targetRef = "refs/tags/components-registry-1.2",
+                targetSha = "deadbeef",
+                status = GitHistoryImportStatus.IN_PROGRESS.name,
+            ),
+        )
+
+        mvc
+            .perform(post("/rest/api/4/admin/migrate-history?reset=true"))
+            .andExpect(status().isConflict)
+
+        // Pre-existing IN_PROGRESS row must survive the rejected reset.
+        val state = stateRepository.findById("component-history").orElseThrow()
+        assertEquals(GitHistoryImportStatus.IN_PROGRESS.name, state.status)
+        assertEquals("deadbeef", state.targetSha, "reset must not have wiped the live claim")
     }
 
     companion object {

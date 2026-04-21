@@ -55,6 +55,12 @@ class GitHistoryImportServiceImpl(
         val historyWorkDir = Paths.get(componentsRegistryProperties.workDir + "-history")
         val groovyPrefix = resolveGroovyPrefix()
 
+        // If a prior run was killed by a hard stop (OOM, SIGKILL, pod eviction)
+        // the finally cleanup never ran, so the directory is still on disk and
+        // JGit's clone will refuse to write into a non-empty target. Mirror
+        // GitVcsServiceImpl.cloneComponentsRegistry and wipe before cloning.
+        cleanup(historyWorkDir)
+
         try {
             Git
                 .cloneRepository()
@@ -83,8 +89,13 @@ class GitHistoryImportServiceImpl(
     }
 
     private fun preflight(reset: Boolean) {
-        if (reset) {
-            commitWriter.resetHistoryRowsAndState()
+        if (reset && !commitWriter.resetIfNotInProgress()) {
+            // Don't let reset=true stomp on a live import — both runs would
+            // then write into the same audit_log and race on COMPLETED/FAILED.
+            throw ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "another git history import is IN_PROGRESS; cannot reset while it is running",
+            )
         }
         // Atomic claim: whichever caller's INSERT lands first owns the run;
         // every other concurrent POST gets 409. Target is inserted as empty
@@ -175,8 +186,11 @@ class GitHistoryImportServiceImpl(
         toRef: String?,
     ): ResolvedTarget =
         toRef?.let { ref ->
+            // Peel annotated tags via the `^{commit}` suffix so we get the
+            // commit id, not the tag-object id. GitTagResolver handles the
+            // same case on the auto-resolution path via refDatabase.peel.
             val sha =
-                git.repository.resolve(ref)?.name
+                git.repository.resolve("$ref^{commit}")?.name
                     ?: throw IllegalArgumentException("cannot resolve toRef '$ref' in cloned repository")
             ResolvedTarget(ref = ref, sha = sha)
         } ?: gitTagResolver.resolve(git, componentsRegistryProperties.vcs.tagVersionPrefix)
