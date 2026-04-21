@@ -55,6 +55,8 @@ ext {
     okdWebConsoleUrl = env.getOrDefault(
             "OKD_WEB_CONSOLE_URL", properties["okd.web-console-url"]
     ).toString()
+    authServerUrl = env.getOrDefault("AUTH_SERVER_URL", properties["auth-server.url"] ?: "").toString()
+    authServerRealm = env.getOrDefault("AUTH_SERVER_REALM", properties["auth-server.realm"] ?: "").toString()
 }
 
 def mandatoryProperties = [
@@ -77,9 +79,37 @@ if (!undefinedProperties.isEmpty()) {
     )
 }
 
+// auth-server.* is only required when the ocProcess task actually runs (i.e. when
+// the pod is being deployed). Other tasks — unit tests, publish, ktlint — don't
+// need it. Check lazy so `./gradlew :components-registry-service-server:build`
+// stays green without the prop.
+gradle.taskGraph.whenReady { graph ->
+    def needsAuthServer = graph.allTasks.any { t ->
+        t.project == project && (t.name == 'ocProcess' || t.name == 'ocCreate')
+    }
+    if (needsAuthServer) {
+        def authUndefined = ["authServerUrl", "authServerRealm"].findAll {
+            (project.ext[it] as String).isBlank()
+        }
+        if (!authUndefined.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "OKD deploy requires auth-server config. Start gradle build with" +
+                            (authUndefined.contains("authServerUrl") ? " -Pauth-server.url=..." : "") +
+                            (authUndefined.contains("authServerRealm") ? " -Pauth-server.realm=..." : "") +
+                            " or set env variable(s):" +
+                            (authUndefined.contains("authServerUrl") ? " AUTH_SERVER_URL" : "") +
+                            (authUndefined.contains("authServerRealm") ? " AUTH_SERVER_REALM" : "") +
+                            ". The comp-reg pod uses these to build its JwtDecoder at startup."
+            )
+        }
+    }
+}
+
 def commonOkdParameters = [
         "ACTIVE_DEADLINE_SECONDS": project.ext.get("okdActiveDeadlineSeconds"),
-        "DOCKER_REGISTRY"        : project.ext.get("dockerRegistry")
+        "DOCKER_REGISTRY"        : project.ext.get("dockerRegistry"),
+        "AUTH_SERVER_URL"        : project.ext.get("authServerUrl"),
+        "AUTH_SERVER_REALM"      : project.ext.get("authServerRealm")
 ]
 
 ocTemplate {
