@@ -79,10 +79,15 @@ if (!undefinedProperties.isEmpty()) {
     )
 }
 
-// auth-server.* is only required when the ocProcess task actually runs (i.e. when
-// the pod is being deployed). Other tasks — unit tests, publish, ktlint — don't
-// need it. Check lazy so `./gradlew :components-registry-service-server:build`
-// stays green without the prop.
+// auth-server.* is only required when ocProcess/ocCreate actually run (OKD deploy).
+// Other tasks (this module's publish/ktlint, and unrelated modules like
+// :components-registry-service-server:build) don't trigger them, so the check is
+// lazy and scoped to ocProcess/ocCreate to avoid forcing the prop on every build.
+//
+// Note: `:components-registry-automation:test` depends on ocCreate (tasks.withType(Test)
+// below), so a root `./gradlew build`/`check` still requires the prop. That's
+// intentional — the automation's own test DOES deploy the pod — but run from the
+// root, not here.
 gradle.taskGraph.whenReady { graph ->
     def needsAuthServer = graph.allTasks.any { t ->
         t.project == project && (t.name == 'ocProcess' || t.name == 'ocCreate')

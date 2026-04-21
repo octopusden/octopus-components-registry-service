@@ -9,6 +9,7 @@ import org.junit.jupiter.api.parallel.ResourceLock
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
+import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.api.beans.GitVersionControlSystemBean
 import org.octopusden.octopus.components.registry.api.enums.BuildSystemType
 import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
@@ -18,6 +19,7 @@ import org.octopusden.octopus.components.registry.client.impl.ClassicComponentsR
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
 import org.octopusden.octopus.components.registry.test.BaseComponentsRegistryServiceTest
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.junit.jupiter.SpringExtension
@@ -36,6 +38,12 @@ import java.util.stream.Stream
 @ActiveProfiles("v3", "test")
 @ResourceLock(value = "SYSTEM_PROPERTIES")
 class ComponentRegistryServiceClientV3Test {
+    // Prevents cloud-commons AuthServerClient from running OIDC discovery at bean init;
+    // v3 endpoints are permit-all so no auth is actually exercised.
+    @MockBean
+    @Suppress("unused")
+    private lateinit var authServerClient: AuthServerClient
+
     init {
         BaseComponentsRegistryServiceTest.configureSpringAppTestDataDir()
     }

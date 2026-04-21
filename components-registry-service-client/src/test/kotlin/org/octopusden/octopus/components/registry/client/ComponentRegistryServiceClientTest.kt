@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.parallel.ResourceLock
+import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.api.build.tools.BuildTool
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.components.registry.client.impl.ClassicComponentsRegistryServiceClient
@@ -32,6 +33,7 @@ import org.octopusden.octopus.components.registry.core.exceptions.NotFoundExcept
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
 import org.octopusden.octopus.components.registry.test.BaseComponentsRegistryServiceTest
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.junit.jupiter.SpringExtension
@@ -45,6 +47,12 @@ import org.springframework.test.context.junit.jupiter.SpringExtension
 @ActiveProfiles("common", "test")
 @ResourceLock(value = "SYSTEM_PROPERTIES")
 class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
+    // Prevents cloud-commons AuthServerClient from running OIDC discovery at bean init;
+    // this test only hits public v1/v2/v3 endpoints through Feign, so no auth is needed.
+    @MockBean
+    @Suppress("unused")
+    private lateinit var authServerClient: AuthServerClient
+
     @LocalServerPort
     private var port: Int = 0
 

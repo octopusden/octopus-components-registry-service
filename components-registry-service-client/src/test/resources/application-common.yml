@@ -25,3 +25,26 @@ components-registry:
 pathToConfig: file://${components-registry.groovy-path}
 
 eureka.client.enabled: false
+
+# Stub auth-server so WebSecurityConfig.jwtDecoder() constructs without a reachable
+# Keycloak. AuthServerClient is replaced with a Mockito @MockBean in every
+# @SpringBootTest in this module, so no HTTP call is actually made to this URL.
+auth-server:
+  url: http://localhost:0
+  realm: test
+
+octopus-security:
+  roles:
+    ROLE_F1_ADMIN:
+      - ACCESS_COMPONENTS
+      - EDIT_COMPONENTS
+      - DELETE_COMPONENTS
+      - IMPORT_DATA
+      - ACCESS_AUDIT
+    ROLE_REGISTRY_EDITOR:
+      - ACCESS_COMPONENTS
+      - EDIT_COMPONENTS
+      - ACCESS_AUDIT
+    ROLE_REGISTRY_VIEWER:
+      - ACCESS_COMPONENTS
+      - ACCESS_AUDIT
