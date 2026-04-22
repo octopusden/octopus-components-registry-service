@@ -5,6 +5,8 @@ import feign.Request
 import feign.RequestTemplate
 import feign.Response
 import feign.RetryableException
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
@@ -34,9 +36,32 @@ class ComponentsRegistryServiceErrorDecoderTest {
     }
 
     @Test
-    fun `503 returns RetryableException`() {
+    fun `503 without Retry-After returns RetryableException`() {
         val ex = decoder.decode("test#method", stubResponse(503, "Service Unavailable"))
         assertTrue(ex is RetryableException) { "Expected RetryableException for 503, got ${ex::class.simpleName}" }
+        // synthesized by us — no cause
+        assertNull(ex.cause)
+    }
+
+    @Test
+    fun `503 with Retry-After header preserves retry timestamp`() {
+        val request = Request.create(
+            Request.HttpMethod.GET,
+            "http://localhost/test",
+            emptyMap(),
+            null,
+            RequestTemplate()
+        )
+        val response = Response.builder()
+            .status(503)
+            .reason("Service Unavailable")
+            .request(request)
+            .headers(mapOf("Retry-After" to listOf("5")))
+            .build()
+        val ex = decoder.decode("test#method", response) as RetryableException
+        // Verify the exception came from super.decode() (which parses Retry-After),
+        // not a freshly synthesized one: super.decode() includes the cause FeignException.
+        assertNotNull(ex.cause, "RetryableException from super.decode() should carry the cause FeignException")
     }
 
     @Test

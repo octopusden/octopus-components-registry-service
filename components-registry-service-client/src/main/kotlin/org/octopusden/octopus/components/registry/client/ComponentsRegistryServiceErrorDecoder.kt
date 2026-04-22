@@ -12,6 +12,13 @@ class ComponentsRegistryServiceErrorDecoder(val objectMapper: ObjectMapper) : Er
 
     override fun decode(methodKey: String?, response: Response?): Exception {
         if (isRetryable(response)) {
+            // Let super parse Retry-After header first; reuse the RetryableException it builds
+            // (which carries the parsed retry timestamp). If super returns a plain FeignException
+            // (no Retry-After header present), synthesize our own with null retryAfter.
+            val superException = super.decode(methodKey, response)
+            if (superException is RetryableException) {
+                return superException
+            }
             return RetryableException(
                 response!!.status(),
                 response.reason() ?: "Service Unavailable",
