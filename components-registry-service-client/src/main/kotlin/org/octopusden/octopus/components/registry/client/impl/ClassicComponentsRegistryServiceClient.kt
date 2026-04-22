@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.module.SimpleModule
 import feign.Feign
 import feign.Logger
+import feign.Retryer
 import feign.Param
 import feign.Response
 import feign.httpclient.ApacheHttpClient
@@ -145,6 +146,7 @@ class ClassicComponentsRegistryServiceClient(
             .errorDecoder(ComponentsRegistryServiceErrorDecoder(objectMapper))
             .encoder(JacksonEncoder())
             .decoder(JacksonDecoder())
+            .retryer(Retryer.Default(100, 1000, 5))
             .logger(Slf4jLogger(ComponentsRegistryServiceClient::class.java))
             .logLevel(Logger.Level.FULL)
             .target(ComponentsRegistryServiceClient::class.java, apiUrl)
