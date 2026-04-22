@@ -15,7 +15,7 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor
 fun adminJwt(): RequestPostProcessor =
     jwt()
         .jwt { it.claim("preferred_username", "alice") }
-        .authorities(SimpleGrantedAuthority("ROLE_F1_ADMIN"))
+        .authorities(SimpleGrantedAuthority("ROLE_ADMIN"))
 
 fun editorJwt(): RequestPostProcessor =
     jwt()

@@ -104,10 +104,18 @@ class ComponentControllerV4(
         return componentManagementService.getComponentByName(idOrName)
     }
 
+    // Field-level gating: a plain edit passes on EDIT_COMPONENTS alone, but switching
+    // `archived` additionally requires ARCHIVE_COMPONENTS, and changing `name`
+    // (rename) additionally requires RENAME_COMPONENTS. These latter two permissions
+    // are currently granted only to ROLE_ADMIN — EDITOR can't archive or rename via
+    // this endpoint. When we split archive/rename into dedicated endpoints, this SpEL
+    // collapses back to the simple edit guard.
     @PatchMapping("/{id}")
     @PreAuthorize(
         "@permissionEvaluator.hasPermission('ACCESS_COMPONENTS') " +
-            "and @permissionEvaluator.canEditComponent(#id.toString())",
+            "and @permissionEvaluator.canEditComponent(#id.toString()) " +
+            "and (#request.archived == null or @permissionEvaluator.canArchiveComponent(#id.toString())) " +
+            "and (#request.name == null or @permissionEvaluator.canRenameComponent(#id.toString()))",
     )
     fun updateComponent(
         @PathVariable id: UUID,

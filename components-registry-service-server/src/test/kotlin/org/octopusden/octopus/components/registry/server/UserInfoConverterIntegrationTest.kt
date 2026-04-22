@@ -84,13 +84,13 @@ class UserInfoConverterIntegrationTest {
     }
 
     @Test
-    @DisplayName("admin token → /userinfo returns F1_ADMIN → /auth/me exposes ROLE_F1_ADMIN")
+    @DisplayName("admin token → /userinfo returns ADMIN → /auth/me exposes ROLE_ADMIN")
     fun adminRolesFlowThroughConverter() {
         mvc
             .perform(mvcGet("/auth/me").header("Authorization", "Bearer $ADMIN_TOKEN"))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.username").value("alice"))
-            .andExpect(jsonPath("$.roles[0].name").value("ROLE_F1_ADMIN"))
+            .andExpect(jsonPath("$.roles[0].name").value("ROLE_ADMIN"))
             .andExpect(jsonPath("$.roles[0].permissions", org.hamcrest.Matchers.hasItem("ACCESS_COMPONENTS")))
     }
 
@@ -115,11 +115,22 @@ class UserInfoConverterIntegrationTest {
     }
 
     @Test
-    @DisplayName("no token → v4 endpoint returns 401 (resource server)")
-    fun missingTokenIs401() {
+    @DisplayName("no token → v4 GET /components is public (200)")
+    fun anonymousCanReadV4List() {
         mvc
             .perform(mvcGet("/rest/api/4/components"))
-            .andExpect(status().isUnauthorized)
+            .andExpect(status().isOk)
+    }
+
+    @Test
+    @DisplayName("no token → v4 write is still 401")
+    fun missingTokenOnWriteIs401() {
+        mvc
+            .perform(
+                post("/rest/api/4/components")
+                    .contentType("application/json")
+                    .content("""{"name":"x","displayName":"x"}"""),
+            ).andExpect(status().isUnauthorized)
     }
 
     companion object {
@@ -163,7 +174,7 @@ class UserInfoConverterIntegrationTest {
                         aResponse()
                             .withStatus(200)
                             .withHeader("Content-Type", "application/json")
-                            .withBody("""{"roles":["F1_ADMIN"],"groups":[]}"""),
+                            .withBody("""{"roles":["ADMIN"],"groups":[]}"""),
                     ),
             )
             wireMock.stubFor(

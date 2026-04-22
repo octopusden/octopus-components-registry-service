@@ -37,18 +37,25 @@ supportedSystems: NONE,CLASSIC
 
 octopus-security:
   roles:
-    ROLE_F1_ADMIN:
+    # Reads on v4 are public at the filter-chain level; ROLE_ANONYMOUS carries
+    # ACCESS_COMPONENTS so @PreAuthorize on GET methods also passes without auth.
+    ROLE_ANONYMOUS:
       - ACCESS_COMPONENTS
-      - EDIT_COMPONENTS
-      - DELETE_COMPONENTS
-      - IMPORT_DATA
+    ROLE_REGISTRY_VIEWER:
+      - ACCESS_COMPONENTS
       - ACCESS_AUDIT
     ROLE_REGISTRY_EDITOR:
       - ACCESS_COMPONENTS
       - EDIT_COMPONENTS
       - ACCESS_AUDIT
-    ROLE_REGISTRY_VIEWER:
+    # Super-admin — reuses existing Keycloak realm-role `ADMIN`.
+    ROLE_ADMIN:
       - ACCESS_COMPONENTS
+      - EDIT_COMPONENTS
+      - ARCHIVE_COMPONENTS
+      - RENAME_COMPONENTS
+      - DELETE_COMPONENTS
+      - IMPORT_DATA
       - ACCESS_AUDIT
 
 logging:

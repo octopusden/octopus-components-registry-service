@@ -10,6 +10,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Import
+import org.springframework.http.HttpMethod
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator
 import org.springframework.security.oauth2.jwt.JwtDecoder
@@ -51,7 +52,12 @@ class WebSecurityConfig(
                     // Legacy read-only APIs — public (Phase 1 from ADR-004).
                     .requestMatchers("/rest/api/1/**", "/rest/api/2/**", "/rest/api/3/**")
                     .permitAll()
-                    // v4 — authenticated + method-level @PreAuthorize.
+                    // v4 read endpoints — public; @PreAuthorize checks ACCESS_COMPONENTS,
+                    // which ROLE_ANONYMOUS is granted in the role-map, so unauthenticated
+                    // requests pass method-security too.
+                    .requestMatchers(HttpMethod.GET, "/rest/api/4/components/**", "/rest/api/4/config/**")
+                    .permitAll()
+                    // v4 writes + admin + audit — authenticated + method-level @PreAuthorize.
                     .requestMatchers("/rest/api/4/**")
                     .authenticated()
                     // /auth/me — must be logged in.

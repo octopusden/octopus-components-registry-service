@@ -20,11 +20,19 @@ class PermissionEvaluator(
     @Suppress("UnusedParameter")
     fun canDeleteComponent(componentIdOrName: String): Boolean = hasPermission(DELETE_COMPONENTS)
 
+    @Suppress("UnusedParameter")
+    fun canArchiveComponent(componentIdOrName: String): Boolean = hasPermission(ARCHIVE_COMPONENTS)
+
+    @Suppress("UnusedParameter")
+    fun canRenameComponent(componentIdOrName: String): Boolean = hasPermission(RENAME_COMPONENTS)
+
     fun canImport(): Boolean = hasPermission(IMPORT_DATA)
 
     companion object {
         const val ACCESS_COMPONENTS = "ACCESS_COMPONENTS"
         const val EDIT_COMPONENTS = "EDIT_COMPONENTS"
+        const val ARCHIVE_COMPONENTS = "ARCHIVE_COMPONENTS"
+        const val RENAME_COMPONENTS = "RENAME_COMPONENTS"
         const val DELETE_COMPONENTS = "DELETE_COMPONENTS"
         const val IMPORT_DATA = "IMPORT_DATA"
         const val ACCESS_AUDIT = "ACCESS_AUDIT"
