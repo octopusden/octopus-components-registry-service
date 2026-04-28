@@ -37,4 +37,6 @@ class AuditLogEntity(
     var changeDiff: Map<String, Any?>? = null,
     @Column(name = "correlation_id")
     var correlationId: String? = null,
+    @Column(nullable = false)
+    var source: String = "api",
 )
