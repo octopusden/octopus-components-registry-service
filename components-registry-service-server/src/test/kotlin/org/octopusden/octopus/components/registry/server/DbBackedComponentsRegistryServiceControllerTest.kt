@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.TestInstance
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
+import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
@@ -51,14 +52,14 @@ class DbBackedComponentsRegistryServiceControllerTest : MockMvcRegistryTestSuppo
     fun migrateAllToDb() {
         // Step 1: migrate defaults
         mvc
-            .perform(post("/rest/api/4/admin/migrate-defaults").accept(APPLICATION_JSON))
+            .perform(post("/rest/api/4/admin/migrate-defaults").with(adminJwt()).accept(APPLICATION_JSON))
             .andExpect(status().isOk)
 
         // Step 2: migrate all components
         val resultJson =
             mvc
                 .perform(
-                    post("/rest/api/4/admin/migrate-components").accept(APPLICATION_JSON),
+                    post("/rest/api/4/admin/migrate-components").with(adminJwt()).accept(APPLICATION_JSON),
                 ).andExpect(status().isOk)
                 .andReturn()
                 .response.contentAsString

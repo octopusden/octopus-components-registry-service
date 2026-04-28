@@ -33,6 +33,10 @@ dependencies {
     testImplementation testFixtures(project(":test-common"))
     testImplementation platform("org.springframework.boot:spring-boot-dependencies:${project['spring-boot-legacy.version']}")
     testImplementation ("org.springframework.boot:spring-boot-starter-test")
+    // Referenced in tests via @MockBean to stub out the eager OIDC discovery in
+    // AuthServerClient.init{}. Explicit because server's octopus-security-common
+    // dependency is runtime-only and doesn't propagate to this module's test compile.
+    testImplementation "org.octopusden.octopus-cloud-commons:octopus-security-common:${project.properties['octopus-cloud-commons.version']}"
 
     testImplementation('ch.qos.logback:logback-classic:1.5.13')
 }

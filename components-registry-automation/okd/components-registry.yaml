@@ -112,6 +112,10 @@ objects:
               value: "true"
             - name: SPRING_JPA_HIBERNATE_DDL_AUTO
               value: "validate"
+            - name: AUTH_SERVER_URL
+              value: ${AUTH_SERVER_URL}
+            - name: AUTH_SERVER_REALM
+              value: ${AUTH_SERVER_REALM}
           volumeMounts:
             - name: components-registry-dir
               mountPath: /components-registry
@@ -202,4 +206,10 @@ parameters:
     required: true
   - description: EE component copyright content
     name: EE_COMPONENT_COPYRIGHT
+    required: true
+  - description: Keycloak auth-server base URL (no trailing slash)
+    name: AUTH_SERVER_URL
+    required: true
+  - description: Keycloak realm name
+    name: AUTH_SERVER_REALM
     required: true

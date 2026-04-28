@@ -9,14 +9,17 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
+import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
 import org.octopusden.octopus.components.registry.server.service.BatchMigrationResult
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
+import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.skyscreamer.jsonassert.JSONAssert
 import org.skyscreamer.jsonassert.JSONCompareMode
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.http.MediaType.APPLICATION_JSON
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.DynamicPropertyRegistry
@@ -46,6 +49,10 @@ import java.nio.file.Paths
 @ActiveProfiles("common", "test-db", "test-db-prod")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class GitVsDbValidationTest {
+    @MockBean
+    @Suppress("UnusedPrivateProperty")
+    private lateinit var authServerClient: AuthServerClient
+
     @Autowired
     private lateinit var mvc: MockMvc
 
@@ -95,14 +102,14 @@ class GitVsDbValidationTest {
     fun migrateAll() {
         // 1. Migrate defaults
         mvc
-            .perform(post("/rest/api/4/admin/migrate-defaults").accept(APPLICATION_JSON))
+            .perform(post("/rest/api/4/admin/migrate-defaults").with(adminJwt()).accept(APPLICATION_JSON))
             .andExpect(status().isOk)
 
         // 2. Migrate all components
         val resultJson =
             mvc
                 .perform(
-                    post("/rest/api/4/admin/migrate-components").accept(APPLICATION_JSON),
+                    post("/rest/api/4/admin/migrate-components").with(adminJwt()).accept(APPLICATION_JSON),
                 ).andExpect(status().isOk)
                 .andReturn()
                 .response.contentAsString

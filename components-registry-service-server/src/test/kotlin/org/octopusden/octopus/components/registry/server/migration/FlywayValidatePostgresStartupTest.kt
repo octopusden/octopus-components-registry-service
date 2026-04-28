@@ -4,9 +4,11 @@ import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
+import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.context.ApplicationContext
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.DynamicPropertyRegistry
@@ -37,6 +39,10 @@ import java.nio.file.Paths
 @ActiveProfiles("common", "test-db-validate")
 @Timeout(120)
 class FlywayValidatePostgresStartupTest {
+    @MockBean
+    @Suppress("UnusedPrivateProperty")
+    private lateinit var authServerClient: AuthServerClient
+
     @Autowired
     private lateinit var applicationContext: ApplicationContext
 

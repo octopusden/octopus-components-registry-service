@@ -6,11 +6,14 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
 import org.octopusden.octopus.components.registry.server.service.FullMigrationResult
+import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.http.MediaType.APPLICATION_JSON
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.DynamicPropertyRegistry
@@ -28,6 +31,10 @@ import java.nio.file.Paths
 )
 @ActiveProfiles("common", "test-db")
 class MigrateEndpointTest {
+    @MockBean
+    @Suppress("UnusedPrivateProperty")
+    private lateinit var authServerClient: AuthServerClient
+
     @Autowired
     private lateinit var mvc: MockMvc
 
@@ -44,7 +51,7 @@ class MigrateEndpointTest {
     fun `POST migrate runs defaults and components in a single call`() {
         val body =
             mvc
-                .perform(post("/rest/api/4/admin/migrate").accept(APPLICATION_JSON))
+                .perform(post("/rest/api/4/admin/migrate").with(adminJwt()).accept(APPLICATION_JSON))
                 .andExpect(status().isOk)
                 .andReturn()
                 .response.contentAsString

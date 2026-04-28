@@ -7,11 +7,14 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
+import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
 import org.octopusden.octopus.components.registry.server.service.MigrationStatus
+import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
@@ -31,6 +34,10 @@ import java.nio.file.Paths
 @ActiveProfiles("common", "ft-db")
 @Timeout(120)
 class FtDbProfileTest {
+    @MockBean
+    @Suppress("UnusedPrivateProperty")
+    private lateinit var authServerClient: AuthServerClient
+
     @Autowired
     private lateinit var mvc: MockMvc
 
@@ -47,7 +54,7 @@ class FtDbProfileTest {
     fun `all components are in DB after startup with ft-db profile`() {
         val body =
             mvc
-                .perform(get("/rest/api/4/admin/migration-status"))
+                .perform(get("/rest/api/4/admin/migration-status").with(adminJwt()))
                 .andExpect(status().isOk)
                 .andReturn()
                 .response.contentAsString

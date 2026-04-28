@@ -75,6 +75,13 @@ class ControllerExceptionHandler {
         return HttpEntity(ErrorResponse(e.localizedMessage))
     }
 
+    // Note: AccessDeniedException and AuthenticationException are intercepted by Spring
+    // Security's ExceptionTranslationFilter BEFORE they ever reach @ControllerAdvice.
+    // Consistent JSON 401/403 bodies are produced by the AuthenticationEntryPoint /
+    // AccessDeniedHandler wired in WebSecurityConfig — see those for the actual envelope.
+    // Do not re-add @ExceptionHandler entries for the security exceptions here; they
+    // would silently never fire and create a false sense of coverage.
+
     companion object {
         val log: Logger = LoggerFactory.getLogger(ControllerExceptionHandler::class.java)
     }

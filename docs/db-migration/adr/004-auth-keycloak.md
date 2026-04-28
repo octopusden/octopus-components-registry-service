@@ -106,11 +106,14 @@ class WebSecurityConfig(
         http
             .authorizeHttpRequests { auth ->
                 auth
-                    // Existing read endpoints — no auth (backward compat)
+                    // Legacy read endpoints — no auth (backward compat)
                     .requestMatchers("/rest/api/1/**").permitAll()
                     .requestMatchers("/rest/api/2/**").permitAll()
                     .requestMatchers("/rest/api/3/**").permitAll()
-                    // New CRUD endpoints — require authentication
+                    // v4 read endpoints — public; anonymous users have ROLE_ANONYMOUS
+                    // → ACCESS_COMPONENTS in the role map, so @PreAuthorize passes too.
+                    .requestMatchers(HttpMethod.GET, "/rest/api/4/components/**", "/rest/api/4/config/**").permitAll()
+                    // v4 writes + admin + audit — require authentication + @PreAuthorize.
                     .requestMatchers("/rest/api/4/**").authenticated()
                     // Actuator, swagger — allowed (from parent)
                     .requestMatchers("/actuator/**", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
@@ -140,6 +143,13 @@ class PermissionEvaluator(
     fun canDeleteComponent(componentName: String): Boolean =
         hasPermission("DELETE_COMPONENTS")
 
+    fun canArchiveComponent(componentName: String): Boolean =
+        hasPermission("ARCHIVE_COMPONENTS")
+        // Future: per-component check against componentOwner / releaseManager
+
+    fun canRenameComponent(componentName: String): Boolean =
+        hasPermission("RENAME_COMPONENTS")
+
     fun canImport(): Boolean =
         hasPermission("IMPORT_DATA")
 }
@@ -167,26 +177,53 @@ class ComponentCrudController(private val service: ComponentManagementService) {
 
 ### Roles & Permissions
 
+Permissions (7):
+
+| Permission | Endpoint / Operation |
+|---|---|
+| `ACCESS_COMPONENTS` | read v1–v4 (public; `ROLE_ANONYMOUS` gets it so `@PreAuthorize` on GET methods also passes without auth) |
+| `EDIT_COMPONENTS` | `POST /rest/api/4/components`, `PATCH /{id}` (regular attributes), field-overrides CRUD |
+| `ARCHIVE_COMPONENTS` | set `archived` via `PATCH /{id}` (future: dedicated `POST /{id}/archive`). Reserved — may move to per-component check (componentOwner, releaseManager) |
+| `RENAME_COMPONENTS` | change `name` via `PATCH /{id}` (future: dedicated `POST /{id}/rename`). Impactful — breaks legacy-resolve consumers |
+| `DELETE_COMPONENTS` | `DELETE /{id}` — hard delete, ADMIN-only |
+| `IMPORT_DATA` | `POST /rest/api/4/admin/**`, `PUT /rest/api/4/admin/config/**` (migrate/import/global-config writes) |
+| `ACCESS_AUDIT` | `GET /rest/api/4/audit/**` |
+
+Role map (`octopus-security.roles` in `components-registry-service.yml`):
+
 ```yaml
-# application.yml (production)
 octopus-security:
   roles:
-    ROLE_F1_ADMIN:
+    # Reads on v4 are public at the filter-chain level; ROLE_ANONYMOUS carries
+    # ACCESS_COMPONENTS so @PreAuthorize on GET methods also passes without auth.
+    # Removing this entry is how we'd later close anonymous reads.
+    ROLE_ANONYMOUS:
       - ACCESS_COMPONENTS
-      - EDIT_COMPONENTS
-      - DELETE_COMPONENTS
-      - IMPORT_DATA
+    ROLE_REGISTRY_VIEWER:
+      - ACCESS_COMPONENTS
       - ACCESS_AUDIT
     ROLE_REGISTRY_EDITOR:
       - ACCESS_COMPONENTS
       - EDIT_COMPONENTS
       - ACCESS_AUDIT
-    ROLE_REGISTRY_VIEWER:
+    # Super-admin — reuses the existing Keycloak realm-role `ADMIN`
+    # (bare; converter prefixes ROLE_). F1_ADMIN is a separate f1-security legacy
+    # role, currently assigned to no one in f1-qa — not used by registry.
+    ROLE_ADMIN:
       - ACCESS_COMPONENTS
+      - EDIT_COMPONENTS
+      - ARCHIVE_COMPONENTS
+      - RENAME_COMPONENTS
+      - DELETE_COMPONENTS
+      - IMPORT_DATA
       - ACCESS_AUDIT
 ```
 
-Roles are defined in Keycloak and mapped to permissions in the service YAML config. Existing DMS roles (`ROLE_F1_ADMIN`) automatically get full registry access.
+Notes on the model:
+
+- `ROLE_REGISTRY_EDITOR` deliberately does **not** carry `ARCHIVE_COMPONENTS` or `RENAME_COMPONENTS`. Archive/rename are reserved for ADMIN (or, longer-term, for a per-component check against `componentOwner` / `releaseManager` — the permission name is kept stable so that check can be added without re-wiring the role map).
+- The `PATCH /{id}` SpEL guard enforces this field-by-field: `... and (#request.archived == null or canArchiveComponent(...)) and (#request.name == null or canRenameComponent(...))`. Plain edits stay on `EDIT_COMPONENTS`; archive/rename payloads fail closed with 403 for anyone without the extra permission.
+- Super-admin role is `ROLE_ADMIN`, reusing the existing Keycloak `ADMIN` realm-role. This diverges from the original ADR draft (`ROLE_F1_ADMIN`) because `F1_ADMIN` in `f1-qa` is currently assigned to no users — wiring admin-access through it would leave real operators locked out.
 
 ### Keycloak Configuration
 
@@ -229,7 +266,7 @@ Phase 2: Migrate consumers to pass JWT
 Phase 3: Full auth on reads
          v1/v2/v3 → authenticated() (after ALL consumers updated and tested)
          Any authenticated user can read (no role restriction)
-         Write operations still require ROLE_REGISTRY_EDITOR / ROLE_F1_ADMIN
+         Write operations still require ROLE_REGISTRY_EDITOR / ROLE_ADMIN
 ```
 
 Phase 3 requires coordinated update of 7+ consumer services. Timeline TBD after Phase 1 is stable.

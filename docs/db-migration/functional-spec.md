@@ -165,33 +165,14 @@ All existing search/lookup operations must return identical results from DB:
 
 ## 6. Authorization Rules
 
-### 6.1 Role → Permission Mapping
+The canonical role/permission matrix, filter-chain rules, and Keycloak role naming convention live in [ADR-004 — Authentication & Authorization via Keycloak](adr/004-auth-keycloak.md). That document is the source of truth; this section only sketches the shape so a reader of the functional spec has enough context without jumping.
 
-| Keycloak Role | Permissions |
-|---------------|------------|
-| REGISTRY_READER | ACCESS_COMPONENTS, ACCESS_AUDIT |
-| REGISTRY_EDITOR | all READER permissions + EDIT_COMPONENTS |
-| REGISTRY_ADMIN | all EDITOR permissions + DELETE_COMPONENTS, IMPORT_DATA |
-| Component Owner | same as EDITOR, scoped to owned components |
-
-### 6.2 Operation → Permission Matrix
-
-| Operation | Required Permission | Additional Check |
-|-----------|-------------------|------------------|
-| List/View components (v1/v2/v3) | None (public, backward compat) | — |
-| List/View components (v4) | ACCESS_COMPONENTS | — |
-| Create component | EDIT_COMPONENTS | — |
-| Update component | EDIT_COMPONENTS | Owner check: if `componentOwner` is set, only the owner or ADMIN can update |
-| Soft delete component (archive) | DELETE_COMPONENTS | — |
-| Hard delete component | ADMIN role only | Irreversible — removes component and all related data (CASCADE) |
-| Manage versions | EDIT_COMPONENTS | — |
-| View audit | ACCESS_AUDIT | — |
-| Import data | IMPORT_DATA | — |
-| Export data | ACCESS_COMPONENTS | — |
-| View field config | ACCESS_COMPONENTS | Read-only (UI uses to render forms) |
-| Edit field config | ADMIN role only | Controls which fields are visible/editable per deployment |
-| View component defaults | ACCESS_COMPONENTS | Read-only |
-| Edit component defaults | ADMIN role only | Replaces Defaults.groovy; applied to new components |
+- **Permissions** (7): `ACCESS_COMPONENTS`, `EDIT_COMPONENTS`, `ARCHIVE_COMPONENTS`, `RENAME_COMPONENTS`, `DELETE_COMPONENTS`, `IMPORT_DATA`, `ACCESS_AUDIT`.
+- **Roles** (4): `ROLE_ANONYMOUS` → public reads only; `ROLE_REGISTRY_VIEWER`; `ROLE_REGISTRY_EDITOR`; `ROLE_ADMIN` (super-admin, reuses the existing Keycloak `ADMIN` realm-role). No separate `REGISTRY_ADMIN` — we piggyback on the platform admin role.
+- **v1/v2/v3 reads**: public (Phase 1 backward compat).
+- **v4 GET `/components/**` and `/config/**`**: public via `ROLE_ANONYMOUS` → `ACCESS_COMPONENTS`. All other v4 endpoints (writes, admin, audit) require authentication + the permission named in ADR-004.
+- **`PATCH /rest/api/4/components/{id}`** is field-level guarded: a plain edit needs `EDIT_COMPONENTS`; flipping `archived` additionally needs `ARCHIVE_COMPONENTS`; changing `name` (rename) additionally needs `RENAME_COMPONENTS`. `ARCHIVE_COMPONENTS` and `RENAME_COMPONENTS` are reserved for `ROLE_ADMIN` today — `ROLE_REGISTRY_EDITOR` cannot archive or rename through this endpoint.
+- **Per-component ownership check** (`componentOwner`, `releaseManager`) is a deferred layer. The permission names `ARCHIVE_COMPONENTS` / `RENAME_COMPONENTS` are stable across that future change so the role map does not need to move.
 
 ## 7. Field Configuration & Defaults (Admin)
 

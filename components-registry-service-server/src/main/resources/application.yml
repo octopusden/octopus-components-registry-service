@@ -3,6 +3,20 @@ pathToConfig: file://${components-registry.groovy-path}
 components-registry:
   auto-migrate: false
 
+# auth-server.url and auth-server.realm bind from AUTH_SERVER_URL / AUTH_SERVER_REALM
+# env vars via Spring Boot's relaxed binding. Production and dev profiles must
+# supply them; WebSecurityConfig.jwtDecoder() fails fast if either is missing.
+# Tests override with stub URLs in application-common.yml so the decoder bean can
+# be constructed without Keycloak running — MockMvc jwt() post-processor bypasses
+# the decoder entirely.
+auth-server:
+  url:
+  realm:
+
+# No spring.security.oauth2.resourceserver.jwt.* here: the auto-configured decoder
+# either forces eager OIDC discovery (issuer-uri) or skips issuer validation
+# (jwk-set-uri alone). Instead WebSecurityConfig provides a custom JwtDecoder
+# that is lazy on JWKS fetch AND explicitly enforces the issuer claim.
 spring:
   jpa:
     open-in-view: false
@@ -13,3 +27,29 @@ spring:
       hibernate.type.json_format_mapper: org.octopusden.octopus.components.registry.server.config.SafeJsonFormatMapper
   flyway:
     enabled: false
+
+octopus-security:
+  roles:
+    # Reads on v4 are public at the filter-chain level; ROLE_ANONYMOUS carries
+    # ACCESS_COMPONENTS so @PreAuthorize on GET methods also passes without auth.
+    # Removing this entry is how we'd later close anonymous reads.
+    ROLE_ANONYMOUS:
+      - ACCESS_COMPONENTS
+    ROLE_REGISTRY_VIEWER:
+      - ACCESS_COMPONENTS
+      - ACCESS_AUDIT
+    ROLE_REGISTRY_EDITOR:
+      - ACCESS_COMPONENTS
+      - EDIT_COMPONENTS
+      - ACCESS_AUDIT
+    # Super-admin — reuses the existing Keycloak realm-role `ADMIN`
+    # (bare; converter prefixes ROLE_). F1_ADMIN is a separate f1-security
+    # legacy role, not used here.
+    ROLE_ADMIN:
+      - ACCESS_COMPONENTS
+      - EDIT_COMPONENTS
+      - ARCHIVE_COMPONENTS
+      - RENAME_COMPONENTS
+      - DELETE_COMPONENTS
+      - IMPORT_DATA
+      - ACCESS_AUDIT

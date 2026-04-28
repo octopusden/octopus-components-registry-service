@@ -28,6 +28,10 @@ dependencies {
     implementation "org.springframework.boot:spring-boot-starter-actuator"
     implementation "org.springframework.boot:spring-boot-starter-validation"
     implementation "org.springframework.boot:spring-boot-starter-web"
+    implementation "org.springframework.boot:spring-boot-starter-security"
+    implementation "org.springframework.security:spring-security-oauth2-resource-server"
+    implementation "org.springframework.security:spring-security-oauth2-jose"
+    implementation "org.octopusden.octopus-cloud-commons:octopus-security-common:${project.properties['octopus-cloud-commons.version']}"
     implementation "org.springframework.boot:spring-boot-devtools"
     implementation 'io.micrometer:micrometer-registry-prometheus:1.2.1'
     implementation "io.github.microutils:kotlin-logging:1.6.22"
@@ -54,6 +58,7 @@ dependencies {
     testImplementation "com.github.kittinunf.fuel:fuel:2.3.1"
     testImplementation group: 'org.skyscreamer', name: 'jsonassert', version: '1.5.0'
     testImplementation('org.springframework.boot:spring-boot-starter-test')
+    testImplementation("org.springframework.security:spring-security-test")
     testImplementation testFixtures(project(":test-common"))
 }
 
@@ -88,6 +93,12 @@ sourceSets {
 configurations {
     integrationTestImplementation.extendsFrom testImplementation
     integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+
+dependencies {
+    // wiremock-standalone is shared between unit tests (security converter integration test)
+    // and the integrationTest source set (FatJarStartupIntegrationTest OIDC discovery stub).
+    testImplementation "org.wiremock:wiremock-standalone:3.9.1"
 }
 
 task integrationTest(type: Test) {

@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
+import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentDetailResponse
@@ -23,10 +24,12 @@ import org.octopusden.octopus.components.registry.server.service.MigrationStatus
 import org.octopusden.octopus.components.registry.server.service.ValidationResult
 import org.octopusden.octopus.components.registry.server.service.impl.ComponentRegistryResolverImpl
 import org.octopusden.octopus.components.registry.server.service.impl.DatabaseComponentRegistryResolver
+import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.http.MediaType.APPLICATION_JSON
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.DynamicPropertyRegistry
@@ -54,6 +57,10 @@ import java.nio.file.Paths
 @ActiveProfiles("common", "test-db")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class MigrationIntegrationTest {
+    @MockBean
+    @Suppress("UnusedPrivateProperty")
+    private lateinit var authServerClient: AuthServerClient
+
     @Autowired
     private lateinit var mvc: MockMvc
 
@@ -91,14 +98,14 @@ class MigrationIntegrationTest {
     fun migrateAll() {
         // Step 1: migrate defaults (Defaults.groovy → registry_config)
         mvc
-            .perform(post("/rest/api/4/admin/migrate-defaults").accept(APPLICATION_JSON))
+            .perform(post("/rest/api/4/admin/migrate-defaults").with(adminJwt()).accept(APPLICATION_JSON))
             .andExpect(status().isOk)
 
         // Step 2: migrate all 55 test components (Git DSL → DB)
         val resultJson =
             mvc
                 .perform(
-                    post("/rest/api/4/admin/migrate-components").accept(APPLICATION_JSON),
+                    post("/rest/api/4/admin/migrate-components").with(adminJwt()).accept(APPLICATION_JSON),
                 ).andExpect(status().isOk)
                 .andReturn()
                 .response.contentAsString
@@ -117,7 +124,7 @@ class MigrationIntegrationTest {
     private fun getJson(path: String): JsonNode {
         val body =
             mvc
-                .perform(get(path).accept(APPLICATION_JSON))
+                .perform(get(path).with(adminJwt()).accept(APPLICATION_JSON))
                 .andExpect(status().isOk)
                 .andReturn()
                 .response.contentAsString
@@ -240,7 +247,7 @@ class MigrationIntegrationTest {
         val statusBefore: MigrationStatus =
             objectMapper.readValue(
                 mvc
-                    .perform(get("/rest/api/4/admin/migration-status").accept(APPLICATION_JSON))
+                    .perform(get("/rest/api/4/admin/migration-status").with(adminJwt()).accept(APPLICATION_JSON))
                     .andExpect(status().isOk)
                     .andReturn()
                     .response.contentAsString,
@@ -250,7 +257,7 @@ class MigrationIntegrationTest {
         val secondResult: BatchMigrationResult =
             objectMapper.readValue(
                 mvc
-                    .perform(post("/rest/api/4/admin/migrate-components").accept(APPLICATION_JSON))
+                    .perform(post("/rest/api/4/admin/migrate-components").with(adminJwt()).accept(APPLICATION_JSON))
                     .andExpect(status().isOk)
                     .andReturn()
                     .response.contentAsString,
@@ -264,7 +271,7 @@ class MigrationIntegrationTest {
         val statusAfter: MigrationStatus =
             objectMapper.readValue(
                 mvc
-                    .perform(get("/rest/api/4/admin/migration-status").accept(APPLICATION_JSON))
+                    .perform(get("/rest/api/4/admin/migration-status").with(adminJwt()).accept(APPLICATION_JSON))
                     .andExpect(status().isOk)
                     .andReturn()
                     .response.contentAsString,
@@ -283,7 +290,7 @@ class MigrationIntegrationTest {
         val body =
             mvc
                 .perform(
-                    post("/rest/api/4/admin/validate-migration/TESTONE").accept(APPLICATION_JSON),
+                    post("/rest/api/4/admin/validate-migration/TESTONE").with(adminJwt()).accept(APPLICATION_JSON),
                 ).andExpect(status().isOk)
                 .andReturn()
                 .response.contentAsString
@@ -309,7 +316,7 @@ class MigrationIntegrationTest {
         val status: MigrationStatus =
             objectMapper.readValue(
                 mvc
-                    .perform(get("/rest/api/4/admin/migration-status").accept(APPLICATION_JSON))
+                    .perform(get("/rest/api/4/admin/migration-status").with(adminJwt()).accept(APPLICATION_JSON))
                     .andExpect(status().isOk)
                     .andReturn()
                     .response.contentAsString,

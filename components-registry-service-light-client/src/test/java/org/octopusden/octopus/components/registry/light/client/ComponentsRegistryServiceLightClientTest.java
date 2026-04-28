@@ -9,12 +9,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.parallel.ResourceLock;
+import org.octopusden.cloud.commons.security.client.AuthServerClient;
 import org.octopusden.octopus.components.registry.light.client.dto.ArtifactComponentsDTO;
 import org.octopusden.octopus.components.registry.light.client.dto.ArtifactDependency;
 import org.octopusden.octopus.components.registry.light.client.impl.ClassicComponentsRegistryServiceClient;
 import org.octopusden.octopus.components.registry.light.client.impl.ClassicComponentsRegistryServiceClientUrlProvider;
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
@@ -45,6 +47,12 @@ class ComponentsRegistryServiceLightClientTest {
     ComponentsRegistryServiceLightClientTest() {
         configureSpringAppTestDataDir();
     }
+
+    // Prevents cloud-commons AuthServerClient from running OIDC discovery at bean init;
+    // this test only hits public v1/v2/v3 endpoints through Feign, so no auth is needed.
+    @MockBean
+    @SuppressWarnings("unused")
+    private AuthServerClient authServerClient;
 
     private final Path testDataDir = getTestResourcesPath();
     protected ObjectMapper objectMapper = new ObjectMapper();
