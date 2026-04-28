@@ -13,4 +13,5 @@ data class AuditLogResponse(
     val newValue: Map<String, Any?>?,
     val changeDiff: Map<String, Any?>?,
     val correlationId: String?,
+    val source: String,
 )

@@ -166,4 +166,5 @@ fun AuditLogEntity.toResponse(): AuditLogResponse =
         newValue = this.newValue,
         changeDiff = this.changeDiff,
         correlationId = this.correlationId,
+        source = this.source,
     )

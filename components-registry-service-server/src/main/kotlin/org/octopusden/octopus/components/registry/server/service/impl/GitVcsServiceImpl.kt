@@ -6,7 +6,6 @@ import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider
 import org.octopusden.octopus.components.registry.server.config.ComponentsRegistryProperties
 import org.octopusden.octopus.components.registry.server.service.VcsService
-import org.octopusden.releng.versions.NumericVersionFactory
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
@@ -26,7 +25,7 @@ import java.nio.file.Paths
 )
 class GitVcsServiceImpl(
     private val componentsRegistryProperties: ComponentsRegistryProperties,
-    private val numericVersionFactory: NumericVersionFactory,
+    private val gitTagResolver: GitTagResolver,
 ) : VcsService {
     override fun cloneComponentsRegistry(): String {
         deleteTemporaryDir()
@@ -56,36 +55,13 @@ class GitVcsServiceImpl(
     }
 
     private fun checkoutToValidatedCommit(git: Git): String {
-        val tagPrefix = componentsRegistryProperties.vcs.tagVersionPrefix
-
-        val (tag, commitId) =
-            git
-                .tagList()
-                .call()
-                .filter { it.name.startsWith(tagPrefix) }
-                .map { ref ->
-                    numericVersionFactory.create(ref.name) to ref
-                }.maxByOrNull { (version, _) -> version }
-                ?.let { (_, ref) ->
-                    ref.name to (ref.peeledObjectId?.name ?: ref.objectId.name)
-                }
-                ?: git
-                    .log()
-                    .setMaxCount(1)
-                    .call()
-                    .firstOrNull()
-                    ?.let { revCommit ->
-                        "master" to revCommit.name
-                    }
-                ?: throw IllegalStateException("Components Registry is empty, can not continue")
-
-        log.info("Checkout to $tag:$commitId")
+        val target = gitTagResolver.resolve(git, componentsRegistryProperties.vcs.tagVersionPrefix)
+        log.info("Checkout to ${target.ref}:${target.sha}")
         git
             .checkout()
-            .setName(commitId)
+            .setName(target.sha)
             .call()
-
-        return commitId
+        return target.sha
     }
 
     @PostConstruct
