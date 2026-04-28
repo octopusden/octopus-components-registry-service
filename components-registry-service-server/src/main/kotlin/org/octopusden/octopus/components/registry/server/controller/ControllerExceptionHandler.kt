@@ -9,8 +9,6 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpEntity
 import org.springframework.http.HttpStatus
-import org.springframework.security.access.AccessDeniedException
-import org.springframework.security.core.AuthenticationException
 import org.springframework.web.bind.annotation.ControllerAdvice
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.ResponseStatus
@@ -77,19 +75,12 @@ class ControllerExceptionHandler {
         return HttpEntity(ErrorResponse(e.localizedMessage))
     }
 
-    @ExceptionHandler(AccessDeniedException::class)
-    @ResponseStatus(HttpStatus.FORBIDDEN)
-    fun accessDeniedExceptionHandler(e: AccessDeniedException): HttpEntity<ErrorResponse> {
-        log.warn("Access denied: {}", e.localizedMessage)
-        return HttpEntity(ErrorResponse("Forbidden"))
-    }
-
-    @ExceptionHandler(AuthenticationException::class)
-    @ResponseStatus(HttpStatus.UNAUTHORIZED)
-    fun authenticationExceptionHandler(e: AuthenticationException): HttpEntity<ErrorResponse> {
-        log.warn("Authentication failed: {}", e.localizedMessage)
-        return HttpEntity(ErrorResponse("Unauthorized"))
-    }
+    // Note: AccessDeniedException and AuthenticationException are intercepted by Spring
+    // Security's ExceptionTranslationFilter BEFORE they ever reach @ControllerAdvice.
+    // Consistent JSON 401/403 bodies are produced by the AuthenticationEntryPoint /
+    // AccessDeniedHandler wired in WebSecurityConfig — see those for the actual envelope.
+    // Do not re-add @ExceptionHandler entries for the security exceptions here; they
+    // would silently never fire and create a false sense of coverage.
 
     companion object {
         val log: Logger = LoggerFactory.getLogger(ControllerExceptionHandler::class.java)

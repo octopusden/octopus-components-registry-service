@@ -5,6 +5,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.octopusden.cloud.commons.security.client.AuthServerClient
+import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
@@ -36,11 +37,15 @@ class MetricsTest {
 
     @Test
     fun shouldReturnMetrics() {
+        // /actuator/metrics is no longer in the permitAll list (only /actuator/health is),
+        // so the request authenticates as an admin to reach the endpoint. The shape of
+        // the metric payload is what's under test, not the auth gate itself.
         mvc
             .perform(
                 MockMvcRequestBuilders
                     .get(URI.create("/actuator/metrics/components.buildsystem.count"))
-                    .accept(MediaType.APPLICATION_JSON),
+                    .accept(MediaType.APPLICATION_JSON)
+                    .with(adminJwt()),
             ).andExpect(MockMvcResultMatchers.status().isOk)
             .andExpect(MockMvcResultMatchers.jsonPath("$.name").value("components.buildsystem.count"))
             .andExpect(MockMvcResultMatchers.jsonPath("$.measurements[0].statistic").value("VALUE"))

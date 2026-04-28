@@ -1,17 +1,22 @@
 package org.octopusden.octopus.components.registry.server.config
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.cloud.commons.security.config.AuthServerProperties
 import org.octopusden.cloud.commons.security.config.CloudCommonWebSecurityConfig
 import org.octopusden.cloud.commons.security.config.SecurityProperties
 import org.octopusden.cloud.commons.security.converter.UserInfoGrantedAuthoritiesConverter
+import org.octopusden.octopus.components.registry.core.dto.ErrorResponse
 import org.springframework.beans.factory.BeanInitializationException
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Import
 import org.springframework.http.HttpMethod
+import org.springframework.http.MediaType
+import org.springframework.security.access.AccessDeniedException
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
+import org.springframework.security.core.AuthenticationException
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator
 import org.springframework.security.oauth2.jwt.JwtDecoder
 import org.springframework.security.oauth2.jwt.JwtIssuerValidator
@@ -19,6 +24,10 @@ import org.springframework.security.oauth2.jwt.JwtValidators
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter
 import org.springframework.security.web.SecurityFilterChain
+import org.springframework.security.web.access.AccessDeniedHandler
+import org.springframework.security.web.AuthenticationEntryPoint
+import jakarta.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletResponse
 
 @Configuration
 @Import(AuthServerClient::class)
@@ -26,6 +35,7 @@ import org.springframework.security.web.SecurityFilterChain
 class WebSecurityConfig(
     private val authServerClient: AuthServerClient,
     private val authServerProperties: AuthServerProperties,
+    private val objectMapper: ObjectMapper,
     securityProperties: SecurityProperties,
 ) : CloudCommonWebSecurityConfig(authServerClient, securityProperties) {
     @Bean
@@ -36,7 +46,12 @@ class WebSecurityConfig(
                     .requestMatchers(
                         "/",
                         "/error",
-                        "/actuator/**",
+                        // Only health probes are anonymous. Other actuator endpoints
+                        // (env, metrics, heapdump, loggers, configprops) leak operational
+                        // detail and must stay behind auth even if the deployed
+                        // management.endpoints.web.exposure.include broadens.
+                        "/actuator/health",
+                        "/actuator/health/**",
                         // springdoc-openapi + swagger-ui: cover the group docs,
                         // YAML variant, web-jars (swagger-ui assets) — otherwise
                         // docs render as 401 for web-jars stylesheets/JS.
@@ -75,9 +90,46 @@ class WebSecurityConfig(
                         },
                     )
                 }
-            }.cors { it.disable() }
+            }
+            // Spring Security's ExceptionTranslationFilter intercepts AuthenticationException
+            // and AccessDeniedException before they would ever hit @ControllerAdvice. Wire
+            // entry-point and access-denied handlers HERE so 401/403 responses ship a JSON
+            // ErrorResponse envelope consistent with the rest of the API. Without these,
+            // Spring's defaults send back HTML / empty bodies and clients have to special-case
+            // the security paths.
+            .exceptionHandling { ex ->
+                ex.authenticationEntryPoint(jsonAuthenticationEntryPoint())
+                ex.accessDeniedHandler(jsonAccessDeniedHandler())
+            }
+            .cors { it.disable() }
+            // CSRF is intentionally disabled: registry is a stateless OAuth2 resource
+            // server. There is no session cookie a CSRF attacker could ride — every
+            // mutating request authenticates with a Bearer JWT presented in the
+            // Authorization header, which a cross-site form post cannot set.
+            // The portal BFF (octopus-components-management-portal) is the cookie-session
+            // surface and enforces CSRF there with a double-submit cookie. CodeQL
+            // "Disabled Spring CSRF protection" is acknowledged here.
             .csrf { it.disable() }
         return http.build()
+    }
+
+    @Bean
+    fun jsonAuthenticationEntryPoint(): AuthenticationEntryPoint =
+        AuthenticationEntryPoint { _: HttpServletRequest, response: HttpServletResponse, ex: AuthenticationException ->
+            writeJsonError(response, HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized", ex.localizedMessage)
+        }
+
+    @Bean
+    fun jsonAccessDeniedHandler(): AccessDeniedHandler =
+        AccessDeniedHandler { _: HttpServletRequest, response: HttpServletResponse, ex: AccessDeniedException ->
+            writeJsonError(response, HttpServletResponse.SC_FORBIDDEN, "Forbidden", ex.localizedMessage)
+        }
+
+    private fun writeJsonError(response: HttpServletResponse, status: Int, fallback: String, detail: String?) {
+        response.status = status
+        response.contentType = MediaType.APPLICATION_JSON_VALUE
+        response.characterEncoding = "UTF-8"
+        response.writer.write(objectMapper.writeValueAsString(ErrorResponse(detail.takeUnless { it.isNullOrBlank() } ?: fallback)))
     }
 
     /**
