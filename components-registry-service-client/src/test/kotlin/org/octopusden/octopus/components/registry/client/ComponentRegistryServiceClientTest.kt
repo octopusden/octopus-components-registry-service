@@ -1,14 +1,12 @@
 package org.octopusden.octopus.components.registry.client
 
-import java.util.Date
-import kotlin.test.assertFailsWith
-import kotlin.test.assertTrue
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.parallel.ResourceLock
+import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.api.build.tools.BuildTool
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.components.registry.client.impl.ClassicComponentsRegistryServiceClient
@@ -32,19 +30,29 @@ import org.octopusden.octopus.components.registry.core.exceptions.NotFoundExcept
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
 import org.octopusden.octopus.components.registry.test.BaseComponentsRegistryServiceTest
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.junit.jupiter.SpringExtension
+import java.util.Date
+import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @ExtendWith(SpringExtension::class)
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    classes = [ComponentRegistryServiceApplication::class]
+    classes = [ComponentRegistryServiceApplication::class],
 )
 @ActiveProfiles("common", "test")
 @ResourceLock(value = "SYSTEM_PROPERTIES")
 class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
+    // Prevents cloud-commons AuthServerClient from running OIDC discovery at bean init;
+    // this test only hits public v1/v2/v3 endpoints through Feign, so no auth is needed.
+    @MockBean
+    @Suppress("unused")
+    private lateinit var authServerClient: AuthServerClient
+
     @LocalServerPort
     private var port: Int = 0
 
@@ -53,13 +61,12 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
 
     @BeforeAll
     internal fun startupServer() {
-        componentsRegistryClient = ClassicComponentsRegistryServiceClient(
-            object : ClassicComponentsRegistryServiceClientUrlProvider {
-                override fun getApiUrl(): String {
-                    return "http://localhost:$port"
-                }
-            }
-        )
+        componentsRegistryClient =
+            ClassicComponentsRegistryServiceClient(
+                object : ClassicComponentsRegistryServiceClientUrlProvider {
+                    override fun getApiUrl(): String = "http://localhost:$port"
+                },
+            )
     }
 
     override fun getAllJiraComponentVersionRanges(): Collection<JiraComponentVersionRangeDTO> =
@@ -67,29 +74,45 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
 
     override fun getComponentV1(component: String): ComponentV1 = componentsRegistryClient.getById(component)
 
-    override fun getDetailedComponent(component: String, version: String) =
-        componentsRegistryClient.getDetailedComponent(component, version)
+    override fun getDetailedComponent(
+        component: String,
+        version: String,
+    ) = componentsRegistryClient.getDetailedComponent(component, version)
 
-    override fun getDetailedComponentVersion(component: String, version: String): DetailedComponentVersion =
-        componentsRegistryClient.getDetailedComponentVersion(component, version)
+    override fun getDetailedComponentVersion(
+        component: String,
+        version: String,
+    ): DetailedComponentVersion = componentsRegistryClient.getDetailedComponentVersion(component, version)
 
-    override fun getDetailedComponentVersions(component: String, versions: List<String>): DetailedComponentVersions =
-        componentsRegistryClient.getDetailedComponentVersions(component, VersionRequest(versions))
+    override fun getDetailedComponentVersions(
+        component: String,
+        versions: List<String>,
+    ): DetailedComponentVersions = componentsRegistryClient.getDetailedComponentVersions(component, VersionRequest(versions))
 
-    override fun getVcsSettings(component: String, version: String): VCSSettingsDTO =
-        componentsRegistryClient.getVCSSetting(component, version)
+    override fun getVcsSettings(
+        component: String,
+        version: String,
+    ): VCSSettingsDTO = componentsRegistryClient.getVCSSetting(component, version)
 
-    override fun getDistribution(component: String, version: String): DistributionDTO =
-        componentsRegistryClient.getComponentDistribution(component, version)
+    override fun getDistribution(
+        component: String,
+        version: String,
+    ): DistributionDTO = componentsRegistryClient.getComponentDistribution(component, version)
 
-    override fun getBuildTools(component: String, version: String): List<BuildTool> =
-        componentsRegistryClient.getBuildTools(component, version)
+    override fun getBuildTools(
+        component: String,
+        version: String,
+    ): List<BuildTool> = componentsRegistryClient.getBuildTools(component, version)
 
-    override fun getJiraComponentVersion(component: String, version: String): JiraComponentVersionDTO =
-        componentsRegistryClient.getJiraComponentForComponentAndVersion(component, version)
+    override fun getJiraComponentVersion(
+        component: String,
+        version: String,
+    ): JiraComponentVersionDTO = componentsRegistryClient.getJiraComponentForComponentAndVersion(component, version)
 
-    override fun getJiraComponentByProjectAndVersion(component: String, version: String): JiraComponentVersionDTO =
-        componentsRegistryClient.getJiraComponentByProjectAndVersion(component, version)
+    override fun getJiraComponentByProjectAndVersion(
+        component: String,
+        version: String,
+    ): JiraComponentVersionDTO = componentsRegistryClient.getJiraComponentByProjectAndVersion(component, version)
 
     override fun getJiraComponentsByProject(projectKey: String): Set<String> =
         componentsRegistryClient.getJiraComponentsByProject(projectKey)
@@ -100,11 +123,15 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
     override fun getComponentsDistributionsByJiraProject(projectKey: String): Map<String, DistributionDTO> =
         componentsRegistryClient.getComponentsDistributionByJiraProject(projectKey)
 
-    override fun getVCSSettingForProject(projectKey: String, version: String): VCSSettingsDTO =
-        componentsRegistryClient.getVCSSettingForProject(projectKey, version)
+    override fun getVCSSettingForProject(
+        projectKey: String,
+        version: String,
+    ): VCSSettingsDTO = componentsRegistryClient.getVCSSettingForProject(projectKey, version)
 
-    override fun getDistributionForProject(projectKey: String, version: String): DistributionDTO =
-        componentsRegistryClient.getDistributionForProject(projectKey, version)
+    override fun getDistributionForProject(
+        projectKey: String,
+        version: String,
+    ): DistributionDTO = componentsRegistryClient.getDistributionForProject(projectKey, version)
 
     override fun findComponentByArtifact(artifact: ArtifactDependency): VersionedComponent =
         componentsRegistryClient.findComponentByArtifact(artifact)
@@ -122,8 +149,7 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
     override fun getDependencyAliasToComponentMapping(): Map<String, String> =
         componentsRegistryClient.getDependencyAliasToComponentMapping()
 
-    override fun getComponentProductMapping(): Map<String, ProductTypes> =
-        componentsRegistryClient.getComponentProductMapping()
+    override fun getComponentProductMapping(): Map<String, ProductTypes> = componentsRegistryClient.getComponentProductMapping()
 
     override fun getServiceStatus(): ServiceStatusDTO = componentsRegistryClient.getServiceStatus()
 
@@ -132,15 +158,16 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
         assertEquals(56, componentsRegistryClient.getAllComponents().components.size)
         assertEquals(
             3,
-            componentsRegistryClient.getAllComponents("ssh://hg@mercurial/technical", null).components.size
+            componentsRegistryClient.getAllComponents("ssh://hg@mercurial/technical", null).components.size,
         )
         assertEquals(4, componentsRegistryClient.getAllComponents(null, BuildSystem.MAVEN).components.size)
         assertEquals(
             1,
-            componentsRegistryClient.getAllComponents(
-                "ssh://hg@mercurial/technical",
-                BuildSystem.MAVEN
-            ).components.size
+            componentsRegistryClient
+                .getAllComponents(
+                    "ssh://hg@mercurial/technical",
+                    BuildSystem.MAVEN,
+                ).components.size,
         )
         assertEquals(2, componentsRegistryClient.getAllComponents(systems = listOf("ALFA")).components.size)
         assertEquals(6, componentsRegistryClient.getAllComponents(systems = listOf("CLASSIC")).components.size)
@@ -181,35 +208,38 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
 
     @Test
     fun testFindComponentByArtifacts() {
-        val components = componentsRegistryClient.findComponentsByArtifacts(
-            listOf(
-                ArtifactDependency(
-                    "org.octopusden.octopus.sub2",
-                    "sub-component2",
-                    "0.1"
-                )
+        val components =
+            componentsRegistryClient.findComponentsByArtifacts(
+                listOf(
+                    ArtifactDependency(
+                        "org.octopusden.octopus.sub2",
+                        "sub-component2",
+                        "0.1",
+                    ),
+                ),
             )
-        )
         assertEquals(1, components.size)
         val versionedComponent = components.first()
         assertEquals("sub-component2", versionedComponent.id)
         assertEquals("0.1", versionedComponent.version)
 
         assertTrue(
-            componentsRegistryClient.findComponentsByArtifacts(listOf(ArtifactDependency("N/A", "N/A", "0.1")))
-                .isEmpty()
+            componentsRegistryClient
+                .findComponentsByArtifacts(listOf(ArtifactDependency("N/A", "N/A", "0.1")))
+                .isEmpty(),
         )
     }
 
     @Test
     fun findComponentsByDockerImagesOldStyle() {
-        val components = componentsRegistryClient.findComponentsByDockerImages(
-            setOf(
-                Image("test/versions-api", "10.1"),
-                Image("test-docker-1", "0.1"),
-                Image("not-found", "0.1")
+        val components =
+            componentsRegistryClient.findComponentsByDockerImages(
+                setOf(
+                    Image("test/versions-api", "10.1"),
+                    Image("test-docker-1", "0.1"),
+                    Image("not-found", "0.1"),
+                ),
             )
-        )
         assertEquals(2, components.size)
         assert(components.any { it.image.name == "test-docker-1" && it.component == "TEST_COMPONENT_WITH_DOCKER_1" && it.version == "0.1" })
         assert(components.any { it.image.name == "test/versions-api" && it.component == "TESTONE" && it.version == "10.1" })
@@ -221,60 +251,117 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
         val components =
             componentsRegistryClient.findComponentsByDockerImages(setOf(Image("test-docker-3", "10.1-amd64")))
         assertEquals(1, components.size)
-        assert(components.any { it.image.name == "test-docker-3" && it.component == "TEST_COMPONENT_WITH_DOCKER_3" && it.version == "10.1" })
+        assert(
+            components.any { it.image.name == "test-docker-3" && it.component == "TEST_COMPONENT_WITH_DOCKER_3" && it.version == "10.1" },
+        )
     }
-
 
     @Test
     fun findComponentsByDockerImagesNewStyle() {
-        val components = componentsRegistryClient.findComponentsByDockerImages(
-            setOf(
-                Image("test-docker-1_1", "0.1"),
-                Image("test-docker-1_2", "0.1.2-3-jdk11"),
-                Image("not-found", "0.1")
+        val components =
+            componentsRegistryClient.findComponentsByDockerImages(
+                setOf(
+                    Image("test-docker-1_1", "0.1"),
+                    Image("test-docker-1_2", "0.1.2-3-jdk11"),
+                    Image("not-found", "0.1"),
+                ),
             )
-        )
         assertEquals(2, components.size)
-        assert(components.any { it.image.name == "test-docker-1_1" && it.component == "TEST_COMPONENT_WITH_DOCKER_1_1" && it.version == "0.1" })
-        assert(components.any { it.image.name == "test-docker-1_2" && it.component == "TEST_COMPONENT_WITH_DOCKER_1_2" && it.version == "0.1.2-3" })
+        assert(
+            components.any {
+                it.image.name == "test-docker-1_1" &&
+                    it.component == "TEST_COMPONENT_WITH_DOCKER_1_1" &&
+                    it.version == "0.1"
+            },
+        )
+        assert(
+            components.any {
+                it.image.name == "test-docker-1_2" &&
+                    it.component == "TEST_COMPONENT_WITH_DOCKER_1_2" &&
+                    it.version == "0.1.2-3"
+            },
+        )
         assert(components.none { it.image.name == "not-found" })
     }
 
-
     @Test
     fun findComponentsByDockerImagesWithRanges() {
-        var components = componentsRegistryClient.findComponentsByDockerImages(
-            setOf(
-                Image("test-docker-first", "1.0.5"),
-                Image("test-docker-second", "1.0.5-amd64"),
+        var components =
+            componentsRegistryClient.findComponentsByDockerImages(
+                setOf(
+                    Image("test-docker-first", "1.0.5"),
+                    Image("test-docker-second", "1.0.5-amd64"),
+                ),
             )
-        )
         assertEquals(1, components.size)
-        assert(components.none { it.image.name == "test-docker-first" && it.component == "TEST_COMPONENT_WITH_DOCKER_2" && it.version == "1.0.5" })
-        assert(components.any { it.image.name == "test-docker-second" && it.component == "TEST_COMPONENT_WITH_DOCKER_2" && it.version == "1.0.5" })
-
-        components = componentsRegistryClient.findComponentsByDockerImages(
-            setOf(
-                Image("test-docker-first", "0.0.5"),
-                Image("test-docker-second", "0.0.5")
-            )
+        assert(
+            components.none {
+                it.image.name == "test-docker-first" &&
+                    it.component == "TEST_COMPONENT_WITH_DOCKER_2" &&
+                    it.version == "1.0.5"
+            },
         )
+        assert(
+            components.any {
+                it.image.name == "test-docker-second" &&
+                    it.component == "TEST_COMPONENT_WITH_DOCKER_2" &&
+                    it.version == "1.0.5"
+            },
+        )
+
+        components =
+            componentsRegistryClient.findComponentsByDockerImages(
+                setOf(
+                    Image("test-docker-first", "0.0.5"),
+                    Image("test-docker-second", "0.0.5"),
+                ),
+            )
         assertEquals(1, components.size)
-        assert(components.any { it.image.name == "test-docker-first" && it.component == "TEST_COMPONENT_WITH_DOCKER_2" && it.version == "0.0.5" })
-        assert(components.none { it.image.name == "test-docker-second" && it.component == "TEST_COMPONENT_WITH_DOCKER_2" && it.version == "0.0.5" })
-
-        components = componentsRegistryClient.findComponentsByDockerImages(
-            setOf(
-                Image("test-docker-first", "0.0.5"),
-                Image("test-docker-second", "1.0.5-amd64"),
-                Image("test-docker-third", "2.0.5-arm64")
-            )
+        assert(
+            components.any {
+                it.image.name == "test-docker-first" &&
+                    it.component == "TEST_COMPONENT_WITH_DOCKER_2" &&
+                    it.version == "0.0.5"
+            },
         )
+        assert(
+            components.none {
+                it.image.name == "test-docker-second" &&
+                    it.component == "TEST_COMPONENT_WITH_DOCKER_2" &&
+                    it.version == "0.0.5"
+            },
+        )
+
+        components =
+            componentsRegistryClient.findComponentsByDockerImages(
+                setOf(
+                    Image("test-docker-first", "0.0.5"),
+                    Image("test-docker-second", "1.0.5-amd64"),
+                    Image("test-docker-third", "2.0.5-arm64"),
+                ),
+            )
         assertEquals(3, components.size)
-        assert(components.any { it.image.name == "test-docker-first" && it.component == "TEST_COMPONENT_WITH_DOCKER_2" && it.version == "0.0.5" })
-        assert(components.any { it.image.name == "test-docker-second" && it.component == "TEST_COMPONENT_WITH_DOCKER_2" && it.version == "1.0.5" })
-        assert(components.any { it.image.name == "test-docker-third" && it.component == "TEST_COMPONENT_WITH_DOCKER_2" && it.version == "2.0.5" })
-
+        assert(
+            components.any {
+                it.image.name == "test-docker-first" &&
+                    it.component == "TEST_COMPONENT_WITH_DOCKER_2" &&
+                    it.version == "0.0.5"
+            },
+        )
+        assert(
+            components.any {
+                it.image.name == "test-docker-second" &&
+                    it.component == "TEST_COMPONENT_WITH_DOCKER_2" &&
+                    it.version == "1.0.5"
+            },
+        )
+        assert(
+            components.any {
+                it.image.name == "test-docker-third" &&
+                    it.component == "TEST_COMPONENT_WITH_DOCKER_2" &&
+                    it.version == "2.0.5"
+            },
+        )
     }
 
     @Test
@@ -283,5 +370,4 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
         assertEquals(getDistribution("TEST_COMPONENT_WITH_DOCKER_2", "1.2.3").docker, "test-docker-second:1.2.3-amd64")
         assertEquals(getDistribution("TEST_COMPONENT_WITH_DOCKER_5", "7.6.5").docker, "test-docker-5:7.6.5-amd64,test-docker-5:7.6.5-arm64")
     }
-
 }

@@ -1,6 +1,13 @@
 package org.octopusden.octopus.components.registry.server
 
+import com.github.tomakehurst.wiremock.WireMockServer
+import com.github.tomakehurst.wiremock.client.WireMock.aResponse
+import com.github.tomakehurst.wiremock.client.WireMock.get
+import com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration
+import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.Assertions
+import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.io.TempDir
@@ -75,6 +82,10 @@ class FatJarStartupIntegrationTest {
                 "-Dcomponents-registry.work-dir=${tempDir.toAbsolutePath()}",
                 "-Dcomponents-registry.project-registry-path=${projectRegistryFile.toAbsolutePath()}",
                 "-Dserver.port=$port",
+                // AuthServerClient's eager OpenID discovery needs a reachable auth-server
+                // to complete bean initialization; point it at the WireMock stub started in @BeforeAll.
+                "-Dauth-server.url=http://localhost:$wireMockPort",
+                "-Dauth-server.realm=test",
                 "-jar",
                 fatJar.absolutePath,
             )
@@ -166,6 +177,46 @@ class FatJarStartupIntegrationTest {
     private fun findRandomPort(): Int {
         ServerSocket(0).use { socket ->
             return socket.localPort
+        }
+    }
+
+    companion object {
+        private lateinit var wireMock: WireMockServer
+        private var wireMockPort: Int = 0
+
+        @JvmStatic
+        @BeforeAll
+        fun startAuthServerStub() {
+            wireMock = WireMockServer(WireMockConfiguration.options().dynamicPort())
+            wireMock.start()
+            wireMockPort = wireMock.port()
+
+            val openidConfig =
+                """
+                {
+                  "issuer": "http://localhost:$wireMockPort/realms/test",
+                  "authorization_endpoint": "http://localhost:$wireMockPort/realms/test/protocol/openid-connect/auth",
+                  "token_endpoint": "http://localhost:$wireMockPort/realms/test/protocol/openid-connect/token",
+                  "userinfo_endpoint": "http://localhost:$wireMockPort/realms/test/protocol/openid-connect/userinfo",
+                  "jwks_uri": "http://localhost:$wireMockPort/realms/test/protocol/openid-connect/certs",
+                  "end_session_endpoint": "http://localhost:$wireMockPort/realms/test/protocol/openid-connect/logout"
+                }
+                """.trimIndent()
+
+            wireMock.stubFor(
+                get(urlEqualTo("/realms/test/.well-known/openid-configuration"))
+                    .willReturn(aResponse().withStatus(200).withHeader("Content-Type", "application/json").withBody(openidConfig)),
+            )
+            wireMock.stubFor(
+                get(urlEqualTo("/realms/test/protocol/openid-connect/certs"))
+                    .willReturn(aResponse().withStatus(200).withHeader("Content-Type", "application/json").withBody("""{"keys":[]}""")),
+            )
+        }
+
+        @JvmStatic
+        @AfterAll
+        fun stopAuthServerStub() {
+            if (::wireMock.isInitialized) wireMock.stop()
         }
     }
 

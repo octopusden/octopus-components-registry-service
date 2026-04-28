@@ -18,7 +18,6 @@ import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.junit.jupiter.SpringExtension
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
-import java.util.Date
 
 @AutoConfigureMockMvc
 @ExtendWith(SpringExtension::class)
@@ -40,19 +39,22 @@ class ComponentsRegistryServiceControllerTest : MockMvcRegistryTestSupport() {
     }
 
     @Test
-    fun testUpdateCacheStatus() {
-        val statusOnStart = getServiceStatus()
-
-        val timeBeforeUpdate = Date()
-
-        Assertions.assertTrue(timeBeforeUpdate.after(statusOnStart.cacheUpdatedAt))
+    fun testUpdateCacheReturnsGone() {
+        // The legacy VCS refresh endpoint is retired in the DB-backed architecture.
+        // It must return 410 Gone and MUST NOT mutate cache state — otherwise callers
+        // that still hit it silently get a VCS refresh that masks the migration.
+        val statusBefore = getServiceStatus()
 
         mvc
             .perform(MockMvcRequestBuilders.put("/rest/api/2/components-registry/service/updateCache"))
-            .andExpect(status().isOk)
+            .andExpect(status().isGone)
 
-        val statusOnUpdateCacheStatusDTO = getServiceStatus()
-        Assertions.assertTrue(timeBeforeUpdate.before(statusOnUpdateCacheStatusDTO.cacheUpdatedAt))
+        val statusAfter = getServiceStatus()
+        Assertions.assertEquals(
+            statusBefore.cacheUpdatedAt,
+            statusAfter.cacheUpdatedAt,
+            "410 Gone must not trigger a cache refresh",
+        )
     }
 
     @Test

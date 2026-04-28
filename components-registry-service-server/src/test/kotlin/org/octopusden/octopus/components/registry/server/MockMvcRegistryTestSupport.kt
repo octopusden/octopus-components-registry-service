@@ -2,6 +2,7 @@ package org.octopusden.octopus.components.registry.server
 
 import com.fasterxml.jackson.core.type.TypeReference
 import org.junit.jupiter.api.Assertions
+import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.api.build.tools.BuildTool
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.components.registry.core.dto.ArtifactComponentsDTO
@@ -22,6 +23,7 @@ import org.octopusden.octopus.components.registry.core.dto.VersionRequest
 import org.octopusden.octopus.components.registry.core.dto.VersionedComponent
 import org.octopusden.octopus.components.registry.test.BaseComponentsRegistryServiceTest
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.http.MediaType.APPLICATION_JSON
 import org.springframework.mock.web.MockHttpServletResponse
 import org.springframework.test.web.servlet.MockMvc
@@ -30,6 +32,13 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.net.URI
 
 abstract class MockMvcRegistryTestSupport : BaseComponentsRegistryServiceTest() {
+    // Prevents the real AuthServerClient from running OpenID discovery at bean init;
+    // tests use SecurityMockMvcRequestPostProcessors.jwt() which bypasses the converter.
+    // Field is injected by @MockBean via reflection, not referenced directly in source.
+    @MockBean
+    @Suppress("UnusedPrivateProperty")
+    protected lateinit var authServerClient: AuthServerClient
+
     @Autowired
     protected lateinit var mvc: MockMvc
 

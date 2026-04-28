@@ -4,10 +4,13 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
+import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
+import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.http.MediaType
 import org.springframework.test.annotation.DirtiesContext
 import org.springframework.test.context.ActiveProfiles
@@ -38,6 +41,10 @@ import java.nio.file.Paths
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Timeout(120)
 class GhostComponentAfterRenameTest {
+    @MockBean
+    @Suppress("UnusedPrivateProperty")
+    private lateinit var authServerClient: AuthServerClient
+
     @Autowired
     private lateinit var mvc: MockMvc
 
@@ -60,7 +67,7 @@ class GhostComponentAfterRenameTest {
 
         val initial =
             mvc
-                .perform(get("/rest/api/4/components/$oldName"))
+                .perform(get("/rest/api/4/components/$oldName").with(adminJwt()))
                 .andExpect(status().isOk)
                 .andReturn()
                 .response.contentAsString
@@ -71,12 +78,13 @@ class GhostComponentAfterRenameTest {
         mvc
             .perform(
                 patch("/rest/api/4/components/$id")
+                    .with(adminJwt())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"version":$version,"name":"$newName"}"""),
             ).andExpect(status().isOk)
 
         // v4 happy path: new name resolves, old name is gone.
-        mvc.perform(get("/rest/api/4/components/$newName")).andExpect(status().isOk)
+        mvc.perform(get("/rest/api/4/components/$newName").with(adminJwt())).andExpect(status().isOk)
 
         // The real assertion — v1 must agree.
         // Today this fails: ComponentRoutingResolver falls back to the git resolver

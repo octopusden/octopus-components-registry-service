@@ -3,10 +3,13 @@ package org.octopusden.octopus.components.registry.server.controller
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
+import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
+import org.octopusden.octopus.components.registry.server.support.viewerJwt
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.test.annotation.DirtiesContext
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.servlet.MockMvc
@@ -32,6 +35,10 @@ import java.nio.file.Paths
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Timeout(120)
 class ListComponentsSystemFilterTest {
+    @MockBean
+    @Suppress("UnusedPrivateProperty")
+    private lateinit var authServerClient: AuthServerClient
+
     @Autowired
     private lateinit var mvc: MockMvc
 
@@ -44,14 +51,14 @@ class ListComponentsSystemFilterTest {
     @Test
     @DisplayName("listComponents without filter.system returns 200")
     fun listComponents_noSystemFilter_ok() {
-        mvc.perform(get("/rest/api/4/components")).andExpect(status().isOk)
+        mvc.perform(get("/rest/api/4/components").with(viewerJwt())).andExpect(status().isOk)
     }
 
     @Test
     @DisplayName("listComponents with filter.system must return 400 until native array-contains is implemented")
     fun listComponents_withSystemFilter_rejected() {
         mvc
-            .perform(get("/rest/api/4/components").param("system", "ANYSYSTEM"))
+            .perform(get("/rest/api/4/components").with(viewerJwt()).param("system", "ANYSYSTEM"))
             .andExpect(status().isBadRequest)
     }
 }

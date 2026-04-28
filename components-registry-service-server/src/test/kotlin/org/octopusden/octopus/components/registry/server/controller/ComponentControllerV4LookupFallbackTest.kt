@@ -6,9 +6,11 @@ import org.junit.jupiter.api.Timeout
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
+import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
+import org.octopusden.octopus.components.registry.server.support.editorJwt
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
@@ -43,6 +45,10 @@ import java.util.UUID
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Timeout(120)
 class ComponentControllerV4LookupFallbackTest {
+    @MockBean
+    @Suppress("UnusedPrivateProperty")
+    private lateinit var authServerClient: AuthServerClient
+
     @Autowired
     private lateinit var mvc: MockMvc
 
@@ -63,7 +69,7 @@ class ComponentControllerV4LookupFallbackTest {
             .thenThrow(IllegalStateException("simulated db failure"))
 
         mvc
-            .perform(get("/rest/api/4/components/$uuid"))
+            .perform(get("/rest/api/4/components/$uuid").with(editorJwt()))
             .andExpect(status().is5xxServerError)
 
         // The fallback must NOT have fired — otherwise DB-down silently
@@ -83,7 +89,7 @@ class ComponentControllerV4LookupFallbackTest {
         // Outer result here is 404 because the stubbed name lookup also throws,
         // but the important assertion is that the name path was reached.
         mvc
-            .perform(get("/rest/api/4/components/$uuid"))
+            .perform(get("/rest/api/4/components/$uuid").with(editorJwt()))
             .andExpect(status().isNotFound)
 
         verify(componentManagementService).getComponentByName(uuid.toString())
