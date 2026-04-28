@@ -1,6 +1,8 @@
 package org.octopusden.octopus.components.registry.server.config
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import jakarta.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletResponse
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.cloud.commons.security.config.AuthServerProperties
 import org.octopusden.cloud.commons.security.config.CloudCommonWebSecurityConfig
@@ -23,11 +25,9 @@ import org.springframework.security.oauth2.jwt.JwtIssuerValidator
 import org.springframework.security.oauth2.jwt.JwtValidators
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter
+import org.springframework.security.web.AuthenticationEntryPoint
 import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.web.access.AccessDeniedHandler
-import org.springframework.security.web.AuthenticationEntryPoint
-import jakarta.servlet.http.HttpServletRequest
-import jakarta.servlet.http.HttpServletResponse
 
 @Configuration
 @Import(AuthServerClient::class)
@@ -100,8 +100,7 @@ class WebSecurityConfig(
             .exceptionHandling { ex ->
                 ex.authenticationEntryPoint(jsonAuthenticationEntryPoint())
                 ex.accessDeniedHandler(jsonAccessDeniedHandler())
-            }
-            .cors { it.disable() }
+            }.cors { it.disable() }
             // CSRF is intentionally disabled: registry is a stateless OAuth2 resource
             // server. There is no session cookie a CSRF attacker could ride — every
             // mutating request authenticates with a Bearer JWT presented in the
@@ -125,7 +124,12 @@ class WebSecurityConfig(
             writeJsonError(response, HttpServletResponse.SC_FORBIDDEN, "Forbidden", ex.localizedMessage)
         }
 
-    private fun writeJsonError(response: HttpServletResponse, status: Int, fallback: String, detail: String?) {
+    private fun writeJsonError(
+        response: HttpServletResponse,
+        status: Int,
+        fallback: String,
+        detail: String?,
+    ) {
         response.status = status
         response.contentType = MediaType.APPLICATION_JSON_VALUE
         response.characterEncoding = "UTF-8"
