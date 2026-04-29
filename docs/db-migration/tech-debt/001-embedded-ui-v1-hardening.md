@@ -2,19 +2,28 @@
 
 ## Status
 
-Open
+**Superseded** by UI extraction to `octopus-components-management-portal` (commit `26278f2`, PR #147, 2026‑04‑14).
 
-## Context
+The embedded SPA model that this tech‑debt entry targeted no longer exists in this repository:
+- `components-registry-ui` Gradle module — deleted.
+- `SpaWebConfig.kt` — deleted.
+- `copyUiDist` / `processResources` UI plumbing — removed from `build.gradle`.
 
-The current V1 implementation ships the React UI and backend API as a single deployable unit:
+SPA fallback, packaging, and base‑path concerns are now Portal repository responsibilities. See [ADR-012](../adr/012-portal-architecture.md).
 
-- UI is built in `components-registry-ui`
-- server packaging copies `dist/` into the Spring Boot artifact
-- Spring MVC serves the SPA from classpath static resources
+The original problem description is preserved below for historical context only — it does not describe the current code.
 
-This is acceptable for V1 and matches the current operational simplicity goals, but a few technical
-issues should be corrected now to keep the implementation maintainable and avoid accidental
-coupling.
+---
+
+## Context (historical, before extraction)
+
+The previous V1 implementation shipped the React UI and backend API as a single deployable unit:
+
+- UI was built in `components-registry-ui`
+- server packaging copied `dist/` into the Spring Boot artifact
+- Spring MVC served the SPA from classpath static resources
+
+The embedded approach was acceptable for V1 but introduced coupling concerns that the extraction in PR #147 resolved structurally rather than via the hardening proposed here.
 
 ## Problem Statement
 

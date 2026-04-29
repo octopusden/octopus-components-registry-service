@@ -1,7 +1,13 @@
 # ADR-009: UI Repository Strategy — Monorepo vs Separate Repo
 
 ## Status
-Proposed
+**Superseded by [ADR-012](012-portal-architecture.md)** (UI extracted to `octopus-components-management-portal` as a Spring Cloud Gateway BFF, 2026‑04‑14, commit `26278f2`, PR #147).
+
+## Resolution
+
+The recommendation in this ADR was **Option B-2 (monorepo with embedded JAR, single Pod)**. That recommendation **was not implemented**. The team chose **Option A (separate repository)** instead, with a Spring Cloud Gateway frontend that proxies `/rest/**` and `/auth/**` to this service. Rationale and consequences are captured in ADR-012.
+
+This ADR is preserved for historical context (analysis of A/B/C trade-offs) but the decision section is no longer authoritative.
 
 ## Context
 

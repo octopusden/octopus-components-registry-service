@@ -1,7 +1,7 @@
 # Technical Design Document: Components Registry DB Migration
 
 ## Status
-**Draft** | Date: 2026-03-08
+**Living document** | Last updated: 2026-04-29 (was Draft 2026-03-08)
 
 ## 1. Overview
 
@@ -89,8 +89,11 @@ distributions (1) ──→ (N) distribution_artifacts
 
 vcs_settings (1) ──→ (N) vcs_settings_entries (for MULTIPLY type)
 
-audit_log (standalone, indexed by entity_type + entity_id)
+audit_log (standalone, indexed by entity_type + entity_id, source ∈ {api, git-history})
 dependency_mappings (standalone key-value)
+git_history_import_state (single-row idempotency state for /admin/migrate-history)
+field_overrides (per-component per-field per-version-range overrides)
+component_artifact_ids (owner XOR: component_id OR component_version_id, V4)
 ```
 
 ### 3.2 Polymorphic Owner Pattern
@@ -129,13 +132,15 @@ CREATE INDEX idx_components_metadata ON components USING GIN (metadata);
 Complete DDL is maintained in Flyway migration files (see §3.1 ERD above for entity relationships). The full SQL will be finalized at implementation start and placed in:
 
 
-Flyway migration files will be placed in:
-```
-components-registry-service-server/src/main/resources/db/migration/
-  V1__initial_schema.sql
-  V2__indexes.sql
-  V3__audit_log.sql
-```
+Flyway migration files live at `components-registry-service-server/src/main/resources/db/migration/`:
+
+| Version | File | Purpose |
+|---|---|---|
+| V1 | `V1__initial_schema.sql` | Initial schema — components, versions, build/escrow/vcs/distribution/jira configs, audit_log, field_overrides, component_artifact_ids, etc. |
+| V2 | `V2__indexes.sql` | Performance indexes on hot lookup paths. |
+| V3 | `V3__text_columns.sql` | Widen VARCHAR(500) columns to TEXT to fix overflow regressions. |
+| V4 | `V4__artifact_ids_version_level.sql` | Allow `component_artifact_ids` to belong to either a component or a `component_version` (XOR `CHECK` + nullable `component_id`, new nullable `component_version_id`). Mirrors the polymorphic owner pattern used by other config tables. |
+| V5 | `V5__audit_source_and_history_state.sql` | Add `audit_log.source VARCHAR(20) NOT NULL DEFAULT 'api'` (distinguishes runtime API events from synthetic backfill rows produced by `/admin/migrate-history`); plain `CREATE INDEX idx_audit_source` (acceptable while the table is small — see file header for the CONCURRENTLY workaround if replayed against a large table). Create `git_history_import_state` (single-row idempotency state, no resume support; PK `import_key`, fields `target_ref`, `target_sha`, `status`, `updated_at`). |
 
 ## 4. JPA Entities
 
@@ -273,14 +278,57 @@ GET    /rest/api/4/audit/recent?page=0&size=50
 ```
 
 #### Admin
+All endpoints under `/rest/api/4/admin/**` are gated at the class level by `@PreAuthorize("@permissionEvaluator.canImport()")` (`IMPORT_DATA`). See `AdminControllerV4.kt` for source of truth.
+
 ```
-POST   /rest/api/4/admin/import
-  Behavior: Parses Groovy/Kotlin DSL from configured Git repo, writes to DB
-  Auth:     IMPORT_DATA
+POST   /rest/api/4/admin/migrate-component/{name}?dryRun={bool}
+  Response: MigrationResult
+  Behavior: Imports a single component from Git DSL into DB (synchronous).
+
+POST   /rest/api/4/admin/migrate-components
+POST   /rest/api/4/admin/import         (alias of migrate-components)
+  Response: BatchMigrationResult
+  Behavior: Bulk synchronous import. Long-running. Prefer the async variant
+            below for full migrations.
+
+POST   /rest/api/4/admin/migrate
+  Response: 202 Accepted (newly started) or 409 Conflict (existing RUNNING
+            job — re-run guard) with body MigrationJobResponse.
+  Behavior: Starts async migration on a background executor. Re-running while
+            a job is RUNNING is a no-op (returns 409 with the existing state),
+            so the SPA "attaches" rather than spawning duplicates.
+  Contract: MIG-027 in requirements-migration.md.
+
+GET    /rest/api/4/admin/migrate/job
+  Response: 200 OK with MigrationJobResponse, or 404 if no job has been
+            started since pod startup.
+  Behavior: Polled by Portal MigrationPanel. State is in-memory; pod restart
+            loses progress and the next poll yields 404. Tracked as MIG-028.
+
+POST   /rest/api/4/admin/migrate-defaults
+  Response: Map of imported keys
+  Behavior: Imports Defaults.groovy → component_defaults (build, jira,
+            distribution, vcs, escrow, doc, deprecated, octopusVersion).
+
+GET    /rest/api/4/admin/migration-status
+  Response: MigrationStatus { dbCount, gitCount, total }
+
+POST   /rest/api/4/admin/validate-migration/{name}
+  Response: ValidationResult
+  Behavior: Deep-compare Git vs DB resolver output for the named component.
+
+POST   /rest/api/4/admin/migrate-history?toRef={ref}&reset={bool}
+  Response: HistoryImportResult { targetRef, targetSha, processedCommits,
+            skippedNoGroovy, skippedParseError, skippedUnknownNames,
+            auditRecords, durationMs }
+  Behavior: Backfills git commit history into audit_log with
+            source = 'git-history'. Idempotent through git_history_import_state
+            (single-row, INSERT … ON CONFLICT DO NOTHING claim). reset=true
+            clears state and re-runs.
+  Contract: MIG-026.
 
 GET    /rest/api/4/admin/export
-  Response: JSON export of all components
-  Auth:     ACCESS_COMPONENTS
+  Response: { "status": "not_implemented" } — stub, not yet implemented.
 ```
 
 #### Configuration (Field Visibility & Defaults)
@@ -312,6 +360,22 @@ The API schema (v1/v2/v3/v4 request/response DTOs) is **identical across all dep
 - Server-side defaults (values applied when field is absent in create request)
 - Server-side enforcement (hidden/readonly fields ignore client-provided values)
 
+#### Service info & current user
+
+These endpoints are cross-cutting (Portal footer + identity display) and live outside the component CRUD tree.
+
+```
+GET    /rest/api/4/info
+  Response: { "name": "<artifact-name>", "version": "<build-version>" }
+  Auth:     Anonymous (permitAll). Sourced from BuildProperties.
+  Contract: SYS-033 in requirements-common.md.
+
+GET    /auth/me           (note: top-level, NOT under /rest/api/4)
+  Response: User { username, roles, groups } from octopus-cloud-commons
+  Auth:     Authenticated (returns 401 without JWT).
+  Contract: SYS-034 in requirements-common.md.
+```
+
 ## 6. Security
 
 ### 6.1 Dependencies
@@ -323,20 +387,47 @@ implementation("org.octopusden.octopus-cloud-commons:octopus-security-common:2.0
 ```
 
 ### 6.2 Configuration
-```kotlin
-@Configuration
-@Import(AuthServerClient::class)
-@EnableConfigurationProperties(SecurityProperties::class)
-class WebSecurityConfig(
-    authServerClient: AuthServerClient,
-    securityProperties: SecurityProperties
-) : CloudCommonWebSecurityConfig(authServerClient, securityProperties)
-```
 
-### 6.3 Backward Compatibility
-- v1/v2/v3 endpoints: **permit all** initially (existing consumers don't send JWT)
-- v4 endpoints: **require authentication** via `@PreAuthorize`
-- Gradual migration: consumers can be updated to pass JWT tokens over time
+Implemented in `WebSecurityConfig.kt` (extends `CloudCommonWebSecurityConfig` from octopus-security-common). Filter-chain rules (canonical source = `WebSecurityConfig.kt`):
+
+- `/rest/api/{1,2,3}/**` → `permitAll()` (legacy Feign clients without JWT).
+- `GET /rest/api/4/components/**`, `GET /rest/api/4/config/**` → `permitAll()`. Anonymous users implicitly carry `ROLE_ANONYMOUS` which the `octopus-security.roles` map binds to `ACCESS_COMPONENTS`, so `@PreAuthorize` annotations on GET endpoints also pass without auth.
+- `GET /rest/api/4/info` → `permitAll()` (anonymous build-info for Portal footer; SYS-033).
+- All other `/rest/api/4/**` (writes, admin, audit) → `authenticated()` + `@PreAuthorize`.
+- `/auth/**` → `authenticated()` (covers `/auth/me`, SYS-034).
+- `/actuator/**`, `/swagger-ui/**`, `/v3/api-docs/**` → `permitAll()` from parent.
+- CSRF disabled (CRS is a Resource Server; CSRF is enforced by Portal at the gateway level — see ADR-012).
+
+### 6.3 Permission Evaluator
+
+`PermissionEvaluator` extends `BasePermissionEvaluator` (cloud-commons). Method-level helpers wired into `@PreAuthorize` SpEL:
+
+| Method | Required permission | Used on |
+|---|---|---|
+| `canEditComponent(name)` | `EDIT_COMPONENTS` | `POST /components`, `PATCH /components/{id}` (plain edit) |
+| `canArchiveComponent(name)` | `ARCHIVE_COMPONENTS` | `PATCH /components/{id}` when `archived` is in payload |
+| `canRenameComponent(name)` | `RENAME_COMPONENTS` | `PATCH /components/{id}` when `name` is in payload |
+| `canDeleteComponent(name)` | `DELETE_COMPONENTS` | `DELETE /components/{id}` |
+| `canImport()` | `IMPORT_DATA` | class-level on `AdminControllerV4` (covers all admin endpoints incl. `/migrate`, `/migrate-history`, etc.) |
+| `hasPermission("ACCESS_AUDIT")` | `ACCESS_AUDIT` | `AuditControllerV4` |
+
+The `PATCH /components/{id}` SpEL guard combines these (the path variable is a `UUID`; the helper takes `String`, so the SpEL passes `#id.toString()`):
+```
+@PreAuthorize("@permissionEvaluator.canEditComponent(#id.toString()) and (#request.archived == null or @permissionEvaluator.canArchiveComponent(#id.toString())) and (#request.name == null or @permissionEvaluator.canRenameComponent(#id.toString()))")
+```
+Plain edits stay on `EDIT_COMPONENTS`; archive/rename payloads fail closed with 403 for anyone without the extra permission.
+
+Per-component ownership (`componentOwner`, `releaseManager`) is a deferred layer — the permission names are stable across that future change so the role map does not need to move.
+
+### 6.4 Audit `changedBy` wiring
+
+Every `applicationEventPublisher.publishEvent(AuditEvent(...))` call site reads the username from `SecurityService.getCurrentUser().username` (cloud-commons), with a fallback of `"system"` for events triggered outside an authenticated context (e.g. background jobs). The fallback path is exercised by `/admin/migrate-history` rows, which still want a non-null `changed_by` for audit consistency.
+
+### 6.5 Backward Compatibility
+- v1/v2/v3 endpoints: **permit all** (existing 7+ Feign client consumers don't send JWT).
+- v4 reads (`GET /components/**`, `/config/**`): **permit all** through the filter chain; method-level `@PreAuthorize` passes thanks to `ROLE_ANONYMOUS → ACCESS_COMPONENTS` in the role map.
+- v4 writes/admin/audit: **require JWT** + the permission named in ADR-004.
+- Gradual migration: consumers can be updated to pass JWT tokens over time. Phase 3 (close anonymous reads on v1/v2/v3) requires coordinated update of all consumers — timeline TBD.
 
 ## 7. Data Migration
 
