@@ -9,9 +9,10 @@ import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
-import org.octopusden.octopus.components.registry.server.service.BatchMigrationResult
-import org.octopusden.octopus.components.registry.server.service.FullMigrationResult
-import org.octopusden.octopus.components.registry.server.service.ImportService
+import org.octopusden.octopus.components.registry.server.service.JobState
+import org.octopusden.octopus.components.registry.server.service.MigrationJobService
+import org.octopusden.octopus.components.registry.server.service.MigrationJobState
+import org.octopusden.octopus.components.registry.server.service.StartMigrationResult
 import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.octopusden.octopus.components.registry.server.support.editorJwt
 import org.springframework.beans.factory.annotation.Autowired
@@ -24,6 +25,7 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.time.Instant
 
 // MIG-024: pin both gates that protect POST /rest/api/4/admin/migrate:
 //   - URL-level requestMatchers("/rest/api/4/**").authenticated() in
@@ -31,10 +33,13 @@ import java.nio.file.Paths
 //   - Class-level @PreAuthorize("@permissionEvaluator.canImport()") on
 //     AdminControllerV4 → 403 for authenticated callers without IMPORT_DATA.
 //
-// ImportService is mocked so the positive path does not actually run a
-// migration in the test context. Slice tests (@WebMvcTest) wouldn't load
-// the real WebSecurityConfig, so the only meaningful regression test is
-// a full @SpringBootTest.
+// MigrationJobService is mocked so the positive path doesn't actually
+// kick a background migration in the test context. Slice tests
+// (@WebMvcTest) wouldn't load the real WebSecurityConfig, so the only
+// meaningful regression test is a full @SpringBootTest.
+//
+// The endpoint contract changed in this PR: it now returns 202 Accepted
+// with a JobResponse instead of 200 OK with FullMigrationResult.
 @AutoConfigureMockMvc
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
@@ -47,48 +52,59 @@ class AdminControllerV4SecurityTest {
     private lateinit var authServerClient: AuthServerClient
 
     @MockBean
-    private lateinit var importService: ImportService
+    private lateinit var migrationJobService: MigrationJobService
 
     @Autowired
     private lateinit var mvc: MockMvc
 
     @Test
-    @DisplayName("MIG-024: POST /admin/migrate without JWT returns 401 and does not invoke ImportService")
-    fun `MIG-024 anonymous POST migrate returns 401 and does not run migration`() {
+    @DisplayName("MIG-024: POST /admin/migrate without JWT returns 401 and does not invoke MigrationJobService")
+    fun `MIG-024 anonymous POST migrate returns 401 and does not start a job`() {
         mvc
             .perform(post("/rest/api/4/admin/migrate"))
             .andExpect(status().isUnauthorized)
 
-        verify(importService, never()).migrate()
+        verify(migrationJobService, never()).startAsync()
     }
 
     @Test
-    @DisplayName("MIG-024: POST /admin/migrate with non-IMPORT_DATA JWT returns 403 and does not invoke ImportService")
-    fun `MIG-024 editor JWT POST migrate returns 403 and does not run migration`() {
+    @DisplayName("MIG-024: POST /admin/migrate with non-IMPORT_DATA JWT returns 403 and does not invoke MigrationJobService")
+    fun `MIG-024 editor JWT POST migrate returns 403 and does not start a job`() {
         mvc
             .perform(post("/rest/api/4/admin/migrate").with(editorJwt()))
             .andExpect(status().isForbidden)
 
-        verify(importService, never()).migrate()
+        verify(migrationJobService, never()).startAsync()
     }
 
     @Test
-    @DisplayName("MIG-024: POST /admin/migrate with IMPORT_DATA JWT returns 200 and invokes ImportService.migrate exactly once")
-    fun `MIG-024 admin JWT POST migrate returns 200 and runs migration once`() {
-        `when`(importService.migrate()).thenReturn(EMPTY_MIGRATION_RESULT)
+    @DisplayName("MIG-024: POST /admin/migrate with IMPORT_DATA JWT returns 202 and invokes MigrationJobService.startAsync exactly once")
+    fun `MIG-024 admin JWT POST migrate returns 202 and starts the job`() {
+        `when`(migrationJobService.startAsync()).thenReturn(
+            StartMigrationResult(state = RUNNING_STATE, isNewlyStarted = true),
+        )
 
         mvc
             .perform(post("/rest/api/4/admin/migrate").with(adminJwt()))
-            .andExpect(status().isOk)
+            .andExpect(status().isAccepted)
 
-        verify(importService, times(1)).migrate()
+        verify(migrationJobService, times(1)).startAsync()
     }
 
     companion object {
-        private val EMPTY_MIGRATION_RESULT =
-            FullMigrationResult(
-                defaults = emptyMap(),
-                components = BatchMigrationResult(total = 0, migrated = 0, failed = 0, skipped = 0, results = emptyList()),
+        private val RUNNING_STATE =
+            MigrationJobState(
+                id = "00000000-0000-0000-0000-000000000000",
+                state = JobState.RUNNING,
+                startedAt = Instant.parse("2026-04-29T10:00:00Z"),
+                finishedAt = null,
+                total = 0,
+                migrated = 0,
+                failed = 0,
+                skipped = 0,
+                currentComponent = null,
+                errorMessage = null,
+                result = null,
             )
 
         @JvmStatic
