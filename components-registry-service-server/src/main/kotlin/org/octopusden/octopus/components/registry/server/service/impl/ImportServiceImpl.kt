@@ -9,6 +9,8 @@ import org.octopusden.octopus.components.registry.server.service.BatchMigrationR
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
 import org.octopusden.octopus.components.registry.server.service.FullMigrationResult
 import org.octopusden.octopus.components.registry.server.service.ImportService
+import org.octopusden.octopus.components.registry.server.service.MigrationProgressEvent
+import org.octopusden.octopus.components.registry.server.service.MigrationProgressListener
 import org.octopusden.octopus.components.registry.server.service.MigrationResult
 import org.octopusden.octopus.components.registry.server.service.MigrationStatus
 import org.octopusden.octopus.components.registry.server.service.ValidationResult
@@ -91,29 +93,50 @@ class ImportServiceImpl(
         }
     }
 
-    override fun migrateAllComponents(): BatchMigrationResult {
+    override fun migrateAllComponents(progress: MigrationProgressListener): BatchMigrationResult {
         val allComponents = gitResolver.getComponents()
         val results = mutableListOf<MigrationResult>()
         var migrated = 0
         var failed = 0
         var skipped = 0
+        val total = allComponents.size
 
         for (module in allComponents) {
             if (sourceRegistry.isDbComponent(module.moduleName)) {
                 skipped++
                 results.add(MigrationResult(module.moduleName, true, false, "Already migrated, skipped"))
-                continue
+            } else {
+                val result = migrateComponent(module.moduleName, false)
+                results.add(result)
+                if (result.success) migrated++ else failed++
             }
-            val result = migrateComponent(module.moduleName, false)
-            results.add(result)
-            if (result.success) migrated++ else failed++
+            // Emit progress AFTER each component (skipped or attempted) so the
+            // SPA can advance the counter even when nothing was actually written.
+            // Catching Throwable is intentional: a misbehaving listener — wired in
+            // by some future caller of `migrate(progress = ...)` — must not be able
+            // to poison the migration loop. The listener is observability only;
+            // if it throws, the migration carries on without it.
+            @Suppress("TooGenericExceptionCaught")
+            try {
+                progress.onProgress(
+                    MigrationProgressEvent(
+                        componentName = module.moduleName,
+                        migrated = migrated,
+                        failed = failed,
+                        skipped = skipped,
+                        total = total,
+                    ),
+                )
+            } catch (e: Throwable) {
+                LOG.warn("Progress listener threw on component '{}': {}", module.moduleName, e.message)
+            }
         }
 
         // Resolve parent-child relationships (requires all components to be saved first)
         resolveParentComponentReferences()
 
         return BatchMigrationResult(
-            total = allComponents.size,
+            total = total,
             migrated = migrated,
             failed = failed,
             skipped = skipped,
@@ -145,9 +168,9 @@ class ImportServiceImpl(
         return ValidationResult(name, discrepancies.isEmpty(), discrepancies)
     }
 
-    override fun migrate(): FullMigrationResult {
+    override fun migrate(progress: MigrationProgressListener): FullMigrationResult {
         val defaults = migrateDefaults()
-        val components = migrateAllComponents()
+        val components = migrateAllComponents(progress)
         return FullMigrationResult(defaults = defaults, components = components)
     }
 

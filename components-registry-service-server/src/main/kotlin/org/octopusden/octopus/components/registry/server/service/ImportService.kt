@@ -6,7 +6,7 @@ interface ImportService {
         dryRun: Boolean = false,
     ): MigrationResult
 
-    fun migrateAllComponents(): BatchMigrationResult
+    fun migrateAllComponents(progress: MigrationProgressListener = MigrationProgressListener.NOOP): BatchMigrationResult
 
     fun getMigrationStatus(): MigrationStatus
 
@@ -14,7 +14,7 @@ interface ImportService {
 
     fun migrateDefaults(): Map<String, Any?>
 
-    fun migrate(): FullMigrationResult
+    fun migrate(progress: MigrationProgressListener = MigrationProgressListener.NOOP): FullMigrationResult
 }
 
 data class MigrationResult(
