@@ -1,17 +1,6 @@
 # TODO / Ideas / Tech Debt
 
 ## Deferred (out of MVP scope)
-- [ ] Keycloak integration (auth для v4, role-based access) — при деплое в OKD
-  - [ ] **Wire `AuditEvent.changedBy`** from `SecurityService.getCurrentUser().username`
-    at every `applicationEventPublisher.publishEvent(AuditEvent(...))` call site in
-    `ComponentManagementServiceImpl` (create / update / delete / rename) and any
-    future write services. Currently every audit row is inserted with
-    `changed_by = null`. SYS-019 acceptance criterion #5 depends on this
-    (`changed_by contains the username`). Review finding #5 on PR #148 was
-    deferred on the premise the wiring would land with Keycloak — if Keycloak
-    slips, land this first with a placeholder like
-    `SecurityContextHolder.getContext().authentication?.name ?: "system"` so the
-    audit log is usable from day one.
 - [ ] Port migration 4567 → 8080 — при OKD
 - [ ] Profile selection для новых компонентов (pre-fill templates)
 - [ ] TeamCity integration (create projects from UI)
@@ -34,11 +23,11 @@
 ## Tech Debt
 _(будет пополняться по мере реализации)_
 
-- [ ] Embedded UI V1 hardening — tighten SPA routing, remove duplicate packaging path, stabilize UI/API base path. See [TD-001](tech-debt/001-embedded-ui-v1-hardening.md).
+- [x] ~~Embedded UI V1 hardening~~ — **Superseded** by UI extraction to `octopus-components-management-portal` (commit `26278f2`, PR #147). `SpaWebConfig.kt` deleted. See [TD-001](tech-debt/001-embedded-ui-v1-hardening.md).
 - [ ] Enable Flyway on all environments and remove `columnDefinition = "TEXT"` workarounds from entity classes. See [TD-002](tech-debt/002-enable-flyway-remove-columnDefinition-workarounds.md).
 
 ## Future Ideas
-- [ ] **Git history → audit log backfill** — насколько возможно, перенести историю изменений из Git в `audit_log` для уже существующих компонентов. Ограничения: старая DSL-структура и модель данных периодически менялись, поэтому полный и точный перенос может быть недостижим; нужен отдельный дизайн partial/backfill strategy с явной маркировкой импортированных исторических записей.
+- [x] ~~**Git history → audit log backfill**~~ — **Done.** Implemented as `POST /rest/api/4/admin/migrate-history?toRef=&reset=` in PR #151, with idempotent state via `GitHistoryImportStateEntity` and auth-gate fix in PR #155. Audit entries are written with `source = "git_history"` to distinguish from API‑driven changes. See `MIG-026` in [requirements-migration.md](requirements-migration.md) for the contract.
 - [ ] **Migration validator / regression suite** — записать историю реальных HTTP-вызовов на продакшн-системе (Git resolver) за сутки, затем воспроизвести те же запросы после миграции в DB и сравнить ответы. Позволяет убедиться в полной обратной совместимости на реальном трафике. Варианты реализации:
   - Capture production traffic (nginx/Envoy access log → curl replay)
   - k6 или Gatling сценарий — replay записанных URL-ов, assert ≡ ответы
