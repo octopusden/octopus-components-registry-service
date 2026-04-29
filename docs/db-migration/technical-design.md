@@ -244,6 +244,14 @@ PATCH  /rest/api/4/components/{id}
 DELETE /rest/api/4/components/{id}
   Behavior: Sets archived=true (soft delete)
   Auth:     DELETE_COMPONENTS
+
+GET    /rest/api/4/components?productType=&archived=&search=&owner=
+  Response: Page<ComponentSummaryResponse>
+  Auth:     ACCESS_COMPONENTS
+  Filters:  productType, archived, search (name/displayName, ILIKE), owner (exact
+            componentOwner). All independently optional, ANDed when combined.
+            `system` is currently rejected with 400 (JPA Criteria + text[] gap).
+  Contract: SYS-035 pins the owner filter (case-sensitive exact match).
 ```
 
 #### Field Version Overrides
@@ -269,12 +277,23 @@ GET    /rest/api/4/components/{id}/field-overrides
 #### Audit
 ```
 GET    /rest/api/4/audit/{entityType}/{entityId}?page=0&size=20
-  Response: Page<AuditEntry> { action, changedBy, changedAt, oldValue, newValue, diff }
+  Response: Page<AuditEntry> { action, changedBy, changedAt, oldValue, newValue, diff, source }
   Auth:     ACCESS_AUDIT
 
-GET    /rest/api/4/audit/recent?page=0&size=50
-  Response: Page<AuditEntry>
+GET    /rest/api/4/audit/recent
+  Response: Page<AuditEntry>, default sort changedAt DESC
   Auth:     ACCESS_AUDIT
+  Filters:  Optional query params (independent, ANDed when combined; SYS-036):
+              entityType   — e.g. "Component", "FieldOverride"
+              entityId     — UUID; combine with entityType for entity-scoped history
+              changedBy    — username from audit_log.changed_by
+              source       — "api" | "git-history" | "migration_job"
+              action       — "CREATE" | "UPDATE" | "DELETE" | "RENAME" | "ARCHIVE"
+              from, to     — ISO-8601 instants; half-open [from, to) on changed_at
+  Note:     `audit_log.changed_by` is populated from CurrentUserResolver
+            (preferred_username from the authenticated JWT, fallback "system" for
+            background jobs). Fixes the gap where API-driven audit rows used to
+            store NULL.
 ```
 
 #### Admin
@@ -421,7 +440,12 @@ Per-component ownership (`componentOwner`, `releaseManager`) is a deferred layer
 
 ### 6.4 Audit `changedBy` wiring
 
-Every `applicationEventPublisher.publishEvent(AuditEvent(...))` call site reads the username from `SecurityService.getCurrentUser().username` (cloud-commons), with a fallback of `"system"` for events triggered outside an authenticated context (e.g. background jobs). The fallback path is exercised by `/admin/migrate-history` rows, which still want a non-null `changed_by` for audit consistency.
+Every `applicationEventPublisher.publishEvent(AuditEvent(...))` call site sets `changedBy = currentUserResolver.currentUsername()`. `CurrentUserResolver` reads the active Spring Security context:
+- `JwtAuthenticationToken` → `preferred_username` claim (Keycloak's canonical username), falling back to `auth.name` (JWT subject);
+- non-JWT `Authentication` (rare) → `auth.name`;
+- no authenticated context (background jobs, async tasks outside an HTTP thread) → `"system"`.
+
+The fallback path is exercised by code paths that don't carry a request context. `/admin/migrate-history` is a special case: it sets `changedBy` from the git author signature (`"Name <email>"`) rather than from `CurrentUserResolver`, because the historical event was originally authored by that git committer — see `GitHistoryImportServiceImpl`. SYS-036 acceptance criterion 3 (filter by `changedBy`) depends on this wiring being in place; tests live under `AuditLogFilterTest`.
 
 ### 6.5 Backward Compatibility
 - v1/v2/v3 endpoints: **permit all** (existing 7+ Feign client consumers don't send JWT).

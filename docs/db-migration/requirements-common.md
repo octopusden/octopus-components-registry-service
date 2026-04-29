@@ -44,6 +44,8 @@
 | SYS-032 | ComponentSourceRegistry reads reflect cross-pod DB changes on every call | High | integration-test | ✅ Tested |
 | SYS-033 | GET /rest/api/4/info returns build name and version, anonymous access | Medium | integration-test | ✅ Tested |
 | SYS-034 | GET /auth/me returns current user (username, roles, groups), authenticated | Medium | integration-test | ❌ Not tested |
+| SYS-035 | GET /components?owner=&lt;username&gt; filters by componentOwner exact match | High | integration-test | ✅ Tested |
+| SYS-036 | GET /audit/recent accepts entityType/entityId/changedBy/source/action/from/to filter params | High | integration-test | ✅ Tested |
 
 ---
 
@@ -1017,3 +1019,72 @@ The Portal needs to render the signed-in user (username, roles) in the header/ad
 **Out of scope:**
 - Modifying user data (this is read-only).
 - Custom claims beyond what cloud-commons `User` exposes.
+
+---
+
+### SYS-035: GET /components?owner=&lt;username&gt; filters by componentOwner exact match
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Description:**
+The Portal `ComponentFilters` UI offers an owner dropdown populated from `/components/meta/owners`. Without a server-side `owner` filter the SPA would have to download the entire components list (~900 rows) on every owner-filter change, defeating server-side pagination. This requirement adds an `owner` query parameter to `GET /rest/api/4/components` that filters rows whose `componentOwner` equals the supplied value (exact, case-sensitive — values come from the same `/meta/owners` source the autocomplete uses).
+
+**Preconditions:**
+- DB contains components with various `componentOwner` values (or none).
+- Caller authenticated with `ACCESS_COMPONENTS` (anonymous is acceptable for reads on v4).
+
+**Acceptance criteria:**
+1. `GET /rest/api/4/components?owner=alice` returns HTTP 200 and the `content` array contains only components whose `componentOwner == "alice"`.
+2. `GET /rest/api/4/components?owner=<unknown>` returns HTTP 200 with an empty `content` array and `totalElements == 0`.
+3. `GET /rest/api/4/components` without the `owner` param returns HTTP 200 with the full list (the parameter is optional).
+4. `owner` combines with existing filters (`system`, `productType`, `archived`, `search`) via AND.
+
+**Test method:** `ListComponentsOwnerFilterTest` — three test methods covering criteria 1, 2, 3 against the live `WebSecurityConfig` chain on the `ft-db` profile.
+
+**Out of scope:**
+- Multi-owner / OR semantics (a single value per call; combine with other filters or paginate).
+- Substring or fuzzy match on owner (the autocomplete passes the exact value; substring would defeat the DB index).
+- Owner aliases / SSO username mapping — accept whatever the DB has.
+
+---
+
+### SYS-036: GET /audit/recent accepts filter params
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Description:**
+The Portal `AuditLogPage` filter sidebar drives a server-side query — without filter params on `/audit/recent` the SPA would have to page through the full audit log to apply filters client-side, which doesn't scale beyond a few hundred rows. This requirement adds a set of independently-optional filter query params to `GET /rest/api/4/audit/recent`. Combinations are ANDed; an empty filter is equivalent to "all rows, newest first" (preserves the legacy unfiltered behaviour).
+
+Supported filters:
+| Param | Type | Notes |
+|---|---|---|
+| `entityType` | string | e.g. `COMPONENT`, `FIELD_OVERRIDE` |
+| `entityId` | string | usually a UUID; combine with `entityType` for entity-scoped history reachable in the same query as user/source filters |
+| `changedBy` | string | username from `audit_log.changed_by` |
+| `source` | string | `api` \| `git-history` \| `migration_job` |
+| `action` | string | `CREATE` \| `UPDATE` \| `DELETE` \| `RENAME` \| `ARCHIVE` \| … |
+| `from`, `to` | ISO-8601 instant | half-open `[from, to)` over `audit_log.changed_at`; either or both optional |
+
+**Preconditions:**
+- Caller authenticated with `ACCESS_AUDIT`.
+- DB contains audit rows produced by either runtime API events (`source = 'api'`) or backfill from `/admin/migrate-history` (`source = 'git-history'`).
+
+**Acceptance criteria:**
+1. `GET /audit/recent?entityType=COMPONENT` returns only rows with `entityType == "COMPONENT"`.
+2. `GET /audit/recent?entityType=COMPONENT&entityId=<uuid>` returns only rows for that single component (CREATE + any UPDATE/RENAME/DELETE).
+3. `GET /audit/recent?changedBy=alice` returns only rows with `changedBy == "alice"`.
+4. `GET /audit/recent?changedBy=<unknown>` returns HTTP 200 with empty `content` and `totalElements == 0`.
+5. `GET /audit/recent?source=api` returns only rows with `source == "api"`; rows with `source == "git-history"` are excluded.
+6. `GET /audit/recent` without any filter param returns the full audit log newest-first (legacy contract preserved).
+7. Default sort when caller has not supplied `sort=`: `changedAt DESC`. Caller-supplied `sort=` overrides.
+
+**Test method:** `AuditLogFilterTest` — six test methods covering criteria 1–6 against live `AuditService.getRecentChanges` Specification on the `ft-db` profile.
+
+**Out of scope:**
+- Free-text search inside `oldValue` / `newValue` / `changeDiff` JSON.
+- OR-combining values inside a single param (e.g. `source=api,git-history` — pass them as separate calls or use a different endpoint when needed).
+- Pagination metadata changes — Spring Data `Pageable` + `Page<>` shape unchanged.
