@@ -49,4 +49,23 @@ class GitHistoryCommitWriter(
         stateRepository.deleteAll()
         return true
     }
+
+    /**
+     * Unconditional wipe used by POST /admin/migrate-history/force-reset (A7.2).
+     * Differs from [resetIfNotInProgress] in that it bypasses the IN_PROGRESS
+     * guard — the controller is responsible for refusing this when an
+     * in-memory job is RUNNING in the current pod. Idempotent: a no-op on an
+     * empty DB returns normally so the endpoint can answer 204 either way.
+     *
+     * The destructive scope (state row + ALL git-history audit_log rows) is
+     * load-bearing: the alternative — clearing only the state row — would
+     * leak partial audit_log rows from an interrupted import, and the next
+     * Run-without-reset would write fresh history on top of them, producing
+     * duplicates. The force-reset confirm dialog spells this out.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    fun forceReset() {
+        auditLogRepository.deleteBySource("git-history")
+        stateRepository.deleteAll()
+    }
 }

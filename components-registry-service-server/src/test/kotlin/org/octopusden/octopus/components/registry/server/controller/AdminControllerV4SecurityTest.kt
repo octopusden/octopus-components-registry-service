@@ -9,9 +9,11 @@ import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
+import org.octopusden.octopus.components.registry.server.service.HistoryMigrationJobService
 import org.octopusden.octopus.components.registry.server.service.JobState
 import org.octopusden.octopus.components.registry.server.service.MigrationJobService
 import org.octopusden.octopus.components.registry.server.service.MigrationJobState
+import org.octopusden.octopus.components.registry.server.service.MigrationPhase
 import org.octopusden.octopus.components.registry.server.service.StartMigrationResult
 import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.octopusden.octopus.components.registry.server.support.editorJwt
@@ -53,6 +55,17 @@ class AdminControllerV4SecurityTest {
 
     @MockBean
     private lateinit var migrationJobService: MigrationJobService
+
+    /**
+     * Mocked too — the controller constructor wires it in for the new
+     * /migrate-history endpoints. The MIG-024 cases below don't drive it,
+     * but without the @MockBean Spring would try to wire the real
+     * HistoryMigrationJobServiceImpl which pulls in the DB layer and
+     * defeats this test's "no integration" stance.
+     */
+    @MockBean
+    @Suppress("UnusedPrivateProperty")
+    private lateinit var historyMigrationJobService: HistoryMigrationJobService
 
     @Autowired
     private lateinit var mvc: MockMvc
@@ -105,6 +118,7 @@ class AdminControllerV4SecurityTest {
                 currentComponent = null,
                 errorMessage = null,
                 result = null,
+                phase = MigrationPhase.DEFAULTS,
             )
 
         @JvmStatic

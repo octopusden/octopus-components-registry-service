@@ -16,6 +16,8 @@ import org.octopusden.octopus.components.registry.server.entity.GitHistoryImport
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.GitHistoryImportStateRepository
 import org.octopusden.octopus.components.registry.server.service.GitHistoryImportService
+import org.octopusden.octopus.components.registry.server.service.HistoryImportProgressEvent
+import org.octopusden.octopus.components.registry.server.service.HistoryImportProgressListener
 import org.octopusden.octopus.components.registry.server.util.AuditDiff
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
@@ -31,6 +33,7 @@ private const val IMPORT_KEY = "component-history"
 private const val HISTORY_SOURCE = "git-history"
 private const val PROGRESS_LOG_EVERY = 250
 private const val UNKNOWN_NAMES_SAMPLE_SIZE = 20
+private const val SHORT_SHA_LENGTH = 7
 
 @Service
 class GitHistoryImportServiceImpl(
@@ -48,6 +51,7 @@ class GitHistoryImportServiceImpl(
     override fun importHistory(
         toRef: String?,
         reset: Boolean,
+        listener: HistoryImportProgressListener,
     ): HistoryImportResult {
         preflight(reset)
 
@@ -77,7 +81,7 @@ class GitHistoryImportServiceImpl(
                     }
                 }.call()
                 .use { git ->
-                    return runImport(git, toRef, historyWorkDir, groovyPrefix, started)
+                    return runImport(git, toRef, historyWorkDir, groovyPrefix, started, listener)
                 }
         } catch (e: Exception) {
             log.error("History import failed", e)
@@ -124,6 +128,7 @@ class GitHistoryImportServiceImpl(
         historyWorkDir: Path,
         groovyPrefix: String,
         started: Instant,
+        listener: HistoryImportProgressListener,
     ): HistoryImportResult {
         val target = resolveTarget(git, toRef)
         log.info("History import target: {}@{}", target.ref, target.sha)
@@ -145,6 +150,12 @@ class GitHistoryImportServiceImpl(
         val stats = ImportStats()
         var prevSnapshot: Map<String, Map<String, Any?>> = emptyMap()
 
+        // Emission #1: pre-loop. The SPA needs `totalCommits` ASAP so its progress
+        // bar can switch from indeterminate to determinate. Without this, the bar
+        // would stay indeterminate (totalCommits=0) until the first per-commit
+        // event below, which on a large chain can be tens of seconds.
+        emitProgress(listener, stats, target.ref, currentSha = null, totalCommits = chain.size)
+
         RevWalk(repo).use { walk ->
             chain.forEachIndexed { index, commitId ->
                 val commit = walk.parseCommit(commitId)
@@ -152,6 +163,16 @@ class GitHistoryImportServiceImpl(
                 prevSnapshot =
                     processCommit(git, repo, loader, commit, prevSnapshot, groovyPrefix, stats)
                 logProgress(index, chain.size, stats.auditRecords)
+                // Emission #2: per-commit. One event per processed commit gives the
+                // SPA a smooth animation. The existing logProgress logs only every
+                // 250 commits — appropriate for log volume but too coarse for UX.
+                emitProgress(
+                    listener,
+                    stats,
+                    target.ref,
+                    currentSha = commit.name.take(SHORT_SHA_LENGTH),
+                    totalCommits = chain.size,
+                )
             }
         }
 
@@ -166,6 +187,11 @@ class GitHistoryImportServiceImpl(
 
         markState(status = GitHistoryImportStatus.COMPLETED)
 
+        // Emission #3: pre-return. Clears `currentSha` so the SPA stops showing a
+        // stale "Processing commit X" between the last loop tick and the COMPLETED
+        // transition.
+        emitProgress(listener, stats, target.ref, currentSha = null, totalCommits = chain.size)
+
         return HistoryImportResult(
             targetRef = target.ref,
             targetSha = target.sha,
@@ -179,6 +205,37 @@ class GitHistoryImportServiceImpl(
                     .between(started, Instant.now())
                     .toMillis(),
         )
+    }
+
+    /**
+     * Throwable-catching emit so a misbehaving listener can't poison the import
+     * loop. Progress reporting is observability, not control flow — if it
+     * throws, the migration carries on without it.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private fun emitProgress(
+        listener: HistoryImportProgressListener,
+        stats: ImportStats,
+        targetRef: String,
+        currentSha: String?,
+        totalCommits: Int,
+    ) {
+        try {
+            listener.onProgress(
+                HistoryImportProgressEvent(
+                    totalCommits = totalCommits,
+                    processedCommits = stats.processed,
+                    auditRecords = stats.auditRecords,
+                    skippedNoGroovy = stats.skippedNoGroovy,
+                    skippedParseError = stats.skippedParseError,
+                    skippedUnknownNames = stats.unknownNames.size,
+                    currentSha = currentSha,
+                    targetRef = targetRef,
+                ),
+            )
+        } catch (e: Throwable) {
+            log.warn("History import progress listener threw at sha={}: {}", currentSha, e.message)
+        }
     }
 
     private fun resolveTarget(
