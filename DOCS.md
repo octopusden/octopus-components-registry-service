@@ -20,7 +20,7 @@ The Components Registry domain is split across two repositories. This file is th
 | **Non-functional spec** | [`docs/db-migration/non-functional-spec.md`](docs/db-migration/non-functional-spec.md) | Performance budgets, availability, observability, async-job SLAs. |
 | **Technical design** | [`docs/db-migration/technical-design.md`](docs/db-migration/technical-design.md) | Architecture, DB schema, JPA entities, API contracts, security. |
 | **Architecture decisions** | [`docs/db-migration/adr/`](docs/db-migration/adr/) | All ADRs — backend, data, security, including [ADR-012 Portal architecture](docs/db-migration/adr/012-portal-architecture.md) (canonical for the boundary). |
-| **Numbered requirements** | [`docs/db-migration/requirements-common.md`](docs/db-migration/requirements-common.md) (`SYS-NNN`) and [`docs/db-migration/requirements-migration.md`](docs/db-migration/requirements-migration.md) (`MIG-NNN`) | Acceptance criteria + test pointers. |
+| **Numbered requirements** | [`requirements-common.md`](docs/db-migration/requirements-common.md) (`SYS-NNN`), [`requirements-migration.md`](docs/db-migration/requirements-migration.md) (`MIG-NNN`), [`requirements-resolver.md`](docs/db-migration/requirements-resolver.md) (`RES-NNN`) | Acceptance criteria + test pointers. SYS = system/API behaviour, MIG = Git→DB migration, RES = resolver parity (DB resolver vs Git resolver). |
 | **Implementation status** | [`docs/db-migration/implementation-progress.md`](docs/db-migration/implementation-progress.md) | What's shipped, by phase. |
 | **Backlog index** | [`docs/db-migration/todo.md`](docs/db-migration/todo.md) | Recently shipped, deferred items, tech-debt index, future ideas. |
 | **Tech-debt entries** | [`docs/db-migration/tech-debt/`](docs/db-migration/tech-debt/) (`TD-NNN`) | Backend tech-debt: Flyway rollout, OpenAPI spec generation, etc. |
@@ -62,7 +62,7 @@ When you write a new doc, pick **one** repo as the owner using these rules:
 2. **Browser experience, UI feature, BFF wiring** → Portal.
 3. **Cross-cutting concern** → write in the repo that has more of the implementation; link from the other repo.
 4. **Never duplicate content.** If you find yourself copy-pasting between repos, replace one side with a link.
-5. **Cross-repo links should target a stable ref** (a release tag or a merge commit SHA), not `blob/<branch>/...`. Branches move; permalinks don't rot.
+5. **Cross-repo links to code should target a stable ref** (a release tag or a merge commit SHA), not `blob/<branch>/...` — branches move and permalinks don't rot. Cross-repo links between **living indexes** (this `DOCS.md`, `AGENTS.md`, top-level READMEs) may use the active branch (`v3` for CRS, `develop` for Portal) — they're meant to track the head, not freeze with it.
 
 ## How to update this map
 

@@ -134,4 +134,4 @@ The original 4-test smoke pack at `components-registry-ui/e2e/smoke.spec.ts` was
 - OverrideApplicator live version-range matching (Phase 1: scalar fields only, tested CRUD but not runtime application with version).
 - TLS migration to Ingress + shared wildcard Secret on Portal side — Portal `TD-004`.
 - OpenAPI v4 spec generation + sharing with Portal — TD-003 (CRS) / Portal TD-002.
-- Cutover Phase 5: drop `component_source` table and remove Git resolver / JGit dependency once stability is confirmed — see ADR-013 (to be created in Step A5).
+- Cutover Phase 5: drop `component_source` table and remove Git resolver / JGit dependency once stability is confirmed — see [ADR-013](adr/013-cutover-strategy.md) (Proposed).

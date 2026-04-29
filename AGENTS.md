@@ -136,7 +136,7 @@ Architecture Decision Records and design docs in this repo live in `docs/db-migr
 - `non-functional-spec.md` — performance, availability, async-job SLAs
 - `implementation-progress.md` — **living document tracking all completed tasks, bugs fixed, and current status**
 - `todo.md` — backlog index (recently shipped, deferred, tech-debt, future ideas)
-- `requirements-{common,migration}.md` — numbered requirements (`SYS-NNN`, `MIG-NNN`)
+- `requirements-{common,migration,resolver}.md` — numbered requirements (`SYS-NNN`, `MIG-NNN`, `RES-NNN` for resolver parity)
 - `adr/` — 14 ADRs (000–013), including ADR-012 (Portal architecture, canonical) and ADR-013 (Cutover strategy, Proposed)
 - `tech-debt/` — numbered tech-debt entries (`TD-NNN`)
 
