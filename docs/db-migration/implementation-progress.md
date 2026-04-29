@@ -62,6 +62,21 @@
 | B3 — Wire field_overrides into resolver | ✅ Done | New: `OverrideApplicator.kt`. `FieldOverrideRepository.findByComponentName()` added. Wired into `DatabaseComponentRegistryResolver.getResolvedComponentDefinition()` and `findConfigurationByDockerImage()` |
 | U5 — Inline field override UI | ✅ Done | New: `FieldOverrideInline.tsx`, `versionRange.ts`. Inline overrides in GeneralTab, BuildTab, JiraTab, EscrowTab |
 
+## Phase 9: Operational Hardening (Auth, Info, History, Async, Schema)
+
+| Task | Status | Notes |
+|------|--------|-------|
+| Keycloak auth | ✅ Done | `WebSecurityConfig` + `PermissionEvaluator` extending cloud-commons; v1/v2/v3 + v4 reads + `/info` permitAll, v4 writes/admin/audit `@PreAuthorize`. PR #150 (commit `b97fad2`). Contract: ADR-004. |
+| Audit `changedBy` wiring | ✅ Done | `AuditServiceImpl` reads `SecurityService.getCurrentUser().username`; falls back to `"system"` for background jobs. Closed PR #148 review finding #5. |
+| Anonymous `/info` endpoint | ✅ Done | `InfoControllerV4` returns `{name, version}` from `BuildProperties`. PR #154. Contract: SYS-033. |
+| `/auth/me` endpoint | ✅ Done | `AuthController` delegates to `SecurityService`. Contract: SYS-034. |
+| `/admin/migrate-history` | ✅ Done | `GitHistoryImportService` + `GitHistoryImportStateEntity` (V5 schema); idempotency via `INSERT … ON CONFLICT DO NOTHING`. PR #151 + auth gate fix #155. Contract: MIG-026. |
+| Async `/admin/migrate` | ✅ Done | `MigrationJobService` + `MigrationJobResponse` + `MigrationExecutorConfig`; 202/409 re-run guard, `GET /admin/migrate/job` polling, in-memory state. PR #156 (commit `c81026b` / merged as `4d4abcb`). Contract: MIG-027. Open follow-up: persisted state — MIG-028. |
+| V4 schema | ✅ Done | `V4__artifact_ids_version_level.sql` — polymorphic owner XOR for `component_artifact_ids` (component vs component_version). |
+| V5 schema | ✅ Done | `V5__audit_source_and_history_state.sql` — `audit_log.source` (api / git_history) + `git_history_import_state` table. |
+| `ft-db` profile | ✅ Done | H2 + auto-migrate for downstream FT testing. PR #148 (commit `7733f83`). Contracts: SYS-026, SYS-027. |
+| UI extracted to Portal | ✅ Done | `components-registry-ui/` module + `SpaWebConfig.kt` removed; UI now lives in `octopus-components-management-portal`. PR #147 (commit `26278f2`). Decision recorded in [ADR-012](adr/012-portal-architecture.md), supersedes ADR-009. |
+
 ## Known Bugs Fixed During Development
 
 - `MultipleBagFetchException` — use `findByName()` (lazy), not `findByNameWithAllRelations()`
@@ -111,7 +126,10 @@ All verified on running server (localhost:4567) with 933 migrated components:
 
 ## What's Left (see todo.md)
 
-- Auth (Keycloak) — при деплое в OKD
-- Expand migration regression suite from local DB-backed resolver coverage to replayed prod traffic diff checks
-- Migration defaults application — some components (e.g. TEST_COMPONENT) may have empty fields that should inherit from Defaults.groovy
-- OverrideApplicator live version-range matching (Phase 1: scalar fields only, tested CRUD but not runtime application with version)
+- Persisted async migration job state across pod restarts — MIG-028.
+- Expand migration regression suite from local DB-backed resolver coverage to replayed prod traffic diff checks.
+- Migration defaults application — some components (e.g. TEST_COMPONENT) may have empty fields that should inherit from Defaults.groovy.
+- OverrideApplicator live version-range matching (Phase 1: scalar fields only, tested CRUD but not runtime application with version).
+- TLS migration to Ingress + shared wildcard Secret on Portal side — Portal `TD-004`.
+- OpenAPI v4 spec generation + sharing with Portal — TD-004 (CRS) / Portal TD-002.
+- Cutover Phase 5: drop `component_source` table and remove Git resolver / JGit dependency once stability is confirmed — see ADR-013 (to be created in Step A5).
