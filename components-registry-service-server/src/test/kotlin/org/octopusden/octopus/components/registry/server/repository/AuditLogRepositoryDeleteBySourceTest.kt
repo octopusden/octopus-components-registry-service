@@ -2,10 +2,12 @@ package org.octopusden.octopus.components.registry.server.repository
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
 import org.octopusden.octopus.components.registry.server.entity.AuditLogEntity
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
@@ -15,6 +17,10 @@ import java.nio.file.Paths
 @SpringBootTest(classes = [ComponentRegistryServiceApplication::class])
 @ActiveProfiles("common", "test-db")
 class AuditLogRepositoryDeleteBySourceTest {
+    @MockBean
+    @Suppress("UnusedPrivateProperty")
+    private lateinit var authServerClient: AuthServerClient
+
     @Autowired
     private lateinit var auditLogRepository: AuditLogRepository
 

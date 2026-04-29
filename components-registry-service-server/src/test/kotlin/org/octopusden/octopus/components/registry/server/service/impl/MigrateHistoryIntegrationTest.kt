@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
+import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.GitHistoryImportStateEntity
@@ -14,9 +15,11 @@ import org.octopusden.octopus.components.registry.server.entity.GitHistoryImport
 import org.octopusden.octopus.components.registry.server.repository.AuditLogRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.GitHistoryImportStateRepository
+import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
@@ -38,6 +41,10 @@ import kotlin.streams.asSequence
 )
 @ActiveProfiles("common", "test-db")
 class MigrateHistoryIntegrationTest {
+    @MockBean
+    @Suppress("UnusedPrivateProperty")
+    private lateinit var authServerClient: AuthServerClient
+
     @Autowired
     private lateinit var mvc: MockMvc
 
@@ -61,7 +68,7 @@ class MigrateHistoryIntegrationTest {
         // Phase 1: explicit toRef to 1.1 (only c1..c3 in scope).
         val firstBody =
             mvc
-                .perform(post("/rest/api/4/admin/migrate-history?toRef=components-registry-1.1"))
+                .perform(post("/rest/api/4/admin/migrate-history?toRef=components-registry-1.1").with(adminJwt()))
                 .andExpect(status().isOk)
                 .andReturn()
                 .response
@@ -77,7 +84,7 @@ class MigrateHistoryIntegrationTest {
 
         // Phase 2: repeat without reset → 409, audit_log unchanged.
         mvc
-            .perform(post("/rest/api/4/admin/migrate-history?toRef=components-registry-1.1"))
+            .perform(post("/rest/api/4/admin/migrate-history?toRef=components-registry-1.1").with(adminJwt()))
             .andExpect(status().isConflict)
         val auditAfterRepeat = auditLogRepository.findAll().filter { it.source == "git-history" }
         assertEquals(auditAfterFirst.size, auditAfterRepeat.size)
@@ -86,7 +93,7 @@ class MigrateHistoryIntegrationTest {
         // covers the unparseable commit (c4) and the DELETE of ARCHIVED_TEST_COMPONENT at c5.
         val secondBody =
             mvc
-                .perform(post("/rest/api/4/admin/migrate-history?reset=true"))
+                .perform(post("/rest/api/4/admin/migrate-history?reset=true").with(adminJwt()))
                 .andExpect(status().isOk)
                 .andReturn()
                 .response
@@ -126,7 +133,7 @@ class MigrateHistoryIntegrationTest {
         )
 
         mvc
-            .perform(post("/rest/api/4/admin/migrate-history?reset=true"))
+            .perform(post("/rest/api/4/admin/migrate-history?reset=true").with(adminJwt()))
             .andExpect(status().isConflict)
 
         // Pre-existing IN_PROGRESS row must survive the rejected reset.
