@@ -25,6 +25,14 @@ data class MigrationJobResponse(
     val currentComponent: String?,
     val errorMessage: String?,
     val result: FullMigrationResult?,
+    /**
+     * Sub-phase ("DEFAULTS" | "COMPONENTS"). Serialized as the enum name (a
+     * String, not the enum itself) so client/server are not coupled through
+     * Jackson's enum (de)serialization conventions. Older SPA builds simply
+     * ignore this field; older CRS builds simply omit it from the JSON, and
+     * the SPA falls back to a generic "Running…" label.
+     */
+    val phase: String?,
 ) {
     companion object {
         fun from(state: MigrationJobState): MigrationJobResponse =
@@ -40,6 +48,7 @@ data class MigrationJobResponse(
                 currentComponent = state.currentComponent,
                 errorMessage = state.errorMessage,
                 result = state.result,
+                phase = state.phase?.name,
             )
     }
 }
