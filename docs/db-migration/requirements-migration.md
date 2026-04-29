@@ -34,6 +34,7 @@
 | MIG-022 | Migration preserves build-tools endpoint behavior | High | integration-test | ✅ Tested |
 | MIG-023 | DB artifact resolution preserves version-specific matches for shared group IDs | High | unit-test, integration-test | ✅ Tested |
 | MIG-024 | POST /rest/api/4/admin/migrate enforces IMPORT_DATA permission | High | integration-test | ✅ Tested |
+| MIG-026 | POST /rest/api/4/admin/migrate-history backfills git history into audit_log | High | integration-test | ❌ Not tested |
 
 ---
 
@@ -658,13 +659,54 @@ expose the migration endpoint.
    include `IMPORT_DATA` returns HTTP 403 with the JSON envelope produced by
    `jsonAccessDeniedHandler`. `ImportService.migrate()` is not invoked.
 3. `POST /rest/api/4/admin/migrate` with a valid JWT whose authorities include
-   `IMPORT_DATA` returns HTTP 200 with a `FullMigrationResult` body, and
-   `ImportService.migrate()` is invoked exactly once.
+   `IMPORT_DATA` succeeds: HTTP 202 (newly-started job) **or** 409 (existing
+   `RUNNING` job — re-run guard) with a `MigrationJobResponse` body, and
+   `MigrationJobService.startAsync()` is invoked exactly once. Full async
+   contract details — including job lifecycle and polling — are pinned in
+   `MIG-027`.
 
-**Test method:** `AdminControllerV4SecurityTest.MIG-024 anonymous POST migrate returns 401`; `AdminControllerV4SecurityTest.MIG-024 editor JWT POST migrate returns 403`; `AdminControllerV4SecurityTest.MIG-024 admin JWT POST migrate returns 200 and runs migration once`.
+**Test method:** `AdminControllerV4SecurityTest.MIG-024 anonymous POST migrate returns 401`; `AdminControllerV4SecurityTest.MIG-024 editor JWT POST migrate returns 403`; `AdminControllerV4SecurityTest.MIG-024 admin JWT POST migrate returns 200 and runs migration once` (test method name predates the async migration in PR #156; it now asserts 202/409 — see test source).
+
+> **Note (post-PR #156):** `POST /admin/migrate` is now asynchronous. This requirement still holds for the **auth gate** (401/403 checks), but the success-shape (criterion 3) now returns 202/409 + `MigrationJobResponse` rather than synchronous 200 + `FullMigrationResult`. The synchronous body is still reachable via `MigrationJobResponse.result` after polling `GET /admin/migrate/job` — see `MIG-027`.
 
 **Out of scope:**
 - Frontend disabled-button / Admin-mode-toggle behavior (covered by Vitest
   RTL on the portal).
 - The actual content of `FullMigrationResult` (covered by existing
   `MigrationIntegrationTest`).
+
+---
+
+### MIG-026: POST /rest/api/4/admin/migrate-history backfills git history into audit_log
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ❌ Not tested
+
+**Description:**
+The DB migration only captures runtime CRUD events from the moment the service is cut over to `source=db`. To preserve developer-visible history older than the cut-over, `POST /admin/migrate-history` replays the legacy DSL repository's git log into `audit_log`. Each historical commit that touches a known component becomes one synthetic audit row marked `source = 'git_history'` so that runtime UI (filters, history view) can blend or separate the two streams.
+
+The endpoint is idempotent through a single-row state in `git_history_import_state`:
+- An atomic `INSERT … ON CONFLICT DO NOTHING` claim under `import_key` decides whether this caller is the runner or a no-op observer.
+- After the clone resolves the real tag/sha, the row is updated with `target_ref`, `target_sha`, and `status = COMPLETED`.
+- A subsequent call with `reset=false` against an already-completed import is a no-op; `reset=true` clears the state and re-runs.
+
+**Preconditions:**
+- Legacy DSL git repository reachable from the service (same configuration as runtime resolver).
+- Schema `V5__audit_source_and_history_state.sql` applied (creates `audit_log.source` column and `git_history_import_state` table).
+- Caller authenticated with `IMPORT_DATA` permission (class-level `@PreAuthorize` on `AdminControllerV4`).
+
+**Acceptance criteria:**
+1. **First run** — `POST /admin/migrate-history?reset=false` against an empty `git_history_import_state` returns HTTP 200 with `HistoryImportResult { targetRef, targetSha, processedCommits, skippedNoGroovy, skippedParseError, skippedUnknownNames, auditRecords, durationMs }`. `auditRecords > 0` and equals the count of new rows in `audit_log` with `source = 'git_history'`.
+2. **Idempotent re-run** — calling the same endpoint again with `reset=false` after a `COMPLETED` import is a no-op: returns 200 with `processedCommits = 0` and `auditRecords = 0`. No duplicate rows are added to `audit_log`.
+3. **Reset re-run** — calling with `reset=true` clears state and re-imports. Audit rows from the previous run are not deleted (history is append-only); runtime is responsible for deduplicating based on `(timestamp, entity_id, action, source)` if needed.
+4. **Optional `toRef`** — when supplied, the import targets the named ref (tag, branch, or sha) rather than `HEAD`. The resolved `targetSha` is recorded in the response and in `git_history_import_state.target_sha`.
+5. **Skip counters** — commits that touch `.kts` only, fail to parse, or refer to unknown component names are counted in the corresponding `skippedNoGroovy` / `skippedParseError` / `skippedUnknownNames` fields and do not produce audit rows.
+6. **Auth gate** — same shape as MIG-024: 401 anonymous, 403 for editor JWT, 200 for admin JWT (regression test exists as `migrate-history` security test, see `(#155)` PR title).
+
+**Test method:** —
+
+**Out of scope:**
+- Backfilling pre-DSL data (e.g. wiki history, manual edits) — only what's reachable from the legacy git repo.
+- A resume mode for partial failures (v1 requires `reset=true` to retry; explicit choice in V5 schema).
+- UI presentation of `source = 'git_history'` rows — that's a Portal concern (see Portal `docs/features/audit-log.md` if/when written).

@@ -1,7 +1,7 @@
 # Functional Specification: Components Registry DB Migration
 
 ## Status
-**Draft** | Date: 2026-03-08
+**Living document** | Last updated: 2026-04-29 (was Draft 2026-03-08)
 
 ---
 
@@ -151,17 +151,50 @@ All existing search/lookup operations must return identical results from DB:
 
 ## 5. Data Import
 
-### 5.1 Import from DSL
-- **Input**: Admin triggers import (optional: Git repo URL, branch, tag)
-- **Process**: Clone Git → parse Groovy DSL → parse Kotlin DSL → map to entities → save to DB
-- **Validation**: After import, deep-compare Git vs DB resolver output per component; flip `source=db` only if match
-- **Idempotency**: Re-import overwrites existing data for matching component names
-- **Output**: Import report — count of imported components, versions, errors
+All admin endpoints below live under `POST /rest/api/4/admin/**` and require `IMPORT_DATA` permission (class-level `@PreAuthorize("@permissionEvaluator.canImport()")` on `AdminControllerV4`).
 
-### 5.2 Export to JSON
-- **Input**: Optional component filter
-- **Output**: JSON file with all component configurations
-- **Format**: Matches v4 API response structure
+### 5.1 Bulk Import from Git (synchronous)
+- **Endpoint**: `POST /admin/migrate-components` (alias: `POST /admin/import`)
+- **Process**: Clone Git → parse Groovy/Kotlin DSL → map to entities → save to DB. Synchronous — request blocks until done.
+- **Validation**: After import, deep-compare Git vs DB resolver output per component; flip `source=db` only if match.
+- **Idempotency**: Re-import overwrites existing data for matching component names.
+- **Output**: `BatchMigrationResult` — count of imported components, versions, errors.
+- **Note**: For long-running migrations (≈900+ components) prefer the async variant in **5.4**.
+
+### 5.2 Per-component Import
+- **Endpoint**: `POST /admin/migrate-component/{name}?dryRun=true|false`
+- **Process**: Same pipeline as 5.1, scoped to one component.
+- **Output**: `MigrationResult`.
+
+### 5.3 Migrate Defaults
+- **Endpoint**: `POST /admin/migrate-defaults`
+- **Process**: Imports `Defaults.groovy` into `component_defaults` (nested keys: build, jira, distribution, vcs, escrow, doc, deprecated, octopusVersion).
+- **Output**: Map of imported keys.
+
+### 5.4 Async Bulk Migration (recommended for full migration)
+- **Endpoint**: `POST /admin/migrate` → `202 Accepted` (newly started) or `409 Conflict` (job already running). Body: `MigrationJobResponse`. See `MIG-027` in [requirements-migration.md](requirements-migration.md) for the full contract.
+- **Polling**: `GET /admin/migrate/job` → `200 OK` with `MigrationJobResponse` (running/completed) or `404 Not Found` if no job has been started since pod startup.
+- **Re-run guard**: a second `POST /admin/migrate` while a job is `RUNNING` returns 409 with the existing job's state — the SPA "attaches" to the in-flight job rather than spawning a duplicate.
+- **State persistence**: in-memory only. Pod restart loses progress; SPA sees `404` on next poll. Tracked in `MIG-028`.
+
+### 5.5 Migration Status
+- **Endpoint**: `GET /admin/migration-status`
+- **Output**: `MigrationStatus` — counts of components currently routed to `db` vs `git`.
+
+### 5.6 Validate Migration
+- **Endpoint**: `POST /admin/validate-migration/{name}`
+- **Output**: `ValidationResult` — Git vs DB resolver diff for the named component.
+
+### 5.7 Git History Backfill
+- **Endpoint**: `POST /admin/migrate-history?toRef={ref}&reset={true|false}`
+- **Purpose**: Replay git commit history of the legacy DSL repo into `audit_log` so the UI's history view shows changes that pre-date the DB migration.
+- **Idempotency**: One-row state in `git_history_import_state` (PK `import_key`, status STARTED/COMPLETED). A second call with `reset=false` against an already-completed import is a no-op; `reset=true` clears state and re-runs.
+- **Audit source marker**: rows written by this endpoint carry `audit_log.source = 'git_history'`; runtime API events carry `'api'`. See V5 schema migration.
+- **Output**: `HistoryImportResult` — `{ targetRef, targetSha, processedCommits, skippedNoGroovy, skippedParseError, skippedUnknownNames, auditRecords, durationMs }`.
+- **Contract**: `MIG-026` in [requirements-migration.md](requirements-migration.md).
+
+### 5.8 Export
+- **Status**: Stub — `GET /admin/export` returns `{"status": "not_implemented"}`. Intentionally not part of the spec until implemented; tracked as backlog.
 
 ## 6. Authorization Rules
 
@@ -230,3 +263,20 @@ Changes to field configuration and component defaults are recorded in the audit 
 | Unauthorized | 401 | Standard Spring Security response |
 | Forbidden | 403 | `{ "error": "Insufficient permissions" }` |
 | Import failure | 422 | `{ "error": "Import failed", "details": [...] }` |
+
+## 9. Service Info & Identity Endpoints
+
+These endpoints serve cross-cutting needs (Portal footer, current-user display) and are not tied to component CRUD.
+
+### 9.1 Build Info
+- **Endpoint**: `GET /rest/api/4/info`
+- **Auth**: Anonymous (`permitAll`) — Portal footer must render before login.
+- **Output**: `{ "name": "<artifact-name>", "version": "<build-version>" }` (sourced from Spring Boot `BuildProperties`).
+- **Contract**: `SYS-033` in [requirements-common.md](requirements-common.md).
+- **Why anonymous on this side too**: Portal also exposes `/portal/info` for its own build label; both endpoints are explicitly `permitAll` end-to-end so the footer never blocks on a 401 round-trip. See ADR-012.
+
+### 9.2 Current User
+- **Endpoint**: `GET /auth/me` (note: outside the `/rest/api/4` tree — top-level `/auth`).
+- **Auth**: Authenticated. Returns 401 if no JWT.
+- **Output**: `User` from `octopus-cloud-commons` — `{ username, roles, groups }`.
+- **Contract**: `SYS-034` in [requirements-common.md](requirements-common.md).
