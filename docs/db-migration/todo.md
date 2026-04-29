@@ -32,7 +32,12 @@ _(будет пополняться по мере реализации)_
 
 - [x] ~~Embedded UI V1 hardening~~ — **Superseded** by UI extraction to `octopus-components-management-portal` (commit `26278f2`, PR #147). `SpaWebConfig.kt` deleted. See [TD-001](tech-debt/001-embedded-ui-v1-hardening.md).
 - [ ] Enable Flyway on all environments and remove `columnDefinition = "TEXT"` workarounds from entity classes. See [TD-002](tech-debt/002-enable-flyway-remove-columnDefinition-workarounds.md).
+- [ ] **OpenAPI v4 spec generation + share with Portal SPA** — mirror of Portal `TD-002`; closes the API/UI drift gap that came with the separate-repo decision (ADR-012). See [TD-003](tech-debt/003-openapi-v4-spec-generation.md).
 - [ ] **Persist async migration job state across pod restarts.** See `MIG-028` in [requirements-migration.md](requirements-migration.md). Currently `MigrationJobServiceImpl` keeps state in `AtomicReference` (single-pod, lost on restart).
+
+## Cutover (PRD Phase 5)
+
+- [ ] Stage 5A → 5B → 5C as described in [ADR-013](adr/013-cutover-strategy.md). 933/933 components are routed `source=db`, but Git resolver, JGit dependency, and `component_source` table are still in code.
 
 ## Future Ideas
 - [x] ~~**Git history → audit log backfill**~~ — **Done.** Implemented as `POST /rest/api/4/admin/migrate-history?toRef=&reset=` in PR #151, with idempotent state via `GitHistoryImportStateEntity` and auth-gate fix in PR #155. Audit entries are written with `source = "git_history"` to distinguish from API‑driven changes. See `MIG-026` in [requirements-migration.md](requirements-migration.md) for the contract.

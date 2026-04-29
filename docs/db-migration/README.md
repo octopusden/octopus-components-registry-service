@@ -54,6 +54,7 @@ PRD (why?) ──→ FS (what?) ──→ TDD (how?)
 | [ADR-010](adr/010-schema-extensibility.md) | Hybrid schema extensibility — Columns + JSONB (Proposed) |
 | [ADR-011](adr/011-field-configuration.md) | Configurable field visibility, defaults, multi-org support (Proposed) |
 | [ADR-012](adr/012-portal-architecture.md) | UI extracted to `octopus-components-management-portal` as a Spring Cloud Gateway BFF (Accepted 2026‑04‑14, PR #147) |
+| [ADR-013](adr/013-cutover-strategy.md) | Cutover strategy — staged removal of Git resolver, `component_source` table, and JGit (Proposed) |
 
 ### Action Items
 
