@@ -33,6 +33,7 @@
 | MIG-021 | Version-range-only component inherits buildSystem from defaults | High | integration-test | ✅ Tested |
 | MIG-022 | Migration preserves build-tools endpoint behavior | High | integration-test | ✅ Tested |
 | MIG-023 | DB artifact resolution preserves version-specific matches for shared group IDs | High | unit-test, integration-test | ✅ Tested |
+| MIG-024 | POST /rest/api/4/admin/migrate enforces IMPORT_DATA permission | High | integration-test | ✅ Tested |
 
 ---
 
@@ -621,3 +622,49 @@ instead of falling back to a generic component-level artifact pattern.
 3. After migration, DB-backed artifact lookup is identical to Git-backed artifact lookup for the same request
 
 **Test method:** `DatabaseComponentRegistryResolverTest.MIG-023 DB resolver prefers version-specific artifact over generic match`; `MigrationIntegrationTest.MIG-023 version-specific artifact mapping parity`
+
+---
+
+### MIG-024: POST /rest/api/4/admin/migrate enforces IMPORT_DATA permission
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Description:**
+The portal exposes a "Run migration" button on the `/admin` page (visible only
+when an authenticated user has the `IMPORT_DATA` permission and has explicitly
+enabled "Admin mode" in the footer). The button POSTs to
+`/rest/api/4/admin/migrate`. UI gates are UX hints — the authoritative gate is
+on CRS:
+
+- The class-level `@PreAuthorize("@permissionEvaluator.canImport()")` on
+  `AdminControllerV4`.
+- The network-level matcher
+  `.requestMatchers("/rest/api/4/**").authenticated()` in `WebSecurityConfig`.
+
+This requirement pins both gates with an explicit security regression test so
+that future refactors of the controller or security chain cannot silently
+expose the migration endpoint.
+
+**Preconditions:**
+- `octopus-security-common` `BasePermissionEvaluator` maps `ROLE_ADMIN` to the
+  `IMPORT_DATA` permission via `application.yml` (existing config).
+
+**Acceptance criteria:**
+1. `POST /rest/api/4/admin/migrate` without an `Authorization` header returns
+   HTTP 401 with the JSON envelope produced by `jsonAuthenticationEntryPoint`.
+2. `POST /rest/api/4/admin/migrate` with a valid JWT whose authorities do NOT
+   include `IMPORT_DATA` returns HTTP 403 with the JSON envelope produced by
+   `jsonAccessDeniedHandler`. `ImportService.migrate()` is not invoked.
+3. `POST /rest/api/4/admin/migrate` with a valid JWT whose authorities include
+   `IMPORT_DATA` returns HTTP 200 with a `FullMigrationResult` body, and
+   `ImportService.migrate()` is invoked exactly once.
+
+**Test method:** `AdminControllerV4SecurityTest.MIG-024 anonymous POST migrate returns 401`; `AdminControllerV4SecurityTest.MIG-024 editor JWT POST migrate returns 403`; `AdminControllerV4SecurityTest.MIG-024 admin JWT POST migrate returns 200 and runs migration once`.
+
+**Out of scope:**
+- Frontend disabled-button / Admin-mode-toggle behavior (covered by Vitest
+  RTL on the portal).
+- The actual content of `FullMigrationResult` (covered by existing
+  `MigrationIntegrationTest`).

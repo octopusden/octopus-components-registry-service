@@ -72,6 +72,11 @@ class WebSecurityConfig(
                     // requests pass method-security too.
                     .requestMatchers(HttpMethod.GET, "/rest/api/4/components/**", "/rest/api/4/config/**")
                     .permitAll()
+                    // SYS-033: anonymous build-info for the portal footer. Public on
+                    // purpose so the footer renders before login and so the portal
+                    // gateway does not have to special-case auth for /info.
+                    .requestMatchers(HttpMethod.GET, "/rest/api/4/info")
+                    .permitAll()
                     // v4 writes + admin + audit — authenticated + method-level @PreAuthorize.
                     .requestMatchers("/rest/api/4/**")
                     .authenticated()
