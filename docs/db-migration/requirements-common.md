@@ -42,6 +42,7 @@
 | SYS-030 | DistributionEntity round-trips groupId-only GAV without `:null` suffix | High | unit-test | ✅ Tested |
 | SYS-031 | DistributionEntity round-trips multi-image docker coordinates verbatim | High | unit-test | ✅ Tested |
 | SYS-032 | ComponentSourceRegistry reads reflect cross-pod DB changes on every call | High | integration-test | ✅ Tested |
+| SYS-033 | GET /rest/api/4/info returns build name and version, anonymous access | Medium | integration-test | ✅ Tested |
 
 ---
 
@@ -953,3 +954,39 @@ through the shared `ComponentSourceRepository`.
 - Designing the cluster-aware L2 cache for later performance work.
 - In-flight writes and isolation semantics (covered by ordinary JPA
   transaction / optimistic-lock mechanics).
+
+---
+
+### SYS-033: GET /rest/api/4/info returns build name and version, anonymous access
+
+**Priority:** Medium
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Description:**
+The portal footer needs to display the running CRS service version next to the
+portal version (DMS-style "Components Registry by F1 team (portal X · service
+Y)"). The portal proxies `/rest/**` to CRS, but the SecurityConfig on both
+sides currently authenticates everything under `/rest/api/4/**`. To keep the
+footer working before the user has logged in (and to avoid 401-noise in logs),
+expose `/rest/api/4/info` anonymously on CRS, sourcing the values from
+Spring Boot's `BuildProperties` bean (`springBoot { buildInfo() }` is already
+enabled in the server module).
+
+**Preconditions:**
+- `META-INF/build-info.properties` is generated at build time (already wired
+  via `springBoot.buildInfo()`).
+
+**Acceptance criteria:**
+1. `GET /rest/api/4/info` without an `Authorization` header returns HTTP 200.
+2. Response body is `application/json` containing fields `name` (string) and
+   `version` (string).
+3. The returned `version` matches `BuildProperties.getVersion()`.
+4. The endpoint is reachable through `WebSecurityConfig` without a valid JWT
+   (i.e. the path is added to `permitAll()` and not just to a slice test).
+
+**Test method:** `InfoControllerV4Test.SYS-033 anonymous GET info returns build name and version` (full `@SpringBootTest` MockMvc — exercises the real `WebSecurityConfig` chain).
+
+**Out of scope:**
+- Caching or rate-limiting the endpoint (single read per page load is fine).
+- Returning git SHA or build timestamp — only `name`/`version` for the footer.
