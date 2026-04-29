@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.fail
 import org.junit.jupiter.api.Test
 import org.octopusden.octopus.components.registry.server.service.BatchMigrationResult
 import org.octopusden.octopus.components.registry.server.service.FullMigrationResult
@@ -17,6 +18,7 @@ import org.octopusden.octopus.components.registry.server.service.MigrationResult
 import org.octopusden.octopus.components.registry.server.service.MigrationStatus
 import org.octopusden.octopus.components.registry.server.service.ValidationResult
 import org.springframework.core.task.SyncTaskExecutor
+import kotlin.test.assertFailsWith
 
 /**
  * Unit-level pin on the idempotency contract MigrationJobService promises to the
@@ -174,6 +176,53 @@ class MigrationJobServiceImplTest {
         assertNull(state.result)
     }
 
+    @Test
+    fun `executor rejection transitions the slot to FAILED and rethrows`() {
+        // Realistic case: pod shutdown — Spring's ThreadPoolTaskExecutor throws
+        // RejectedExecutionException once the queue is closed. Without the
+        // rollback, the slot stays RUNNING forever and every subsequent POST
+        // returns 409 from the controller layer. The operator would be wedged.
+        val importService = StubImportService(migrateImpl = { fail("executor refused; importService should never be touched") })
+        val service = MigrationJobServiceImpl(importService, RejectingExecutor("pool shutting down"))
+
+        val thrown = assertFailsWith<java.util.concurrent.RejectedExecutionException> { service.startAsync() }
+        assertEquals("pool shutting down", thrown.message)
+
+        val state = service.current()!!
+        assertEquals(JobState.FAILED, state.state)
+        assertNotNull(state.finishedAt)
+        assertEquals("Failed to submit migration: pool shutting down", state.errorMessage)
+        assertEquals(0, importService.migrateCallCount, "ImportService.migrate must not be called when the executor refuses")
+    }
+
+    @Test
+    fun `next startAsync after an executor-rejection failure starts a fresh job (no 409)`() {
+        // Tests the practical consequence of the rollback above: once we've
+        // transitioned the slot to FAILED, a retry must succeed. Without the
+        // P2 fix the slot would be RUNNING and we'd return isNewlyStarted=false.
+        val importService = StubImportService(migrateImpl = { emptyResult })
+        var rejecting = true
+        val executor =
+            ToggleableExecutor(
+                onExecute = { runnable ->
+                    if (rejecting) throw java.util.concurrent.RejectedExecutionException("once")
+                    runnable.run()
+                },
+            )
+        val service = MigrationJobServiceImpl(importService, executor)
+
+        // First call → rejection → FAILED slot.
+        runCatching { service.startAsync() }
+        assertEquals(JobState.FAILED, service.current()!!.state)
+
+        // Operator retries; executor is healthy this time.
+        rejecting = false
+        val retry = service.startAsync()
+
+        assertTrue(retry.isNewlyStarted, "after FAILED, retry must claim a fresh slot, not 409 the previous one")
+        assertEquals(JobState.COMPLETED, retry.state.state)
+    }
+
     /**
      * Hand-written stub for [ImportService]. Mockito would have been smaller, but
      * the non-nullable Kotlin progress parameter trips its `any()` matcher
@@ -229,6 +278,22 @@ class MigrationJobServiceImplTest {
         override fun execute(task: Runnable) {
             taskCount++
             // Intentionally NOT running the task.
+        }
+    }
+
+    /** Always throws [RejectedExecutionException] — simulates pod shutdown / queue full. */
+    private class RejectingExecutor(
+        private val reason: String,
+    ) : org.springframework.core.task.TaskExecutor {
+        override fun execute(task: Runnable): Unit = throw java.util.concurrent.RejectedExecutionException(reason)
+    }
+
+    /** Caller-controlled executor: invoke [onExecute] on each submission. */
+    private class ToggleableExecutor(
+        private val onExecute: (Runnable) -> Unit,
+    ) : org.springframework.core.task.TaskExecutor {
+        override fun execute(task: Runnable) {
+            onExecute(task)
         }
     }
 }

@@ -60,7 +60,34 @@ class MigrationJobServiceImpl(
                 )
             if (state.compareAndSet(existing, candidate)) {
                 LOG.info("Starting migration job {}", candidate.id)
-                executor.execute { runMigration(candidate.id) }
+                try {
+                    executor.execute { runMigration(candidate.id) }
+                } catch (
+                    @Suppress("TooGenericExceptionCaught") rejected: Throwable,
+                ) {
+                    // The slot was claimed for this candidate but the executor refused
+                    // (typical case: RejectedExecutionException during pod shutdown,
+                    // or a queue-capacity-exceeded if a future config narrows the
+                    // queue). Without this, the in-memory slot would stay RUNNING
+                    // forever — every subsequent POST /admin/migrate would return
+                    // 409, and the operator would be stuck without a way to retry.
+                    // Transition to FAILED so the slot is "done" and the next
+                    // startAsync claims a fresh one.
+                    LOG.error("Failed to submit migration job {} to executor", candidate.id, rejected)
+                    state.updateAndGet { current ->
+                        if (current?.id != candidate.id) {
+                            current
+                        } else {
+                            current.copy(
+                                state = JobState.FAILED,
+                                finishedAt = Instant.now(),
+                                errorMessage =
+                                    "Failed to submit migration: ${rejected.message ?: rejected::class.java.simpleName}",
+                            )
+                        }
+                    }
+                    throw rejected
+                }
                 // Return the post-spawn current state — with SyncTaskExecutor (used in
                 // tests) the run has already finished by now, so callers see COMPLETED;
                 // with the production async executor they see RUNNING. Either way it's
