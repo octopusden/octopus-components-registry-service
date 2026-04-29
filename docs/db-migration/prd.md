@@ -1,7 +1,7 @@
 # PRD: Components Registry Service — Migration to Database + Web UI
 
 ## Status
-**Draft** | Author: Team | Date: 2026-03-08
+**Living document** | Author: Team | Last updated: 2026-04-29 (was Draft 2026-03-08)
 
 ---
 
@@ -73,38 +73,62 @@ The Components Registry Service stores all component configuration in a Git repo
 
 ## 6. Scope & Milestones
 
-### Phase 1: Foundation
-- PostgreSQL schema + Flyway migrations
+### Phase 1: Foundation ✅ Done
+- PostgreSQL schema + Flyway migrations (V1–V3 baseline; V4–V5 added in Phase 6)
 - JPA entities + Spring Data repositories
 - CRUD API (v4) for components and versions
 - Audit log with JSONB diff
-- Keycloak integration (octopus-security-common), role-based access
 - Bean Validation (Jakarta)
 - Integration tests with Testcontainers
+- (Keycloak integration moved to Phase 6 — landed later than originally planned, see PR #150)
 
-### Phase 2: Web UI
-- React 19 + Vite + shadcn/ui + TailwindCSS
-- Components list, editor (multi-tab), audit log viewer
-- Keycloak JS adapter for authentication
-- Works with DB-native components (created via API/UI)
+### Phase 2: Web UI ✅ Done — extracted to a separate repository
 
-### Phase 3: Component-Source Routing
+The original plan was a monorepo with embedded UI (per [ADR-009](adr/009-ui-repository-strategy.md)). That decision was reversed in April 2026: the UI now lives in `octopus-components-management-portal` as a Spring Cloud Gateway BFF + React 19 SPA. See [ADR-012](adr/012-portal-architecture.md) for the rationale and PR #147 for the extraction commit.
+
+Functional scope of the UI itself remains the same:
+- Components list (filter, paginate, search, owner autocomplete coming in Portal P1)
+- Component editor — six tabs (General/Build/VCS/Distribution/Jira/Escrow), inline per-version field overrides
+- Audit log viewer (per-entity history coming in Portal P1)
+- Admin: field config + component defaults + Migration panel
+- Keycloak login via OIDC authorization-code flow handled at the gateway (BFF), not in the SPA
+
+### Phase 3: Component-Source Routing ✅ Done
 - `DatabaseComponentRegistryResolver` implementation
 - `ComponentRoutingResolver` — routes per component based on `component_source` table
 - No global mode flag — routing is always active once deployed
 - Existing v1/v2/v3 API serves both Git and DB sources transparently
 
-### Phase 4: Data Import
-- Per-component import from Groovy/Kotlin DSL → DB
-- Validation: deep-compare Git vs DB resolver output per component
-- Gradual migration of existing components
-- Validation against existing test suite (250+ test .groovy files)
+### Phase 4: Data Import ✅ Done
+- Per-component import from Groovy/Kotlin DSL → DB (`POST /admin/migrate-component/{name}`)
+- Bulk synchronous import (`POST /admin/migrate-components`)
+- Async bulk import (`POST /admin/migrate` → 202/409 + `MigrationJobResponse` + polling at `GET /admin/migrate/job`) — added in PR #156. Contract: [`MIG-027`](requirements-migration.md).
+- Defaults import (`POST /admin/migrate-defaults`)
+- Validation: deep-compare Git vs DB resolver output per component (`POST /admin/validate-migration/{name}`)
+- All 933 production components migrated to `source=db`
 
-### Phase 5: Cutover
-- All components migrated to `source=db` in `component_source` table
-- Remove Git resolver code, drop `component_source` table
-- Remove JGit dependency
-- Decommission Git-based DSL repository
+### Phase 5: Cutover 🚧 In progress (proposed)
+
+933/933 components are routed `source=db`. Cutover is **not yet complete** in the formal sense:
+
+- Git resolver code, JGit dependency, and `component_source` table all still present.
+- Strategy and trigger conditions for removal: see [ADR-013](adr/013-cutover-strategy.md) (Proposed, lands in Step A5 of `docs/v3-actualization`).
+
+### Phase 6: Operational Hardening ✅ Done
+
+Work that was originally rolled into Phase 1 but landed later, plus net-new features that became needed once the UI was a separate deploy unit:
+
+- **Keycloak auth + `@PreAuthorize`** on v4 writes/admin/audit (PR #150, [ADR-004](adr/004-auth-keycloak.md) Implemented 2026-04-28).
+- **Audit `changedBy` wiring** through `SecurityService` with a `"system"` fallback for background jobs.
+- **`/auth/me`** endpoint for the SPA's identity display (`SYS-034`).
+- **`/info`** endpoint, anonymous on both CRS and Portal sides, for the footer build label (`SYS-033`, PR #154).
+- **`/admin/migrate-history`** to backfill git commit history into `audit_log` with `source='git_history'` (`MIG-026`, PR #151 + #155, V5 schema).
+- **V4 schema** (`V4__artifact_ids_version_level.sql`) — polymorphic owner XOR for `component_artifact_ids`.
+- **V5 schema** (`V5__audit_source_and_history_state.sql`) — `audit_log.source` column + `git_history_import_state` table.
+- **`ft-db` profile** — H2 + auto-migrate for downstream FT testing (`SYS-026`, `SYS-027`, PR #148).
+- **UI extraction to Portal** (PR #147, [ADR-012](adr/012-portal-architecture.md) Accepted).
+
+Open follow-ups under this phase: persisted async migration job state (`MIG-028`), OpenAPI v4 spec generation (CRS `TD-004` + Portal `TD-002`), Portal TLS Ingress migration (Portal `TD-004`).
 
 ## 7. Risks
 

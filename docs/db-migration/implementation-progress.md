@@ -22,14 +22,16 @@
 | 3A | ✅ Done | DatabaseComponentRegistryResolver (@Transactional readOnly) |
 | 3B | ✅ Done | ComponentRoutingResolver (@Primary) + ComponentSourceRegistry (Caffeine cache) |
 
-## Phase 4: React UI ✅
+## Phase 4: React UI ✅ (extracted to `octopus-components-management-portal`)
 
-| Task | Status | Notes |
+This phase was originally implemented in-tree as a `components-registry-ui/` Gradle module. In April 2026 the entire module was deleted from this repo and the UI moved to `octopus-components-management-portal` as a Spring Cloud Gateway BFF + standalone Vite SPA — see [ADR-012](adr/012-portal-architecture.md) and PR #147 (commit `26278f2`). The original task list is preserved below for traceability; the live code now lives in the Portal repo. Per-feature status (component list / editor / audit / admin) is tracked in the Portal's own `docs/features/` going forward.
+
+| Task | Status | Notes (historical, before extraction) |
 |------|--------|-------|
-| 4A | ✅ Done | Vite + React 19 + TailwindCSS + shadcn/ui + Gradle integration |
-| 4B | ✅ Done | Component list with filters, pagination, TanStack Table |
-| 4C | ✅ Done | Component editor (tabbed: General/Build/VCS/Distribution/Jira/Escrow), field overrides |
-| 4D | ✅ Done | Audit log viewer + Admin settings (field config + component defaults editors) |
+| 4A | ✅ Done → moved to Portal | Vite + React 19 + TailwindCSS + shadcn/ui (Gradle integration removed in PR #147; Portal builds via npm + a single Gradle wrapper task) |
+| 4B | ✅ Done → moved to Portal | Component list with filters, pagination, TanStack Table |
+| 4C | ✅ Done → moved to Portal | Component editor (tabbed: General/Build/VCS/Distribution/Jira/Escrow), field overrides |
+| 4D | ✅ Done → moved to Portal | Audit log viewer + Admin settings (field config + component defaults editors) |
 
 ## Phase 5: Import Service ✅
 
@@ -45,22 +47,26 @@
 
 ## Phase 7: Editable Everything (Iteration 1) ✅
 
+Backend tasks (M1, B1) live in this repo. Frontend tasks (U1-U3) were implemented here originally and **moved to `octopus-components-management-portal` in PR #147** along with the rest of the UI; the file paths below for U1/U2/U3 reflect Portal locations as of `develop`.
+
 | Task | Status | Notes |
 |------|--------|-------|
-| M1 — Expand migrateDefaults() | ✅ Done | Nested sub-objects: build, jira, distribution, vcs, escrow, doc + deprecated, octopusVersion. File: `ImportServiceImpl.kt` |
-| U3 — EnumSelect + useFieldConfig | ✅ Done | New: `EnumSelect.tsx`, `useFieldConfig.ts`. GeneralTab uses EnumSelect for productType |
-| B1 — Extend ComponentUpdateRequest | ✅ Done | 6 nested DTOs added: BuildConfiguration, VcsSettings, Distribution, JiraComponentConfig, EscrowConfiguration. Backend + frontend. Files: `ComponentUpdateRequest.kt`, `ComponentManagementServiceImpl.kt`, `useComponent.ts` |
-| U2 — Editable sub-entity tabs | ✅ Done | All 5 tabs (Build, VCS, Distribution, Jira, Escrow) converted from read-only to editable with per-tab Save buttons. Files: `BuildTab.tsx`, `VcsTab.tsx`, `DistributionTab.tsx`, `JiraTab.tsx`, `EscrowTab.tsx`, `ComponentDetailPage.tsx` |
-| U1 — Structured Defaults form | ✅ Done | New: `ComponentDefaultsForm.tsx` with tabbed sections (General, Build, Jira, Distribution, VCS, Escrow) + raw JSON toggle. File: `AdminSettingsPage.tsx` updated |
+| M1 — Expand migrateDefaults() | ✅ Done | Backend. Nested sub-objects: build, jira, distribution, vcs, escrow, doc + deprecated, octopusVersion. File: `ImportServiceImpl.kt` |
+| U3 — EnumSelect + useFieldConfig | ✅ Done → Portal | Portal: `frontend/src/components/ui/EnumSelect.tsx`, `frontend/src/hooks/useFieldConfig.ts`. `GeneralTab` uses EnumSelect for productType |
+| B1 — Extend ComponentUpdateRequest | ✅ Done | Backend: 6 nested DTOs (BuildConfiguration, VcsSettings, Distribution, JiraComponentConfig, EscrowConfiguration). Files: `ComponentUpdateRequest.kt`, `ComponentManagementServiceImpl.kt`. Portal frontend: `frontend/src/hooks/useComponent.ts` |
+| U2 — Editable sub-entity tabs | ✅ Done → Portal | Portal: all 5 tabs (`BuildTab.tsx`, `VcsTab.tsx`, `DistributionTab.tsx`, `JiraTab.tsx`, `EscrowTab.tsx`) under `frontend/src/components/editor/`, plus `frontend/src/pages/ComponentDetailPage.tsx`. Per-tab Save buttons; optimistic-locking on `@Version` |
+| U1 — Structured Defaults form | ✅ Done → Portal | Portal: `frontend/src/components/admin/ComponentDefaultsForm.tsx` with tabbed sections (General, Build, Jira, Distribution, VCS, Escrow) + raw JSON toggle. `frontend/src/pages/AdminSettingsPage.tsx` updated |
 
 ## Phase 8: Smart Fields + Overrides (Iteration 2) ✅
 
+Backend tasks (B2, B3) live in this repo. Frontend tasks (U4, U5) moved to Portal in PR #147; paths below reflect Portal locations.
+
 | Task | Status | Notes |
 |------|--------|-------|
-| B2 — /meta/owners endpoint | ✅ Done | `GET /rest/api/4/components/meta/owners` returns 97 distinct owners. Files: `ComponentRepository.kt`, `ComponentControllerV4.kt` |
-| U4 — PeopleInput autocomplete | ✅ Done | New: `PeopleInput.tsx`, `useOwners.ts`. GeneralTab uses PeopleInput for componentOwner |
-| B3 — Wire field_overrides into resolver | ✅ Done | New: `OverrideApplicator.kt`. `FieldOverrideRepository.findByComponentName()` added. Wired into `DatabaseComponentRegistryResolver.getResolvedComponentDefinition()` and `findConfigurationByDockerImage()` |
-| U5 — Inline field override UI | ✅ Done | New: `FieldOverrideInline.tsx`, `versionRange.ts`. Inline overrides in GeneralTab, BuildTab, JiraTab, EscrowTab |
+| B2 — /meta/owners endpoint | ✅ Done | Backend. `GET /rest/api/4/components/meta/owners` returns distinct component owners. Files: `ComponentRepository.kt`, `ComponentControllerV4.kt` |
+| U4 — PeopleInput autocomplete | ✅ Done → Portal | Portal: `frontend/src/components/ui/PeopleInput.tsx`, `frontend/src/hooks/useOwners.ts`. `GeneralTab` uses PeopleInput for componentOwner |
+| B3 — Wire field_overrides into resolver | ✅ Done | Backend. `OverrideApplicator.kt`; `FieldOverrideRepository.findByComponentName()` wired into `DatabaseComponentRegistryResolver.getResolvedComponentDefinition()` and `findConfigurationByDockerImage()` |
+| U5 — Inline field override UI | ✅ Done → Portal | Portal: `frontend/src/components/editor/FieldOverrideInline.tsx`, `frontend/src/lib/versionRange.ts`. Inline overrides in GeneralTab, BuildTab, JiraTab, EscrowTab |
 
 ## Phase 9: Operational Hardening (Auth, Info, History, Async, Schema)
 
@@ -93,36 +99,32 @@
 - DB migration lost `parentComponent` and `escrow.additionalSources` on resolver path — import/entity mappers now preserve both values for DB-backed V1/V2 responses, covered by DB-backed resolver regression suite (`RES-006`, `RES-007`, `RES-008`)
 - DB `jira-component-version-ranges` emitted entries with blank Jira project key — `DatabaseComponentRegistryResolver` now skips incomplete Jira configs so aggregate ranges match Git behavior (`RES-001`)
 
-## Runtime Verification (Phase 7+8)
+## Runtime Verification (Phase 7+8) — historical, pre-extraction
 
-All verified on running server (localhost:4567) with 933 migrated components:
+The table below was the smoke-check pass on the embedded UI build at the end of Phase 8 (commits between 2026-03 and 2026-04, before PR #147). It is preserved as a record of what was passing at the cutover, not as a current verification — the embedded UI no longer exists in this repo. The Portal repository owns the runtime verification of the corresponding UI flows from PR #147 onward; Portal-side tests live under `frontend/src/**/*.test.tsx` and `frontend/e2e/`.
 
-| Check | Result |
-|-------|--------|
-| Server health | UP |
-| GET /components (paginated) | 933 total |
-| GET /components/meta/owners | 97 owners |
-| POST /admin/migrate-defaults | Nested build/jira/distribution/vcs/escrow keys |
-| GET /admin/migration-status | db=933, git=0 |
-| PATCH with nested buildConfiguration | javaVersion changed, version incremented |
-| PATCH with nested jiraComponentConfig | projectKey + displayName updated |
-| PATCH with nested escrowConfiguration | generation + diskSpace updated |
-| PATCH with nested distribution | explicit/external flags updated |
-| PATCH with nested vcsSettings (entries replace-all) | vcsType + entries replaced |
-| Optimistic locking (stale version) | Proper error returned |
-| Field overrides CRUD | POST 201, GET 200, PATCH 200, DELETE 204 |
-| TypeScript compilation | 0 errors |
-| Kotlin compilation | 0 errors |
-| Vite UI build | Success |
-| E2E smoke tests | 4/4 pass |
+Backend-only checks from the table (server health, GET endpoints, PATCH with nested DTOs, optimistic locking, field overrides CRUD) remain valid against the current codebase; they're now exercised by the regular integration test suite rather than ad-hoc curls against `localhost:4567`.
 
-## Playwright E2E Smoke Tests
+| Check | Result | Still valid? |
+|-------|--------|---|
+| Server health | UP | ✅ Yes — actuator |
+| GET /components (paginated) | 933 total | ✅ Yes — covered by `ComponentControllerV4Test` and prod migration-status |
+| GET /components/meta/owners | 97 owners | ✅ Yes — `SYS-017` |
+| POST /admin/migrate-defaults | Nested build/jira/distribution/vcs/escrow keys | ✅ Yes — `SYS-018` |
+| GET /admin/migration-status | db=933, git=0 | ✅ Yes |
+| PATCH with nested buildConfiguration | javaVersion changed, version incremented | ✅ Yes — `SYS-004` |
+| PATCH with nested jiraComponentConfig | projectKey + displayName updated | ✅ Yes — `SYS-007` |
+| PATCH with nested escrowConfiguration | generation + diskSpace updated | ✅ Yes — `SYS-008` |
+| PATCH with nested distribution | explicit/external flags updated | ✅ Yes — `SYS-006` |
+| PATCH with nested vcsSettings (entries replace-all) | vcsType + entries replaced | ✅ Yes — `SYS-005` |
+| Optimistic locking (stale version) | Proper error returned | ✅ Yes — `SYS-009` |
+| Field overrides CRUD | POST 201, GET 200, PATCH 200, DELETE 204 | ✅ Yes — `SYS-012`–`SYS-016` |
+| TypeScript / Kotlin / Vite build | 0 errors | Now Portal-side concern (`./gradlew build` over there) |
+| E2E smoke tests | 4/4 pass | Historical — Portal `frontend/e2e/smoke.spec.ts` is the current equivalent |
 
-4 tests in `components-registry-ui/e2e/smoke.spec.ts` — all pass (~5s):
-1. Component list loads
-2. Navigation links work
-3. Component detail page loads
-4. No JS errors on main pages
+## Playwright E2E Smoke Tests — moved to Portal
+
+The original 4-test smoke pack at `components-registry-ui/e2e/smoke.spec.ts` was deleted with the rest of the UI module in PR #147. The current equivalent lives at `frontend/e2e/smoke.spec.ts` in the Portal repo. Authenticated e2e (Migration tab + Admin-mode + role gating) is still pending — see Portal `TD-001`.
 
 ## What's Left (see todo.md)
 
