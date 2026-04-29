@@ -5,7 +5,7 @@
 - [x] **Async migration** — `POST /admin/migrate` runs on a background executor with 202/409 re-run guard; `GET /admin/migrate/job` polled by Portal MigrationPanel. PR #156 (commit `c81026b` / `4d4abcb`). Contract: `MIG-027`. Open follow-up: persisted job state — `MIG-028`.
 - [x] **Anonymous /info endpoint** — `GET /rest/api/4/info` returns `{name, version}` for the Portal footer. PR #154. Contract: `SYS-033`.
 - [x] **Current-user endpoint** — `GET /auth/me` returns `User { username, roles, groups }`. Contract: `SYS-034`.
-- [x] **Git history backfill** — `POST /admin/migrate-history` populates `audit_log` with `source='git_history'` rows. PR #151 + #155. Contract: `MIG-026`.
+- [x] **Git history backfill** — `POST /admin/migrate-history` populates `audit_log` with `source='git-history'` rows. PR #151 + #155. Contract: `MIG-026`.
 
 ## Deferred (out of MVP scope)
 - [ ] Port migration 4567 → 8080 — при OKD
@@ -40,7 +40,7 @@ _(будет пополняться по мере реализации)_
 - [ ] Stage 5A → 5B → 5C as described in [ADR-013](adr/013-cutover-strategy.md). 933/933 components are routed `source=db`, but Git resolver, JGit dependency, and `component_source` table are still in code.
 
 ## Future Ideas
-- [x] ~~**Git history → audit log backfill**~~ — **Done.** Implemented as `POST /rest/api/4/admin/migrate-history?toRef=&reset=` in PR #151, with idempotent state via `GitHistoryImportStateEntity` and auth-gate fix in PR #155. Audit entries are written with `source = "git_history"` to distinguish from API‑driven changes. See `MIG-026` in [requirements-migration.md](requirements-migration.md) for the contract.
+- [x] ~~**Git history → audit log backfill**~~ — **Done.** Implemented as `POST /rest/api/4/admin/migrate-history?toRef=&reset=` in PR #151, with idempotent state via `GitHistoryImportStateEntity` and auth-gate fix in PR #155. Audit entries are written with `source = "git-history"` to distinguish from API‑driven changes. See `MIG-026` in [requirements-migration.md](requirements-migration.md) for the contract.
 - [ ] **Migration validator / regression suite** — записать историю реальных HTTP-вызовов на продакшн-системе (Git resolver) за сутки, затем воспроизвести те же запросы после миграции в DB и сравнить ответы. Позволяет убедиться в полной обратной совместимости на реальном трафике. Варианты реализации:
   - Capture production traffic (nginx/Envoy access log → curl replay)
   - k6 или Gatling сценарий — replay записанных URL-ов, assert ≡ ответы

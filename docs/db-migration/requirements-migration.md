@@ -686,7 +686,7 @@ expose the migration endpoint.
 **Status:** ❌ Not tested
 
 **Description:**
-The DB migration only captures runtime CRUD events from the moment the service is cut over to `source=db`. To preserve developer-visible history older than the cut-over, `POST /admin/migrate-history` replays the legacy DSL repository's git log into `audit_log`. Each historical commit that touches a known component becomes one synthetic audit row marked `source = 'git_history'` so that runtime UI (filters, history view) can blend or separate the two streams.
+The DB migration only captures runtime CRUD events from the moment the service is cut over to `source=db`. To preserve developer-visible history older than the cut-over, `POST /admin/migrate-history` replays the legacy DSL repository's git log into `audit_log`. Each historical commit that touches a known component becomes one synthetic audit row marked `source = 'git-history'` so that runtime UI (filters, history view) can blend or separate the two streams.
 
 The endpoint is idempotent through a single-row state in `git_history_import_state`:
 - An atomic `INSERT … ON CONFLICT DO NOTHING` claim under `import_key` decides whether this caller is the runner or a no-op observer.
@@ -699,7 +699,7 @@ The endpoint is idempotent through a single-row state in `git_history_import_sta
 - Caller authenticated with `IMPORT_DATA` permission (class-level `@PreAuthorize` on `AdminControllerV4`).
 
 **Acceptance criteria:**
-1. **First run** — `POST /admin/migrate-history?reset=false` against an empty `git_history_import_state` returns HTTP 200 with `HistoryImportResult { targetRef, targetSha, processedCommits, skippedNoGroovy, skippedParseError, skippedUnknownNames, auditRecords, durationMs }`. `auditRecords > 0` and equals the count of new rows in `audit_log` with `source = 'git_history'`.
+1. **First run** — `POST /admin/migrate-history?reset=false` against an empty `git_history_import_state` returns HTTP 200 with `HistoryImportResult { targetRef, targetSha, processedCommits, skippedNoGroovy, skippedParseError, skippedUnknownNames, auditRecords, durationMs }`. `auditRecords > 0` and equals the count of new rows in `audit_log` with `source = 'git-history'`.
 2. **Idempotent re-run** — calling the same endpoint again with `reset=false` after a `COMPLETED` import is a no-op: returns 200 with `processedCommits = 0` and `auditRecords = 0`. No duplicate rows are added to `audit_log`.
 3. **Reset re-run** — calling with `reset=true` clears state and re-imports. Audit rows from the previous run are not deleted (history is append-only); runtime is responsible for deduplicating based on `(timestamp, entity_id, action, source)` if needed.
 4. **Optional `toRef`** — when supplied, the import targets the named ref (tag, branch, or sha) rather than `HEAD`. The resolved `targetSha` is recorded in the response and in `git_history_import_state.target_sha`.
@@ -711,7 +711,7 @@ The endpoint is idempotent through a single-row state in `git_history_import_sta
 **Out of scope:**
 - Backfilling pre-DSL data (e.g. wiki history, manual edits) — only what's reachable from the legacy git repo.
 - A resume mode for partial failures (v1 requires `reset=true` to retry; explicit choice in V5 schema).
-- UI presentation of `source = 'git_history'` rows — that's a Portal concern (see Portal `docs/features/audit-log.md` if/when written).
+- UI presentation of `source = 'git-history'` rows — that's a Portal concern (see Portal `docs/features/audit-log.md` if/when written).
 
 ---
 

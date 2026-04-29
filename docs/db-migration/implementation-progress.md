@@ -79,7 +79,7 @@ Backend tasks (B2, B3) live in this repo. Frontend tasks (U4, U5) moved to Porta
 | `/admin/migrate-history` | ✅ Done | `GitHistoryImportService` + `GitHistoryImportStateEntity` (V5 schema); idempotency via `INSERT … ON CONFLICT DO NOTHING`. PR #151 + auth gate fix #155. Contract: MIG-026. |
 | Async `/admin/migrate` | ✅ Done | `MigrationJobService` + `MigrationJobResponse` + `MigrationExecutorConfig`; 202/409 re-run guard, `GET /admin/migrate/job` polling, in-memory state. PR #156 (commit `c81026b` / merged as `4d4abcb`). Contract: MIG-027. Open follow-up: persisted state — MIG-028. |
 | V4 schema | ✅ Done | `V4__artifact_ids_version_level.sql` — polymorphic owner XOR for `component_artifact_ids` (component vs component_version). |
-| V5 schema | ✅ Done | `V5__audit_source_and_history_state.sql` — `audit_log.source` (api / git_history) + `git_history_import_state` table. |
+| V5 schema | ✅ Done | `V5__audit_source_and_history_state.sql` — `audit_log.source` (api / git-history) + `git_history_import_state` table. |
 | `ft-db` profile | ✅ Done | H2 + auto-migrate for downstream FT testing. PR #148 (commit `7733f83`). Contracts: SYS-026, SYS-027. |
 | UI extracted to Portal | ✅ Done | `components-registry-ui/` module + `SpaWebConfig.kt` removed; UI now lives in `octopus-components-management-portal`. PR #147 (commit `26278f2`). Decision recorded in [ADR-012](adr/012-portal-architecture.md), supersedes ADR-009. |
 
@@ -133,5 +133,5 @@ The original 4-test smoke pack at `components-registry-ui/e2e/smoke.spec.ts` was
 - Migration defaults application — some components (e.g. TEST_COMPONENT) may have empty fields that should inherit from Defaults.groovy.
 - OverrideApplicator live version-range matching (Phase 1: scalar fields only, tested CRUD but not runtime application with version).
 - TLS migration to Ingress + shared wildcard Secret on Portal side — Portal `TD-004`.
-- OpenAPI v4 spec generation + sharing with Portal — TD-004 (CRS) / Portal TD-002.
+- OpenAPI v4 spec generation + sharing with Portal — TD-003 (CRS) / Portal TD-002.
 - Cutover Phase 5: drop `component_source` table and remove Git resolver / JGit dependency once stability is confirmed — see ADR-013 (to be created in Step A5).

@@ -188,8 +188,8 @@ All admin endpoints below live under `POST /rest/api/4/admin/**` and require `IM
 ### 5.7 Git History Backfill
 - **Endpoint**: `POST /admin/migrate-history?toRef={ref}&reset={true|false}`
 - **Purpose**: Replay git commit history of the legacy DSL repo into `audit_log` so the UI's history view shows changes that pre-date the DB migration.
-- **Idempotency**: One-row state in `git_history_import_state` (PK `import_key`, status STARTED/COMPLETED). A second call with `reset=false` against an already-completed import is a no-op; `reset=true` clears state and re-runs.
-- **Audit source marker**: rows written by this endpoint carry `audit_log.source = 'git_history'`; runtime API events carry `'api'`. See V5 schema migration.
+- **Idempotency**: One-row state in `git_history_import_state` (PK `import_key`, status `IN_PROGRESS` / `COMPLETED` / `FAILED` — see `GitHistoryImportStatus`). A second call with `reset=false` against an already-completed import is a no-op; `reset=true` clears state and re-runs.
+- **Audit source marker**: rows written by this endpoint carry `audit_log.source = 'git-history'`; runtime API events carry `'api'`. See V5 schema migration.
 - **Output**: `HistoryImportResult` — `{ targetRef, targetSha, processedCommits, skippedNoGroovy, skippedParseError, skippedUnknownNames, auditRecords, durationMs }`.
 - **Contract**: `MIG-026` in [requirements-migration.md](requirements-migration.md).
 

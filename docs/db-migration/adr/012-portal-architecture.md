@@ -18,7 +18,7 @@ ADR-009 itself does not record a re-evaluation. Practical drivers for the change
 - **Frontend tooling friction.** Vite + Gradle `node-gradle` integration imposed a non-trivial cost on UI iteration speed; a standalone repo lets the frontend ship with `npm run dev` + Vite proxy without any Gradle in the developer's path.
 - **Independent rollouts.** Frontend changes deploy without rebuilding the registry service JAR.
 
-These trade-offs are accepted; their costs are mitigated by TD-003 (drop legacy `columnDefinition` workarounds) and TD-004 (OpenAPI generation to keep frontend types in sync without a monorepo).
+These trade-offs are accepted; their costs are mitigated by TD-002 (enable Flyway + drop legacy `columnDefinition` workarounds) and TD-003 (OpenAPI generation to keep frontend types in sync without a monorepo).
 
 ## Decision
 
@@ -95,7 +95,7 @@ Two repositories, two deploy units:
 - Anonymous footer endpoints are explicit on both sides; no implicit gateway-only behavior.
 
 ### Negative — and how mitigated
-- **API + UI changes are no longer atomic.** Mitigated by TD-004 (OpenAPI v4 spec generation, share with Portal).
+- **API + UI changes are no longer atomic.** Mitigated by TD-003 (OpenAPI v4 spec generation, share with Portal).
 - **CSRF policy is unusual.** Plain (non-XOR) double-submit is intentional and documented in `SecurityConfig.kt` lines 96–107; reviewers must not "fix" it back to the default XOR handler.
 - **Migration job state lives in the registry service in-memory.** When the registry pod restarts mid-migration, the Portal's MigrationPanel gets `404` on the polling endpoint. Closed long-term by [MIG-028](../requirements-migration.md) (persisted job state).
 - **Two deploy units to coordinate.** TLS/cert rotation, Vault secrets, and Spring Cloud Config payloads must be aligned across repos (see Portal `docs/onboarding/components-management-portal.md`).

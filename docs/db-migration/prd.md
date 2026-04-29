@@ -122,13 +122,13 @@ Work that was originally rolled into Phase 1 but landed later, plus net-new feat
 - **Audit `changedBy` wiring** through `SecurityService` with a `"system"` fallback for background jobs.
 - **`/auth/me`** endpoint for the SPA's identity display (`SYS-034`).
 - **`/info`** endpoint, anonymous on both CRS and Portal sides, for the footer build label (`SYS-033`, PR #154).
-- **`/admin/migrate-history`** to backfill git commit history into `audit_log` with `source='git_history'` (`MIG-026`, PR #151 + #155, V5 schema).
+- **`/admin/migrate-history`** to backfill git commit history into `audit_log` with `source='git-history'` (`MIG-026`, PR #151 + #155, V5 schema).
 - **V4 schema** (`V4__artifact_ids_version_level.sql`) — polymorphic owner XOR for `component_artifact_ids`.
 - **V5 schema** (`V5__audit_source_and_history_state.sql`) — `audit_log.source` column + `git_history_import_state` table.
 - **`ft-db` profile** — H2 + auto-migrate for downstream FT testing (`SYS-026`, `SYS-027`, PR #148).
 - **UI extraction to Portal** (PR #147, [ADR-012](adr/012-portal-architecture.md) Accepted).
 
-Open follow-ups under this phase: persisted async migration job state (`MIG-028`), OpenAPI v4 spec generation (CRS `TD-004` + Portal `TD-002`), Portal TLS Ingress migration (Portal `TD-004`).
+Open follow-ups under this phase: persisted async migration job state (`MIG-028`), OpenAPI v4 spec generation (CRS `TD-003` + Portal `TD-002`), Portal TLS Ingress migration (Portal `TD-004`).
 
 ## 7. Risks
 

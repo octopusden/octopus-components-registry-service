@@ -89,7 +89,7 @@ distributions (1) ──→ (N) distribution_artifacts
 
 vcs_settings (1) ──→ (N) vcs_settings_entries (for MULTIPLY type)
 
-audit_log (standalone, indexed by entity_type + entity_id, source ∈ {api, git_history})
+audit_log (standalone, indexed by entity_type + entity_id, source ∈ {api, git-history})
 dependency_mappings (standalone key-value)
 git_history_import_state (single-row idempotency state for /admin/migrate-history)
 field_overrides (per-component per-field per-version-range overrides)
@@ -322,7 +322,7 @@ POST   /rest/api/4/admin/migrate-history?toRef={ref}&reset={bool}
             skippedNoGroovy, skippedParseError, skippedUnknownNames,
             auditRecords, durationMs }
   Behavior: Backfills git commit history into audit_log with
-            source = 'git_history'. Idempotent through git_history_import_state
+            source = 'git-history'. Idempotent through git_history_import_state
             (single-row, INSERT … ON CONFLICT DO NOTHING claim). reset=true
             clears state and re-runs.
   Contract: MIG-026.
@@ -411,9 +411,9 @@ Implemented in `WebSecurityConfig.kt` (extends `CloudCommonWebSecurityConfig` fr
 | `canImport()` | `IMPORT_DATA` | class-level on `AdminControllerV4` (covers all admin endpoints incl. `/migrate`, `/migrate-history`, etc.) |
 | `hasPermission("ACCESS_AUDIT")` | `ACCESS_AUDIT` | `AuditControllerV4` |
 
-The `PATCH /components/{id}` SpEL guard combines these:
+The `PATCH /components/{id}` SpEL guard combines these (the path variable is a `UUID`; the helper takes `String`, so the SpEL passes `#id.toString()`):
 ```
-@PreAuthorize("@permissionEvaluator.canEditComponent(#id) and (#request.archived == null or @permissionEvaluator.canArchiveComponent(#id)) and (#request.name == null or @permissionEvaluator.canRenameComponent(#id))")
+@PreAuthorize("@permissionEvaluator.canEditComponent(#id.toString()) and (#request.archived == null or @permissionEvaluator.canArchiveComponent(#id.toString())) and (#request.name == null or @permissionEvaluator.canRenameComponent(#id.toString()))")
 ```
 Plain edits stay on `EDIT_COMPONENTS`; archive/rename payloads fail closed with 403 for anyone without the extra permission.
 
