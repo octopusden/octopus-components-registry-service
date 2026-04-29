@@ -43,6 +43,7 @@
 | SYS-031 | DistributionEntity round-trips multi-image docker coordinates verbatim | High | unit-test | ✅ Tested |
 | SYS-032 | ComponentSourceRegistry reads reflect cross-pod DB changes on every call | High | integration-test | ✅ Tested |
 | SYS-033 | GET /rest/api/4/info returns build name and version, anonymous access | Medium | integration-test | ✅ Tested |
+| SYS-034 | GET /auth/me returns current user (username, roles, groups), authenticated | Medium | integration-test | ❌ Not tested |
 
 ---
 
@@ -990,3 +991,29 @@ enabled in the server module).
 **Out of scope:**
 - Caching or rate-limiting the endpoint (single read per page load is fine).
 - Returning git SHA or build timestamp — only `name`/`version` for the footer.
+
+---
+
+### SYS-034: GET /auth/me returns current user, authenticated
+
+**Priority:** Medium
+**Test layer:** integration-test
+**Status:** ❌ Not tested
+
+**Description:**
+The Portal needs to render the signed-in user (username, roles) in the header/admin gates. CRS exposes `GET /auth/me` which delegates to `octopus-cloud-commons` `SecurityService.getCurrentUser()` and returns a `User { username, roles, groups }`. Path is **outside** `/rest/api/4` — it's at the top-level `/auth` so the Portal gateway can proxy it on the `/auth/**` route.
+
+**Preconditions:**
+- A valid JWT for a user with at least `ROLE_REGISTRY_VIEWER` (or any authenticated role).
+
+**Acceptance criteria:**
+1. `GET /auth/me` without `Authorization` header → HTTP 401.
+2. `GET /auth/me` with valid JWT → HTTP 200, `application/json` body `{ "username": ..., "roles": [...], "groups": [...] }`.
+3. Returned `username` equals the JWT `preferred_username` claim (or whatever `SecurityService` resolves it from for the current cloud-commons version).
+4. Returned `roles` reflect Keycloak realm roles after `UserInfoGrantedAuthoritiesConverter` mapping.
+
+**Test method:** —
+
+**Out of scope:**
+- Modifying user data (this is read-only).
+- Custom claims beyond what cloud-commons `User` exposes.

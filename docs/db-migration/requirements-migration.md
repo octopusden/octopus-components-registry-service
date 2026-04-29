@@ -34,6 +34,9 @@
 | MIG-022 | Migration preserves build-tools endpoint behavior | High | integration-test | ✅ Tested |
 | MIG-023 | DB artifact resolution preserves version-specific matches for shared group IDs | High | unit-test, integration-test | ✅ Tested |
 | MIG-024 | POST /rest/api/4/admin/migrate enforces IMPORT_DATA permission | High | integration-test | ✅ Tested |
+| MIG-026 | POST /rest/api/4/admin/migrate-history backfills git history into audit_log | High | integration-test | ❌ Not tested |
+| MIG-027 | POST /admin/migrate is async; 202 new / 409 re-run guard / GET /admin/migrate/job polling | High | integration-test | ✅ Tested |
+| MIG-028 | Async migration job state survives pod restart | Medium | design | ❌ Open |
 
 ---
 
@@ -658,13 +661,135 @@ expose the migration endpoint.
    include `IMPORT_DATA` returns HTTP 403 with the JSON envelope produced by
    `jsonAccessDeniedHandler`. `ImportService.migrate()` is not invoked.
 3. `POST /rest/api/4/admin/migrate` with a valid JWT whose authorities include
-   `IMPORT_DATA` returns HTTP 200 with a `FullMigrationResult` body, and
-   `ImportService.migrate()` is invoked exactly once.
+   `IMPORT_DATA` succeeds: HTTP 202 (newly-started job) **or** 409 (existing
+   `RUNNING` job — re-run guard) with a `MigrationJobResponse` body, and
+   `MigrationJobService.startAsync()` is invoked exactly once. Full async
+   contract details — including job lifecycle and polling — are pinned in
+   `MIG-027`.
 
-**Test method:** `AdminControllerV4SecurityTest.MIG-024 anonymous POST migrate returns 401`; `AdminControllerV4SecurityTest.MIG-024 editor JWT POST migrate returns 403`; `AdminControllerV4SecurityTest.MIG-024 admin JWT POST migrate returns 200 and runs migration once`.
+**Test method:** `AdminControllerV4SecurityTest.MIG-024 anonymous POST migrate returns 401`; `AdminControllerV4SecurityTest.MIG-024 editor JWT POST migrate returns 403`; `AdminControllerV4SecurityTest.MIG-024 admin JWT POST migrate returns 200 and runs migration once` (test method name predates the async migration in PR #156; it now asserts 202/409 — see test source).
+
+> **Note (post-PR #156):** `POST /admin/migrate` is now asynchronous. This requirement still holds for the **auth gate** (401/403 checks), but the success-shape (criterion 3) now returns 202/409 + `MigrationJobResponse` rather than synchronous 200 + `FullMigrationResult`. The synchronous body is still reachable via `MigrationJobResponse.result` after polling `GET /admin/migrate/job` — see `MIG-027`.
 
 **Out of scope:**
 - Frontend disabled-button / Admin-mode-toggle behavior (covered by Vitest
   RTL on the portal).
 - The actual content of `FullMigrationResult` (covered by existing
   `MigrationIntegrationTest`).
+
+---
+
+### MIG-026: POST /rest/api/4/admin/migrate-history backfills git history into audit_log
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ❌ Not tested
+
+**Description:**
+The DB migration only captures runtime CRUD events from the moment the service is cut over to `source=db`. To preserve developer-visible history older than the cut-over, `POST /admin/migrate-history` replays the legacy DSL repository's git log into `audit_log`. Each historical commit that touches a known component becomes one synthetic audit row marked `source = 'git-history'` so that runtime UI (filters, history view) can blend or separate the two streams.
+
+The endpoint is idempotent through a single-row state in `git_history_import_state`:
+- An atomic `INSERT … ON CONFLICT DO NOTHING` claim under `import_key` decides whether this caller is the runner or a no-op observer.
+- After the clone resolves the real tag/sha, the row is updated with `target_ref`, `target_sha`, and `status = COMPLETED`.
+- A subsequent call with `reset=false` against an already-completed import is a no-op; `reset=true` clears the state and re-runs.
+
+**Preconditions:**
+- Legacy DSL git repository reachable from the service (same configuration as runtime resolver).
+- Schema `V5__audit_source_and_history_state.sql` applied (creates `audit_log.source` column and `git_history_import_state` table).
+- Caller authenticated with `IMPORT_DATA` permission (class-level `@PreAuthorize` on `AdminControllerV4`).
+
+**Acceptance criteria:**
+1. **First run** — `POST /admin/migrate-history?reset=false` against an empty `git_history_import_state` returns HTTP 200 with `HistoryImportResult { targetRef, targetSha, processedCommits, skippedNoGroovy, skippedParseError, skippedUnknownNames, auditRecords, durationMs }`. `auditRecords > 0` and equals the count of new rows in `audit_log` with `source = 'git-history'`.
+2. **Idempotent re-run** — calling the same endpoint again with `reset=false` after a `COMPLETED` import is a no-op: returns 200 with `processedCommits = 0` and `auditRecords = 0`. No duplicate rows are added to `audit_log`.
+3. **Reset re-run** — calling with `reset=true` clears state and re-imports. Audit rows from the previous run are not deleted (history is append-only); runtime is responsible for deduplicating based on `(timestamp, entity_id, action, source)` if needed.
+4. **Optional `toRef`** — when supplied, the import targets the named ref (tag, branch, or sha) rather than `HEAD`. The resolved `targetSha` is recorded in the response and in `git_history_import_state.target_sha`.
+5. **Skip counters** — commits that touch `.kts` only, fail to parse, or refer to unknown component names are counted in the corresponding `skippedNoGroovy` / `skippedParseError` / `skippedUnknownNames` fields and do not produce audit rows.
+6. **Auth gate** — same shape as MIG-024: 401 anonymous, 403 for editor JWT, 200 for admin JWT (regression test exists as `migrate-history` security test, see `(#155)` PR title).
+
+**Test method:** —
+
+**Out of scope:**
+- Backfilling pre-DSL data (e.g. wiki history, manual edits) — only what's reachable from the legacy git repo.
+- A resume mode for partial failures (v1 requires `reset=true` to retry; explicit choice in V5 schema).
+- UI presentation of `source = 'git-history'` rows — that's a Portal concern (see Portal `docs/features/audit-log.md` if/when written).
+
+---
+
+### MIG-027: POST /admin/migrate is async with 202/409 re-run guard and GET /admin/migrate/job polling
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested (PR #156, commit `c81026b`/`4d4abcb`)
+
+**Description:**
+A full Git→DB migration of ~933 components exceeds Portal's HTTP read timeout when run synchronously (the gateway returns 504 even though `ImportService` keeps working in the background). To support an interactive UX, `POST /rest/api/4/admin/migrate` runs on a background single-thread executor (`MigrationExecutorConfig`) and exposes per-component progress through `MigrationJobService`. The Portal SPA polls `GET /admin/migrate/job` to render a progress bar.
+
+The wire shape is `MigrationJobResponse`:
+
+```kotlin
+data class MigrationJobResponse(
+    val id: String,                  // UUID assigned at startAsync()
+    val state: JobState,             // RUNNING | COMPLETED | FAILED
+    val startedAt: Instant,
+    val finishedAt: Instant?,        // null while RUNNING
+    val total: Int,
+    val migrated: Int,
+    val failed: Int,
+    val skipped: Int,
+    val currentComponent: String?,   // populated during RUNNING; null after
+    val errorMessage: String?,       // populated on state=FAILED
+    val result: FullMigrationResult?, // populated on state=COMPLETED
+)
+```
+
+Note: there is **no `CANCELLED` state** in `JobState` — only RUNNING, COMPLETED, FAILED. There is no cancel endpoint either; cancellation is out of scope for this contract.
+
+**Preconditions:**
+- Caller authenticated with `IMPORT_DATA` permission (covered by MIG-024 auth gate).
+- `MigrationExecutorConfig` thread pool wired (single-thread `ExecutorService`).
+
+**Acceptance criteria:**
+1. **Newly-started job** — `POST /admin/migrate` against a fresh pod (or after a previous COMPLETED/FAILED job) returns **HTTP 202 Accepted** with body `MigrationJobResponse { state=RUNNING, id=<uuid>, startedAt=<now>, total=0|<known>, migrated=0, failed=0, skipped=0, currentComponent=null|<first> }`. The work proceeds on the background executor.
+2. **Re-run guard (409)** — A second `POST /admin/migrate` while the first job is `RUNNING` returns **HTTP 409 Conflict** with the body of the existing job (same `id`, same `state=RUNNING`, advanced counters). `MigrationJobService.startAsync()` does not spawn a duplicate.
+3. **Re-run after terminal state** — A new `POST /admin/migrate` after the previous job reached `COMPLETED` or `FAILED` returns 202 with a fresh `id` and replaces the slot. The previous result is no longer accessible via `GET /admin/migrate/job` after the new job claims the slot.
+4. **Polling — running** — `GET /admin/migrate/job` while `state=RUNNING` returns 200 with the current `MigrationJobResponse`. `currentComponent` advances as `ImportService` walks the component list (driven by `MigrationProgressListener`); counters update.
+5. **Polling — completed** — `GET /admin/migrate/job` after the job reaches `COMPLETED` returns 200 with `state=COMPLETED`, `finishedAt != null`, full counters, `currentComponent=null`, `errorMessage=null`, and `result: FullMigrationResult` populated.
+6. **Polling — failed** — On `state=FAILED`, `errorMessage` is populated with a top-level message; `result` may be null or partial. The pod-side log carries the stack trace.
+7. **No job since pod boot** — `GET /admin/migrate/job` returns **HTTP 404 Not Found** if `MigrationJobService.current() == null` (no migrate has been called since pod startup).
+
+**Test method:** `MigrationJobIntegrationTest` (or similar) covering (1)-(7) end-to-end against a Spring Boot Test slice that exercises the real `WebSecurityConfig` chain and the executor. Auth-gate sub-cases reused from MIG-024.
+
+**Out of scope:**
+- Cancellation (no endpoint, no `CANCELLED` state).
+- Cross-pod visibility / restart resilience (see MIG-028).
+- Multi-job history (only the latest job is reachable; previous COMPLETED/FAILED is GC'd when a new job starts).
+
+---
+
+### MIG-028: Async migration job state survives pod restart
+
+**Priority:** Medium
+**Test layer:** design
+**Status:** ❌ Open
+
+**Description:**
+`MigrationJobServiceImpl` currently stores state in an in-process `AtomicReference<MigrationJobState>` (single-pod scope). A pod restart during a long-running migration loses progress: the SPA's next poll yields `GET /admin/migrate/job` → 404, and the operator must re-run from scratch. The migration itself is idempotent at the per-component level (re-importing produces the same result), but the user-visible progress bar resets, and there is no audit-trail entry for the lost run.
+
+The fix is design-deferred: pick one of (a) persist `MigrationJobState` rows to a DB table mirroring the `git_history_import_state` pattern (PR #151) so both pod restart and cross-pod visibility are covered; (b) on pod startup, reconstruct an approximation of state by scanning the latest `audit_log source='migration_job'` rows (requires writing such rows during the run, which is also missing today); (c) give up and document the limitation, relying on the operator to re-run.
+
+The MIG-027 surface (DTO, status codes, paths) does **not** change as part of MIG-028 — only the persistence layer behind `MigrationJobService`. The Portal MigrationPanel has to handle the `404 → "no current job, please re-run"` branch regardless.
+
+**Acceptance criteria:**
+1. After a pod restart during `state=RUNNING`, the next `GET /admin/migrate/job` returns the last persisted state (most likely `state=FAILED` with an `errorMessage` such as `"job interrupted by pod restart"`), not 404, and not a phantom RUNNING.
+2. After a pod restart during `state=COMPLETED` (job finished but the success was not yet observed by the SPA), the next `GET /admin/migrate/job` still returns `state=COMPLETED` with the original `result`.
+3. Cross-pod: in a 2-pod deployment, `POST /admin/migrate` to pod A and `GET /admin/migrate/job` to pod B both observe the same `id`/`state`. (Today they do not.)
+4. An audit_log entry is written for each migration start, end (success or fail), so retrospective inspection is possible even if state is GC'd.
+
+**Out of scope:**
+- The MIG-027 wire shape (unchanged).
+- Cancellation (still out of scope).
+
+**Suggested implementation sketch:**
+- Add a `migration_job_state` table mirroring `git_history_import_state`: PK `id` (UUID), columns matching `MigrationJobState` fields, plus `updated_at`.
+- Replace `AtomicReference` with a transactional read/write through that table.
+- On pod startup, scan for `state=RUNNING` rows older than a sane threshold (e.g. 1 hour) and mark them `FAILED` with `errorMessage="interrupted by pod restart"`.

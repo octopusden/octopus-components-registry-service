@@ -1,7 +1,7 @@
 # ADR-004: Authentication & Authorization via Keycloak
 
 ## Status
-Accepted
+Accepted. **Implemented:** 2026‑04‑28 (commit `b97fad2`, PR #150 — Keycloak auth + v4 `@PreAuthorize`).
 
 ## Context
 

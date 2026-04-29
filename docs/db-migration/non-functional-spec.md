@@ -1,7 +1,7 @@
 # Non-Functional Specification: Components Registry DB Migration
 
 ## Status
-**Draft** | Date: 2026-03-08
+**Living document** | Last updated: 2026-04-29 (was Draft 2026-03-08)
 
 ---
 
@@ -177,6 +177,17 @@ slices().matching("org.octopusden.octopus.components.registry.(*)..")
 | **Audit trail of migration** | Each migration action logged in `audit_log` (who, when, which component, result) |
 
 **Rollback is a one-way cutover after first DB write.** See [ADR-007](adr/007-dual-read-migration.md) for full rollback semantics per component state. There is no global "rollback to Git" switch.
+
+#### Async migration job (POST /admin/migrate, MIG-027)
+
+| Aspect | Target |
+|---|---|
+| **Duration** | Full ~933‑component migration completes in under 5 min on a hot CRS pod (warm Git clone, warm JVM). First run from cold can be longer; not a contractual SLA but a smoke‑test budget. |
+| **Re-run guard** | Concurrent `POST /admin/migrate` while a job is `RUNNING` → 409 with the existing `MigrationJobResponse`. SPA must "attach" rather than spawn parallel jobs. |
+| **Polling cadence** | Portal polls `GET /admin/migrate/job` every 1 s while `state=RUNNING`. Cadence is a Portal concern; CRS endpoint is read-only and idempotent. |
+| **State scope** | Single‑pod, in‑memory (`AtomicReference<MigrationJobState>` in `MigrationJobServiceImpl`). Pod restart loses state and the SPA gets `404` on the next poll → user must re‑run. Tracked in `MIG-028` for cross‑pod / restart‑resilient state. |
+| **Observability** | Per‑component progress (`currentComponent`, counters `total`/`migrated`/`failed`/`skipped`) is exposed in the response body. `errorMessage` is set on `state=FAILED`. JVM/Spring metrics for the executor are not yet wired — open follow‑up under MIG‑028. |
+| **Audit** | The async start/end is **not** currently written into `audit_log` as a synthetic entry. Per‑component CRUD events still produce normal `source='api'` audit rows during the run. Wiring an async‑run summary row is open follow‑up under MIG‑028. |
 
 ### 5.7 Data Integrity
 
