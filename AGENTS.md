@@ -127,13 +127,18 @@ Required env vars: `LDAP_USERNAME`, `LDAP_PASSWORD`, `COMPONENTS_REGISTRY_VCS_RO
 
 ## Design Documentation
 
-Architecture Decision Records and design docs live in `docs/db-migration/`:
+**Start with [`DOCS.md`](DOCS.md)** — the wayfinding map showing what lives in this repo vs the Portal repo, with the "owns vs delegates" rules.
+
+Architecture Decision Records and design docs in this repo live in `docs/db-migration/`:
 - `technical-design.md` — primary working document
 - `prd.md` — product requirements
 - `functional-spec.md` — functional specification
+- `non-functional-spec.md` — performance, availability, async-job SLAs
 - `implementation-progress.md` — **living document tracking all completed tasks, bugs fixed, and current status**
-- `todo.md` — tech debt and future ideas
-- `adr/` — 12 ADRs (000–011) covering storage, language, UI stack, auth, audit, API versioning, routing, schema extensibility
+- `todo.md` — backlog index (recently shipped, deferred, tech-debt, future ideas)
+- `requirements-{common,migration}.md` — numbered requirements (`SYS-NNN`, `MIG-NNN`)
+- `adr/` — 14 ADRs (000–013), including ADR-012 (Portal architecture, canonical) and ADR-013 (Cutover strategy, Proposed)
+- `tech-debt/` — numbered tech-debt entries (`TD-NNN`)
 
 ## Implementation Progress Tracking
 
