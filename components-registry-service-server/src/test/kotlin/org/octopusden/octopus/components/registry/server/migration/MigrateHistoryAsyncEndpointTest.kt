@@ -6,7 +6,6 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
-import org.mockito.Mockito.`when`
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
 import org.octopusden.octopus.components.registry.server.dto.v4.HistoryImportResult
@@ -22,6 +21,7 @@ import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
+import org.springframework.context.annotation.Primary
 import org.springframework.core.task.SyncTaskExecutor
 import org.springframework.core.task.TaskExecutor
 import org.springframework.http.MediaType.APPLICATION_JSON
@@ -33,6 +33,8 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.testcontainers.containers.PostgreSQLContainer
+import java.nio.file.Paths
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Endpoint-shape smoke test for `POST /admin/migrate-history` + `GET
@@ -42,29 +44,23 @@ import org.testcontainers.containers.PostgreSQLContainer
  * COMPLETED, GET /job returning the same shape) without paying the JGit
  * fixture cost on every CI run.
  *
- * GitHistoryImportService is @MockBean'd so we don't need to set up a clone
- * source or DSL fixtures — we control what `importHistory` returns and
- * assert the controller wires the response correctly.
+ * Why a hand-rolled stub instead of @MockBean: Mockito's `any(...)` returns
+ * null at the call site, which trips the JVM null-check on Kotlin's
+ * non-nullable `listener: HistoryImportProgressListener` parameter before the
+ * proxy intercepts. The same trap is documented in MigrationJobServiceImplTest
+ * — both files dodge it via a stub registered through @TestConfiguration.
  */
 @AutoConfigureMockMvc
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     classes = [ComponentRegistryServiceApplication::class],
 )
-@Import(MigrateHistoryAsyncEndpointTest.SyncMigrationExecutorConfig::class)
+@Import(MigrateHistoryAsyncEndpointTest.AsyncEndpointTestConfig::class)
 @ActiveProfiles("common", "test-db")
 class MigrateHistoryAsyncEndpointTest {
     @MockBean
     @Suppress("UnusedPrivateProperty")
     private lateinit var authServerClient: AuthServerClient
-
-    /**
-     * Mocked: the controller wires the in-memory job service which in turn
-     * wires this. Replacing it with a stub returning a canned result lets us
-     * assert on the response wiring without paying for git clone + DSL parse.
-     */
-    @MockBean
-    private lateinit var gitHistoryImportService: GitHistoryImportService
 
     @Autowired
     private lateinit var mvc: MockMvc
@@ -72,9 +68,28 @@ class MigrateHistoryAsyncEndpointTest {
     @Autowired
     private lateinit var objectMapper: ObjectMapper
 
+    /**
+     * Test-controlled holder that the stub bean reads from. Each test sets
+     * the canned [HistoryImportResult] before driving a POST so the bean
+     * returns whatever the test wants.
+     */
+    @Autowired
+    private lateinit var stubResult: AtomicReference<HistoryImportResult>
+
+    init {
+        // ComponentsRegistryProperties has a property `groovy-path` whose
+        // default value references ${COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR}.
+        // Without it set, ApplicationContext fails to bind. Mirror the pattern
+        // from MigrateEndpointTest / AdminControllerV4SecurityTest: point at
+        // the test-resources dir so the placeholder resolves.
+        val testResourcesPath =
+            Paths.get(MigrateHistoryAsyncEndpointTest::class.java.getResource("/expected-data")!!.toURI()).parent
+        System.setProperty("COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR", testResourcesPath.toString())
+    }
+
     @Test
     fun `POST migrate-history returns 202 + COMPLETED body once the sync executor finishes`() {
-        val cannedResult =
+        stubResult.set(
             HistoryImportResult(
                 targetRef = "refs/tags/test-1.0",
                 targetSha = "abc1234567890",
@@ -84,14 +99,8 @@ class MigrateHistoryAsyncEndpointTest {
                 skippedUnknownNames = 0,
                 auditRecords = 99,
                 durationMs = 500,
-            )
-        `when`(
-            gitHistoryImportService.importHistory(
-                org.mockito.ArgumentMatchers.isNull(),
-                org.mockito.ArgumentMatchers.eq(false),
-                org.mockito.ArgumentMatchers.any(HistoryImportProgressListener::class.java),
             ),
-        ).thenReturn(cannedResult)
+        )
 
         val body =
             mvc
@@ -109,13 +118,13 @@ class MigrateHistoryAsyncEndpointTest {
         assertNotNull(job.finishedAt)
         assertEquals(42, job.processedCommits)
         assertEquals(99, job.auditRecords)
-        assertEquals(cannedResult, job.result)
+        assertEquals(stubResult.get(), job.result)
         assertNull(job.currentSha, "currentSha must be cleared once the run is done")
     }
 
     @Test
     fun `POST then GET migrate-history-job returns the same job shape`() {
-        val cannedResult =
+        stubResult.set(
             HistoryImportResult(
                 targetRef = "refs/tags/test-2.0",
                 targetSha = "deadbeef",
@@ -125,14 +134,8 @@ class MigrateHistoryAsyncEndpointTest {
                 skippedUnknownNames = 0,
                 auditRecords = 12,
                 durationMs = 100,
-            )
-        `when`(
-            gitHistoryImportService.importHistory(
-                org.mockito.ArgumentMatchers.isNull(),
-                org.mockito.ArgumentMatchers.eq(false),
-                org.mockito.ArgumentMatchers.any(HistoryImportProgressListener::class.java),
             ),
-        ).thenReturn(cannedResult)
+        )
 
         val postedBody =
             mvc
@@ -153,10 +156,43 @@ class MigrateHistoryAsyncEndpointTest {
         assertEquals(posted.result, got.result)
     }
 
+    /**
+     * @TestConfiguration replaces both the production migrationExecutor (with
+     * a SyncTaskExecutor so each POST runs the import inline) AND the real
+     * GitHistoryImportService (with a hand-rolled stub that returns whatever
+     * the test stuffs into [stubResult]). @Primary on the service bean wins
+     * over the production @Service-annotated impl during context wiring.
+     */
     @TestConfiguration
-    open class SyncMigrationExecutorConfig {
+    open class AsyncEndpointTestConfig {
         @Bean("migrationExecutor")
         open fun syncMigrationExecutor(): TaskExecutor = SyncTaskExecutor()
+
+        @Bean
+        open fun stubResult(): AtomicReference<HistoryImportResult> =
+            AtomicReference(
+                HistoryImportResult(
+                    targetRef = "",
+                    targetSha = "",
+                    processedCommits = 0,
+                    skippedNoGroovy = 0,
+                    skippedParseError = 0,
+                    skippedUnknownNames = 0,
+                    auditRecords = 0,
+                    durationMs = 0,
+                ),
+            )
+
+        @Bean
+        @Primary
+        open fun stubGitHistoryImportService(stubResult: AtomicReference<HistoryImportResult>): GitHistoryImportService =
+            object : GitHistoryImportService {
+                override fun importHistory(
+                    toRef: String?,
+                    reset: Boolean,
+                    listener: HistoryImportProgressListener,
+                ): HistoryImportResult = stubResult.get()
+            }
     }
 
     companion object {
