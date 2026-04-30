@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
+import org.octopusden.octopus.components.registry.server.entity.AuditLogEntity
+import org.octopusden.octopus.components.registry.server.repository.AuditLogRepository
 import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
@@ -22,6 +24,8 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.nio.file.Paths
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.util.UUID
 
 /**
@@ -65,6 +69,9 @@ class AuditLogFilterTest {
 
     @Autowired
     private lateinit var objectMapper: ObjectMapper
+
+    @Autowired
+    private lateinit var auditLogRepository: AuditLogRepository
 
     init {
         val testResourcesPath =
@@ -214,8 +221,16 @@ class AuditLogFilterTest {
     @Test
     @DisplayName("SYS-036 audit/recent filtered by source='api' excludes git-history rows")
     fun auditRecent_bySource_excludesOthers() {
-        val name = uniqueName("sys036_src")
-        createComponent(name) // produces source=api rows
+        // Proof-of-exclusion: seed both an api row (via the live CRUD path) AND a synthetic
+        // git-history row (direct repo write — same path /admin/migrate-history takes), then
+        // assert the source=api filter returns only the api row. If the source predicate were
+        // accidentally removed, this test would fail because the git-history row would leak
+        // through. The earlier shape of this test only checked "all rows are source=api"
+        // which silently passes when the fixture has no git-history rows.
+        val name = uniqueName("sys036_src_api")
+        val apiId = createComponent(name) // source=api row
+        val historyEntityId = "sys036_history_${UUID.randomUUID().toString().take(8)}"
+        seedSyntheticAuditRow(entityId = historyEntityId, source = "git-history")
 
         val body =
             mvc
@@ -223,7 +238,7 @@ class AuditLogFilterTest {
                     get("/rest/api/4/audit/recent")
                         .with(adminJwt())
                         .param("source", "api")
-                        .param("size", "200"),
+                        .param("size", "500"),
                 ).andExpect(status().isOk)
                 .andReturn()
                 .response.contentAsString
@@ -231,6 +246,144 @@ class AuditLogFilterTest {
 
         val sources = json["content"].map { it["source"].asText() }.toSet()
         assert(sources.all { it == "api" }) { "expected only api, got $sources" }
+
+        val entityIds = json["content"].map { it["entityId"].asText() }.toSet()
+        assert(entityIds.contains(apiId)) { "expected the api-sourced row $apiId in the response" }
+        assert(!entityIds.contains(historyEntityId)) {
+            "expected git-history row $historyEntityId to be excluded by source=api"
+        }
+    }
+
+    @Test
+    @DisplayName("SYS-036 audit/recent filtered by action returns only matching rows")
+    fun auditRecent_byAction_returnsMatching() {
+        // Generate two rows for the same component: a CREATE and a DELETE. Filtering by
+        // ?action=DELETE should return only the delete row.
+        val name = uniqueName("sys036_act")
+        val id = createComponent(name)
+        deleteComponent(id)
+
+        val body =
+            mvc
+                .perform(
+                    get("/rest/api/4/audit/recent")
+                        .with(adminJwt())
+                        .param("action", "DELETE")
+                        .param("size", "500"),
+                ).andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString
+        val json = objectMapper.readTree(body)
+
+        val actions = json["content"].map { it["action"].asText() }.toSet()
+        assert(actions.all { it == "DELETE" }) { "expected only DELETE, got $actions" }
+        assert(json["content"].any { it["entityId"].asText() == id }) {
+            "expected to find the DELETE row for $id"
+        }
+        // Spot-check that the CREATE row from the same component IS reachable on a separate
+        // call — proves we're filtering by action, not just always returning the same set.
+        val createBody =
+            mvc
+                .perform(
+                    get("/rest/api/4/audit/recent")
+                        .with(adminJwt())
+                        .param("action", "CREATE")
+                        .param("entityId", id)
+                        .param("size", "10"),
+                ).andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString
+        val createActions = objectMapper.readTree(createBody)["content"].map { it["action"].asText() }.toSet()
+        assert(createActions == setOf("CREATE")) { "expected only CREATE for $id, got $createActions" }
+    }
+
+    @Test
+    @DisplayName("SYS-036 audit/recent filtered by half-open [from, to) date window")
+    fun auditRecent_byDateWindow_halfOpen() {
+        // Seed three synthetic rows at controlled timestamps so we can prove half-open
+        // semantics deterministically. Live audit rows always use Instant.now() and we
+        // can't pin those to specific instants without sleeping the test, hence direct repo
+        // writes here. Window: [t1, t2). t0 < t1 < t2 < t3, so:
+        //   - row at t0 → before window, excluded
+        //   - row at t1 → exactly the lower bound, INCLUDED (closed end)
+        //   - row at t2 → exactly the upper bound, EXCLUDED (open end)
+        //   - row at t3 → after window, excluded
+        val anchor = Instant.now().minus(7, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS)
+        val t0 = anchor
+        val t1 = anchor.plus(1, ChronoUnit.HOURS)
+        val t2 = anchor.plus(2, ChronoUnit.HOURS)
+        val t3 = anchor.plus(3, ChronoUnit.HOURS)
+        val tag = "sys036_window_${UUID.randomUUID().toString().take(8)}"
+        val idT0 = "${tag}_t0"
+        val idT1 = "${tag}_t1"
+        val idT2 = "${tag}_t2"
+        val idT3 = "${tag}_t3"
+        seedSyntheticAuditRow(entityId = idT0, changedAt = t0)
+        seedSyntheticAuditRow(entityId = idT1, changedAt = t1)
+        seedSyntheticAuditRow(entityId = idT2, changedAt = t2)
+        seedSyntheticAuditRow(entityId = idT3, changedAt = t3)
+
+        val body =
+            mvc
+                .perform(
+                    get("/rest/api/4/audit/recent")
+                        .with(adminJwt())
+                        .param("from", t1.toString())
+                        .param("to", t2.toString())
+                        .param("size", "500"),
+                ).andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString
+        val json = objectMapper.readTree(body)
+        val ids = json["content"].map { it["entityId"].asText() }.filter { it.startsWith(tag) }.toSet()
+
+        assert(ids == setOf(idT1)) {
+            "expected only [t1] in [from=$t1, to=$t2), got $ids " +
+                "(t0=$idT0 should be excluded as before-window, " +
+                "t2=$idT2 should be excluded as upper-bound-exclusive, " +
+                "t3=$idT3 should be excluded as after-window)"
+        }
+    }
+
+    @Test
+    @DisplayName("SYS-036 audit/recent default sort is changedAt DESC when caller doesn't supply sort=")
+    fun auditRecent_defaultSort_changedAtDesc() {
+        // Seed three rows with controlled, distinct timestamps. With no sort= parameter the
+        // service default-sorts changedAt DESC (AuditServiceImpl.withDefaultSort), so we
+        // expect the response to list our seeded rows in newest-first order.
+        val anchor = Instant.now().minus(30, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS)
+        val tOldest = anchor
+        val tMiddle = anchor.plus(1, ChronoUnit.HOURS)
+        val tNewest = anchor.plus(2, ChronoUnit.HOURS)
+        val tag = "sys036_sort_${UUID.randomUUID().toString().take(8)}"
+        val idOldest = "${tag}_oldest"
+        val idMiddle = "${tag}_middle"
+        val idNewest = "${tag}_newest"
+        // Insert intentionally out of order to make sure ordering comes from the query, not insert order.
+        seedSyntheticAuditRow(entityId = idMiddle, changedAt = tMiddle)
+        seedSyntheticAuditRow(entityId = idOldest, changedAt = tOldest)
+        seedSyntheticAuditRow(entityId = idNewest, changedAt = tNewest)
+
+        val body =
+            mvc
+                .perform(
+                    get("/rest/api/4/audit/recent")
+                        .with(adminJwt())
+                        .param("from", tOldest.toString())
+                        .param("to", tNewest.plus(1, ChronoUnit.HOURS).toString())
+                        .param("size", "500"),
+                ).andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString
+        val json = objectMapper.readTree(body)
+        val orderedIdsForTag =
+            json["content"]
+                .map { it["entityId"].asText() }
+                .filter { it.startsWith(tag) }
+
+        assert(orderedIdsForTag == listOf(idNewest, idMiddle, idOldest)) {
+            "expected DESC order [newest, middle, oldest] for tag $tag, got $orderedIdsForTag"
+        }
     }
 
     @Test
@@ -240,4 +393,29 @@ class AuditLogFilterTest {
             .perform(get("/rest/api/4/audit/recent").with(adminJwt()))
             .andExpect(status().isOk)
     }
+
+    /**
+     * Direct repo write — bypasses the controller path so we can pin source/changedAt to
+     * specific values for tests that need to prove exclusion or ordering. The live CRUD path
+     * always writes source=api and changedAt=Instant.now(), which is fine for the happy-path
+     * tests but not enough to prove the filter predicates are actually applied.
+     */
+    private fun seedSyntheticAuditRow(
+        entityType: String = "Component",
+        entityId: String,
+        action: String = "CREATE",
+        changedBy: String = "system",
+        changedAt: Instant = Instant.now(),
+        source: String = "api",
+    ): AuditLogEntity =
+        auditLogRepository.save(
+            AuditLogEntity(
+                entityType = entityType,
+                entityId = entityId,
+                action = action,
+                changedBy = changedBy,
+                changedAt = changedAt,
+                source = source,
+            ),
+        )
 }
