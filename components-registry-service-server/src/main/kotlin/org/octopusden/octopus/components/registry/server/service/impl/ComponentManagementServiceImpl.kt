@@ -26,6 +26,7 @@ import org.octopusden.octopus.components.registry.server.mapper.toResponse
 import org.octopusden.octopus.components.registry.server.mapper.toSummaryResponse
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.FieldOverrideRepository
+import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
 import org.springframework.context.ApplicationEventPublisher
@@ -44,6 +45,7 @@ class ComponentManagementServiceImpl(
     private val fieldOverrideRepository: FieldOverrideRepository,
     private val sourceRegistry: ComponentSourceRegistry,
     private val applicationEventPublisher: ApplicationEventPublisher,
+    private val currentUserResolver: CurrentUserResolver,
 ) : ComponentManagementService {
     @Suppress("CyclomaticComplexMethod")
     override fun createComponent(request: ComponentCreateRequest): ComponentDetailResponse {
@@ -78,6 +80,7 @@ class ComponentManagementServiceImpl(
                 entityType = "Component",
                 entityId = saved.id.toString(),
                 action = "CREATE",
+                changedBy = currentUserResolver.currentUsername(),
                 newValue =
                     mapOf(
                         "name" to saved.name,
@@ -284,6 +287,7 @@ class ComponentManagementServiceImpl(
                 entityType = "Component",
                 entityId = saved.id.toString(),
                 action = if (isRename) "RENAME" else "UPDATE",
+                changedBy = currentUserResolver.currentUsername(),
                 oldValue = oldValue,
                 newValue = newValue,
             ),
@@ -306,6 +310,7 @@ class ComponentManagementServiceImpl(
                 entityType = "Component",
                 entityId = id.toString(),
                 action = "DELETE",
+                changedBy = currentUserResolver.currentUsername(),
                 oldValue = mapOf("name" to entity.name, "archived" to false),
                 newValue = mapOf("name" to entity.name, "archived" to true),
             ),
@@ -396,6 +401,14 @@ class ComponentManagementServiceImpl(
 
         filter.archived?.let { archived ->
             spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<Boolean>("archived"), archived) })
+        }
+
+        filter.owner?.let { owner ->
+            // Exact match on `componentOwner` (the entity's column for the user-facing
+            // "owner"). Case-sensitive — the values come from `/components/meta/owners`
+            // which returns the canonical strings, so the Portal autocomplete picker
+            // hands back exactly what is in the column.
+            spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<String>("componentOwner"), owner) })
         }
 
         filter.search?.let { search ->
