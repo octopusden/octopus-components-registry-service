@@ -20,7 +20,7 @@
 | Task | Status | Notes |
 |------|--------|-------|
 | 3A | ✅ Done | DatabaseComponentRegistryResolver (@Transactional readOnly) |
-| 3B | ✅ Done | ComponentRoutingResolver (@Primary) + ComponentSourceRegistry (Caffeine cache) |
+| 3B | ✅ Done | ComponentRoutingResolver (@Primary) + ComponentSourceRegistry (in-process cache removed by SYS-032) |
 
 ## Phase 4: React UI ✅ (extracted to `octopus-components-management-portal`)
 
