@@ -3,6 +3,7 @@ package org.octopusden.octopus.components.registry.server.service.impl
 import org.octopusden.octopus.components.registry.server.entity.GitHistoryImportStateEntity
 import org.octopusden.octopus.components.registry.server.entity.GitHistoryImportStatus
 import org.octopusden.octopus.components.registry.server.repository.GitHistoryImportStateRepository
+import org.octopusden.octopus.components.registry.server.service.ForceResetOutcome
 import org.octopusden.octopus.components.registry.server.service.GitHistoryImportService
 import org.octopusden.octopus.components.registry.server.service.HistoryImportProgressListener
 import org.octopusden.octopus.components.registry.server.service.HistoryMigrationJobService
@@ -17,11 +18,10 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.core.task.TaskExecutor
 import org.springframework.stereotype.Service
+import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
-
-private const val IMPORT_KEY = "component-history"
 
 /**
  * In-memory async wrapper around [GitHistoryImportService.importHistory]. Mirrors
@@ -41,6 +41,7 @@ class HistoryMigrationJobServiceImpl(
     private val stateRepository: GitHistoryImportStateRepository,
     @Qualifier("migrationExecutor") private val executor: TaskExecutor,
     private val lifecycleGate: MigrationLifecycleGate,
+    private val forceResetter: HistoryForceResetter,
 ) : HistoryMigrationJobService {
     private val state = AtomicReference<HistoryMigrationJobState?>()
 
@@ -159,12 +160,109 @@ class HistoryMigrationJobServiceImpl(
      */
     override fun current(): HistoryMigrationJobState? {
         state.get()?.let { return it }
-        val row = stateRepository.findById(IMPORT_KEY).orElse(null) ?: return null
+        val row = stateRepository.findById(HISTORY_IMPORT_KEY).orElse(null) ?: return null
         return synthesizeFromDb(row)
     }
 
     override fun clearInMemory() {
+        val current = state.get()
+        if (current?.state == JobState.RUNNING) {
+            LOG.warn(
+                "clearInMemory() called while job {} is RUNNING — ignored. " +
+                    "Call forceReset() or wait for the job to complete first.",
+                current.id,
+            )
+            return
+        }
         state.set(null)
+    }
+
+    /**
+     * Guards → wipe → return outcome. See [HistoryMigrationJobService.forceReset].
+     *
+     * Guard ordering mirrors [AdminControllerV4.forceResetHistory] before refactor:
+     *  1. In-pod RUNNING check (in-memory read, no DB).
+     *  2. DB staleness check (DB read + age compare).
+     *  3. TOCTOU re-read: re-check in-memory state after DB read to catch a
+     *     concurrent [startAsync] that claimed the gate between Guards 1 and 2.
+     */
+    override fun forceReset(ackMultipodRisk: Boolean): ForceResetOutcome {
+        // Guard 1: same-pod active job.
+        val active = state.get()
+        if (active?.state == JobState.RUNNING) {
+            return ForceResetOutcome.Blocked(
+                code = "history-migration-running",
+                message =
+                    "Cannot force-reset while history migration is RUNNING (jobId=${active.id}). " +
+                        "Wait for it to finish or restart the pod.",
+                activeKind = JobKind.HISTORY.name,
+                activeJobId = active.id,
+            )
+        }
+
+        // Guard 2: cross-pod staleness. Inspect the DB row directly so a live import
+        // in another pod (with a fresh updatedAt) is detected.
+        val row = stateRepository.findById(HISTORY_IMPORT_KEY).orElse(null)
+        if (row != null &&
+            row.status == GitHistoryImportStatus.IN_PROGRESS.name &&
+            !ackMultipodRisk
+        ) {
+            val age = Duration.between(row.updatedAt, Instant.now())
+            if (age < STALE_IN_PROGRESS_THRESHOLD) {
+                LOG.info(
+                    "Refusing force-reset: IN_PROGRESS row updated {} ago (threshold={}). " +
+                        "Likely a live import in another pod. Override with ack-multipod-risk=true if you accept the data-corruption risk.",
+                    age,
+                    STALE_IN_PROGRESS_THRESHOLD,
+                )
+                return ForceResetOutcome.Blocked(
+                    code = "history-import-likely-live-elsewhere",
+                    message =
+                        "Refusing force-reset: the IN_PROGRESS claim was updated ${age.toSeconds()}s ago, " +
+                            "below the ${STALE_IN_PROGRESS_THRESHOLD.toMinutes()}-minute staleness threshold. " +
+                            "A live import in another pod is likely. " +
+                            "If you understand the multi-pod risk and want to proceed anyway, " +
+                            "POST again with ?ack-multipod-risk=true.",
+                    activeKind = JobKind.HISTORY.name,
+                    activeJobId = null,
+                )
+            }
+        }
+
+        // TOCTOU re-read: re-check in-memory state after the DB row read. The window
+        // between Guard 1 and this point is at most one DB round-trip wide. A concurrent
+        // startAsync that slipped past Guard 1 (it hadn't claimed the gate yet) and has
+        // since published its state will be caught here.
+        val activeAfterRowRead = state.get()
+        if (activeAfterRowRead?.state == JobState.RUNNING) {
+            return ForceResetOutcome.Blocked(
+                code = "history-migration-running",
+                message =
+                    "Cannot force-reset while history migration is RUNNING (jobId=${activeAfterRowRead.id}). " +
+                        "Wait for it to finish or restart the pod.",
+                activeKind = JobKind.HISTORY.name,
+                activeJobId = activeAfterRowRead.id,
+            )
+        }
+
+        // Audit-loud destructive action: log before the wipe so the pre-state survives
+        // in the log stream. ackMultipodRisk override logged at ERROR so alert pipelines
+        // that filter on ERROR-only catch it.
+        if (row != null) {
+            val msg =
+                "FORCE-RESET: deleting git_history_import_state " +
+                    "(target=${row.targetRef}@${row.targetSha}, status=${row.status}, " +
+                    "updatedAt=${row.updatedAt}) and all audit_log rows with source='git-history'."
+            if (ackMultipodRisk) LOG.error("$msg [ack-multipod-risk=true overriding staleness check]") else LOG.info(msg)
+        } else {
+            LOG.info("FORCE-RESET: no state row to delete (idempotent no-op on empty DB)")
+        }
+
+        forceResetter.forceReset()
+        // Bypass the clearInMemory() RUNNING guard — we already verified there is no
+        // RUNNING job above (Guards 1, 3). Direct set avoids the redundant re-check.
+        state.set(null)
+        return ForceResetOutcome.Cleared
     }
 
     private fun runHistoryMigration(

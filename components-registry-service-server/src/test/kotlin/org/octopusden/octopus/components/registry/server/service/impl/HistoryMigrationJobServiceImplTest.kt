@@ -12,6 +12,7 @@ import org.octopusden.octopus.components.registry.server.dto.v4.HistoryImportRes
 import org.octopusden.octopus.components.registry.server.entity.GitHistoryImportStateEntity
 import org.octopusden.octopus.components.registry.server.entity.GitHistoryImportStatus
 import org.octopusden.octopus.components.registry.server.repository.GitHistoryImportStateRepository
+import org.octopusden.octopus.components.registry.server.service.ForceResetOutcome
 import org.octopusden.octopus.components.registry.server.service.GitHistoryImportService
 import org.octopusden.octopus.components.registry.server.service.HistoryImportProgressEvent
 import org.octopusden.octopus.components.registry.server.service.HistoryImportProgressListener
@@ -20,7 +21,9 @@ import org.octopusden.octopus.components.registry.server.service.JobState
 import org.octopusden.octopus.components.registry.server.service.MigrationConflictException
 import org.octopusden.octopus.components.registry.server.service.MigrationLifecycleGate
 import org.springframework.core.task.SyncTaskExecutor
+import java.time.Duration
 import java.time.Instant
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.assertFailsWith
 
 /**
@@ -397,6 +400,122 @@ class HistoryMigrationJobServiceImplTest {
     }
 
     @Test
+    fun `clearInMemory is ignored when a job is RUNNING (prevents false FORCE_RESET synthesis)`() {
+        val deferred = DeferredExecutor()
+        val service =
+            newService(
+                import = StubGitHistoryImportService(impl = { _, _, _ -> emptyResult }),
+                executor = deferred,
+            )
+
+        val result = service.startAsync(toRef = null, reset = false)
+        assertEquals(JobState.RUNNING, result.state.state)
+
+        service.clearInMemory()
+        assertEquals(JobState.RUNNING, service.current()!!.state, "clearInMemory must be a no-op while RUNNING")
+        assertEquals(result.state.id, service.current()!!.id, "job id must remain unchanged")
+    }
+
+    @Test
+    fun `forceReset returns Cleared on empty DB (idempotent)`() {
+        val service = newService()
+        val outcome = service.forceReset(ackMultipodRisk = false)
+        assertEquals(ForceResetOutcome.Cleared, outcome)
+    }
+
+    @Test
+    fun `forceReset returns Blocked with code=history-migration-running when a job is RUNNING in this pod`() {
+        val deferred = DeferredExecutor()
+        val service =
+            newService(
+                import = StubGitHistoryImportService(impl = { _, _, _ -> emptyResult }),
+                executor = deferred,
+            )
+        service.startAsync(toRef = null, reset = false)
+        assertEquals(JobState.RUNNING, service.current()!!.state)
+
+        val outcome = service.forceReset(ackMultipodRisk = false) as ForceResetOutcome.Blocked
+        assertEquals("history-migration-running", outcome.code)
+        assertNotNull(outcome.activeJobId)
+    }
+
+    @Test
+    fun `forceReset returns Blocked when DB row is IN_PROGRESS and fresh (cross-pod guard)`() {
+        val repo = StubGitHistoryImportStateRepository()
+        repo.saveRow(
+            GitHistoryImportStateEntity(
+                importKey = "component-history",
+                targetRef = "refs/tags/v1",
+                targetSha = "abc",
+                status = GitHistoryImportStatus.IN_PROGRESS.name,
+                // updatedAt = now → age < threshold
+                updatedAt = Instant.now(),
+            ),
+        )
+        val service = newService(stateRepository = repo)
+
+        val outcome = service.forceReset(ackMultipodRisk = false) as ForceResetOutcome.Blocked
+        assertEquals("history-import-likely-live-elsewhere", outcome.code)
+        assertNull(outcome.activeJobId)
+    }
+
+    @Test
+    fun `forceReset proceeds when DB row is IN_PROGRESS but stale (older than threshold)`() {
+        val forceResetCalls = AtomicInteger(0)
+        val repo = StubGitHistoryImportStateRepository()
+        repo.saveRow(
+            GitHistoryImportStateEntity(
+                importKey = "component-history",
+                targetRef = "refs/tags/v1",
+                targetSha = "abc",
+                status = GitHistoryImportStatus.IN_PROGRESS.name,
+                // Make the row stale: updatedAt > STALE_IN_PROGRESS_THRESHOLD ago
+                updatedAt = Instant.now().minus(Duration.ofMinutes(31)),
+            ),
+        )
+        val service = newService(stateRepository = repo, forceResetter = HistoryForceResetter { forceResetCalls.incrementAndGet() })
+
+        val outcome = service.forceReset(ackMultipodRisk = false)
+        assertEquals(ForceResetOutcome.Cleared, outcome)
+        assertEquals(1, forceResetCalls.get(), "forceResetter must be called exactly once")
+    }
+
+    @Test
+    fun `forceReset with ackMultipodRisk=true bypasses the staleness guard and proceeds`() {
+        val forceResetCalls = AtomicInteger(0)
+        val repo = StubGitHistoryImportStateRepository()
+        repo.saveRow(
+            GitHistoryImportStateEntity(
+                importKey = "component-history",
+                targetRef = "refs/tags/v1",
+                targetSha = "abc",
+                status = GitHistoryImportStatus.IN_PROGRESS.name,
+                // Fresh row that would normally be blocked
+                updatedAt = Instant.now(),
+            ),
+        )
+        val service = newService(stateRepository = repo, forceResetter = HistoryForceResetter { forceResetCalls.incrementAndGet() })
+
+        val outcome = service.forceReset(ackMultipodRisk = true)
+        assertEquals(ForceResetOutcome.Cleared, outcome)
+        assertEquals(1, forceResetCalls.get(), "staleness guard must be bypassed when ackMultipodRisk=true")
+    }
+
+    @Test
+    fun `forceReset clears in-memory state after wiping so DB-fallback shows idle`() {
+        val service =
+            newService(
+                import = StubGitHistoryImportService(impl = { _, _, _ -> emptyResult }),
+            )
+        service.startAsync(toRef = null, reset = false)
+        assertEquals(JobState.COMPLETED, service.current()!!.state)
+
+        // forceReset with no DB row (COMPLETED was in-memory only) — still clears slot.
+        service.forceReset(ackMultipodRisk = false)
+        assertNull(service.current(), "after forceReset the in-memory slot must be cleared")
+    }
+
+    @Test
     fun `clearInMemory drops the in-memory state so DB-fallback takes over`() {
         val repo = StubGitHistoryImportStateRepository()
         repo.saveRow(
@@ -426,12 +545,14 @@ class HistoryMigrationJobServiceImplTest {
         stateRepository: GitHistoryImportStateRepository = StubGitHistoryImportStateRepository(),
         executor: org.springframework.core.task.TaskExecutor = SyncTaskExecutor(),
         gate: MigrationLifecycleGate = MigrationLifecycleGate(),
+        forceResetter: HistoryForceResetter = HistoryForceResetter {},
     ): HistoryMigrationJobServiceImpl =
         HistoryMigrationJobServiceImpl(
             gitHistoryImportService = import,
             stateRepository = stateRepository,
             executor = executor,
             lifecycleGate = gate,
+            forceResetter = forceResetter,
         )
 
     /** Hand-written stub for [GitHistoryImportService] mirroring StubImportService in the components test. */

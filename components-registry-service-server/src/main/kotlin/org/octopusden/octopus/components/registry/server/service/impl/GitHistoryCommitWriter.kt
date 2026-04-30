@@ -20,7 +20,7 @@ import java.time.Instant
 class GitHistoryCommitWriter(
     private val auditLogRepository: AuditLogRepository,
     private val stateRepository: GitHistoryImportStateRepository,
-) {
+) : HistoryForceResetter {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     fun persistCommitRows(rows: List<AuditLogEntity>) {
         if (rows.isEmpty()) return
@@ -49,7 +49,7 @@ class GitHistoryCommitWriter(
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     fun touchHeartbeat() {
-        val row = stateRepository.findById("component-history").orElse(null) ?: return
+        val row = stateRepository.findById(HISTORY_IMPORT_KEY).orElse(null) ?: return
         row.updatedAt = Instant.now()
         stateRepository.save(row)
     }
@@ -62,7 +62,7 @@ class GitHistoryCommitWriter(
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     fun resetIfNotInProgress(): Boolean {
-        val existing = stateRepository.findById("component-history").orElse(null)
+        val existing = stateRepository.findById(HISTORY_IMPORT_KEY).orElse(null)
         if (existing != null && existing.status == GitHistoryImportStatus.IN_PROGRESS.name) {
             return false
         }
@@ -85,7 +85,7 @@ class GitHistoryCommitWriter(
      * duplicates. The force-reset confirm dialog spells this out.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    fun forceReset() {
+    override fun forceReset() {
         auditLogRepository.deleteBySource("git-history")
         stateRepository.deleteAll()
     }

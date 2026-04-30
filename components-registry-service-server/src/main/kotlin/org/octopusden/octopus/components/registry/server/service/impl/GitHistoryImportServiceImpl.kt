@@ -29,7 +29,6 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Instant
 
-private const val IMPORT_KEY = "component-history"
 private const val HISTORY_SOURCE = "git-history"
 private const val PROGRESS_LOG_EVERY = 250
 private const val UNKNOWN_NAMES_SAMPLE_SIZE = 20
@@ -125,13 +124,13 @@ class GitHistoryImportServiceImpl(
         // the real tag/sha.
         val claimed =
             stateRepository.tryInsert(
-                importKey = IMPORT_KEY,
+                importKey = HISTORY_IMPORT_KEY,
                 targetRef = "",
                 targetSha = "",
                 status = GitHistoryImportStatus.IN_PROGRESS.name,
             )
         if (claimed == 0) {
-            val existing = stateRepository.findById(IMPORT_KEY).orElseThrow()
+            val existing = stateRepository.findById(HISTORY_IMPORT_KEY).orElseThrow()
             throw ResponseStatusException(
                 HttpStatus.CONFLICT,
                 "git history import already ran (status=${existing.status}, " +
@@ -152,7 +151,7 @@ class GitHistoryImportServiceImpl(
         log.info("History import target: {}@{}", target.ref, target.sha)
 
         // Fill in the real target on the claimed state row (inserted empty by preflight).
-        val state = stateRepository.findById(IMPORT_KEY).orElseThrow()
+        val state = stateRepository.findById(HISTORY_IMPORT_KEY).orElseThrow()
         state.targetRef = target.ref
         state.targetSha = target.sha
         commitWriter.saveState(state)
@@ -201,8 +200,12 @@ class GitHistoryImportServiceImpl(
                 val now = Instant.now()
                 if (java.time.Duration.between(lastHeartbeat, now) >= HEARTBEAT_INTERVAL) {
                     lastHeartbeat = now
-                    runCatching { commitWriter.touchHeartbeat() }
-                        .onFailure { log.warn("Heartbeat write failed at commit $index: ${it.message}") }
+                    @Suppress("TooGenericExceptionCaught") // intentional: don't abort the import on a transient DB hiccup
+                    try {
+                        commitWriter.touchHeartbeat()
+                    } catch (e: Exception) {
+                        log.warn("Heartbeat write failed at commit $index: ${e.message}")
+                    }
                 }
             }
         }
@@ -435,7 +438,7 @@ class GitHistoryImportServiceImpl(
     }
 
     private fun markState(status: GitHistoryImportStatus) {
-        stateRepository.findById(IMPORT_KEY).ifPresent { entity ->
+        stateRepository.findById(HISTORY_IMPORT_KEY).ifPresent { entity ->
             entity.status = status.name
             commitWriter.saveState(entity)
         }

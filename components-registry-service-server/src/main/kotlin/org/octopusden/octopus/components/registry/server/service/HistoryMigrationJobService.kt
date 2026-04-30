@@ -60,6 +60,26 @@ data class StartHistoryMigrationResult(
     val isNewlyStarted: Boolean,
 )
 
+/**
+ * Outcome of [HistoryMigrationJobService.forceReset].
+ *
+ * Using a sealed type (rather than throwing) so the service layer can express
+ * all outcomes without coupling the controller to implementation details:
+ *  - [Cleared] → 204 No Content; DB row + audit rows wiped (or already empty).
+ *  - [Blocked] → 409 Conflict; controller maps [code]/[message]/[activeKind]/[activeJobId]
+ *    to a [org.octopusden.octopus.components.registry.server.dto.v4.MigrationConflictResponse].
+ */
+sealed interface ForceResetOutcome {
+    data object Cleared : ForceResetOutcome
+
+    data class Blocked(
+        val code: String,
+        val message: String,
+        val activeKind: String,
+        val activeJobId: String?,
+    ) : ForceResetOutcome
+}
+
 interface HistoryMigrationJobService {
     /**
      * Mirror of [MigrationJobService.startAsync] for history. Same idempotency
@@ -85,9 +105,30 @@ interface HistoryMigrationJobService {
     fun current(): HistoryMigrationJobState?
 
     /**
-     * Drop the in-memory state. Called from the force-reset flow (A7.2) so the
-     * synthesized DB-backed state doesn't keep showing "restored from previous
-     * pod" once the operator has explicitly wiped it.
+     * Drop the in-memory state. Called externally when an operator-level
+     * action (e.g. a test helper) needs to reset the slot without going
+     * through the full guard logic. Ignored (with a WARN log) if a job is
+     * currently RUNNING — callers that need to clear a live job should use
+     * [forceReset] instead.
      */
     fun clearInMemory()
+
+    /**
+     * Destructive recovery endpoint (POST /admin/migrate-history/force-reset).
+     *
+     * Applies two guards before wiping:
+     *  1. In-pod gate — refused with [ForceResetOutcome.Blocked] if a history
+     *     migration is currently RUNNING in this pod.
+     *  2. Cross-pod staleness — refused if the DB row is IN_PROGRESS with a
+     *     fresh `updatedAt` (< STALE_IN_PROGRESS_THRESHOLD), unless
+     *     `ackMultipodRisk=true` overrides.
+     *
+     * After both guards pass it calls the underlying commit writer to wipe the
+     * state row + all audit_log rows with source='git-history', then clears
+     * the in-memory slot.
+     *
+     * Returns [ForceResetOutcome.Cleared] (idempotent) when the DB was already
+     * empty, so the controller can always answer 204 on success.
+     */
+    fun forceReset(ackMultipodRisk: Boolean): ForceResetOutcome
 }

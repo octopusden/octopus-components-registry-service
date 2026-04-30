@@ -55,13 +55,13 @@ class FaultInjectionConfig {
     fun faultyImportService(real: ImportServiceImpl): ImportService = FaultInjectingImportService(real)
 
     /**
-     * Wraps the real [GitHistoryImportService], throwing inside `importHistory`
-     * after the clone+resolve phase (the listener gets a single
-     * `totalCommits` event before the throw, so the SPA briefly sees the
-     * total before the FAILED transition). State row in
-     * `git_history_import_state` is left as IN_PROGRESS by the underlying
-     * impl's `markState(FAILED)` — exact same path a real-world failure
-     * takes. Verification 5b uses this to test Force-reset.
+     * Wraps the real [GitHistoryImportService], throwing immediately at the
+     * start of `importHistory` without delegating. No progress events are
+     * emitted — the throw happens before the clone+resolve phase, so the
+     * SPA goes straight from RUNNING to FAILED with no totalCommits update.
+     * The underlying impl's `markState(FAILED)` path handles state row
+     * cleanup, which is the same path a real-world failure takes.
+     * Verification 5b uses this to test Force-reset.
      */
     @Bean
     @Primary
