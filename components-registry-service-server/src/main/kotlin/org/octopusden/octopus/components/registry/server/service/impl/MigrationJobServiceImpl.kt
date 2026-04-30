@@ -48,107 +48,134 @@ class MigrationJobServiceImpl(
 ) : MigrationJobService {
     private val state = AtomicReference<MigrationJobState?>()
 
-    // Suppressed LoopWithTooManyJumpStatements — the loop IS the CAS-retry
-    // pattern: each branch (same-kind attach, cross-kind gate conflict, lost
-    // CAS race) needs its own non-local exit. Refactoring into helpers
-    // would pull non-trivial state across the boundary and make the
-    // ordering invariants harder to read, not easier.
-    @Suppress("LoopWithTooManyJumpStatements")
+    /**
+     * Outcome of a single CAS-retry iteration in [startAsync]. Replaces what
+     * was previously a multi-jump loop body with explicit named cases — each
+     * one maps to exactly one terminal action in the loop driver.
+     */
+    private sealed interface ClaimAttempt {
+        /** Same-kind start while one is RUNNING — caller attaches to existing. */
+        data class Attached(
+            val state: MigrationJobState,
+        ) : ClaimAttempt
+
+        /** Cross-kind gate held by HISTORY — caller throws to the controller's 409 mapper. */
+        data class CrossKindConflict(
+            val active: MigrationLifecycleGate.ActiveJob,
+        ) : ClaimAttempt
+
+        /** Lost a race (gate or state CAS); caller loops back for another attempt. */
+        data object Retry : ClaimAttempt
+
+        /** Won the slot; caller submits the runnable to the executor. */
+        data class Claimed(
+            val candidate: MigrationJobState,
+        ) : ClaimAttempt
+    }
+
     override fun startAsync(): StartMigrationResult {
-        // Order of operations is load-bearing:
-        //   1. same-kind 409 from local AtomicReference (state is non-null when RUNNING),
-        //   2. cross-kind gate claim (after the same-kind path so we never read nullable
-        //      state inside the gate-conflict branch),
-        //   3. publish state via CAS,
-        //   4. submit to executor.
-        // A naive "gate first" version had a window where thread A claimed the gate but
-        // hadn't yet written state, and thread B's same-kind 409 path would NPE on
-        // state.get()!!. Same-kind first dodges that.
+        // Order of operations is load-bearing — see [tryClaim]. We loop only on
+        // [ClaimAttempt.Retry]; every other case is a terminal action.
         while (true) {
-            val existing = state.get()
-            if (existing?.state == JobState.RUNNING) {
-                return StartMigrationResult(existing, isNewlyStarted = false)
+            when (val attempt = tryClaim()) {
+                is ClaimAttempt.Attached -> return StartMigrationResult(attempt.state, isNewlyStarted = false)
+                is ClaimAttempt.CrossKindConflict -> throw MigrationConflictException(attempt.active)
+                is ClaimAttempt.Claimed -> {
+                    submitToExecutor(attempt.candidate)
+                    // SyncTaskExecutor (used in tests) has already finished the run by now → callers see COMPLETED.
+                    // Production async executor → RUNNING. Either way, return the authoritative current state.
+                    return StartMigrationResult(state.get() ?: attempt.candidate, isNewlyStarted = true)
+                }
+                ClaimAttempt.Retry -> Unit // loop again
             }
+        }
+    }
 
-            val candidate =
-                MigrationJobState(
-                    id = UUID.randomUUID().toString(),
-                    state = JobState.RUNNING,
-                    startedAt = Instant.now(),
-                    finishedAt = null,
-                    total = 0,
-                    migrated = 0,
-                    failed = 0,
-                    skipped = 0,
-                    currentComponent = null,
-                    errorMessage = null,
-                    result = null,
-                    // CRITICAL: phase is set on the candidate BEFORE executor.execute,
-                    // not inside the runnable. ThreadPoolTaskExecutor.execute returns
-                    // synchronously and the controller builds its response from
-                    // state.get() right after — if phase weren't already DEFAULTS the
-                    // first SPA poll tick would see RUNNING with no phase and render
-                    // the fallback "Running…" instead of "Loading defaults from Git…".
-                    // The whole point of the field would be defeated at the moment of
-                    // the click.
-                    phase = MigrationPhase.DEFAULTS,
-                )
+    /**
+     * One CAS-retry iteration. Decomposes the original loop body into:
+     *   1. same-kind 409 from local AtomicReference (state is non-null when RUNNING),
+     *   2. cross-kind gate claim (after the same-kind path so we never read
+     *      nullable state inside the gate-conflict branch),
+     *   3. publish state via CAS.
+     *
+     * A naive "gate first" version had a window where thread A claimed the gate but
+     * hadn't yet written state, and thread B's same-kind 409 path would NPE on
+     * `state.get()!!`. Same-kind first dodges that.
+     */
+    private fun tryClaim(): ClaimAttempt {
+        val existing = state.get()
+        if (existing?.state == JobState.RUNNING) {
+            return ClaimAttempt.Attached(existing)
+        }
 
-            val gateConflict = lifecycleGate.tryClaim(JobKind.COMPONENTS, candidate.id)
-            if (gateConflict != null) {
-                when (gateConflict.kind) {
-                    // A concurrent components-startAsync got the gate first — retry from
-                    // the top so we re-read state and either attach to its publication or
-                    // race for the next slot once it completes.
-                    JobKind.COMPONENTS -> continue
-                    // The other migration kind owns the gate. Surface as cross-kind 409
-                    // via the controller's exception handler.
-                    JobKind.HISTORY -> throw MigrationConflictException(gateConflict)
+        val candidate =
+            MigrationJobState(
+                id = UUID.randomUUID().toString(),
+                state = JobState.RUNNING,
+                startedAt = Instant.now(),
+                finishedAt = null,
+                total = 0,
+                migrated = 0,
+                failed = 0,
+                skipped = 0,
+                currentComponent = null,
+                errorMessage = null,
+                result = null,
+                // CRITICAL: phase is set on the candidate BEFORE executor.execute,
+                // not inside the runnable. ThreadPoolTaskExecutor.execute returns
+                // synchronously and the controller builds its response from
+                // state.get() right after — if phase weren't already DEFAULTS the
+                // first SPA poll tick would see RUNNING with no phase and render
+                // the fallback "Running…" instead of "Loading defaults from Git…".
+                phase = MigrationPhase.DEFAULTS,
+            )
+
+        val gateConflict = lifecycleGate.tryClaim(JobKind.COMPONENTS, candidate.id)
+        if (gateConflict != null) {
+            return when (gateConflict.kind) {
+                JobKind.COMPONENTS -> ClaimAttempt.Retry
+                JobKind.HISTORY -> ClaimAttempt.CrossKindConflict(gateConflict)
+            }
+        }
+
+        // Gate is ours. Publish state. With the gate held no other startAsync of
+        // either kind is in this critical section, so the CAS should always succeed
+        // — the false branch is defensive belt-and-braces.
+        if (!state.compareAndSet(existing, candidate)) {
+            lifecycleGate.release(candidate.id)
+            return ClaimAttempt.Retry
+        }
+        return ClaimAttempt.Claimed(candidate)
+    }
+
+    @Suppress("TooGenericExceptionCaught") // Throwable so executor rejection ALWAYS unwinds the slot.
+    private fun submitToExecutor(candidate: MigrationJobState) {
+        LOG.info("Starting migration job {}", candidate.id)
+        try {
+            executor.execute { runMigration(candidate.id) }
+        } catch (rejected: Throwable) {
+            // The slot was claimed for this candidate but the executor refused
+            // (typical case: RejectedExecutionException during pod shutdown).
+            // Without this rollback, the in-memory slot would stay RUNNING
+            // forever — every subsequent POST /admin/migrate would return 409
+            // and the operator would be wedged. Transition to FAILED so the
+            // slot is "done" and the next startAsync claims a fresh one.
+            LOG.error("Failed to submit migration job {} to executor", candidate.id, rejected)
+            lifecycleGate.release(candidate.id)
+            state.updateAndGet { current ->
+                if (current?.id != candidate.id) {
+                    current
+                } else {
+                    current.copy(
+                        state = JobState.FAILED,
+                        finishedAt = Instant.now(),
+                        errorMessage =
+                            "Failed to submit migration: ${rejected.message ?: rejected::class.java.simpleName}",
+                        phase = null,
+                    )
                 }
             }
-
-            // Gate is ours. Publish state. With the gate held, no other startAsync of
-            // either kind is in this critical section, so the CAS should always succeed
-            // — the false branch is a defensive belt-and-braces.
-            if (!state.compareAndSet(existing, candidate)) {
-                lifecycleGate.release(candidate.id)
-                continue
-            }
-
-            LOG.info("Starting migration job {}", candidate.id)
-            try {
-                executor.execute { runMigration(candidate.id) }
-            } catch (
-                @Suppress("TooGenericExceptionCaught") rejected: Throwable,
-            ) {
-                // The slot was claimed for this candidate but the executor refused
-                // (typical case: RejectedExecutionException during pod shutdown).
-                // Without this rollback, the in-memory slot would stay RUNNING
-                // forever — every subsequent POST /admin/migrate would return
-                // 409 and the operator would be wedged. Transition to FAILED so
-                // the slot is "done" and the next startAsync claims a fresh one.
-                LOG.error("Failed to submit migration job {} to executor", candidate.id, rejected)
-                lifecycleGate.release(candidate.id)
-                state.updateAndGet { current ->
-                    if (current?.id != candidate.id) {
-                        current
-                    } else {
-                        current.copy(
-                            state = JobState.FAILED,
-                            finishedAt = Instant.now(),
-                            errorMessage =
-                                "Failed to submit migration: ${rejected.message ?: rejected::class.java.simpleName}",
-                            phase = null,
-                        )
-                    }
-                }
-                throw rejected
-            }
-            // Return the post-spawn current state — with SyncTaskExecutor (used in
-            // tests) the run has already finished by now, so callers see COMPLETED;
-            // with the production async executor they see RUNNING. Either way it's
-            // the authoritative state for "what is the job right now".
-            return StartMigrationResult(state.get() ?: candidate, isNewlyStarted = true)
+            throw rejected
         }
     }
 

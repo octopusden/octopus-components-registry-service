@@ -36,18 +36,22 @@ private const val UNKNOWN_NAMES_SAMPLE_SIZE = 20
 private const val SHORT_SHA_LENGTH = 7
 
 /**
- * How often to refresh `git_history_import_state.updated_at` from inside the
- * chain loop. Used by the force-reset multi-pod-staleness check to distinguish
- * "live import in another pod" from "orphan claim". Cadence chosen to be:
- *   - frequent enough that a healthy import never sneaks past the
- *     STALE_IN_PROGRESS_THRESHOLD (controller-side, 30 minutes); even on a
- *     pathologically slow per-commit cost of 2 seconds, every-50 commits
- *     puts the heartbeat at <2 minutes.
- *   - infrequent enough that the heartbeat doesn't contend with persistCommitRows
- *     for DB write capacity. 50 is a round number well below the 250-commit
- *     log cadence already established in this file.
+ * Min interval between `git_history_import_state.updated_at` refreshes from
+ * inside the chain loop. Used by the force-reset multi-pod-staleness check
+ * to distinguish "live import in another pod" from "orphan claim".
+ *
+ * Wall-clock based, not commit-count based — the count-based variant
+ * (every 50 commits) silently failed two corner cases:
+ *   1. A chain with <50 commits where heartbeat never fires.
+ *   2. A pathologically slow per-commit step (Groovy DSL parsing on a huge
+ *      escrow tree) where 50 commits could take longer than the 30-min
+ *      controller threshold.
+ *
+ * 5-minute interval keeps a healthy import comfortably under the 30-minute
+ * STALE_IN_PROGRESS_THRESHOLD even with one heartbeat write per interval,
+ * and is well below any commit-loop processing cost worth caring about.
  */
-private const val HEARTBEAT_EVERY = 50
+private val HEARTBEAT_INTERVAL: java.time.Duration = java.time.Duration.ofMinutes(5)
 
 @Service
 class GitHistoryImportServiceImpl(
@@ -163,6 +167,9 @@ class GitHistoryImportServiceImpl(
 
         val stats = ImportStats()
         var prevSnapshot: Map<String, Map<String, Any?>> = emptyMap()
+        // Wall-clock-based heartbeat — see HEARTBEAT_INTERVAL for the rationale
+        // (commit-count was vulnerable to small chains and slow first commits).
+        var lastHeartbeat = Instant.now()
 
         // Emission #1: pre-loop. The SPA needs `totalCommits` ASAP so its progress
         // bar can switch from indeterminate to determinate. Without this, the bar
@@ -188,10 +195,12 @@ class GitHistoryImportServiceImpl(
                     totalCommits = chain.size,
                 )
                 // Liveness heartbeat: refresh updated_at on the state row so a
-                // concurrent force-reset call in another pod sees this import
-                // as live, not stale. See HEARTBEAT_EVERY for the cadence
-                // rationale.
-                if ((index + 1) % HEARTBEAT_EVERY == 0) {
+                // concurrent force-reset call in another pod sees this import as
+                // live, not stale. Wall-clock based so a slow per-commit cost
+                // doesn't sneak past the controller's STALE_IN_PROGRESS_THRESHOLD.
+                val now = Instant.now()
+                if (java.time.Duration.between(lastHeartbeat, now) >= HEARTBEAT_INTERVAL) {
+                    lastHeartbeat = now
                     runCatching { commitWriter.touchHeartbeat() }
                         .onFailure { log.warn("Heartbeat write failed at commit $index: ${it.message}") }
                 }

@@ -1,9 +1,3 @@
-// MaxLineLength suppressed because StubStateRepository overrides JpaRepository's
-// long generic-laden signatures verbatim — they are mostly `error("unused")`
-// boilerplate, breaking each one across multiple lines makes the file harder
-// to scan, not easier.
-@file:Suppress("MaxLineLength")
-
 package org.octopusden.octopus.components.registry.server.service.impl
 
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -27,7 +21,6 @@ import org.octopusden.octopus.components.registry.server.service.MigrationConfli
 import org.octopusden.octopus.components.registry.server.service.MigrationLifecycleGate
 import org.springframework.core.task.SyncTaskExecutor
 import java.time.Instant
-import java.util.Optional
 import kotlin.test.assertFailsWith
 
 /**
@@ -235,7 +228,7 @@ class HistoryMigrationJobServiceImplTest {
 
     @Test
     fun `current() falls back to DB row when in-memory state is null`() {
-        val repo = StubStateRepository()
+        val repo = StubGitHistoryImportStateRepository()
         repo.saveRow(
             GitHistoryImportStateEntity(
                 importKey = "component-history",
@@ -256,7 +249,7 @@ class HistoryMigrationJobServiceImplTest {
 
     @Test
     fun `current() synthesizes FAILED state with recoveryAction=RETRY when DB row is FAILED`() {
-        val repo = StubStateRepository()
+        val repo = StubGitHistoryImportStateRepository()
         repo.saveRow(
             GitHistoryImportStateEntity(
                 importKey = "component-history",
@@ -280,7 +273,7 @@ class HistoryMigrationJobServiceImplTest {
         // a brittle string contract spread across two repos. Now the contract is the
         // explicit `recoveryAction` discriminator. The errorMessage stays human-readable
         // but is no longer load-bearing.
-        val repo = StubStateRepository()
+        val repo = StubGitHistoryImportStateRepository()
         repo.saveRow(
             GitHistoryImportStateEntity(
                 importKey = "component-history",
@@ -324,7 +317,7 @@ class HistoryMigrationJobServiceImplTest {
         // unrecognised status values to FORCE_RESET, which confidently shows a
         // destructive button for a state the server doesn't even understand.
         // Now → UNKNOWN; SPA renders message but disables both action buttons.
-        val repo = StubStateRepository()
+        val repo = StubGitHistoryImportStateRepository()
         repo.saveRow(
             GitHistoryImportStateEntity(
                 importKey = "component-history",
@@ -342,7 +335,7 @@ class HistoryMigrationJobServiceImplTest {
 
     @Test
     fun `current() synthesized COMPLETED state has recoveryAction=RETRY`() {
-        val repo = StubStateRepository()
+        val repo = StubGitHistoryImportStateRepository()
         repo.saveRow(
             GitHistoryImportStateEntity(
                 importKey = "component-history",
@@ -362,7 +355,7 @@ class HistoryMigrationJobServiceImplTest {
         // (multiple sequential restarts against the unchanged row → same id),
         // making downstream consumers that key on `id` miss state transitions.
         // The new form `restored:<status>:<sha>:<millis>` is content-addressed.
-        val repo = StubStateRepository()
+        val repo = StubGitHistoryImportStateRepository()
         val updatedAt = Instant.parse("2026-04-29T10:00:00Z")
         repo.saveRow(
             GitHistoryImportStateEntity(
@@ -381,7 +374,7 @@ class HistoryMigrationJobServiceImplTest {
 
     @Test
     fun `current() prefers in-memory state over DB row when both exist`() {
-        val repo = StubStateRepository()
+        val repo = StubGitHistoryImportStateRepository()
         repo.saveRow(
             GitHistoryImportStateEntity(
                 importKey = "component-history",
@@ -405,7 +398,7 @@ class HistoryMigrationJobServiceImplTest {
 
     @Test
     fun `clearInMemory drops the in-memory state so DB-fallback takes over`() {
-        val repo = StubStateRepository()
+        val repo = StubGitHistoryImportStateRepository()
         repo.saveRow(
             GitHistoryImportStateEntity(
                 importKey = "component-history",
@@ -430,7 +423,7 @@ class HistoryMigrationJobServiceImplTest {
 
     private fun newService(
         import: GitHistoryImportService = StubGitHistoryImportService(),
-        stateRepository: GitHistoryImportStateRepository = StubStateRepository(),
+        stateRepository: GitHistoryImportStateRepository = StubGitHistoryImportStateRepository(),
         executor: org.springframework.core.task.TaskExecutor = SyncTaskExecutor(),
         gate: MigrationLifecycleGate = MigrationLifecycleGate(),
     ): HistoryMigrationJobServiceImpl =
@@ -462,126 +455,6 @@ class HistoryMigrationJobServiceImplTest {
                 }
             return impl(toRef, reset, tap)
         }
-    }
-
-    /**
-     * Hand-rolled stub for [GitHistoryImportStateRepository] that only implements
-     * the methods HistoryMigrationJobServiceImpl actually uses (findById +
-     * tryInsert) plus the test-only [saveRow] seeder. JpaRepository has dozens
-     * of methods we don't touch; making them all `error("unused")` is the
-     * standard Kotlin pattern for "fail fast on unexpected usage in test".
-     */
-    private class StubStateRepository : GitHistoryImportStateRepository {
-        private val rows = mutableMapOf<String, GitHistoryImportStateEntity>()
-
-        fun saveRow(entity: GitHistoryImportStateEntity) {
-            rows[entity.importKey] = entity
-        }
-
-        override fun findById(id: String): Optional<GitHistoryImportStateEntity> = Optional.ofNullable(rows[id])
-
-        override fun tryInsert(
-            importKey: String,
-            targetRef: String,
-            targetSha: String,
-            status: String,
-        ): Int {
-            if (rows.containsKey(importKey)) return 0
-            rows[importKey] =
-                GitHistoryImportStateEntity(
-                    importKey = importKey,
-                    targetRef = targetRef,
-                    targetSha = targetSha,
-                    status = status,
-                    updatedAt = Instant.now(),
-                )
-            return 1
-        }
-
-        // Everything else: not used by the service-under-test. Failing loudly
-        // surfaces accidental usage in future tests.
-        override fun <S : GitHistoryImportStateEntity?> save(entity: S): S = error("unused")
-
-        override fun <S : GitHistoryImportStateEntity?> saveAll(entities: MutableIterable<S>): MutableList<S> = error("unused")
-
-        override fun existsById(id: String): Boolean = rows.containsKey(id)
-
-        override fun findAll(): MutableList<GitHistoryImportStateEntity> = rows.values.toMutableList()
-
-        override fun findAll(sort: org.springframework.data.domain.Sort): MutableList<GitHistoryImportStateEntity> = error("unused")
-
-        override fun findAll(
-            pageable: org.springframework.data.domain.Pageable,
-        ): org.springframework.data.domain.Page<GitHistoryImportStateEntity> = error("unused")
-
-        override fun findAllById(ids: MutableIterable<String>): MutableList<GitHistoryImportStateEntity> = error("unused")
-
-        override fun count(): Long = rows.size.toLong()
-
-        override fun deleteById(id: String) {
-            rows.remove(id)
-        }
-
-        override fun delete(entity: GitHistoryImportStateEntity) {
-            rows.remove(entity.importKey)
-        }
-
-        override fun deleteAllById(ids: MutableIterable<String>) {
-            ids.forEach(::deleteById)
-        }
-
-        override fun deleteAll(entities: MutableIterable<GitHistoryImportStateEntity>) = entities.forEach(::delete)
-
-        override fun deleteAll() {
-            rows.clear()
-        }
-
-        override fun flush() = Unit
-
-        override fun <S : GitHistoryImportStateEntity?> saveAndFlush(entity: S): S = error("unused")
-
-        override fun <S : GitHistoryImportStateEntity?> saveAllAndFlush(entities: MutableIterable<S>): MutableList<S> = error("unused")
-
-        @Suppress("DEPRECATION")
-        override fun deleteAllInBatch(entities: MutableIterable<GitHistoryImportStateEntity>) = error("unused")
-
-        override fun deleteAllByIdInBatch(ids: MutableIterable<String>) = error("unused")
-
-        override fun deleteAllInBatch() = error("unused")
-
-        @Suppress("DEPRECATION")
-        override fun getOne(id: String): GitHistoryImportStateEntity = error("unused")
-
-        @Suppress("DEPRECATION")
-        override fun getById(id: String): GitHistoryImportStateEntity = error("unused")
-
-        override fun getReferenceById(id: String): GitHistoryImportStateEntity = error("unused")
-
-        override fun <S : GitHistoryImportStateEntity?> findAll(example: org.springframework.data.domain.Example<S>): MutableList<S> =
-            error("unused")
-
-        override fun <S : GitHistoryImportStateEntity?> findAll(
-            example: org.springframework.data.domain.Example<S>,
-            sort: org.springframework.data.domain.Sort,
-        ): MutableList<S> = error("unused")
-
-        override fun <S : GitHistoryImportStateEntity?> findAll(
-            example: org.springframework.data.domain.Example<S>,
-            pageable: org.springframework.data.domain.Pageable,
-        ): org.springframework.data.domain.Page<S> = error("unused")
-
-        override fun <S : GitHistoryImportStateEntity?> findOne(example: org.springframework.data.domain.Example<S>): Optional<S> =
-            error("unused")
-
-        override fun <S : GitHistoryImportStateEntity?> count(example: org.springframework.data.domain.Example<S>): Long = error("unused")
-
-        override fun <S : GitHistoryImportStateEntity?> exists(example: org.springframework.data.domain.Example<S>): Boolean =
-            error("unused")
-
-        override fun <S : GitHistoryImportStateEntity?, R : Any?> findBy(
-            example: org.springframework.data.domain.Example<S>,
-            queryFunction: java.util.function.Function<org.springframework.data.repository.query.FluentQuery.FetchableFluentQuery<S>, R>,
-        ): R = error("unused")
     }
 
     /** Capture-but-don't-run executor mirroring the one in MigrationJobServiceImplTest. */

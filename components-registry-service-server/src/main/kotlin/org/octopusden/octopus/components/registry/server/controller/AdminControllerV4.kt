@@ -209,6 +209,26 @@ class AdminControllerV4(
             }
         }
 
+        // P1 review fix: TOCTOU between Guard 1 (in-memory state) and Guard 2
+        // (DB row read). Window is microseconds — between an external
+        // startAsync's state.compareAndSet and its preflight tryInsert.
+        // Re-check the in-memory state after the row read so a freshly-claimed
+        // job in this same pod can't slip past both guards. Cheap defensive
+        // re-read; if it picks up a RUNNING job, treat it like Guard 1.
+        val activeAfterRowRead = historyMigrationJobService.current()
+        if (activeAfterRowRead?.state == JobState.RUNNING) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(
+                MigrationConflictResponse(
+                    code = "history-migration-running",
+                    message =
+                        "Cannot force-reset while history migration is RUNNING (jobId=${activeAfterRowRead.id}). " +
+                            "Wait for it to finish or restart the pod.",
+                    activeKind = MigrationLifecycleGate.JobKind.HISTORY.name,
+                    activeJobId = activeAfterRowRead.id,
+                ),
+            )
+        }
+
         // Audit-loud destructive action: log before the wipe so the pre-state
         // survives the operation in the log stream. ack-multipod-risk=true is
         // logged at WARN to make the override visible in alert pipelines.

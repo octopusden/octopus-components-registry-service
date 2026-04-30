@@ -44,76 +44,106 @@ class HistoryMigrationJobServiceImpl(
 ) : HistoryMigrationJobService {
     private val state = AtomicReference<HistoryMigrationJobState?>()
 
-    // See MigrationJobServiceImpl.startAsync — same CAS-retry shape, same suppression rationale.
-    @Suppress("LoopWithTooManyJumpStatements")
+    /** Mirror of [MigrationJobServiceImpl.ClaimAttempt] for the history flow. */
+    private sealed interface ClaimAttempt {
+        data class Attached(
+            val state: HistoryMigrationJobState,
+        ) : ClaimAttempt
+
+        data class CrossKindConflict(
+            val active: MigrationLifecycleGate.ActiveJob,
+        ) : ClaimAttempt
+
+        data object Retry : ClaimAttempt
+
+        data class Claimed(
+            val candidate: HistoryMigrationJobState,
+        ) : ClaimAttempt
+    }
+
     override fun startAsync(
         toRef: String?,
         reset: Boolean,
     ): StartHistoryMigrationResult {
-        // Same ordering as MigrationJobServiceImpl.startAsync — see comments there.
-        // Same-kind 409 first (so we don't read nullable state in cross-kind branch),
-        // then cross-kind gate, then publish state, then submit.
         while (true) {
-            val existing = state.get()
-            if (existing?.state == JobState.RUNNING) {
-                return StartHistoryMigrationResult(existing, isNewlyStarted = false)
+            when (val attempt = tryClaim()) {
+                is ClaimAttempt.Attached -> return StartHistoryMigrationResult(attempt.state, isNewlyStarted = false)
+                is ClaimAttempt.CrossKindConflict -> throw MigrationConflictException(attempt.active)
+                is ClaimAttempt.Claimed -> {
+                    submitToExecutor(attempt.candidate, toRef, reset)
+                    return StartHistoryMigrationResult(state.get() ?: attempt.candidate, isNewlyStarted = true)
+                }
+                ClaimAttempt.Retry -> Unit
             }
+        }
+    }
 
-            val candidate =
-                HistoryMigrationJobState(
-                    id = UUID.randomUUID().toString(),
-                    state = JobState.RUNNING,
-                    startedAt = Instant.now(),
-                    finishedAt = null,
-                    totalCommits = 0,
-                    processedCommits = 0,
-                    auditRecords = 0,
-                    skippedNoGroovy = 0,
-                    skippedParseError = 0,
-                    skippedUnknownNames = 0,
-                    currentSha = null,
-                    targetRef = null,
-                    errorMessage = null,
-                    result = null,
-                )
+    /** See [MigrationJobServiceImpl.tryClaim] — same CAS-retry shape, same ordering rationale. */
+    private fun tryClaim(): ClaimAttempt {
+        val existing = state.get()
+        if (existing?.state == JobState.RUNNING) {
+            return ClaimAttempt.Attached(existing)
+        }
 
-            val gateConflict = lifecycleGate.tryClaim(JobKind.HISTORY, candidate.id)
-            if (gateConflict != null) {
-                when (gateConflict.kind) {
-                    JobKind.HISTORY -> continue
-                    JobKind.COMPONENTS -> throw MigrationConflictException(gateConflict)
+        val candidate =
+            HistoryMigrationJobState(
+                id = UUID.randomUUID().toString(),
+                state = JobState.RUNNING,
+                startedAt = Instant.now(),
+                finishedAt = null,
+                totalCommits = 0,
+                processedCommits = 0,
+                auditRecords = 0,
+                skippedNoGroovy = 0,
+                skippedParseError = 0,
+                skippedUnknownNames = 0,
+                currentSha = null,
+                targetRef = null,
+                errorMessage = null,
+                result = null,
+            )
+
+        val gateConflict = lifecycleGate.tryClaim(JobKind.HISTORY, candidate.id)
+        if (gateConflict != null) {
+            return when (gateConflict.kind) {
+                JobKind.HISTORY -> ClaimAttempt.Retry
+                JobKind.COMPONENTS -> ClaimAttempt.CrossKindConflict(gateConflict)
+            }
+        }
+
+        if (!state.compareAndSet(existing, candidate)) {
+            lifecycleGate.release(candidate.id)
+            return ClaimAttempt.Retry
+        }
+        return ClaimAttempt.Claimed(candidate)
+    }
+
+    @Suppress("TooGenericExceptionCaught") // Throwable so executor rejection ALWAYS unwinds the slot.
+    private fun submitToExecutor(
+        candidate: HistoryMigrationJobState,
+        toRef: String?,
+        reset: Boolean,
+    ) {
+        LOG.info("Starting history migration job {} (toRef={}, reset={})", candidate.id, toRef, reset)
+        try {
+            executor.execute { runHistoryMigration(candidate.id, toRef, reset) }
+        } catch (rejected: Throwable) {
+            LOG.error("Failed to submit history migration job {} to executor", candidate.id, rejected)
+            lifecycleGate.release(candidate.id)
+            state.updateAndGet { current ->
+                if (current?.id != candidate.id) {
+                    current
+                } else {
+                    current.copy(
+                        state = JobState.FAILED,
+                        finishedAt = Instant.now(),
+                        errorMessage =
+                            "Failed to submit history migration: ${rejected.message ?: rejected::class.java.simpleName}",
+                        recoveryAction = HistoryRecoveryAction.RETRY,
+                    )
                 }
             }
-
-            if (!state.compareAndSet(existing, candidate)) {
-                lifecycleGate.release(candidate.id)
-                continue
-            }
-
-            LOG.info("Starting history migration job {} (toRef={}, reset={})", candidate.id, toRef, reset)
-            try {
-                executor.execute { runHistoryMigration(candidate.id, toRef, reset) }
-            } catch (
-                @Suppress("TooGenericExceptionCaught") rejected: Throwable,
-            ) {
-                LOG.error("Failed to submit history migration job {} to executor", candidate.id, rejected)
-                lifecycleGate.release(candidate.id)
-                state.updateAndGet { current ->
-                    if (current?.id != candidate.id) {
-                        current
-                    } else {
-                        current.copy(
-                            state = JobState.FAILED,
-                            finishedAt = Instant.now(),
-                            errorMessage =
-                                "Failed to submit history migration: ${rejected.message ?: rejected::class.java.simpleName}",
-                            recoveryAction = HistoryRecoveryAction.RETRY,
-                        )
-                    }
-                }
-                throw rejected
-            }
-            return StartHistoryMigrationResult(state.get() ?: candidate, isNewlyStarted = true)
+            throw rejected
         }
     }
 
