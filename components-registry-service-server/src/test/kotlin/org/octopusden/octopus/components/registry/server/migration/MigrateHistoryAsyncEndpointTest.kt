@@ -123,6 +123,41 @@ class MigrateHistoryAsyncEndpointTest {
     }
 
     @Test
+    fun `JSON wire shape includes kind=job discriminator`() {
+        // P2 review fix: the SPA branches on `kind === 'conflict'` to
+        // distinguish same-kind 409 attach from cross-kind 409 conflict.
+        // Jackson serializes the data-class default value `kind = "job"`,
+        // but if a future refactor turns the response into an interface
+        // and an implementation forgets the field, no test would fire.
+        // This test pins the wire contract.
+        stubResult.set(
+            HistoryImportResult(
+                targetRef = "refs/tags/test-3.0",
+                targetSha = "kind-discriminator-test",
+                processedCommits = 0,
+                skippedNoGroovy = 0,
+                skippedParseError = 0,
+                skippedUnknownNames = 0,
+                auditRecords = 0,
+                durationMs = 0,
+            ),
+        )
+        val body =
+            mvc
+                .perform(post("/rest/api/4/admin/migrate-history").with(adminJwt()).accept(APPLICATION_JSON))
+                .andExpect(status().isAccepted)
+                .andReturn().response.contentAsString
+        // Asserting on the raw JSON (not the deserialized DTO) — the contract
+        // is "the field is present on the wire", and DTO deserialization
+        // would happily fall back to the data-class default if the field
+        // were missing in the JSON.
+        org.junit.jupiter.api.Assertions.assertTrue(
+            body.contains("\"kind\":\"job\""),
+            "Response JSON must include the 'kind' discriminator. Body was: $body",
+        )
+    }
+
+    @Test
     fun `POST then GET migrate-history-job returns the same job shape`() {
         stubResult.set(
             HistoryImportResult(

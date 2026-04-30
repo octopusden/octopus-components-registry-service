@@ -23,10 +23,15 @@ import java.time.Instant
  *   shows "Retry (reset state)" and POSTs with `reset=true`.
  * - `FORCE_RESET` — stuck IN_PROGRESS row (left by a previous pod that crashed
  *   or restarted mid-import). SPA shows "Force reset" + disabled "Retry".
+ * - `UNKNOWN` — the backend has a state row it can't classify (e.g. a future
+ *   status enum value rolled out via DB without a code change). The SPA shows
+ *   the errorMessage with NO action buttons enabled — defense against
+ *   confidently telling the operator "Force reset" or "Retry" against a
+ *   state we don't actually understand.
  *
  * `null` for RUNNING jobs and on idle (no claim, no previous run).
  */
-enum class HistoryRecoveryAction { RETRY, FORCE_RESET }
+enum class HistoryRecoveryAction { RETRY, FORCE_RESET, UNKNOWN }
 
 data class HistoryMigrationJobState(
     val id: String,

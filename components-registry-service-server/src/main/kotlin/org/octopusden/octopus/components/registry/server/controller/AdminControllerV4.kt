@@ -198,7 +198,11 @@ class AdminControllerV4(
         ) {
             val age = Duration.between(row.updatedAt, Instant.now())
             if (age < STALE_IN_PROGRESS_THRESHOLD) {
-                LOG.warn(
+                // INFO not WARN: this is the *successful* defense path —
+                // the gate worked, no operator needs to be paged. The WARN
+                // is reserved for the override case below where a live
+                // import in another pod might be about to lose data.
+                LOG.info(
                     "Refusing force-reset: IN_PROGRESS row updated {} ago (threshold={}). " +
                         "Likely a live import in another pod. Override with ack-multipod-risk=true if you accept the data-corruption risk.",
                     age,
@@ -214,7 +218,8 @@ class AdminControllerV4(
                                 "If you understand the multi-pod risk and want to proceed anyway, " +
                                 "POST again with ?ack-multipod-risk=true.",
                         activeKind = MigrationLifecycleGate.JobKind.HISTORY.name,
-                        activeJobId = "(unknown — owned by another pod)",
+                        // Owned by another pod — we can't read its in-memory job id from here.
+                        activeJobId = null,
                     ),
                 )
             }
@@ -228,7 +233,11 @@ class AdminControllerV4(
                 "FORCE-RESET: deleting git_history_import_state " +
                     "(target=${row.targetRef}@${row.targetSha}, status=${row.status}, " +
                     "updatedAt=${row.updatedAt}) and all audit_log rows with source='git-history'."
-            if (ackMultipodRisk) LOG.warn("$msg [ack-multipod-risk=true overriding staleness check]") else LOG.info(msg)
+            // ack-multipod-risk overrides the staleness check, which means the
+            // operator just told us "I accept potential data corruption."
+            // ERROR level so alert pipelines that filter on ERROR-only catch
+            // this — same reasoning as FaultInjectionConfig's startup banner.
+            if (ackMultipodRisk) LOG.error("$msg [ack-multipod-risk=true overriding staleness check]") else LOG.info(msg)
         } else {
             LOG.info("FORCE-RESET: no state row to delete (idempotent no-op on empty DB)")
         }

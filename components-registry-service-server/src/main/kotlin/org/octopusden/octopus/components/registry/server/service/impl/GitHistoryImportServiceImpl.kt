@@ -35,6 +35,20 @@ private const val PROGRESS_LOG_EVERY = 250
 private const val UNKNOWN_NAMES_SAMPLE_SIZE = 20
 private const val SHORT_SHA_LENGTH = 7
 
+/**
+ * How often to refresh `git_history_import_state.updated_at` from inside the
+ * chain loop. Used by the force-reset multi-pod-staleness check to distinguish
+ * "live import in another pod" from "orphan claim". Cadence chosen to be:
+ *   - frequent enough that a healthy import never sneaks past the
+ *     STALE_IN_PROGRESS_THRESHOLD (controller-side, 30 minutes); even on a
+ *     pathologically slow per-commit cost of 2 seconds, every-50 commits
+ *     puts the heartbeat at <2 minutes.
+ *   - infrequent enough that the heartbeat doesn't contend with persistCommitRows
+ *     for DB write capacity. 50 is a round number well below the 250-commit
+ *     log cadence already established in this file.
+ */
+private const val HEARTBEAT_EVERY = 50
+
 @Service
 class GitHistoryImportServiceImpl(
     private val componentsRegistryProperties: ComponentsRegistryProperties,
@@ -173,6 +187,14 @@ class GitHistoryImportServiceImpl(
                     currentSha = commit.name.take(SHORT_SHA_LENGTH),
                     totalCommits = chain.size,
                 )
+                // Liveness heartbeat: refresh updated_at on the state row so a
+                // concurrent force-reset call in another pod sees this import
+                // as live, not stale. See HEARTBEAT_EVERY for the cadence
+                // rationale.
+                if ((index + 1) % HEARTBEAT_EVERY == 0) {
+                    runCatching { commitWriter.touchHeartbeat() }
+                        .onFailure { log.warn("Heartbeat write failed at commit $index: ${it.message}") }
+                }
             }
         }
 

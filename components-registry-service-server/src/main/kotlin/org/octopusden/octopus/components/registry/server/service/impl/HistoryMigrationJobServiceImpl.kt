@@ -269,8 +269,11 @@ class HistoryMigrationJobServiceImpl(
                     JobState.FAILED,
                     row.updatedAt,
                     targetRef,
-                    errorMessage = "Unknown status: ${row.status}",
-                    recoveryAction = HistoryRecoveryAction.FORCE_RESET,
+                    errorMessage = "Unknown status: ${row.status}. Contact operations.",
+                    // Don't confidently route an unknown DB status to FORCE_RESET —
+                    // we don't actually know if a force-reset is the right move.
+                    // SPA renders the message and disables both action buttons.
+                    recoveryAction = HistoryRecoveryAction.UNKNOWN,
                 )
         }
     }

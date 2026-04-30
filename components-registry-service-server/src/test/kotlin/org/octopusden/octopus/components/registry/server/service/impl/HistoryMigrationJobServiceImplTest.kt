@@ -297,6 +297,45 @@ class HistoryMigrationJobServiceImplTest {
     }
 
     @Test
+    fun `RUNNING in-memory state has recoveryAction == null (no recovery needed while running)`() {
+        // P2 review fix: the "null while RUNNING" contract was documented but
+        // not enforced. A future refactor populating recoveryAction on RUNNING
+        // would render a Retry button next to a live progress bar — visibly broken.
+        val deferred = DeferredExecutor()
+        val service =
+            newService(
+                import = StubGitHistoryImportService(impl = { _, _, _ -> emptyResult }),
+                executor = deferred,
+            )
+
+        val result = service.startAsync(toRef = null, reset = false)
+        assertEquals(JobState.RUNNING, result.state.state)
+        assertNull(result.state.recoveryAction, "RUNNING jobs must NOT carry a recoveryAction hint")
+    }
+
+    @Test
+    fun `current() synthesized state for unknown DB status has recoveryAction=UNKNOWN (defensive)`() {
+        // P2 review fix: previously the else-branch in synthesizeFromDb mapped
+        // unrecognised status values to FORCE_RESET, which confidently shows a
+        // destructive button for a state the server doesn't even understand.
+        // Now → UNKNOWN; SPA renders message but disables both action buttons.
+        val repo = StubStateRepository()
+        repo.saveRow(
+            GitHistoryImportStateEntity(
+                importKey = "component-history",
+                targetRef = "refs/tags/v1",
+                targetSha = "abc",
+                status = "SOMETHING_FROM_THE_FUTURE",
+                updatedAt = Instant.now(),
+            ),
+        )
+        val service = newService(stateRepository = repo)
+        val state = service.current()!!
+        assertEquals(JobState.FAILED, state.state)
+        assertEquals(HistoryRecoveryAction.UNKNOWN, state.recoveryAction)
+    }
+
+    @Test
     fun `current() synthesized COMPLETED state has recoveryAction=RETRY`() {
         val repo = StubStateRepository()
         repo.saveRow(
