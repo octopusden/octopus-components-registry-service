@@ -31,9 +31,30 @@ data class MigrationJobState(
     val currentComponent: String?,
     val errorMessage: String?,
     val result: FullMigrationResult?,
+    /**
+     * Sub-phase the migration is currently in. Lets the SPA render an
+     * informative label ("Loading defaults from Git…", "Resolving components
+     * from Git…") during the early window before the per-component progress
+     * listener has fired its first event — that window can take many seconds
+     * on a cold git clone, and a frozen "Running…" with `total=0` was the
+     * original UX complaint that motivated this field.
+     *
+     * `null` only on terminal states (COMPLETED / FAILED) where no phase is
+     * active. While RUNNING this is always set.
+     */
+    val phase: MigrationPhase? = null,
 )
 
 enum class JobState { RUNNING, COMPLETED, FAILED }
+
+/**
+ * Phases of `ImportService.migrate(progress)` exposed to the SPA so it can
+ * render meaningful text while progress counters are still zero. Closed enum
+ * — DEFAULTS happens before any per-component event, COMPONENTS while the
+ * loop is iterating. There is no DONE / COMPLETED phase: terminal job state
+ * lives in [JobState], and `phase` is cleared to null on transition.
+ */
+enum class MigrationPhase { DEFAULTS, COMPONENTS }
 
 /** Outcome of [MigrationJobService.startAsync]. */
 data class StartMigrationResult(
@@ -82,3 +103,19 @@ data class MigrationProgressEvent(
     val skipped: Int,
     val total: Int,
 )
+
+/**
+ * Thrown by either job service's startAsync when [MigrationLifecycleGate] reports
+ * a *cross-kind* conflict (this caller is COMPONENTS, but HISTORY holds the gate,
+ * or vice versa). Same-kind conflicts are NOT exceptions — they resolve to the
+ * existing [StartMigrationResult] with `isNewlyStarted=false` so the caller can
+ * attach to the in-flight job. Cross-kind has no equivalent attach path: the
+ * caller wanted a different operation and there is nothing useful to attach to.
+ *
+ * The controller layer maps this to HTTP 409 with a structured error body
+ * carrying [activeKind] / [activeJobId] so the SPA can render a clear message
+ * ("History migration is currently running. Wait for it to finish.").
+ */
+class MigrationConflictException(
+    val active: MigrationLifecycleGate.ActiveJob,
+) : RuntimeException("Cross-kind migration conflict: ${active.kind} job ${active.jobId} is already running")

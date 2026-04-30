@@ -19,7 +19,12 @@ import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.boot.test.mock.mockito.MockBean
+import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Import
+import org.springframework.core.task.SyncTaskExecutor
+import org.springframework.core.task.TaskExecutor
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
@@ -34,11 +39,28 @@ import java.nio.file.StandardCopyOption
 import kotlin.io.path.writeText
 import kotlin.streams.asSequence
 
+/**
+ * End-to-end coverage for the async POST /admin/migrate-history flow against a
+ * real Postgres testcontainer + JGit fixture repo. The endpoint became async in
+ * this branch (returns 202 + HistoryMigrationJobResponse, runs the import on
+ * the migrationExecutor), so we swap in a SyncTaskExecutor — same trick as
+ * MigrateEndpointTest — to make the migration body finish inline before the
+ * POST returns. That way the test can read state=COMPLETED/FAILED + the
+ * populated `result` block right off the response, without polling /job.
+ *
+ * Note on 409 semantics: under the old sync endpoint, "history already ran"
+ * surfaced as HTTP 409 directly from the preflight. With the async endpoint
+ * the HTTP response is 202 (the job started in-memory) and the preflight 409
+ * is caught inside runHistoryMigration, transitioning state to FAILED with the
+ * "use reset=true to re-run" message. Tests assert on the in-memory state body
+ * rather than the HTTP status for that case.
+ */
 @AutoConfigureMockMvc
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     classes = [ComponentRegistryServiceApplication::class],
 )
+@Import(MigrateHistoryIntegrationTest.SyncMigrationExecutorConfig::class)
 @ActiveProfiles("common", "test-db")
 class MigrateHistoryIntegrationTest {
     @MockBean
@@ -62,47 +84,69 @@ class MigrateHistoryIntegrationTest {
 
     @Test
     @Suppress("LongMethod")
-    fun `migrate-history end-to-end covers write, 409, reset, parse-error, DELETE, default toRef`() {
+    fun `migrate-history end-to-end covers write, terminal-row reset gate, parse-error, DELETE, default toRef`() {
         componentRepository.save(ComponentEntity(name = "ARCHIVED_TEST_COMPONENT"))
 
-        // Phase 1: explicit toRef to 1.1 (only c1..c3 in scope).
+        // Phase 1: explicit toRef to 1.1 (only c1..c3 in scope). With the
+        // SyncTaskExecutor swap, the inline runnable finishes before the POST
+        // response is built — the body carries state=COMPLETED + a populated
+        // `result` block we can assert on directly.
         val firstBody =
             mvc
                 .perform(post("/rest/api/4/admin/migrate-history?toRef=components-registry-1.1").with(adminJwt()))
-                .andExpect(status().isOk)
+                .andExpect(status().isAccepted)
                 .andReturn()
                 .response
                 .contentAsString
         val first = objectMapper.readTree(firstBody)
-        assertEquals("components-registry-1.1", first["targetRef"].asText())
-        assertTrue(first["processedCommits"].asInt() >= 2, "expected >= 2 processed commits, got $first")
+        assertEquals("COMPLETED", first["state"].asText(), "sync executor → state should be COMPLETED on response")
+        val firstResult = first["result"]
+        assertEquals("components-registry-1.1", firstResult["targetRef"].asText())
+        assertTrue(firstResult["processedCommits"].asInt() >= 2, "expected >= 2 processed commits, got $firstResult")
         val auditAfterFirst = auditLogRepository.findAll().filter { it.source == "git-history" }
         assertTrue(auditAfterFirst.isNotEmpty(), "expected at least one git-history audit row")
         assertTrue(auditAfterFirst.all { it.correlationId != null }, "every history row carries a commit SHA")
         assertTrue(auditAfterFirst.all { it.changedBy == "Tester <test@example.com>" })
         assertEquals(GitHistoryImportStatus.COMPLETED.name, stateRepository.findById("component-history").orElseThrow().status)
 
-        // Phase 2: repeat without reset → 409, audit_log unchanged.
-        mvc
-            .perform(post("/rest/api/4/admin/migrate-history?toRef=components-registry-1.1").with(adminJwt()))
-            .andExpect(status().isConflict)
+        // Phase 2: repeat without reset. Under the OLD sync endpoint this was
+        // an HTTP 409 from the preflight. Async semantics: the HTTP layer
+        // returns 202 (the job started in-memory) and the preflight 409 is
+        // raised inside runHistoryMigration, transitioning state to FAILED.
+        // No new audit_log rows must have been written — the FAILED transition
+        // happens before any walk.
+        val repeatBody =
+            mvc
+                .perform(post("/rest/api/4/admin/migrate-history?toRef=components-registry-1.1").with(adminJwt()))
+                .andExpect(status().isAccepted)
+                .andReturn()
+                .response
+                .contentAsString
+        val repeat = objectMapper.readTree(repeatBody)
+        assertEquals("FAILED", repeat["state"].asText(), "repeat without reset must end in FAILED, not 409")
+        assertTrue(
+            repeat["errorMessage"].asText().contains("use reset=true"),
+            "errorMessage must guide the operator toward reset=true: ${repeat["errorMessage"].asText()}",
+        )
         val auditAfterRepeat = auditLogRepository.findAll().filter { it.source == "git-history" }
-        assertEquals(auditAfterFirst.size, auditAfterRepeat.size)
+        assertEquals(auditAfterFirst.size, auditAfterRepeat.size, "FAILED retry must not have touched audit_log")
 
         // Phase 3: reset=true, no toRef → auto-resolves to latest tag (components-registry-1.2),
         // covers the unparseable commit (c4) and the DELETE of ARCHIVED_TEST_COMPONENT at c5.
         val secondBody =
             mvc
                 .perform(post("/rest/api/4/admin/migrate-history?reset=true").with(adminJwt()))
-                .andExpect(status().isOk)
+                .andExpect(status().isAccepted)
                 .andReturn()
                 .response
                 .contentAsString
         val second = objectMapper.readTree(secondBody)
-        assertEquals("refs/tags/components-registry-1.2", second["targetRef"].asText())
+        assertEquals("COMPLETED", second["state"].asText())
+        val secondResult = second["result"]
+        assertEquals("refs/tags/components-registry-1.2", secondResult["targetRef"].asText())
         assertTrue(
-            second["skippedParseError"].asInt() >= 1,
-            "c4 is deliberately unparseable, expected skippedParseError >= 1, got $second",
+            secondResult["skippedParseError"].asInt() >= 1,
+            "c4 is deliberately unparseable, expected skippedParseError >= 1, got $secondResult",
         )
 
         val auditFinal = auditLogRepository.findAll().filter { it.source == "git-history" }
@@ -120,7 +164,7 @@ class MigrateHistoryIntegrationTest {
     }
 
     @Test
-    fun `reset=true refuses to stomp on an IN_PROGRESS claim`() {
+    fun `reset=true refuses to stomp on an IN_PROGRESS claim — surfaces as in-memory FAILED, not HTTP 409`() {
         auditLogRepository.deleteAll()
         stateRepository.deleteAll()
         stateRepository.save(
@@ -132,14 +176,43 @@ class MigrateHistoryIntegrationTest {
             ),
         )
 
-        mvc
-            .perform(post("/rest/api/4/admin/migrate-history?reset=true").with(adminJwt()))
-            .andExpect(status().isConflict)
+        // Async: HTTP returns 202; the preflight CONFLICT raised inside the
+        // import is caught and transitioned to FAILED in the in-memory state.
+        val body =
+            mvc
+                .perform(post("/rest/api/4/admin/migrate-history?reset=true").with(adminJwt()))
+                .andExpect(status().isAccepted)
+                .andReturn()
+                .response
+                .contentAsString
+        val response = objectMapper.readTree(body)
+        assertEquals("FAILED", response["state"].asText())
+        assertTrue(
+            response["errorMessage"].asText().lowercase().contains("in_progress"),
+            "errorMessage must mention IN_PROGRESS so operator understands the conflict: ${response["errorMessage"].asText()}",
+        )
 
         // Pre-existing IN_PROGRESS row must survive the rejected reset.
         val state = stateRepository.findById("component-history").orElseThrow()
         assertEquals(GitHistoryImportStatus.IN_PROGRESS.name, state.status)
         assertEquals("deadbeef", state.targetSha, "reset must not have wiped the live claim")
+    }
+
+    /**
+     * Replaces the production single-thread migrationExecutor with a
+     * SyncTaskExecutor so each /migrate-history POST runs the import inline
+     * on the request thread. Without this swap the test would have to poll
+     * /migrate-history/job for COMPLETED state, which adds flake to a test
+     * already gated on a real Postgres testcontainer + JGit fixture.
+     *
+     * Mirrors the SyncMigrationExecutorConfig in MigrateEndpointTest. The
+     * production bean is `@ConditionalOnMissingBean`, so registering this
+     * @Bean("migrationExecutor") first means the production one steps aside.
+     */
+    @TestConfiguration
+    open class SyncMigrationExecutorConfig {
+        @Bean("migrationExecutor")
+        open fun syncMigrationExecutor(): TaskExecutor = SyncTaskExecutor()
     }
 
     companion object {

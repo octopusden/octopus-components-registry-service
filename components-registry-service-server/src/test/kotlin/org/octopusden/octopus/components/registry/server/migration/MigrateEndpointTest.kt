@@ -99,6 +99,13 @@ class MigrateEndpointTest {
             "Expected no migration failures: ${populated.components.results.filter { !it.success }}",
         )
         assertEquals(populated.components.migrated + populated.components.skipped, populated.components.total)
+
+        // phase must be cleared on COMPLETED. While RUNNING the field carries
+        // "DEFAULTS" / "COMPONENTS" so the SPA renders informative labels, but
+        // by the time we see COMPLETED there is no active sub-phase to report.
+        // Clearing it explicitly (rather than leaving e.g. "COMPONENTS") avoids
+        // the SPA mistakenly rendering a phase label next to the result tiles.
+        assertEquals(null, job.phase, "phase must be null on COMPLETED")
     }
 
     /**

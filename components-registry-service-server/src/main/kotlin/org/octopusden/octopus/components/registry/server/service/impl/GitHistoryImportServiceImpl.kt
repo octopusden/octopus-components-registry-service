@@ -16,6 +16,8 @@ import org.octopusden.octopus.components.registry.server.entity.GitHistoryImport
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.GitHistoryImportStateRepository
 import org.octopusden.octopus.components.registry.server.service.GitHistoryImportService
+import org.octopusden.octopus.components.registry.server.service.HistoryImportProgressEvent
+import org.octopusden.octopus.components.registry.server.service.HistoryImportProgressListener
 import org.octopusden.octopus.components.registry.server.util.AuditDiff
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
@@ -27,10 +29,28 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Instant
 
-private const val IMPORT_KEY = "component-history"
 private const val HISTORY_SOURCE = "git-history"
 private const val PROGRESS_LOG_EVERY = 250
 private const val UNKNOWN_NAMES_SAMPLE_SIZE = 20
+private const val SHORT_SHA_LENGTH = 7
+
+/**
+ * Min interval between `git_history_import_state.updated_at` refreshes from
+ * inside the chain loop. Used by the force-reset multi-pod-staleness check
+ * to distinguish "live import in another pod" from "orphan claim".
+ *
+ * Wall-clock based, not commit-count based — the count-based variant
+ * (every 50 commits) silently failed two corner cases:
+ *   1. A chain with <50 commits where heartbeat never fires.
+ *   2. A pathologically slow per-commit step (Groovy DSL parsing on a huge
+ *      escrow tree) where 50 commits could take longer than the 30-min
+ *      controller threshold.
+ *
+ * 5-minute interval keeps a healthy import comfortably under the 30-minute
+ * STALE_IN_PROGRESS_THRESHOLD even with one heartbeat write per interval,
+ * and is well below any commit-loop processing cost worth caring about.
+ */
+private val HEARTBEAT_INTERVAL: java.time.Duration = java.time.Duration.ofMinutes(5)
 
 @Service
 class GitHistoryImportServiceImpl(
@@ -48,6 +68,7 @@ class GitHistoryImportServiceImpl(
     override fun importHistory(
         toRef: String?,
         reset: Boolean,
+        listener: HistoryImportProgressListener,
     ): HistoryImportResult {
         preflight(reset)
 
@@ -77,7 +98,7 @@ class GitHistoryImportServiceImpl(
                     }
                 }.call()
                 .use { git ->
-                    return runImport(git, toRef, historyWorkDir, groovyPrefix, started)
+                    return runImport(git, toRef, historyWorkDir, groovyPrefix, started, listener)
                 }
         } catch (e: Exception) {
             log.error("History import failed", e)
@@ -103,13 +124,13 @@ class GitHistoryImportServiceImpl(
         // the real tag/sha.
         val claimed =
             stateRepository.tryInsert(
-                importKey = IMPORT_KEY,
+                importKey = HISTORY_IMPORT_KEY,
                 targetRef = "",
                 targetSha = "",
                 status = GitHistoryImportStatus.IN_PROGRESS.name,
             )
         if (claimed == 0) {
-            val existing = stateRepository.findById(IMPORT_KEY).orElseThrow()
+            val existing = stateRepository.findById(HISTORY_IMPORT_KEY).orElseThrow()
             throw ResponseStatusException(
                 HttpStatus.CONFLICT,
                 "git history import already ran (status=${existing.status}, " +
@@ -124,12 +145,13 @@ class GitHistoryImportServiceImpl(
         historyWorkDir: Path,
         groovyPrefix: String,
         started: Instant,
+        listener: HistoryImportProgressListener,
     ): HistoryImportResult {
         val target = resolveTarget(git, toRef)
         log.info("History import target: {}@{}", target.ref, target.sha)
 
         // Fill in the real target on the claimed state row (inserted empty by preflight).
-        val state = stateRepository.findById(IMPORT_KEY).orElseThrow()
+        val state = stateRepository.findById(HISTORY_IMPORT_KEY).orElseThrow()
         state.targetRef = target.ref
         state.targetSha = target.sha
         commitWriter.saveState(state)
@@ -144,6 +166,15 @@ class GitHistoryImportServiceImpl(
 
         val stats = ImportStats()
         var prevSnapshot: Map<String, Map<String, Any?>> = emptyMap()
+        // Wall-clock-based heartbeat — see HEARTBEAT_INTERVAL for the rationale
+        // (commit-count was vulnerable to small chains and slow first commits).
+        var lastHeartbeat = Instant.now()
+
+        // Emission #1: pre-loop. The SPA needs `totalCommits` ASAP so its progress
+        // bar can switch from indeterminate to determinate. Without this, the bar
+        // would stay indeterminate (totalCommits=0) until the first per-commit
+        // event below, which on a large chain can be tens of seconds.
+        emitProgress(listener, stats, target.ref, currentSha = null, totalCommits = chain.size)
 
         RevWalk(repo).use { walk ->
             chain.forEachIndexed { index, commitId ->
@@ -152,6 +183,30 @@ class GitHistoryImportServiceImpl(
                 prevSnapshot =
                     processCommit(git, repo, loader, commit, prevSnapshot, groovyPrefix, stats)
                 logProgress(index, chain.size, stats.auditRecords)
+                // Emission #2: per-commit. One event per processed commit gives the
+                // SPA a smooth animation. The existing logProgress logs only every
+                // 250 commits — appropriate for log volume but too coarse for UX.
+                emitProgress(
+                    listener,
+                    stats,
+                    target.ref,
+                    currentSha = commit.name.take(SHORT_SHA_LENGTH),
+                    totalCommits = chain.size,
+                )
+                // Liveness heartbeat: refresh updated_at on the state row so a
+                // concurrent force-reset call in another pod sees this import as
+                // live, not stale. Wall-clock based so a slow per-commit cost
+                // doesn't sneak past the controller's STALE_IN_PROGRESS_THRESHOLD.
+                val now = Instant.now()
+                if (java.time.Duration.between(lastHeartbeat, now) >= HEARTBEAT_INTERVAL) {
+                    lastHeartbeat = now
+                    @Suppress("TooGenericExceptionCaught") // intentional: don't abort the import on a transient DB hiccup
+                    try {
+                        commitWriter.touchHeartbeat()
+                    } catch (e: Exception) {
+                        log.warn("Heartbeat write failed at commit $index: ${e.message}")
+                    }
+                }
             }
         }
 
@@ -166,6 +221,11 @@ class GitHistoryImportServiceImpl(
 
         markState(status = GitHistoryImportStatus.COMPLETED)
 
+        // Emission #3: pre-return. Clears `currentSha` so the SPA stops showing a
+        // stale "Processing commit X" between the last loop tick and the COMPLETED
+        // transition.
+        emitProgress(listener, stats, target.ref, currentSha = null, totalCommits = chain.size)
+
         return HistoryImportResult(
             targetRef = target.ref,
             targetSha = target.sha,
@@ -179,6 +239,37 @@ class GitHistoryImportServiceImpl(
                     .between(started, Instant.now())
                     .toMillis(),
         )
+    }
+
+    /**
+     * Throwable-catching emit so a misbehaving listener can't poison the import
+     * loop. Progress reporting is observability, not control flow — if it
+     * throws, the migration carries on without it.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private fun emitProgress(
+        listener: HistoryImportProgressListener,
+        stats: ImportStats,
+        targetRef: String,
+        currentSha: String?,
+        totalCommits: Int,
+    ) {
+        try {
+            listener.onProgress(
+                HistoryImportProgressEvent(
+                    totalCommits = totalCommits,
+                    processedCommits = stats.processed,
+                    auditRecords = stats.auditRecords,
+                    skippedNoGroovy = stats.skippedNoGroovy,
+                    skippedParseError = stats.skippedParseError,
+                    skippedUnknownNames = stats.unknownNames.size,
+                    currentSha = currentSha,
+                    targetRef = targetRef,
+                ),
+            )
+        } catch (e: Throwable) {
+            log.warn("History import progress listener threw at sha={}: {}", currentSha, e.message)
+        }
     }
 
     private fun resolveTarget(
@@ -347,7 +438,7 @@ class GitHistoryImportServiceImpl(
     }
 
     private fun markState(status: GitHistoryImportStatus) {
-        stateRepository.findById(IMPORT_KEY).ifPresent { entity ->
+        stateRepository.findById(HISTORY_IMPORT_KEY).ifPresent { entity ->
             entity.status = status.name
             commitWriter.saveState(entity)
         }
