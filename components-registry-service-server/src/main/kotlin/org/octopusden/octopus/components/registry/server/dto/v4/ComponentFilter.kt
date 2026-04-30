@@ -5,4 +5,5 @@ data class ComponentFilter(
     val productType: String? = null,
     val archived: Boolean? = null,
     val search: String? = null,
+    val owner: String? = null,
 )

@@ -8,7 +8,7 @@
 ## 1. Component Management
 
 ### 1.1 List Components
-- **Input**: Optional filters — system, clientCode, productType, archived, search (name/displayName)
+- **Input**: Optional filters — `productType`, `archived`, `search` (name/displayName), `owner` (exact match on `componentOwner`, `SYS-035`). `system` is currently rejected with 400 (see ADR/TDD on JPA Criteria + `text[]` limitations); `clientCode` is reserved for future.
 - **Output**: Paginated list of components with summary info
 - **Sorting**: By name (default), system, productType, updatedAt
 - **Pagination**: Page number + page size (default 20, max 100)
@@ -133,9 +133,16 @@ All existing search/lookup operations must return identical results from DB:
 - **Each entry**: action, changedBy, changedAt, oldValue (JSONB), newValue (JSONB), changeDiff (JSONB)
 
 ### 4.2 Global Recent Changes
-- **Input**: Optional filters — user, date range, entity type, action type
-- **Output**: Paginated feed of all recent changes across all entities
-- **Default**: Last 7 days, page size 50
+- **Endpoint**: `GET /rest/api/4/audit/recent`
+- **Input**: Optional filter query params (all independently optional, ANDed when combined; contract `SYS-036`):
+  - `entityType` — currently only `Component` is emitted (case-sensitive; `cb.equal`). `FieldOverride` and other entity types are reserved for future audit instrumentation.
+  - `entityId` — UUID of a specific entity (combine with `entityType` for entity-scoped history reachable via the same query as user/source filters)
+  - `changedBy` — username from `audit_log.changed_by`
+  - `source` — currently only `api` and `git-history` are emitted. Other values are reserved for future writers.
+  - `action` — `CREATE` \| `UPDATE` \| `DELETE` \| `RENAME` \| `ARCHIVE`
+  - `from`, `to` — ISO-8601 instants forming a half-open `[from, to)` window over `audit_log.changed_at`
+- **Output**: Paginated feed of audit rows newest-first (default sort `changedAt DESC`; caller-supplied `sort=` overrides)
+- **Page size**: Spring Data `Pageable`; defaults to the global `spring.data.web.pageable.default-page-size`
 
 ### 4.3 Change Diff
 - **Format**: JSON object showing only changed fields
