@@ -417,7 +417,7 @@ Implemented in `WebSecurityConfig.kt` (extends `CloudCommonWebSecurityConfig` fr
 - All other `/rest/api/4/**` (writes, admin, audit) → `authenticated()` + `@PreAuthorize`.
 - `/auth/**` → `authenticated()` (covers `/auth/me`, SYS-034).
 - `/actuator/health`, `/actuator/health/**` → `permitAll()`. All other `/actuator/**` paths fall through to `authenticated()` — only health probes are anonymous (see inline comment in `WebSecurityConfig.kt:49-54`).
-- `/swagger-ui/**`, `/webjars/**`, `/v3/api-docs/swagger-config`, `/swagger-resources/**` → `permitAll()` (springdoc-openapi assets; configured in this class, not inherited from parent).
+- `/swagger-ui/**`, `/webjars/**`, `/v2/api-docs`, `/v3/api-docs`, `/v3/api-docs/**`, `/v3/api-docs.yaml`, `/swagger-resources/**` → `permitAll()` (springdoc-openapi assets; configured in this class, not inherited from parent).
 - CSRF disabled (CRS is a Resource Server; CSRF is enforced by Portal at the gateway level — see ADR-012).
 
 ### 6.3 Permission Evaluator
