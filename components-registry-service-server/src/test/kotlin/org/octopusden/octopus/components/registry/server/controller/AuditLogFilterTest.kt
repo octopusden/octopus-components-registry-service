@@ -31,12 +31,15 @@ import java.util.UUID
  * which doesn't scale.
  *
  * Supported filters (each independently optional, ANDed when combined):
- *   - `entityType`        — e.g. `COMPONENT`, `FIELD_OVERRIDE`
+ *   - `entityType`        — currently only `Component` (capitalized; the filter is
+ *                           a case-sensitive `cb.equal`). `FieldOverride` and other
+ *                           entity types are reserved for future audit instrumentation.
  *   - `entityId`          — UUID of a specific entity (for entity-scoped history; identical
  *                           shape to `GET /audit/{entityType}/{entityId}` but reachable on
  *                           the same query as user/source/etc. filters)
  *   - `changedBy`         — username from `audit_log.changed_by`
- *   - `source`            — `api` | `git-history` | `migration_job`
+ *   - `source`            — currently only `api` and `git-history`; other values are
+ *                           reserved for future writers
  *   - `action`            — `CREATE` | `UPDATE` | `DELETE` | `RENAME` | `ARCHIVE` | …
  *   - `from`, `to`        — ISO-8601 instants; either or both, half-open `[from, to)`
  *
@@ -110,7 +113,7 @@ class AuditLogFilterTest {
     fun auditRecent_byEntityType_returnsMatching() {
         val name = uniqueName("sys036_et")
         val id = createComponent(name)
-        deleteComponent(id) // generates a COMPONENT-scoped audit row even if other types exist
+        deleteComponent(id) // generates a Component-scoped audit row even if other types exist
 
         val body =
             mvc
@@ -125,7 +128,7 @@ class AuditLogFilterTest {
         val json = objectMapper.readTree(body)
 
         val entityTypes = json["content"].map { it["entityType"].asText() }.toSet()
-        assert(entityTypes.all { it == "Component" }) { "expected only COMPONENT, got $entityTypes" }
+        assert(entityTypes.all { it == "Component" }) { "expected only Component, got $entityTypes" }
         assert(json["content"].any { it["entityId"].asText() == id }) {
             "expected to find audit rows for component $id"
         }
@@ -169,6 +172,12 @@ class AuditLogFilterTest {
     @Test
     @DisplayName("SYS-036 audit/recent filtered by changedBy returns only that user's rows")
     fun auditRecent_byChangedBy_returnsMatching() {
+        // This test depends on CurrentUserResolver wiring (TDD §6.4): every AuditEvent
+        // published by ComponentManagementServiceImpl carries `changedBy =
+        // currentUserResolver.currentUsername()`. Without that wiring, runtime API rows
+        // would write `changed_by = null` and this filter would always return empty.
+        // If a future revert of CurrentUserResolver lands without bisecting this test,
+        // the assertion will fail loudly here rather than silently pass on null rows.
         val name = uniqueName("sys036_user")
         createComponent(name) // adminJwt → preferred_username "alice"
 

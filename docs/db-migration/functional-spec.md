@@ -135,10 +135,10 @@ All existing search/lookup operations must return identical results from DB:
 ### 4.2 Global Recent Changes
 - **Endpoint**: `GET /rest/api/4/audit/recent`
 - **Input**: Optional filter query params (all independently optional, ANDed when combined; contract `SYS-036`):
-  - `entityType` — e.g. `Component`, `FieldOverride`
+  - `entityType` — currently only `Component` is emitted (case-sensitive; `cb.equal`). `FieldOverride` and other entity types are reserved for future audit instrumentation.
   - `entityId` — UUID of a specific entity (combine with `entityType` for entity-scoped history reachable via the same query as user/source filters)
   - `changedBy` — username from `audit_log.changed_by`
-  - `source` — `api` \| `git-history` \| `migration_job`
+  - `source` — currently only `api` and `git-history` are emitted. Other values are reserved for future writers.
   - `action` — `CREATE` \| `UPDATE` \| `DELETE` \| `RENAME` \| `ARCHIVE`
   - `from`, `to` — ISO-8601 instants forming a half-open `[from, to)` window over `audit_log.changed_at`
 - **Output**: Paginated feed of audit rows newest-first (default sort `changedAt DESC`; caller-supplied `sort=` overrides)

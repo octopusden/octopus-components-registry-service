@@ -127,4 +127,74 @@ class ListComponentsOwnerFilterTest {
     fun listComponents_withoutOwner_ok() {
         mvc.perform(get("/rest/api/4/components").with(viewerJwt())).andExpect(status().isOk)
     }
+
+    @Test
+    @DisplayName("SYS-035 criterion 4: ?owner combines with ?archived via AND")
+    fun listComponents_byOwnerAndArchived_combinesViaAnd() {
+        val owner = uniqueName("alice_and")
+        val activeName = uniqueName("sys035_and_active")
+        val archivedName = uniqueName("sys035_and_archived")
+
+        // Two components for the same owner: one active, one archived.
+        createComponent(activeName, owner)
+        createComponent(archivedName, owner)
+        archiveComponent(archivedName)
+
+        // owner=<owner> AND archived=true → only the archived one
+        val onlyArchivedJson =
+            mvc
+                .perform(
+                    get("/rest/api/4/components")
+                        .with(viewerJwt())
+                        .param("owner", owner)
+                        .param("archived", "true")
+                        .param("size", "200"),
+                ).andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString
+        val onlyArchivedNames = objectMapper.readTree(onlyArchivedJson)["content"].map { it["name"].asText() }.toSet()
+        assert(onlyArchivedNames == setOf(archivedName)) {
+            "expected only $archivedName, got $onlyArchivedNames"
+        }
+
+        // owner=<owner> AND archived=false → only the active one
+        val onlyActiveJson =
+            mvc
+                .perform(
+                    get("/rest/api/4/components")
+                        .with(viewerJwt())
+                        .param("owner", owner)
+                        .param("archived", "false")
+                        .param("size", "200"),
+                ).andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString
+        val onlyActiveNames = objectMapper.readTree(onlyActiveJson)["content"].map { it["name"].asText() }.toSet()
+        assert(onlyActiveNames == setOf(activeName)) {
+            "expected only $activeName, got $onlyActiveNames"
+        }
+    }
+
+    private fun archiveComponent(name: String) {
+        // Re-fetch to obtain id + version, then PATCH with archived=true. Goes through the
+        // real ComponentControllerV4 PATCH path, so it generates an audit row and increments
+        // @Version — same shape a Portal "Archive" button would use.
+        val detailJson =
+            mvc
+                .perform(get("/rest/api/4/components/$name").with(adminJwt()))
+                .andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString
+        val detail = objectMapper.readTree(detailJson)
+        val id = detail["id"].asText()
+        val version = detail["version"].asLong()
+        mvc
+            .perform(
+                org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                    .patch("/rest/api/4/components/$id")
+                    .with(adminJwt())
+                    .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                    .content("""{"version":$version,"archived":true}"""),
+            ).andExpect(status().isOk)
+    }
 }

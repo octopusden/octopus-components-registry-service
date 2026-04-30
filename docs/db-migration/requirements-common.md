@@ -1039,9 +1039,9 @@ The Portal `ComponentFilters` UI offers an owner dropdown populated from `/compo
 1. `GET /rest/api/4/components?owner=alice` returns HTTP 200 and the `content` array contains only components whose `componentOwner == "alice"`.
 2. `GET /rest/api/4/components?owner=<unknown>` returns HTTP 200 with an empty `content` array and `totalElements == 0`.
 3. `GET /rest/api/4/components` without the `owner` param returns HTTP 200 with the full list (the parameter is optional).
-4. `owner` combines with existing filters (`system`, `productType`, `archived`, `search`) via AND.
+4. `owner` combines with the other supported filters (`productType`, `archived`, `search`) via AND. (`system` is currently rejected with HTTP 400 — see `ComponentManagementServiceImpl.buildSpecification` — and is therefore not part of this combination.)
 
-**Test method:** `ListComponentsOwnerFilterTest` — three test methods covering criteria 1, 2, 3 against the live `WebSecurityConfig` chain on the `ft-db` profile.
+**Test method:** `ListComponentsOwnerFilterTest` — four test methods covering criteria 1, 2, 3, 4 against the live `WebSecurityConfig` chain on the `ft-db` profile.
 
 **Out of scope:**
 - Multi-owner / OR semantics (a single value per call; combine with other filters or paginate).
@@ -1062,10 +1062,10 @@ The Portal `AuditLogPage` filter sidebar drives a server-side query — without 
 Supported filters:
 | Param | Type | Notes |
 |---|---|---|
-| `entityType` | string | e.g. `COMPONENT`, `FIELD_OVERRIDE` |
+| `entityType` | string | Currently only `Component` is emitted (capitalized — `cb.equal` is case-sensitive). `FieldOverride` and other entity types are reserved for future audit instrumentation; field-override CRUD does not publish `AuditEvent` yet. |
 | `entityId` | string | usually a UUID; combine with `entityType` for entity-scoped history reachable in the same query as user/source filters |
-| `changedBy` | string | username from `audit_log.changed_by` |
-| `source` | string | `api` \| `git-history` \| `migration_job` |
+| `changedBy` | string | username from `audit_log.changed_by`. For runtime API events the value is resolved by `CurrentUserResolver` (see TDD §6.4); for git-history backfill rows it is the git author signature. |
+| `source` | string | Currently only `api` (default for runtime events) and `git-history` (backfill from `/admin/migrate-history`) are emitted. Other values are reserved for future writers. |
 | `action` | string | `CREATE` \| `UPDATE` \| `DELETE` \| `RENAME` \| `ARCHIVE` \| … |
 | `from`, `to` | ISO-8601 instant | half-open `[from, to)` over `audit_log.changed_at`; either or both optional |
 
@@ -1074,9 +1074,9 @@ Supported filters:
 - DB contains audit rows produced by either runtime API events (`source = 'api'`) or backfill from `/admin/migrate-history` (`source = 'git-history'`).
 
 **Acceptance criteria:**
-1. `GET /audit/recent?entityType=COMPONENT` returns only rows with `entityType == "COMPONENT"`.
-2. `GET /audit/recent?entityType=COMPONENT&entityId=<uuid>` returns only rows for that single component (CREATE + any UPDATE/RENAME/DELETE).
-3. `GET /audit/recent?changedBy=alice` returns only rows with `changedBy == "alice"`.
+1. `GET /audit/recent?entityType=Component` returns only rows with `entityType == "Component"`.
+2. `GET /audit/recent?entityType=Component&entityId=<uuid>` returns only rows for that single component (CREATE + any UPDATE/RENAME/DELETE).
+3. `GET /audit/recent?changedBy=alice` returns only rows with `changedBy == "alice"`. Depends on `CurrentUserResolver` populating `audit_log.changed_by` (TDD §6.4) — without that wiring, runtime API rows would have `changed_by = null` and the filter would always be empty.
 4. `GET /audit/recent?changedBy=<unknown>` returns HTTP 200 with empty `content` and `totalElements == 0`.
 5. `GET /audit/recent?source=api` returns only rows with `source == "api"`; rows with `source == "git-history"` are excluded.
 6. `GET /audit/recent` without any filter param returns the full audit log newest-first (legacy contract preserved).

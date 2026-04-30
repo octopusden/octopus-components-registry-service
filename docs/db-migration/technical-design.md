@@ -284,10 +284,12 @@ GET    /rest/api/4/audit/recent
   Response: Page<AuditEntry>, default sort changedAt DESC
   Auth:     ACCESS_AUDIT
   Filters:  Optional query params (independent, ANDed when combined; SYS-036):
-              entityType   — e.g. "Component", "FieldOverride"
+              entityType   — currently only "Component" (case-sensitive); other
+                             types reserved for future audit instrumentation
               entityId     — UUID; combine with entityType for entity-scoped history
-              changedBy    — username from audit_log.changed_by
-              source       — "api" | "git-history" | "migration_job"
+              changedBy    — username from audit_log.changed_by (CurrentUserResolver)
+              source       — currently only "api" or "git-history"; other values
+                             reserved for future writers
               action       — "CREATE" | "UPDATE" | "DELETE" | "RENAME" | "ARCHIVE"
               from, to     — ISO-8601 instants; half-open [from, to) on changed_at
   Note:     `audit_log.changed_by` is populated from CurrentUserResolver
