@@ -12,6 +12,8 @@ import org.octopusden.octopus.components.registry.server.service.BatchMigrationR
 import org.octopusden.octopus.components.registry.server.service.FullMigrationResult
 import org.octopusden.octopus.components.registry.server.service.ImportService
 import org.octopusden.octopus.components.registry.server.service.JobState
+import org.octopusden.octopus.components.registry.server.service.MigrationLifecycleGate
+import org.octopusden.octopus.components.registry.server.service.MigrationPhase
 import org.octopusden.octopus.components.registry.server.service.MigrationProgressEvent
 import org.octopusden.octopus.components.registry.server.service.MigrationProgressListener
 import org.octopusden.octopus.components.registry.server.service.MigrationResult
@@ -47,14 +49,14 @@ class MigrationJobServiceImplTest {
 
     @Test
     fun `current() is null before any job has been started`() {
-        val service = MigrationJobServiceImpl(StubImportService(), SyncTaskExecutor())
+        val service = MigrationJobServiceImpl(StubImportService(), SyncTaskExecutor(), MigrationLifecycleGate())
         assertNull(service.current())
     }
 
     @Test
     fun `first startAsync returns isNewlyStarted=true and the migration runs`() {
         val importService = StubImportService(migrateImpl = { emptyResult })
-        val service = MigrationJobServiceImpl(importService, SyncTaskExecutor())
+        val service = MigrationJobServiceImpl(importService, SyncTaskExecutor(), MigrationLifecycleGate())
 
         val result = service.startAsync()
 
@@ -69,7 +71,7 @@ class MigrationJobServiceImplTest {
     fun `second startAsync while RUNNING returns the existing job and does not spawn a duplicate`() {
         val deferredExecutor = DeferredExecutor()
         val importService = StubImportService(migrateImpl = { emptyResult })
-        val service = MigrationJobServiceImpl(importService, deferredExecutor)
+        val service = MigrationJobServiceImpl(importService, deferredExecutor, MigrationLifecycleGate())
 
         val first = service.startAsync()
         // Migration runnable hasn't actually been run yet (deferred), so the job is
@@ -87,7 +89,7 @@ class MigrationJobServiceImplTest {
     @Test
     fun `after job COMPLETES the next startAsync starts a fresh job with a different id`() {
         val importService = StubImportService(migrateImpl = { emptyResult })
-        val service = MigrationJobServiceImpl(importService, SyncTaskExecutor())
+        val service = MigrationJobServiceImpl(importService, SyncTaskExecutor(), MigrationLifecycleGate())
 
         val first = service.startAsync()
         assertEquals(JobState.COMPLETED, first.state.state)
@@ -120,7 +122,7 @@ class MigrationJobServiceImplTest {
                 // lambda the test can flip from outside, then complete after.
                 emptyResult
             })
-        val service = MigrationJobServiceImpl(importService, SyncTaskExecutor())
+        val service = MigrationJobServiceImpl(importService, SyncTaskExecutor(), MigrationLifecycleGate())
 
         service.startAsync()
 
@@ -147,7 +149,7 @@ class MigrationJobServiceImplTest {
                     ),
             )
         val importService = StubImportService(migrateImpl = { populatedResult })
-        val service = MigrationJobServiceImpl(importService, SyncTaskExecutor())
+        val service = MigrationJobServiceImpl(importService, SyncTaskExecutor(), MigrationLifecycleGate())
 
         service.startAsync()
         val state = service.current()!!
@@ -164,7 +166,7 @@ class MigrationJobServiceImplTest {
     @Test
     fun `terminal state is FAILED with error message when ImportService throws`() {
         val importService = StubImportService(migrateImpl = { throw IllegalStateException("disk full") })
-        val service = MigrationJobServiceImpl(importService, SyncTaskExecutor())
+        val service = MigrationJobServiceImpl(importService, SyncTaskExecutor(), MigrationLifecycleGate())
 
         service.startAsync()
         val state = service.current()!!
@@ -183,7 +185,7 @@ class MigrationJobServiceImplTest {
         // rollback, the slot stays RUNNING forever and every subsequent POST
         // returns 409 from the controller layer. The operator would be wedged.
         val importService = StubImportService(migrateImpl = { fail("executor refused; importService should never be touched") })
-        val service = MigrationJobServiceImpl(importService, RejectingExecutor("pool shutting down"))
+        val service = MigrationJobServiceImpl(importService, RejectingExecutor("pool shutting down"), MigrationLifecycleGate())
 
         val thrown = assertFailsWith<java.util.concurrent.RejectedExecutionException> { service.startAsync() }
         assertEquals("pool shutting down", thrown.message)
@@ -209,7 +211,7 @@ class MigrationJobServiceImplTest {
                     runnable.run()
                 },
             )
-        val service = MigrationJobServiceImpl(importService, executor)
+        val service = MigrationJobServiceImpl(importService, executor, MigrationLifecycleGate())
 
         // First call → rejection → FAILED slot.
         runCatching { service.startAsync() }
@@ -223,13 +225,160 @@ class MigrationJobServiceImplTest {
         assertEquals(JobState.COMPLETED, retry.state.state)
     }
 
+    @Test
+    fun `phase is set to DEFAULTS in the published state BEFORE the runnable runs`() {
+        // Pin the race fix from A2: ThreadPoolTaskExecutor.execute() returns
+        // synchronously, and the controller builds its 202 response from
+        // state.get() right after. If phase were set inside runMigration
+        // (the runnable), the SPA would briefly see RUNNING with phase=null
+        // and render fallback "Running…" instead of "Loading defaults…" —
+        // exactly the UX bug we set out to fix. DeferredExecutor never runs
+        // the captured runnable, so the only way state.phase can be DEFAULTS
+        // here is if it was published at startAsync time.
+        val deferredExecutor = DeferredExecutor()
+        val service =
+            MigrationJobServiceImpl(
+                StubImportService(migrateImpl = { fail("runnable should not have run") }),
+                deferredExecutor,
+                MigrationLifecycleGate(),
+            )
+
+        val result = service.startAsync()
+
+        assertEquals(JobState.RUNNING, result.state.state)
+        assertEquals(MigrationPhase.DEFAULTS, result.state.phase)
+        assertEquals(MigrationPhase.DEFAULTS, service.current()!!.phase)
+    }
+
+    @Test
+    fun `phase transitions to COMPONENTS before migrateAllComponents and clears on COMPLETED`() {
+        // Capture phase observed inside each ImportService method to assert ordering.
+        val phaseAtMigrateDefaults = AtomicPhaseRef()
+        val phaseAtMigrateAllComponents = AtomicPhaseRef()
+        // Use a service ref captured by closure so the stub can read live phase from
+        // the same instance under test.
+        lateinit var service: MigrationJobServiceImpl
+        val importService =
+            object : StubImportService() {
+                override fun migrateDefaults(): Map<String, Any?> {
+                    phaseAtMigrateDefaults.value = service.current()?.phase
+                    return emptyMap()
+                }
+
+                override fun migrateAllComponents(progress: MigrationProgressListener): BatchMigrationResult {
+                    phaseAtMigrateAllComponents.value = service.current()?.phase
+                    return BatchMigrationResult(0, 0, 0, 0, emptyList())
+                }
+            }
+        service = MigrationJobServiceImpl(importService, SyncTaskExecutor(), MigrationLifecycleGate())
+
+        service.startAsync()
+
+        assertEquals(MigrationPhase.DEFAULTS, phaseAtMigrateDefaults.value, "migrateDefaults runs while phase=DEFAULTS")
+        assertEquals(MigrationPhase.COMPONENTS, phaseAtMigrateAllComponents.value, "migrateAllComponents runs while phase=COMPONENTS")
+        assertNull(service.current()!!.phase, "terminal COMPLETED state must clear phase to null")
+    }
+
+    @Test
+    fun `phase is cleared on FAILED transition`() {
+        val service =
+            MigrationJobServiceImpl(
+                StubImportService(migrateImpl = { throw IllegalStateException("boom") }),
+                SyncTaskExecutor(),
+                MigrationLifecycleGate(),
+            )
+        service.startAsync()
+        assertEquals(JobState.FAILED, service.current()!!.state)
+        assertNull(service.current()!!.phase, "terminal FAILED state must also clear phase")
+    }
+
+    @Test
+    fun `runMigration releases the lifecycle gate on success`() {
+        val gate = MigrationLifecycleGate()
+        val service =
+            MigrationJobServiceImpl(
+                StubImportService(migrateImpl = {
+                    BatchMigrationResult(0, 0, 0, 0, emptyList())
+                    org.octopusden.octopus.components.registry.server.service.FullMigrationResult(
+                        defaults = emptyMap(),
+                        components = BatchMigrationResult(0, 0, 0, 0, emptyList()),
+                    )
+                }),
+                SyncTaskExecutor(),
+                gate,
+            )
+        service.startAsync()
+        assertNull(gate.current(), "gate must be released after a successful run so other migrations are not blocked")
+    }
+
+    @Test
+    fun `runMigration releases the lifecycle gate on failure`() {
+        val gate = MigrationLifecycleGate()
+        val service =
+            MigrationJobServiceImpl(
+                StubImportService(migrateImpl = { throw IllegalStateException("boom") }),
+                SyncTaskExecutor(),
+                gate,
+            )
+        service.startAsync()
+        assertNull(gate.current(), "gate must be released after FAILED too — leak would block any future history migration")
+    }
+
+    @Test
+    fun `executor rejection releases the lifecycle gate so the next startAsync can proceed`() {
+        val gate = MigrationLifecycleGate()
+        val service =
+            MigrationJobServiceImpl(
+                StubImportService(migrateImpl = { fail("must not be called") }),
+                RejectingExecutor("queue closed"),
+                gate,
+            )
+        runCatching { service.startAsync() }
+        assertNull(gate.current(), "rejection branch must release the gate too — defends against gate-leak on submit failure")
+    }
+
+    @Test
+    fun `cross-kind gate held by HISTORY makes startAsync throw MigrationConflictException`() {
+        val gate = MigrationLifecycleGate()
+        // Simulate history-job currently holding the gate.
+        gate.tryClaim(MigrationLifecycleGate.JobKind.HISTORY, "history-1")
+
+        val service =
+            MigrationJobServiceImpl(
+                StubImportService(migrateImpl = { fail("must not be called when cross-kind conflict") }),
+                SyncTaskExecutor(),
+                gate,
+            )
+
+        val ex =
+            assertFailsWith<org.octopusden.octopus.components.registry.server.service.MigrationConflictException> {
+                service.startAsync()
+            }
+        assertEquals(MigrationLifecycleGate.JobKind.HISTORY, ex.active.kind)
+        assertEquals("history-1", ex.active.jobId)
+    }
+
+    /** Captures a [MigrationPhase] observed from a different thread / call site. */
+    private class AtomicPhaseRef {
+        @Volatile
+        var value: MigrationPhase? = null
+    }
+
     /**
      * Hand-written stub for [ImportService]. Mockito would have been smaller, but
      * the non-nullable Kotlin progress parameter trips its `any()` matcher
      * (returns null → NPE before the proxy intercepts). The stub records call
      * counts + the last progress event so tests can assert on flow.
+     *
+     * Adapter contract: the constructor takes a `migrateImpl` that returns a
+     * full [FullMigrationResult]; the stub splits this between [migrateDefaults]
+     * (returns the `defaults` map) and [migrateAllComponents] (returns the
+     * `components` value AND drives any progress events the body would have
+     * emitted). This preserves existing test ergonomics from when
+     * MigrationJobServiceImpl called `migrate(progress)` as one step before A2
+     * split it into two phases.
      */
-    private class StubImportService(
+    private open class StubImportService(
         private val migrateImpl: (MigrationProgressListener) -> FullMigrationResult = { unused() },
     ) : ImportService {
         var migrateCallCount: Int = 0
@@ -239,17 +388,32 @@ class MigrationJobServiceImplTest {
         var lastProgressEvent: MigrationProgressEvent? = null
             private set
 
-        override fun migrate(progress: MigrationProgressListener): FullMigrationResult {
+        // Memoize across the two phase calls so the result-building lambda
+        // runs exactly once per logical migration. migrateDefaults is called
+        // first, then migrateAllComponents — both pull from the same memo.
+        private var memoized: FullMigrationResult? = null
+        private var capturedListener: MigrationProgressListener? = null
+
+        private fun buildResult(): FullMigrationResult {
+            val cached = memoized
+            if (cached != null) return cached
             migrateCallCount++
-            // Wrap the listener so we can also see what events ImportService would
-            // have driven through it; useful for tests that assert on mid-run state.
+            val listener = capturedListener ?: MigrationProgressListener.NOOP
             val tap =
                 MigrationProgressListener { event ->
                     progressCallCount++
                     lastProgressEvent = event
-                    progress.onProgress(event)
+                    listener.onProgress(event)
                 }
-            return migrateImpl(tap)
+            val result = migrateImpl(tap)
+            memoized = result
+            return result
+        }
+
+        override fun migrate(progress: MigrationProgressListener): FullMigrationResult {
+            // Legacy entrypoint kept for the few tests / callers that still use it.
+            capturedListener = progress
+            return buildResult()
         }
 
         override fun migrateComponent(
@@ -257,13 +421,29 @@ class MigrationJobServiceImplTest {
             dryRun: Boolean,
         ): MigrationResult = unused()
 
-        override fun migrateAllComponents(progress: MigrationProgressListener): BatchMigrationResult = unused()
+        // `open` so phase-ordering tests can override per-method to capture state mid-run.
+        open override fun migrateAllComponents(progress: MigrationProgressListener): BatchMigrationResult {
+            capturedListener = progress
+            val result = buildResult()
+            // Logical migration boundary: defaults+components both ran. Reset memo
+            // so the next startAsync (post-COMPLETED retry) re-evaluates the lambda
+            // and migrateCallCount climbs as expected.
+            memoized = null
+            return result.components
+        }
 
         override fun getMigrationStatus(): MigrationStatus = unused()
 
         override fun validateMigration(name: String): ValidationResult = unused()
 
-        override fun migrateDefaults(): Map<String, Any?> = unused()
+        open override fun migrateDefaults(): Map<String, Any?> {
+            // Defaults runs first under A2, but if migrateImpl throws we want it to
+            // fire from migrateAllComponents (so phase=COMPONENTS at failure-time
+            // matches what the existing tests expect about FAILED transitions).
+            // To preserve that, defaults returns an empty placeholder and the
+            // real lambda fires inside migrateAllComponents.
+            return emptyMap()
+        }
 
         companion object {
             private fun <T> unused(): T = error("not stubbed for this test")
