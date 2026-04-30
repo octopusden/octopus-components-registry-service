@@ -145,17 +145,40 @@ class MigrationLifecycleGateTest {
      */
     @Test
     fun `release-then-CAS-retry never produces phantom successful claims`() {
+        // P2 review fix: previously asserted only `claimsObserved == releasesPerformed`,
+        // which catches *bookkeeping* leaks but NOT the actual phantom-claim
+        // scenario this test claims to cover. The proper invariant is
+        // `peakSimultaneousOwners <= 1` — if two threads ever both observe a
+        // successful claim AT THE SAME TIME, the gate's mutual-exclusion
+        // contract is broken regardless of the eventual release counts.
         val gate = MigrationLifecycleGate()
         val claimsObserved = AtomicInteger(0)
         val releasesPerformed = AtomicInteger(0)
+        val activeOwners = AtomicInteger(0)
+        val peakOwners = AtomicInteger(0)
         val iterations = 2_000
+
+        fun ownClaimWindow() {
+            val current = activeOwners.incrementAndGet()
+            // Track high-water-mark via CAS-loop so we don't miss a transient peak.
+            while (true) {
+                val seen = peakOwners.get()
+                if (current <= seen || peakOwners.compareAndSet(seen, current)) break
+            }
+            claimsObserved.incrementAndGet()
+            // Brief active window so concurrent claimers have a chance to overlap
+            // and the peak counter has time to observe the violation, if any.
+            // Thread.yield is enough; sleep would slow the test pointlessly.
+            Thread.yield()
+            activeOwners.decrementAndGet()
+        }
 
         val claimer =
             Thread {
                 repeat(iterations) { i ->
                     val result = gate.tryClaim(JobKind.COMPONENTS, "claim-$i")
                     if (result == null) {
-                        claimsObserved.incrementAndGet()
+                        ownClaimWindow()
                         gate.release("claim-$i")
                         releasesPerformed.incrementAndGet()
                     }
@@ -166,7 +189,7 @@ class MigrationLifecycleGateTest {
                 repeat(iterations) { i ->
                     val result = gate.tryClaim(JobKind.HISTORY, "challenge-$i")
                     if (result == null) {
-                        claimsObserved.incrementAndGet()
+                        ownClaimWindow()
                         gate.release("challenge-$i")
                         releasesPerformed.incrementAndGet()
                     }
@@ -179,9 +202,14 @@ class MigrationLifecycleGateTest {
         challenger.join(10_000)
 
         assertEquals(
+            1,
+            peakOwners.get(),
+            "peakSimultaneousOwners must be 1 — two threads both observing a successful claim is the phantom-claim bug this test exists to prevent",
+        )
+        assertEquals(
             claimsObserved.get(),
             releasesPerformed.get(),
-            "every observed claim must be paired with a release — phantom claims would skew this count",
+            "every observed claim must be paired with a release — bookkeeping cross-check",
         )
         assertNull(gate.current(), "after all releases the gate must be empty")
         assertTrue(claimsObserved.get() > 0, "sanity check: at least one claim should have happened")

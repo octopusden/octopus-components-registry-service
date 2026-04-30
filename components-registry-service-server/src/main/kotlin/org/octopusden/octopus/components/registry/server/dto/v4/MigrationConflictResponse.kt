@@ -19,4 +19,11 @@ data class MigrationConflictResponse(
     val message: String,
     val activeKind: String,
     val activeJobId: String,
+    /**
+     * Discriminator. Always `"conflict"` for this shape — counterpart to
+     * `kind = "job"` on MigrationJobResponse / HistoryMigrationJobResponse.
+     * The SPA branches on this directly instead of inferring from the
+     * presence/absence of fields, which is brittle under contract drift.
+     */
+    val kind: String = "conflict",
 )

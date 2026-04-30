@@ -7,6 +7,7 @@ import org.octopusden.octopus.components.registry.server.service.GitHistoryImpor
 import org.octopusden.octopus.components.registry.server.service.HistoryImportProgressListener
 import org.octopusden.octopus.components.registry.server.service.HistoryMigrationJobService
 import org.octopusden.octopus.components.registry.server.service.HistoryMigrationJobState
+import org.octopusden.octopus.components.registry.server.service.HistoryRecoveryAction
 import org.octopusden.octopus.components.registry.server.service.JobState
 import org.octopusden.octopus.components.registry.server.service.MigrationConflictException
 import org.octopusden.octopus.components.registry.server.service.MigrationLifecycleGate
@@ -104,6 +105,7 @@ class HistoryMigrationJobServiceImpl(
                             finishedAt = Instant.now(),
                             errorMessage =
                                 "Failed to submit history migration: ${rejected.message ?: rejected::class.java.simpleName}",
+                            recoveryAction = HistoryRecoveryAction.RETRY,
                         )
                     }
                 }
@@ -156,6 +158,9 @@ class HistoryMigrationJobServiceImpl(
                         skippedParseError = result.skippedParseError,
                         skippedUnknownNames = result.skippedUnknownNames,
                         result = result,
+                        // Operator can re-run the import on top of a COMPLETED row
+                        // via reset=true; SPA shows "Retry (reset state)".
+                        recoveryAction = HistoryRecoveryAction.RETRY,
                     )
                 }
             }
@@ -179,6 +184,11 @@ class HistoryMigrationJobServiceImpl(
                         finishedAt = Instant.now(),
                         currentSha = null,
                         errorMessage = e.message ?: e::class.java.simpleName,
+                        // FAILED in-memory paths are recoverable with reset=true
+                        // (the underlying preflight will clear the FAILED row
+                        // before re-claiming). FORCE_RESET is reserved for the
+                        // synthesized stuck-IN_PROGRESS DB-fallback case only.
+                        recoveryAction = HistoryRecoveryAction.RETRY,
                     )
                 }
             }
@@ -208,41 +218,70 @@ class HistoryMigrationJobServiceImpl(
         }
 
     private fun synthesizeFromDb(row: GitHistoryImportStateEntity): HistoryMigrationJobState {
-        val syntheticId = "restored-${row.updatedAt.toEpochMilli()}"
         val targetRef = row.targetRef.takeIf { it.isNotEmpty() }
+        // Synthetic id includes status + targetSha + updatedAt millis. Status
+        // makes the id distinguishable across the COMPLETED→re-claimed→FAILED
+        // sequence in the same pod-restart window; targetSha disambiguates
+        // imports against different refs; updatedAt covers the rare
+        // same-content same-ref case. The previous "restored-${epochMillis}"
+        // form could collide on identical updatedAt (multiple sequential
+        // restarts against the unchanged row), causing downstream consumers
+        // that key on `id` to miss state transitions.
+        val shaPart = row.targetSha.takeIf { it.isNotEmpty() } ?: "no-sha"
+        val syntheticId = "restored:${row.status.lowercase()}:$shaPart:${row.updatedAt.toEpochMilli()}"
         return when (row.status) {
             GitHistoryImportStatus.COMPLETED.name ->
-                emptyJobState(syntheticId, JobState.COMPLETED, row.updatedAt, targetRef, errorMessage = null)
+                synthesizedJobState(
+                    syntheticId,
+                    JobState.COMPLETED,
+                    row.updatedAt,
+                    targetRef,
+                    errorMessage = null,
+                    recoveryAction = HistoryRecoveryAction.RETRY,
+                )
             GitHistoryImportStatus.FAILED.name ->
-                emptyJobState(
+                synthesizedJobState(
                     syntheticId,
                     JobState.FAILED,
                     row.updatedAt,
                     targetRef,
                     errorMessage = "Previous run failed (details unavailable). Use Retry to re-run.",
+                    recoveryAction = HistoryRecoveryAction.RETRY,
                 )
             GitHistoryImportStatus.IN_PROGRESS.name ->
-                emptyJobState(
+                synthesizedJobState(
                     syntheticId,
                     JobState.FAILED,
                     row.updatedAt,
                     targetRef,
+                    // Human-readable explainer; the SPA does NOT match on this
+                    // string anymore — it branches on `recoveryAction == FORCE_RESET`.
                     errorMessage =
-                        "Previous run is marked IN_PROGRESS but no job is active in this pod " +
-                            "(probably interrupted by pod restart). Use Force reset to clear the claim, " +
+                        "Previous run is stuck in IN_PROGRESS state with no active job in this pod " +
+                            "(probably interrupted by a pod restart). Use Force reset to clear the claim, " +
                             "then Retry. WARNING: if another CRS pod is currently running this import, " +
                             "force-reset will corrupt its data.",
+                    recoveryAction = HistoryRecoveryAction.FORCE_RESET,
                 )
-            else -> emptyJobState(syntheticId, JobState.FAILED, row.updatedAt, targetRef, errorMessage = "Unknown status: ${row.status}")
+            else ->
+                synthesizedJobState(
+                    syntheticId,
+                    JobState.FAILED,
+                    row.updatedAt,
+                    targetRef,
+                    errorMessage = "Unknown status: ${row.status}",
+                    recoveryAction = HistoryRecoveryAction.FORCE_RESET,
+                )
         }
     }
 
-    private fun emptyJobState(
+    private fun synthesizedJobState(
         id: String,
         state: JobState,
         updatedAt: Instant,
         targetRef: String?,
         errorMessage: String?,
+        recoveryAction: HistoryRecoveryAction?,
     ): HistoryMigrationJobState =
         HistoryMigrationJobState(
             id = id,
@@ -259,6 +298,7 @@ class HistoryMigrationJobServiceImpl(
             targetRef = targetRef,
             errorMessage = errorMessage,
             result = null,
+            recoveryAction = recoveryAction,
         )
 
     companion object {

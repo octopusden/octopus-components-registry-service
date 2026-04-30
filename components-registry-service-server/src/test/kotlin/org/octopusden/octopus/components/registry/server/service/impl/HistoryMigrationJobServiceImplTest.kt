@@ -15,6 +15,7 @@ import org.octopusden.octopus.components.registry.server.repository.GitHistoryIm
 import org.octopusden.octopus.components.registry.server.service.GitHistoryImportService
 import org.octopusden.octopus.components.registry.server.service.HistoryImportProgressEvent
 import org.octopusden.octopus.components.registry.server.service.HistoryImportProgressListener
+import org.octopusden.octopus.components.registry.server.service.HistoryRecoveryAction
 import org.octopusden.octopus.components.registry.server.service.JobState
 import org.octopusden.octopus.components.registry.server.service.MigrationConflictException
 import org.octopusden.octopus.components.registry.server.service.MigrationLifecycleGate
@@ -150,10 +151,15 @@ class HistoryMigrationJobServiceImplTest {
         assertEquals(250, state.processedCommits)
         assertEquals(800, state.auditRecords)
         assertEquals(populated, state.result)
+        assertEquals(
+            HistoryRecoveryAction.RETRY,
+            state.recoveryAction,
+            "in-memory COMPLETED is recoverable via reset=true → SPA shows Retry button",
+        )
     }
 
     @Test
-    fun `terminal FAILED state captures the throwable message`() {
+    fun `terminal FAILED state captures the throwable message and sets recoveryAction=RETRY`() {
         val service =
             newService(
                 import = StubGitHistoryImportService(impl = { _, _, _ -> throw IllegalStateException("git refused clone") }),
@@ -165,6 +171,10 @@ class HistoryMigrationJobServiceImplTest {
         assertEquals(JobState.FAILED, state.state)
         assertEquals("git refused clone", state.errorMessage)
         assertNull(state.currentSha)
+        // In-memory FAILED is recoverable via reset=true (the underlying preflight
+        // clears the FAILED state row before the next claim). FORCE_RESET is reserved
+        // for the synthesized stuck-IN_PROGRESS DB-fallback case.
+        assertEquals(HistoryRecoveryAction.RETRY, state.recoveryAction)
     }
 
     @Test
@@ -240,7 +250,7 @@ class HistoryMigrationJobServiceImplTest {
     }
 
     @Test
-    fun `current() synthesizes FAILED-with-explainer when DB row is FAILED`() {
+    fun `current() synthesizes FAILED state with recoveryAction=RETRY when DB row is FAILED`() {
         val repo = StubStateRepository()
         repo.saveRow(
             GitHistoryImportStateEntity(
@@ -255,16 +265,16 @@ class HistoryMigrationJobServiceImplTest {
 
         val state = service.current()!!
         assertEquals(JobState.FAILED, state.state)
+        assertEquals(HistoryRecoveryAction.RETRY, state.recoveryAction, "FAILED row → SPA shows Retry (reset state) button")
         assertNotNull(state.errorMessage)
-        assertTrue(state.errorMessage!!.contains("Use Retry"))
     }
 
     @Test
-    fun `current() synthesizes IN_PROGRESS row as FAILED-with-marker so SPA shows Force-reset path`() {
-        // The SPA uses the literal substring "marked IN_PROGRESS" in errorMessage
-        // to switch its UI from "Retry" to "Force reset" — see B4
-        // HistoryActionButtons. This pin is load-bearing for the cross-pod
-        // recovery path; do not soften it without updating the SPA in lockstep.
+    fun `current() synthesizes IN_PROGRESS row with recoveryAction=FORCE_RESET so SPA shows Force-reset path`() {
+        // P1 review fix: the SPA used to match on `errorMessage.includes("marked IN_PROGRESS")`,
+        // a brittle string contract spread across two repos. Now the contract is the
+        // explicit `recoveryAction` discriminator. The errorMessage stays human-readable
+        // but is no longer load-bearing.
         val repo = StubStateRepository()
         repo.saveRow(
             GitHistoryImportStateEntity(
@@ -279,10 +289,50 @@ class HistoryMigrationJobServiceImplTest {
 
         val state = service.current()!!
         assertEquals(JobState.FAILED, state.state, "IN_PROGRESS in DB but no in-memory job — surface as FAILED for the UI")
-        assertTrue(
-            state.errorMessage!!.contains("marked IN_PROGRESS"),
-            "errorMessage must contain the SPA-recognised marker 'marked IN_PROGRESS' (verbatim) so it routes to Force-reset",
+        assertEquals(
+            HistoryRecoveryAction.FORCE_RESET,
+            state.recoveryAction,
+            "stuck IN_PROGRESS row must route the SPA to Force-reset, not Retry",
         )
+    }
+
+    @Test
+    fun `current() synthesized COMPLETED state has recoveryAction=RETRY`() {
+        val repo = StubStateRepository()
+        repo.saveRow(
+            GitHistoryImportStateEntity(
+                importKey = "component-history",
+                targetRef = "refs/tags/v1",
+                targetSha = "abc",
+                status = GitHistoryImportStatus.COMPLETED.name,
+                updatedAt = Instant.now(),
+            ),
+        )
+        val service = newService(stateRepository = repo)
+        assertEquals(HistoryRecoveryAction.RETRY, service.current()!!.recoveryAction)
+    }
+
+    @Test
+    fun `synthesized id includes status + targetSha + millis so it does not collide across pod restarts`() {
+        // P1 review fix: previous "restored-${epochMillis}" form could collide
+        // (multiple sequential restarts against the unchanged row → same id),
+        // making downstream consumers that key on `id` miss state transitions.
+        // The new form `restored:<status>:<sha>:<millis>` is content-addressed.
+        val repo = StubStateRepository()
+        val updatedAt = Instant.parse("2026-04-29T10:00:00Z")
+        repo.saveRow(
+            GitHistoryImportStateEntity(
+                importKey = "component-history",
+                targetRef = "refs/tags/v1",
+                targetSha = "abc1234",
+                status = GitHistoryImportStatus.COMPLETED.name,
+                updatedAt = updatedAt,
+            ),
+        )
+        val service = newService(stateRepository = repo)
+        val state = service.current()!!
+        assertTrue(state.id.startsWith("restored:completed:abc1234:"), "synthesized id must encode status + sha: ${state.id}")
+        assertTrue(state.id.endsWith(updatedAt.toEpochMilli().toString()), "synthesized id must include updatedAt millis: ${state.id}")
     }
 
     @Test

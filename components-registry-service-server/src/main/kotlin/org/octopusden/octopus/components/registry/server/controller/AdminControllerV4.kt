@@ -9,13 +9,18 @@ import org.octopusden.octopus.components.registry.server.service.ImportService
 import org.octopusden.octopus.components.registry.server.service.JobState
 import org.octopusden.octopus.components.registry.server.service.MigrationConflictException
 import org.octopusden.octopus.components.registry.server.service.MigrationJobService
+import org.octopusden.octopus.components.registry.server.entity.GitHistoryImportStatus
+import org.octopusden.octopus.components.registry.server.repository.GitHistoryImportStateRepository
 import org.octopusden.octopus.components.registry.server.service.MigrationLifecycleGate
 import org.octopusden.octopus.components.registry.server.service.MigrationResult
 import org.octopusden.octopus.components.registry.server.service.MigrationStatus
 import org.octopusden.octopus.components.registry.server.service.ValidationResult
 import org.octopusden.octopus.components.registry.server.service.impl.GitHistoryCommitWriter
+import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import java.time.Duration
+import java.time.Instant
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.GetMapping
@@ -33,7 +38,25 @@ class AdminControllerV4(
     private val migrationJobService: MigrationJobService,
     private val historyMigrationJobService: HistoryMigrationJobService,
     private val historyCommitWriter: GitHistoryCommitWriter,
+    private val historyStateRepository: GitHistoryImportStateRepository,
 ) {
+    companion object {
+        private val LOG = LoggerFactory.getLogger(AdminControllerV4::class.java)
+
+        /**
+         * Threshold for considering an IN_PROGRESS DB row "stale enough that no
+         * one in any pod is actively writing to it." Conservative: a real
+         * import takes minutes and writes update the state row's `updated_at`
+         * implicitly via JPA on every commit batch. If we haven't seen a
+         * write in 30 minutes, the original pod is almost certainly gone.
+         *
+         * Operators who genuinely need to interrupt a fresh live import can
+         * bypass with `?ack-multipod-risk=true` — explicit acknowledgement
+         * that data corruption is acceptable.
+         */
+        private val STALE_IN_PROGRESS_THRESHOLD: Duration = Duration.ofMinutes(30)
+        private const val IMPORT_KEY = "component-history"
+    }
     @PostMapping("/migrate-component/{name}")
     fun migrateComponent(
         @PathVariable name: String,
@@ -129,12 +152,28 @@ class AdminControllerV4(
      * claims left by a prior pod restart, or to bootstrap a re-import on a
      * stuck COMPLETED row when reset=true is also blocked.
      *
-     * Refused with 409 if a history migration is currently RUNNING in this
-     * pod — defense-in-depth against a direct curl call racing the Run flow.
-     * Idempotent on an empty DB (returns 204).
+     * Two layers of guard against multi-pod corruption (P1 review fix):
+     *
+     * 1. **In-pod gate** — refused with 409 if a history migration is
+     *    currently RUNNING in *this* pod. Defense-in-depth against a curl
+     *    call racing the Run flow.
+     * 2. **Cross-pod staleness gate** — refused with 409 if the DB row is
+     *    IN_PROGRESS with a fresh `updatedAt` (< STALE_IN_PROGRESS_THRESHOLD).
+     *    A live import in *another* pod would have a recent updatedAt; this
+     *    catches the cross-pod overlap that the in-pod gate cannot. Operators
+     *    who explicitly need to interrupt a fresh live import can override
+     *    with `?ack-multipod-risk=true` — that's an audit-loud opt-in, not a
+     *    silent default.
+     *
+     * Always logs the destructive action before performing it so operators
+     * have an audit trail even when the DB row gets wiped. Idempotent on
+     * an empty DB (returns 204 even when nothing was deleted).
      */
     @PostMapping("/migrate-history/force-reset")
-    fun forceResetHistory(): ResponseEntity<Any> {
+    fun forceResetHistory(
+        @RequestParam(name = "ack-multipod-risk", defaultValue = "false") ackMultipodRisk: Boolean,
+    ): ResponseEntity<Any> {
+        // Guard 1: same-pod active job.
         val active = historyMigrationJobService.current()
         if (active?.state == JobState.RUNNING) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(
@@ -148,6 +187,52 @@ class AdminControllerV4(
                 ),
             )
         }
+
+        // Guard 2: cross-pod staleness. Inspect the DB row directly (NOT via
+        // current() — that one synthesizes a JobState rather than exposing
+        // updatedAt).
+        val row = historyStateRepository.findById(IMPORT_KEY).orElse(null)
+        if (row != null &&
+            row.status == GitHistoryImportStatus.IN_PROGRESS.name &&
+            !ackMultipodRisk
+        ) {
+            val age = Duration.between(row.updatedAt, Instant.now())
+            if (age < STALE_IN_PROGRESS_THRESHOLD) {
+                LOG.warn(
+                    "Refusing force-reset: IN_PROGRESS row updated {} ago (threshold={}). " +
+                        "Likely a live import in another pod. Override with ack-multipod-risk=true if you accept the data-corruption risk.",
+                    age,
+                    STALE_IN_PROGRESS_THRESHOLD,
+                )
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(
+                    MigrationConflictResponse(
+                        code = "history-import-likely-live-elsewhere",
+                        message =
+                            "Refusing force-reset: the IN_PROGRESS claim was updated ${age.toSeconds()}s ago, " +
+                                "below the ${STALE_IN_PROGRESS_THRESHOLD.toMinutes()}-minute staleness threshold. " +
+                                "A live import in another pod is likely. " +
+                                "If you understand the multi-pod risk and want to proceed anyway, " +
+                                "POST again with ?ack-multipod-risk=true.",
+                        activeKind = MigrationLifecycleGate.JobKind.HISTORY.name,
+                        activeJobId = "(unknown — owned by another pod)",
+                    ),
+                )
+            }
+        }
+
+        // Audit-loud destructive action: log before the wipe so the pre-state
+        // survives the operation in the log stream. ack-multipod-risk=true is
+        // logged at WARN to make the override visible in alert pipelines.
+        if (row != null) {
+            val msg =
+                "FORCE-RESET: deleting git_history_import_state " +
+                    "(target=${row.targetRef}@${row.targetSha}, status=${row.status}, " +
+                    "updatedAt=${row.updatedAt}) and all audit_log rows with source='git-history'."
+            if (ackMultipodRisk) LOG.warn("$msg [ack-multipod-risk=true overriding staleness check]") else LOG.info(msg)
+        } else {
+            LOG.info("FORCE-RESET: no state row to delete (idempotent no-op on empty DB)")
+        }
+
         historyCommitWriter.forceReset()
         historyMigrationJobService.clearInMemory()
         return ResponseEntity.noContent().build()

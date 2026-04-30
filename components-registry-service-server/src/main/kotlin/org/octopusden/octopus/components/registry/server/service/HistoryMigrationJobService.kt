@@ -14,6 +14,20 @@ import java.time.Instant
  * state lives only for the duration of the running pod; on restart, the DB row
  * is the source of truth and the impl synthesizes a state from it (see A7.1).
  */
+/**
+ * Recovery hint for a non-running history-migration state. Drives the SPA's
+ * action button mode. Replaces the previous "match `errorMessage.includes('marked
+ * IN_PROGRESS')`" substring contract that was silently coupled across two repos.
+ *
+ * - `RETRY` — terminal-but-recoverable: COMPLETED or normal FAILED row. The SPA
+ *   shows "Retry (reset state)" and POSTs with `reset=true`.
+ * - `FORCE_RESET` — stuck IN_PROGRESS row (left by a previous pod that crashed
+ *   or restarted mid-import). SPA shows "Force reset" + disabled "Retry".
+ *
+ * `null` for RUNNING jobs and on idle (no claim, no previous run).
+ */
+enum class HistoryRecoveryAction { RETRY, FORCE_RESET }
+
 data class HistoryMigrationJobState(
     val id: String,
     val state: JobState,
@@ -32,6 +46,8 @@ data class HistoryMigrationJobState(
     val targetRef: String?,
     val errorMessage: String?,
     val result: HistoryImportResult?,
+    /** See [HistoryRecoveryAction]. Null while RUNNING or for an idle service. */
+    val recoveryAction: HistoryRecoveryAction? = null,
 )
 
 data class StartHistoryMigrationResult(

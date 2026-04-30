@@ -33,6 +33,14 @@ data class MigrationJobResponse(
      * the SPA falls back to a generic "Running…" label.
      */
     val phase: String?,
+    /**
+     * Discriminator for unambiguous 409 branching on the SPA. Always
+     * `"job"` for this shape; the cross-kind 409 envelope sets
+     * `"conflict"`. Without an explicit discriminator the SPA had to
+     * branch on the *absence* of fields, which silently corrupts on
+     * future contract drift.
+     */
+    val kind: String = "job",
 ) {
     companion object {
         fun from(state: MigrationJobState): MigrationJobResponse =

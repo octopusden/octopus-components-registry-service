@@ -26,6 +26,21 @@ data class HistoryMigrationJobResponse(
     val targetRef: String?,
     val errorMessage: String?,
     val result: HistoryImportResult?,
+    /**
+     * SPA action hint: 'RETRY' | 'FORCE_RESET' | null. Replaces the
+     * previous "match `errorMessage.includes('marked IN_PROGRESS')`"
+     * substring contract — the new field is a positive discriminator,
+     * stable across wording changes.
+     */
+    val recoveryAction: String?,
+    /**
+     * Discriminator for unambiguous 409 branching on the SPA. Always
+     * `"job"` for this shape; the cross-kind 409 envelope sets
+     * `"conflict"`. Without an explicit discriminator the SPA had to
+     * branch on the *absence* of fields, which silently corrupts on
+     * future contract drift.
+     */
+    val kind: String = "job",
 ) {
     companion object {
         fun from(state: HistoryMigrationJobState): HistoryMigrationJobResponse =
@@ -44,6 +59,7 @@ data class HistoryMigrationJobResponse(
                 targetRef = state.targetRef,
                 errorMessage = state.errorMessage,
                 result = state.result,
+                recoveryAction = state.recoveryAction?.name,
             )
     }
 }

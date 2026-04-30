@@ -32,6 +32,16 @@ import org.springframework.context.annotation.Profile
 @Configuration
 @Profile("dev-fault-injection")
 class FaultInjectionConfig {
+    init {
+        // Startup log — critical that operators can spot "fault injection
+        // active" in pod boot logs. ERROR level so it surfaces in
+        // alert/monitoring pipelines that filter on ERROR-only.
+        log.error(
+            "[fault-injection] dev-fault-injection profile is ACTIVE. " +
+                "If you see this in a production deployment, the wrong profile is set — " +
+                "investigate spring.profiles.active and the matching property gates immediately.",
+        )
+    }
     /**
      * Wraps the real [ImportService], throwing once `migrateDefaults()` is
      * called (so the SPA observes phase=DEFAULTS first, then a FAILED
@@ -66,7 +76,7 @@ class FaultInjectionConfig {
             // knows the path was hit, then bomb. A pure throw without delegation
             // would also work but makes the failure feel synthetic.
             delegate.migrateDefaults()
-            log.warn("[fault-injection] throwing IllegalStateException after migrateDefaults")
+            log.error("[fault-injection] throwing IllegalStateException after migrateDefaults")
             throw IllegalStateException(
                 "fault-injection: migration.fault-injection.fail-after-defaults=true",
             )
@@ -81,7 +91,7 @@ class FaultInjectionConfig {
             reset: Boolean,
             listener: HistoryImportProgressListener,
         ): HistoryImportResult {
-            log.warn("[fault-injection] throwing IllegalStateException from importHistory before walk")
+            log.error("[fault-injection] throwing IllegalStateException from importHistory before walk")
             // We could delegate part-way, but we don't actually want to leave
             // partial DB state — the underlying impl already marks FAILED on
             // throw via its outer try/catch, that's what we want to exercise.
