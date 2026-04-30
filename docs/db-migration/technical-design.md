@@ -416,7 +416,8 @@ Implemented in `WebSecurityConfig.kt` (extends `CloudCommonWebSecurityConfig` fr
 - `GET /rest/api/4/info` → `permitAll()` (anonymous build-info for Portal footer; SYS-033).
 - All other `/rest/api/4/**` (writes, admin, audit) → `authenticated()` + `@PreAuthorize`.
 - `/auth/**` → `authenticated()` (covers `/auth/me`, SYS-034).
-- `/actuator/**`, `/swagger-ui/**`, `/v3/api-docs/**` → `permitAll()` from parent.
+- `/actuator/health`, `/actuator/health/**` → `permitAll()`. All other `/actuator/**` paths fall through to `authenticated()` — only health probes are anonymous (see inline comment in `WebSecurityConfig.kt:49-54`).
+- `/swagger-ui/**`, `/webjars/**`, `/v2/api-docs`, `/v3/api-docs`, `/v3/api-docs/**`, `/v3/api-docs.yaml`, `/v3/api-docs/swagger-config`, `/swagger-resources/**` → `permitAll()` (springdoc-openapi assets; configured in this class, not inherited from parent).
 - CSRF disabled (CRS is a Resource Server; CSRF is enforced by Portal at the gateway level — see ADR-012).
 
 ### 6.3 Permission Evaluator
@@ -425,7 +426,7 @@ Implemented in `WebSecurityConfig.kt` (extends `CloudCommonWebSecurityConfig` fr
 
 | Method | Required permission | Used on |
 |---|---|---|
-| `canEditComponent(name)` | `EDIT_COMPONENTS` | `POST /components`, `PATCH /components/{id}` (plain edit) |
+| `canEditComponent(name)` | `EDIT_COMPONENTS` | `PATCH /components/{id}` (plain edit; `POST /components` uses `hasPermission('EDIT_COMPONENTS')` directly — no `name` arg available) |
 | `canArchiveComponent(name)` | `ARCHIVE_COMPONENTS` | `PATCH /components/{id}` when `archived` is in payload |
 | `canRenameComponent(name)` | `RENAME_COMPONENTS` | `PATCH /components/{id}` when `name` is in payload |
 | `canDeleteComponent(name)` | `DELETE_COMPONENTS` | `DELETE /components/{id}` |
@@ -434,7 +435,7 @@ Implemented in `WebSecurityConfig.kt` (extends `CloudCommonWebSecurityConfig` fr
 
 The `PATCH /components/{id}` SpEL guard combines these (the path variable is a `UUID`; the helper takes `String`, so the SpEL passes `#id.toString()`):
 ```
-@PreAuthorize("@permissionEvaluator.canEditComponent(#id.toString()) and (#request.archived == null or @permissionEvaluator.canArchiveComponent(#id.toString())) and (#request.name == null or @permissionEvaluator.canRenameComponent(#id.toString()))")
+@PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS') and @permissionEvaluator.canEditComponent(#id.toString()) and (#request.archived == null or @permissionEvaluator.canArchiveComponent(#id.toString())) and (#request.name == null or @permissionEvaluator.canRenameComponent(#id.toString()))")
 ```
 Plain edits stay on `EDIT_COMPONENTS`; archive/rename payloads fail closed with 403 for anyone without the extra permission.
 
