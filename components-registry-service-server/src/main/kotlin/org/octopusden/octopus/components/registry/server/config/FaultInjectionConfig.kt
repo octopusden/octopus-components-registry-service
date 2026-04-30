@@ -42,6 +42,7 @@ class FaultInjectionConfig {
                 "investigate spring.profiles.active and the matching property gates immediately.",
         )
     }
+
     /**
      * Wraps the real [ImportService], throwing once `migrateDefaults()` is
      * called (so the SPA observes phase=DEFAULTS first, then a FAILED
@@ -65,8 +66,7 @@ class FaultInjectionConfig {
     @Bean
     @Primary
     @ConditionalOnProperty("migration.fault-injection.fail-history-after-clone", havingValue = "true")
-    fun faultyHistoryImportService(real: GitHistoryImportServiceImpl): GitHistoryImportService =
-        FaultInjectingHistoryImportService(real)
+    fun faultyHistoryImportService(real: GitHistoryImportServiceImpl): GitHistoryImportService = FaultInjectingHistoryImportService(real)
 
     private class FaultInjectingImportService(
         private val delegate: ImportService,
@@ -77,9 +77,7 @@ class FaultInjectionConfig {
             // would also work but makes the failure feel synthetic.
             delegate.migrateDefaults()
             log.error("[fault-injection] throwing IllegalStateException after migrateDefaults")
-            throw IllegalStateException(
-                "fault-injection: migration.fault-injection.fail-after-defaults=true",
-            )
+            error("fault-injection: migration.fault-injection.fail-after-defaults=true")
         }
     }
 
@@ -95,7 +93,7 @@ class FaultInjectionConfig {
             // We could delegate part-way, but we don't actually want to leave
             // partial DB state — the underlying impl already marks FAILED on
             // throw via its outer try/catch, that's what we want to exercise.
-            throw IllegalStateException(
+            error(
                 "fault-injection: migration.fault-injection.fail-history-after-clone=true",
             )
         }

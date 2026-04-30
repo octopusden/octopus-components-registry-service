@@ -26,7 +26,10 @@ import java.util.concurrent.atomic.AtomicReference
 class MigrationLifecycleGate {
     enum class JobKind { COMPONENTS, HISTORY }
 
-    data class ActiveJob(val kind: JobKind, val jobId: String)
+    data class ActiveJob(
+        val kind: JobKind,
+        val jobId: String,
+    )
 
     private val active = AtomicReference<ActiveJob?>(null)
 
@@ -42,7 +45,10 @@ class MigrationLifecycleGate {
      * loop guarantees we either observe a live owner (returned as conflict) or
      * win our own CAS on a confirmed-null slot.
      */
-    fun tryClaim(kind: JobKind, jobId: String): ActiveJob? {
+    fun tryClaim(
+        kind: JobKind,
+        jobId: String,
+    ): ActiveJob? {
         val candidate = ActiveJob(kind, jobId)
         while (true) {
             val current = active.get()

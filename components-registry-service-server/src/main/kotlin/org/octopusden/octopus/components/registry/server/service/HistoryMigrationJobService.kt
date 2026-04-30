@@ -4,17 +4,6 @@ import org.octopusden.octopus.components.registry.server.dto.v4.HistoryImportRes
 import java.time.Instant
 
 /**
- * Server-side state of a long-running POST /rest/api/4/admin/migrate-history run.
- *
- * Mirrors [MigrationJobState] for components, with history-specific counters
- * (`processedCommits/totalCommits`, `auditRecords`, etc.) instead of per-component.
- *
- * Unlike the components job, history has a table-backed claim
- * (`git_history_import_state`) that persists across pod restarts. The in-memory
- * state lives only for the duration of the running pod; on restart, the DB row
- * is the source of truth and the impl synthesizes a state from it (see A7.1).
- */
-/**
  * Recovery hint for a non-running history-migration state. Drives the SPA's
  * action button mode. Replaces the previous "match `errorMessage.includes('marked
  * IN_PROGRESS')`" substring contract that was silently coupled across two repos.
@@ -33,6 +22,17 @@ import java.time.Instant
  */
 enum class HistoryRecoveryAction { RETRY, FORCE_RESET, UNKNOWN }
 
+/**
+ * Server-side state of a long-running POST /rest/api/4/admin/migrate-history run.
+ *
+ * Mirrors [MigrationJobState] for components, with history-specific counters
+ * (`processedCommits/totalCommits`, `auditRecords`, etc.) instead of per-component.
+ *
+ * Unlike the components job, history has a table-backed claim
+ * (`git_history_import_state`) that persists across pod restarts. The in-memory
+ * state lives only for the duration of the running pod; on restart, the DB row
+ * is the source of truth and the impl synthesizes a state from it (see A7.1).
+ */
 data class HistoryMigrationJobState(
     val id: String,
     val state: JobState,

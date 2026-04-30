@@ -1,3 +1,9 @@
+// MaxLineLength suppressed because StubStateRepository overrides JpaRepository's
+// long generic-laden signatures verbatim — they are mostly `error("unused")`
+// boilerplate, breaking each one across multiple lines makes the file harder
+// to scan, not easier.
+@file:Suppress("MaxLineLength")
+
 package org.octopusden.octopus.components.registry.server.service.impl
 
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -20,7 +26,6 @@ import org.octopusden.octopus.components.registry.server.service.JobState
 import org.octopusden.octopus.components.registry.server.service.MigrationConflictException
 import org.octopusden.octopus.components.registry.server.service.MigrationLifecycleGate
 import org.springframework.core.task.SyncTaskExecutor
-import org.springframework.data.repository.CrudRepository
 import java.time.Instant
 import java.util.Optional
 import kotlin.test.assertFailsWith
@@ -505,7 +510,9 @@ class HistoryMigrationJobServiceImplTest {
 
         override fun findAll(sort: org.springframework.data.domain.Sort): MutableList<GitHistoryImportStateEntity> = error("unused")
 
-        override fun findAll(pageable: org.springframework.data.domain.Pageable): org.springframework.data.domain.Page<GitHistoryImportStateEntity> = error("unused")
+        override fun findAll(
+            pageable: org.springframework.data.domain.Pageable,
+        ): org.springframework.data.domain.Page<GitHistoryImportStateEntity> = error("unused")
 
         override fun findAllById(ids: MutableIterable<String>): MutableList<GitHistoryImportStateEntity> = error("unused")
 
@@ -550,7 +557,8 @@ class HistoryMigrationJobServiceImplTest {
 
         override fun getReferenceById(id: String): GitHistoryImportStateEntity = error("unused")
 
-        override fun <S : GitHistoryImportStateEntity?> findAll(example: org.springframework.data.domain.Example<S>): MutableList<S> = error("unused")
+        override fun <S : GitHistoryImportStateEntity?> findAll(example: org.springframework.data.domain.Example<S>): MutableList<S> =
+            error("unused")
 
         override fun <S : GitHistoryImportStateEntity?> findAll(
             example: org.springframework.data.domain.Example<S>,
@@ -562,11 +570,13 @@ class HistoryMigrationJobServiceImplTest {
             pageable: org.springframework.data.domain.Pageable,
         ): org.springframework.data.domain.Page<S> = error("unused")
 
-        override fun <S : GitHistoryImportStateEntity?> findOne(example: org.springframework.data.domain.Example<S>): Optional<S> = error("unused")
+        override fun <S : GitHistoryImportStateEntity?> findOne(example: org.springframework.data.domain.Example<S>): Optional<S> =
+            error("unused")
 
         override fun <S : GitHistoryImportStateEntity?> count(example: org.springframework.data.domain.Example<S>): Long = error("unused")
 
-        override fun <S : GitHistoryImportStateEntity?> exists(example: org.springframework.data.domain.Example<S>): Boolean = error("unused")
+        override fun <S : GitHistoryImportStateEntity?> exists(example: org.springframework.data.domain.Example<S>): Boolean =
+            error("unused")
 
         override fun <S : GitHistoryImportStateEntity?, R : Any?> findBy(
             example: org.springframework.data.domain.Example<S>,

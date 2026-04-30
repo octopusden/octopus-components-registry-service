@@ -44,6 +44,8 @@ class HistoryMigrationJobServiceImpl(
 ) : HistoryMigrationJobService {
     private val state = AtomicReference<HistoryMigrationJobState?>()
 
+    // See MigrationJobServiceImpl.startAsync — same CAS-retry shape, same suppression rationale.
+    @Suppress("LoopWithTooManyJumpStatements")
     override fun startAsync(
         toRef: String?,
         reset: Boolean,

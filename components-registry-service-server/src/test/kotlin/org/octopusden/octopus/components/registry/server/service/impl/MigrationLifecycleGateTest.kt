@@ -204,7 +204,8 @@ class MigrationLifecycleGateTest {
         assertEquals(
             1,
             peakOwners.get(),
-            "peakSimultaneousOwners must be 1 — two threads both observing a successful claim is the phantom-claim bug this test exists to prevent",
+            "peakSimultaneousOwners must be 1 — two threads both observing a successful claim " +
+                "is the phantom-claim bug this test exists to prevent",
         )
         assertEquals(
             claimsObserved.get(),

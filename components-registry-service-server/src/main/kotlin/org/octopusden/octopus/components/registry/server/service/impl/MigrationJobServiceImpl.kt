@@ -48,6 +48,12 @@ class MigrationJobServiceImpl(
 ) : MigrationJobService {
     private val state = AtomicReference<MigrationJobState?>()
 
+    // Suppressed LoopWithTooManyJumpStatements — the loop IS the CAS-retry
+    // pattern: each branch (same-kind attach, cross-kind gate conflict, lost
+    // CAS race) needs its own non-local exit. Refactoring into helpers
+    // would pull non-trivial state across the boundary and make the
+    // ordering invariants harder to read, not easier.
+    @Suppress("LoopWithTooManyJumpStatements")
     override fun startAsync(): StartMigrationResult {
         // Order of operations is load-bearing:
         //   1. same-kind 409 from local AtomicReference (state is non-null when RUNNING),

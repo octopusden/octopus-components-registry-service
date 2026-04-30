@@ -3,14 +3,14 @@ package org.octopusden.octopus.components.registry.server.controller
 import org.octopusden.octopus.components.registry.server.dto.v4.HistoryMigrationJobResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.MigrationConflictResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.MigrationJobResponse
+import org.octopusden.octopus.components.registry.server.entity.GitHistoryImportStatus
+import org.octopusden.octopus.components.registry.server.repository.GitHistoryImportStateRepository
 import org.octopusden.octopus.components.registry.server.service.BatchMigrationResult
 import org.octopusden.octopus.components.registry.server.service.HistoryMigrationJobService
 import org.octopusden.octopus.components.registry.server.service.ImportService
 import org.octopusden.octopus.components.registry.server.service.JobState
 import org.octopusden.octopus.components.registry.server.service.MigrationConflictException
 import org.octopusden.octopus.components.registry.server.service.MigrationJobService
-import org.octopusden.octopus.components.registry.server.entity.GitHistoryImportStatus
-import org.octopusden.octopus.components.registry.server.repository.GitHistoryImportStateRepository
 import org.octopusden.octopus.components.registry.server.service.MigrationLifecycleGate
 import org.octopusden.octopus.components.registry.server.service.MigrationResult
 import org.octopusden.octopus.components.registry.server.service.MigrationStatus
@@ -19,8 +19,6 @@ import org.octopusden.octopus.components.registry.server.service.impl.GitHistory
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
-import java.time.Duration
-import java.time.Instant
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.GetMapping
@@ -29,10 +27,13 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
+import java.time.Duration
+import java.time.Instant
 
 @RestController
 @RequestMapping("rest/api/4/admin")
 @PreAuthorize("@permissionEvaluator.canImport()")
+@Suppress("TooManyFunctions") // Each migration / import endpoint is its own method; consistent with ComponentControllerV4.
 class AdminControllerV4(
     private val importService: ImportService,
     private val migrationJobService: MigrationJobService,
@@ -40,23 +41,6 @@ class AdminControllerV4(
     private val historyCommitWriter: GitHistoryCommitWriter,
     private val historyStateRepository: GitHistoryImportStateRepository,
 ) {
-    companion object {
-        private val LOG = LoggerFactory.getLogger(AdminControllerV4::class.java)
-
-        /**
-         * Threshold for considering an IN_PROGRESS DB row "stale enough that no
-         * one in any pod is actively writing to it." Conservative: a real
-         * import takes minutes and writes update the state row's `updated_at`
-         * implicitly via JPA on every commit batch. If we haven't seen a
-         * write in 30 minutes, the original pod is almost certainly gone.
-         *
-         * Operators who genuinely need to interrupt a fresh live import can
-         * bypass with `?ack-multipod-risk=true` — explicit acknowledgement
-         * that data corruption is acceptable.
-         */
-        private val STALE_IN_PROGRESS_THRESHOLD: Duration = Duration.ofMinutes(30)
-        private const val IMPORT_KEY = "component-history"
-    }
     @PostMapping("/migrate-component/{name}")
     fun migrateComponent(
         @PathVariable name: String,
@@ -267,5 +251,24 @@ class AdminControllerV4(
                 activeJobId = e.active.jobId,
             ),
         )
+    }
+
+    companion object {
+        private val LOG = LoggerFactory.getLogger(AdminControllerV4::class.java)
+
+        /**
+         * Threshold for considering an IN_PROGRESS DB row "stale enough that no
+         * one in any pod is actively writing to it." Conservative: a real
+         * import keeps `updated_at` fresh via the per-50-commits heartbeat
+         * call from `GitHistoryImportServiceImpl.runImport`. If we haven't
+         * seen a write in 30 minutes, the original pod is almost certainly
+         * gone.
+         *
+         * Operators who genuinely need to interrupt a fresh live import can
+         * bypass with `?ack-multipod-risk=true` — explicit acknowledgement
+         * that data corruption is acceptable.
+         */
+        private val STALE_IN_PROGRESS_THRESHOLD: Duration = Duration.ofMinutes(30)
+        private const val IMPORT_KEY = "component-history"
     }
 }

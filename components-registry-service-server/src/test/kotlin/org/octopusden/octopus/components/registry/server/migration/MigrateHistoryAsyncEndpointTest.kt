@@ -146,7 +146,8 @@ class MigrateHistoryAsyncEndpointTest {
             mvc
                 .perform(post("/rest/api/4/admin/migrate-history").with(adminJwt()).accept(APPLICATION_JSON))
                 .andExpect(status().isAccepted)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         // Asserting on the raw JSON (not the deserialized DTO) — the contract
         // is "the field is present on the wire", and DTO deserialization
         // would happily fall back to the data-class default if the field
@@ -176,14 +177,16 @@ class MigrateHistoryAsyncEndpointTest {
             mvc
                 .perform(post("/rest/api/4/admin/migrate-history").with(adminJwt()).accept(APPLICATION_JSON))
                 .andExpect(status().isAccepted)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val posted: HistoryMigrationJobResponse = objectMapper.readValue(postedBody)
 
         val gotBody =
             mvc
                 .perform(get("/rest/api/4/admin/migrate-history/job").with(adminJwt()).accept(APPLICATION_JSON))
                 .andExpect(status().isOk)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val got: HistoryMigrationJobResponse = objectMapper.readValue(gotBody)
 
         assertEquals(posted.id, got.id)
