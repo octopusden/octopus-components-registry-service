@@ -27,6 +27,10 @@
 - [ ] `/dev-start` — skill для запуска docker-compose + bootRun с dev-db профилем
 - [ ] `/ui-dev` — skill для запуска npm run dev в components-registry-ui/
 
+## Backlog
+
+- [ ] **SYS-037** v4 CRUD API for dependency mappings (`GET/POST/PUT/DELETE /rest/api/4/dependency-mappings`). Removes the last Git-DSL data dependency that has no management endpoint. No UI planned — API only. See [requirements-common.md §SYS-037](requirements-common.md).
+
 ## Tech Debt
 _(будет пополняться по мере реализации)_
 
