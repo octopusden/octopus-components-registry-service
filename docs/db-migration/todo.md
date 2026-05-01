@@ -29,7 +29,7 @@
 
 ## Backlog
 
-- [ ] **SYS-037** v4 CRUD API for dependency mappings (`GET/POST/PUT/DELETE /rest/api/4/dependency-mappings`). Removes the last Git-DSL data dependency that has no management endpoint. No UI planned — API only. See [requirements-common.md §SYS-037](requirements-common.md).
+- [ ] **SYS-037** v4 CRUD API for dependency mappings (`GET/POST/PUT/DELETE /rest/api/4/dependency-mappings`). Removes the last Git-DSL data dependency that has no management endpoint. No UI planned — API only. See [requirements-common.md §SYS-037](requirements-common.md#sys-037-v4-crud-api-for-dependency-mappings).
 
 ## Tech Debt
 _(будет пополняться по мере реализации)_

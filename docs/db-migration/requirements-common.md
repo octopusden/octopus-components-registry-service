@@ -1099,7 +1099,7 @@ Supported filters:
 **Status:** ❌ Not implemented
 
 **Motivation:**
-`dependency_mapping.properties` in the Git DSL defined alias→component mappings consumed by downstream tools via `GET /rest/api/2/dependency-mapping`. These mappings live in the `dependency_mappings` table (`DependencyMappingEntity`: `alias` PK, `componentName`), populated during `/admin/migrate-history`. Currently there is no v4 management API — edits require direct DB access or re-running the history backfill. UI for editing these mappings is not planned (they change rarely); the API alone is sufficient to remove the Git-DSL dependency for this data.
+`dependency_mapping.properties` in the Git DSL defined alias→component mappings consumed by downstream tools via `GET /rest/api/2/common/dependency-aliases`. These mappings live in the `dependency_mappings` table (`DependencyMappingEntity`: `alias` PK, `componentName`), populated during `/admin/migrate-history`. Currently there is no v4 management API — edits require direct DB access or re-running the history backfill. UI for editing these mappings is not planned (they change rarely); the API alone is sufficient to remove the Git-DSL dependency for this data.
 
 **Description:**
 Add four endpoints under `/rest/api/4/dependency-mappings`:
@@ -1111,12 +1111,12 @@ Add four endpoints under `/rest/api/4/dependency-mappings`:
 | `PUT` | `/rest/api/4/dependency-mappings/{alias}` | Replace `componentName` for an existing alias. Returns 200. 404 if alias not found. |
 | `DELETE` | `/rest/api/4/dependency-mappings/{alias}` | Delete a mapping. Returns 204. 404 if alias not found. |
 
-Auth: `@PreAuthorize("@permissionEvaluator.canImport()")` (same gate as other admin data-management endpoints — `IMPORT_DATA` permission, `ROLE_REGISTRY_ADMIN` in the default role map).
+Auth: `@PreAuthorize("@permissionEvaluator.canImport()")` (same gate as other admin data-management endpoints — `IMPORT_DATA` permission, `ROLE_ADMIN` in the default role map).
 
-The existing v2 read endpoint (`GET /rest/api/2/dependency-mapping`) remains unchanged — it reads from the same `dependency_mappings` table.
+The existing v2 read endpoint (`GET /rest/api/2/common/dependency-aliases`) remains unchanged — it reads from the same `dependency_mappings` table.
 
 **Preconditions:**
-- Caller has `ROLE_REGISTRY_ADMIN` (or a role that grants `IMPORT_DATA`).
+- Caller has `ROLE_ADMIN` (or a role that grants `IMPORT_DATA`).
 - `dependency_mappings` table exists (V1 schema).
 
 **Acceptance criteria:**
@@ -1128,7 +1128,7 @@ The existing v2 read endpoint (`GET /rest/api/2/dependency-mapping`) remains unc
 6. `DELETE /rest/api/4/dependency-mappings/foo` returns 204 and subsequent `GET` no longer lists the entry.
 7. `DELETE` for a non-existent alias returns 404.
 8. All write endpoints require auth; `GET` without a valid JWT returns 401 (consistent with other v4 non-info endpoints).
-9. The existing `GET /rest/api/2/dependency-mapping` response is unaffected by v4 CRUD operations (reads same table).
+9. The existing `GET /rest/api/2/common/dependency-aliases` response is unaffected by v4 CRUD operations (reads same table).
 
 **Test method:** —
 
