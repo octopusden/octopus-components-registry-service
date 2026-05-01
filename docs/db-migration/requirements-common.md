@@ -46,6 +46,7 @@
 | SYS-034 | GET /auth/me returns current user (username, roles, groups), authenticated | Medium | integration-test | ❌ Not tested |
 | SYS-035 | GET /components?owner=&lt;username&gt; filters by componentOwner exact match | High | integration-test | ✅ Tested |
 | SYS-036 | GET /audit/recent accepts entityType/entityId/changedBy/source/action/from/to filter params | High | integration-test | ✅ Tested |
+| SYS-037 | v4 CRUD API for dependency mappings (alias → componentName) | Medium | integration-test | ❌ Not implemented |
 
 ---
 
@@ -1088,3 +1089,50 @@ Supported filters:
 - Free-text search inside `oldValue` / `newValue` / `changeDiff` JSON.
 - OR-combining values inside a single param (e.g. `source=api,git-history` — pass them as separate calls or use a different endpoint when needed).
 - Pagination metadata changes — Spring Data `Pageable` + `Page<>` shape unchanged.
+
+---
+
+### SYS-037: v4 CRUD API for dependency mappings
+
+**Priority:** Medium
+**Test layer:** integration-test
+**Status:** ❌ Not implemented
+
+**Motivation:**
+`dependency_mapping.properties` in the Git DSL defined alias→component mappings consumed by downstream tools via `GET /rest/api/2/common/dependency-aliases`. These mappings live in the `dependency_mappings` table (`DependencyMappingEntity`: `alias` PK, `componentName`), populated during `/admin/migrate-history`. Currently there is no v4 management API — edits require direct DB access or re-running the history backfill. UI for editing these mappings is not planned (they change rarely); the API alone is sufficient to remove the Git-DSL dependency for this data.
+
+**Description:**
+Add four endpoints under `/rest/api/4/dependency-mappings`:
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/rest/api/4/dependency-mappings` | Return all mappings as a list of `{alias, componentName}`. No pagination needed (expected < 1000 entries). |
+| `POST` | `/rest/api/4/dependency-mappings` | Create a new mapping. Body: `{alias, componentName}`. Returns 201 with the created resource. 409 if `alias` already exists. |
+| `PUT` | `/rest/api/4/dependency-mappings/{alias}` | Replace `componentName` for an existing alias. Returns 200. 404 if alias not found. |
+| `DELETE` | `/rest/api/4/dependency-mappings/{alias}` | Delete a mapping. Returns 204. 404 if alias not found. |
+
+Auth: `@PreAuthorize("@permissionEvaluator.canImport()")` (same gate as other admin data-management endpoints — `IMPORT_DATA` permission, `ROLE_ADMIN` in the default role map).
+
+The existing v2 read endpoint (`GET /rest/api/2/common/dependency-aliases`) remains unchanged — it reads from the same `dependency_mappings` table.
+
+**Preconditions:**
+- Caller has `ROLE_ADMIN` (or a role that grants `IMPORT_DATA`).
+- `dependency_mappings` table exists (V1 schema).
+
+**Acceptance criteria:**
+1. `GET /rest/api/4/dependency-mappings` (authenticated) returns HTTP 200 and an array of `{alias, componentName}` objects. An empty table returns `[]`.
+2. `POST /rest/api/4/dependency-mappings` with `{"alias": "foo", "componentName": "bar"}` returns 201 and `GET` lists the new entry.
+3. `POST` with a duplicate `alias` returns 409 Conflict.
+4. `PUT /rest/api/4/dependency-mappings/foo` with `{"componentName": "baz"}` returns 200 and updates the mapping.
+5. `PUT` for a non-existent alias returns 404.
+6. `DELETE /rest/api/4/dependency-mappings/foo` returns 204 and subsequent `GET` no longer lists the entry.
+7. `DELETE` for a non-existent alias returns 404.
+8. All write endpoints require auth; `GET` without a valid JWT returns 401 (consistent with other v4 non-info endpoints).
+9. The existing `GET /rest/api/2/common/dependency-aliases` response is unaffected by v4 CRUD operations (reads same table).
+
+**Test method:** —
+
+**Out of scope:**
+- Bulk import/replace-all (single-entry operations are sufficient; bulk is handled by `/admin/migrate-history`).
+- Portal UI — not planned; the v2 read endpoint and direct API calls cover the use cases.
+- Pagination — the mapping set is small enough for a flat list response.
