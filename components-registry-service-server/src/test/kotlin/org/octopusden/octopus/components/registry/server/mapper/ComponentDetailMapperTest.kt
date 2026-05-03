@@ -48,7 +48,7 @@ class ComponentDetailMapperTest {
                 it.groupId = "org.octopusden.alpha"
                 it.releaseManager = "rm-user"
                 it.securityChampion = "sc-user"
-                it.copyright = "(c) 2026 OpenWay"
+                it.copyright = "(c) 2026 Acme Inc."
                 it.releasesInDefaultBranch = true
                 it.labels = arrayOf("backend", "internal")
             }
@@ -58,7 +58,7 @@ class ComponentDetailMapperTest {
         assertEquals("org.octopusden.alpha", response.groupId)
         assertEquals("rm-user", response.releaseManager)
         assertEquals("sc-user", response.securityChampion)
-        assertEquals("(c) 2026 OpenWay", response.copyright)
+        assertEquals("(c) 2026 Acme Inc.", response.copyright)
         assertEquals(true, response.releasesInDefaultBranch)
         assertEquals(setOf("backend", "internal"), response.labels)
     }
