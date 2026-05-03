@@ -12,6 +12,14 @@ data class ComponentUpdateRequest(
     val parentComponentName: String? = null,
     val archived: Boolean? = null,
     val metadata: Map<String, Any?>? = null,
+    // SYS-039: §7.0 Wave 2 PR-G fields. Null means "don't touch" per the
+    // existing JSON Merge Patch semantics for scalar fields.
+    val groupId: String? = null,
+    val releaseManager: String? = null,
+    val securityChampion: String? = null,
+    val copyright: String? = null,
+    val releasesInDefaultBranch: Boolean? = null,
+    val labels: Set<String>? = null,
     val buildConfiguration: BuildConfigurationUpdateRequest? = null,
     val vcsSettings: VcsSettingsUpdateRequest? = null,
     val distribution: DistributionUpdateRequest? = null,
