@@ -46,6 +46,12 @@ class ComponentManagementServiceImpl(
     private val sourceRegistry: ComponentSourceRegistry,
     private val applicationEventPublisher: ApplicationEventPublisher,
     private val currentUserResolver: CurrentUserResolver,
+    // Risk-1 mitigation: see FieldConfigService class doc. Used by
+    // updateComponent to silently strip writes to hidden fields,
+    // matching the Portal-side filter so a buggy client can't bypass
+    // it. Create path is admin-driven (component import) and reads
+    // the full payload — not gated.
+    private val fieldConfigService: FieldConfigService,
 ) : ComponentManagementService {
     @Suppress("CyclomaticComplexMethod")
     override fun createComponent(request: ComponentCreateRequest): ComponentDetailResponse {
@@ -167,21 +173,55 @@ class ComponentManagementServiceImpl(
         if (isRename) {
             entity.name = normalizedName!!
         }
-        request.displayName?.let { entity.displayName = it }
-        request.componentOwner?.let { entity.componentOwner = it }
-        request.productType?.let { entity.productType = it }
-        request.system?.let { entity.system = it.toTypedArray() }
-        request.clientCode?.let { entity.clientCode = it }
-        request.solution?.let { entity.solution = it }
+        // Risk-1 mitigation: each component-section scalar is gated on
+        // FieldConfig visibility. A request that arrives with a value
+        // for a field whose admin-configured visibility is "hidden" gets
+        // silently stripped — defence-in-depth against buggy / outdated
+        // clients. `archived`, `metadata`, `parentComponentName`, and
+        // `name` (rename) are NOT FC-controlled and stay un-gated; they
+        // have their own permission gates (@PreAuthorize at the
+        // controller). `productType` lives on the Component entity but
+        // the Portal renders/saves it from EscrowTab, so it's gated
+        // under the "escrow.productType" path here to match.
+        if (!fieldConfigService.isHidden("component.displayName")) {
+            request.displayName?.let { entity.displayName = it }
+        }
+        if (!fieldConfigService.isHidden("component.componentOwner")) {
+            request.componentOwner?.let { entity.componentOwner = it }
+        }
+        if (!fieldConfigService.isHidden("escrow.productType")) {
+            request.productType?.let { entity.productType = it }
+        }
+        if (!fieldConfigService.isHidden("component.system")) {
+            request.system?.let { entity.system = it.toTypedArray() }
+        }
+        if (!fieldConfigService.isHidden("component.clientCode")) {
+            request.clientCode?.let { entity.clientCode = it }
+        }
+        if (!fieldConfigService.isHidden("component.solution")) {
+            request.solution?.let { entity.solution = it }
+        }
         request.archived?.let { entity.archived = it }
         request.metadata?.let { entity.metadata = it.toMutableMap() }
-        // SYS-039
-        request.groupId?.let { entity.groupId = it }
-        request.releaseManager?.let { entity.releaseManager = it }
-        request.securityChampion?.let { entity.securityChampion = it }
-        request.copyright?.let { entity.copyright = it }
-        request.releasesInDefaultBranch?.let { entity.releasesInDefaultBranch = it }
-        request.labels?.let { entity.labels = it.toTypedArray() }
+        // SYS-039 — same gating
+        if (!fieldConfigService.isHidden("component.groupId")) {
+            request.groupId?.let { entity.groupId = it }
+        }
+        if (!fieldConfigService.isHidden("component.releaseManager")) {
+            request.releaseManager?.let { entity.releaseManager = it }
+        }
+        if (!fieldConfigService.isHidden("component.securityChampion")) {
+            request.securityChampion?.let { entity.securityChampion = it }
+        }
+        if (!fieldConfigService.isHidden("component.copyright")) {
+            request.copyright?.let { entity.copyright = it }
+        }
+        if (!fieldConfigService.isHidden("component.releasesInDefaultBranch")) {
+            request.releasesInDefaultBranch?.let { entity.releasesInDefaultBranch = it }
+        }
+        if (!fieldConfigService.isHidden("component.labels")) {
+            request.labels?.let { entity.labels = it.toTypedArray() }
+        }
 
         request.parentComponentName?.let { parentName ->
             entity.parentComponent = componentRepository.findByName(parentName)
