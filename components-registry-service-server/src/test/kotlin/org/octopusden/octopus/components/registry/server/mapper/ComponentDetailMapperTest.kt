@@ -66,6 +66,12 @@ class ComponentDetailMapperTest {
     @Test
     @DisplayName("labels Array → Set conversion deduplicates while preserving membership")
     fun labels_arrayToSet_dedupes() {
+        // Defence-in-depth: even though ComponentManagementServiceImpl
+        // dedups on write (createComponent + updateComponent paths), an
+        // entity loaded from a row that pre-dates the dedup, or one
+        // written via a direct DB path, can still carry duplicates. The
+        // mapper Set conversion masks them in the response so the Portal
+        // sees a clean projection regardless of how the row was written.
         val component =
             baseComponent().also {
                 it.labels = arrayOf("a", "b", "a", "c")
