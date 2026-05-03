@@ -46,6 +46,12 @@ class ComponentManagementServiceImpl(
     private val sourceRegistry: ComponentSourceRegistry,
     private val applicationEventPublisher: ApplicationEventPublisher,
     private val currentUserResolver: CurrentUserResolver,
+    // Risk-1 mitigation: see FieldConfigService class doc. Used by
+    // updateComponent to silently strip writes to hidden fields,
+    // matching the Portal-side filter so a buggy client can't bypass
+    // it. Create path is admin-driven (component import) and reads
+    // the full payload — not gated.
+    private val fieldConfigService: FieldConfigService,
 ) : ComponentManagementService {
     @Suppress("CyclomaticComplexMethod")
     override fun createComponent(request: ComponentCreateRequest): ComponentDetailResponse {
@@ -167,21 +173,65 @@ class ComponentManagementServiceImpl(
         if (isRename) {
             entity.name = normalizedName!!
         }
-        request.displayName?.let { entity.displayName = it }
-        request.componentOwner?.let { entity.componentOwner = it }
-        request.productType?.let { entity.productType = it }
-        request.system?.let { entity.system = it.toTypedArray() }
-        request.clientCode?.let { entity.clientCode = it }
-        request.solution?.let { entity.solution = it }
+        // Risk-1 mitigation: each component-section scalar is gated on
+        // FieldConfig visibility. A request that arrives with a value
+        // for a field whose admin-configured visibility is "hidden" gets
+        // silently stripped — defence-in-depth against buggy / outdated
+        // clients. `archived`, `metadata`, `parentComponentName`, and
+        // `name` (rename) are NOT FC-controlled and stay un-gated; they
+        // have their own permission gates (@PreAuthorize at the
+        // controller). All field-config paths follow the section-prefixed
+        // ADR-011 convention — `productType` is `component.productType`
+        // even though the Portal renders the editor from EscrowTab; FC
+        // path is keyed by the entity owner, not the UX placement.
+        //
+        // Null-skip: `request.X?.let { ... }` already short-circuits when
+        // the request field is absent, but isHidden() runs first under
+        // the original layout and would still hit FieldConfigService once
+        // per scalar even on a no-op patch. Reorder so null check comes
+        // first — the JPA query lands at most once per actually-present
+        // field, which on a typical Portal save is 1–3 keys.
+        request.displayName?.let {
+            if (!fieldConfigService.isHidden("component.displayName")) entity.displayName = it
+        }
+        request.componentOwner?.let {
+            if (!fieldConfigService.isHidden("component.componentOwner")) entity.componentOwner = it
+        }
+        request.productType?.let {
+            if (!fieldConfigService.isHidden("component.productType")) entity.productType = it
+        }
+        request.system?.let {
+            if (!fieldConfigService.isHidden("component.system")) entity.system = it.toTypedArray()
+        }
+        request.clientCode?.let {
+            if (!fieldConfigService.isHidden("component.clientCode")) entity.clientCode = it
+        }
+        request.solution?.let {
+            if (!fieldConfigService.isHidden("component.solution")) entity.solution = it
+        }
         request.archived?.let { entity.archived = it }
         request.metadata?.let { entity.metadata = it.toMutableMap() }
-        // SYS-039
-        request.groupId?.let { entity.groupId = it }
-        request.releaseManager?.let { entity.releaseManager = it }
-        request.securityChampion?.let { entity.securityChampion = it }
-        request.copyright?.let { entity.copyright = it }
-        request.releasesInDefaultBranch?.let { entity.releasesInDefaultBranch = it }
-        request.labels?.let { entity.labels = it.toTypedArray() }
+        // SYS-039 — same gating, same null-skip ordering
+        request.groupId?.let {
+            if (!fieldConfigService.isHidden("component.groupId")) entity.groupId = it
+        }
+        request.releaseManager?.let {
+            if (!fieldConfigService.isHidden("component.releaseManager")) entity.releaseManager = it
+        }
+        request.securityChampion?.let {
+            if (!fieldConfigService.isHidden("component.securityChampion")) entity.securityChampion = it
+        }
+        request.copyright?.let {
+            if (!fieldConfigService.isHidden("component.copyright")) entity.copyright = it
+        }
+        request.releasesInDefaultBranch?.let {
+            if (!fieldConfigService.isHidden("component.releasesInDefaultBranch")) {
+                entity.releasesInDefaultBranch = it
+            }
+        }
+        request.labels?.let {
+            if (!fieldConfigService.isHidden("component.labels")) entity.labels = it.toTypedArray()
+        }
 
         request.parentComponentName?.let { parentName ->
             entity.parentComponent = componentRepository.findByName(parentName)
