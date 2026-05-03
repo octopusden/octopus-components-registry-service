@@ -145,14 +145,34 @@ class FieldConfigEnforcementIntegrationTest {
     }
 
     @Test
-    @DisplayName("editable displayName (no field-config row) → PATCH applies normally")
+    @DisplayName("editable displayName (explicit field-config) → PATCH applies normally")
     fun editableDisplayName_appliesNormally() {
         val summary = firstComponent()
         val id = summary["id"].asText()
         val originalDetail = getComponent(id)
         val version = originalDetail["version"].asLong()
 
-        // No field-config row written — fallback is "editable" → write applies.
+        // Make the case order-independent: write an explicit
+        // `displayName.visibility = "editable"` instead of relying on the
+        // field-config row being absent. JUnit doesn't guarantee method
+        // order, and the `hiddenDisplayName_isStripped` case writes a
+        // persistent `field-config` row whose `hidden` value would mask
+        // this test's contract if it ran first.
+        val fieldConfigPayload =
+            mapOf(
+                "component" to
+                    mapOf(
+                        "displayName" to mapOf("visibility" to "editable"),
+                    ),
+            )
+        mvc
+            .perform(
+                put("/rest/api/4/admin/config/field-config")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsBytes(fieldConfigPayload)),
+            ).andExpect(status().is2xxSuccessful)
+
         val attempted = "EDITABLE-CHANGE-${System.nanoTime()}"
         val patchPayload =
             mapOf(
@@ -171,7 +191,7 @@ class FieldConfigEnforcementIntegrationTest {
         assertEquals(
             attempted,
             updated["displayName"].asText(""),
-            "displayName should reflect the patch when no field-config gates it",
+            "displayName should reflect the patch when field-config marks it editable",
         )
     }
 }
