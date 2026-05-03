@@ -83,7 +83,13 @@ class ComponentManagementServiceImpl(
                 securityChampion = request.securityChampion,
                 copyright = request.copyright,
                 releasesInDefaultBranch = request.releasesInDefaultBranch,
-                labels = request.labels.toTypedArray(),
+                // labels is a `text[]`; the column allows duplicates but the
+                // domain treats labels as a set. Dedup here so `["a","a","b"]`
+                // round-trips as `["a","b"]` rather than relying on the
+                // mapper's Array→Set conversion to mask the dupes only on
+                // reads (a DB-level UNIQUE constraint on array elements is
+                // unsupported by Postgres without a custom CHECK).
+                labels = request.labels.distinct().toTypedArray(),
             )
 
         val saved = componentRepository.save(entity)
@@ -230,7 +236,11 @@ class ComponentManagementServiceImpl(
             }
         }
         request.labels?.let {
-            if (!fieldConfigService.isHidden("component.labels")) entity.labels = it.toTypedArray()
+            // Dedup matches the create path — see ComponentEntity init for
+            // rationale. Writes through here pass through the FC hidden gate.
+            if (!fieldConfigService.isHidden("component.labels")) {
+                entity.labels = it.distinct().toTypedArray()
+            }
         }
 
         request.parentComponentName?.let { parentName ->
