@@ -16,6 +16,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.http.MediaType
+import org.springframework.test.annotation.DirtiesContext
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
@@ -51,6 +52,7 @@ import java.nio.file.Paths
     classes = [ComponentRegistryServiceApplication::class],
 )
 @ActiveProfiles("common", "ft-db")
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Timeout(120)
 class Sys039PersistenceRoundtripTest {
     @MockBean
@@ -140,27 +142,46 @@ class Sys039PersistenceRoundtripTest {
     fun releasesInDefaultBranch_falseDistinctFromNull() {
         val summary = firstComponent()
         val id = summary["id"].asText()
-        val detail = getComponent(id)
-        val version = detail["version"].asLong()
+        var detail = getComponent(id)
+        var version = detail["version"].asLong()
 
-        val payload =
-            mapOf(
-                "version" to version,
-                "releasesInDefaultBranch" to false,
-            )
-
+        // Establish a non-false baseline: PATCH to true first so the
+        // subsequent false-write is observable as an actual change.
+        // Without this step, a stored null or already-false baseline
+        // would let the test pass even if the false-write path were
+        // broken (the column would just stay at its prior value).
         mvc
             .perform(
                 patch("/rest/api/4/components/$id")
                     .with(editorJwt())
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content(objectMapper.writeValueAsBytes(payload)),
+                    .content(
+                        objectMapper.writeValueAsBytes(
+                            mapOf("version" to version, "releasesInDefaultBranch" to true),
+                        ),
+                    ),
+            ).andExpect(status().is2xxSuccessful)
+        detail = getComponent(id)
+        assertEquals(true, detail["releasesInDefaultBranch"].asBoolean(false), "baseline true established")
+        version = detail["version"].asLong()
+
+        // Now the actual test — patch from true to false.
+        mvc
+            .perform(
+                patch("/rest/api/4/components/$id")
+                    .with(editorJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        objectMapper.writeValueAsBytes(
+                            mapOf("version" to version, "releasesInDefaultBranch" to false),
+                        ),
+                    ),
             ).andExpect(status().is2xxSuccessful)
 
         val updated = getComponent(id)
         val node = updated["releasesInDefaultBranch"]
         assertNotNull(node, "nullable Boolean column must serialize false, not omit")
         assertTrue(!node.isNull, "false must round-trip as JSON false, not null")
-        assertEquals(false, node.asBoolean(true), "explicit false survives round-trip")
+        assertEquals(false, node.asBoolean(true), "explicit false survives round-trip from true→false")
     }
 }
