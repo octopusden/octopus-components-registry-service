@@ -63,10 +63,13 @@ fun ComponentEntity.toSummaryResponse(): ComponentSummaryResponse =
         archived = this.archived,
         updatedAt = this.updatedAt,
         // SYS-040: list-view extras. firstOrNull mirrors V4Mappers convention
-        // for nested-collection access; multi-config rows fall back to the
-        // first row deterministically (insertion order from JPA OneToMany).
-        // Blank strings are normalized to null so the Portal can safely
-        // treat absence and empty as the same case (no link rendered).
+        // for nested-collection access; deterministic "first row" ordering is
+        // enforced at the entity level via @OrderBy("id ASC") on the parent
+        // OneToMany — Hibernate adds an ORDER BY id ASC clause to the
+        // lazy-load query, so the first element is stable across queries
+        // (UUID v4 is not monotonic by creation time, but lexicographic order
+        // is at least reproducible). Blank strings are normalized to null so
+        // the Portal can treat absence and empty as the same case.
         buildSystem =
             this.buildConfigurations
                 .firstOrNull()
