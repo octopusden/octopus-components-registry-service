@@ -12,4 +12,10 @@ data class ComponentSummaryResponse(
     val productType: String?,
     val archived: Boolean,
     val updatedAt: Instant?,
+    // SYS-040: list-view extras. Derived from nested entities (first row only —
+    // list view shows one badge / one link per component, not the full set).
+    // null when the source nested entity is absent or its leaf field is null.
+    val buildSystem: String? = null,
+    val jiraProjectKey: String? = null,
+    val vcsPath: String? = null,
 )

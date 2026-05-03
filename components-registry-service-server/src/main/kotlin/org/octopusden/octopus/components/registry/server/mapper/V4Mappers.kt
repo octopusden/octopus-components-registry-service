@@ -62,6 +62,28 @@ fun ComponentEntity.toSummaryResponse(): ComponentSummaryResponse =
         productType = this.productType,
         archived = this.archived,
         updatedAt = this.updatedAt,
+        // SYS-040: list-view extras. firstOrNull mirrors V4Mappers convention
+        // for nested-collection access; multi-config rows fall back to the
+        // first row deterministically (insertion order from JPA OneToMany).
+        // Blank strings are normalized to null so the Portal can safely
+        // treat absence and empty as the same case (no link rendered).
+        buildSystem =
+            this.buildConfigurations
+                .firstOrNull()
+                ?.buildSystem
+                ?.takeIf { it.isNotBlank() },
+        jiraProjectKey =
+            this.jiraComponentConfigs
+                .firstOrNull()
+                ?.projectKey
+                ?.takeIf { it.isNotBlank() },
+        vcsPath =
+            this.vcsSettings
+                .firstOrNull()
+                ?.entries
+                ?.firstOrNull()
+                ?.vcsPath
+                ?.takeIf { it.isNotBlank() },
     )
 
 fun BuildConfigurationEntity.toResponse(): BuildConfigurationResponse =

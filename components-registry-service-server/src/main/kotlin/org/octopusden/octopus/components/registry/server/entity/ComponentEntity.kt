@@ -10,6 +10,7 @@ import jakarta.persistence.Id
 import jakarta.persistence.JoinColumn
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.OneToMany
+import jakarta.persistence.OrderBy
 import jakarta.persistence.Table
 import jakarta.persistence.Version
 import org.hibernate.annotations.CreationTimestamp
@@ -54,15 +55,25 @@ class ComponentEntity(
     var updatedAt: Instant? = null,
     @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true)
     var versions: MutableList<ComponentVersionEntity> = mutableListOf(),
+    // SYS-040: deterministic ordering for list-view summary (Portal renders
+    // first build/jira/vcs row as a badge/link). Without @OrderBy, Hibernate
+    // returns rows in heap order on H2 but possibly random in Postgres,
+    // causing the badge to flicker between deploys. UUID v4 ids are not
+    // monotonic by creation time, but lexicographic order is at least stable
+    // across queries (deterministic). Long-term, child tables can grow a
+    // created_at column and switch to that.
     @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true)
+    @OrderBy("id ASC")
     var buildConfigurations: MutableList<BuildConfigurationEntity> = mutableListOf(),
     @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true)
     var escrowConfigurations: MutableList<EscrowConfigurationEntity> = mutableListOf(),
     @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true)
+    @OrderBy("id ASC")
     var vcsSettings: MutableList<VcsSettingsEntity> = mutableListOf(),
     @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true)
     var distributions: MutableList<DistributionEntity> = mutableListOf(),
     @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true)
+    @OrderBy("id ASC")
     var jiraComponentConfigs: MutableList<JiraComponentConfigEntity> = mutableListOf(),
     @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true)
     var artifactIds: MutableList<ComponentArtifactIdEntity> = mutableListOf(),
