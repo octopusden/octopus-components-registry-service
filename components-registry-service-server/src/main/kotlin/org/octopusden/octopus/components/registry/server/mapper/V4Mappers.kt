@@ -44,6 +44,15 @@ fun ComponentEntity.toDetailResponse(): ComponentDetailResponse =
         version = this.version,
         createdAt = this.createdAt,
         updatedAt = this.updatedAt,
+        // SYS-039: §7.0 Wave 2 PR-G fields, surfaced verbatim. labels is
+        // converted from Array<String> to Set<String> matching the
+        // existing `system` projection convention.
+        groupId = this.groupId,
+        releaseManager = this.releaseManager,
+        securityChampion = this.securityChampion,
+        copyright = this.copyright,
+        releasesInDefaultBranch = this.releasesInDefaultBranch,
+        labels = this.labels.toSet(),
         buildConfigurations = this.buildConfigurations.map { it.toResponse() },
         vcsSettings = this.vcsSettings.map { it.toResponse() },
         distributions = this.distributions.map { it.toResponse() },
