@@ -54,6 +54,14 @@ class ComponentEntity(
     var updatedAt: Instant? = null,
     @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true)
     var versions: MutableList<ComponentVersionEntity> = mutableListOf(),
+    // SYS-040: V4 summary mapper reads firstOrNull() on these collections
+    // for list-view badges/links. We considered @OrderBy("id ASC") for
+    // deterministic first-pick, but adding it broke V2/V3 contract tests
+    // (RES-001: All Jira component version ranges) — the V2/V3 code path
+    // also calls vcsSettings.firstOrNull() and committed expected-data
+    // fixtures encode the previous (insertion-order) first-pick. Reverted
+    // until either the test fixtures are migrated or the child tables
+    // grow a created_at column for proper creation-order @OrderBy.
     @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true)
     var buildConfigurations: MutableList<BuildConfigurationEntity> = mutableListOf(),
     @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true)

@@ -25,6 +25,15 @@ spring:
       # `Object.class` fields with an unsafe `(String) value` cast that blows up on any
       # non-String value (e.g. Map). Our SafeJsonFormatMapper always routes through Jackson.
       hibernate.type.json_format_mapper: org.octopusden.octopus.components.registry.server.config.SafeJsonFormatMapper
+      # SYS-040: batch lazy-load fetch size. The v4 list endpoint maps each
+      # ComponentEntity through toSummaryResponse(), which dereferences three
+      # OneToMany collections (buildConfigurations, jiraComponentConfigs,
+      # vcsSettings + nested entries) for the Build System badge and Jira/Git
+      # link icons. Without batching, a page of 20 components triggers
+      # ~4*20+1 = 81 SELECTs; with batch_fetch_size=50, Hibernate issues a
+      # single IN(...) per collection per page → 5 SELECTs total. Page size
+      # in the v4 controller is capped at 100, so 50 is comfortable.
+      hibernate.default_batch_fetch_size: 50
   flyway:
     enabled: false
 
