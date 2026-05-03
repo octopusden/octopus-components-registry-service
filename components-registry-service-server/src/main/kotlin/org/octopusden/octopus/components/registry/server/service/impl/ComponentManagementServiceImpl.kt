@@ -71,6 +71,13 @@ class ComponentManagementServiceImpl(
                 parentComponent = parentComponent,
                 archived = request.archived,
                 metadata = request.metadata.toMutableMap(),
+                // SYS-039
+                groupId = request.groupId,
+                releaseManager = request.releaseManager,
+                securityChampion = request.securityChampion,
+                copyright = request.copyright,
+                releasesInDefaultBranch = request.releasesInDefaultBranch,
+                labels = request.labels.toTypedArray(),
             )
 
         val saved = componentRepository.save(entity)
@@ -148,6 +155,13 @@ class ComponentManagementServiceImpl(
                 "parentComponentName" to entity.parentComponent?.name,
                 "archived" to entity.archived,
                 "metadata" to entity.metadata.toMap(),
+                // SYS-039
+                "groupId" to entity.groupId,
+                "releaseManager" to entity.releaseManager,
+                "securityChampion" to entity.securityChampion,
+                "copyright" to entity.copyright,
+                "releasesInDefaultBranch" to entity.releasesInDefaultBranch,
+                "labels" to entity.labels.toList(),
             )
 
         if (isRename) {
@@ -161,6 +175,13 @@ class ComponentManagementServiceImpl(
         request.solution?.let { entity.solution = it }
         request.archived?.let { entity.archived = it }
         request.metadata?.let { entity.metadata = it.toMutableMap() }
+        // SYS-039
+        request.groupId?.let { entity.groupId = it }
+        request.releaseManager?.let { entity.releaseManager = it }
+        request.securityChampion?.let { entity.securityChampion = it }
+        request.copyright?.let { entity.copyright = it }
+        request.releasesInDefaultBranch?.let { entity.releasesInDefaultBranch = it }
+        request.labels?.let { entity.labels = it.toTypedArray() }
 
         request.parentComponentName?.let { parentName ->
             entity.parentComponent = componentRepository.findByName(parentName)
@@ -280,6 +301,16 @@ class ComponentManagementServiceImpl(
                 "parentComponentName" to saved.parentComponent?.name,
                 "archived" to saved.archived,
                 "metadata" to saved.metadata.toMap(),
+                // SYS-039 — must mirror the oldValue map above; without these
+                // keys the audit changeDiff would report a spurious deletion
+                // (oldValue has the field, newValue doesn't) on every update
+                // that touches a SYS-039 field.
+                "groupId" to saved.groupId,
+                "releaseManager" to saved.releaseManager,
+                "securityChampion" to saved.securityChampion,
+                "copyright" to saved.copyright,
+                "releasesInDefaultBranch" to saved.releasesInDefaultBranch,
+                "labels" to saved.labels.toList(),
             )
 
         applicationEventPublisher.publishEvent(

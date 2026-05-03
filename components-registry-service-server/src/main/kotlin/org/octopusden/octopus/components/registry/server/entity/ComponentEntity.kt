@@ -39,6 +39,21 @@ class ComponentEntity(
     var clientCode: String? = null,
     var archived: Boolean = false,
     var solution: Boolean? = null,
+    // SYS-039: §7.0 Wave 2 PR-G fields. All nullable / empty-default so
+    // existing rows survive the V6 migration without rewrite. Portal-side
+    // visibility/required is field-config controlled per ADR-011.
+    @Column(name = "group_id")
+    var groupId: String? = null,
+    @Column(name = "release_manager")
+    var releaseManager: String? = null,
+    @Column(name = "security_champion")
+    var securityChampion: String? = null,
+    @Column(columnDefinition = "TEXT")
+    var copyright: String? = null,
+    @Column(name = "releases_in_default_branch")
+    var releasesInDefaultBranch: Boolean? = null,
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    var labels: Array<String> = emptyArray(),
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_component_id")
     var parentComponent: ComponentEntity? = null,

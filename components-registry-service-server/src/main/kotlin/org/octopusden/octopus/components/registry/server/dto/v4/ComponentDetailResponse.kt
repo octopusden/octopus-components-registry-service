@@ -18,6 +18,15 @@ data class ComponentDetailResponse(
     val version: Long,
     val createdAt: Instant?,
     val updatedAt: Instant?,
+    // SYS-039: §7.0 Wave 2 PR-G fields. All optional with null / empty
+    // defaults so legacy clients constructed before SYS-039 still
+    // deserialize cleanly when CRS responses include the new fields.
+    val groupId: String? = null,
+    val releaseManager: String? = null,
+    val securityChampion: String? = null,
+    val copyright: String? = null,
+    val releasesInDefaultBranch: Boolean? = null,
+    val labels: Set<String> = emptySet(),
     val buildConfigurations: List<BuildConfigurationResponse> = emptyList(),
     val vcsSettings: List<VcsSettingsResponse> = emptyList(),
     val distributions: List<DistributionResponse> = emptyList(),
