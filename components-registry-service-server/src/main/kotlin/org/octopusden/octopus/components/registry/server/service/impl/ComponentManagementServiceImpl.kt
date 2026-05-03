@@ -180,47 +180,57 @@ class ComponentManagementServiceImpl(
         // clients. `archived`, `metadata`, `parentComponentName`, and
         // `name` (rename) are NOT FC-controlled and stay un-gated; they
         // have their own permission gates (@PreAuthorize at the
-        // controller). `productType` lives on the Component entity but
-        // the Portal renders/saves it from EscrowTab, so it's gated
-        // under the "escrow.productType" path here to match.
-        if (!fieldConfigService.isHidden("component.displayName")) {
-            request.displayName?.let { entity.displayName = it }
+        // controller). All field-config paths follow the section-prefixed
+        // ADR-011 convention — `productType` is `component.productType`
+        // even though the Portal renders the editor from EscrowTab; FC
+        // path is keyed by the entity owner, not the UX placement.
+        //
+        // Null-skip: `request.X?.let { ... }` already short-circuits when
+        // the request field is absent, but isHidden() runs first under
+        // the original layout and would still hit FieldConfigService once
+        // per scalar even on a no-op patch. Reorder so null check comes
+        // first — the JPA query lands at most once per actually-present
+        // field, which on a typical Portal save is 1–3 keys.
+        request.displayName?.let {
+            if (!fieldConfigService.isHidden("component.displayName")) entity.displayName = it
         }
-        if (!fieldConfigService.isHidden("component.componentOwner")) {
-            request.componentOwner?.let { entity.componentOwner = it }
+        request.componentOwner?.let {
+            if (!fieldConfigService.isHidden("component.componentOwner")) entity.componentOwner = it
         }
-        if (!fieldConfigService.isHidden("escrow.productType")) {
-            request.productType?.let { entity.productType = it }
+        request.productType?.let {
+            if (!fieldConfigService.isHidden("component.productType")) entity.productType = it
         }
-        if (!fieldConfigService.isHidden("component.system")) {
-            request.system?.let { entity.system = it.toTypedArray() }
+        request.system?.let {
+            if (!fieldConfigService.isHidden("component.system")) entity.system = it.toTypedArray()
         }
-        if (!fieldConfigService.isHidden("component.clientCode")) {
-            request.clientCode?.let { entity.clientCode = it }
+        request.clientCode?.let {
+            if (!fieldConfigService.isHidden("component.clientCode")) entity.clientCode = it
         }
-        if (!fieldConfigService.isHidden("component.solution")) {
-            request.solution?.let { entity.solution = it }
+        request.solution?.let {
+            if (!fieldConfigService.isHidden("component.solution")) entity.solution = it
         }
         request.archived?.let { entity.archived = it }
         request.metadata?.let { entity.metadata = it.toMutableMap() }
-        // SYS-039 — same gating
-        if (!fieldConfigService.isHidden("component.groupId")) {
-            request.groupId?.let { entity.groupId = it }
+        // SYS-039 — same gating, same null-skip ordering
+        request.groupId?.let {
+            if (!fieldConfigService.isHidden("component.groupId")) entity.groupId = it
         }
-        if (!fieldConfigService.isHidden("component.releaseManager")) {
-            request.releaseManager?.let { entity.releaseManager = it }
+        request.releaseManager?.let {
+            if (!fieldConfigService.isHidden("component.releaseManager")) entity.releaseManager = it
         }
-        if (!fieldConfigService.isHidden("component.securityChampion")) {
-            request.securityChampion?.let { entity.securityChampion = it }
+        request.securityChampion?.let {
+            if (!fieldConfigService.isHidden("component.securityChampion")) entity.securityChampion = it
         }
-        if (!fieldConfigService.isHidden("component.copyright")) {
-            request.copyright?.let { entity.copyright = it }
+        request.copyright?.let {
+            if (!fieldConfigService.isHidden("component.copyright")) entity.copyright = it
         }
-        if (!fieldConfigService.isHidden("component.releasesInDefaultBranch")) {
-            request.releasesInDefaultBranch?.let { entity.releasesInDefaultBranch = it }
+        request.releasesInDefaultBranch?.let {
+            if (!fieldConfigService.isHidden("component.releasesInDefaultBranch")) {
+                entity.releasesInDefaultBranch = it
+            }
         }
-        if (!fieldConfigService.isHidden("component.labels")) {
-            request.labels?.let { entity.labels = it.toTypedArray() }
+        request.labels?.let {
+            if (!fieldConfigService.isHidden("component.labels")) entity.labels = it.toTypedArray()
         }
 
         request.parentComponentName?.let { parentName ->

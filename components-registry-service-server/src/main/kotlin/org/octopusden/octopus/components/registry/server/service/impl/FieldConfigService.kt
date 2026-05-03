@@ -14,7 +14,7 @@ import org.springframework.transaction.annotation.Transactional
  * This service reads `registry_config[field-config].value` (a JSONB
  * blob written by `ConfigControllerV4.updateFieldConfig`) and exposes
  * a single visibility lookup. Callers — currently
- * `ComponentManagementServiceImpl.update` — gate scalar field writes on
+ * `ComponentManagementServiceImpl.updateComponent` — gate scalar field writes on
  * `isHidden(...)` to silently strip values for hidden fields rather
  * than rejecting the request. The strip-vs-reject choice keeps the
  * server defensive without breaking existing clients that send
@@ -51,7 +51,15 @@ class FieldConfigService(
         @Suppress("UNCHECKED_CAST")
         val entry = sectionMap[parts[1]] as? Map<String, Any?> ?: return EDITABLE
 
-        return (entry["visibility"] as? String)?.takeIf { it.isNotBlank() } ?: EDITABLE
+        // Normalize: trim + lowercase before returning so a typo like
+        // `"Hidden"` or `"hidden "` in admin-edited JSON still matches the
+        // canonical "hidden"/"readonly"/"editable" tokens that callers
+        // (and tests) compare against.
+        return (entry["visibility"] as? String)
+            ?.trim()
+            ?.lowercase()
+            ?.takeIf { it.isNotBlank() }
+            ?: EDITABLE
     }
 
     fun isHidden(fieldPath: String): Boolean = visibilityFor(fieldPath) == HIDDEN

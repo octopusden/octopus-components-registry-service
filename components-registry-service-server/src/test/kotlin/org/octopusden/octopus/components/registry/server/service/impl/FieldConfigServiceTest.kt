@@ -121,6 +121,20 @@ class FieldConfigServiceTest {
     }
 
     @Test
+    @DisplayName("visibility with surrounding whitespace and mixed case → trimmed + lowercased")
+    fun whitespaceAndCase_normalized() {
+        val svc =
+            service(
+                mapOf(
+                    "component" to mapOf("displayName" to mapOf("visibility" to "  Hidden  ")),
+                ),
+            )
+
+        assertTrue(svc.isHidden("component.displayName"))
+        assertEquals("hidden", svc.visibilityFor("component.displayName"))
+    }
+
+    @Test
     @DisplayName("blank visibility string → editable fallback")
     fun blankVisibility_editable() {
         val svc =
