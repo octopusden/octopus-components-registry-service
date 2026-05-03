@@ -63,13 +63,16 @@ fun ComponentEntity.toSummaryResponse(): ComponentSummaryResponse =
         archived = this.archived,
         updatedAt = this.updatedAt,
         // SYS-040: list-view extras. firstOrNull mirrors V4Mappers convention
-        // for nested-collection access; deterministic "first row" ordering is
-        // enforced at the entity level via @OrderBy("id ASC") on the parent
-        // OneToMany — Hibernate adds an ORDER BY id ASC clause to the
-        // lazy-load query, so the first element is stable across queries
-        // (UUID v4 is not monotonic by creation time, but lexicographic order
-        // is at least reproducible). Blank strings are normalized to null so
-        // the Portal can treat absence and empty as the same case.
+        // for nested-collection access; in practice the same row is
+        // returned across queries (heap order on H2; physical-storage order
+        // on Postgres until VACUUM FULL reshuffles), and the V2/V3 code
+        // path already relies on this implicit first-pick. We considered
+        // @OrderBy("id ASC") for explicit determinism but reverted: it
+        // changed which row was "first" and broke V2/V3 expected-data
+        // fixtures (RES-001 in BaseComponentsRegistryServiceTest). The
+        // long-term fix is a created_at column on the child tables.
+        // Blank strings are normalized to null so the Portal can treat
+        // absence and empty as the same case.
         buildSystem =
             this.buildConfigurations
                 .firstOrNull()

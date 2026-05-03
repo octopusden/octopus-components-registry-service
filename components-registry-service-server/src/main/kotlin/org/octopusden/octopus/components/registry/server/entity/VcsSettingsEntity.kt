@@ -10,7 +10,6 @@ import jakarta.persistence.Id
 import jakarta.persistence.JoinColumn
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.OneToMany
-import jakarta.persistence.OrderBy
 import jakarta.persistence.Table
 import java.util.UUID
 
@@ -31,10 +30,6 @@ class VcsSettingsEntity(
     // see TD-002
     @Column(name = "external_registry", columnDefinition = "TEXT")
     var externalRegistry: String? = null,
-    // SYS-040: same rationale as ComponentEntity OneToMany ordering — Portal
-    // list view reads vcsSettings.firstOrNull().entries.firstOrNull().vcsPath,
-    // so the underlying entries collection must yield a stable first row.
     @OneToMany(mappedBy = "vcsSettings", cascade = [CascadeType.ALL], orphanRemoval = true)
-    @OrderBy("id ASC")
     var entries: MutableList<VcsSettingsEntryEntity> = mutableListOf(),
 )
