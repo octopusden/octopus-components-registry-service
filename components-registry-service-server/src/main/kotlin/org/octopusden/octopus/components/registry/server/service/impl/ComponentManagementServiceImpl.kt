@@ -301,6 +301,16 @@ class ComponentManagementServiceImpl(
                 "parentComponentName" to saved.parentComponent?.name,
                 "archived" to saved.archived,
                 "metadata" to saved.metadata.toMap(),
+                // SYS-039 — must mirror the oldValue map above; without these
+                // keys the audit changeDiff would report a spurious deletion
+                // (oldValue has the field, newValue doesn't) on every update
+                // that touches a SYS-039 field.
+                "groupId" to saved.groupId,
+                "releaseManager" to saved.releaseManager,
+                "securityChampion" to saved.securityChampion,
+                "copyright" to saved.copyright,
+                "releasesInDefaultBranch" to saved.releasesInDefaultBranch,
+                "labels" to saved.labels.toList(),
             )
 
         applicationEventPublisher.publishEvent(
