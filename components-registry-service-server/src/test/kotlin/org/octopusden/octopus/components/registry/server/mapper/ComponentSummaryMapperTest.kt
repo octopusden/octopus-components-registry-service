@@ -2,6 +2,7 @@ package org.octopusden.octopus.components.registry.server.mapper
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.octopusden.octopus.components.registry.server.entity.BuildConfigurationEntity
@@ -31,13 +32,25 @@ class ComponentSummaryMapperTest {
         )
 
     @Test
-    @DisplayName("empty nested collections → all three SYS-040 fields null")
+    @DisplayName("empty nested collections → all three SYS-040 fields null, labels empty")
     fun emptyNested_allNull() {
         val response = baseComponent().toSummaryResponse()
 
         assertNull(response.buildSystem)
         assertNull(response.jiraProjectKey)
         assertNull(response.vcsPath)
+        assertTrue(response.labels.isEmpty())
+    }
+
+    @Test
+    @DisplayName("labels are mapped from entity array to List<String>")
+    fun labels_mappedFromEntityArray() {
+        val component = baseComponent()
+        component.labels = arrayOf("backend", "core")
+
+        val response = component.toSummaryResponse()
+
+        assertEquals(listOf("backend", "core"), response.labels)
     }
 
     @Test

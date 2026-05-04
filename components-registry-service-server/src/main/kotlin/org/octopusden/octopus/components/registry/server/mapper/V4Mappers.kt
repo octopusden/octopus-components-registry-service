@@ -71,6 +71,7 @@ fun ComponentEntity.toSummaryResponse(): ComponentSummaryResponse =
         productType = this.productType,
         archived = this.archived,
         updatedAt = this.updatedAt,
+        labels = this.labels.toList(),
         // SYS-040: list-view extras. firstOrNull mirrors V4Mappers convention
         // for nested-collection access; in practice the same row is
         // returned across queries (heap order on H2; physical-storage order
