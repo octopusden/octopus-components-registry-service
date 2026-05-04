@@ -67,6 +67,7 @@ class ComponentControllerV4(
         @RequestParam(required = false) archived: Boolean?,
         @RequestParam(required = false) search: String?,
         @RequestParam(required = false) owner: String?,
+        @RequestParam(required = false) buildSystem: String?,
         pageable: Pageable,
     ): Page<ComponentSummaryResponse> {
         val filter =
@@ -76,6 +77,7 @@ class ComponentControllerV4(
                 archived = archived,
                 search = search,
                 owner = owner,
+                buildSystem = buildSystem,
             )
         return componentManagementService.listComponents(filter, pageable)
     }

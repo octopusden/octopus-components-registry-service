@@ -6,4 +6,5 @@ data class ComponentFilter(
     val archived: Boolean? = null,
     val search: String? = null,
     val owner: String? = null,
+    val buildSystem: String? = null,
 )

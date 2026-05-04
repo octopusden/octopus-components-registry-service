@@ -515,6 +515,20 @@ class ComponentManagementServiceImpl(
                 )
         }
 
+        filter.buildSystem?.let { bs ->
+            // INNER JOIN on buildConfigurations: components without any build config
+            // row are excluded (the join produces no match). Components that have at
+            // least one row with the matching buildSystem value are included.
+            spec =
+                spec.and(
+                    Specification { root, query, cb ->
+                        val join = root.join<ComponentEntity, BuildConfigurationEntity>("buildConfigurations")
+                        query?.distinct(true)
+                        cb.equal(join.get<String>("buildSystem"), bs)
+                    },
+                )
+        }
+
         // filter.system is not yet supported against the text[] column. JPA Criteria
         // can't portably express "array contains" across H2 PG-compat and PostgreSQL,
         // and we don't have a native query for it yet. The earlier implementation
