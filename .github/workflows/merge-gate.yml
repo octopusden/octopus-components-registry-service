@@ -3,7 +3,6 @@ name: Merge Gate
 
 on:
   pull_request:
-    branches: [ main ]
 
 jobs:
   build:
