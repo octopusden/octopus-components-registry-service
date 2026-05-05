@@ -73,20 +73,27 @@ class TeamcityClient(
 
     /**
      * Returns a UUID → TC project map for components whose TC project carries
-     * `parameter:(name:COMPONENT_NAME,value:<uuid>)`. Single batched call:
+     * `parameter:(name:COMPONENT_NAME,value:<name>)`. Single batched call:
      * `parameter:(name:COMPONENT_NAME)` returns ALL such projects, then we
-     * group client-side.
+     * group client-side by name string.
+     *
+     * [componentsByName] maps component name (string, as stored in TC
+     * COMPONENT_NAME parameter) → component UUID.
      *
      * Behaviour contract:
      * - Empty input → empty result, no HTTP call.
      * - `teamcity.base-url` blank → empty result, no HTTP call.
-     * - TC returns multiple projects for the same UUID → all included in the
+     * - TC returns multiple projects for the same name → all included in the
      *   raw return; the SyncService is responsible for "skipped_ambiguous".
      * - TC API failure → exception propagates; SyncService catches and counts
      *   as `errors`.
+     *
+     * NOTE: components-automation BaseComponentsTask stores the v2 CRS component
+     * name (not a UUID) as the COMPONENT_NAME parameter value. Matching is done
+     * by name string via [componentsByName].
      */
-    fun findProjectsByComponentParameter(componentIds: Collection<UUID>): Map<UUID, List<TeamcityProject>> {
-        if (componentIds.isEmpty()) return emptyMap()
+    fun findProjectsByComponentParameter(componentsByName: Map<String, UUID>): Map<UUID, List<TeamcityProject>> {
+        if (componentsByName.isEmpty()) return emptyMap()
         val baseUrl = properties.baseUrl.trimEnd('/')
         if (baseUrl.isBlank()) {
             log.debug { "TC sync disabled (teamcity.base-url is blank); returning empty result" }
@@ -120,18 +127,12 @@ class TeamcityClient(
         val projects = response.body?.project ?: emptyList()
         log.info { "TC sync: received ${projects.size} projects with COMPONENT_NAME parameter" }
 
-        val targetIds = componentIds.toSet()
-        // Non-UUID COMPONENT_NAME values exist in legacy TC projects (string
-        // component names from the pre-DB era). They cannot match a v3
-        // component, so we drop them quietly here rather than failing the
-        // whole sync. Same for projects whose COMPONENT_NAME is blank or
-        // whose UUID isn't in the requested set.
         return projects
             .mapNotNull { it.toDomain() }
             .mapNotNull { project ->
                 val raw = project.parameters[COMPONENT_NAME_PARAM]?.trim().orEmpty()
-                val uuid = runCatching { UUID.fromString(raw) }.getOrNull()
-                if (uuid != null && uuid in targetIds) uuid to project else null
+                val uuid = componentsByName[raw]
+                if (uuid != null) uuid to project else null
             }.groupBy({ it.first }, { it.second })
     }
 

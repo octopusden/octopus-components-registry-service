@@ -57,13 +57,13 @@ class TeamcitySyncServiceTest {
         val client =
             StubTeamcityClient(
                 mapOf(
-                    alice to
+                    "alpha" to
                         listOf(
                             TeamcityProject(
                                 id = "Alpha_Build",
                                 name = "Alpha Build",
                                 webUrl = "https://teamcity.example.com/project/Alpha_Build",
-                                parameters = mapOf("COMPONENT_NAME" to alice.toString()),
+                                parameters = mapOf("COMPONENT_NAME" to "alpha"),
                             ),
                         ),
                 ),
@@ -113,13 +113,13 @@ class TeamcitySyncServiceTest {
         val client =
             StubTeamcityClient(
                 mapOf(
-                    alice to
+                    "alpha" to
                         listOf(
                             TeamcityProject(
                                 id = "Alpha_Build",
                                 name = "Alpha Build",
                                 webUrl = "https://teamcity.example.com/project/Alpha_Build",
-                                parameters = mapOf("COMPONENT_NAME" to alice.toString()),
+                                parameters = mapOf("COMPONENT_NAME" to "alpha"),
                             ),
                         ),
                 ),
@@ -144,7 +144,7 @@ class TeamcitySyncServiceTest {
         val client =
             StubTeamcityClient(
                 mapOf(
-                    alice to
+                    "alpha" to
                         listOf(
                             TeamcityProject("Project_A", "A", "https://teamcity.example.com/project/A", emptyMap()),
                             TeamcityProject("Project_B", "B", "https://teamcity.example.com/project/B", emptyMap()),
@@ -191,7 +191,7 @@ class TeamcitySyncServiceTest {
         val client =
             StubTeamcityClient(
                 mapOf(
-                    alice to
+                    "alpha" to
                         listOf(
                             TeamcityProject("Project_A", "A", webUrl = "", parameters = emptyMap()),
                         ),
@@ -241,7 +241,7 @@ class TeamcitySyncServiceTest {
         val client =
             StubTeamcityClient(
                 mapOf(
-                    alice to
+                    "alpha" to
                         listOf(
                             TeamcityProject(
                                 "Alpha_Build",
@@ -250,7 +250,7 @@ class TeamcitySyncServiceTest {
                                 emptyMap(),
                             ),
                         ),
-                    bob to
+                    "beta" to
                         listOf(
                             TeamcityProject(
                                 "Beta_Build",
@@ -306,20 +306,25 @@ class TeamcitySyncServiceTest {
     }
 
     /**
-     * Stub TC client. Map a UUID to whatever list of "matches" the test
-     * wants returned. Empty map → resync sees nothing for any component.
+     * Stub TC client. Map a component name string to whatever list of
+     * "matches" the test wants returned. Empty map → resync sees nothing for
+     * any component.
      */
     private class StubTeamcityClient(
-        private val matches: Map<UUID, List<TeamcityProject>>,
+        private val matchesByName: Map<String, List<TeamcityProject>>,
     ) : TeamcityClient(
             TeamcityProperties(),
             org.springframework.boot.web.client
                 .RestTemplateBuilder(),
         ) {
-        override fun findProjectsByComponentParameter(componentIds: Collection<UUID>): Map<UUID, List<TeamcityProject>> {
+        override fun findProjectsByComponentParameter(componentsByName: Map<String, UUID>): Map<UUID, List<TeamcityProject>> {
             // Filter so we only return entries the caller asked about, mirroring
-            // the real client's contract.
-            return matches.filterKeys { it in componentIds }
+            // the real client's contract: look up by name, emit under UUID.
+            return componentsByName.entries
+                .mapNotNull { (name, uuid) ->
+                    val projects = matchesByName[name] ?: return@mapNotNull null
+                    uuid to projects
+                }.toMap()
         }
     }
 
@@ -330,7 +335,7 @@ class TeamcitySyncServiceTest {
             org.springframework.boot.web.client
                 .RestTemplateBuilder(),
         ) {
-        override fun findProjectsByComponentParameter(componentIds: Collection<UUID>): Map<UUID, List<TeamcityProject>> = throw cause
+        override fun findProjectsByComponentParameter(componentsByName: Map<String, UUID>): Map<UUID, List<TeamcityProject>> = throw cause
     }
 
     /**

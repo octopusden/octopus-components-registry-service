@@ -59,9 +59,12 @@ class TeamcitySyncService(
         val scanned = components.size
         log.info { "TC sync starting: scanned=$scanned non-archived components" }
 
-        val componentIds = components.mapNotNull { it.id }
+        val componentsByName =
+            components
+                .filter { it.id != null }
+                .associate { it.name to it.id!! }
         // HTTP call to TC happens here, deliberately OUTSIDE any DB tx.
-        val matches = teamcityClient.findProjectsByComponentParameter(componentIds)
+        val matches = teamcityClient.findProjectsByComponentParameter(componentsByName)
 
         // CurrentUserResolver returns "system" when there is no auth context
         // (the scheduled cron path), or the JWT's preferred_username when an
