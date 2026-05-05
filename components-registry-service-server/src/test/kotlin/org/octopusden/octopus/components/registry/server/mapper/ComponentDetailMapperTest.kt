@@ -41,6 +41,25 @@ class ComponentDetailMapperTest {
     }
 
     @Test
+    @DisplayName("default entity → teamcityProjectUrl is null")
+    fun default_teamcityProjectUrl_isNull() {
+        assertNull(baseComponent().toDetailResponse().teamcityProjectUrl)
+    }
+
+    @Test
+    @DisplayName("populated teamcityProjectUrl propagates to detail response")
+    fun teamcityProjectUrl_propagates() {
+        val component =
+            baseComponent().also {
+                it.teamcityProjectUrl = "https://teamcity.example.com/project/MyProject_Alpha"
+            }
+        assertEquals(
+            "https://teamcity.example.com/project/MyProject_Alpha",
+            component.toDetailResponse().teamcityProjectUrl,
+        )
+    }
+
+    @Test
     @DisplayName("default entity → all six SYS-039 fields are absent / empty")
     fun defaults_allAbsent() {
         val response = baseComponent().toDetailResponse()

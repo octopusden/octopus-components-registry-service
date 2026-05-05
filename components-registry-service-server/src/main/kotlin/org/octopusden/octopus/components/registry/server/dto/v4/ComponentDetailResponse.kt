@@ -22,6 +22,7 @@ data class ComponentDetailResponse(
     // defaults so legacy clients constructed before SYS-039 still
     // deserialize cleanly when CRS responses include the new fields.
     val teamcityProjectId: String? = null,
+    val teamcityProjectUrl: String? = null,
     val groupId: String? = null,
     val releaseManager: String? = null,
     val securityChampion: String? = null,

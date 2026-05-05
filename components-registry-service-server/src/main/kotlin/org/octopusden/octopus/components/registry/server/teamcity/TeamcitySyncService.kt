@@ -1,0 +1,181 @@
+package org.octopusden.octopus.components.registry.server.teamcity
+
+import mu.KotlinLogging
+import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
+import org.octopusden.octopus.components.registry.server.event.AuditEvent
+import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
+import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
+import org.springframework.context.ApplicationEventPublisher
+import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
+
+/**
+ * The TeamCity sync engine.
+ *
+ * One pass:
+ * 1. Read all non-archived components.
+ * 2. Single batched call to TC: `parameter:(name:COMPONENT_NAME)` returns
+ *    every project carrying the parameter; group client-side by parameter
+ *    value (= component UUID).
+ * 3. For each component:
+ *      - 0 matches → leave nulls, count `skippedNoMatch`.
+ *      - 1 match with non-blank webUrl → upsert id+url if changed; count
+ *        `updated` or `unchanged`.
+ *      - 1 match with blank webUrl → treat as no-match (cannot link).
+ *      - 2+ matches → skip, count `skippedAmbiguous`. Manual override is
+ *        the escape hatch.
+ *
+ * Idempotent: only writes when `id` or `url` actually changes. Audit log
+ * emitted via existing [AuditEvent] flow when fields change so admins can
+ * trace the source of writes.
+ *
+ * If the TC client throws (network / 5xx / auth), the exception propagates
+ * to the caller — for the admin endpoint that surfaces as 502/500, for the
+ * scheduled cron that's logged-and-swallowed by the scheduler.
+ */
+@Service
+class TeamcitySyncService(
+    private val componentRepository: ComponentRepository,
+    private val teamcityClient: TeamcityClient,
+    private val applicationEventPublisher: ApplicationEventPublisher,
+    private val currentUserResolver: CurrentUserResolver,
+) {
+    private val log = KotlinLogging.logger {}
+
+    /**
+     * Run one resync pass.
+     *
+     * Wrapped in a single @Transactional so the bulk update is atomic:
+     * either all changes commit, or none do (e.g. on a JPA failure mid-batch).
+     * The audit-log events are published BEFORE_COMMIT so they share the same
+     * tx and won't strand without their corresponding row write.
+     */
+    @Transactional
+    @Suppress("TooGenericExceptionCaught")
+    fun resync(): TeamcitySyncResult {
+        val components = componentRepository.findByArchivedFalse()
+        val scanned = components.size
+        log.info { "TC sync starting: scanned=$scanned non-archived components" }
+
+        val componentIds = components.mapNotNull { it.id }
+        val matches = teamcityClient.findProjectsByComponentParameter(componentIds)
+
+        var updated = 0
+        var unchanged = 0
+        var skippedNoMatch = 0
+        var skippedAmbiguous = 0
+        val errors = mutableListOf<String>()
+
+        // CurrentUserResolver returns "system" when there is no auth context
+        // (the scheduled cron path), or the JWT's preferred_username when an
+        // admin invokes the resync endpoint. Either way it never returns null.
+        val changedBy = currentUserResolver.currentUsername()
+
+        for (component in components) {
+            val componentId = component.id ?: continue
+            try {
+                val candidates = matches[componentId].orEmpty()
+                when {
+                    candidates.isEmpty() -> {
+                        skippedNoMatch++
+                    }
+                    candidates.size > 1 -> {
+                        // Don't pick a winner silently. Manual override is
+                        // the documented escape hatch for genuinely-duplicated
+                        // TC setups.
+                        log.warn {
+                            "TC sync: ambiguous match for component '${component.name}' " +
+                                "(id=$componentId): ${candidates.size} TC projects share " +
+                                "COMPONENT_NAME=$componentId — skipping."
+                        }
+                        skippedAmbiguous++
+                    }
+                    else -> {
+                        val match = candidates.single()
+                        if (match.webUrl.isBlank()) {
+                            // webUrl missing/blank → cannot render the link.
+                            // Treat as no-match: leave nulls, count it.
+                            log.warn {
+                                "TC sync: component '${component.name}' (id=$componentId) " +
+                                    "matched TC project '${match.id}' but webUrl is blank; " +
+                                    "treating as no-match."
+                            }
+                            skippedNoMatch++
+                        } else {
+                            val didChange = applyMatch(component, match, changedBy)
+                            if (didChange) updated++ else unchanged++
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                // Per-component error: log + count, keep processing the rest.
+                // A top-level TC client failure short-circuits earlier and
+                // propagates out.
+                val msg = "Failed to sync component '${component.name}' (id=$componentId): ${e.message}"
+                log.error(e) { msg }
+                errors.add(msg)
+            }
+        }
+
+        log.info {
+            "TC sync done: scanned=$scanned, updated=$updated, unchanged=$unchanged, " +
+                "skippedNoMatch=$skippedNoMatch, skippedAmbiguous=$skippedAmbiguous, " +
+                "errors=${errors.size}"
+        }
+        return TeamcitySyncResult(
+            scanned = scanned,
+            updated = updated,
+            unchanged = unchanged,
+            skippedNoMatch = skippedNoMatch,
+            skippedAmbiguous = skippedAmbiguous,
+            errors = errors.toList(),
+        )
+    }
+
+    /**
+     * Write the match if it differs from current state. Returns true when
+     * either column actually changed (drives the `updated` counter and the
+     * audit-log emission).
+     */
+    private fun applyMatch(
+        component: ComponentEntity,
+        match: TeamcityProject,
+        changedBy: String,
+    ): Boolean {
+        val oldId = component.teamcityProjectId
+        val oldUrl = component.teamcityProjectUrl
+        val newId = match.id
+        val newUrl = match.webUrl
+
+        if (oldId == newId && oldUrl == newUrl) {
+            return false
+        }
+
+        component.teamcityProjectId = newId
+        component.teamcityProjectUrl = newUrl
+        // Save through the component repository to ensure the @Version
+        // optimistic-locking column is bumped and any change-tracking
+        // listeners fire as they would on a regular PATCH write.
+        componentRepository.save(component)
+
+        applicationEventPublisher.publishEvent(
+            AuditEvent(
+                entityType = "Component",
+                entityId = component.id.toString(),
+                action = "UPDATE",
+                changedBy = changedBy,
+                oldValue =
+                    mapOf(
+                        "teamcityProjectId" to oldId,
+                        "teamcityProjectUrl" to oldUrl,
+                    ),
+                newValue =
+                    mapOf(
+                        "teamcityProjectId" to newId,
+                        "teamcityProjectUrl" to newUrl,
+                    ),
+            ),
+        )
+        return true
+    }
+}
