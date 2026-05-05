@@ -101,7 +101,8 @@ fun ComponentEntity.toSummaryResponse(): ComponentSummaryResponse =
                 ?.entries
                 ?.firstOrNull()
                 ?.vcsPath
-                ?.takeIf { it.isNotBlank() },
+                ?.takeIf { it.isNotBlank() }
+                ?.sshUrlToProjectRepo(),
         teamcityProjectId = this.teamcityProjectId,
         teamcityProjectUrl = this.teamcityProjectUrl,
     )
@@ -210,3 +211,35 @@ fun AuditLogEntity.toResponse(): AuditLogResponse =
         correlationId = this.correlationId,
         source = this.source,
     )
+
+/**
+ * Normalises a raw VCS path to the `project/repo` format expected by the
+ * Portal for constructing Bitbucket (and future Gitea) browse links.
+ *
+ * Handles:
+ *  - `ssh://git@host/[scm/]project/repo.git`   (Bitbucket ssh scheme)
+ *  - `ssh://git@host:port/[scm/]project/repo.git` (with explicit port)
+ *  - `git@host:project/repo.git`               (SCP-style, Gitea / Bitbucket)
+ *  - `project/repo`                            (already normalised, returned as-is)
+ *
+ * If the value does not match any known pattern the original string is
+ * returned unchanged so the Portal can decide how to handle it.
+ */
+internal fun String.sshUrlToProjectRepo(): String {
+    val pathPart: String = when {
+        startsWith("ssh://") -> {
+            // ssh://git@host[:port]/[scm/]project/repo.git → strip scheme + host
+            substringAfter("://").substringAfter("/")
+        }
+        contains("@") && contains(":") -> {
+            // git@host:project/repo.git → strip everything before the colon
+            substringAfter(":")
+        }
+        else -> return this
+    }
+    val cleaned = pathPart.trimEnd('/').removeSuffix(".git")
+    // Bitbucket sometimes inserts "scm/" between the host and the project key
+    val normalized = if (cleaned.startsWith("scm/")) cleaned.removePrefix("scm/") else cleaned
+    val parts = normalized.split("/").filter { it.isNotEmpty() }
+    return if (parts.size >= 2) "${parts[parts.size - 2]}/${parts.last()}" else this
+}

@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
 import org.octopusden.octopus.components.registry.server.entity.BuildConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.JiraComponentConfigEntity
@@ -158,5 +160,57 @@ class ComponentSummaryMapperTest {
         val response = component.toSummaryResponse()
 
         assertEquals("GRADLE", response.buildSystem)
+    }
+
+    // -----------------------------------------------------------------------
+    // sshUrlToProjectRepo — SSH URL normalisation for Portal Bitbucket links
+    // -----------------------------------------------------------------------
+
+    @ParameterizedTest(name = "[{index}] \"{0}\" → \"{1}\"")
+    @DisplayName("sshUrlToProjectRepo normalises SSH URLs to project/repo")
+    @CsvSource(
+        // Bitbucket ssh:// with no port
+        "ssh://git@bitbucket.example.com/neo/access-contol.git,       neo/access-contol",
+        // Bitbucket ssh:// with explicit port — substringAfter("/") on
+        // "git@host:7999/neo/repo.git" finds the FIRST slash (before neo),
+        // so the port does NOT appear in pathPart; result is correct.
+        "ssh://git@bitbucket.example.com:7999/neo/access-contol.git,  neo/access-contol",
+        // Bitbucket ssh:// with scm/ prefix + port
+        "ssh://git@bitbucket.example.com:7999/scm/project/repo.git,   project/repo",
+        // SCP-style (Gitea / Bitbucket SCP)
+        "git@gitea.example.com:org/repo.git,                          org/repo",
+        // Nested group path — only last two segments are taken (group/sub/repo → sub/repo)
+        "git@gitea.example.com:group/sub/repo.git,                    sub/repo",
+        // Already normalised — must be returned as-is
+        "org/repo,                                                     org/repo",
+        delimiter = ',',
+    )
+    fun sshUrlToProjectRepo_normalisesVcsPath(raw: String, expected: String) {
+        assertEquals(expected.trim(), raw.trim().sshUrlToProjectRepo())
+    }
+
+    @Test
+    @DisplayName("sshUrlToProjectRepo returns original value when path has fewer than two segments (no misfire)")
+    fun sshUrlToProjectRepo_singleSegment_returnsOriginal() {
+        // ssh://git@host:7999/repo.git  → pathPart = "repo.git" → parts = ["repo"] → size < 2
+        // The function must NOT return "7999/repo" — proof that port stays out of pathPart.
+        val raw = "ssh://git@bitbucket.example.com:7999/repo.git"
+        assertEquals(raw, raw.sshUrlToProjectRepo())
+    }
+
+    @Test
+    @DisplayName("vcsPath stored as SSH URL → toSummaryResponse returns project/repo")
+    fun sshUrlInEntity_returnedAsProjectRepo() {
+        val component = baseComponent()
+        val vcs = VcsSettingsEntity(component = component)
+        vcs.entries.add(
+            VcsSettingsEntryEntity(
+                vcsSettings = vcs,
+                vcsPath = "ssh://git@bitbucket.spb.example.com/neo/access-contol.git",
+            ),
+        )
+        component.vcsSettings.add(vcs)
+
+        assertEquals("neo/access-contol", component.toSummaryResponse().vcsPath)
     }
 }
