@@ -242,6 +242,20 @@ class TeamcitySyncServiceTest {
     }
 
     @Test
+    @DisplayName("blank base-url: resync throws IllegalStateException instead of returning all-NO_MATCH")
+    fun blankBaseUrlThrows() {
+        val components = listOf(component(alice, "alpha"))
+        // Real client with default (blank) base-url — no HTTP call is made.
+        val client = TeamcityClient(TeamcityProperties(), org.springframework.boot.web.client.RestTemplateBuilder())
+        val repo = StubComponentRepository(components)
+        val publisher = RecordingPublisher()
+        val service = TeamcitySyncService(repo, client, publisher, fixedUser("admin"), inlineTx())
+
+        val ex = assertThrows<IllegalStateException> { service.resync() }
+        assertTrue(ex.message!!.contains("TEAMCITY_BASE_URL"), "message should mention the env var")
+    }
+
+    @Test
     @DisplayName("TC client failure on the batched call: exception propagates")
     fun clientFailurePropagates() {
         val components = listOf(component(alice, "alpha"))
