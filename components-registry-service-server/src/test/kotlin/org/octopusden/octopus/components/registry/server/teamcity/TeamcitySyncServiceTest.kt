@@ -10,6 +10,7 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.event.AuditEvent
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
+import org.springframework.boot.web.client.RestTemplateBuilder
 import org.springframework.context.ApplicationEvent
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.data.domain.Example
@@ -246,7 +247,7 @@ class TeamcitySyncServiceTest {
     fun blankBaseUrlThrows() {
         val components = listOf(component(alice, "alpha"))
         // Real client with default (blank) base-url — no HTTP call is made.
-        val client = TeamcityClient(TeamcityProperties(), org.springframework.boot.web.client.RestTemplateBuilder())
+        val client = TeamcityClient(TeamcityProperties(), RestTemplateBuilder())
         val repo = StubComponentRepository(components)
         val publisher = RecordingPublisher()
         val service = TeamcitySyncService(repo, client, publisher, fixedUser("admin"), inlineTx())
