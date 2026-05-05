@@ -45,6 +45,25 @@ class ComponentSummaryMapperTest {
     }
 
     @Test
+    @DisplayName("default entity → teamcityProjectUrl is null")
+    fun default_teamcityProjectUrl_isNull() {
+        assertNull(baseComponent().toSummaryResponse().teamcityProjectUrl)
+    }
+
+    @Test
+    @DisplayName("populated teamcityProjectUrl propagates to summary response")
+    fun teamcityProjectUrl_propagates() {
+        val component =
+            baseComponent().also {
+                it.teamcityProjectUrl = "https://teamcity.example.com/project/MyProject_Alpha"
+            }
+        assertEquals(
+            "https://teamcity.example.com/project/MyProject_Alpha",
+            component.toSummaryResponse().teamcityProjectUrl,
+        )
+    }
+
+    @Test
     @DisplayName("empty nested collections → all three SYS-040 fields null, labels empty")
     fun emptyNested_allNull() {
         val response = baseComponent().toSummaryResponse()

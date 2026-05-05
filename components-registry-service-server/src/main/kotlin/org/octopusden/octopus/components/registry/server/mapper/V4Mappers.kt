@@ -45,6 +45,7 @@ fun ComponentEntity.toDetailResponse(): ComponentDetailResponse =
         createdAt = this.createdAt,
         updatedAt = this.updatedAt,
         teamcityProjectId = this.teamcityProjectId,
+        teamcityProjectUrl = this.teamcityProjectUrl,
         // SYS-039: §7.0 Wave 2 PR-G fields, surfaced verbatim. labels is
         // converted from Array<String> to Set<String> matching the
         // existing `system` projection convention.
@@ -102,6 +103,7 @@ fun ComponentEntity.toSummaryResponse(): ComponentSummaryResponse =
                 ?.vcsPath
                 ?.takeIf { it.isNotBlank() },
         teamcityProjectId = this.teamcityProjectId,
+        teamcityProjectUrl = this.teamcityProjectUrl,
     )
 
 fun BuildConfigurationEntity.toResponse(): BuildConfigurationResponse =

@@ -13,6 +13,8 @@ import org.octopusden.octopus.components.registry.server.service.MigrationLifecy
 import org.octopusden.octopus.components.registry.server.service.MigrationResult
 import org.octopusden.octopus.components.registry.server.service.MigrationStatus
 import org.octopusden.octopus.components.registry.server.service.ValidationResult
+import org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncResult
+import org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncService
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
@@ -32,6 +34,7 @@ class AdminControllerV4(
     private val importService: ImportService,
     private val migrationJobService: MigrationJobService,
     private val historyMigrationJobService: HistoryMigrationJobService,
+    private val teamcitySyncService: TeamcitySyncService,
 ) {
     @PostMapping("/migrate-component/{name}")
     fun migrateComponent(
@@ -146,6 +149,25 @@ class AdminControllerV4(
                     ),
                 )
         }
+
+    /**
+     * On-demand TeamCity project ID/URL resync. Reuses the IMPORT_DATA permission
+     * (locked design decision — see PR plan §A5 rationale: a separate
+     * SYNC_TC_PROJECTS permission would require new constants across CRS,
+     * cloud-commons, the automation repo's role yaml, the portal `auth.ts`,
+     * and every admin UI consumer; for "admin bulk operation" the existing
+     * IMPORT_DATA semantic is the right scope).
+     *
+     * Synchronous: a single batched TC call returns all projects carrying the
+     * COMPONENT_NAME parameter, then we group client-side by parameter value.
+     * For the foreseeable scale this is well under typical gateway timeouts.
+     * If response time grows, port to the async-job pattern (see /migrate).
+     *
+     * Returns the per-pass counts so the Portal can render a toast with the
+     * effect of the run.
+     */
+    @PostMapping("/teamcity-project-ids/resync")
+    fun resyncTeamcityProjectIds(): ResponseEntity<TeamcitySyncResult> = ResponseEntity.ok(teamcitySyncService.resync())
 
     /**
      * Map cross-kind gate conflicts to a structured 409. Same-kind 409 is
