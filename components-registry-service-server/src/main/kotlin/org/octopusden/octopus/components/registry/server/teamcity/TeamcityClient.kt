@@ -47,8 +47,8 @@ data class TeamcityProject(
  *   the simpler dependency-free path.
  *
  * Disabled when `teamcity.base-url` is blank — [findProjectsByComponentParameter]
- * returns an empty map so the sync service can run end-to-end on
- * unconfigured envs (returning `scanned=0, updated=0, ...`) without HTTP.
+ * throws [IllegalStateException] so the caller (admin endpoint or scheduler)
+ * surfaces the misconfiguration rather than silently returning all-NO_MATCH.
  */
 @Component
 class TeamcityClient(
@@ -96,8 +96,10 @@ class TeamcityClient(
         if (componentsByName.isEmpty()) return emptyMap()
         val baseUrl = properties.baseUrl.trimEnd('/')
         if (baseUrl.isBlank()) {
-            log.debug { "TC sync disabled (teamcity.base-url is blank); returning empty result" }
-            return emptyMap()
+            throw IllegalStateException(
+                "TC sync is not configured: teamcity.base-url is blank. " +
+                    "Set the TEAMCITY_BASE_URL environment variable.",
+            )
         }
 
         // Locator: parameter:(name:COMPONENT_NAME) — match every project
