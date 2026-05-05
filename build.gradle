@@ -33,8 +33,8 @@ octopusQuality {
         // guards with IllegalMutationException (tasks.register(String,Class,Action)
         // cannot be called from within another task's configuration action).
         // Per-module jacoco (jacocoTestReport, jacocoTestCoverageVerification) is
-        // still configured by the plugin. We wire the aggregate + gate manually below
-        // via qualityCoverageManual and override coverage-command in quality.yml.
+        // still configured by the plugin. The aggregate tasks are registered manually
+        // in projectsEvaluated below and wired into the plugin-owned qualityCoverage task.
         enabled = false
     }
 }
@@ -343,12 +343,14 @@ ${sectionsHtml}
 """
 }
 
-// Aggregate JaCoCo tasks and coverage gate registered directly in projectsEvaluated
-// (outside any task configuration action) so the task container is still mutable.
-// This is a workaround for an octopus-quality plugin bug: the plugin's qualityCoverage
-// task registers jacocoOverallCoverage* tasks inside its own lazy configuration action,
-// which Gradle 8.6 prohibits (tasks.register(String,Class,Action) is guarded during
-// task-graph resolution). The quality.yml overrides coverage-command to use this task.
+// Aggregate JaCoCo tasks and coverage gate wired in projectsEvaluated (outside any task
+// configuration action) so the task container is still mutable.
+// Workaround for an octopus-quality plugin bug: the plugin's qualityCoverage task calls
+// tasks.register(String,Class,Action) inside its own lazy configuration action, which
+// Gradle 8.6 prohibits (IllegalMutationException during task-graph resolution).
+// coverage.enabled = false stops the plugin from triggering that code path; we then
+// register the aggregate tasks here and wire them into the plugin-owned qualityCoverage
+// task so the shared workflow default command (./gradlew qualityCoverage) remains correct.
 gradle.projectsEvaluated {
     def coverageProjects = subprojects.findAll {
         !(it.name in ['components-registry-automation', 'test-common'])
@@ -363,7 +365,7 @@ gradle.projectsEvaluated {
             p.fileTree(p.layout.buildDirectory) { include 'jacoco/test.exec' }
         }))
         sourceDirectories.from(files(testTargets.collectMany { p -> p.sourceSets.main.allSource.srcDirs }))
-        classDirectories.from(files(testTargets.collectMany { p -> p.sourceSets.main.output }))
+        classDirectories.from(files(testTargets.collect { p -> p.sourceSets.main.output }))
         reports {
             xml.required = true
             html.required = true
@@ -380,7 +382,7 @@ gradle.projectsEvaluated {
             p.fileTree(p.layout.buildDirectory) { include 'jacoco/test.exec' }
         }))
         sourceDirectories.from(files(testTargets.collectMany { p -> p.sourceSets.main.allSource.srcDirs }))
-        classDirectories.from(files(testTargets.collectMany { p -> p.sourceSets.main.output }))
+        classDirectories.from(files(testTargets.collect { p -> p.sourceSets.main.output }))
         violationRules {
             rule {
                 element = 'BUNDLE'
@@ -393,10 +395,7 @@ gradle.projectsEvaluated {
         }
     }
 
-    tasks.register('qualityCoverageManual') {
-        group = 'verification'
-        description = 'Coverage gate: per-module tests + jacoco + aggregate (workaround for plugin/Gradle 8.6 incompatibility)'
-        dependsOn(coverageProjects.collect { "${it.path}:test" })
+    tasks.named('qualityCoverage').configure {
         dependsOn(coverageProjects.collect { "${it.path}:jacocoTestReport" })
         dependsOn(coverageProjects.collect { "${it.path}:jacocoTestCoverageVerification" })
         dependsOn('jacocoOverallCoverageReport')

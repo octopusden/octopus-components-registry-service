@@ -12,5 +12,4 @@ jobs:
     uses: octopusden/octopus-base/.github/workflows/common-java-gradle-quality-gates.yml@v2.3.4
     with:
       java-version: '21'
-      coverage-command: ./gradlew qualityCoverageManual --no-daemon --stacktrace
     secrets: inherit
