@@ -10,7 +10,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties
  * false, the [TeamcitySyncScheduler] bean is not registered — so dev /
  * unconfigured envs boot cleanly without TC credentials. The manual admin
  * resync endpoint will throw when `base-url` is blank, which is the intended
- * behaviour (surfaces misconfiguration). Production wires through
+ * behavior (surfaces misconfiguration). Production wires through
  * `service-config` per env.
  */
 @ConfigurationProperties(prefix = "teamcity")

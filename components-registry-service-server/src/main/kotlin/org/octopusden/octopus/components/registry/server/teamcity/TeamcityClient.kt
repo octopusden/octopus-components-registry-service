@@ -82,7 +82,7 @@ class TeamcityClient(
      *
      * Behaviour contract:
      * - Empty input → empty result, no HTTP call.
-     * - `teamcity.base-url` blank → empty result, no HTTP call.
+     * - `teamcity.base-url` blank → throws [IllegalStateException]; caller surfaces it as an error.
      * - TC returns multiple projects for the same name → all included in the
      *   raw return; the SyncService is responsible for "skipped_ambiguous".
      * - TC API failure → exception propagates; SyncService catches and counts
