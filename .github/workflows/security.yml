@@ -1,19 +1,21 @@
+# INTERNAL — triggered on push to main, nightly, and manually; never on pull_request.
 name: Security Reports
 
 on:
-  pull_request:
   push:
     branches:
       - main
   schedule:
     - cron: '0 3 * * *'
+  workflow_call:
   workflow_dispatch:
 
 jobs:
   security:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-security-reports.yml@v2.2.1
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-security-reports.yml@v2.3.4
     with:
       java-version: '21'
       enable-codeql: true
       enable-trivy: true
       enable-dependency-check: false
+    secrets: inherit
