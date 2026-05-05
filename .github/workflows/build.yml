@@ -1,7 +1,7 @@
+# INTERNAL — triggered on push to main and manually; PR builds are handled by merge-gate.yml.
 name: Gradle Compile & UT
 
 on:
-  pull_request:
   push:
     branches:
       - main
@@ -9,8 +9,9 @@ on:
 
 jobs:
   run-build-and-deploy:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-build.yml@v2.2.1
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-build.yml@v2.3.4
     with:
       flow-type: hybrid
       java-version: '21'
       docker-image: components-registry-service
+    secrets: inherit
