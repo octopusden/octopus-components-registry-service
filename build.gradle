@@ -334,6 +334,16 @@ ${sectionsHtml}
 """
 }
 
+// Workaround: octopus-quality plugin registers jacocoOverallCoverage* tasks inside
+// the qualityCoverage configuration action. Gradle 8.6 guards tasks.register(String,Class,Action)
+// during task-graph resolution, so that nested call fails when qualityCoverage is first realized.
+// Force early realization here (projectsEvaluated = configuration phase, still mutable) so the
+// aggregate tasks are registered before graph resolution locks the container.
+// Tracked as a bug in octopus-base: nested tasks.register inside a lazy task action.
+gradle.projectsEvaluated {
+    tasks.findByName('qualityCoverage')
+}
+
 tasks.register('qualityReportsIndex') {
     group = 'verification'
     description = 'Generates a single HTML entry point for all quality reports'
