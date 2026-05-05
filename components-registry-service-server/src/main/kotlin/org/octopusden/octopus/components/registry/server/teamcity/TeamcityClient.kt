@@ -19,7 +19,7 @@ import java.util.UUID
  * The TC REST projects search returns an arbitrary tree (project →
  * subprojects → buildTypes → ...). For sync we only need the leaf identity
  * (id, display name, webUrl) plus the parameter map so we can extract
- * `COMPONENT_NAME` to key by component UUID.
+ * `COMPONENT_NAME` to key by component name string.
  *
  * `parameters` is a flat name-to-value map; multi-value TC properties are
  * collapsed to the last seen value (the locator search returns one project

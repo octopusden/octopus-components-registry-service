@@ -185,6 +185,39 @@ class TeamcitySyncServiceTest {
     }
 
     @Test
+    @DisplayName("null-id component: counted in scanned but silently skipped, no error counter")
+    fun nullIdComponentSkipped() {
+        val nullIdComponent = ComponentEntity(id = null, name = "no-id")
+        val components = listOf(component(alice, "alpha"), nullIdComponent)
+        val client =
+            StubTeamcityClient(
+                mapOf(
+                    "alpha" to
+                        listOf(
+                            TeamcityProject(
+                                id = "Alpha_Build",
+                                name = "Alpha Build",
+                                webUrl = "https://teamcity.example.com/project/Alpha_Build",
+                                parameters = mapOf("COMPONENT_NAME" to "alpha"),
+                            ),
+                        ),
+                ),
+            )
+        val repo = StubComponentRepository(components)
+        val publisher = RecordingPublisher()
+        val service = TeamcitySyncService(repo, client, publisher, fixedUser("admin"), inlineTx())
+
+        val result = service.resync()
+
+        // Both components are counted in scanned; only the one with an id is processed.
+        assertEquals(2, result.scanned)
+        assertEquals(1, result.updated)
+        assertEquals(0, result.unchanged)
+        assertEquals(0, result.skippedNoMatch)
+        assertTrue(result.errors.isEmpty())
+    }
+
+    @Test
     @DisplayName("blank webUrl: treated as no-match")
     fun blankWebUrlIsNoMatch() {
         val components = listOf(component(alice, "alpha"))

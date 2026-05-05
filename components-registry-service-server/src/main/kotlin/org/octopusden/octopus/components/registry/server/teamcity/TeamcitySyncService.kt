@@ -62,7 +62,13 @@ class TeamcitySyncService(
         val componentsByName =
             components
                 .filter { it.id != null }
-                .associate { it.name to it.id!! }
+                .groupBy { it.name }
+                .mapValues { (name, group) ->
+                    if (group.size > 1) {
+                        log.warn { "TC sync: duplicate component name '$name' in non-archived set; only first will be synced" }
+                    }
+                    group.first().id!!
+                }
         // HTTP call to TC happens here, deliberately OUTSIDE any DB tx.
         val matches = teamcityClient.findProjectsByComponentParameter(componentsByName)
 
@@ -105,7 +111,7 @@ class TeamcitySyncService(
                         log.warn {
                             "TC sync: ambiguous match for component '${component.name}' " +
                                 "(id=$componentId): ${candidates.size} TC projects share " +
-                                "COMPONENT_NAME=$componentId — skipping."
+                                "COMPONENT_NAME=${component.name} — skipping."
                         }
                         skippedAmbiguous++
                     }
