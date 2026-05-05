@@ -257,6 +257,18 @@ class TeamcitySyncServiceTest {
     }
 
     @Test
+    @DisplayName("blank base-url: throws even when the registry is empty (no silent scanned=0 on misconfiguration)")
+    fun blankBaseUrlThrowsOnEmptyRegistry() {
+        val client = TeamcityClient(TeamcityProperties(), RestTemplateBuilder())
+        val repo = StubComponentRepository(emptyList())
+        val publisher = RecordingPublisher()
+        val service = TeamcitySyncService(repo, client, publisher, fixedUser("admin"), inlineTx())
+
+        val ex = assertThrows<IllegalStateException> { service.resync() }
+        assertTrue(ex.message!!.contains("TEAMCITY_BASE_URL"), "message should mention the env var")
+    }
+
+    @Test
     @DisplayName("TC client failure on the batched call: exception propagates")
     fun clientFailurePropagates() {
         val components = listOf(component(alice, "alpha"))
