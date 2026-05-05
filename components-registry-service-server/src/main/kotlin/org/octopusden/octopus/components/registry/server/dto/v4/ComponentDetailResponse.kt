@@ -21,6 +21,7 @@ data class ComponentDetailResponse(
     // SYS-039: §7.0 Wave 2 PR-G fields. All optional with null / empty
     // defaults so legacy clients constructed before SYS-039 still
     // deserialize cleanly when CRS responses include the new fields.
+    val teamcityProjectId: String? = null,
     val groupId: String? = null,
     val releaseManager: String? = null,
     val securityChampion: String? = null,

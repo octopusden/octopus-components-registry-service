@@ -8,6 +8,7 @@ data class ComponentUpdateRequest(
     val productType: String? = null,
     val system: Set<String>? = null,
     val clientCode: String? = null,
+    val teamcityProjectId: String? = null,
     val solution: Boolean? = null,
     val parentComponentName: String? = null,
     val archived: Boolean? = null,
