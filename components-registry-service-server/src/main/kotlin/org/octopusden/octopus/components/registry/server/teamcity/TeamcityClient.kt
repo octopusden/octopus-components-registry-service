@@ -47,8 +47,8 @@ data class TeamcityProject(
  *   the simpler dependency-free path.
  *
  * Disabled when `teamcity.base-url` is blank — [findProjectsByComponentParameter]
- * returns an empty map so the sync service can run end-to-end on
- * unconfigured envs (returning `scanned=0, updated=0, ...`) without HTTP.
+ * throws [IllegalStateException] so the caller (admin endpoint or scheduler)
+ * surfaces the misconfiguration rather than silently returning all-NO_MATCH.
  */
 @Component
 class TeamcityClient(
@@ -81,8 +81,11 @@ class TeamcityClient(
      * COMPONENT_NAME parameter) → component UUID.
      *
      * Behaviour contract:
+     * - `teamcity.base-url` blank → throws [IllegalStateException] regardless of
+     *   input size; caller surfaces it as an error. Checked first so a
+     *   misconfigured environment is never silently treated as successful (the
+     *   empty-registry fast-path would otherwise mask the missing URL).
      * - Empty input → empty result, no HTTP call.
-     * - `teamcity.base-url` blank → empty result, no HTTP call.
      * - TC returns multiple projects for the same name → all included in the
      *   raw return; the SyncService is responsible for "skipped_ambiguous".
      * - TC API failure → exception propagates; SyncService catches and counts
@@ -93,12 +96,14 @@ class TeamcityClient(
      * by name string via [componentsByName].
      */
     fun findProjectsByComponentParameter(componentsByName: Map<String, UUID>): Map<UUID, List<TeamcityProject>> {
-        if (componentsByName.isEmpty()) return emptyMap()
         val baseUrl = properties.baseUrl.trimEnd('/')
         if (baseUrl.isBlank()) {
-            log.debug { "TC sync disabled (teamcity.base-url is blank); returning empty result" }
-            return emptyMap()
+            throw IllegalStateException(
+                "TC sync is not configured: teamcity.base-url is blank. " +
+                    "Set the TEAMCITY_BASE_URL environment variable.",
+            )
         }
+        if (componentsByName.isEmpty()) return emptyMap()
 
         // Locator: parameter:(name:COMPONENT_NAME) — match every project
         // carrying the parameter regardless of value, then group client-side.

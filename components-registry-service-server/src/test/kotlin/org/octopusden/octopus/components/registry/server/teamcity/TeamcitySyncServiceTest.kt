@@ -10,6 +10,7 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.event.AuditEvent
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
+import org.springframework.boot.web.client.RestTemplateBuilder
 import org.springframework.context.ApplicationEvent
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.data.domain.Example
@@ -239,6 +240,32 @@ class TeamcitySyncServiceTest {
         assertEquals(1, result.skippedNoMatch)
         assertEquals(0, result.updated)
         assertNull(components[0].teamcityProjectId)
+    }
+
+    @Test
+    @DisplayName("blank base-url: resync throws IllegalStateException instead of returning all-NO_MATCH")
+    fun blankBaseUrlThrows() {
+        val components = listOf(component(alice, "alpha"))
+        // Real client with default (blank) base-url — no HTTP call is made.
+        val client = TeamcityClient(TeamcityProperties(), RestTemplateBuilder())
+        val repo = StubComponentRepository(components)
+        val publisher = RecordingPublisher()
+        val service = TeamcitySyncService(repo, client, publisher, fixedUser("admin"), inlineTx())
+
+        val ex = assertThrows<IllegalStateException> { service.resync() }
+        assertTrue(ex.message!!.contains("TEAMCITY_BASE_URL"), "message should mention the env var")
+    }
+
+    @Test
+    @DisplayName("blank base-url: throws even when the registry is empty (no silent scanned=0 on misconfiguration)")
+    fun blankBaseUrlThrowsOnEmptyRegistry() {
+        val client = TeamcityClient(TeamcityProperties(), RestTemplateBuilder())
+        val repo = StubComponentRepository(emptyList())
+        val publisher = RecordingPublisher()
+        val service = TeamcitySyncService(repo, client, publisher, fixedUser("admin"), inlineTx())
+
+        val ex = assertThrows<IllegalStateException> { service.resync() }
+        assertTrue(ex.message!!.contains("TEAMCITY_BASE_URL"), "message should mention the env var")
     }
 
     @Test

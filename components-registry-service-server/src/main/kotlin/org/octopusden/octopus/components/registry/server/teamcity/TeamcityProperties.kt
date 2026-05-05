@@ -7,17 +7,20 @@ import org.springframework.boot.context.properties.ConfigurationProperties
  * application*.yml (defaults below).
  *
  * Defaults are intentionally inert: with `base-url` blank and `sync.enabled`
- * false, the [TeamcityClient] does not register HTTP, the [TeamcitySyncService]
- * skips all calls, and the [TeamcitySyncScheduler] does not fire — so dev /
- * unconfigured envs boot cleanly without TC credentials. Production wires
- * through `service-config` per env.
+ * false, the [TeamcitySyncScheduler] bean is not registered — so dev /
+ * unconfigured envs boot cleanly without TC credentials. The manual admin
+ * resync endpoint will throw when `base-url` is blank, which is the intended
+ * behavior (surfaces misconfiguration). Production wires through
+ * `service-config` per env.
  */
 @ConfigurationProperties(prefix = "teamcity")
 class TeamcityProperties(
     /**
      * Base URL of the TC server, e.g. `https://teamcity.example.com`.
-     * Trailing slashes are tolerated. Blank disables the integration —
-     * [TeamcitySyncService] short-circuits and returns an empty result.
+     * Trailing slashes are tolerated. Blank is a misconfiguration —
+     * [TeamcityClient] throws [IllegalStateException] so the caller surfaces
+     * the error rather than silently returning all-NO_MATCH. Set via
+     * `TEAMCITY_BASE_URL` environment variable.
      */
     val baseUrl: String = "",
     /** TC service account username (HTTP Basic auth). */
