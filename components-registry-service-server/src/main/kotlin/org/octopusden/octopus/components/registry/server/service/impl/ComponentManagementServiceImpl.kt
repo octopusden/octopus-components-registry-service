@@ -217,8 +217,11 @@ class ComponentManagementServiceImpl(
         request.teamcityProjectId?.let {
             if (!fieldConfigService.isHidden("component.teamcityProjectId")) entity.teamcityProjectId = it
         }
-        request.teamcityProjectUrl?.let {
-            if (!fieldConfigService.isHidden("component.teamcityProjectUrl")) entity.teamcityProjectUrl = it
+        request.teamcityProjectUrl?.let { url ->
+            require(url.isBlank() || url.startsWith("http://") || url.startsWith("https://")) {
+                "teamcityProjectUrl must be an http/https URL or blank"
+            }
+            if (!fieldConfigService.isHidden("component.teamcityProjectUrl")) entity.teamcityProjectUrl = url
         }
         request.solution?.let {
             if (!fieldConfigService.isHidden("component.solution")) entity.solution = it

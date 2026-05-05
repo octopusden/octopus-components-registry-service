@@ -108,12 +108,16 @@ class TeamcitySyncService(
                     }
                     else -> {
                         val match = candidates.single()
-                        if (match.webUrl.isBlank()) {
-                            // webUrl missing/blank → cannot render the link.
-                            // Treat as no-match: leave nulls, count it.
+                        val isUsableUrl =
+                            match.webUrl.isNotBlank() &&
+                                (match.webUrl.startsWith("http://") || match.webUrl.startsWith("https://"))
+                        if (!isUsableUrl) {
+                            // webUrl missing, blank, or non-http → cannot render
+                            // a safe link. Treat as no-match: leave nulls, count it.
                             log.warn {
                                 "TC sync: component '${component.name}' (id=$componentId) " +
-                                    "matched TC project '${match.id}' but webUrl is blank; " +
+                                    "matched TC project '${match.id}' but webUrl " +
+                                    "'${match.webUrl}' is blank or not http/https; " +
                                     "treating as no-match."
                             }
                             skippedNoMatch++
