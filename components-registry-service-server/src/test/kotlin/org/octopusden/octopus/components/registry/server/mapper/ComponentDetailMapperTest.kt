@@ -28,6 +28,19 @@ class ComponentDetailMapperTest {
         )
 
     @Test
+    @DisplayName("default entity → teamcityProjectId is null")
+    fun default_teamcityProjectId_isNull() {
+        assertNull(baseComponent().toDetailResponse().teamcityProjectId)
+    }
+
+    @Test
+    @DisplayName("populated teamcityProjectId propagates to detail response")
+    fun teamcityProjectId_propagates() {
+        val component = baseComponent().also { it.teamcityProjectId = "MyProject_Alpha" }
+        assertEquals("MyProject_Alpha", component.toDetailResponse().teamcityProjectId)
+    }
+
+    @Test
     @DisplayName("default entity → all six SYS-039 fields are absent / empty")
     fun defaults_allAbsent() {
         val response = baseComponent().toDetailResponse()

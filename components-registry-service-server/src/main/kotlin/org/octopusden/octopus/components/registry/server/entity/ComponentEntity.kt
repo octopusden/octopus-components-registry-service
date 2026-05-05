@@ -37,6 +37,8 @@ class ComponentEntity(
     var system: Array<String> = emptyArray(),
     @Column(name = "client_code")
     var clientCode: String? = null,
+    @Column(name = "teamcity_project_id", length = 255)
+    var teamcityProjectId: String? = null,
     var archived: Boolean = false,
     var solution: Boolean? = null,
     // SYS-039: §7.0 Wave 2 PR-G fields. All nullable / empty-default so

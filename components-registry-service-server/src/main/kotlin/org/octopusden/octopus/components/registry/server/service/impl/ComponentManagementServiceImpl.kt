@@ -163,6 +163,7 @@ class ComponentManagementServiceImpl(
                 "productType" to entity.productType,
                 "system" to entity.system.toList(),
                 "clientCode" to entity.clientCode,
+                "teamcityProjectId" to entity.teamcityProjectId,
                 "solution" to entity.solution,
                 "parentComponentName" to entity.parentComponent?.name,
                 "archived" to entity.archived,
@@ -211,6 +212,9 @@ class ComponentManagementServiceImpl(
         }
         request.clientCode?.let {
             if (!fieldConfigService.isHidden("component.clientCode")) entity.clientCode = it
+        }
+        request.teamcityProjectId?.let {
+            if (!fieldConfigService.isHidden("component.teamcityProjectId")) entity.teamcityProjectId = it
         }
         request.solution?.let {
             if (!fieldConfigService.isHidden("component.solution")) entity.solution = it
@@ -357,6 +361,7 @@ class ComponentManagementServiceImpl(
                 "productType" to saved.productType,
                 "system" to saved.system.toList(),
                 "clientCode" to saved.clientCode,
+                "teamcityProjectId" to saved.teamcityProjectId,
                 "solution" to saved.solution,
                 "parentComponentName" to saved.parentComponent?.name,
                 "archived" to saved.archived,
