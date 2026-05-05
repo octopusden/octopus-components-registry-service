@@ -1,0 +1,41 @@
+# PUBLIC — every PR triggers this workflow and the gate/merge check must be green to merge.
+name: Merge Gate
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-build.yml@v2.3.4
+    with:
+      java-version: '21'
+      flow-type: hybrid
+      docker-image: components-registry-service
+    secrets: inherit
+
+  quality:
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-quality-gates.yml@v2.3.4
+    with:
+      java-version: '21'
+    secrets: inherit
+
+  security:
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-security-reports.yml@v2.3.4
+    with:
+      java-version: '21'
+      enable-codeql: true
+      enable-trivy: true
+      enable-dependency-check: false
+    secrets: inherit
+
+  gate-merge:
+    name: gate/merge
+    needs: [ build, quality, security ]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: octopusden/octopus-base/.github/actions/merge-gate@v2.3.4
+        with:
+          needs: ${{ toJson(needs) }}
