@@ -15,6 +15,7 @@ CREATE TABLE components (
     product_type VARCHAR(50),
     system text[] NOT NULL DEFAULT '{}',
     client_code VARCHAR(255),
+    teamcity_project_id VARCHAR(255),
     archived BOOLEAN NOT NULL DEFAULT false,
     solution BOOLEAN,
     parent_component_id UUID REFERENCES components(id),

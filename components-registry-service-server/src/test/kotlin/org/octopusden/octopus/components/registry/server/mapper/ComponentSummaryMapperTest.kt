@@ -32,6 +32,19 @@ class ComponentSummaryMapperTest {
         )
 
     @Test
+    @DisplayName("default entity → teamcityProjectId is null")
+    fun default_teamcityProjectId_isNull() {
+        assertNull(baseComponent().toSummaryResponse().teamcityProjectId)
+    }
+
+    @Test
+    @DisplayName("populated teamcityProjectId propagates to summary response")
+    fun teamcityProjectId_propagates() {
+        val component = baseComponent().also { it.teamcityProjectId = "MyProject_Alpha" }
+        assertEquals("MyProject_Alpha", component.toSummaryResponse().teamcityProjectId)
+    }
+
+    @Test
     @DisplayName("empty nested collections → all three SYS-040 fields null, labels empty")
     fun emptyNested_allNull() {
         val response = baseComponent().toSummaryResponse()

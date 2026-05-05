@@ -24,4 +24,5 @@ data class ComponentSummaryResponse(
     val buildSystem: String? = null,
     val jiraProjectKey: String? = null,
     val vcsPath: String? = null,
+    val teamcityProjectId: String? = null,
 )
