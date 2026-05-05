@@ -164,6 +164,7 @@ class ComponentManagementServiceImpl(
                 "system" to entity.system.toList(),
                 "clientCode" to entity.clientCode,
                 "teamcityProjectId" to entity.teamcityProjectId,
+                "teamcityProjectUrl" to entity.teamcityProjectUrl,
                 "solution" to entity.solution,
                 "parentComponentName" to entity.parentComponent?.name,
                 "archived" to entity.archived,
@@ -215,6 +216,12 @@ class ComponentManagementServiceImpl(
         }
         request.teamcityProjectId?.let {
             if (!fieldConfigService.isHidden("component.teamcityProjectId")) entity.teamcityProjectId = it
+        }
+        request.teamcityProjectUrl?.let { url ->
+            require(url.isBlank() || url.startsWith("http://") || url.startsWith("https://")) {
+                "teamcityProjectUrl must be an http/https URL or blank"
+            }
+            if (!fieldConfigService.isHidden("component.teamcityProjectUrl")) entity.teamcityProjectUrl = url
         }
         request.solution?.let {
             if (!fieldConfigService.isHidden("component.solution")) entity.solution = it
@@ -362,6 +369,7 @@ class ComponentManagementServiceImpl(
                 "system" to saved.system.toList(),
                 "clientCode" to saved.clientCode,
                 "teamcityProjectId" to saved.teamcityProjectId,
+                "teamcityProjectUrl" to saved.teamcityProjectUrl,
                 "solution" to saved.solution,
                 "parentComponentName" to saved.parentComponent?.name,
                 "archived" to saved.archived,

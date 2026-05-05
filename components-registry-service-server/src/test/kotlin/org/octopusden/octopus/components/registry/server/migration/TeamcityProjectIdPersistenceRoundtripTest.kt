@@ -96,6 +96,29 @@ class TeamcityProjectIdPersistenceRoundtripTest {
     }
 
     @Test
+    @DisplayName("teamcityProjectUrl round-trips via PATCH + GET")
+    fun teamcityProjectUrl_roundtrip() {
+        val summary = firstComponent()
+        val id = summary["id"].asText()
+        val version = getComponent(id)["version"].asLong()
+        val url = "https://teamcity.example.com/project/ProjectAlpha"
+
+        mvc
+            .perform(
+                patch("/rest/api/4/components/$id")
+                    .with(editorJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        objectMapper.writeValueAsBytes(
+                            mapOf("version" to version, "teamcityProjectUrl" to url),
+                        ),
+                    ),
+            ).andExpect(status().is2xxSuccessful)
+
+        assertEquals(url, getComponent(id)["teamcityProjectUrl"].asText())
+    }
+
+    @Test
     @DisplayName("teamcityProjectId: null in PATCH body does not clear an existing value (absent-vs-null limitation)")
     fun teamcityProjectId_nullDoesNotClear() {
         // The PATCH handler uses `?.let { }` semantics: a JSON null in the

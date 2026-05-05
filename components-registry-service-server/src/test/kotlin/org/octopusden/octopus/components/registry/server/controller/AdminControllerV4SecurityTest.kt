@@ -17,6 +17,7 @@ import org.octopusden.octopus.components.registry.server.service.MigrationPhase
 import org.octopusden.octopus.components.registry.server.service.StartMigrationResult
 import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.octopusden.octopus.components.registry.server.support.editorJwt
+import org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
@@ -66,6 +67,16 @@ class AdminControllerV4SecurityTest {
     @MockBean
     @Suppress("UnusedPrivateProperty")
     private lateinit var historyMigrationJobService: HistoryMigrationJobService
+
+    /**
+     * Mocked so the new /teamcity-project-ids/resync endpoint's collaborator
+     * is satisfied without standing up the real TC client. Same rationale as
+     * the migration-job mocks above: keep this test purely about the security
+     * gates on AdminControllerV4.
+     */
+    @MockBean
+    @Suppress("UnusedPrivateProperty")
+    private lateinit var teamcitySyncService: TeamcitySyncService
 
     @Autowired
     private lateinit var mvc: MockMvc
