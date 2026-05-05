@@ -7,7 +7,8 @@ import org.octopusden.octopus.components.registry.server.repository.ComponentRep
 import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
-import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionTemplate
+import java.util.UUID
 
 /**
  * The TeamCity sync engine.
@@ -39,37 +40,52 @@ class TeamcitySyncService(
     private val teamcityClient: TeamcityClient,
     private val applicationEventPublisher: ApplicationEventPublisher,
     private val currentUserResolver: CurrentUserResolver,
+    private val transactionTemplate: TransactionTemplate,
 ) {
     private val log = KotlinLogging.logger {}
 
     /**
      * Run one resync pass.
      *
-     * Wrapped in a single @Transactional so the bulk update is atomic:
-     * either all changes commit, or none do (e.g. on a JPA failure mid-batch).
-     * The audit-log events are published BEFORE_COMMIT so they share the same
-     * tx and won't strand without their corresponding row write.
+     * The TC HTTP call deliberately runs OUTSIDE any database transaction so
+     * a slow/stalled TC server cannot hold a JDBC connection or extend a
+     * transaction's lifetime. Per-component writes happen inside a single
+     * [TransactionTemplate.execute] block so the bulk write is still atomic
+     * (either all changes commit, or none do on JPA failure), and the audit
+     * events published BEFORE_COMMIT remain in the same tx as their row writes.
      */
-    @Transactional
-    @Suppress("TooGenericExceptionCaught")
     fun resync(): TeamcitySyncResult {
         val components = componentRepository.findByArchivedFalse()
         val scanned = components.size
         log.info { "TC sync starting: scanned=$scanned non-archived components" }
 
         val componentIds = components.mapNotNull { it.id }
+        // HTTP call to TC happens here, deliberately OUTSIDE any DB tx.
         val matches = teamcityClient.findProjectsByComponentParameter(componentIds)
-
-        var updated = 0
-        var unchanged = 0
-        var skippedNoMatch = 0
-        var skippedAmbiguous = 0
-        val errors = mutableListOf<String>()
 
         // CurrentUserResolver returns "system" when there is no auth context
         // (the scheduled cron path), or the JWT's preferred_username when an
         // admin invokes the resync endpoint. Either way it never returns null.
         val changedBy = currentUserResolver.currentUsername()
+
+        // execute() returns the callback's value; applyMatches never returns
+        // null, so the !! cannot trip in practice — Kotlin just sees the API's
+        // declared T? signature.
+        return transactionTemplate.execute { _ -> applyMatches(components, matches, changedBy) }!!
+    }
+
+    @Suppress("TooGenericExceptionCaught")
+    private fun applyMatches(
+        components: List<ComponentEntity>,
+        matches: Map<UUID, List<TeamcityProject>>,
+        changedBy: String,
+    ): TeamcitySyncResult {
+        val scanned = components.size
+        var updated = 0
+        var unchanged = 0
+        var skippedNoMatch = 0
+        var skippedAmbiguous = 0
+        val errors = mutableListOf<String>()
 
         for (component in components) {
             val componentId = component.id ?: continue

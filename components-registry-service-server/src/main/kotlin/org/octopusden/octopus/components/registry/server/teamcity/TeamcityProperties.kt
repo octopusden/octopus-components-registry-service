@@ -24,6 +24,17 @@ class TeamcityProperties(
     val username: String = "",
     /** TC service account password (HTTP Basic auth). */
     val password: String = "",
+    /**
+     * TCP connect timeout for the TC HTTP client, in seconds. Bounded so a
+     * stalled TC host does not hang resync indefinitely.
+     */
+    val connectTimeoutSeconds: Long = 10,
+    /**
+     * Per-request read timeout for the TC HTTP client, in seconds. Default
+     * leaves headroom for a full bulk-projects response on a busy TC server
+     * but is finite so resync cannot block forever on a slow read.
+     */
+    val readTimeoutSeconds: Long = 120,
     val sync: SyncProperties = SyncProperties(),
 ) {
     data class SyncProperties(

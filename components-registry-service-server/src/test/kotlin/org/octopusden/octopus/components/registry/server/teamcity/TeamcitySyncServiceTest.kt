@@ -19,6 +19,9 @@ import org.springframework.data.domain.Pageable
 import org.springframework.data.domain.Sort
 import org.springframework.data.jpa.domain.Specification
 import org.springframework.data.repository.query.FluentQuery
+import org.springframework.transaction.support.SimpleTransactionStatus
+import org.springframework.transaction.support.TransactionCallback
+import org.springframework.transaction.support.TransactionTemplate
 import java.util.Optional
 import java.util.UUID
 import java.util.function.Function
@@ -67,7 +70,7 @@ class TeamcitySyncServiceTest {
             )
         val repo = StubComponentRepository(components)
         val publisher = RecordingPublisher()
-        val service = TeamcitySyncService(repo, client, publisher, fixedUser("admin"))
+        val service = TeamcitySyncService(repo, client, publisher, fixedUser("admin"), inlineTx())
 
         val result = service.resync()
 
@@ -123,7 +126,7 @@ class TeamcitySyncServiceTest {
             )
         val repo = StubComponentRepository(components)
         val publisher = RecordingPublisher()
-        val service = TeamcitySyncService(repo, client, publisher, fixedUser("admin"))
+        val service = TeamcitySyncService(repo, client, publisher, fixedUser("admin"), inlineTx())
 
         val result = service.resync()
 
@@ -150,7 +153,7 @@ class TeamcitySyncServiceTest {
             )
         val repo = StubComponentRepository(components)
         val publisher = RecordingPublisher()
-        val service = TeamcitySyncService(repo, client, publisher, fixedUser("admin"))
+        val service = TeamcitySyncService(repo, client, publisher, fixedUser("admin"), inlineTx())
 
         val result = service.resync()
 
@@ -170,7 +173,7 @@ class TeamcitySyncServiceTest {
         val client = StubTeamcityClient(emptyMap())
         val repo = StubComponentRepository(components)
         val publisher = RecordingPublisher()
-        val service = TeamcitySyncService(repo, client, publisher, fixedUser("admin"))
+        val service = TeamcitySyncService(repo, client, publisher, fixedUser("admin"), inlineTx())
 
         val result = service.resync()
 
@@ -196,7 +199,7 @@ class TeamcitySyncServiceTest {
             )
         val repo = StubComponentRepository(components)
         val publisher = RecordingPublisher()
-        val service = TeamcitySyncService(repo, client, publisher, fixedUser("admin"))
+        val service = TeamcitySyncService(repo, client, publisher, fixedUser("admin"), inlineTx())
 
         val result = service.resync()
 
@@ -212,7 +215,7 @@ class TeamcitySyncServiceTest {
         val client = ThrowingTeamcityClient(RuntimeException("TC unavailable"))
         val repo = StubComponentRepository(components)
         val publisher = RecordingPublisher()
-        val service = TeamcitySyncService(repo, client, publisher, fixedUser("admin"))
+        val service = TeamcitySyncService(repo, client, publisher, fixedUser("admin"), inlineTx())
 
         val ex = assertThrows<RuntimeException> { service.resync() }
         assertEquals("TC unavailable", ex.message)
@@ -260,7 +263,7 @@ class TeamcitySyncServiceTest {
             )
         val repo = StubComponentRepository(components)
         val publisher = RecordingPublisher()
-        val service = TeamcitySyncService(repo, client, publisher, fixedUser("alice"))
+        val service = TeamcitySyncService(repo, client, publisher, fixedUser("alice"), inlineTx())
 
         val result = service.resync()
 
@@ -278,6 +281,16 @@ class TeamcitySyncServiceTest {
     private fun fixedUser(name: String): CurrentUserResolver =
         object : CurrentUserResolver() {
             override fun currentUsername(): String = name
+        }
+
+    /**
+     * No-op [TransactionTemplate] that runs the callback inline. The repo
+     * stubs don't simulate JPA transaction semantics, so wrapping calls in
+     * a real [PlatformTransactionManager] would only add ceremony.
+     */
+    private fun inlineTx(): TransactionTemplate =
+        object : TransactionTemplate() {
+            override fun <T> execute(action: TransactionCallback<T>): T? = action.doInTransaction(SimpleTransactionStatus())
         }
 
     private class RecordingPublisher : ApplicationEventPublisher {

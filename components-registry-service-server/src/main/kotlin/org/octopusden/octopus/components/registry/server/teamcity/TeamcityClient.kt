@@ -10,6 +10,7 @@ import org.springframework.http.HttpMethod
 import org.springframework.http.MediaType
 import org.springframework.stereotype.Component
 import org.springframework.web.client.RestTemplate
+import java.time.Duration
 import java.util.UUID
 
 /**
@@ -60,8 +61,15 @@ class TeamcityClient(
      * Pre-built RestTemplate. Basic-auth headers are injected per request
      * (not via builder.basicAuthentication) so we can probe the disabled-state
      * (blank base URL) without any auth header configuration churn.
+     *
+     * Connect/read timeouts are bounded — a stalled TC host must not block
+     * the synchronous resync (or its caller's HTTP request) indefinitely.
      */
-    private val restTemplate: RestTemplate = restTemplateBuilder.build()
+    private val restTemplate: RestTemplate =
+        restTemplateBuilder
+            .setConnectTimeout(Duration.ofSeconds(properties.connectTimeoutSeconds))
+            .setReadTimeout(Duration.ofSeconds(properties.readTimeoutSeconds))
+            .build()
 
     /**
      * Returns a UUID → TC project map for components whose TC project carries
