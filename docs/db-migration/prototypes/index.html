@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Components Registry</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="theme.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--fg); transition: background .2s, color .2s; }
+        .badge { display: inline-flex; align-items: center; border-radius: 9999px; padding: 2px 10px; font-size: 12px; font-weight: 500; }
+        .badge-outline { border: 1px solid var(--badge-outline-border); color: var(--badge-outline-fg); }
+        .badge-green { background: var(--badge-green-bg); color: var(--badge-green-fg); }
+        .badge-yellow { background: var(--badge-yellow-bg); color: var(--badge-yellow-fg); }
+        .badge-blue { background: var(--badge-blue-bg); color: var(--badge-blue-fg); }
+        .badge-red { background: var(--badge-red-bg); color: var(--badge-red-fg); }
+        header { border-bottom: 1px solid var(--border); }
+        .nav-active { background: var(--accent); color: var(--accent-fg); }
+        .nav-inactive { color: var(--muted-fg); }
+        .nav-inactive:hover { color: var(--fg); background: var(--accent); opacity: .6; }
+        .text-muted { color: var(--muted-fg); }
+        .text-link { color: var(--link); }
+        .text-link:hover { text-decoration: underline; }
+        .btn-primary { background: var(--primary); color: var(--primary-fg); }
+        .btn-primary:hover { opacity: .9; }
+        .input-field { height: 36px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--input); background: transparent; font-size: 14px; color: var(--fg); }
+        .input-field:focus { outline: none; box-shadow: 0 0 0 1px var(--ring); }
+        .table-border { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+        .table-header { background: var(--muted); border-bottom: 1px solid var(--border); }
+        .table-header th { color: var(--muted-fg); }
+        tbody tr { border-bottom: 1px solid var(--border); }
+        tbody tr:last-child { border-bottom: none; }
+        tbody tr:hover td { background: var(--row-hover); }
+        .page-btn { height: 32px; width: 32px; border-radius: 6px; border: 1px solid var(--input); color: var(--muted-fg); display: flex; align-items: center; justify-content: center; }
+        .page-btn:hover { background: var(--accent); }
+        .page-btn-active { background: var(--primary); color: var(--primary-fg); border-color: var(--primary); }
+        .theme-btn { width: 32px; height: 32px; border-radius: 6px; border: 1px solid var(--input); display: flex; align-items: center; justify-content: center; color: var(--muted-fg); cursor: pointer; background: transparent; }
+        .theme-btn:hover { background: var(--accent); color: var(--fg); }
+    </style>
+</head>
+<body class="min-h-screen">
+    <!-- Header -->
+    <header>
+        <div class="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
+            <div class="flex items-center gap-6">
+                <h1 class="text-base font-semibold tracking-tight">Components Registry</h1>
+                <nav class="flex items-center gap-1 text-sm">
+                    <a href="index.html" class="px-3 py-1.5 rounded-md nav-active font-medium">Components</a>
+                    <a href="audit-log.html" class="px-3 py-1.5 rounded-md nav-inactive transition-colors">Audit Log</a>
+                    <a href="admin-settings.html" class="px-3 py-1.5 rounded-md nav-inactive transition-colors">Settings</a>
+                </nav>
+            </div>
+            <div class="flex items-center gap-3">
+                <button class="theme-btn" onclick="toggleTheme()" title="Toggle theme">
+                    <svg class="theme-icon-sun w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                    <svg class="theme-icon-moon w-4 h-4" style="display:none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+                </button>
+                <div style="width:1px;height:16px;background:var(--border)"></div>
+                <div class="flex items-center gap-2">
+                    <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium" style="background:var(--accent);color:var(--accent-fg)">PG</div>
+                    <span class="text-sm text-muted">p.gorbachev</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-6 py-6">
+        <!-- Page Header -->
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <h2 class="text-2xl font-semibold tracking-tight">Components</h2>
+                <p class="text-sm text-muted mt-1">Manage component configurations, build settings, and version ranges.</p>
+            </div>
+            <a href="create-component.html" class="inline-flex items-center justify-center rounded-md btn-primary px-4 py-2 text-sm font-medium transition-opacity no-underline">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                New Component
+            </a>
+        </div>
+
+        <!-- Filters Bar -->
+        <div class="flex items-center gap-3 mb-4">
+            <div class="relative flex-1 max-w-sm">
+                <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                <input type="text" placeholder="Search by name or display name..." class="w-full input-field pl-9 pr-3">
+            </div>
+            <select class="input-field text-sm text-muted" style="width:auto">
+                <option value="">All Build Systems</option>
+                <option>GRADLE</option>
+                <option>MAVEN</option>
+                <option>PROVIDED</option>
+                <option>BS2_0</option>
+            </select>
+            <select class="input-field text-sm text-muted" style="width:auto">
+                <option value="">All Owners</option>
+                <option>j.smith</option>
+                <option>a.petrov</option>
+                <option>m.ivanova</option>
+                <option>d.kuznetsov</option>
+            </select>
+            <label class="flex items-center gap-2 text-sm cursor-pointer" style="color:var(--link)">
+                <input type="checkbox" class="rounded">
+                My Components
+            </label>
+            <label class="flex items-center gap-2 text-sm text-muted cursor-pointer">
+                <input type="checkbox" class="rounded">
+                Show archived
+            </label>
+            <div class="ml-auto text-sm text-muted">
+                Showing <span style="color:var(--fg)" class="font-medium">247</span> components
+            </div>
+        </div>
+
+        <!-- Table -->
+        <div class="table-border">
+            <table class="w-full">
+                <thead>
+                    <tr class="table-header">
+                        <th class="h-10 px-4 text-left text-xs font-medium uppercase tracking-wider">Name</th>
+                        <th class="h-10 px-4 text-left text-xs font-medium uppercase tracking-wider">Owner</th>
+                        <th class="h-10 px-4 text-left text-xs font-medium uppercase tracking-wider">Build System</th>
+                        <th class="h-10 px-4 text-left text-xs font-medium uppercase tracking-wider">Labels</th>
+                        <th class="h-10 px-4 text-left text-xs font-medium uppercase tracking-wider">Versions</th>
+                        <th class="h-10 px-4 text-left text-xs font-medium uppercase tracking-wider">Updated</th>
+                        <th class="h-10 px-4 text-left text-xs font-medium uppercase tracking-wider">Links</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="cursor-pointer" onclick="location.href='component-detail.html'">
+                        <td class="h-12 px-4">
+                            <div>
+                                <a href="component-detail.html" class="text-sm font-medium text-link">ee-component</a>
+                                <div class="text-xs"><a href="#" class="text-muted hover:underline" title="Open in Jira: EE">EE Component</a></div>
+                            </div>
+                        </td>
+                        <td class="h-12 px-4 text-sm text-muted">j.smith</td>
+                        <td class="h-12 px-4"><span class="badge badge-green">GRADLE</span></td>
+                        <td class="h-12 px-4">
+                            <span class="badge badge-outline mr-1">critical</span>
+                            <span class="badge badge-outline">platform</span>
+                        </td>
+                        <td class="h-12 px-4 text-sm text-muted">3</td>
+                        <td class="h-12 px-4 text-sm text-muted">2 hours ago</td>
+                        <td class="h-12 px-4">
+                            <div class="flex items-center gap-2">
+                                <a href="#" class="text-muted hover:opacity-80" title="Jira: EE"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="#2684FF"><path d="M11.571 11.513H0a5.218 5.218 0 005.232 5.215h2.13v2.057A5.215 5.215 0 0012.575 24V12.518a1.005 1.005 0 00-1.005-1.005zm5.723-5.756H5.736a5.215 5.215 0 005.215 5.214h2.129v2.058a5.218 5.218 0 005.215 5.214V6.758a1.001 1.001 0 00-1.001-1.001zM23.013 0H11.455a5.215 5.215 0 005.215 5.215h2.129v2.057A5.215 5.215 0 0024 12.483V1.005A1.001 1.001 0 0023.013 0z"/></svg></a>
+                                <a href="#" class="text-muted hover:opacity-80" title="Git: ee-component"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="#2684FF"><path d="M.778 1.213a.768.768 0 00-.768.892l3.263 19.81c.084.5.515.868 1.022.873H19.95a.772.772 0 00.77-.646l3.27-20.03a.768.768 0 00-.768-.891z"/><path d="M14.52 15.53H9.522L8.17 8.466h7.561z"/></svg></a>
+                                <a href="#" class="text-muted hover:opacity-80" title="TeamCity"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="#07C3F2"><path d="M0 0v24h24V0zm2.664 2.964h7.48v1.832H7.396v7.196H5.412V4.796H2.664zm9.328 18H2.992v-1.5h8.999zm5.564-9.218a4.62 4.62 0 01-2.036.374 4.556 4.556 0 01-4.628-4.616v-.024a4.584 4.584 0 014.708-4.668 4.656 4.656 0 013.56 1.388l-1.264 1.456a3.336 3.336 0 00-2.312-1.02 2.671 2.671 0 00-2.616 2.8v.028a2.68 2.68 0 002.616 2.836 3.226 3.226 0 002.376-1.056l1.264 1.276a4.619 4.619 0 01-1.668 1.226z"/></svg></a>
+                                <a href="#" class="text-muted hover:opacity-80" title="DMS: explicit external"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg></a>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr class="cursor-pointer">
+                        <td class="h-12 px-4">
+                            <div>
+                                <span class="text-sm font-medium text-link">octopus-dms-service</span>
+                                <div class="text-xs"><a href="#" class="text-muted hover:underline" title="Open in Jira: DMS">DMS Service</a></div>
+                            </div>
+                        </td>
+                        <td class="h-12 px-4 text-sm text-muted">a.petrov</td>
+                        <td class="h-12 px-4"><span class="badge badge-green">GRADLE</span></td>
+                        <td class="h-12 px-4"><span class="badge badge-outline">platform</span></td>
+                        <td class="h-12 px-4 text-sm text-muted">5</td>
+                        <td class="h-12 px-4 text-sm text-muted">5 hours ago</td>
+                        <td class="h-12 px-4"><div class="flex items-center gap-2"><a href="#" class="text-muted hover:opacity-80" title="Jira"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="#2684FF"><path d="M11.571 11.513H0a5.218 5.218 0 005.232 5.215h2.13v2.057A5.215 5.215 0 0012.575 24V12.518a1.005 1.005 0 00-1.005-1.005zm5.723-5.756H5.736a5.215 5.215 0 005.215 5.214h2.129v2.058a5.218 5.218 0 005.215 5.214V6.758a1.001 1.001 0 00-1.001-1.001zM23.013 0H11.455a5.215 5.215 0 005.215 5.215h2.129v2.057A5.215 5.215 0 0024 12.483V1.005A1.001 1.001 0 0023.013 0z"/></svg></a><a href="#" class="text-muted hover:opacity-80" title="Git"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="#2684FF"><path d="M.778 1.213a.768.768 0 00-.768.892l3.263 19.81c.084.5.515.868 1.022.873H19.95a.772.772 0 00.77-.646l3.27-20.03a.768.768 0 00-.768-.891z"/><path d="M14.52 15.53H9.522L8.17 8.466h7.561z"/></svg></a><a href="#" class="text-muted hover:opacity-80" title="TeamCity"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="#07C3F2"><path d="M0 0v24h24V0zm2.664 2.964h7.48v1.832H7.396v7.196H5.412V4.796H2.664zm9.328 18H2.992v-1.5h8.999zm5.564-9.218a4.62 4.62 0 01-2.036.374 4.556 4.556 0 01-4.628-4.616v-.024a4.584 4.584 0 014.708-4.668 4.656 4.656 0 013.56 1.388l-1.264 1.456a3.336 3.336 0 00-2.312-1.02 2.671 2.671 0 00-2.616 2.8v.028a2.68 2.68 0 002.616 2.836 3.226 3.226 0 002.376-1.056l1.264 1.276a4.619 4.619 0 01-1.668 1.226z"/></svg></a><a href="#" class="text-muted hover:opacity-80" title="DMS"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg></a></div></td>
+                    </tr>
+                    <tr class="cursor-pointer">
+                        <td class="h-12 px-4">
+                            <div>
+                                <span class="text-sm font-medium text-link">octopus-jira-utils</span>
+                                <div class="text-xs"><a href="#" class="text-muted hover:underline" title="Open in Jira: JIRAUTILS">Jira Utilities</a></div>
+                            </div>
+                        </td>
+                        <td class="h-12 px-4 text-sm text-muted">m.ivanova</td>
+                        <td class="h-12 px-4"><span class="badge badge-blue">MAVEN</span></td>
+                        <td class="h-12 px-4 text-sm text-muted">-</td>
+                        <td class="h-12 px-4 text-sm text-muted">2</td>
+                        <td class="h-12 px-4 text-sm text-muted">1 day ago</td>
+                        <td class="h-12 px-4"><div class="flex items-center gap-2"><a href="#" class="text-muted hover:opacity-80" title="Jira"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="#2684FF"><path d="M11.571 11.513H0a5.218 5.218 0 005.232 5.215h2.13v2.057A5.215 5.215 0 0012.575 24V12.518a1.005 1.005 0 00-1.005-1.005zm5.723-5.756H5.736a5.215 5.215 0 005.215 5.214h2.129v2.058a5.218 5.218 0 005.215 5.214V6.758a1.001 1.001 0 00-1.001-1.001zM23.013 0H11.455a5.215 5.215 0 005.215 5.215h2.129v2.057A5.215 5.215 0 0024 12.483V1.005A1.001 1.001 0 0023.013 0z"/></svg></a><a href="#" class="text-muted hover:opacity-80" title="Git"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="#2684FF"><path d="M.778 1.213a.768.768 0 00-.768.892l3.263 19.81c.084.5.515.868 1.022.873H19.95a.772.772 0 00.77-.646l3.27-20.03a.768.768 0 00-.768-.891z"/><path d="M14.52 15.53H9.522L8.17 8.466h7.561z"/></svg></a><a href="#" class="text-muted hover:opacity-80" title="TeamCity"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="#07C3F2"><path d="M0 0v24h24V0zm2.664 2.964h7.48v1.832H7.396v7.196H5.412V4.796H2.664zm9.328 18H2.992v-1.5h8.999zm5.564-9.218a4.62 4.62 0 01-2.036.374 4.556 4.556 0 01-4.628-4.616v-.024a4.584 4.584 0 014.708-4.668 4.656 4.656 0 013.56 1.388l-1.264 1.456a3.336 3.336 0 00-2.312-1.02 2.671 2.671 0 00-2.616 2.8v.028a2.68 2.68 0 002.616 2.836 3.226 3.226 0 002.376-1.056l1.264 1.276a4.619 4.619 0 01-1.668 1.226z"/></svg></a></div></td>
+                    </tr>
+                    <tr class="cursor-pointer">
+                        <td class="h-12 px-4">
+                            <div>
+                                <span class="text-sm font-medium text-link">build-integration-gradle-plugin</span>
+                                <div class="text-xs"><a href="#" class="text-muted hover:underline" title="Open in Jira: BIGRADLE">Build Integration Plugin</a></div>
+                            </div>
+                        </td>
+                        <td class="h-12 px-4 text-sm text-muted">d.kuznetsov</td>
+                        <td class="h-12 px-4"><span class="badge badge-green">GRADLE</span></td>
+                        <td class="h-12 px-4"><span class="badge badge-outline">java-21</span></td>
+                        <td class="h-12 px-4 text-sm text-muted">7</td>
+                        <td class="h-12 px-4 text-sm text-muted">2 days ago</td>
+                        <td class="h-12 px-4"><div class="flex items-center gap-2"><a href="#" class="text-muted hover:opacity-80" title="Jira"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="#2684FF"><path d="M11.571 11.513H0a5.218 5.218 0 005.232 5.215h2.13v2.057A5.215 5.215 0 0012.575 24V12.518a1.005 1.005 0 00-1.005-1.005zm5.723-5.756H5.736a5.215 5.215 0 005.215 5.214h2.129v2.058a5.218 5.218 0 005.215 5.214V6.758a1.001 1.001 0 00-1.001-1.001zM23.013 0H11.455a5.215 5.215 0 005.215 5.215h2.129v2.057A5.215 5.215 0 0024 12.483V1.005A1.001 1.001 0 0023.013 0z"/></svg></a><a href="#" class="text-muted hover:opacity-80" title="Git"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="#2684FF"><path d="M.778 1.213a.768.768 0 00-.768.892l3.263 19.81c.084.5.515.868 1.022.873H19.95a.772.772 0 00.77-.646l3.27-20.03a.768.768 0 00-.768-.891z"/><path d="M14.52 15.53H9.522L8.17 8.466h7.561z"/></svg></a><a href="#" class="text-muted hover:opacity-80" title="TeamCity"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="#07C3F2"><path d="M0 0v24h24V0zm2.664 2.964h7.48v1.832H7.396v7.196H5.412V4.796H2.664zm9.328 18H2.992v-1.5h8.999zm5.564-9.218a4.62 4.62 0 01-2.036.374 4.556 4.556 0 01-4.628-4.616v-.024a4.584 4.584 0 014.708-4.668 4.656 4.656 0 013.56 1.388l-1.264 1.456a3.336 3.336 0 00-2.312-1.02 2.671 2.671 0 00-2.616 2.8v.028a2.68 2.68 0 002.616 2.836 3.226 3.226 0 002.376-1.056l1.264 1.276a4.619 4.619 0 01-1.668 1.226z"/></svg></a><a href="#" class="text-muted hover:opacity-80" title="DMS"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg></a></div></td>
+                    </tr>
+                    <tr class="cursor-pointer">
+                        <td class="h-12 px-4">
+                            <div>
+                                <span class="text-sm font-medium text-link">release-management-plugin</span>
+                                <div class="text-xs"><a href="#" class="text-muted hover:underline" title="Open in Jira: RELENG">Release Management</a></div>
+                            </div>
+                        </td>
+                        <td class="h-12 px-4 text-sm text-muted">j.smith</td>
+                        <td class="h-12 px-4"><span class="badge badge-green">GRADLE</span></td>
+                        <td class="h-12 px-4 text-sm text-muted">-</td>
+                        <td class="h-12 px-4 text-sm text-muted">4</td>
+                        <td class="h-12 px-4 text-sm text-muted">3 days ago</td>
+                        <td class="h-12 px-4"><div class="flex items-center gap-2"><a href="#" class="text-muted hover:opacity-80" title="Jira"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="#2684FF"><path d="M11.571 11.513H0a5.218 5.218 0 005.232 5.215h2.13v2.057A5.215 5.215 0 0012.575 24V12.518a1.005 1.005 0 00-1.005-1.005zm5.723-5.756H5.736a5.215 5.215 0 005.215 5.214h2.129v2.058a5.218 5.218 0 005.215 5.214V6.758a1.001 1.001 0 00-1.001-1.001zM23.013 0H11.455a5.215 5.215 0 005.215 5.215h2.129v2.057A5.215 5.215 0 0024 12.483V1.005A1.001 1.001 0 0023.013 0z"/></svg></a><a href="#" class="text-muted hover:opacity-80" title="Git"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="#2684FF"><path d="M.778 1.213a.768.768 0 00-.768.892l3.263 19.81c.084.5.515.868 1.022.873H19.95a.772.772 0 00.77-.646l3.27-20.03a.768.768 0 00-.768-.891z"/><path d="M14.52 15.53H9.522L8.17 8.466h7.561z"/></svg></a><a href="#" class="text-muted hover:opacity-80" title="TeamCity"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="#07C3F2"><path d="M0 0v24h24V0zm2.664 2.964h7.48v1.832H7.396v7.196H5.412V4.796H2.664zm9.328 18H2.992v-1.5h8.999zm5.564-9.218a4.62 4.62 0 01-2.036.374 4.556 4.556 0 01-4.628-4.616v-.024a4.584 4.584 0 014.708-4.668 4.656 4.656 0 013.56 1.388l-1.264 1.456a3.336 3.336 0 00-2.312-1.02 2.671 2.671 0 00-2.616 2.8v.028a2.68 2.68 0 002.616 2.836 3.226 3.226 0 002.376-1.056l1.264 1.276a4.619 4.619 0 01-1.668 1.226z"/></svg></a></div></td>
+                    </tr>
+                    <tr class="cursor-pointer" style="opacity:.5">
+                        <td class="h-12 px-4">
+                            <div>
+                                <span class="text-sm font-medium text-muted">legacy-bs2-component</span>
+                                <div class="text-xs text-muted">Legacy BS2 Build</div>
+                            </div>
+                        </td>
+                        <td class="h-12 px-4 text-sm text-muted">-</td>
+                        <td class="h-12 px-4"><span class="badge badge-outline">BS2_0</span></td>
+                        <td class="h-12 px-4"><span class="badge badge-red">archived</span></td>
+                        <td class="h-12 px-4 text-sm text-muted">1</td>
+                        <td class="h-12 px-4 text-sm text-muted">30 days ago</td>
+                        <td class="h-12 px-4 text-sm text-muted">-</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="flex items-center justify-between mt-4">
+            <p class="text-sm text-muted">Page 1 of 13</p>
+            <div class="flex items-center gap-1">
+                <button disabled class="page-btn opacity-50">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                </button>
+                <button class="page-btn page-btn-active text-sm font-medium">1</button>
+                <button class="page-btn text-sm">2</button>
+                <button class="page-btn text-sm">3</button>
+                <span class="text-muted px-1">...</span>
+                <button class="page-btn text-sm">13</button>
+                <button class="page-btn">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                </button>
+            </div>
+        </div>
+    </main>
+</body>
+</html>
