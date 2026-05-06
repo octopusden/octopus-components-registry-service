@@ -38,10 +38,10 @@ class ControllerExceptionHandler {
     }
 
     @ExceptionHandler(RestClientException::class)
-    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    @ResponseStatus(HttpStatus.BAD_GATEWAY)
     fun restClientExceptionHandler(e: RestClientException): HttpEntity<ErrorResponse> {
-        log.error("Upstream HTTP call failed: {}", e.localizedMessage)
-        return HttpEntity(ErrorResponse("Upstream call failed: ${e.localizedMessage}"))
+        log.error("Upstream HTTP call failed", e)
+        return HttpEntity(ErrorResponse("Upstream service call failed — check server logs for details"))
     }
 
     @ExceptionHandler(
