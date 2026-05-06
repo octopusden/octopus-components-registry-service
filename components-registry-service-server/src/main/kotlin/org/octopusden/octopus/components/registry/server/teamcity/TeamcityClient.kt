@@ -107,10 +107,10 @@ class TeamcityClient(
 
         // Locator: parameter:(name:COMPONENT_NAME) — match every project
         // carrying the parameter regardless of value, then group client-side.
-        // matchType=equals,ignoreCase=true matches BaseComponentsTask in
-        // components-automation, ensuring we resolve the same set of projects
-        // the build pipeline created.
-        val locator = "parameter:(name:COMPONENT_NAME,matchType:equals,ignoreCase:true)"
+        // matchType:equals requires a value to be specified and is rejected by
+        // TC REST API without one; name-only lookup returns all projects that
+        // have the parameter, which is exactly what we need.
+        val locator = "parameter:(name:COMPONENT_NAME)"
         // `fields=` keeps the response shape minimal — only id/name/webUrl
         // plus the parameter map (we need COMPONENT_NAME's value).
         val fields = "project(id,name,webUrl,parameters(property(name,value)))"
