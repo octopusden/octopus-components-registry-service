@@ -20,12 +20,12 @@ class TeamcityProperties(
      * Trailing slashes are tolerated. Blank is a misconfiguration —
      * [TeamcityClient] throws [IllegalStateException] so the caller surfaces
      * the error rather than silently returning all-NO_MATCH. Set via
-     * `TEAMCITY_BASE_URL` environment variable.
+     * `teamcity.base-url` in service-config (components-registry-service.yml).
      */
     val baseUrl: String = "",
-    /** TC service account username (HTTP Basic auth). */
+    /** TC service account username (HTTP Basic auth). Set via service-config. */
     val username: String = "",
-    /** TC service account password (HTTP Basic auth). */
+    /** TC service account password (HTTP Basic auth). Set via service-config. */
     val password: String = "",
     /**
      * TCP connect timeout for the TC HTTP client, in seconds. Bounded so a
@@ -44,7 +44,7 @@ class TeamcityProperties(
         /**
          * Master switch for the weekly cron + idle behavior. False by default
          * so dev/unconfigured envs don't fail at startup. Production sets it
-         * via `TEAMCITY_SYNC_ENABLED` per env.
+         * via `teamcity.sync.enabled` in service-config.
          */
         val enabled: Boolean = false,
         /**

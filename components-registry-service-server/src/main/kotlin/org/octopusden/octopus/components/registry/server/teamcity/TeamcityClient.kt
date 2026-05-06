@@ -100,7 +100,7 @@ class TeamcityClient(
         if (baseUrl.isBlank()) {
             throw IllegalStateException(
                 "TC sync is not configured: teamcity.base-url is blank. " +
-                    "Set the TEAMCITY_BASE_URL environment variable.",
+                    "Set teamcity.base-url in service-config (components-registry-service.yml).",
             )
         }
         if (componentsByName.isEmpty()) return emptyMap()

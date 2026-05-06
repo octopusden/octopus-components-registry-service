@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component
  * Weekly cron that resyncs TC project ids/urls.
  *
  * Conditional bean — registered only when `teamcity.sync.enabled=true`
- * (`TEAMCITY_SYNC_ENABLED=true` in env). With the property absent or false
+ * (`teamcity.sync.enabled=true` in service-config). With the property absent or false
  * (the default), the bean is not registered and Spring's `@EnableScheduling`
  * task scheduler ignores the cron entirely. Production service-config sets
  * the property per env that has TC credentials wired through; CI/test envs
