@@ -58,7 +58,10 @@ fun ComponentEntity.toDetailResponse(): ComponentDetailResponse =
         buildConfigurations = this.buildConfigurations.map { it.toResponse() },
         vcsSettings = this.vcsSettings.map { it.toResponse() },
         distributions = this.distributions.map { it.toResponse() },
-        jiraComponentConfigs = this.jiraComponentConfigs.map { it.toResponse() },
+        jiraComponentConfigs = (
+            this.jiraComponentConfigs.takeIf { it.isNotEmpty() }
+                ?: this.versions.flatMap { it.jiraComponentConfigs }
+        ).map { it.toResponse() },
         escrowConfigurations = this.escrowConfigurations.map { it.toResponse() },
         versions = this.versions.map { it.toResponse() },
     )
@@ -91,8 +94,10 @@ fun ComponentEntity.toSummaryResponse(): ComponentSummaryResponse =
                 ?.buildSystem
                 ?.takeIf { it.isNotBlank() },
         jiraProjectKey =
-            this.jiraComponentConfigs
-                .firstOrNull()
+            (
+                this.jiraComponentConfigs.takeIf { it.isNotEmpty() }
+                    ?: this.versions.flatMap { it.jiraComponentConfigs }
+            ).firstOrNull()
                 ?.projectKey
                 ?.takeIf { it.isNotBlank() },
         vcsPath =

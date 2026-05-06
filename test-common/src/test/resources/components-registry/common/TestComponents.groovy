@@ -926,11 +926,12 @@ TEST_COMPONENT4 {
     componentOwner = "user4"
     releaseManager = "user4"
     securityChampion = "user4"
+    labels = ['java', 'sql']
     vcsUrl = 'ssh://hg@mercurial/tdsecure'
     groupId = "org.octopusden.octopus.test"
     tag = 'octopustds-$version'
     jira {
-        projectKey = "TDS"
+        projectKey = "TC3"
     }
     build {
         javaVersion = "1.8"

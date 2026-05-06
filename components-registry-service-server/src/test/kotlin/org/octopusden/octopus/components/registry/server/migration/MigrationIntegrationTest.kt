@@ -3,6 +3,7 @@ package org.octopusden.octopus.components.registry.server.migration
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
+import org.junit.jupiter.api.Assertions.assertAll
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -384,12 +385,12 @@ class MigrationIntegrationTest {
     // ---------------------------------------------------------------------------
 
     @Test
-    @DisplayName("MIG-013: Metadata fields (releaseManager, securityChampion, copyright) migrate")
+    @DisplayName("MIG-013: Tier-3 fields (releaseManager, securityChampion, copyright) migrate to dedicated columns")
     fun `MIG-013 metadata`() {
         val component = getComponent("TESTONE")
-        assertEquals("user", component.metadata["releaseManager"], "releaseManager")
-        assertEquals("user", component.metadata["securityChampion"], "securityChampion")
-        assertEquals("companyName1", component.metadata["copyright"], "copyright")
+        assertEquals("user", component.releaseManager, "releaseManager")
+        assertEquals("user", component.securityChampion, "securityChampion")
+        assertEquals("companyName1", component.copyright, "copyright")
     }
 
     // ---------------------------------------------------------------------------
@@ -622,6 +623,49 @@ class MigrationIntegrationTest {
         )
         val dbResult = dbResolver.findComponentByArtifact(artifact)
         assertEquals(gitResult, dbResult, "DB resolver must preserve version-specific artifact matching")
+    }
+
+    // ---------------------------------------------------------------------------
+    // MIG-024: Version-range component preserves root-level jira, labels,
+    //          releaseManager and securityChampion in dedicated entity fields.
+    //
+    // Regression for components whose DSL has root-level metadata (labels, jira,
+    // releaseManager, securityChampion) combined with old-style version-range
+    // blocks ("(,1.0.107)" / "[1.0.107,)").  Before the fix, toComponentEntity()
+    // skipped component-level jira (hasDefaultConfig guard) and wrote
+    // labels/releaseManager/securityChampion only into entity.metadata instead of
+    // the dedicated SYS-039 columns, so the v4 API returned empty labels and an
+    // empty jiraComponentConfigs list.
+    // ---------------------------------------------------------------------------
+
+    @Test
+    @DisplayName(
+        "MIG-024: Version-range-only component preserves root-level jira, labels, " +
+            "releaseManager and securityChampion in dedicated entity columns",
+    )
+    fun `MIG-024 version-range-only component preserves root-level metadata fields`() {
+        // TEST_COMPONENT3:
+        //   labels = ['java', 'sql']
+        //   releaseManager = "user4"
+        //   securityChampion = "user4"
+        //   jira { projectKey = "TC3" }              ← root-level, no ALL_VERSIONS wrapper
+        //   "(,1.0.107)" { }                         ← empty range
+        //   "[1.0.107,)" { jira { releaseVersionFormat = '...' } }
+        val component = getComponent("TEST_COMPONENT3")
+
+        assertAll(
+            // labels must be in the dedicated top-level field, not buried in metadata
+            { assertEquals(setOf("java", "sql"), component.labels, "labels must be populated in the dedicated entity column") },
+
+            // root-level jira must surface as a component-level JiraComponentConfig
+            { assertTrue(component.jiraComponentConfigs.isNotEmpty(), "jiraComponentConfigs must not be empty for a version-range component with a root-level jira block") },
+            { assertEquals("TC3", component.jiraComponentConfigs.firstOrNull()?.projectKey, "projectKey from root jira block must appear in component-level jiraComponentConfigs") },
+
+            // releaseManager / securityChampion / groupId must be in dedicated columns (not only metadata)
+            { assertEquals("user4", component.releaseManager, "releaseManager must be stored in the dedicated entity column") },
+            { assertEquals("user4", component.securityChampion, "securityChampion must be stored in the dedicated entity column") },
+            { assertEquals("org.octopusden.octopus.test", component.groupId, "groupId must be stored in the dedicated entity column") },
+        )
     }
 
     companion object {
