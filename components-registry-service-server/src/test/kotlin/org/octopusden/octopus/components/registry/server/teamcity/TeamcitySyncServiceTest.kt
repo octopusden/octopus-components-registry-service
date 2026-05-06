@@ -10,7 +10,6 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.event.AuditEvent
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
-import org.springframework.boot.web.client.RestTemplateBuilder
 import org.springframework.context.ApplicationEvent
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.data.domain.Example
@@ -28,11 +27,9 @@ import java.util.UUID
 import java.util.function.Function
 
 /**
- * Unit tests for the TC sync service, mocking the TC client.
- *
- * Mockito is avoided here too (matches repo convention from
- * MigrationJobServiceImplTest) — the kotlin nullability + Mockito.any()
- * combo is brittle. Handwritten test doubles below.
+ * Unit tests for the TC sync service, using handwritten doubles for all
+ * dependencies. The [TcProjectFetcher] interface allows simple lambda-based
+ * stubs — no Mockito or base-class extension needed.
  */
 class TeamcitySyncServiceTest {
     private val alice = UUID.fromString("11111111-1111-1111-1111-111111111111")
@@ -51,29 +48,40 @@ class TeamcitySyncServiceTest {
         teamcityProjectUrl = tcUrl,
     )
 
+    private fun stubFetcher(matchesByName: Map<String, List<TcProject>>): TcProjectFetcher =
+        TcProjectFetcher { componentsByName ->
+            componentsByName.entries
+                .mapNotNull { (name, uuid) ->
+                    val projects = matchesByName[name] ?: return@mapNotNull null
+                    uuid to projects
+                }.toMap()
+        }
+
+    private fun service(
+        repo: ComponentRepository,
+        fetcher: TcProjectFetcher,
+        publisher: ApplicationEventPublisher,
+        user: CurrentUserResolver,
+        properties: TeamcityProperties = configuredProperties(),
+    ) = TeamcitySyncService(repo, fetcher, publisher, user, inlineTx(), properties)
+
+    private fun configuredProperties() = TeamcityProperties(baseUrl = "https://teamcity.example.com")
+
     @Test
     @DisplayName("happy path: writes both id and url; counts updated; emits audit event")
     fun happyPath() {
         val components = listOf(component(alice, "alpha"))
-        val client =
-            StubTeamcityClient(
+        val fetcher =
+            stubFetcher(
                 mapOf(
-                    "alpha" to
-                        listOf(
-                            TeamcityProject(
-                                id = "Alpha_Build",
-                                name = "Alpha Build",
-                                webUrl = "https://teamcity.example.com/project/Alpha_Build",
-                                parameters = mapOf("COMPONENT_NAME" to "alpha"),
-                            ),
-                        ),
+                    "alpha" to listOf(TcProject("Alpha_Build", "https://teamcity.example.com/project/Alpha_Build")),
                 ),
             )
         val repo = StubComponentRepository(components)
         val publisher = RecordingPublisher()
-        val service = TeamcitySyncService(repo, client, publisher, fixedUser("admin"), inlineTx())
+        val svc = service(repo, fetcher, publisher, fixedUser("admin"))
 
-        val result = service.resync()
+        val result = svc.resync()
 
         assertEquals(1, result.scanned)
         assertEquals(1, result.updated)
@@ -84,7 +92,6 @@ class TeamcitySyncServiceTest {
         assertEquals("Alpha_Build", components[0].teamcityProjectId)
         assertEquals("https://teamcity.example.com/project/Alpha_Build", components[0].teamcityProjectUrl)
 
-        // One audit event with old (null,null) and new (id,url).
         val audit = publisher.events.filterIsInstance<AuditEvent>().single()
         assertEquals("Component", audit.entityType)
         assertEquals("UPDATE", audit.action)
@@ -111,25 +118,17 @@ class TeamcitySyncServiceTest {
                     tcUrl = "https://teamcity.example.com/project/Alpha_Build",
                 ),
             )
-        val client =
-            StubTeamcityClient(
+        val fetcher =
+            stubFetcher(
                 mapOf(
-                    "alpha" to
-                        listOf(
-                            TeamcityProject(
-                                id = "Alpha_Build",
-                                name = "Alpha Build",
-                                webUrl = "https://teamcity.example.com/project/Alpha_Build",
-                                parameters = mapOf("COMPONENT_NAME" to "alpha"),
-                            ),
-                        ),
+                    "alpha" to listOf(TcProject("Alpha_Build", "https://teamcity.example.com/project/Alpha_Build")),
                 ),
             )
         val repo = StubComponentRepository(components)
         val publisher = RecordingPublisher()
-        val service = TeamcitySyncService(repo, client, publisher, fixedUser("admin"), inlineTx())
+        val svc = service(repo, fetcher, publisher, fixedUser("admin"))
 
-        val result = service.resync()
+        val result = svc.resync()
 
         assertEquals(1, result.scanned)
         assertEquals(0, result.updated)
@@ -142,21 +141,21 @@ class TeamcitySyncServiceTest {
     @DisplayName("ambiguous: 2+ matches → skip + count, no write")
     fun ambiguousSkipped() {
         val components = listOf(component(alice, "alpha"))
-        val client =
-            StubTeamcityClient(
+        val fetcher =
+            stubFetcher(
                 mapOf(
                     "alpha" to
                         listOf(
-                            TeamcityProject("Project_A", "A", "https://teamcity.example.com/project/A", emptyMap()),
-                            TeamcityProject("Project_B", "B", "https://teamcity.example.com/project/B", emptyMap()),
+                            TcProject("Project_A", "https://teamcity.example.com/project/A"),
+                            TcProject("Project_B", "https://teamcity.example.com/project/B"),
                         ),
                 ),
             )
         val repo = StubComponentRepository(components)
         val publisher = RecordingPublisher()
-        val service = TeamcitySyncService(repo, client, publisher, fixedUser("admin"), inlineTx())
+        val svc = service(repo, fetcher, publisher, fixedUser("admin"))
 
-        val result = service.resync()
+        val result = svc.resync()
 
         assertEquals(1, result.scanned)
         assertEquals(0, result.updated)
@@ -171,12 +170,12 @@ class TeamcitySyncServiceTest {
     @DisplayName("no match: 0 candidates → skip + count, no write")
     fun noMatchSkipped() {
         val components = listOf(component(alice, "alpha"))
-        val client = StubTeamcityClient(emptyMap())
+        val fetcher = stubFetcher(emptyMap())
         val repo = StubComponentRepository(components)
         val publisher = RecordingPublisher()
-        val service = TeamcitySyncService(repo, client, publisher, fixedUser("admin"), inlineTx())
+        val svc = service(repo, fetcher, publisher, fixedUser("admin"))
 
-        val result = service.resync()
+        val result = svc.resync()
 
         assertEquals(1, result.scanned)
         assertEquals(0, result.updated)
@@ -190,27 +189,18 @@ class TeamcitySyncServiceTest {
     fun nullIdComponentSkipped() {
         val nullIdComponent = ComponentEntity(id = null, name = "no-id")
         val components = listOf(component(alice, "alpha"), nullIdComponent)
-        val client =
-            StubTeamcityClient(
+        val fetcher =
+            stubFetcher(
                 mapOf(
-                    "alpha" to
-                        listOf(
-                            TeamcityProject(
-                                id = "Alpha_Build",
-                                name = "Alpha Build",
-                                webUrl = "https://teamcity.example.com/project/Alpha_Build",
-                                parameters = mapOf("COMPONENT_NAME" to "alpha"),
-                            ),
-                        ),
+                    "alpha" to listOf(TcProject("Alpha_Build", "https://teamcity.example.com/project/Alpha_Build")),
                 ),
             )
         val repo = StubComponentRepository(components)
         val publisher = RecordingPublisher()
-        val service = TeamcitySyncService(repo, client, publisher, fixedUser("admin"), inlineTx())
+        val svc = service(repo, fetcher, publisher, fixedUser("admin"))
 
-        val result = service.resync()
+        val result = svc.resync()
 
-        // Both components are counted in scanned; only the one with an id is processed.
         assertEquals(2, result.scanned)
         assertEquals(1, result.updated)
         assertEquals(0, result.unchanged)
@@ -222,20 +212,12 @@ class TeamcitySyncServiceTest {
     @DisplayName("blank webUrl: treated as no-match")
     fun blankWebUrlIsNoMatch() {
         val components = listOf(component(alice, "alpha"))
-        val client =
-            StubTeamcityClient(
-                mapOf(
-                    "alpha" to
-                        listOf(
-                            TeamcityProject("Project_A", "A", webUrl = "", parameters = emptyMap()),
-                        ),
-                ),
-            )
+        val fetcher = stubFetcher(mapOf("alpha" to listOf(TcProject("Project_A", ""))))
         val repo = StubComponentRepository(components)
         val publisher = RecordingPublisher()
-        val service = TeamcitySyncService(repo, client, publisher, fixedUser("admin"), inlineTx())
+        val svc = service(repo, fetcher, publisher, fixedUser("admin"))
 
-        val result = service.resync()
+        val result = svc.resync()
 
         assertEquals(1, result.skippedNoMatch)
         assertEquals(0, result.updated)
@@ -246,38 +228,37 @@ class TeamcitySyncServiceTest {
     @DisplayName("blank base-url: resync throws IllegalStateException instead of returning all-NO_MATCH")
     fun blankBaseUrlThrows() {
         val components = listOf(component(alice, "alpha"))
-        // Real client with default (blank) base-url — no HTTP call is made.
-        val client = TeamcityClient(TeamcityProperties(), RestTemplateBuilder())
+        val fetcher = TcProjectFetcher { _ -> emptyMap() }
         val repo = StubComponentRepository(components)
         val publisher = RecordingPublisher()
-        val service = TeamcitySyncService(repo, client, publisher, fixedUser("admin"), inlineTx())
+        val svc = service(repo, fetcher, publisher, fixedUser("admin"), TeamcityProperties())
 
-        val ex = assertThrows<IllegalStateException> { service.resync() }
+        val ex = assertThrows<IllegalStateException> { svc.resync() }
         assertTrue(ex.message!!.contains("teamcity.base-url"), "message should mention the config property")
     }
 
     @Test
     @DisplayName("blank base-url: throws even when the registry is empty (no silent scanned=0 on misconfiguration)")
     fun blankBaseUrlThrowsOnEmptyRegistry() {
-        val client = TeamcityClient(TeamcityProperties(), RestTemplateBuilder())
+        val fetcher = TcProjectFetcher { _ -> emptyMap() }
         val repo = StubComponentRepository(emptyList())
         val publisher = RecordingPublisher()
-        val service = TeamcitySyncService(repo, client, publisher, fixedUser("admin"), inlineTx())
+        val svc = service(repo, fetcher, publisher, fixedUser("admin"), TeamcityProperties())
 
-        val ex = assertThrows<IllegalStateException> { service.resync() }
+        val ex = assertThrows<IllegalStateException> { svc.resync() }
         assertTrue(ex.message!!.contains("teamcity.base-url"), "message should mention the config property")
     }
 
     @Test
-    @DisplayName("TC client failure on the batched call: exception propagates")
+    @DisplayName("TC client failure on fetch: exception propagates")
     fun clientFailurePropagates() {
         val components = listOf(component(alice, "alpha"))
-        val client = ThrowingTeamcityClient(RuntimeException("TC unavailable"))
+        val fetcher = TcProjectFetcher { _ -> throw RuntimeException("TC unavailable") }
         val repo = StubComponentRepository(components)
         val publisher = RecordingPublisher()
-        val service = TeamcitySyncService(repo, client, publisher, fixedUser("admin"), inlineTx())
+        val svc = service(repo, fetcher, publisher, fixedUser("admin"))
 
-        val ex = assertThrows<RuntimeException> { service.resync() }
+        val ex = assertThrows<RuntimeException> { svc.resync() }
         assertEquals("TC unavailable", ex.message)
     }
 
@@ -286,46 +267,22 @@ class TeamcitySyncServiceTest {
     fun mixedBatch() {
         val components =
             listOf(
-                // alice → updated
                 component(alice, "alpha"),
-                // bob → unchanged
-                component(
-                    bob,
-                    "beta",
-                    tcId = "Beta_Build",
-                    tcUrl = "https://teamcity.example.com/project/Beta_Build",
-                ),
-                // carol → no-match
+                component(bob, "beta", tcId = "Beta_Build", tcUrl = "https://teamcity.example.com/project/Beta_Build"),
                 component(carol, "gamma"),
             )
-        val client =
-            StubTeamcityClient(
+        val fetcher =
+            stubFetcher(
                 mapOf(
-                    "alpha" to
-                        listOf(
-                            TeamcityProject(
-                                "Alpha_Build",
-                                "Alpha",
-                                "https://teamcity.example.com/project/Alpha_Build",
-                                emptyMap(),
-                            ),
-                        ),
-                    "beta" to
-                        listOf(
-                            TeamcityProject(
-                                "Beta_Build",
-                                "Beta",
-                                "https://teamcity.example.com/project/Beta_Build",
-                                emptyMap(),
-                            ),
-                        ),
+                    "alpha" to listOf(TcProject("Alpha_Build", "https://teamcity.example.com/project/Alpha_Build")),
+                    "beta" to listOf(TcProject("Beta_Build", "https://teamcity.example.com/project/Beta_Build")),
                 ),
             )
         val repo = StubComponentRepository(components)
         val publisher = RecordingPublisher()
-        val service = TeamcitySyncService(repo, client, publisher, fixedUser("alice"), inlineTx())
+        val svc = service(repo, fetcher, publisher, fixedUser("alice"))
 
-        val result = service.resync()
+        val result = svc.resync()
 
         assertEquals(3, result.scanned)
         assertEquals(1, result.updated)
@@ -363,39 +320,6 @@ class TeamcitySyncServiceTest {
         override fun publishEvent(event: ApplicationEvent) {
             events.add(event)
         }
-    }
-
-    /**
-     * Stub TC client. Map a component name string to whatever list of
-     * "matches" the test wants returned. Empty map → resync sees nothing for
-     * any component.
-     */
-    private class StubTeamcityClient(
-        private val matchesByName: Map<String, List<TeamcityProject>>,
-    ) : TeamcityClient(
-            TeamcityProperties(),
-            org.springframework.boot.web.client
-                .RestTemplateBuilder(),
-        ) {
-        override fun findProjectsByComponentParameter(componentsByName: Map<String, UUID>): Map<UUID, List<TeamcityProject>> {
-            // Filter so we only return entries the caller asked about, mirroring
-            // the real client's contract: look up by name, emit under UUID.
-            return componentsByName.entries
-                .mapNotNull { (name, uuid) ->
-                    val projects = matchesByName[name] ?: return@mapNotNull null
-                    uuid to projects
-                }.toMap()
-        }
-    }
-
-    private class ThrowingTeamcityClient(
-        private val cause: Throwable,
-    ) : TeamcityClient(
-            TeamcityProperties(),
-            org.springframework.boot.web.client
-                .RestTemplateBuilder(),
-        ) {
-        override fun findProjectsByComponentParameter(componentsByName: Map<String, UUID>): Map<UUID, List<TeamcityProject>> = throw cause
     }
 
     /**
