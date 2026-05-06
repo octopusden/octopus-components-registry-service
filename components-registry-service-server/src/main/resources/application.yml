@@ -12,7 +12,6 @@ teamcity:
   username:
   password:
   sync:
-    enabled: false
     cron: "0 0 4 * * SUN"
 
 # auth-server.url and auth-server.realm bind from AUTH_SERVER_URL / AUTH_SERVER_REALM
