@@ -20,6 +20,13 @@ teamcity:
 # Tests override with stub URLs in application-common.yml so the decoder bean can
 # be constructed without Keycloak running — MockMvc jwt() post-processor bypasses
 # the decoder entirely.
+#
+# auth-server.disabled (intentionally unset here): FT-only opt-out for environments
+# without a Keycloak. When set to true, WebSecurityConfig is skipped and
+# AnonymousSecurityConfig loads instead — see those classes for the contract.
+# Leaving the property unset preserves the production fail-fast guarantee, so do
+# NOT set it in any production profile. Set via env var AUTH_SERVER_DISABLED=true
+# or in profile-specific YAML mounted under /application-ft.yml.
 auth-server:
   url:
   realm:

@@ -10,6 +10,7 @@ import org.octopusden.cloud.commons.security.config.SecurityProperties
 import org.octopusden.cloud.commons.security.converter.UserInfoGrantedAuthoritiesConverter
 import org.octopusden.octopus.components.registry.core.dto.ErrorResponse
 import org.springframework.beans.factory.BeanInitializationException
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -29,7 +30,15 @@ import org.springframework.security.web.AuthenticationEntryPoint
 import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.web.access.AccessDeniedHandler
 
+/**
+ * Production / dev security wiring. Loaded by default; opt out by setting
+ * `auth-server.disabled=true`, which switches the application to [AnonymousSecurityConfig]
+ * for FT and local environments without a Keycloak. The disabled-mode flag must NEVER
+ * be set in production — `matchIfMissing = true` here keeps the existing fail-fast
+ * contract on `auth-server.url` / `auth-server.realm` (see [jwtDecoder]).
+ */
 @Configuration
+@ConditionalOnProperty(name = ["auth-server.disabled"], havingValue = "false", matchIfMissing = true)
 @Import(AuthServerClient::class)
 @EnableConfigurationProperties(SecurityProperties::class)
 class WebSecurityConfig(
