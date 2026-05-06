@@ -626,7 +626,7 @@ class MigrationIntegrationTest {
     }
 
     // ---------------------------------------------------------------------------
-    // MIG-024: Version-range component preserves root-level jira, labels,
+    // MIG-025: Version-range component preserves root-level jira, labels,
     //          releaseManager and securityChampion in dedicated entity fields.
     //
     // Regression for components whose DSL has root-level metadata (labels, jira,
@@ -640,10 +640,10 @@ class MigrationIntegrationTest {
 
     @Test
     @DisplayName(
-        "MIG-024: Version-range-only component preserves root-level jira, labels, " +
+        "MIG-025: Version-range-only component preserves root-level jira, labels, " +
             "releaseManager and securityChampion in dedicated entity columns",
     )
-    fun `MIG-024 version-range-only component preserves root-level metadata fields`() {
+    fun `MIG-025 version-range-only component preserves root-level metadata fields`() {
         // TEST_COMPONENT3:
         //   labels = ['java', 'sql']
         //   releaseManager = "user4"

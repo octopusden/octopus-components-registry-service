@@ -58,10 +58,21 @@ fun ComponentEntity.toDetailResponse(): ComponentDetailResponse =
         buildConfigurations = this.buildConfigurations.map { it.toResponse() },
         vcsSettings = this.vcsSettings.map { it.toResponse() },
         distributions = this.distributions.map { it.toResponse() },
-        jiraComponentConfigs = (
-            this.jiraComponentConfigs.takeIf { it.isNotEmpty() }
-                ?: this.versions.flatMap { it.jiraComponentConfigs }
-        ).map { it.toResponse() },
+        jiraComponentConfigs =
+            (
+                this.jiraComponentConfigs.takeIf { it.isNotEmpty() }
+                    // Version-range-only components have jira on each version entity.
+                    // JiraComponentConfigResponse has no versionRange field — flattening N
+                    // configs would surface duplicates the consumer can't disambiguate.
+                    // Per-range jira remains available via the versions[].jiraComponentConfigs
+                    // collection in this same response. Dedupe by the response shape so a
+                    // component whose ranges differ only in version-format collapses to one
+                    // entry, while truly different jira configs (e.g. different projectKey)
+                    // are all returned for visibility.
+                    ?: this.versions
+                        .flatMap { it.jiraComponentConfigs }
+                        .distinctBy { Triple(it.projectKey, it.displayName, it.componentVersionFormat) }
+            ).map { it.toResponse() },
         escrowConfigurations = this.escrowConfigurations.map { it.toResponse() },
         versions = this.versions.map { it.toResponse() },
     )
@@ -93,11 +104,15 @@ fun ComponentEntity.toSummaryResponse(): ComponentSummaryResponse =
                 .firstOrNull()
                 ?.buildSystem
                 ?.takeIf { it.isNotBlank() },
+        // Version-range-only components have no component-level jira; the project key
+        // lives on each version entity. Falling through to versions[].jiraComponentConfigs
+        // here would trigger an N+1 lazy-load on the paginated list endpoint
+        // (findAll(spec, pageable) doesn't fetch versions) and could pick an arbitrary
+        // key when ranges have different projects. Return null in that case — the full
+        // picture is available via the detail endpoint.
         jiraProjectKey =
-            (
-                this.jiraComponentConfigs.takeIf { it.isNotEmpty() }
-                    ?: this.versions.flatMap { it.jiraComponentConfigs }
-            ).firstOrNull()
+            this.jiraComponentConfigs
+                .firstOrNull()
                 ?.projectKey
                 ?.takeIf { it.isNotBlank() },
         vcsPath =

@@ -232,18 +232,33 @@ class ComponentManagementServiceImpl(
         request.groupId?.let {
             if (!fieldConfigService.isHidden("component.groupId")) entity.groupId = it
         }
+        // SYS-039 dedicated columns: when writing the dedicated column, also drop the legacy
+        // metadata key. Components migrated before the dedicated columns existed kept these
+        // values in `metadata`, and toEscrowModuleConfig() falls back to metadata when the
+        // column is empty. Without this purge a PATCH that intentionally clears (or rewrites)
+        // a field would leave the stale metadata value visible to v2/v3 consumers.
         request.releaseManager?.let {
-            if (!fieldConfigService.isHidden("component.releaseManager")) entity.releaseManager = it
+            if (!fieldConfigService.isHidden("component.releaseManager")) {
+                entity.releaseManager = it
+                entity.metadata.remove("releaseManager")
+            }
         }
         request.securityChampion?.let {
-            if (!fieldConfigService.isHidden("component.securityChampion")) entity.securityChampion = it
+            if (!fieldConfigService.isHidden("component.securityChampion")) {
+                entity.securityChampion = it
+                entity.metadata.remove("securityChampion")
+            }
         }
         request.copyright?.let {
-            if (!fieldConfigService.isHidden("component.copyright")) entity.copyright = it
+            if (!fieldConfigService.isHidden("component.copyright")) {
+                entity.copyright = it
+                entity.metadata.remove("copyright")
+            }
         }
         request.releasesInDefaultBranch?.let {
             if (!fieldConfigService.isHidden("component.releasesInDefaultBranch")) {
                 entity.releasesInDefaultBranch = it
+                entity.metadata.remove("releasesInDefaultBranch")
             }
         }
         request.labels?.let {
@@ -251,6 +266,7 @@ class ComponentManagementServiceImpl(
             // rationale. Writes through here pass through the FC hidden gate.
             if (!fieldConfigService.isHidden("component.labels")) {
                 entity.labels = it.distinct().toTypedArray()
+                entity.metadata.remove("labels")
             }
         }
 
