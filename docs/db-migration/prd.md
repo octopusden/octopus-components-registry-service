@@ -52,7 +52,7 @@ The Components Registry Service stores all component configuration in a Git repo
 - **US-7**: As an **automation tool** (octopus-build-integration-gradle-plugin), I want `findByArtifacts` and `getSupportedGroupIds` to return the same results from the database as they did from Git.
 
 ### Security
-- **US-8**: As a **security officer**, I want only authorized users with REGISTRY_EDITOR role to modify configurations, so unauthorized changes are prevented.
+- **US-8**: As a **security officer**, I want only authorized users with COMPONENTS_REGISTRY_EDITOR role to modify configurations, so unauthorized changes are prevented.
 - **US-9**: As a **component owner**, I want only myself and admins to be able to edit my component, so changes require proper authorization.
 
 ### Audit

@@ -95,7 +95,7 @@ class UserInfoConverterIntegrationTest {
     }
 
     @Test
-    @DisplayName("viewer token → /userinfo returns REGISTRY_VIEWER → cannot POST v4 create (403)")
+    @DisplayName("viewer token → /userinfo returns COMPONENTS_REGISTRY_VIEWER → cannot POST v4 create (403)")
     fun viewerCannotCreateV4() {
         mvc
             .perform(
@@ -184,7 +184,7 @@ class UserInfoConverterIntegrationTest {
                         aResponse()
                             .withStatus(200)
                             .withHeader("Content-Type", "application/json")
-                            .withBody("""{"roles":["REGISTRY_VIEWER"],"groups":[]}"""),
+                            .withBody("""{"roles":["COMPONENTS_REGISTRY_VIEWER"],"groups":[]}"""),
                     ),
             )
         }
