@@ -6,14 +6,13 @@ components-registry:
 # TeamCity sync engine. Defaults are inert: with `base-url` blank and
 # `sync.enabled` false, the client makes no HTTP calls and the weekly cron
 # bean does not register. Production values come from `service-config`
-# per env (see f1/service-config). Set TEAMCITY_SYNC_ENABLED=true and the
-# host/credentials to turn it on.
+# per env (f1/service-config: components-registry-service.yml).
 teamcity:
-  base-url: ${TEAMCITY_BASE_URL:}
-  username: ${TEAMCITY_USERNAME:}
-  password: ${TEAMCITY_PASSWORD:}
+  base-url:
+  username:
+  password:
   sync:
-    enabled: ${TEAMCITY_SYNC_ENABLED:false}
+    enabled: false
     cron: "0 0 4 * * SUN"
 
 # auth-server.url and auth-server.realm bind from AUTH_SERVER_URL / AUTH_SERVER_REALM
