@@ -106,4 +106,5 @@ data class EscrowConfigurationResponse(
 data class ComponentVersionResponse(
     val id: UUID?,
     val versionRange: String,
+    val jiraComponentConfigs: List<JiraComponentConfigResponse> = emptyList(),
 )

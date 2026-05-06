@@ -58,7 +58,33 @@ fun ComponentEntity.toDetailResponse(): ComponentDetailResponse =
         buildConfigurations = this.buildConfigurations.map { it.toResponse() },
         vcsSettings = this.vcsSettings.map { it.toResponse() },
         distributions = this.distributions.map { it.toResponse() },
-        jiraComponentConfigs = this.jiraComponentConfigs.map { it.toResponse() },
+        // Version-range-only components have no component-level jira; the projectKey lives
+        // on each version entity. JiraComponentConfigResponse carries no versionRange, so
+        // flattening N range-scoped configs at the top level would expose duplicates the
+        // consumer can't associate with a specific range. Only surface a top-level summary
+        // when every range shares the same identity (projectKey, displayName, technical) —
+        // version-format overrides between ranges are allowed (the override is the whole
+        // reason multiple ranges exist) and the first range's format is used as the
+        // summary's componentVersionFormat. When ranges genuinely disagree on identity,
+        // return an empty list rather than picking one arbitrarily; consumers must read
+        // versions[].jiraComponentConfigs (which carries the matching versionRange) for
+        // the per-range picture.
+        jiraComponentConfigs =
+            this.jiraComponentConfigs
+                .takeIf { it.isNotEmpty() }
+                ?.map { it.toResponse() }
+                ?: run {
+                    val versionConfigs = this.versions.flatMap { it.jiraComponentConfigs }
+                    val identities =
+                        versionConfigs
+                            .map { Triple(it.projectKey, it.displayName, it.technical) }
+                            .toSet()
+                    if (identities.size == 1) {
+                        listOfNotNull(versionConfigs.firstOrNull()?.toResponse())
+                    } else {
+                        emptyList()
+                    }
+                },
         escrowConfigurations = this.escrowConfigurations.map { it.toResponse() },
         versions = this.versions.map { it.toResponse() },
     )
@@ -90,6 +116,12 @@ fun ComponentEntity.toSummaryResponse(): ComponentSummaryResponse =
                 .firstOrNull()
                 ?.buildSystem
                 ?.takeIf { it.isNotBlank() },
+        // Version-range-only components have no component-level jira; the project key
+        // lives on each version entity. Falling through to versions[].jiraComponentConfigs
+        // here would trigger an N+1 lazy-load on the paginated list endpoint
+        // (findAll(spec, pageable) doesn't fetch versions) and could pick an arbitrary
+        // key when ranges have different projects. Return null in that case — the full
+        // picture is available via the detail endpoint.
         jiraProjectKey =
             this.jiraComponentConfigs
                 .firstOrNull()
@@ -185,6 +217,10 @@ fun ComponentVersionEntity.toResponse(): ComponentVersionResponse =
     ComponentVersionResponse(
         id = this.id,
         versionRange = this.versionRange,
+        // Range-scoped jira lives on the version entity for version-range-only components
+        // (no ALL_VERSIONS wrapper); exposing it here lets consumers associate a config
+        // with its versionRange — JiraComponentConfigResponse itself carries no range.
+        jiraComponentConfigs = this.jiraComponentConfigs.map { it.toResponse() },
     )
 
 fun FieldOverrideEntity.toResponse(): FieldOverrideResponse =

@@ -148,16 +148,18 @@ fun ComponentEntity.toEscrowModuleConfig(componentVersion: ComponentVersionEntit
     setEscrowModuleConfigField(config, "archived", this.archived)
     config.productType = this.productType?.let { safeParseProductType(it) }
 
-    // Tier 3 metadata fields
-    setEscrowModuleConfigField(config, "releaseManager", this.metadata["releaseManager"] as? String)
-    setEscrowModuleConfigField(config, "securityChampion", this.metadata["securityChampion"] as? String)
-    setEscrowModuleConfigField(config, "copyright", this.metadata["copyright"] as? String)
-    setEscrowModuleConfigField(config, "releasesInDefaultBranch", this.metadata["releasesInDefaultBranch"] as? Boolean)
+    // Tier 3 fields — dedicated columns take priority; fall back to metadata for components
+    // migrated before the SYS-039 dedicated columns were introduced.
+    setEscrowModuleConfigField(config, "releaseManager", this.releaseManager ?: this.metadata["releaseManager"] as? String)
+    setEscrowModuleConfigField(config, "securityChampion", this.securityChampion ?: this.metadata["securityChampion"] as? String)
+    setEscrowModuleConfigField(config, "copyright", this.copyright ?: this.metadata["copyright"] as? String)
+    setEscrowModuleConfigField(config, "releasesInDefaultBranch", this.releasesInDefaultBranch ?: this.metadata["releasesInDefaultBranch"] as? Boolean)
 
     @Suppress("UNCHECKED_CAST")
-    val labels = this.metadata["labels"] as? Collection<String>
+    val labels = this.labels.takeIf { it.isNotEmpty() }?.toSet()
+        ?: (this.metadata["labels"] as? Collection<String>)?.toSet()
     if (labels != null) {
-        setEscrowModuleConfigField(config, "labels", labels.toSet())
+        setEscrowModuleConfigField(config, "labels", labels)
     }
 
     val docUrl = this.metadata["docUrl"] as? String
@@ -429,17 +431,20 @@ fun EscrowModule.toComponentEntity(): ComponentEntity {
             clientCode = firstConfig.clientCode,
             archived = firstConfig.archived,
             solution = firstConfig.solution,
+            releaseManager = firstConfig.releaseManager,
+            securityChampion = firstConfig.securityChampion,
+            copyright = firstConfig.copyright,
+            releasesInDefaultBranch = firstConfig.releasesInDefaultBranch,
+            // Domain treats labels as a set; create/PATCH paths call distinct() for the
+            // same reason. Dedupe migrated values too so the dedicated column matches.
+            labels = firstConfig.labels?.distinct()?.toTypedArray() ?: emptyArray(),
+            groupId = firstConfig.groupIdPattern,
         )
 
-    // Tier 3 metadata
+    // metadata: only fields without dedicated columns
     entity.metadata =
         mutableMapOf<String, Any?>().apply {
-            firstConfig.releaseManager?.let { put("releaseManager", it) }
-            firstConfig.securityChampion?.let { put("securityChampion", it) }
-            firstConfig.copyright?.let { put("copyright", it) }
-            firstConfig.releasesInDefaultBranch?.let { put("releasesInDefaultBranch", it) }
             firstConfig.parentComponent?.let { put("parentComponent", it) }
-            firstConfig.labels?.let { put("labels", it.toList()) }
             firstConfig.doc?.let {
                 put("docUrl", it.component())
                 put("docBranch", it.majorVersion())
@@ -452,7 +457,10 @@ fun EscrowModule.toComponentEntity(): ComponentEntity {
     // Distribution, VCS, artifact IDs: always at component level (needed for GET /components/{name})
     addComponentLevelDistributionVcsArtifacts(entity, firstConfig)
 
-    // Jira: only at component level for ALL_VERSIONS default (avoids overlapping ranges)
+    // Jira: save at component level only for ALL_VERSIONS components; version-range-only components
+    // store jira per version entity (the loop below starts at index 0 for !hasDefaultConfig).
+    // buildJiraVersionRangesForComponent treats component-level jira as ALL_VERSIONS, so adding it
+    // for version-range-only components would create a spurious ALL_VERSIONS entry in RES-001.
     if (hasDefaultConfig && firstConfig.jiraConfiguration != null) {
         entity.jiraComponentConfigs.add(firstConfig.jiraConfiguration.toJiraConfigEntity(entity, null))
     }

@@ -533,7 +533,7 @@
     "componentName": "TEST_COMPONENT3",
     "versionRange": "[1.0.107,)",
     "component": {
-      "projectKey": "TDS",
+      "projectKey": "TC3",
       "displayName": null,
       "componentVersionFormat": {
         "majorVersionFormat": "$major.$minor",
@@ -1282,7 +1282,7 @@
     "componentName": "TEST_COMPONENT3",
     "versionRange": "(,1.0.107)",
     "component": {
-      "projectKey": "TDS",
+      "projectKey": "TC3",
       "displayName": null,
       "componentVersionFormat": {
         "majorVersionFormat": "$major.$minor",
