@@ -4,14 +4,15 @@ import org.springframework.stereotype.Component
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * Cross-job concurrency gate shared by [MigrationJobService] (components) and
- * [HistoryMigrationJobService] — only one of the two may be RUNNING at a time.
+ * Cross-job concurrency gate shared by [MigrationJobService] (components),
+ * [HistoryMigrationJobService] (history) and the TeamCity-resync job
+ * (`TeamcitySyncJobService`) — only one of the three may be RUNNING at a time.
  *
  * Why this exists separately from each service's own AtomicReference: each job
  * service has its own slot for the response shape ("what is the current
  * components job?") but neither knows about the other. Without a shared gate
- * both would happily start in parallel — the SPA would render two RUNNING
- * jobs, both backed by importers writing to the same DB tables. The
+ * all three would happily start in parallel — the SPA would render multiple
+ * RUNNING jobs, all backed by writers touching the same DB tables. The
  * single-thread `migrationExecutor` doesn't help: ThreadPoolTaskExecutor with
  * `queueCapacity > 0` queues the second submit instead of rejecting it, so
  * both `startAsync()` calls return 202 with RUNNING and the second job just
@@ -24,7 +25,7 @@ import java.util.concurrent.atomic.AtomicReference
  */
 @Component
 class MigrationLifecycleGate {
-    enum class JobKind { COMPONENTS, HISTORY }
+    enum class JobKind { COMPONENTS, HISTORY, TC_RESYNC }
 
     data class ActiveJob(
         val kind: JobKind,

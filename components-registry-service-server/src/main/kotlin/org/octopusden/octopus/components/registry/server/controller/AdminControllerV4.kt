@@ -3,6 +3,7 @@ package org.octopusden.octopus.components.registry.server.controller
 import org.octopusden.octopus.components.registry.server.dto.v4.HistoryMigrationJobResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.MigrationConflictResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.MigrationJobResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.TeamcitySyncJobResponse
 import org.octopusden.octopus.components.registry.server.service.BatchMigrationResult
 import org.octopusden.octopus.components.registry.server.service.ForceResetOutcome
 import org.octopusden.octopus.components.registry.server.service.HistoryMigrationJobService
@@ -13,6 +14,7 @@ import org.octopusden.octopus.components.registry.server.service.MigrationLifecy
 import org.octopusden.octopus.components.registry.server.service.MigrationResult
 import org.octopusden.octopus.components.registry.server.service.MigrationStatus
 import org.octopusden.octopus.components.registry.server.service.ValidationResult
+import org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncJobService
 import org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncResult
 import org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncService
 import org.springframework.http.HttpStatus
@@ -35,6 +37,7 @@ class AdminControllerV4(
     private val migrationJobService: MigrationJobService,
     private val historyMigrationJobService: HistoryMigrationJobService,
     private val teamcitySyncService: TeamcitySyncService,
+    private val teamcitySyncJobService: TeamcitySyncJobService,
 ) {
     @PostMapping("/migrate-component/{name}")
     fun migrateComponent(
@@ -151,23 +154,57 @@ class AdminControllerV4(
         }
 
     /**
-     * On-demand TeamCity project ID/URL resync. Reuses the IMPORT_DATA permission
-     * (locked design decision — see PR plan §A5 rationale: a separate
-     * SYNC_TC_PROJECTS permission would require new constants across CRS,
-     * cloud-commons, the automation repo's role yaml, the portal `auth.ts`,
-     * and every admin UI consumer; for "admin bulk operation" the existing
-     * IMPORT_DATA semantic is the right scope).
+     * **Deprecated** — synchronous TC resync. Kept for backwards-compatibility
+     * with portal builds that haven't switched to the async pair yet
+     * (`POST /teamcity-project-ids/sync` + `GET .../sync/job`). Once the portal
+     * deploy is complete in all envs, this endpoint is removed in a follow-up.
      *
-     * Synchronous: a single batched TC call returns all projects carrying the
-     * COMPONENT_NAME parameter, then we group client-side by parameter value.
-     * For the foreseeable scale this is well under typical gateway timeouts.
-     * If response time grows, port to the async-job pattern (see /migrate).
+     * Reuses the IMPORT_DATA permission (locked design decision — see PR plan
+     * §A5 rationale: a separate SYNC_TC_PROJECTS permission would require new
+     * constants across CRS, cloud-commons, the automation repo's role yaml,
+     * the portal `auth.ts`, and every admin UI consumer; for "admin bulk
+     * operation" the existing IMPORT_DATA semantic is the right scope).
      *
-     * Returns the per-pass counts so the Portal can render a toast with the
-     * effect of the run.
+     * Synchronous and gateway-blocking: TC sync issues one REST call per
+     * non-archived component, so on registries past ~150 components the round
+     * trip exceeds typical gateway HTTP read timeouts and returns 504. The
+     * async pair below was added specifically to fix that.
      */
+    @Deprecated("Use POST /teamcity-project-ids/sync (async). This endpoint is removed once portal switches.")
     @PostMapping("/teamcity-project-ids/resync")
     fun resyncTeamcityProjectIds(): ResponseEntity<TeamcitySyncResult> = ResponseEntity.ok(teamcitySyncService.resync())
+
+    /**
+     * Async TC resync — kicks off the run on the background executor.
+     *
+     * Returns 202 Accepted with a [TeamcitySyncJobResponse] describing the
+     * freshly-started job. If a TC resync is already RUNNING in this pod,
+     * returns 409 Conflict with the existing job's state — the SPA "attaches"
+     * to the in-flight job rather than spawning a duplicate. Either way,
+     * callers poll `GET /admin/teamcity-project-ids/sync/job` for progress
+     * and pick up the final per-pass counts once `state == COMPLETED`.
+     *
+     * If the OTHER migration kind (components / history) is currently RUNNING,
+     * the service throws [MigrationConflictException] which the handler below
+     * maps to a 409 with [MigrationConflictResponse] body so the SPA can
+     * surface a clear "something else is running" message.
+     */
+    @PostMapping("/teamcity-project-ids/sync")
+    fun startTeamcitySync(): ResponseEntity<TeamcitySyncJobResponse> {
+        val outcome = teamcitySyncJobService.startAsync()
+        val httpStatus = if (outcome.isNewlyStarted) HttpStatus.ACCEPTED else HttpStatus.CONFLICT
+        return ResponseEntity.status(httpStatus).body(TeamcitySyncJobResponse.from(outcome.state))
+    }
+
+    /**
+     * Returns the latest known [TeamcitySyncJobResponse], or 404 if no TC
+     * resync has been started since the pod came up.
+     */
+    @GetMapping("/teamcity-project-ids/sync/job")
+    fun getTeamcitySyncJob(): ResponseEntity<TeamcitySyncJobResponse> {
+        val state = teamcitySyncJobService.current() ?: return ResponseEntity.notFound().build()
+        return ResponseEntity.ok(TeamcitySyncJobResponse.from(state))
+    }
 
     /**
      * Map cross-kind gate conflicts to a structured 409. Same-kind 409 is
@@ -180,6 +217,7 @@ class AdminControllerV4(
             when (e.active.kind) {
                 MigrationLifecycleGate.JobKind.COMPONENTS -> "components-migration-running"
                 MigrationLifecycleGate.JobKind.HISTORY -> "history-migration-running"
+                MigrationLifecycleGate.JobKind.TC_RESYNC -> "tc-resync-running"
             }
         return ResponseEntity.status(HttpStatus.CONFLICT).body(
             MigrationConflictResponse(
