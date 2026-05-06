@@ -3,6 +3,7 @@ package org.octopusden.octopus.components.registry.server.service.impl
 import org.octopusden.octopus.components.registry.server.entity.GitHistoryImportStateEntity
 import org.octopusden.octopus.components.registry.server.entity.GitHistoryImportStatus
 import org.octopusden.octopus.components.registry.server.repository.GitHistoryImportStateRepository
+import org.octopusden.octopus.components.registry.server.service.AsyncJobLifecycle
 import org.octopusden.octopus.components.registry.server.service.ForceResetOutcome
 import org.octopusden.octopus.components.registry.server.service.GitHistoryImportService
 import org.octopusden.octopus.components.registry.server.service.HistoryImportProgressListener
@@ -10,7 +11,6 @@ import org.octopusden.octopus.components.registry.server.service.HistoryMigratio
 import org.octopusden.octopus.components.registry.server.service.HistoryMigrationJobState
 import org.octopusden.octopus.components.registry.server.service.HistoryRecoveryAction
 import org.octopusden.octopus.components.registry.server.service.JobState
-import org.octopusden.octopus.components.registry.server.service.MigrationConflictException
 import org.octopusden.octopus.components.registry.server.service.MigrationLifecycleGate
 import org.octopusden.octopus.components.registry.server.service.MigrationLifecycleGate.JobKind
 import org.octopusden.octopus.components.registry.server.service.StartHistoryMigrationResult
@@ -20,131 +20,66 @@ import org.springframework.core.task.TaskExecutor
 import org.springframework.stereotype.Service
 import java.time.Duration
 import java.time.Instant
-import java.util.UUID
-import java.util.concurrent.atomic.AtomicReference
 
 /**
- * In-memory async wrapper around [GitHistoryImportService.importHistory]. Mirrors
- * [MigrationJobServiceImpl] for the components flow — same gate integration, same
- * CAS-then-publish ordering, same finally-release.
+ * In-memory async wrapper around [GitHistoryImportService.importHistory].
+ * Mirrors [MigrationJobServiceImpl] for the components flow — same gate
+ * integration via [AsyncJobLifecycle], same CAS-then-publish ordering, same
+ * finally-release.
  *
  * Difference from components: history has a table-backed claim
  * (`git_history_import_state`) that survives pod restarts. The in-memory state
  * is what the SPA sees while a job is RUNNING in this pod; after the pod
  * restarts the in-memory ref is empty but the DB row is still there, and
  * [current] synthesizes a state from it so the SPA can render the right action
- * (Retry on COMPLETED/FAILED, Force-reset on stale IN_PROGRESS — see A7.1).
+ * (Retry on COMPLETED/FAILED, Force-reset on stale IN_PROGRESS).
  */
 @Service
 class HistoryMigrationJobServiceImpl(
     private val gitHistoryImportService: GitHistoryImportService,
     private val stateRepository: GitHistoryImportStateRepository,
-    @Qualifier("migrationExecutor") private val executor: TaskExecutor,
-    private val lifecycleGate: MigrationLifecycleGate,
+    @Qualifier("migrationExecutor") executor: TaskExecutor,
+    lifecycleGate: MigrationLifecycleGate,
     private val forceResetter: HistoryForceResetter,
 ) : HistoryMigrationJobService {
-    private val state = AtomicReference<HistoryMigrationJobState?>()
-
-    /** Mirror of [MigrationJobServiceImpl.ClaimAttempt] for the history flow. */
-    private sealed interface ClaimAttempt {
-        data class Attached(
-            val state: HistoryMigrationJobState,
-        ) : ClaimAttempt
-
-        data class CrossKindConflict(
-            val active: MigrationLifecycleGate.ActiveJob,
-        ) : ClaimAttempt
-
-        data object Retry : ClaimAttempt
-
-        data class Claimed(
-            val candidate: HistoryMigrationJobState,
-        ) : ClaimAttempt
-    }
+    private val lifecycle =
+        AsyncJobLifecycle<HistoryMigrationJobState>(
+            jobKind = JobKind.HISTORY,
+            executor = executor,
+            gate = lifecycleGate,
+            getId = { it.id },
+            isRunning = { it.state == JobState.RUNNING },
+            markRejected = { current, rejected ->
+                current.copy(
+                    state = JobState.FAILED,
+                    finishedAt = Instant.now(),
+                    errorMessage =
+                        "Failed to submit history migration: ${rejected.message ?: rejected::class.java.simpleName}",
+                    recoveryAction = HistoryRecoveryAction.RETRY,
+                )
+            },
+        )
 
     override fun startAsync(
         toRef: String?,
         reset: Boolean,
     ): StartHistoryMigrationResult {
-        while (true) {
-            when (val attempt = tryClaim()) {
-                is ClaimAttempt.Attached -> return StartHistoryMigrationResult(attempt.state, isNewlyStarted = false)
-                is ClaimAttempt.CrossKindConflict -> throw MigrationConflictException(attempt.active)
-                is ClaimAttempt.Claimed -> {
-                    submitToExecutor(attempt.candidate, toRef, reset)
-                    return StartHistoryMigrationResult(state.get() ?: attempt.candidate, isNewlyStarted = true)
-                }
-                ClaimAttempt.Retry -> Unit
-            }
-        }
-    }
-
-    /** See [MigrationJobServiceImpl.tryClaim] — same CAS-retry shape, same ordering rationale. */
-    private fun tryClaim(): ClaimAttempt {
-        val existing = state.get()
-        if (existing?.state == JobState.RUNNING) {
-            return ClaimAttempt.Attached(existing)
-        }
-
-        val candidate =
-            HistoryMigrationJobState(
-                id = UUID.randomUUID().toString(),
-                state = JobState.RUNNING,
-                startedAt = Instant.now(),
-                finishedAt = null,
-                totalCommits = 0,
-                processedCommits = 0,
-                auditRecords = 0,
-                skippedNoGroovy = 0,
-                skippedParseError = 0,
-                skippedUnknownNames = 0,
-                currentSha = null,
-                targetRef = null,
-                errorMessage = null,
-                result = null,
+        val outcome =
+            lifecycle.claimAndSubmit(
+                buildCandidate = ::buildCandidate,
+                work = { jobId -> runHistoryMigration(jobId, toRef, reset) },
             )
-
-        val gateConflict = lifecycleGate.tryClaim(JobKind.HISTORY, candidate.id)
-        if (gateConflict != null) {
-            return when (gateConflict.kind) {
-                JobKind.HISTORY -> ClaimAttempt.Retry
-                JobKind.COMPONENTS -> ClaimAttempt.CrossKindConflict(gateConflict)
+        return when (outcome) {
+            is AsyncJobLifecycle.ClaimOutcome.Attached ->
+                StartHistoryMigrationResult(outcome.state, isNewlyStarted = false)
+            is AsyncJobLifecycle.ClaimOutcome.Started -> {
+                // Preserve the pre-refactor "Starting history migration job ..."
+                // breadcrumb (the generic helper line carries only kind+id, which
+                // log-greppers and runbooks looking for the previous prefix would
+                // miss). Logged only on Started so attach attempts don't double-log.
+                LOG.info("Starting history migration job {} (toRef={}, reset={})", outcome.state.id, toRef, reset)
+                StartHistoryMigrationResult(outcome.state, isNewlyStarted = true)
             }
-        }
-
-        if (!state.compareAndSet(existing, candidate)) {
-            lifecycleGate.release(candidate.id)
-            return ClaimAttempt.Retry
-        }
-        return ClaimAttempt.Claimed(candidate)
-    }
-
-    @Suppress("TooGenericExceptionCaught") // Throwable so executor rejection ALWAYS unwinds the slot.
-    private fun submitToExecutor(
-        candidate: HistoryMigrationJobState,
-        toRef: String?,
-        reset: Boolean,
-    ) {
-        LOG.info("Starting history migration job {} (toRef={}, reset={})", candidate.id, toRef, reset)
-        try {
-            executor.execute { runHistoryMigration(candidate.id, toRef, reset) }
-        } catch (rejected: Throwable) {
-            LOG.error("Failed to submit history migration job {} to executor", candidate.id, rejected)
-            lifecycleGate.release(candidate.id)
-            state.updateAndGet { current ->
-                if (current?.id != candidate.id) {
-                    current
-                } else {
-                    current.copy(
-                        state = JobState.FAILED,
-                        finishedAt = Instant.now(),
-                        errorMessage =
-                            "Failed to submit history migration: ${rejected.message ?: rejected::class.java.simpleName}",
-                        recoveryAction = HistoryRecoveryAction.RETRY,
-                    )
-                }
-            }
-            throw rejected
         }
     }
 
@@ -159,13 +94,13 @@ class HistoryMigrationJobServiceImpl(
      * Force-reset.
      */
     override fun current(): HistoryMigrationJobState? {
-        state.get()?.let { return it }
+        lifecycle.current()?.let { return it }
         val row = stateRepository.findById(HISTORY_IMPORT_KEY).orElse(null) ?: return null
         return synthesizeFromDb(row)
     }
 
     override fun clearInMemory() {
-        val current = state.get()
+        val current = lifecycle.current()
         if (current?.state == JobState.RUNNING) {
             LOG.warn(
                 "clearInMemory() called while job {} is RUNNING — ignored. " +
@@ -174,13 +109,13 @@ class HistoryMigrationJobServiceImpl(
             )
             return
         }
-        state.set(null)
+        lifecycle.setIdle()
     }
 
     /**
      * Guards → wipe → return outcome. See [HistoryMigrationJobService.forceReset].
      *
-     * Guard ordering mirrors [AdminControllerV4.forceResetHistory] before refactor:
+     * Guard ordering mirrors the pre-refactor controller flow:
      *  1. In-pod RUNNING check (in-memory read, no DB).
      *  2. DB staleness check (DB read + age compare).
      *  3. TOCTOU re-read: re-check in-memory state after DB read to catch a
@@ -188,7 +123,7 @@ class HistoryMigrationJobServiceImpl(
      */
     override fun forceReset(ackMultipodRisk: Boolean): ForceResetOutcome {
         // Guard 1: same-pod active job.
-        val active = state.get()
+        val active = lifecycle.current()
         if (active?.state == JobState.RUNNING) {
             return ForceResetOutcome.Blocked(
                 code = "history-migration-running",
@@ -200,8 +135,8 @@ class HistoryMigrationJobServiceImpl(
             )
         }
 
-        // Guard 2: cross-pod staleness. Inspect the DB row directly so a live import
-        // in another pod (with a fresh updatedAt) is detected.
+        // Guard 2: cross-pod staleness. Inspect the DB row directly so a live
+        // import in another pod (with a fresh updatedAt) is detected.
         val row = stateRepository.findById(HISTORY_IMPORT_KEY).orElse(null)
         if (row != null &&
             row.status == GitHistoryImportStatus.IN_PROGRESS.name &&
@@ -229,11 +164,12 @@ class HistoryMigrationJobServiceImpl(
             }
         }
 
-        // TOCTOU re-read: re-check in-memory state after the DB row read. The window
-        // between Guard 1 and this point is at most one DB round-trip wide. A concurrent
-        // startAsync that slipped past Guard 1 (it hadn't claimed the gate yet) and has
-        // since published its state will be caught here.
-        val activeAfterRowRead = state.get()
+        // TOCTOU re-read: re-check in-memory state after the DB row read. The
+        // window between Guard 1 and this point is at most one DB round-trip
+        // wide. A concurrent startAsync that slipped past Guard 1 (it hadn't
+        // claimed the gate yet) and has since published its state will be
+        // caught here.
+        val activeAfterRowRead = lifecycle.current()
         if (activeAfterRowRead?.state == JobState.RUNNING) {
             return ForceResetOutcome.Blocked(
                 code = "history-migration-running",
@@ -245,9 +181,9 @@ class HistoryMigrationJobServiceImpl(
             )
         }
 
-        // Audit-loud destructive action: log before the wipe so the pre-state survives
-        // in the log stream. ackMultipodRisk override logged at ERROR so alert pipelines
-        // that filter on ERROR-only catch it.
+        // Audit-loud destructive action: log before the wipe so the pre-state
+        // survives in the log stream. ackMultipodRisk override logged at ERROR
+        // so alert pipelines that filter on ERROR-only catch it.
         if (row != null) {
             val msg =
                 "FORCE-RESET: deleting git_history_import_state " +
@@ -259,11 +195,30 @@ class HistoryMigrationJobServiceImpl(
         }
 
         forceResetter.forceReset()
-        // Bypass the clearInMemory() RUNNING guard — we already verified there is no
-        // RUNNING job above (Guards 1, 3). Direct set avoids the redundant re-check.
-        state.set(null)
+        // Bypass the clearInMemory() RUNNING guard — we already verified there
+        // is no RUNNING job above (Guards 1, 3). Direct setIdle avoids the
+        // redundant re-check.
+        lifecycle.setIdle()
         return ForceResetOutcome.Cleared
     }
+
+    private fun buildCandidate(jobId: String): HistoryMigrationJobState =
+        HistoryMigrationJobState(
+            id = jobId,
+            state = JobState.RUNNING,
+            startedAt = Instant.now(),
+            finishedAt = null,
+            totalCommits = 0,
+            processedCommits = 0,
+            auditRecords = 0,
+            skippedNoGroovy = 0,
+            skippedParseError = 0,
+            skippedUnknownNames = 0,
+            currentSha = null,
+            targetRef = null,
+            errorMessage = null,
+            result = null,
+        )
 
     private fun runHistoryMigration(
         jobId: String,
@@ -272,27 +227,23 @@ class HistoryMigrationJobServiceImpl(
     ) {
         try {
             val result = gitHistoryImportService.importHistory(toRef, reset, progressListener(jobId))
-            state.updateAndGet { current ->
-                if (current?.id != jobId) {
-                    current
-                } else {
-                    current.copy(
-                        state = JobState.COMPLETED,
-                        finishedAt = Instant.now(),
-                        currentSha = null,
-                        targetRef = result.targetRef,
-                        totalCommits = result.processedCommits,
-                        processedCommits = result.processedCommits,
-                        auditRecords = result.auditRecords,
-                        skippedNoGroovy = result.skippedNoGroovy,
-                        skippedParseError = result.skippedParseError,
-                        skippedUnknownNames = result.skippedUnknownNames,
-                        result = result,
-                        // Operator can re-run the import on top of a COMPLETED row
-                        // via reset=true; SPA shows "Retry (reset state)".
-                        recoveryAction = HistoryRecoveryAction.RETRY,
-                    )
-                }
+            lifecycle.update(jobId) { current ->
+                current.copy(
+                    state = JobState.COMPLETED,
+                    finishedAt = Instant.now(),
+                    currentSha = null,
+                    targetRef = result.targetRef,
+                    totalCommits = result.processedCommits,
+                    processedCommits = result.processedCommits,
+                    auditRecords = result.auditRecords,
+                    skippedNoGroovy = result.skippedNoGroovy,
+                    skippedParseError = result.skippedParseError,
+                    skippedUnknownNames = result.skippedUnknownNames,
+                    result = result,
+                    // Operator can re-run the import on top of a COMPLETED row
+                    // via reset=true; SPA shows "Retry (reset state)".
+                    recoveryAction = HistoryRecoveryAction.RETRY,
+                )
             }
             LOG.info(
                 "History migration job {} COMPLETED: {} commits processed, {} audit rows, {} ms",
@@ -305,45 +256,37 @@ class HistoryMigrationJobServiceImpl(
             @Suppress("TooGenericExceptionCaught") e: Throwable,
         ) {
             LOG.error("History migration job {} FAILED", jobId, e)
-            state.updateAndGet { current ->
-                if (current?.id != jobId) {
-                    current
-                } else {
-                    current.copy(
-                        state = JobState.FAILED,
-                        finishedAt = Instant.now(),
-                        currentSha = null,
-                        errorMessage = e.message ?: e::class.java.simpleName,
-                        // FAILED in-memory paths are recoverable with reset=true
-                        // (the underlying preflight will clear the FAILED row
-                        // before re-claiming). FORCE_RESET is reserved for the
-                        // synthesized stuck-IN_PROGRESS DB-fallback case only.
-                        recoveryAction = HistoryRecoveryAction.RETRY,
-                    )
-                }
+            lifecycle.update(jobId) { current ->
+                current.copy(
+                    state = JobState.FAILED,
+                    finishedAt = Instant.now(),
+                    currentSha = null,
+                    errorMessage = e.message ?: e::class.java.simpleName,
+                    // FAILED in-memory paths are recoverable with reset=true
+                    // (the underlying preflight will clear the FAILED row
+                    // before re-claiming). FORCE_RESET is reserved for the
+                    // synthesized stuck-IN_PROGRESS DB-fallback case only.
+                    recoveryAction = HistoryRecoveryAction.RETRY,
+                )
             }
         } finally {
-            lifecycleGate.release(jobId)
+            lifecycle.release(jobId)
         }
     }
 
     private fun progressListener(jobId: String): HistoryImportProgressListener =
         HistoryImportProgressListener { event ->
-            state.updateAndGet { current ->
-                if (current?.id != jobId) {
-                    current
-                } else {
-                    current.copy(
-                        totalCommits = event.totalCommits,
-                        processedCommits = event.processedCommits,
-                        auditRecords = event.auditRecords,
-                        skippedNoGroovy = event.skippedNoGroovy,
-                        skippedParseError = event.skippedParseError,
-                        skippedUnknownNames = event.skippedUnknownNames,
-                        currentSha = event.currentSha,
-                        targetRef = event.targetRef,
-                    )
-                }
+            lifecycle.update(jobId) { current ->
+                current.copy(
+                    totalCommits = event.totalCommits,
+                    processedCommits = event.processedCommits,
+                    auditRecords = event.auditRecords,
+                    skippedNoGroovy = event.skippedNoGroovy,
+                    skippedParseError = event.skippedParseError,
+                    skippedUnknownNames = event.skippedUnknownNames,
+                    currentSha = event.currentSha,
+                    targetRef = event.targetRef,
+                )
             }
         }
 
@@ -353,10 +296,7 @@ class HistoryMigrationJobServiceImpl(
         // makes the id distinguishable across the COMPLETED→re-claimed→FAILED
         // sequence in the same pod-restart window; targetSha disambiguates
         // imports against different refs; updatedAt covers the rare
-        // same-content same-ref case. The previous "restored-${epochMillis}"
-        // form could collide on identical updatedAt (multiple sequential
-        // restarts against the unchanged row), causing downstream consumers
-        // that key on `id` to miss state transitions.
+        // same-content same-ref case.
         val shaPart = row.targetSha.takeIf { it.isNotEmpty() } ?: "no-sha"
         val syntheticId = "restored:${row.status.lowercase()}:$shaPart:${row.updatedAt.toEpochMilli()}"
         return when (row.status) {
