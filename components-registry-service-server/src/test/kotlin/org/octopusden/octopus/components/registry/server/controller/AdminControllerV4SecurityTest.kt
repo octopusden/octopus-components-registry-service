@@ -78,6 +78,16 @@ class AdminControllerV4SecurityTest {
     @Suppress("UnusedPrivateProperty")
     private lateinit var teamcitySyncService: TeamcitySyncService
 
+    /**
+     * Mocked too — the controller wires this in for the async TC resync pair
+     * (`POST /sync` + `GET /sync/job`). Same isolation rationale as the other
+     * job-service mocks.
+     */
+    @MockBean
+    @Suppress("UnusedPrivateProperty")
+    private lateinit var teamcitySyncJobService:
+        org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncJobService
+
     @Autowired
     private lateinit var mvc: MockMvc
 
