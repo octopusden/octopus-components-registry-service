@@ -15,9 +15,9 @@ import java.util.UUID
  *
  * One pass:
  * 1. Read all non-archived components.
- * 2. Single batched call to TC: `parameter:(name:COMPONENT_NAME)` returns
- *    every project carrying the parameter; group client-side by parameter
- *    value (= component UUID).
+ * 2. For each component, issue a TC REST call to find projects where
+ *    `COMPONENT_NAME` parameter equals the component name (exact match,
+ *    per-component query via [TcProjectFetcher]).
  * 3. For each component:
  *      - 0 matches → leave nulls, count `skippedNoMatch`.
  *      - 1 match with non-blank webUrl → upsert id+url if changed; count
@@ -30,24 +30,30 @@ import java.util.UUID
  * emitted via existing [AuditEvent] flow when fields change so admins can
  * trace the source of writes.
  *
- * If the TC client throws (network / 5xx / auth), the exception propagates
- * to the caller — for the admin endpoint that surfaces as 502/500, for the
- * scheduled cron that's logged-and-swallowed by the scheduler.
+ * Error handling: the production [TcProjectFetcher] implementation
+ * ([ExternalTcProjectFetcher]) isolates per-component TC failures — a single
+ * HTTP error is logged as a warning and that component is treated as no-match,
+ * leaving the rest of the batch unaffected. Only a failure that aborts the
+ * fetcher entirely (e.g. an alternative implementation used in tests, or an
+ * unrecoverable initialisation error) propagates out of [resync] — for the
+ * admin endpoint that surfaces as 502/500, for the scheduled cron that is
+ * logged-and-swallowed by the scheduler.
  */
 @Service
 class TeamcitySyncService(
     private val componentRepository: ComponentRepository,
-    private val teamcityClient: TeamcityClient,
+    private val tcProjectFetcher: TcProjectFetcher,
     private val applicationEventPublisher: ApplicationEventPublisher,
     private val currentUserResolver: CurrentUserResolver,
     private val transactionTemplate: TransactionTemplate,
+    private val teamcityProperties: TeamcityProperties,
 ) {
     private val log = KotlinLogging.logger {}
 
     /**
      * Run one resync pass.
      *
-     * The TC HTTP call deliberately runs OUTSIDE any database transaction so
+     * The TC HTTP calls deliberately run OUTSIDE any database transaction so
      * a slow/stalled TC server cannot hold a JDBC connection or extend a
      * transaction's lifetime. Per-component writes happen inside a single
      * [TransactionTemplate.execute] block so the bulk write is still atomic
@@ -55,6 +61,11 @@ class TeamcitySyncService(
      * events published BEFORE_COMMIT remain in the same tx as their row writes.
      */
     fun resync(): TeamcitySyncResult {
+        check(teamcityProperties.baseUrl.isNotBlank()) {
+            "TC sync is not configured: teamcity.base-url is blank. " +
+                "Set teamcity.base-url in service-config (components-registry-service.yml)."
+        }
+
         val components = componentRepository.findByArchivedFalse()
         val scanned = components.size
         log.info { "TC sync starting: scanned=$scanned non-archived components" }
@@ -69,8 +80,9 @@ class TeamcitySyncService(
                     }
                     group.first().id!!
                 }
-        // HTTP call to TC happens here, deliberately OUTSIDE any DB tx.
-        val matches = teamcityClient.findProjectsByComponentParameter(componentsByName)
+
+        // HTTP calls to TC happen here, deliberately OUTSIDE any DB tx.
+        val matches = tcProjectFetcher.findByComponentNames(componentsByName)
 
         // CurrentUserResolver returns "system" when there is no auth context
         // (the scheduled cron path), or the JWT's preferred_username when an
@@ -86,7 +98,7 @@ class TeamcitySyncService(
     @Suppress("TooGenericExceptionCaught")
     private fun applyMatches(
         components: List<ComponentEntity>,
-        matches: Map<UUID, List<TeamcityProject>>,
+        matches: Map<UUID, List<TcProject>>,
         changedBy: String,
     ): TeamcitySyncResult {
         val scanned = components.size
@@ -168,7 +180,7 @@ class TeamcitySyncService(
      */
     private fun applyMatch(
         component: ComponentEntity,
-        match: TeamcityProject,
+        match: TcProject,
         changedBy: String,
     ): Boolean {
         val oldId = component.teamcityProjectId

@@ -37,6 +37,7 @@ dependencies {
     implementation "io.github.microutils:kotlin-logging:1.6.22"
 
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:${project.properties["openapi.version"]}")
+    implementation "org.octopusden.octopus.octopus-external-systems-clients:teamcity-client:${project.properties['octopus-external-systems-clients.version']}"
 
     implementation("org.eclipse.jgit:org.eclipse.jgit:5.13.0.202109080827-r")
 
