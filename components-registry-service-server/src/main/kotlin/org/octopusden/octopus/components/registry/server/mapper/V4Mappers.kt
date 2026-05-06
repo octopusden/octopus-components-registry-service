@@ -58,21 +58,24 @@ fun ComponentEntity.toDetailResponse(): ComponentDetailResponse =
         buildConfigurations = this.buildConfigurations.map { it.toResponse() },
         vcsSettings = this.vcsSettings.map { it.toResponse() },
         distributions = this.distributions.map { it.toResponse() },
+        // Version-range-only components have no component-level jira; the projectKey lives
+        // on each version entity. JiraComponentConfigResponse carries no versionRange, so
+        // flattening N range-scoped configs at the top level would expose duplicates the
+        // consumer can't associate with a specific range (e.g. TEST_COMPONENT3 has the same
+        // projectKey on both ranges with different releaseVersionFormat). Surface one
+        // unambiguous summary entry here and let consumers pick up the range-scoped configs
+        // via versions[].jiraComponentConfigs which carries the matching versionRange.
         jiraComponentConfigs =
-            (
-                this.jiraComponentConfigs.takeIf { it.isNotEmpty() }
-                    // Version-range-only components have jira on each version entity.
-                    // JiraComponentConfigResponse has no versionRange field — flattening N
-                    // configs would surface duplicates the consumer can't disambiguate.
-                    // Per-range jira remains available via the versions[].jiraComponentConfigs
-                    // collection in this same response. Dedupe by the response shape so a
-                    // component whose ranges differ only in version-format collapses to one
-                    // entry, while truly different jira configs (e.g. different projectKey)
-                    // are all returned for visibility.
-                    ?: this.versions
-                        .flatMap { it.jiraComponentConfigs }
-                        .distinctBy { Triple(it.projectKey, it.displayName, it.componentVersionFormat) }
-            ).map { it.toResponse() },
+            this.jiraComponentConfigs
+                .takeIf { it.isNotEmpty() }
+                ?.map { it.toResponse() }
+                ?: listOfNotNull(
+                    this.versions
+                        .firstOrNull()
+                        ?.jiraComponentConfigs
+                        ?.firstOrNull()
+                        ?.toResponse(),
+                ),
         escrowConfigurations = this.escrowConfigurations.map { it.toResponse() },
         versions = this.versions.map { it.toResponse() },
     )
@@ -205,6 +208,10 @@ fun ComponentVersionEntity.toResponse(): ComponentVersionResponse =
     ComponentVersionResponse(
         id = this.id,
         versionRange = this.versionRange,
+        // Range-scoped jira lives on the version entity for version-range-only components
+        // (no ALL_VERSIONS wrapper); exposing it here lets consumers associate a config
+        // with its versionRange — JiraComponentConfigResponse itself carries no range.
+        jiraComponentConfigs = this.jiraComponentConfigs.map { it.toResponse() },
     )
 
 fun FieldOverrideEntity.toResponse(): FieldOverrideResponse =
