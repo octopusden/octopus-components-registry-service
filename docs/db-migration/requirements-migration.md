@@ -34,6 +34,7 @@
 | MIG-022 | Migration preserves build-tools endpoint behavior | High | integration-test | ✅ Tested |
 | MIG-023 | DB artifact resolution preserves version-specific matches for shared group IDs | High | unit-test, integration-test | ✅ Tested |
 | MIG-024 | POST /rest/api/4/admin/migrate enforces IMPORT_DATA permission | High | integration-test | ✅ Tested |
+| MIG-025 | Version-range-only component migrates root-level SYS-039 fields and jira to dedicated entity columns | High | integration-test | ✅ Tested |
 | MIG-026 | POST /rest/api/4/admin/migrate-history backfills git history into audit_log | High | integration-test | ❌ Not tested |
 | MIG-027 | POST /admin/migrate is async; 202 new / 409 re-run guard / GET /admin/migrate/job polling | High | integration-test | ✅ Tested |
 | MIG-028 | Async migration job state survives pod restart | Medium | design | ❌ Open |
@@ -676,6 +677,62 @@ expose the migration endpoint.
   RTL on the portal).
 - The actual content of `FullMigrationResult` (covered by existing
   `MigrationIntegrationTest`).
+
+---
+
+### MIG-025: Version-range-only component migrates root-level SYS-039 fields and jira to dedicated entity columns
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Description:**
+A component whose DSL declares only version-range blocks (no `ALL_VERSIONS` wrapper —
+e.g. `(,1.0.107)` and `[1.0.107,)`) inherits root-level properties (`labels`,
+`releaseManager`, `securityChampion`, `groupId`, `jira`) into each version-range
+config. `EscrowConfigurationLoader` does not synthesize an ALL_VERSIONS entry for
+such components, so `toComponentEntity()` runs with `hasDefaultConfig = false`.
+Before this fix the SYS-039 dedicated columns (`labels[]`, `release_manager`,
+`security_champion`, `group_id`, `copyright`, `releases_in_default_branch`) were
+guarded behind `hasDefaultConfig` and never populated, leaving the v4
+`/components/{name}` response with empty/null values for these fields. The v4
+`jiraComponentConfigs` response was also empty because the read-side flattening
+only looked at component-level `jiraComponentConfigs`, which is intentionally
+left empty for version-range-only components (per `buildJiraVersionRangesForComponent`
+ALL_VERSIONS semantics).
+
+**Acceptance criteria:**
+1. After migration of a version-range-only component:
+   - `component_entity.labels` contains the root-level DSL labels
+   - `component_entity.release_manager` / `security_champion` / `group_id` /
+     `copyright` / `releases_in_default_branch` are populated from root-level
+     DSL values (or inherited defaults).
+   - Each `component_version_entity.jira_component_configs` row contains the
+     range-specific (root-inherited + per-range override) jira config.
+2. v4 `GET /rest/api/4/components/{name}` returns:
+   - `labels`, `releaseManager`, `securityChampion`, `groupId`,
+     `releasesInDefaultBranch` populated from the dedicated columns.
+   - `jiraComponentConfigs` non-empty — falls back to the deduplicated set of
+     version-entity jira configs when component-level is empty.
+3. v2 `GET /rest/api/2/components/{name}/versions/{ver}` continues to return
+   correct `labels` / `releaseManager` / `securityChampion` for both
+   freshly-migrated rows (read from dedicated columns) and pre-fix rows
+   migrated with values in `metadata` (read via the `metadata` fallback in
+   `toEscrowModuleConfig`).
+4. `RES-001 / All Jira component version ranges` keeps emitting exactly one
+   entry per `versionRange` (no spurious `ALL_VERSIONS` entry for
+   version-range-only components).
+
+**Test method:** `MigrationIntegrationTest.MIG-025 version-range-only component preserves root-level metadata fields` against `TEST_COMPONENT3` (range blocks `(,1.0.107)` and `[1.0.107,)`, root-level labels/releaseManager/securityChampion/groupId/jira). Asserts dedicated-column values via the v4 detail response. RES-001 unchanged-output regression covered by `ComponentsRegistryServiceControllerTest` and `DbBackedComponentsRegistryServiceControllerTest`.
+
+**Out of scope:**
+- Per-range jira surfacing in the v4 detail response: range-specific configs
+  remain accessible via `versions[].jiraComponentConfigs`. The top-level
+  `jiraComponentConfigs` is deduplicated by `(projectKey, displayName,
+  componentVersionFormat)` so equivalent inherited configs collapse to one entry.
+- Backfill of legacy `metadata` keys on rows migrated before SYS-039 — handled
+  by re-running `POST /admin/migrate-components` after deploy. The metadata
+  fallback in `toEscrowModuleConfig` preserves v2/v3 correctness in the interim.
 
 ---
 

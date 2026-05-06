@@ -3,8 +3,10 @@ package org.octopusden.octopus.components.registry.server.migration
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
+import org.junit.jupiter.api.Assertions.assertAll
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeAll
@@ -384,12 +386,12 @@ class MigrationIntegrationTest {
     // ---------------------------------------------------------------------------
 
     @Test
-    @DisplayName("MIG-013: Metadata fields (releaseManager, securityChampion, copyright) migrate")
+    @DisplayName("MIG-013: Tier-3 fields (releaseManager, securityChampion, copyright) migrate to dedicated columns")
     fun `MIG-013 metadata`() {
         val component = getComponent("TESTONE")
-        assertEquals("user", component.metadata["releaseManager"], "releaseManager")
-        assertEquals("user", component.metadata["securityChampion"], "securityChampion")
-        assertEquals("companyName1", component.metadata["copyright"], "copyright")
+        assertEquals("user", component.releaseManager, "releaseManager")
+        assertEquals("user", component.securityChampion, "securityChampion")
+        assertEquals("companyName1", component.copyright, "copyright")
     }
 
     // ---------------------------------------------------------------------------
@@ -622,6 +624,74 @@ class MigrationIntegrationTest {
         )
         val dbResult = dbResolver.findComponentByArtifact(artifact)
         assertEquals(gitResult, dbResult, "DB resolver must preserve version-specific artifact matching")
+    }
+
+    // ---------------------------------------------------------------------------
+    // MIG-025: Version-range component preserves root-level jira, labels,
+    //          releaseManager and securityChampion in dedicated entity fields.
+    //
+    // Regression for components whose DSL has root-level metadata (labels, jira,
+    // releaseManager, securityChampion) combined with old-style version-range
+    // blocks ("(,1.0.107)" / "[1.0.107,)").  Before the fix, toComponentEntity()
+    // skipped component-level jira (hasDefaultConfig guard) and wrote
+    // labels/releaseManager/securityChampion only into entity.metadata instead of
+    // the dedicated SYS-039 columns, so the v4 API returned empty labels and an
+    // empty jiraComponentConfigs list.
+    // ---------------------------------------------------------------------------
+
+    @Test
+    @DisplayName(
+        "MIG-025: Version-range-only component preserves root-level jira, labels, " +
+            "releaseManager and securityChampion in dedicated entity columns",
+    )
+    fun `MIG-025 version-range-only component preserves root-level metadata fields`() {
+        // TEST_COMPONENT3:
+        //   labels = ['java', 'sql']
+        //   releaseManager = "user4"
+        //   securityChampion = "user4"
+        //   jira { projectKey = "TC3" }              ← root-level, no ALL_VERSIONS wrapper
+        //   "(,1.0.107)" { }                         ← empty range (inherits root jira)
+        //   "[1.0.107,)" { jira { releaseVersionFormat = '...' } }  ← override
+        val component = getComponent("TEST_COMPONENT3")
+
+        assertAll(
+            // labels must be in the dedicated top-level field, not buried in metadata
+            { assertEquals(setOf("java", "sql"), component.labels, "labels must be populated in the dedicated entity column") },
+
+            // releaseManager / securityChampion / groupId must be in dedicated columns (not only metadata)
+            { assertEquals("user4", component.releaseManager, "releaseManager must be stored in the dedicated entity column") },
+            { assertEquals("user4", component.securityChampion, "securityChampion must be stored in the dedicated entity column") },
+            { assertEquals("org.octopusden.octopus.test", component.groupId, "groupId must be stored in the dedicated entity column") },
+
+            // Top-level jiraComponentConfigs is a single unambiguous SUMMARY entry — not a
+            // flattened list of all per-range configs. JiraComponentConfigResponse carries no
+            // versionRange, so the top-level cannot disambiguate two TC3 configs that differ
+            // only in releaseVersionFormat. Per-range configs are exposed via versions[]
+            // (asserted below).
+            { assertEquals(1, component.jiraComponentConfigs.size, "top-level jiraComponentConfigs must collapse to a single summary entry") },
+            { assertEquals("TC3", component.jiraComponentConfigs.first().projectKey, "summary projectKey must come from the root-level jira block") },
+
+            // Per-range jira: each version entity carries its own config with the matching
+            // versionRange. The "[1.0.107,)" range overrides releaseVersionFormat, and the
+            // override must be visible to consumers via versions[].jiraComponentConfigs.
+            { assertEquals(2, component.versions.size, "TEST_COMPONENT3 has two version-range entities") },
+            {
+                val rangesWithJira = component.versions.associate { it.versionRange to it.jiraComponentConfigs }
+                assertEquals(setOf("(,1.0.107)", "[1.0.107,)"), rangesWithJira.keys, "version ranges must match the DSL")
+                assertEquals(1, rangesWithJira["(,1.0.107)"]!!.size, "(,1.0.107) must carry exactly its inherited jira config")
+                assertEquals("TC3", rangesWithJira["(,1.0.107)"]!!.first().projectKey, "(,1.0.107) inherits TC3")
+                assertEquals(1, rangesWithJira["[1.0.107,)"]!!.size, "[1.0.107,) must carry exactly its overridden jira config")
+                assertEquals("TC3", rangesWithJira["[1.0.107,)"]!!.first().projectKey, "[1.0.107,) inherits TC3 projectKey")
+
+                // The override on [1.0.107,) sets releaseVersionFormat to '$major.$minor.$service-$fix';
+                // the inherited (,1.0.107) keeps the default '$major.$minor.$service'. Asserting
+                // the formats differ is what proves per-range jira is actually exposed (not
+                // collapsed to one).
+                val fmt1 = rangesWithJira["(,1.0.107)"]!!.first().componentVersionFormat?.get("releaseVersionFormat")
+                val fmt2 = rangesWithJira["[1.0.107,)"]!!.first().componentVersionFormat?.get("releaseVersionFormat")
+                assertNotEquals(fmt1, fmt2, "the two ranges must surface different releaseVersionFormat values to prove per-range jira is exposed")
+            },
+        )
     }
 
     companion object {
