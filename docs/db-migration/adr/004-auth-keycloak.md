@@ -199,10 +199,13 @@ octopus-security:
     # Removing this entry is how we'd later close anonymous reads.
     ROLE_ANONYMOUS:
       - ACCESS_COMPONENTS
-    ROLE_REGISTRY_VIEWER:
+    # Naming: the short `REGISTRY_*` was ambiguous (Docker/npm/CRS); switched
+    # to `COMPONENTS_REGISTRY_*` to mirror the service name, by analogy with
+    # `EMPLOYEE_SERVICE_USER`.
+    ROLE_COMPONENTS_REGISTRY_VIEWER:
       - ACCESS_COMPONENTS
       - ACCESS_AUDIT
-    ROLE_REGISTRY_EDITOR:
+    ROLE_COMPONENTS_REGISTRY_EDITOR:
       - ACCESS_COMPONENTS
       - EDIT_COMPONENTS
       - ACCESS_AUDIT
@@ -221,7 +224,7 @@ octopus-security:
 
 Notes on the model:
 
-- `ROLE_REGISTRY_EDITOR` deliberately does **not** carry `ARCHIVE_COMPONENTS` or `RENAME_COMPONENTS`. Archive/rename are reserved for ADMIN (or, longer-term, for a per-component check against `componentOwner` / `releaseManager` — the permission name is kept stable so that check can be added without re-wiring the role map).
+- `ROLE_COMPONENTS_REGISTRY_EDITOR` deliberately does **not** carry `ARCHIVE_COMPONENTS` or `RENAME_COMPONENTS`. Archive/rename are reserved for ADMIN (or, longer-term, for a per-component check against `componentOwner` / `releaseManager` — the permission name is kept stable so that check can be added without re-wiring the role map).
 - The `PATCH /{id}` SpEL guard enforces this field-by-field: `... and (#request.archived == null or canArchiveComponent(...)) and (#request.name == null or canRenameComponent(...))`. Plain edits stay on `EDIT_COMPONENTS`; archive/rename payloads fail closed with 403 for anyone without the extra permission.
 - Super-admin role is `ROLE_ADMIN`, reusing the existing Keycloak `ADMIN` realm-role. This diverges from the original ADR draft (`ROLE_F1_ADMIN`) because `F1_ADMIN` in `f1-qa` is currently assigned to no users — wiring admin-access through it would leave real operators locked out.
 
@@ -266,7 +269,7 @@ Phase 2: Migrate consumers to pass JWT
 Phase 3: Full auth on reads
          v1/v2/v3 → authenticated() (after ALL consumers updated and tested)
          Any authenticated user can read (no role restriction)
-         Write operations still require ROLE_REGISTRY_EDITOR / ROLE_ADMIN
+         Write operations still require ROLE_COMPONENTS_REGISTRY_EDITOR / ROLE_ADMIN
 ```
 
 Phase 3 requires coordinated update of 7+ consumer services. Timeline TBD after Phase 1 is stable.

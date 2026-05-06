@@ -1007,7 +1007,7 @@ enabled in the server module).
 The Portal needs to render the signed-in user (username, roles) in the header/admin gates. CRS exposes `GET /auth/me` which delegates to `octopus-cloud-commons` `SecurityService.getCurrentUser()` and returns a `User { username, roles, groups }`. Path is **outside** `/rest/api/4` — it's at the top-level `/auth` so the Portal gateway can proxy it on the `/auth/**` route.
 
 **Preconditions:**
-- A valid JWT for a user with at least `ROLE_REGISTRY_VIEWER` (or any authenticated role).
+- A valid JWT for a user with at least `ROLE_COMPONENTS_REGISTRY_VIEWER` (or any authenticated role).
 
 **Acceptance criteria:**
 1. `GET /auth/me` without `Authorization` header → HTTP 401.

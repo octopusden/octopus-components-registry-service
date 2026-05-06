@@ -20,9 +20,9 @@ fun adminJwt(): RequestPostProcessor =
 fun editorJwt(): RequestPostProcessor =
     jwt()
         .jwt { it.claim("preferred_username", "bob") }
-        .authorities(SimpleGrantedAuthority("ROLE_REGISTRY_EDITOR"))
+        .authorities(SimpleGrantedAuthority("ROLE_COMPONENTS_REGISTRY_EDITOR"))
 
 fun viewerJwt(): RequestPostProcessor =
     jwt()
         .jwt { it.claim("preferred_username", "carol") }
-        .authorities(SimpleGrantedAuthority("ROLE_REGISTRY_VIEWER"))
+        .authorities(SimpleGrantedAuthority("ROLE_COMPONENTS_REGISTRY_VIEWER"))
