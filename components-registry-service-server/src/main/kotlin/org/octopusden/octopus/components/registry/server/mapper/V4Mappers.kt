@@ -217,8 +217,9 @@ fun AuditLogEntity.toResponse(): AuditLogResponse =
  * Portal for constructing Bitbucket (and future Gitea) browse links.
  *
  * Handles:
- *  - `ssh://git@host/[scm/]project/repo.git`   (Bitbucket ssh scheme)
- *  - `ssh://git@host:port/[scm/]project/repo.git` (with explicit port)
+ *  - `ssh://git@host/[scm/]project/repo.git`    (Bitbucket ssh scheme, no port)
+ *  - `ssh://git@host:port/[scm/]project/repo.git` (Bitbucket, numeric port)
+ *  - `ssh://git@host:org/repo.git`              (GitHub SCP-over-SSH, org not a port)
  *  - `git@host:project/repo.git`               (SCP-style git, Gitea / Bitbucket)
  *  - `project/repo`                            (already normalised, returned as-is)
  *
@@ -229,8 +230,21 @@ internal fun String.sshUrlToProjectRepo(): String {
     val pathPart: String =
         when {
             startsWith("ssh://git@") -> {
-                // ssh://git@host[:port]/[scm/]project/repo.git → strip scheme + host
-                substringAfter("://").substringAfter("/")
+                val afterAt = substringAfter("@")
+                val colonIdx = afterAt.indexOf(':')
+                if (colonIdx >= 0) {
+                    val portOrOrg = afterAt.substring(colonIdx + 1).substringBefore("/")
+                    if (portOrOrg.isNotEmpty() && portOrOrg.all { it.isDigit() }) {
+                        // Numeric port: ssh://git@host:7999/project/repo.git
+                        afterAt.substringAfter("/")
+                    } else {
+                        // SCP-over-SSH org: ssh://git@host:org/repo.git
+                        afterAt.substringAfter(":")
+                    }
+                } else {
+                    // No port: ssh://git@host/project/repo.git
+                    afterAt.substringAfter("/")
+                }
             }
             startsWith("git@") -> {
                 // git@host:project/repo.git → strip everything before the colon

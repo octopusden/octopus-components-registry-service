@@ -170,19 +170,19 @@ class ComponentSummaryMapperTest {
     @DisplayName("sshUrlToProjectRepo normalises SSH URLs to project/repo")
     @CsvSource(
         // Bitbucket ssh:// with no port
-        "ssh://git@bitbucket.example.com/neo/access-contol.git,       neo/access-contol",
-        // Bitbucket ssh:// with explicit port — substringAfter("/") on
-        // "git@host:7999/neo/repo.git" finds the FIRST slash (before neo),
-        // so the port does NOT appear in pathPart; result is correct.
-        "ssh://git@bitbucket.example.com:7999/neo/access-contol.git,  neo/access-contol",
+        "ssh://git@bitbucket.example.com/neo/access-contol.git,                    neo/access-contol",
+        // Bitbucket ssh:// with explicit numeric port
+        "ssh://git@bitbucket.example.com:7999/neo/access-contol.git,               neo/access-contol",
         // Bitbucket ssh:// with scm/ prefix + port
-        "ssh://git@bitbucket.example.com:7999/scm/project/repo.git,   project/repo",
+        "ssh://git@bitbucket.example.com:7999/scm/project/repo.git,                project/repo",
+        // GitHub SCP-over-SSH: colon introduces org name (not a port)
+        "ssh://git@github.com:octopusden/octopus-rm-gradle-plugin.git,             octopusden/octopus-rm-gradle-plugin",
         // SCP-style (Gitea / Bitbucket SCP)
-        "git@gitea.example.com:org/repo.git,                          org/repo",
+        "git@gitea.example.com:org/repo.git,                                       org/repo",
         // Nested group path — only last two segments are taken (group/sub/repo → sub/repo)
-        "git@gitea.example.com:group/sub/repo.git,                    sub/repo",
+        "git@gitea.example.com:group/sub/repo.git,                                 sub/repo",
         // Already normalised — must be returned as-is
-        "org/repo,                                                     org/repo",
+        "org/repo,                                                                  org/repo",
         delimiter = ',',
     )
     fun sshUrlToProjectRepo_normalisesVcsPath(
@@ -195,8 +195,8 @@ class ComponentSummaryMapperTest {
     @Test
     @DisplayName("sshUrlToProjectRepo returns original value when path has fewer than two segments (no misfire)")
     fun sshUrlToProjectRepo_singleSegment_returnsOriginal() {
-        // ssh://git@host:7999/repo.git  → pathPart = "repo.git" → parts = ["repo"] → size < 2
-        // The function must NOT return "7999/repo" — proof that port stays out of pathPart.
+        // "7999" is all-digits → treated as port → afterAt.substringAfter("/") = "repo.git"
+        // parts = ["repo"] → size < 2 → original URL is returned, not "7999/repo"
         val raw = "ssh://git@bitbucket.example.com:7999/repo.git"
         assertEquals(raw, raw.sshUrlToProjectRepo())
     }
