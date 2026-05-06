@@ -435,7 +435,9 @@ fun EscrowModule.toComponentEntity(): ComponentEntity {
             securityChampion = firstConfig.securityChampion,
             copyright = firstConfig.copyright,
             releasesInDefaultBranch = firstConfig.releasesInDefaultBranch,
-            labels = firstConfig.labels?.toTypedArray() ?: emptyArray(),
+            // Domain treats labels as a set; create/PATCH paths call distinct() for the
+            // same reason. Dedupe migrated values too so the dedicated column matches.
+            labels = firstConfig.labels?.distinct()?.toTypedArray() ?: emptyArray(),
             groupId = firstConfig.groupIdPattern,
         )
 

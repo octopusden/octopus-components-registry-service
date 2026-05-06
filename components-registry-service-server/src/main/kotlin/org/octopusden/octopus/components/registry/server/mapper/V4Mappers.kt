@@ -61,21 +61,30 @@ fun ComponentEntity.toDetailResponse(): ComponentDetailResponse =
         // Version-range-only components have no component-level jira; the projectKey lives
         // on each version entity. JiraComponentConfigResponse carries no versionRange, so
         // flattening N range-scoped configs at the top level would expose duplicates the
-        // consumer can't associate with a specific range (e.g. TEST_COMPONENT3 has the same
-        // projectKey on both ranges with different releaseVersionFormat). Surface one
-        // unambiguous summary entry here and let consumers pick up the range-scoped configs
-        // via versions[].jiraComponentConfigs which carries the matching versionRange.
+        // consumer can't associate with a specific range. Only surface a top-level summary
+        // when every range shares the same identity (projectKey, displayName, technical) —
+        // version-format overrides between ranges are allowed (the override is the whole
+        // reason multiple ranges exist) and the first range's format is used as the
+        // summary's componentVersionFormat. When ranges genuinely disagree on identity,
+        // return an empty list rather than picking one arbitrarily; consumers must read
+        // versions[].jiraComponentConfigs (which carries the matching versionRange) for
+        // the per-range picture.
         jiraComponentConfigs =
             this.jiraComponentConfigs
                 .takeIf { it.isNotEmpty() }
                 ?.map { it.toResponse() }
-                ?: listOfNotNull(
-                    this.versions
-                        .firstOrNull()
-                        ?.jiraComponentConfigs
-                        ?.firstOrNull()
-                        ?.toResponse(),
-                ),
+                ?: run {
+                    val versionConfigs = this.versions.flatMap { it.jiraComponentConfigs }
+                    val identities =
+                        versionConfigs
+                            .map { Triple(it.projectKey, it.displayName, it.technical) }
+                            .toSet()
+                    if (identities.size == 1) {
+                        listOfNotNull(versionConfigs.firstOrNull()?.toResponse())
+                    } else {
+                        emptyList()
+                    }
+                },
         escrowConfigurations = this.escrowConfigurations.map { it.toResponse() },
         versions = this.versions.map { it.toResponse() },
     )
