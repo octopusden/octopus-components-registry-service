@@ -12,6 +12,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.ControllerAdvice
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.ResponseStatus
+import org.springframework.web.client.RestClientException
 
 @ControllerAdvice
 class ControllerExceptionHandler {
@@ -34,6 +35,13 @@ class ControllerExceptionHandler {
     fun illegalStateExceptionHandler(e: IllegalStateException): HttpEntity<ErrorResponse> {
         log.error(e.localizedMessage)
         return HttpEntity(ErrorResponse(e.localizedMessage))
+    }
+
+    @ExceptionHandler(RestClientException::class)
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    fun restClientExceptionHandler(e: RestClientException): HttpEntity<ErrorResponse> {
+        log.error("Upstream HTTP call failed: {}", e.localizedMessage)
+        return HttpEntity(ErrorResponse("Upstream call failed: ${e.localizedMessage}"))
     }
 
     @ExceptionHandler(

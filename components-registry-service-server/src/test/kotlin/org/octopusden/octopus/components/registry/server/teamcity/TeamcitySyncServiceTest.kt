@@ -253,7 +253,7 @@ class TeamcitySyncServiceTest {
         val service = TeamcitySyncService(repo, client, publisher, fixedUser("admin"), inlineTx())
 
         val ex = assertThrows<IllegalStateException> { service.resync() }
-        assertTrue(ex.message!!.contains("TEAMCITY_BASE_URL"), "message should mention the env var")
+        assertTrue(ex.message!!.contains("teamcity.base-url"), "message should mention the config property")
     }
 
     @Test
@@ -265,7 +265,7 @@ class TeamcitySyncServiceTest {
         val service = TeamcitySyncService(repo, client, publisher, fixedUser("admin"), inlineTx())
 
         val ex = assertThrows<IllegalStateException> { service.resync() }
-        assertTrue(ex.message!!.contains("TEAMCITY_BASE_URL"), "message should mention the env var")
+        assertTrue(ex.message!!.contains("teamcity.base-url"), "message should mention the config property")
     }
 
     @Test
