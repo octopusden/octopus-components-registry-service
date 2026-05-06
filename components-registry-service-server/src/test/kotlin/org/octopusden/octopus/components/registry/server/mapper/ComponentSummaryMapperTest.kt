@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
 import org.octopusden.octopus.components.registry.server.entity.BuildConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.JiraComponentConfigEntity
@@ -158,5 +160,74 @@ class ComponentSummaryMapperTest {
         val response = component.toSummaryResponse()
 
         assertEquals("GRADLE", response.buildSystem)
+    }
+
+    // -----------------------------------------------------------------------
+    // sshUrlToProjectRepo — SSH URL normalisation for Portal Bitbucket links
+    // -----------------------------------------------------------------------
+
+    @ParameterizedTest(name = "[{index}] \"{0}\" → \"{1}\"")
+    @DisplayName("sshUrlToProjectRepo normalises SSH URLs to project/repo")
+    @CsvSource(
+        // Bitbucket ssh:// with no port
+        "ssh://git@bitbucket.example.com/neo/access-contol.git,                    neo/access-contol",
+        // Bitbucket ssh:// with explicit numeric port
+        "ssh://git@bitbucket.example.com:7999/neo/access-contol.git,               neo/access-contol",
+        // Bitbucket ssh:// with scm/ prefix + port
+        "ssh://git@bitbucket.example.com:7999/scm/project/repo.git,                project/repo",
+        // GitHub SCP-over-SSH: colon introduces org name (not a port)
+        "ssh://git@github.com:octopusden/octopus-rm-gradle-plugin.git,             octopusden/octopus-rm-gradle-plugin",
+        // SCP-style (Gitea / Bitbucket SCP)
+        "git@gitea.example.com:org/repo.git,                                       org/repo",
+        // Nested group path — only last two segments are taken (group/sub/repo → sub/repo)
+        "git@gitea.example.com:group/sub/repo.git,                                 sub/repo",
+        // Already normalised — must be returned as-is
+        "org/repo,                                                                  org/repo",
+        delimiter = ',',
+    )
+    fun sshUrlToProjectRepo_normalisesVcsPath(
+        raw: String,
+        expected: String,
+    ) {
+        assertEquals(expected.trim(), raw.trim().sshUrlToProjectRepo())
+    }
+
+    @Test
+    @DisplayName("sshUrlToProjectRepo returns original value when path has fewer than two segments (no misfire)")
+    fun sshUrlToProjectRepo_singleSegment_returnsOriginal() {
+        // "7999" is all-digits → treated as port → afterAt.substringAfter("/") = "repo.git"
+        // parts = ["repo"] → size < 2 → original URL is returned, not "7999/repo"
+        val raw = "ssh://git@bitbucket.example.com:7999/repo.git"
+        assertEquals(raw, raw.sshUrlToProjectRepo())
+    }
+
+    @Test
+    @DisplayName("sshUrlToProjectRepo returns non-git SSH URLs unchanged (e.g. Mercurial ssh://)")
+    fun sshUrlToProjectRepo_nonGitSshUrl_returnsOriginal() {
+        val raw = "ssh://hg@mercurial.example.com/ddd/technical"
+        assertEquals(raw, raw.sshUrlToProjectRepo())
+    }
+
+    @Test
+    @DisplayName("sshUrlToProjectRepo returns non-git SCP-style URLs unchanged (e.g. Mercurial hg@)")
+    fun sshUrlToProjectRepo_nonGitScpUrl_returnsOriginal() {
+        val raw = "hg@mercurial.example.com:ddd/technical"
+        assertEquals(raw, raw.sshUrlToProjectRepo())
+    }
+
+    @Test
+    @DisplayName("vcsPath stored as SSH URL → toSummaryResponse returns project/repo")
+    fun sshUrlInEntity_returnedAsProjectRepo() {
+        val component = baseComponent()
+        val vcs = VcsSettingsEntity(component = component)
+        vcs.entries.add(
+            VcsSettingsEntryEntity(
+                vcsSettings = vcs,
+                vcsPath = "ssh://git@bitbucket.spb.example.com/neo/access-contol.git",
+            ),
+        )
+        component.vcsSettings.add(vcs)
+
+        assertEquals("neo/access-contol", component.toSummaryResponse().vcsPath)
     }
 }
