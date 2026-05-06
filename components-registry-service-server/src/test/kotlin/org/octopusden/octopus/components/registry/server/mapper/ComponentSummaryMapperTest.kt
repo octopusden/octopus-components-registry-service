@@ -185,7 +185,10 @@ class ComponentSummaryMapperTest {
         "org/repo,                                                     org/repo",
         delimiter = ',',
     )
-    fun sshUrlToProjectRepo_normalisesVcsPath(raw: String, expected: String) {
+    fun sshUrlToProjectRepo_normalisesVcsPath(
+        raw: String,
+        expected: String,
+    ) {
         assertEquals(expected.trim(), raw.trim().sshUrlToProjectRepo())
     }
 
@@ -195,6 +198,20 @@ class ComponentSummaryMapperTest {
         // ssh://git@host:7999/repo.git  → pathPart = "repo.git" → parts = ["repo"] → size < 2
         // The function must NOT return "7999/repo" — proof that port stays out of pathPart.
         val raw = "ssh://git@bitbucket.example.com:7999/repo.git"
+        assertEquals(raw, raw.sshUrlToProjectRepo())
+    }
+
+    @Test
+    @DisplayName("sshUrlToProjectRepo returns non-git SSH URLs unchanged (e.g. Mercurial ssh://)")
+    fun sshUrlToProjectRepo_nonGitSshUrl_returnsOriginal() {
+        val raw = "ssh://hg@mercurial.example.com/ddd/technical"
+        assertEquals(raw, raw.sshUrlToProjectRepo())
+    }
+
+    @Test
+    @DisplayName("sshUrlToProjectRepo returns non-git SCP-style URLs unchanged (e.g. Mercurial hg@)")
+    fun sshUrlToProjectRepo_nonGitScpUrl_returnsOriginal() {
+        val raw = "hg@mercurial.example.com:ddd/technical"
         assertEquals(raw, raw.sshUrlToProjectRepo())
     }
 

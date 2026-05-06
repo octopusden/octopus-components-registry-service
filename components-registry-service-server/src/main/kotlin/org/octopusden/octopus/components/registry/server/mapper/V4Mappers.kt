@@ -219,24 +219,25 @@ fun AuditLogEntity.toResponse(): AuditLogResponse =
  * Handles:
  *  - `ssh://git@host/[scm/]project/repo.git`   (Bitbucket ssh scheme)
  *  - `ssh://git@host:port/[scm/]project/repo.git` (with explicit port)
- *  - `git@host:project/repo.git`               (SCP-style, Gitea / Bitbucket)
+ *  - `git@host:project/repo.git`               (SCP-style git, Gitea / Bitbucket)
  *  - `project/repo`                            (already normalised, returned as-is)
  *
  * If the value does not match any known pattern the original string is
  * returned unchanged so the Portal can decide how to handle it.
  */
 internal fun String.sshUrlToProjectRepo(): String {
-    val pathPart: String = when {
-        startsWith("ssh://") -> {
-            // ssh://git@host[:port]/[scm/]project/repo.git → strip scheme + host
-            substringAfter("://").substringAfter("/")
+    val pathPart: String =
+        when {
+            startsWith("ssh://git@") -> {
+                // ssh://git@host[:port]/[scm/]project/repo.git → strip scheme + host
+                substringAfter("://").substringAfter("/")
+            }
+            startsWith("git@") -> {
+                // git@host:project/repo.git → strip everything before the colon
+                substringAfter(":")
+            }
+            else -> return this
         }
-        contains("@") && contains(":") -> {
-            // git@host:project/repo.git → strip everything before the colon
-            substringAfter(":")
-        }
-        else -> return this
-    }
     val cleaned = pathPart.trimEnd('/').removeSuffix(".git")
     // Bitbucket sometimes inserts "scm/" between the host and the project key
     val normalized = if (cleaned.startsWith("scm/")) cleaned.removePrefix("scm/") else cleaned
