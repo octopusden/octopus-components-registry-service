@@ -44,6 +44,12 @@ class AnonymousSecurityConfig(
     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain =
         http
             .authorizeHttpRequests { it.anyRequest().permitAll() }
+            // CSRF is intentionally disabled, mirroring WebSecurityConfig: the registry is a
+            // stateless OAuth2 resource server, so there is no session cookie a CSRF attacker
+            // could ride. AnonymousSecurityConfig only loads in FT/dev (auth-server.disabled=true)
+            // and the same browser-form-post threat model still does not apply. CodeQL
+            // "Disabled Spring CSRF protection" (java/spring-disabled-csrf-protection) is
+            // acknowledged here.
             .csrf { it.disable() }
             .cors { it.disable() }
             .build()
