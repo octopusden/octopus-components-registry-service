@@ -82,8 +82,9 @@ class TeamcitySyncService(
         val matches = tcProjectFetcher.findByComponentNames(componentsByName)
 
         // CurrentUserResolver returns "system" when there is no auth context
-        // (the scheduled cron path), or the JWT's preferred_username when an
-        // admin invokes the resync endpoint. Either way it never returns null.
+        // (the scheduled cron path), or the JWT's preferred_username captured
+        // from the admin request that started the async resync job. Either way
+        // it never returns null.
         val changedBy = currentUserResolver.currentUsername()
 
         // execute() returns the callback's value; applyMatches never returns

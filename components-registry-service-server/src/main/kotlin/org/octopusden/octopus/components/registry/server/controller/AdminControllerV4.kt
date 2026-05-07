@@ -15,8 +15,6 @@ import org.octopusden.octopus.components.registry.server.service.MigrationResult
 import org.octopusden.octopus.components.registry.server.service.MigrationStatus
 import org.octopusden.octopus.components.registry.server.service.ValidationResult
 import org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncJobService
-import org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncResult
-import org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncService
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
@@ -36,7 +34,6 @@ class AdminControllerV4(
     private val importService: ImportService,
     private val migrationJobService: MigrationJobService,
     private val historyMigrationJobService: HistoryMigrationJobService,
-    private val teamcitySyncService: TeamcitySyncService,
     private val teamcitySyncJobService: TeamcitySyncJobService,
 ) {
     @PostMapping("/migrate-component/{name}")
@@ -152,27 +149,6 @@ class AdminControllerV4(
                     ),
                 )
         }
-
-    /**
-     * **Deprecated** — synchronous TC resync. Kept for backwards-compatibility
-     * with portal builds that haven't switched to the async pair yet
-     * (`POST /teamcity-project-ids/sync` + `GET .../sync/job`). Once the portal
-     * deploy is complete in all envs, this endpoint is removed in a follow-up.
-     *
-     * Reuses the IMPORT_DATA permission (locked design decision — see PR plan
-     * §A5 rationale: a separate SYNC_TC_PROJECTS permission would require new
-     * constants across CRS, cloud-commons, the automation repo's role yaml,
-     * the portal `auth.ts`, and every admin UI consumer; for "admin bulk
-     * operation" the existing IMPORT_DATA semantic is the right scope).
-     *
-     * Synchronous and gateway-blocking: TC sync issues one REST call per
-     * non-archived component, so on registries past ~150 components the round
-     * trip exceeds typical gateway HTTP read timeouts and returns 504. The
-     * async pair below was added specifically to fix that.
-     */
-    @Deprecated("Use POST /teamcity-project-ids/sync (async). This endpoint is removed once portal switches.")
-    @PostMapping("/teamcity-project-ids/resync")
-    fun resyncTeamcityProjectIds(): ResponseEntity<TeamcitySyncResult> = ResponseEntity.ok(teamcitySyncService.resync())
 
     /**
      * Async TC resync — kicks off the run on the background executor.

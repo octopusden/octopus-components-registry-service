@@ -18,7 +18,6 @@ import org.octopusden.octopus.components.registry.server.teamcity.StartTeamcityS
 import org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncJobService
 import org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncJobState
 import org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncResult
-import org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
@@ -35,20 +34,18 @@ import java.time.Instant
 
 /**
  * Pins the auth + response-shape contract of the TeamCity resync endpoints
- * (legacy synchronous `POST /resync`, new async pair `POST /sync` + `GET
- * /sync/job`).
+ * (`POST /sync` + `GET /sync/job`).
  *
  * Both gates that protect the endpoints are exercised:
  *   - WebSecurityConfig URL-level rule → 401 for anonymous callers.
  *   - AdminControllerV4 class-level @PreAuthorize("@permissionEvaluator.canImport()")
  *     → 403 for authenticated callers without IMPORT_DATA.
  *
- * Both TeamcitySyncService and TeamcitySyncJobService are @MockBean'd so the
- * test does not pull in the TeamcityClient bean wiring (which would attempt
- * outbound HTTP if base-url were ever set). The legacy path verifies the
- * 6-field counts shape including the snake_case `skipped_no_match` /
- * `skipped_ambiguous` keys; the async path verifies 202/409 attach, 200/404
- * polling, and the cross-kind 409 envelope.
+ * TeamcitySyncJobService is @MockBean'd so the test does not pull in the
+ * TeamcityClient bean wiring (which would attempt outbound HTTP if base-url
+ * were ever set). Asserts cover 202/409 attach + 409 cross-kind envelope on
+ * POST, and 200/404 polling on GET, including the snake_case
+ * `skipped_no_match` / `skipped_ambiguous` keys in the COMPLETED `result`.
  *
  * Other migration job services are @MockBean'd to keep this test scoped to
  * the resync paths — same convention as AdminControllerV4SecurityTest.
@@ -65,9 +62,6 @@ class TeamcityResyncControllerTest {
     private lateinit var authServerClient: AuthServerClient
 
     @MockBean
-    private lateinit var teamcitySyncService: TeamcitySyncService
-
-    @MockBean
     private lateinit var teamcitySyncJobService: TeamcitySyncJobService
 
     @MockBean
@@ -82,58 +76,7 @@ class TeamcityResyncControllerTest {
     private lateinit var mvc: MockMvc
 
     // ---------------------------------------------------------------------
-    // Legacy synchronous POST /resync (kept while portal switches; deleted in PR-D).
-    // ---------------------------------------------------------------------
-
-    @Test
-    @DisplayName("anonymous POST /admin/teamcity-project-ids/resync → 401, sync not invoked")
-    fun resyncAnonymousReturns401() {
-        mvc
-            .perform(post("/rest/api/4/admin/teamcity-project-ids/resync"))
-            .andExpect(status().isUnauthorized)
-
-        verify(teamcitySyncService, never()).resync()
-    }
-
-    @Test
-    @DisplayName("editor JWT POST /admin/teamcity-project-ids/resync → 403, sync not invoked")
-    fun resyncEditorReturns403() {
-        mvc
-            .perform(post("/rest/api/4/admin/teamcity-project-ids/resync").with(editorJwt()))
-            .andExpect(status().isForbidden)
-
-        verify(teamcitySyncService, never()).resync()
-    }
-
-    @Test
-    @DisplayName("admin POST /admin/teamcity-project-ids/resync → 200 with full counts shape (legacy path)")
-    fun resyncAdminReturns200WithCounts() {
-        `when`(teamcitySyncService.resync()).thenReturn(
-            TeamcitySyncResult(
-                scanned = 12,
-                updated = 3,
-                unchanged = 7,
-                skippedNoMatch = 1,
-                skippedAmbiguous = 1,
-                errors = listOf("oops on alpha"),
-            ),
-        )
-
-        mvc
-            .perform(post("/rest/api/4/admin/teamcity-project-ids/resync").with(adminJwt()))
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.scanned").value(12))
-            .andExpect(jsonPath("$.updated").value(3))
-            .andExpect(jsonPath("$.unchanged").value(7))
-            .andExpect(jsonPath("$.skipped_no_match").value(1))
-            .andExpect(jsonPath("$.skipped_ambiguous").value(1))
-            .andExpect(jsonPath("$.errors[0]").value("oops on alpha"))
-
-        verify(teamcitySyncService, times(1)).resync()
-    }
-
-    // ---------------------------------------------------------------------
-    // New async POST /sync — 202 newly-started, 409 same-kind attach, 409 cross-kind.
+    // POST /sync — 202 newly-started, 409 same-kind attach, 409 cross-kind.
     // ---------------------------------------------------------------------
 
     @Test
@@ -229,7 +172,7 @@ class TeamcityResyncControllerTest {
     }
 
     // ---------------------------------------------------------------------
-    // New async GET /sync/job — 200 when state is present, 404 when idle.
+    // GET /sync/job — 200 when state is present, 404 when idle.
     // ---------------------------------------------------------------------
 
     @Test
