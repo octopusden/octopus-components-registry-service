@@ -15,9 +15,9 @@ import java.util.UUID
  *
  * One pass:
  * 1. Read all non-archived components.
- * 2. For each component, issue a TC REST call to find projects where
- *    `COMPONENT_NAME` parameter equals the component name (exact match,
- *    per-component query via [TcProjectFetcher]).
+ * 2. Single batched TC REST call via [TcProjectFetcher]: ask for every project
+ *    that carries a `COMPONENT_NAME` parameter (any value), then group the
+ *    response client-side by the parameter value.
  * 3. For each component:
  *      - 0 matches → leave nulls, count `skippedNoMatch`.
  *      - 1 match with non-blank webUrl → upsert id+url if changed; count
@@ -30,14 +30,11 @@ import java.util.UUID
  * emitted via existing [AuditEvent] flow when fields change so admins can
  * trace the source of writes.
  *
- * Error handling: the production [TcProjectFetcher] implementation
- * ([ExternalTcProjectFetcher]) isolates per-component TC failures — a single
- * HTTP error is logged as a warning and that component is treated as no-match,
- * leaving the rest of the batch unaffected. Only a failure that aborts the
- * fetcher entirely (e.g. an alternative implementation used in tests, or an
- * unrecoverable initialisation error) propagates out of [resync] — for the
- * admin endpoint that surfaces as 502/500, for the scheduled cron that is
- * logged-and-swallowed by the scheduler.
+ * Error handling: a fetcher failure (TC unreachable, auth refused, malformed
+ * response) propagates out of [resync] — for the admin endpoint that surfaces
+ * as 502/500, for the scheduled cron that is logged-and-swallowed by the
+ * scheduler. Per-write JPA failures inside the transaction template cause the
+ * whole transaction to roll back, leaving DB state untouched.
  */
 @Service
 class TeamcitySyncService(
