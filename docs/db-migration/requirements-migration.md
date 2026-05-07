@@ -877,4 +877,4 @@ Fields covered: `releaseManager`, `securityChampion`, `copyright`, `releasesInDe
 **Out of scope:**
 - Concurrent-edit semantics — covered by the optimistic-locking `version` field on `ComponentUpdateRequest` and the existing tests for it.
 - The dedicated-column population by `toComponentEntity` itself (covered by MIG-013 for ALL_VERSIONS components and MIG-025 for version-range-only components).
-- Mass-update / migrate paths for legacy rows — operators are expected to either re-run `POST /admin/migrate-components` or accept the metadata fallback in `toEscrowModuleConfig` for rows that have not been edited or re-migrated.
+- Mass-update / migrate paths for legacy rows — operators are expected to either re-run `POST /rest/api/4/admin/migrate-components` or accept the metadata fallback in `toEscrowModuleConfig` for rows that have not been edited or re-migrated.
