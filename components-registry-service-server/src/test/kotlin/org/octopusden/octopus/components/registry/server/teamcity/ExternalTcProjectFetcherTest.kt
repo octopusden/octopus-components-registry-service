@@ -4,10 +4,10 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
-import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProperties
-import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProperty
-import java.util.UUID
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProject as ExternalTeamcityProject
+import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProperties as ExternalTeamcityProperties
+import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProperty as ExternalTeamcityProperty
+import java.util.UUID
 
 /**
  * Unit tests for the pure mapper inside [ExternalTcProjectFetcher]. The HTTP side
@@ -61,7 +61,7 @@ class ExternalTcProjectFetcherTest {
                 name = "Other",
                 href = "/x",
                 webUrl = "http://tc/other",
-                parameters = TeamcityProperties(properties = mutableListOf(TeamcityProperty(name = "OTHER", value = "y"))),
+                parameters = ExternalTeamcityProperties(properties = mutableListOf(ExternalTeamcityProperty(name = "OTHER", value = "y"))),
             ),
         )
         val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid))
@@ -109,10 +109,10 @@ class ExternalTcProjectFetcherTest {
                 name = "Dup",
                 href = "/x",
                 webUrl = "http://tc/dup",
-                parameters = TeamcityProperties(
+                parameters = ExternalTeamcityProperties(
                     properties = mutableListOf(
-                        TeamcityProperty(name = "COMPONENT_NAME", value = "foo"),
-                        TeamcityProperty(name = "COMPONENT_NAME", value = "bar"),
+                        ExternalTeamcityProperty(name = "COMPONENT_NAME", value = "foo"),
+                        ExternalTeamcityProperty(name = "COMPONENT_NAME", value = "bar"),
                     ),
                 ),
             ),
@@ -142,8 +142,8 @@ class ExternalTcProjectFetcherTest {
         name = id,
         href = "/$id",
         webUrl = webUrl,
-        parameters = TeamcityProperties(
-            properties = mutableListOf(TeamcityProperty(name = "COMPONENT_NAME", value = componentName)),
+        parameters = ExternalTeamcityProperties(
+            properties = mutableListOf(ExternalTeamcityProperty(name = "COMPONENT_NAME", value = componentName)),
         ),
     )
 }
