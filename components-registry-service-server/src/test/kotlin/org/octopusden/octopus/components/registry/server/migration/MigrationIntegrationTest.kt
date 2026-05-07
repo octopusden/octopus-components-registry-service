@@ -711,8 +711,8 @@ class MigrationIntegrationTest {
      * - Result: v4 PATCH bypassed metadata → v2 silently kept the migrated value.
      *
      * Post-fix invariant the test pins:
-     *   For every SYS-039 field, after `PATCH /api/4/components/{id}` the same
-     *   field returned by `GET /api/2/components/{name}/versions/{ver}` matches.
+     *   For every SYS-039 field, after `PATCH /rest/api/4/components/{id}` the same
+     *   field returned by `GET /rest/api/2/components/{name}/versions/{ver}` matches.
      *
      * Guards against:
      * - Dropping the dedicated-column write in `updateComponent()` (PATCH would no
