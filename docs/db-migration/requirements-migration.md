@@ -38,6 +38,7 @@
 | MIG-026 | POST /rest/api/4/admin/migrate-history backfills git history into audit_log | High | integration-test | ❌ Not tested |
 | MIG-027 | POST /admin/migrate is async; 202 new / 409 re-run guard / GET /admin/migrate/job polling | High | integration-test | ✅ Tested |
 | MIG-028 | Async migration job state survives pod restart | Medium | design | ❌ Open |
+| MIG-029 | v2 reflects v4 PATCH for SYS-039 fields (no stale metadata after edit) | High | integration-test | ✅ Tested |
 
 ---
 
@@ -850,3 +851,30 @@ The MIG-027 surface (DTO, status codes, paths) does **not** change as part of MI
 - Add a `migration_job_state` table mirroring `git_history_import_state`: PK `id` (UUID), columns matching `MigrationJobState` fields, plus `updated_at`.
 - Replace `AtomicReference` with a transactional read/write through that table.
 - On pod startup, scan for `state=RUNNING` rows older than a sane threshold (e.g. 1 hour) and mark them `FAILED` with `errorMessage="interrupted by pod restart"`.
+
+---
+
+### MIG-029: v2 reflects v4 PATCH for SYS-039 fields (no stale metadata after edit)
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Description:**
+The v2 read path (`toEscrowModuleConfig`) and the v4 PATCH write path (`updateComponent`) used to touch different storage for the same SYS-039 field: PATCH wrote the dedicated column, v2 read `entity.metadata`. After PR #179 the writes are aligned (PATCH also clears the legacy metadata key) and the read prefers the dedicated column, so v2 no longer drifts after edits. This requirement pins that contract — without an explicit assertion, a future change that drops the metadata cleanup or reverts the read precedence would silently re-introduce a stale-data bug that surfaces only after some downstream user edits a component via the v4 API.
+
+**Acceptance criteria:**
+For every SYS-039 field on a component that was migrated from the Git DSL (so `entity.metadata` initially holds the legacy migrated value):
+
+1. `PATCH /rest/api/4/components/{id}` updating that field returns 200 and the new value in the response body (sanity).
+2. A subsequent `GET /rest/api/4/components/{id}` returns the new value.
+3. A subsequent `GET /rest/api/2/components/{name}/versions/{ver}` returns **the same new value** — the migrated value held in `entity.metadata` must not surface.
+
+Fields covered: `releaseManager`, `securityChampion`, `copyright`, `releasesInDefaultBranch`, `labels`.
+
+**Test method:** `MigrationIntegrationTest.MIG-029 v2 reflects v4 patch for SYS-039 fields` against `TESTONE` (which sets all five fields in `TestComponents.groovy`, exercising the "PATCH overrides a populated value" path).
+
+**Out of scope:**
+- Concurrent-edit semantics — covered by the optimistic-locking `version` field on `ComponentUpdateRequest` and the existing tests for it.
+- The dedicated-column population by `toComponentEntity` itself (covered by MIG-013 for ALL_VERSIONS components and MIG-025 for version-range-only components).
+- Mass-update / migrate paths for legacy rows — operators are expected to either re-run `POST /admin/migrate-components` or accept the metadata fallback in `toEscrowModuleConfig` for rows that have not been edited or re-migrated.
