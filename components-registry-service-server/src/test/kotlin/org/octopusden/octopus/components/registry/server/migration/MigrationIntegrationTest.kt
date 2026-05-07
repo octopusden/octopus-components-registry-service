@@ -750,14 +750,32 @@ class MigrationIntegrationTest {
               "labels": ["after-patch-1", "after-patch-2"]
             }
             """.trimIndent()
-        mvc
-            .perform(
-                patch("/rest/api/4/components/${before.id}")
-                    .with(adminJwt())
-                    .contentType(APPLICATION_JSON)
-                    .content(patchBody)
-                    .accept(APPLICATION_JSON),
-            ).andExpect(status().isOk)
+        val patchResponse =
+            mvc
+                .perform(
+                    patch("/rest/api/4/components/${before.id}")
+                        .with(adminJwt())
+                        .contentType(APPLICATION_JSON)
+                        .content(patchBody)
+                        .accept(APPLICATION_JSON),
+                ).andExpect(status().isOk)
+                .andReturn()
+                .response
+                .contentAsString
+        val patchTree = objectMapper.readTree(patchResponse)
+        assertAll(
+            { assertEquals("rm-after-patch", patchTree.get("releaseManager")?.asText(), "PATCH releaseManager") },
+            { assertEquals("sc-after-patch", patchTree.get("securityChampion")?.asText(), "PATCH securityChampion") },
+            { assertEquals("cp-after-patch", patchTree.get("copyright")?.asText(), "PATCH copyright") },
+            { assertEquals(true, patchTree.get("releasesInDefaultBranch")?.asBoolean(), "PATCH releasesInDefaultBranch") },
+            {
+                assertEquals(
+                    setOf("after-patch-1", "after-patch-2"),
+                    patchTree.get("labels")?.elements()?.asSequence()?.map { it.asText() }?.toSet(),
+                    "PATCH labels",
+                )
+            },
+        )
 
         // v4 must reflect the PATCH (sanity check — reads dedicated columns directly).
         val v4After = getComponent("TESTONE")

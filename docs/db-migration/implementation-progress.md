@@ -98,6 +98,7 @@ Backend tasks (B2, B3) live in this repo. Frontend tasks (U4, U5) moved to Porta
 - DB `find-by-artifact` ignored version-specific artifact IDs — `DatabaseComponentRegistryResolver` now matches `componentVersion.artifactIds`, respects version ranges, and prefers version-specific matches over component-level ones (migration regression MIG-023)
 - DB migration lost `parentComponent` and `escrow.additionalSources` on resolver path — import/entity mappers now preserve both values for DB-backed V1/V2 responses, covered by DB-backed resolver regression suite (`RES-006`, `RES-007`, `RES-008`)
 - DB `jira-component-version-ranges` emitted entries with blank Jira project key — `DatabaseComponentRegistryResolver` now skips incomplete Jira configs so aggregate ranges match Git behavior (`RES-001`)
+- MIG-029 regression test initially asserted only `PATCH` status; strengthened to assert `/rest/api/4/components/{id}` PATCH response payload for all SYS-039 fields so API-mapping regressions are caught
 
 ## Runtime Verification (Phase 7+8) — historical, pre-extraction
 
