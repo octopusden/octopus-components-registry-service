@@ -38,6 +38,7 @@ import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.testcontainers.containers.PostgreSQLContainer
@@ -691,6 +692,167 @@ class MigrationIntegrationTest {
                 val fmt2 = rangesWithJira["[1.0.107,)"]!!.first().componentVersionFormat?.get("releaseVersionFormat")
                 assertNotEquals(fmt1, fmt2, "the two ranges must surface different releaseVersionFormat values to prove per-range jira is exposed")
             },
+        )
+    }
+
+    // ---------------------------------------------------------------------------
+    // MIG-029: v2 reflects v4 PATCH for SYS-039 fields (no stale metadata)
+    // ---------------------------------------------------------------------------
+
+    /**
+     * Regression for the silent stale-data bug fixed in PR #179: when a v4 PATCH
+     * updates a SYS-039 field, v2 must return the new value, not the original
+     * migrated value cached in `entity.metadata`.
+     *
+     * Pre-fix code paths (kept here as the reason this test exists):
+     * - `toComponentEntity()` wrote SYS-039 fields to `entity.metadata` only.
+     * - `toEscrowModuleConfig()` (v2/v3 read path) read from `entity.metadata` only.
+     * - `updateComponent()` (v4 PATCH) wrote to dedicated columns only.
+     * - Result: v4 PATCH bypassed metadata → v2 silently kept the migrated value.
+     *
+     * Post-fix invariant the test pins:
+     *   For every SYS-039 field, after `PATCH /rest/api/4/components/{id}` the same
+     *   field returned by `GET /rest/api/2/components/{name}/versions/{ver}` matches.
+     *
+     * Guards against:
+     * - Dropping the dedicated-column write in `updateComponent()` (PATCH would no
+     *   longer land anywhere v2 reads → both v4 and v2 stay on the migrated value).
+     * - Flipping `toEscrowModuleConfig()` back to metadata-first precedence (v2
+     *   would read the migrated value while v4 reads the patched one).
+     * - A new v4 write path that bypasses the dedicated column.
+     *
+     * Does NOT directly catch reverting just the `entity.metadata.remove(...)`
+     * cleanup lines — dedicated-column-first read wins regardless of metadata
+     * staleness. That cleanup is defensive hygiene for any future change that
+     * might flip the read precedence; pin it separately if the precedence ever
+     * becomes contested.
+     */
+    @Test
+    @DisplayName(
+        "MIG-029: v2 reflects v4 PATCH for SYS-039 fields (no stale metadata after edit)",
+    )
+    fun `MIG-029 v2 reflects v4 patch for SYS-039 fields`() {
+        // TESTONE in TestComponents.groovy sets all five SYS-039 fields, so we exercise
+        // both "PATCH overrides a populated value" and the metadata-cleanup path.
+        val before = getComponent("TESTONE")
+
+        // PATCH every SYS-039 field via v4. Distinct sentinel values ensure each assertion
+        // can only pass if its field was actually updated (not cross-contaminated by another
+        // field's value).
+        val patchBody =
+            """
+            {
+              "version": ${before.version},
+              "releaseManager": "rm-after-patch",
+              "securityChampion": "sc-after-patch",
+              "copyright": "cp-after-patch",
+              "releasesInDefaultBranch": true,
+              "labels": ["after-patch-1", "after-patch-2"]
+            }
+            """.trimIndent()
+        val patchResponse =
+            mvc
+                .perform(
+                    patch("/rest/api/4/components/${before.id}")
+                        .with(adminJwt())
+                        .contentType(APPLICATION_JSON)
+                        .content(patchBody)
+                        .accept(APPLICATION_JSON),
+                ).andExpect(status().isOk)
+                .andReturn()
+                .response
+                .contentAsString
+        val patchTree = objectMapper.readTree(patchResponse)
+        assertAll(
+            { assertEquals("rm-after-patch", patchTree.get("releaseManager")?.asText(), "PATCH releaseManager") },
+            { assertEquals("sc-after-patch", patchTree.get("securityChampion")?.asText(), "PATCH securityChampion") },
+            { assertEquals("cp-after-patch", patchTree.get("copyright")?.asText(), "PATCH copyright") },
+            { assertEquals(true, patchTree.get("releasesInDefaultBranch")?.asBoolean(), "PATCH releasesInDefaultBranch") },
+            {
+                assertEquals(
+                    setOf("after-patch-1", "after-patch-2"),
+                    patchTree.get("labels")?.elements()?.asSequence()?.map { it.asText() }?.toSet(),
+                    "PATCH labels",
+                )
+            },
+        )
+
+        // v4 must reflect the PATCH (sanity check — reads dedicated columns directly).
+        val v4After = getComponent("TESTONE")
+        assertAll(
+            { assertEquals("rm-after-patch", v4After.releaseManager, "v4 releaseManager") },
+            { assertEquals("sc-after-patch", v4After.securityChampion, "v4 securityChampion") },
+            { assertEquals("cp-after-patch", v4After.copyright, "v4 copyright") },
+            { assertEquals(true, v4After.releasesInDefaultBranch, "v4 releasesInDefaultBranch") },
+            { assertEquals(setOf("after-patch-1", "after-patch-2"), v4After.labels, "v4 labels") },
+        )
+
+        // v2 must reflect the same values. Failure here is the stale-metadata bug:
+        // PATCH updated the dedicated column, but `entity.metadata['<field>']` still holds
+        // the migrated value. v2 (`toEscrowModuleConfig`) used to read metadata first —
+        // PR #179 changed it to dedicated-with-metadata-fallback AND made `updateComponent`
+        // remove the legacy metadata key, so post-PATCH the fallback never fires.
+        val v2 = readV2DetailedComponent("TESTONE", "1.0")
+        assertAll(
+            { assertEquals("rm-after-patch", v2.releaseManager, "v2 releaseManager must match the v4 PATCH") },
+            { assertEquals("sc-after-patch", v2.securityChampion, "v2 securityChampion must match the v4 PATCH") },
+            { assertEquals("cp-after-patch", v2.copyright, "v2 copyright must match the v4 PATCH") },
+            { assertEquals(true, v2.releasesInDefaultBranch, "v2 releasesInDefaultBranch must match the v4 PATCH") },
+            { assertEquals(setOf("after-patch-1", "after-patch-2"), v2.labels, "v2 labels must match the v4 PATCH") },
+        )
+
+        // Restore TESTONE to its DSL values so order-dependent peer tests (e.g. MIG-013)
+        // that read these fields still see the migrated baseline. Spring context and DB
+        // are shared across @TestInstance(PER_CLASS) methods.
+        val restoreBody =
+            """
+            {
+              "version": ${v4After.version},
+              "releaseManager": "user",
+              "securityChampion": "user",
+              "copyright": "companyName1",
+              "releasesInDefaultBranch": false,
+              "labels": ["Label2"]
+            }
+            """.trimIndent()
+        mvc
+            .perform(
+                patch("/rest/api/4/components/${before.id}")
+                    .with(adminJwt())
+                    .contentType(APPLICATION_JSON)
+                    .content(restoreBody)
+                    .accept(APPLICATION_JSON),
+            ).andExpect(status().isOk)
+    }
+
+    /**
+     * Minimal projection of v2 `DetailedComponent` for MIG-029. Avoids pulling the
+     * full v2 DTO and its enum dependencies just to read five fields.
+     */
+    private data class V2Sys039Projection(
+        val releaseManager: String?,
+        val securityChampion: String?,
+        val copyright: String?,
+        val releasesInDefaultBranch: Boolean?,
+        val labels: Set<String>,
+    )
+
+    private fun readV2DetailedComponent(
+        name: String,
+        version: String,
+    ): V2Sys039Projection {
+        val tree = getJson("/rest/api/2/components/$name/versions/$version")
+        @Suppress("UNCHECKED_CAST")
+        val labelsList =
+            tree.get("labels")?.takeIf { it.isArray }?.let { node ->
+                node.elements().asSequence().mapNotNull { it.asText() }.toSet()
+            } ?: emptySet()
+        return V2Sys039Projection(
+            releaseManager = tree.get("releaseManager")?.takeIf { !it.isNull }?.asText(),
+            securityChampion = tree.get("securityChampion")?.takeIf { !it.isNull }?.asText(),
+            copyright = tree.get("copyright")?.takeIf { !it.isNull }?.asText(),
+            releasesInDefaultBranch = tree.get("releasesInDefaultBranch")?.takeIf { !it.isNull }?.asBoolean(),
+            labels = labelsList,
         )
     }
 
