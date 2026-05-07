@@ -40,12 +40,9 @@ data class StartTeamcitySyncResult(
  * Async wrapper around [TeamcitySyncService.resync]. Mirrors
  * `MigrationJobService` for the components flow.
  *
- * The synchronous endpoint `POST /admin/teamcity-project-ids/resync` is kept for
- * backwards-compatibility (deprecated; will be removed once portal is on the
- * async path) and delegates to [TeamcitySyncService] directly. The new async
- * endpoint pair `POST /admin/teamcity-project-ids/sync` + `GET .../sync/job`
- * goes through this service so callers can poll instead of holding an HTTP
- * connection through TC's per-component REST roundtrip storm.
+ * The endpoint pair `POST /admin/teamcity-project-ids/sync` + `GET .../sync/job`
+ * goes through this service so callers poll instead of holding an HTTP
+ * connection while TC is being scanned.
  */
 interface TeamcitySyncJobService {
     /**
