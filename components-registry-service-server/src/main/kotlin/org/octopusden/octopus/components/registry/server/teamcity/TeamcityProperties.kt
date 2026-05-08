@@ -40,5 +40,15 @@ class TeamcityProperties(
          * Spring cron expression for the weekly resync. Default: Sunday 04:00 UTC.
          */
         val cron: String = "0 0 4 * * SUN",
+        /**
+         * TeamCity build-template id used as the tie-breaker when several TC
+         * projects share the same `COMPONENT_NAME` parameter: the project that
+         * owns a buildType inheriting from this template wins. If none of the
+         * tied projects has it, the component is left unchanged (counted as
+         * `skipped_ambiguous`). Configurable via
+         * `teamcity.sync.cd-release-template-id` for envs where the template
+         * carries a different id.
+         */
+        val cdReleaseTemplateId: String = "CDRelease",
     )
 }

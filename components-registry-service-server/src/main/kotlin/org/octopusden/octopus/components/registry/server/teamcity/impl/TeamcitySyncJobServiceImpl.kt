@@ -85,13 +85,14 @@ class TeamcitySyncJobServiceImpl(
             }
             LOG.info(
                 "TC resync job {} COMPLETED: scanned={}, updated={}, unchanged={}, " +
-                    "skippedNoMatch={}, skippedAmbiguous={}, errors={}",
+                    "skippedNoMatch={}, skippedAmbiguous={}, ambiguousAutoResolved={}, errors={}",
                 jobId,
                 result.scanned,
                 result.updated,
                 result.unchanged,
                 result.skippedNoMatch,
                 result.skippedAmbiguous,
+                result.ambiguousAutoResolved,
                 result.errors.size,
             )
         } catch (

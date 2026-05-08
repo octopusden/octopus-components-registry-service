@@ -23,8 +23,15 @@ import java.util.UUID
  *      - 1 match with non-blank webUrl → upsert id+url if changed; count
  *        `updated` or `unchanged`.
  *      - 1 match with blank webUrl → treat as no-match (cannot link).
- *      - 2+ matches → skip, count `skippedAmbiguous`. Manual override is
- *        the escape hatch.
+ *      - 2+ matches → CDRelease tie-break:
+ *          - filter to projects with `hasCdReleaseBuild = true`;
+ *          - if filtered is empty → leave nulls, count `skippedAmbiguous`
+ *            (no release build → no automated way to pick the right project);
+ *          - if non-empty → pick the lexicographically smallest by id (stable
+ *            across runs), apply the match, count it under `updated`/`unchanged`
+ *            and bump `ambiguousAutoResolved` for visibility.
+ *        Manual override remains the escape hatch for rows that still skip.
+ *        TODO: properly support multiple TC projects per component (DTO/UI work).
  *
  * Idempotent: only writes when `id` or `url` actually changes. Audit log
  * emitted via existing [AuditEvent] flow when fields change so admins can
@@ -93,7 +100,7 @@ class TeamcitySyncService(
         return transactionTemplate.execute { _ -> applyMatches(components, matches, changedBy) }!!
     }
 
-    @Suppress("TooGenericExceptionCaught")
+    @Suppress("TooGenericExceptionCaught", "LongMethod")
     private fun applyMatches(
         components: List<ComponentEntity>,
         matches: Map<UUID, List<TcProject>>,
@@ -104,45 +111,61 @@ class TeamcitySyncService(
         var unchanged = 0
         var skippedNoMatch = 0
         var skippedAmbiguous = 0
+        var ambiguousAutoResolved = 0
         val errors = mutableListOf<String>()
 
         for (component in components) {
             val componentId = component.id ?: continue
             try {
                 val candidates = matches[componentId].orEmpty()
+                val pick: TcProject?
+                val pickedFromAmbiguous: Boolean
+                when {
+                    candidates.isEmpty() -> {
+                        pick = null
+                        pickedFromAmbiguous = false
+                    }
+                    candidates.size == 1 -> {
+                        pick = candidates.single()
+                        pickedFromAmbiguous = false
+                    }
+                    else -> {
+                        pick = resolveAmbiguous(component, componentId, candidates)
+                        pickedFromAmbiguous = pick != null
+                    }
+                }
+
                 when {
                     candidates.isEmpty() -> {
                         skippedNoMatch++
                     }
-                    candidates.size > 1 -> {
-                        // Don't pick a winner silently. Manual override is
-                        // the documented escape hatch for genuinely-duplicated
-                        // TC setups.
-                        log.warn {
-                            "TC sync: ambiguous match for component '${component.name}' " +
-                                "(id=$componentId): ${candidates.size} TC projects share " +
-                                "COMPONENT_NAME=${component.name} — skipping."
-                        }
+                    pick == null -> {
+                        // Ambiguous and none of the candidates owns a CDRelease build —
+                        // tie-break failed, fall through to skipped_ambiguous.
                         skippedAmbiguous++
                     }
                     else -> {
-                        val match = candidates.single()
                         val isUsableUrl =
-                            match.webUrl.isNotBlank() &&
-                                (match.webUrl.startsWith("http://") || match.webUrl.startsWith("https://"))
+                            pick.webUrl.isNotBlank() &&
+                                (pick.webUrl.startsWith("http://") || pick.webUrl.startsWith("https://"))
                         if (!isUsableUrl) {
                             // webUrl missing, blank, or non-http → cannot render
                             // a safe link. Treat as no-match: leave nulls, count it.
+                            // ambiguousAutoResolved is NOT incremented here — the row is
+                            // counted as skipped_no_match, not as a successful auto-resolve,
+                            // so the result KDoc invariant "sub-counter of updated+unchanged"
+                            // holds.
                             log.warn {
                                 "TC sync: component '${component.name}' (id=$componentId) " +
-                                    "matched TC project '${match.id}' but webUrl " +
-                                    "'${match.webUrl}' is blank or not http/https; " +
+                                    "matched TC project '${pick.id}' but webUrl " +
+                                    "'${pick.webUrl}' is blank or not http/https; " +
                                     "treating as no-match."
                             }
                             skippedNoMatch++
                         } else {
-                            val didChange = applyMatch(component, match, changedBy)
+                            val didChange = applyMatch(component, pick, changedBy)
                             if (didChange) updated++ else unchanged++
+                            if (pickedFromAmbiguous) ambiguousAutoResolved++
                         }
                     }
                 }
@@ -159,7 +182,7 @@ class TeamcitySyncService(
         log.info {
             "TC sync done: scanned=$scanned, updated=$updated, unchanged=$unchanged, " +
                 "skippedNoMatch=$skippedNoMatch, skippedAmbiguous=$skippedAmbiguous, " +
-                "errors=${errors.size}"
+                "ambiguousAutoResolved=$ambiguousAutoResolved, errors=${errors.size}"
         }
         return TeamcitySyncResult(
             scanned = scanned,
@@ -167,8 +190,65 @@ class TeamcitySyncService(
             unchanged = unchanged,
             skippedNoMatch = skippedNoMatch,
             skippedAmbiguous = skippedAmbiguous,
+            ambiguousAutoResolved = ambiguousAutoResolved,
             errors = errors.toList(),
         )
+    }
+
+    /**
+     * Tie-break for `candidates.size > 1`: keep only those with a CDRelease build,
+     * then pick the lexicographically smallest by id so the choice is stable
+     * across reruns. Returns null when no candidate has a release build — caller
+     * counts that as `skippedAmbiguous` (manual override is the escape hatch).
+     *
+     * Log-level policy:
+     *  - `withCdRelease.size == 1` → INFO. The auto-pick is the *intended*
+     *    outcome — exactly one project carries the release build, the other
+     *    candidates are typically legacy/archived duplicates of the
+     *    COMPONENT_NAME. Ops want this counted, not paged on.
+     *  - `withCdRelease.size > 1` → WARN. Genuine ambiguity (multiple "release"
+     *    projects share the same COMPONENT_NAME) where lexicographic tie-break
+     *    is just a deterministic last-resort; the row needs a TC cleanup.
+     *  - `withCdRelease.isEmpty()` → WARN. Skipped, ops should fix in TC.
+     */
+    private fun resolveAmbiguous(
+        component: ComponentEntity,
+        componentId: UUID,
+        candidates: List<TcProject>,
+    ): TcProject? {
+        val withCdRelease = candidates.filter { it.hasCdReleaseBuild }
+        if (withCdRelease.isEmpty()) {
+            log.warn {
+                "TC sync: ambiguous match for component '${component.name}' " +
+                    "(id=$componentId): ${candidates.size} TC projects share " +
+                    "COMPONENT_NAME=${component.name} but none has a CDRelease build " +
+                    "(${candidates.joinToString { it.id }}) — skipping."
+            }
+            return null
+        }
+        // String.compareTo on TC ids: TC project ids are conventionally
+        // [A-Za-z0-9_], so ASCII-lexicographic order is total and
+        // case-insensitivity is moot. !! is safe: we returned above when
+        // withCdRelease was empty, so minByOrNull cannot return null here.
+        // (Kotlin 1.9.x deprecated `minBy` in favour of `minByOrNull`.)
+        val pick = withCdRelease.minByOrNull { it.id }!!
+        if (withCdRelease.size == 1) {
+            log.info {
+                "TC sync: ambiguous match for component '${component.name}' " +
+                    "(id=$componentId): ${candidates.size} TC projects share " +
+                    "COMPONENT_NAME=${component.name}, exactly one has a CDRelease build " +
+                    "(${pick.id}); auto-picking it."
+            }
+        } else {
+            log.warn {
+                "TC sync: ambiguous match for component '${component.name}' " +
+                    "(id=$componentId): ${candidates.size} TC projects share " +
+                    "COMPONENT_NAME=${component.name}, ${withCdRelease.size} have a CDRelease build " +
+                    "(${withCdRelease.joinToString { it.id }}); auto-picking '${pick.id}' " +
+                    "(lexicographically smallest) — TC cleanup recommended."
+            }
+        }
+        return pick
     }
 
     /**

@@ -74,7 +74,7 @@ class TeamcitySyncServiceTest {
         val fetcher =
             stubFetcher(
                 mapOf(
-                    "alpha" to listOf(TcProject("Alpha_Build", "https://teamcity.example.com/project/Alpha_Build")),
+                    "alpha" to listOf(TcProject("Alpha_Build", "https://teamcity.example.com/project/Alpha_Build", hasCdReleaseBuild = false)),
                 ),
             )
         val repo = StubComponentRepository(components)
@@ -121,7 +121,7 @@ class TeamcitySyncServiceTest {
         val fetcher =
             stubFetcher(
                 mapOf(
-                    "alpha" to listOf(TcProject("Alpha_Build", "https://teamcity.example.com/project/Alpha_Build")),
+                    "alpha" to listOf(TcProject("Alpha_Build", "https://teamcity.example.com/project/Alpha_Build", hasCdReleaseBuild = false)),
                 ),
             )
         val repo = StubComponentRepository(components)
@@ -138,16 +138,16 @@ class TeamcitySyncServiceTest {
     }
 
     @Test
-    @DisplayName("ambiguous: 2+ matches → skip + count, no write")
-    fun ambiguousSkipped() {
+    @DisplayName("ambiguous + nobody has CDRelease build → skip + count, no write")
+    fun ambiguousNoCdReleaseSkipped() {
         val components = listOf(component(alice, "alpha"))
         val fetcher =
             stubFetcher(
                 mapOf(
                     "alpha" to
                         listOf(
-                            TcProject("Project_A", "https://teamcity.example.com/project/A"),
-                            TcProject("Project_B", "https://teamcity.example.com/project/B"),
+                            TcProject("Project_A", "https://teamcity.example.com/project/A", hasCdReleaseBuild = false),
+                            TcProject("Project_B", "https://teamcity.example.com/project/B", hasCdReleaseBuild = false),
                         ),
                 ),
             )
@@ -161,9 +161,98 @@ class TeamcitySyncServiceTest {
         assertEquals(0, result.updated)
         assertEquals(0, result.unchanged)
         assertEquals(1, result.skippedAmbiguous)
+        assertEquals(0, result.ambiguousAutoResolved)
         assertNull(components[0].teamcityProjectId, "ambiguous → no write")
         assertNull(components[0].teamcityProjectUrl, "ambiguous → no write")
         assertTrue(publisher.events.isEmpty())
+    }
+
+    @Test
+    @DisplayName("ambiguous + exactly one has CDRelease → tie-break to that one, count auto-resolved")
+    fun ambiguousSingleCdReleaseAutoResolved() {
+        val components = listOf(component(alice, "alpha"))
+        val fetcher =
+            stubFetcher(
+                mapOf(
+                    "alpha" to
+                        listOf(
+                            TcProject("Project_A_NoRelease", "https://tc/a", hasCdReleaseBuild = false),
+                            TcProject("Project_B_Release", "https://tc/b", hasCdReleaseBuild = true),
+                        ),
+                ),
+            )
+        val repo = StubComponentRepository(components)
+        val publisher = RecordingPublisher()
+        val svc = service(repo, fetcher, publisher, fixedUser("admin"))
+
+        val result = svc.resync()
+
+        assertEquals(1, result.scanned)
+        assertEquals(1, result.updated)
+        assertEquals(0, result.skippedAmbiguous)
+        assertEquals(1, result.ambiguousAutoResolved)
+        assertEquals("Project_B_Release", components[0].teamcityProjectId)
+        assertEquals("https://tc/b", components[0].teamcityProjectUrl)
+        assertEquals(1, publisher.events.filterIsInstance<AuditEvent>().size)
+    }
+
+    @Test
+    @DisplayName("ambiguous + multiple have CDRelease → pick lexicographically smallest by id")
+    fun ambiguousMultipleCdReleasePickFirstById() {
+        val components = listOf(component(alice, "alpha"))
+        // "Project_A_Release" < "Project_B_Release" lexicographically; both have CDRelease.
+        // Order in the list is intentionally inverted so the tie-break is by id, not by input order.
+        val fetcher =
+            stubFetcher(
+                mapOf(
+                    "alpha" to
+                        listOf(
+                            TcProject("Project_B_Release", "https://tc/b", hasCdReleaseBuild = true),
+                            TcProject("Project_A_Release", "https://tc/a", hasCdReleaseBuild = true),
+                        ),
+                ),
+            )
+        val repo = StubComponentRepository(components)
+        val publisher = RecordingPublisher()
+        val svc = service(repo, fetcher, publisher, fixedUser("admin"))
+
+        val result = svc.resync()
+
+        assertEquals(1, result.updated)
+        assertEquals(0, result.skippedAmbiguous)
+        assertEquals(1, result.ambiguousAutoResolved)
+        assertEquals("Project_A_Release", components[0].teamcityProjectId)
+        assertEquals("https://tc/a", components[0].teamcityProjectUrl)
+    }
+
+    @Test
+    @DisplayName("ambiguous tie-break to a CDRelease project with blank webUrl → no-match, ambiguousAutoResolved stays 0")
+    fun ambiguousTieBreakBlankUrlIsNoMatch() {
+        val components = listOf(component(alice, "alpha"))
+        val fetcher =
+            stubFetcher(
+                mapOf(
+                    "alpha" to
+                        listOf(
+                            TcProject("Project_NoUrl", "", hasCdReleaseBuild = true),
+                            TcProject("Project_Other", "https://tc/other", hasCdReleaseBuild = false),
+                        ),
+                ),
+            )
+        val repo = StubComponentRepository(components)
+        val publisher = RecordingPublisher()
+        val svc = service(repo, fetcher, publisher, fixedUser("admin"))
+
+        val result = svc.resync()
+
+        // Tie-break selected the CDRelease one, but its webUrl is unusable → counts as no-match.
+        // ambiguousAutoResolved is a sub-counter of `updated`+`unchanged` (per the result KDoc), so
+        // it must NOT increment for rows that ultimately fall into skipped_no_match.
+        assertEquals(1, result.skippedNoMatch)
+        assertEquals(0, result.updated)
+        assertEquals(0, result.skippedAmbiguous)
+        assertEquals(0, result.ambiguousAutoResolved)
+        assertNull(components[0].teamcityProjectId)
     }
 
     @Test
@@ -192,7 +281,7 @@ class TeamcitySyncServiceTest {
         val fetcher =
             stubFetcher(
                 mapOf(
-                    "alpha" to listOf(TcProject("Alpha_Build", "https://teamcity.example.com/project/Alpha_Build")),
+                    "alpha" to listOf(TcProject("Alpha_Build", "https://teamcity.example.com/project/Alpha_Build", hasCdReleaseBuild = false)),
                 ),
             )
         val repo = StubComponentRepository(components)
@@ -212,7 +301,7 @@ class TeamcitySyncServiceTest {
     @DisplayName("blank webUrl: treated as no-match")
     fun blankWebUrlIsNoMatch() {
         val components = listOf(component(alice, "alpha"))
-        val fetcher = stubFetcher(mapOf("alpha" to listOf(TcProject("Project_A", ""))))
+        val fetcher = stubFetcher(mapOf("alpha" to listOf(TcProject("Project_A", "", hasCdReleaseBuild = false))))
         val repo = StubComponentRepository(components)
         val publisher = RecordingPublisher()
         val svc = service(repo, fetcher, publisher, fixedUser("admin"))
@@ -274,8 +363,8 @@ class TeamcitySyncServiceTest {
         val fetcher =
             stubFetcher(
                 mapOf(
-                    "alpha" to listOf(TcProject("Alpha_Build", "https://teamcity.example.com/project/Alpha_Build")),
-                    "beta" to listOf(TcProject("Beta_Build", "https://teamcity.example.com/project/Beta_Build")),
+                    "alpha" to listOf(TcProject("Alpha_Build", "https://teamcity.example.com/project/Alpha_Build", hasCdReleaseBuild = false)),
+                    "beta" to listOf(TcProject("Beta_Build", "https://teamcity.example.com/project/Beta_Build", hasCdReleaseBuild = false)),
                 ),
             )
         val repo = StubComponentRepository(components)
