@@ -17,7 +17,19 @@ private const val COMPONENT_NAME_PARAM = "COMPONENT_NAME"
 // `href` and `webUrl` are non-nullable on the library's TeamcityProject DTO, so the
 // fields spec MUST request them or Jackson throws on deserialisation. We don't read
 // `href` ourselves — it just has to round-trip through the client.
-private const val PROJECT_FIELDS = "project(id,name,webUrl,href,parameters(property(name,value)))"
+//
+// `buildTypes(buildType(id,template(id),templates(buildType(id))))` powers the
+// CDRelease tie-breaker for ambiguous matches: we only need each buildType id and
+// its template ancestry. Both `template` (legacy single, TC <2018) and `templates`
+// (multi, TC2018+) are requested because TC populates only one of the two
+// depending on installation/version; checking both keeps the detection robust at
+// negligible cost (one extra id per buildType). Direct buildTypes only — sub-projects
+// are not walked, on the convention that the project carrying COMPONENT_NAME also
+// owns the release build.
+private const val PROJECT_FIELDS =
+    "project(id,name,webUrl,href," +
+        "parameters(property(name,value))," +
+        "buildTypes(buildType(id,template(id),templates(buildType(id)))))"
 
 @Configuration
 class TeamcityClientConfig {
@@ -38,9 +50,10 @@ class TeamcityClientConfig {
  *   The simple `parameter:(name:X)` filter is universally supported.
  *
  * Multiple TC projects sharing the same `COMPONENT_NAME` are all included in the
- * `List<TcProject>` for that component — [TeamcitySyncService.applyMatches] treats
- * `size > 1` as `skipped_ambiguous` and skips the row. Projects whose
- * `COMPONENT_NAME` is unknown to CRS, missing, or blank are silently dropped.
+ * `List<TcProject>` for that component; each carries `hasCdReleaseBuild` derived
+ * from the same response so [TeamcitySyncService.applyMatches] can pick the
+ * release-flagged one without an extra round-trip. Projects whose `COMPONENT_NAME`
+ * is unknown to CRS, missing, or blank are silently dropped.
  *
  * The client is lazily initialised so that a blank [TeamcityProperties.baseUrl]
  * does not attempt a connection until [findByComponentNames] is actually called.
@@ -85,7 +98,11 @@ internal class ExternalTcProjectFetcher(
         val projects = response.projects.orEmpty()
         log.info { "TC sync: TC returned ${projects.size} projects with $COMPONENT_NAME_PARAM parameter" }
 
-        return mapTcProjectsToComponentMatches(projects, componentsByName)
+        return mapTcProjectsToComponentMatches(
+            projects,
+            componentsByName,
+            properties.sync.cdReleaseTemplateId,
+        )
     }
 }
 
@@ -94,10 +111,17 @@ internal class ExternalTcProjectFetcher(
  * `COMPONENT_NAME` parameter value, looks it up in [componentsByName], and groups
  * the resulting [TcProject]s by component UUID. Projects without the parameter,
  * with a blank value, or whose value is unknown to CRS are dropped.
+ *
+ * `hasCdReleaseBuild` is computed per-project from the same response: true iff
+ * any direct [ExternalTeamcityProject.buildTypes] entry inherits — through either
+ * the legacy single `template` or the multi `templates` link — from the
+ * configured [cdReleaseTemplateId]. Inheritance is checked **only** at the
+ * project carrying the COMPONENT_NAME parameter; sub-projects are not walked.
  */
 internal fun mapTcProjectsToComponentMatches(
     projects: List<ExternalTeamcityProject>,
     componentsByName: Map<String, UUID>,
+    cdReleaseTemplateId: String,
 ): Map<UUID, List<TcProject>> =
     projects
         .mapNotNull { project ->
@@ -108,6 +132,16 @@ internal fun mapTcProjectsToComponentMatches(
                 ?.takeIf { it.isNotEmpty() }
                 ?: return@mapNotNull null
             val uuid = componentsByName[componentName] ?: return@mapNotNull null
-            uuid to TcProject(id = project.id, webUrl = project.webUrl)
+            val hasCdRelease = projectHasCdReleaseBuild(project, cdReleaseTemplateId)
+            uuid to TcProject(id = project.id, webUrl = project.webUrl, hasCdReleaseBuild = hasCdRelease)
         }
         .groupBy({ it.first }, { it.second })
+
+private fun projectHasCdReleaseBuild(
+    project: ExternalTeamcityProject,
+    cdReleaseTemplateId: String,
+): Boolean =
+    project.buildTypes?.buildTypes?.any { bt ->
+        bt.template?.id == cdReleaseTemplateId ||
+            bt.templates?.buildTypes?.any { it.id == cdReleaseTemplateId } == true
+    } == true
