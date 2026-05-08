@@ -709,8 +709,8 @@ class MigrationIntegrationTest {
     @Test
     @DisplayName(
         "MIG-029: toEscrowModule must not fabricate a synthetic ALL_VERSIONS config " +
-            "for version-range-only components, while preserving exact ranges for default-only " +
-            "and default+versions cases",
+            "for version-range-only components, while preserving the single ALL_VERSIONS " +
+            "row for default-only components",
     )
     // Disabled by default: this test reproduces a known bug (no fix yet on `v3`); enabling it
     // would turn the default `:components-registry-service-server:test` red on every run.
@@ -720,6 +720,14 @@ class MigrationIntegrationTest {
     @EnabledIfSystemProperty(named = "compat.mig029.enabled", matches = "true")
     fun `MIG-029 version-range-only component does not produce synthetic ALL_VERSIONS in toEscrowModule`() {
         val allVersions = "(,0),[0,)"
+
+        // EscrowConfigurationLoader collapses the source DSL into exactly two
+        // moduleConfigurations shapes (see EntityMappers.kt:407-413):
+        //   (1) a single ALL_VERSIONS row when the DSL has no version-range blocks, or
+        //   (2) only version-specific rows when at least one version-range block is present
+        //       (top-level fields, if any, are absorbed into each version-specific config).
+        // There is no third "ALL_VERSIONS + version-specific" shape, so this test exercises
+        // exactly those two branches.
 
         // (1) version-range-only — TEST_COMPONENT3 DSL has no top-level ALL_VERSIONS
         // wrapper, only "(,1.0.107)" and "[1.0.107,)" blocks. Expected ranges = exactly the
@@ -734,13 +742,6 @@ class MigrationIntegrationTest {
         val defaultOnly = dbResolver.getComponentById("TEST_COMPONENT_WITH_GOLANG_BUILD_SYSTEM")
         assertNotNull(defaultOnly, "TEST_COMPONENT_WITH_GOLANG_BUILD_SYSTEM must be present after migration")
         val defaultOnlyRanges = defaultOnly!!.moduleConfigurations.map { it.versionRangeString }.toSet()
-
-        // (3) default + versions — TEST_COMPONENT_VERSIONED_ARTIFACT has top-level fields
-        // AND two version-range blocks "(,2.0)" / "[2.0,)". Expected ranges = ALL_VERSIONS
-        // plus the two DSL ranges.
-        val defaultPlusVersions = dbResolver.getComponentById("TEST_COMPONENT_VERSIONED_ARTIFACT")
-        assertNotNull(defaultPlusVersions, "TEST_COMPONENT_VERSIONED_ARTIFACT must be present after migration")
-        val defaultPlusVersionsRanges = defaultPlusVersions!!.moduleConfigurations.map { it.versionRangeString }.toSet()
 
         assertAll(
             // AC #1 — the bug: must NOT contain the synthetic ALL_VERSIONS, must equal exactly the DSL ranges
@@ -763,14 +764,6 @@ class MigrationIntegrationTest {
                     setOf(allVersions),
                     defaultOnlyRanges,
                     "TEST_COMPONENT_WITH_GOLANG_BUILD_SYSTEM (default-only) must surface exactly [$allVersions]",
-                )
-            },
-            // AC #3 — regression guard: default + versions must produce all three keys
-            {
-                assertEquals(
-                    setOf(allVersions, "(,2.0)", "[2.0,)"),
-                    defaultPlusVersionsRanges,
-                    "TEST_COMPONENT_VERSIONED_ARTIFACT (default+versions) must surface ALL_VERSIONS plus DSL ranges",
                 )
             },
         )

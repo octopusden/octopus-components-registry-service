@@ -868,10 +868,17 @@ On the read-back path, `ComponentEntity.toEscrowModule()` (`EntityMappers.kt:42-
 This breaks v1/v2/v3 backward compatibility for any consumer that compares the set of variant ranges or looks up a per-range configuration.
 
 **Acceptance criteria:**
+
+`EscrowConfigurationLoader` produces exactly two `moduleConfigurations` shapes for any
+DSL module: a single `ALL_VERSIONS` row when no version-range sections exist, or only
+version-specific rows when at least one version-range block is present (top-level fields
+in the latter case are absorbed into each version-specific config). There is no third
+"default + version-range" shape — the loader collapses it. The criteria therefore cover
+both real shapes:
+
 1. After Git → DB migration of a version-range-only DSL component (e.g. `TEST_COMPONENT3` — only `"(,1.0.107)"` and `"[1.0.107,)"` blocks, no top-level wrapper), `dbResolver.getComponentById("TEST_COMPONENT3")!!.moduleConfigurations.map { it.versionRangeString }` does **not** contain `"(,0),[0,)"`. Set-equal to the original DSL ranges.
 2. After migration of a default-only DSL component (e.g. component with only top-level fields, no version-range blocks), `getComponentById(...)!!.moduleConfigurations` is exactly `[ALL_VERSIONS]` (one row).
-3. After migration of a "default + version-range" DSL component (top-level fields followed by version-specific blocks), `getComponentById(...)!!.moduleConfigurations.map { it.versionRangeString }` is set-equal to `[ALL_VERSIONS, <range1>, <range2>, ...]` matching the DSL.
-4. v3 list endpoint (`GET /rest/api/3/components`) returns `variants` keys exactly matching the DSL ranges per component (no extra `(,0),[0,)` entries for version-range-only components).
+3. v3 list endpoint (`GET /rest/api/3/components`) returns `variants` keys exactly matching the DSL ranges per component (no extra `(,0),[0,)` entries for version-range-only components).
 
 **Out of scope:**
 - Re-migration of existing 933 production components (test-only environments are recreated from scratch — see project notes).
