@@ -192,6 +192,10 @@ configure(subprojects) {
             // can fail sporadically on GH
             'junit.jupiter.execution.parallel.enabled': false
         ]
+        // Forward the MIG-029 reproduction toggle to the test JVM. Default off;
+        // enable with -Pcompat.mig029.enabled=true to reproduce the bug or verify a fix.
+        // See MigrationIntegrationTest.MIG-029 + docs/db-migration/requirements-migration.md.
+        systemProperty 'compat.mig029.enabled', project.findProperty('compat.mig029.enabled') ?: 'false'
         // Testcontainers + Colima: override socket path mounted into Ryuk container
         environment 'TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE', '/var/run/docker.sock'
         // Route Testcontainers image pulls through the internal Docker registry when

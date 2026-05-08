@@ -38,6 +38,7 @@
 | MIG-026 | POST /rest/api/4/admin/migrate-history backfills git history into audit_log | High | integration-test | ❌ Not tested |
 | MIG-027 | POST /admin/migrate is async; 202 new / 409 re-run guard / GET /admin/migrate/job polling | High | integration-test | ✅ Tested |
 | MIG-028 | Async migration job state survives pod restart | Medium | design | ❌ Open |
+| MIG-029 | DB → EscrowModule round-trip preserves the absence of a default ALL_VERSIONS config for version-range-only components | High | integration-test | ❌ Not tested |
 
 ---
 
@@ -850,3 +851,42 @@ The MIG-027 surface (DTO, status codes, paths) does **not** change as part of MI
 - Add a `migration_job_state` table mirroring `git_history_import_state`: PK `id` (UUID), columns matching `MigrationJobState` fields, plus `updated_at`.
 - Replace `AtomicReference` with a transactional read/write through that table.
 - On pod startup, scan for `state=RUNNING` rows older than a sane threshold (e.g. 1 hour) and mark them `FAILED` with `errorMessage="interrupted by pod restart"`.
+
+---
+
+### MIG-029: DB → EscrowModule round-trip preserves the absence of a default ALL_VERSIONS config
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ❌ Not tested
+
+**Description:**
+`EscrowConfigurationLoader` produces two shapes of `EscrowModule.moduleConfigurations` for a Git-DSL module: (1) a single `ALL_VERSIONS = "(,0),[0,)"` config when the DSL has no version-range blocks, or (2) only version-specific configs when the DSL has only `"<range>" { ... }` blocks (no top-level fields wrapped under `(,0),[0,)`). `EntityMappers.toComponentEntity()` correctly distinguishes the two shapes via a `hasDefaultConfig` local flag, but loses that distinction when persisting to the DB — `ComponentEntity` has no field that records "originally had ALL_VERSIONS row".
+
+On the read-back path, `ComponentEntity.toEscrowModule()` (`EntityMappers.kt:42-57`) **unconditionally** synthesises a default `(,0),[0,)` config for every component, then appends `versions` on top. As a result, the DB resolver's `getComponents()` returns an extra spurious `(,0),[0,)` row for every version-range-only component. The compat-test smoke run discovered this on three of ten sampled production components (variants Map keys for those components on the v3 stand contain `(,0),[0,)`, on the prod main stand they do not).
+
+This breaks v1/v2/v3 backward compatibility for any consumer that compares the set of variant ranges or looks up a per-range configuration.
+
+**Acceptance criteria:**
+
+`EscrowConfigurationLoader` produces exactly two `moduleConfigurations` shapes for any
+DSL module: a single `ALL_VERSIONS` row when no version-range sections exist, or only
+version-specific rows when at least one version-range block is present (top-level fields
+in the latter case are absorbed into each version-specific config). No combined shape
+exists — the loader collapses any DSL with both into the version-specific-only form.
+The criteria therefore cover both real shapes:
+
+1. After Git → DB migration of a version-range-only DSL component (e.g. `TEST_COMPONENT3` — only `"(,1.0.107)"` and `"[1.0.107,)"` blocks, no top-level wrapper), `dbResolver.getComponentById("TEST_COMPONENT3")!!.moduleConfigurations.map { it.versionRangeString }` does **not** contain `"(,0),[0,)"`. Set-equal to the original DSL ranges.
+2. After migration of a default-only DSL component (e.g. component with only top-level fields, no version-range blocks), `getComponentById(...)!!.moduleConfigurations` is exactly `[ALL_VERSIONS]` (one row).
+3. v3 list endpoint (`GET /rest/api/3/components`) returns `variants` keys exactly matching the DSL ranges per component (no extra `(,0),[0,)` entries for version-range-only components).
+
+**Out of scope:**
+- Re-migration of existing 933 production components (test-only environments are recreated from scratch — see project notes).
+- Feature flag / rollout: this is a bug fix, not a switchable behaviour.
+
+**Suggested implementation sketch:**
+- Add a non-nullable boolean `has_default_config` column to `components` table (entity field default `false`; populated by `toComponentEntity` from the existing local `hasDefaultConfig` flag).
+- `toEscrowModule` emits the synthetic default config only when `entity.hasDefaultConfig == true` OR `entity.versions.isEmpty()` (degenerate case: nothing to iterate, must emit at least one config so the module is non-empty).
+- Test data already covers the version-range-only shape via `TEST_COMPONENT3`; add a focused MIG-029 test method in `MigrationIntegrationTest`.
+
+**Test method:** `MigrationIntegrationTest.MIG-029 version-range-only component does not produce a synthetic ALL_VERSIONS config in toEscrowModule`

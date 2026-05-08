@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
@@ -690,6 +691,80 @@ class MigrationIntegrationTest {
                 val fmt1 = rangesWithJira["(,1.0.107)"]!!.first().componentVersionFormat?.get("releaseVersionFormat")
                 val fmt2 = rangesWithJira["[1.0.107,)"]!!.first().componentVersionFormat?.get("releaseVersionFormat")
                 assertNotEquals(fmt1, fmt2, "the two ranges must surface different releaseVersionFormat values to prove per-range jira is exposed")
+            },
+        )
+    }
+
+    // ---------------------------------------------------------------------------
+    // MIG-029: DB → EscrowModule round-trip preserves the absence of a default
+    //          ALL_VERSIONS config for version-range-only components.
+    //
+    // Reproduces the bug discovered by the v1/v2/v3 compat-test smoke run
+    // (3 of 10 prod components had a spurious "(,0),[0,)" key added to v3 variants
+    // that was absent on the main/baseline stand). Root cause: ComponentEntity has
+    // no field recording "originally had ALL_VERSIONS row", so toEscrowModule()
+    // unconditionally fabricates one regardless of source DSL shape.
+    // ---------------------------------------------------------------------------
+
+    @Test
+    @DisplayName(
+        "MIG-029: toEscrowModule must not fabricate a synthetic ALL_VERSIONS config " +
+            "for version-range-only components, while preserving the single ALL_VERSIONS " +
+            "row for default-only components",
+    )
+    // Disabled by default: this test reproduces a known bug (no fix yet on `v3`); enabling it
+    // would turn the default `:components-registry-service-server:test` red on every run.
+    // Opt in to reproduce the bug or to verify a candidate fix:
+    //   ./gradlew :components-registry-service-server:test --tests "*.MIG-029*" -Pcompat.mig029.enabled=true
+    // (The Gradle property is forwarded to the test JVM as a system property in root build.gradle.)
+    @EnabledIfSystemProperty(named = "compat.mig029.enabled", matches = "true")
+    fun `MIG-029 version-range-only component does not produce synthetic ALL_VERSIONS in toEscrowModule`() {
+        val allVersions = "(,0),[0,)"
+
+        // EscrowConfigurationLoader collapses the source DSL into exactly two
+        // moduleConfigurations shapes (see EntityMappers.kt:407-413):
+        //   (1) a single ALL_VERSIONS row when the DSL has no version-range blocks, or
+        //   (2) only version-specific rows when at least one version-range block is present
+        //       (top-level fields, if any, are absorbed into each version-specific config).
+        // There is no third "ALL_VERSIONS + version-specific" shape, so this test exercises
+        // exactly those two branches.
+
+        // (1) version-range-only — TEST_COMPONENT3 DSL has no top-level ALL_VERSIONS
+        // wrapper, only "(,1.0.107)" and "[1.0.107,)" blocks. Expected ranges = exactly the
+        // two DSL ranges. Currently fails because toEscrowModule prepends a synthetic
+        // (,0),[0,) row.
+        val versionRangeOnly = dbResolver.getComponentById("TEST_COMPONENT3")
+        assertNotNull(versionRangeOnly, "TEST_COMPONENT3 must be present after migration")
+        val versionRangeOnlyRanges = versionRangeOnly!!.moduleConfigurations.map { it.versionRangeString }.toSet()
+
+        // (2) default-only — TEST_COMPONENT_WITH_GOLANG_BUILD_SYSTEM has only top-level
+        // fields, no version-range blocks. Expected ranges = exactly [ALL_VERSIONS].
+        val defaultOnly = dbResolver.getComponentById("TEST_COMPONENT_WITH_GOLANG_BUILD_SYSTEM")
+        assertNotNull(defaultOnly, "TEST_COMPONENT_WITH_GOLANG_BUILD_SYSTEM must be present after migration")
+        val defaultOnlyRanges = defaultOnly!!.moduleConfigurations.map { it.versionRangeString }.toSet()
+
+        assertAll(
+            // AC #1 — the bug: must NOT contain the synthetic ALL_VERSIONS, must equal exactly the DSL ranges
+            {
+                assertFalse(
+                    versionRangeOnlyRanges.contains(allVersions),
+                    "TEST_COMPONENT3 (version-range-only) must NOT have a synthetic '$allVersions' config; got $versionRangeOnlyRanges",
+                )
+            },
+            {
+                assertEquals(
+                    setOf("(,1.0.107)", "[1.0.107,)"),
+                    versionRangeOnlyRanges,
+                    "TEST_COMPONENT3 ranges must equal the source DSL ranges exactly",
+                )
+            },
+            // AC #2 — regression guard: default-only must keep the single ALL_VERSIONS entry
+            {
+                assertEquals(
+                    setOf(allVersions),
+                    defaultOnlyRanges,
+                    "TEST_COMPONENT_WITH_GOLANG_BUILD_SYSTEM (default-only) must surface exactly [$allVersions]",
+                )
             },
         )
     }
