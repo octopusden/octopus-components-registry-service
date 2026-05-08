@@ -126,6 +126,12 @@ Backend-only checks from the table (server health, GET endpoints, PATCH with nes
 
 The original 4-test smoke pack at `components-registry-ui/e2e/smoke.spec.ts` was deleted with the rest of the UI module in PR #147. The current equivalent lives at `frontend/e2e/smoke.spec.ts` in the Portal repo. Authenticated e2e (Migration tab + Admin-mode + role gating) is still pending — see Portal `TD-001`.
 
+## Phase 10: Auth Role Provisioning ✅
+
+| Task | Status | Notes |
+|------|--------|-------|
+| 10A | ✅ Done | 2026-05-08 — `COMPONENTS_REGISTRY_EDITOR` + `COMPONENTS_REGISTRY_VIEWER` materialised in QA and prod realms; `COMPONENTS_REGISTRY_EDITOR` added to `default-roles-{realm}`; phantom role keys renamed `ROLE_REGISTRY_*` → `ROLE_COMPONENTS_REGISTRY_*` (CRS PR #178, Portal PR #34). Operator-facing setup steps live in [`deployment/keycloak-setup.md`](deployment/keycloak-setup.md). |
+
 ## What's Left (see todo.md)
 
 - Persisted async migration job state across pod restarts — MIG-028.

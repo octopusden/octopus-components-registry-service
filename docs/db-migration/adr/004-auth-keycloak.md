@@ -1,7 +1,7 @@
 # ADR-004: Authentication & Authorization via Keycloak
 
 ## Status
-Accepted. **Implemented:** 2026‑04‑28 (commit `b97fad2`, PR #150 — Keycloak auth + v4 `@PreAuthorize`).
+Accepted. **Implemented:** 2026‑04‑28 (commit `b97fad2`, PR #150 — Keycloak auth + v4 `@PreAuthorize`). **Realm-roles `COMPONENTS_REGISTRY_EDITOR` / `_VIEWER` materialised:** 2026‑05‑08 — operator-facing provisioning steps in [`deployment/keycloak-setup.md`](../deployment/keycloak-setup.md).
 
 ## Context
 
@@ -209,9 +209,11 @@ octopus-security:
       - ACCESS_COMPONENTS
       - EDIT_COMPONENTS
       - ACCESS_AUDIT
-    # Super-admin — reuses the existing Keycloak realm-role `ADMIN`
-    # (bare; converter prefixes ROLE_). F1_ADMIN is a separate f1-security legacy
-    # role, currently assigned to no one in f1-qa — not used by registry.
+    # Super-admin — reuses whatever platform-wide admin realm-role already
+    # exists in your Keycloak realm (commonly literally named `ADMIN`; the
+    # converter prefixes `ROLE_`). Earlier drafts proposed a dedicated
+    # `ROLE_<PRODUCT>_ADMIN`; reusing the platform admin avoids wiring
+    # admin-access through a role nobody currently carries.
     ROLE_ADMIN:
       - ACCESS_COMPONENTS
       - EDIT_COMPONENTS
@@ -226,7 +228,7 @@ Notes on the model:
 
 - `ROLE_COMPONENTS_REGISTRY_EDITOR` deliberately does **not** carry `ARCHIVE_COMPONENTS` or `RENAME_COMPONENTS`. Archive/rename are reserved for ADMIN (or, longer-term, for a per-component check against `componentOwner` / `releaseManager` — the permission name is kept stable so that check can be added without re-wiring the role map).
 - The `PATCH /{id}` SpEL guard enforces this field-by-field: `... and (#request.archived == null or canArchiveComponent(...)) and (#request.name == null or canRenameComponent(...))`. Plain edits stay on `EDIT_COMPONENTS`; archive/rename payloads fail closed with 403 for anyone without the extra permission.
-- Super-admin role is `ROLE_ADMIN`, reusing the existing Keycloak `ADMIN` realm-role. This diverges from the original ADR draft (`ROLE_F1_ADMIN`) because `F1_ADMIN` in `f1-qa` is currently assigned to no users — wiring admin-access through it would leave real operators locked out.
+- Super-admin role is `ROLE_ADMIN`, reusing whatever existing platform-wide admin realm-role your Keycloak instance already carries (commonly literally named `ADMIN`). This diverges from an earlier draft that proposed a dedicated `ROLE_<PRODUCT>_ADMIN`; reusing the platform admin avoids wiring admin-access through a role nobody currently carries.
 
 ### Keycloak Configuration
 
