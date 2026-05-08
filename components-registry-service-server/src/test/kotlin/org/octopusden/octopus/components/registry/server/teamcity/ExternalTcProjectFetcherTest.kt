@@ -1,5 +1,7 @@
 package org.octopusden.octopus.components.registry.server.teamcity
 
+import com.fasterxml.jackson.databind.DeserializationFeature
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
@@ -7,6 +9,7 @@ import org.junit.jupiter.api.Test
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityBuildType as ExternalTeamcityBuildType
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityBuildTypes as ExternalTeamcityBuildTypes
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProject as ExternalTeamcityProject
+import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProjects as ExternalTeamcityProjects
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProperties as ExternalTeamcityProperties
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProperty as ExternalTeamcityProperty
 import java.util.UUID
@@ -237,6 +240,81 @@ class ExternalTcProjectFetcherTest {
         )
         val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId = "CustomReleaseTpl")
         assertEquals(true, result[fooUuid]!!.single().hasCdReleaseBuild)
+    }
+
+    @Test
+    @DisplayName("Jackson round-trip: a TC response shaped exactly to PROJECT_FIELDS deserializes and maps cleanly")
+    fun jacksonRoundTripWithFieldsSpec() {
+        // Why this test:
+        //   The other tests construct ExternalTeamcityProject via the Kotlin
+        //   constructor (which fills in every required field). That bypasses
+        //   Jackson and hides the failure mode where PROJECT_FIELDS forgets a
+        //   required column on TeamcityBuildType (id/name/projectId/projectName/href
+        //   are non-null on the library DTO). This test mimics what TC actually
+        //   returns for our fields spec — only the listed columns are populated —
+        //   and round-trips through the same ObjectMapper config the library
+        //   itself uses, so a future spec narrowing surfaces here as a
+        //   MissingKotlinParameterException-style failure rather than as a
+        //   prod resync exploding with `0 returned`.
+        //
+        // The legacy `template` and plural `templates(buildType(...))` blocks
+        // both populate all five required buildType columns, mirroring what
+        // PROJECT_FIELDS asks TC for.
+        val json = """
+            {
+              "project": [
+                {
+                  "id": "Tc_Foo",
+                  "name": "Foo",
+                  "webUrl": "http://tc/foo",
+                  "href": "/app/rest/projects/Tc_Foo",
+                  "parameters": {
+                    "property": [{"name": "COMPONENT_NAME", "value": "foo"}]
+                  },
+                  "buildTypes": {
+                    "buildType": [
+                      {
+                        "id": "Tc_Foo_Build",
+                        "name": "Build",
+                        "projectId": "Tc_Foo",
+                        "projectName": "Foo",
+                        "href": "/app/rest/buildTypes/id:Tc_Foo_Build",
+                        "template": {
+                          "id": "CDRelease",
+                          "name": "CDRelease",
+                          "projectId": "_Templates",
+                          "projectName": "Templates",
+                          "href": "/app/rest/buildTypes/id:CDRelease"
+                        },
+                        "templates": {
+                          "buildType": [
+                            {
+                              "id": "CDRelease",
+                              "name": "CDRelease",
+                              "projectId": "_Templates",
+                              "projectName": "Templates",
+                              "href": "/app/rest/buildTypes/id:CDRelease"
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+        """.trimIndent()
+        // Mirror the library's getMapper() in TeamcityClassicClient.companion:
+        // jacksonObjectMapper + FAIL_ON_UNKNOWN_PROPERTIES=false. That's what
+        // hits the wire on real resyncs, so we deserialize through the same
+        // configuration to make the test diagnostic of prod behaviour.
+        val mapper = jacksonObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+        val response = mapper.readValue(json, ExternalTeamcityProjects::class.java)
+        val result = mapTcProjectsToComponentMatches(response.projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
+        val tcProject = result[fooUuid]?.single() ?: error("expected exactly one match for foo")
+        assertEquals("Tc_Foo", tcProject.id)
+        assertEquals("http://tc/foo", tcProject.webUrl)
+        assertEquals(true, tcProject.hasCdReleaseBuild)
     }
 
     private fun tcProject(
