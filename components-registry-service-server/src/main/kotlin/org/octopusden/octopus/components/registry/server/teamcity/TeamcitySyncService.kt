@@ -228,9 +228,10 @@ class TeamcitySyncService(
         }
         // String.compareTo on TC ids: TC project ids are conventionally
         // [A-Za-z0-9_], so ASCII-lexicographic order is total and
-        // case-insensitivity is moot. minBy returns the first occurrence on
-        // a tie; ties on id can't happen (TC enforces unique project ids).
-        val pick = withCdRelease.minBy { it.id }
+        // case-insensitivity is moot. !! is safe: we returned above when
+        // withCdRelease was empty, so minByOrNull cannot return null here.
+        // (Kotlin 1.9.x deprecated `minBy` in favour of `minByOrNull`.)
+        val pick = withCdRelease.minByOrNull { it.id }!!
         if (withCdRelease.size == 1) {
             log.info {
                 "TC sync: ambiguous match for component '${component.name}' " +

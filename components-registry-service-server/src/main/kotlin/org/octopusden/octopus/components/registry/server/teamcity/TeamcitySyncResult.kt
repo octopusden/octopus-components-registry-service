@@ -15,7 +15,10 @@ import com.fasterxml.jackson.annotation.JsonProperty
  *                   both single-candidate matches and ambiguous rows resolved
  *                   by the CDRelease tie-break).
  * - `unchanged`   — components matched and already correct (no DB write).
- * - `skippedNoMatch`   — components with no TC project carrying the parameter.
+ * - `skippedNoMatch`   — components with no TC project carrying the parameter,
+ *                        plus single-candidate / tie-broken matches dropped by
+ *                        the URL guard (blank or non-http(s) `webUrl` cannot
+ *                        be linked, so the row falls through to no-match).
  * - `skippedAmbiguous` — components matched by ≥2 TC projects where the
  *                        CDRelease tie-break could not pick a winner (no
  *                        candidate owns a release build). Manual override is the
