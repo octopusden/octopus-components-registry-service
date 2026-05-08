@@ -4,6 +4,8 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityBuildType as ExternalTeamcityBuildType
+import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityBuildTypes as ExternalTeamcityBuildTypes
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProject as ExternalTeamcityProject
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProperties as ExternalTeamcityProperties
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProperty as ExternalTeamcityProperty
@@ -18,11 +20,12 @@ class ExternalTcProjectFetcherTest {
 
     private val fooUuid = UUID.randomUUID()
     private val barUuid = UUID.randomUUID()
+    private val cdReleaseTemplateId = "CDRelease"
 
     @Test
     @DisplayName("empty input -> empty output")
     fun emptyInputEmptyOutput() {
-        val result = mapTcProjectsToComponentMatches(emptyList(), mapOf("foo" to fooUuid))
+        val result = mapTcProjectsToComponentMatches(emptyList(), mapOf("foo" to fooUuid), cdReleaseTemplateId)
         assertTrue(result.isEmpty())
     }
 
@@ -30,15 +33,18 @@ class ExternalTcProjectFetcherTest {
     @DisplayName("project with known COMPONENT_NAME maps to UUID")
     fun knownComponentNameMaps() {
         val projects = listOf(tcProject(id = "Tc_Foo", webUrl = "http://tc/foo", componentName = "foo"))
-        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid))
-        assertEquals(mapOf(fooUuid to listOf(TcProject(id = "Tc_Foo", webUrl = "http://tc/foo"))), result)
+        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
+        assertEquals(
+            mapOf(fooUuid to listOf(TcProject(id = "Tc_Foo", webUrl = "http://tc/foo", hasCdReleaseBuild = false))),
+            result,
+        )
     }
 
     @Test
     @DisplayName("project whose COMPONENT_NAME is unknown to CRS is dropped")
     fun unknownComponentNameDropped() {
         val projects = listOf(tcProject(id = "Tc_Stranger", webUrl = "http://tc/x", componentName = "not-in-registry"))
-        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid))
+        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
         assertTrue(result.isEmpty())
     }
 
@@ -48,7 +54,7 @@ class ExternalTcProjectFetcherTest {
         val projects = listOf(
             ExternalTeamcityProject(id = "Tc_Empty", name = "Empty", href = "/x", webUrl = "http://tc/empty"),
         )
-        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid))
+        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
         assertTrue(result.isEmpty())
     }
 
@@ -64,7 +70,7 @@ class ExternalTcProjectFetcherTest {
                 parameters = ExternalTeamcityProperties(properties = mutableListOf(ExternalTeamcityProperty(name = "OTHER", value = "y"))),
             ),
         )
-        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid))
+        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
         assertTrue(result.isEmpty())
     }
 
@@ -72,7 +78,7 @@ class ExternalTcProjectFetcherTest {
     @DisplayName("project with whitespace-only COMPONENT_NAME value is dropped")
     fun whitespaceOnlyValueDropped() {
         val projects = listOf(tcProject(id = "Tc_Blank", webUrl = "http://tc/blank", componentName = "   "))
-        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid))
+        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
         assertTrue(result.isEmpty())
     }
 
@@ -83,7 +89,7 @@ class ExternalTcProjectFetcherTest {
             tcProject(id = "Tc_Foo_A", webUrl = "http://tc/foo-a", componentName = "foo"),
             tcProject(id = "Tc_Foo_B", webUrl = "http://tc/foo-b", componentName = "foo"),
         )
-        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid))
+        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
         assertEquals(1, result.size)
         assertEquals(2, result[fooUuid]!!.size)
         assertEquals(setOf("Tc_Foo_A", "Tc_Foo_B"), result[fooUuid]!!.map { it.id }.toSet())
@@ -93,8 +99,11 @@ class ExternalTcProjectFetcherTest {
     @DisplayName("value with surrounding whitespace is trimmed before matching")
     fun whitespaceTrimmedBeforeMatching() {
         val projects = listOf(tcProject(id = "Tc_Foo", webUrl = "http://tc/foo", componentName = "  foo  "))
-        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid))
-        assertEquals(mapOf(fooUuid to listOf(TcProject(id = "Tc_Foo", webUrl = "http://tc/foo"))), result)
+        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
+        assertEquals(
+            mapOf(fooUuid to listOf(TcProject(id = "Tc_Foo", webUrl = "http://tc/foo", hasCdReleaseBuild = false))),
+            result,
+        )
     }
 
     @Test
@@ -117,8 +126,15 @@ class ExternalTcProjectFetcherTest {
                 ),
             ),
         )
-        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid, "bar" to barUuid))
-        assertEquals(mapOf(fooUuid to listOf(TcProject(id = "Tc_Dup", webUrl = "http://tc/dup"))), result)
+        val result = mapTcProjectsToComponentMatches(
+            projects,
+            mapOf("foo" to fooUuid, "bar" to barUuid),
+            cdReleaseTemplateId,
+        )
+        assertEquals(
+            mapOf(fooUuid to listOf(TcProject(id = "Tc_Dup", webUrl = "http://tc/dup", hasCdReleaseBuild = false))),
+            result,
+        )
     }
 
     @Test
@@ -131,13 +147,104 @@ class ExternalTcProjectFetcherTest {
             tcProject(id = "Tc_Blank", webUrl = "http://tc/blank", componentName = ""),
             ExternalTeamcityProject(id = "Tc_NoParams", name = "NoParams", href = "/x", webUrl = "http://tc/np"),
         )
-        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid, "bar" to barUuid))
+        val result = mapTcProjectsToComponentMatches(
+            projects,
+            mapOf("foo" to fooUuid, "bar" to barUuid),
+            cdReleaseTemplateId,
+        )
         assertEquals(2, result.size)
-        assertEquals(listOf(TcProject(id = "Tc_Foo", webUrl = "http://tc/foo")), result[fooUuid])
-        assertEquals(listOf(TcProject(id = "Tc_Bar", webUrl = "http://tc/bar")), result[barUuid])
+        assertEquals(listOf(TcProject(id = "Tc_Foo", webUrl = "http://tc/foo", hasCdReleaseBuild = false)), result[fooUuid])
+        assertEquals(listOf(TcProject(id = "Tc_Bar", webUrl = "http://tc/bar", hasCdReleaseBuild = false)), result[barUuid])
     }
 
-    private fun tcProject(id: String, webUrl: String, componentName: String) = ExternalTeamcityProject(
+    @Test
+    @DisplayName("CDRelease via legacy single template field is detected")
+    fun cdReleaseDetectedViaLegacyTemplate() {
+        val projects = listOf(
+            tcProject(
+                id = "Tc_Rel",
+                webUrl = "http://tc/rel",
+                componentName = "foo",
+                buildTypes = listOf(buildType(id = "Build1", legacyTemplateId = "CDRelease")),
+            ),
+        )
+        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
+        assertEquals(true, result[fooUuid]!!.single().hasCdReleaseBuild)
+    }
+
+    @Test
+    @DisplayName("CDRelease via plural templates link is detected")
+    fun cdReleaseDetectedViaPluralTemplates() {
+        val projects = listOf(
+            tcProject(
+                id = "Tc_Rel",
+                webUrl = "http://tc/rel",
+                componentName = "foo",
+                buildTypes = listOf(buildType(id = "Build1", pluralTemplateIds = listOf("Other", "CDRelease"))),
+            ),
+        )
+        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
+        assertEquals(true, result[fooUuid]!!.single().hasCdReleaseBuild)
+    }
+
+    @Test
+    @DisplayName("CDRelease present on any of multiple buildTypes flips the flag")
+    fun cdReleaseAnyBuildType() {
+        val projects = listOf(
+            tcProject(
+                id = "Tc_Rel",
+                webUrl = "http://tc/rel",
+                componentName = "foo",
+                buildTypes = listOf(
+                    buildType(id = "Build1", legacyTemplateId = "Unrelated"),
+                    buildType(id = "Build2", legacyTemplateId = "CDRelease"),
+                ),
+            ),
+        )
+        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
+        assertEquals(true, result[fooUuid]!!.single().hasCdReleaseBuild)
+    }
+
+    @Test
+    @DisplayName("project with buildTypes but none inheriting from CDRelease has hasCdReleaseBuild=false")
+    fun cdReleaseAbsentWhenUnrelatedTemplates() {
+        val projects = listOf(
+            tcProject(
+                id = "Tc_Foo",
+                webUrl = "http://tc/foo",
+                componentName = "foo",
+                buildTypes = listOf(
+                    buildType(id = "Build1", legacyTemplateId = "Unrelated"),
+                    buildType(id = "Build2", pluralTemplateIds = listOf("AnotherTemplate")),
+                    buildType(id = "Build3"), // no template at all
+                ),
+            ),
+        )
+        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
+        assertEquals(false, result[fooUuid]!!.single().hasCdReleaseBuild)
+    }
+
+    @Test
+    @DisplayName("template id comparison honors a custom configured cdReleaseTemplateId")
+    fun customTemplateIdHonored() {
+        val projects = listOf(
+            tcProject(
+                id = "Tc_Rel",
+                webUrl = "http://tc/rel",
+                componentName = "foo",
+                buildTypes = listOf(buildType(id = "Build1", legacyTemplateId = "CustomReleaseTpl")),
+            ),
+        )
+        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId = "CustomReleaseTpl")
+        assertEquals(true, result[fooUuid]!!.single().hasCdReleaseBuild)
+    }
+
+    private fun tcProject(
+        id: String,
+        webUrl: String,
+        componentName: String,
+        buildTypes: List<ExternalTeamcityBuildType> = emptyList(),
+    ) = ExternalTeamcityProject(
         id = id,
         name = id,
         href = "/$id",
@@ -145,5 +252,30 @@ class ExternalTcProjectFetcherTest {
         parameters = ExternalTeamcityProperties(
             properties = mutableListOf(ExternalTeamcityProperty(name = "COMPONENT_NAME", value = componentName)),
         ),
+        buildTypes = if (buildTypes.isEmpty()) {
+            null
+        } else {
+            ExternalTeamcityBuildTypes(buildTypes = buildTypes)
+        },
+    )
+
+    private fun buildType(
+        id: String,
+        legacyTemplateId: String? = null,
+        pluralTemplateIds: List<String>? = null,
+    ): ExternalTeamcityBuildType = ExternalTeamcityBuildType(
+        id = id,
+        name = id,
+        projectId = "P",
+        projectName = "P",
+        href = "/$id",
+        template = legacyTemplateId?.let {
+            ExternalTeamcityBuildType(id = it, name = it, projectId = "P", projectName = "P", href = "/$it")
+        },
+        templates = pluralTemplateIds?.let { ids ->
+            ExternalTeamcityBuildTypes(
+                buildTypes = ids.map { ExternalTeamcityBuildType(id = it, name = it, projectId = "P", projectName = "P", href = "/$it") },
+            )
+        },
     )
 }
