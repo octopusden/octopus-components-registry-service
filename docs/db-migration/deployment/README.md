@@ -5,8 +5,11 @@ This directory collects the deployment-related inputs and working documents for 
 
 ## Files
 
+- `keycloak-setup.md` — operator-facing setup steps for Keycloak realm-roles
+  required by CRS authorization (manual Admin-Console actions not covered by
+  source patches)
 - `claude-subagent-brief.md` — detailed task for Claude or a subagent to research and design the deployment path
-- `references/teamcity/` — raw TeamCity Kotlin DSL snippets relevant to the current F1 OKD deployment flow
+- `references/teamcity/` — raw TeamCity Kotlin DSL snippets relevant to the current OKD deployment flow
 - `references/platform/okd-platform-patterns.md` — summarized conventions from `service-deployment`, `service-config`, `octopus-dms-ui`, and `octopus-api-gateway`
 
 ## Scope
