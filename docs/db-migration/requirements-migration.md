@@ -872,9 +872,9 @@ This breaks v1/v2/v3 backward compatibility for any consumer that compares the s
 `EscrowConfigurationLoader` produces exactly two `moduleConfigurations` shapes for any
 DSL module: a single `ALL_VERSIONS` row when no version-range sections exist, or only
 version-specific rows when at least one version-range block is present (top-level fields
-in the latter case are absorbed into each version-specific config). There is no third
-"default + version-range" shape — the loader collapses it. The criteria therefore cover
-both real shapes:
+in the latter case are absorbed into each version-specific config). No combined shape
+exists — the loader collapses any DSL with both into the version-specific-only form.
+The criteria therefore cover both real shapes:
 
 1. After Git → DB migration of a version-range-only DSL component (e.g. `TEST_COMPONENT3` — only `"(,1.0.107)"` and `"[1.0.107,)"` blocks, no top-level wrapper), `dbResolver.getComponentById("TEST_COMPONENT3")!!.moduleConfigurations.map { it.versionRangeString }` does **not** contain `"(,0),[0,)"`. Set-equal to the original DSL ranges.
 2. After migration of a default-only DSL component (e.g. component with only top-level fields, no version-range blocks), `getComponentById(...)!!.moduleConfigurations` is exactly `[ALL_VERSIONS]` (one row).
