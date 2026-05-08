@@ -18,18 +18,27 @@ private const val COMPONENT_NAME_PARAM = "COMPONENT_NAME"
 // fields spec MUST request them or Jackson throws on deserialisation. We don't read
 // `href` ourselves — it just has to round-trip through the client.
 //
-// `buildTypes(buildType(id,template(id),templates(buildType(id))))` powers the
-// CDRelease tie-breaker for ambiguous matches: we only need each buildType id and
-// its template ancestry. Both `template` (legacy single, TC <2018) and `templates`
-// (multi, TC2018+) are requested because TC populates only one of the two
-// depending on installation/version; checking both keeps the detection robust at
-// negligible cost (one extra id per buildType). Direct buildTypes only — sub-projects
-// are not walked, on the convention that the project carrying COMPONENT_NAME also
-// owns the release build.
+// `buildTypes(...)` powers the CDRelease tie-breaker for ambiguous matches. Even
+// though we only need the buildType id and its template ancestry to detect
+// inheritance, the library's [TeamcityBuildType] DTO also has non-nullable
+// `name`, `projectId`, `projectName`, and `href` (TC always returns them on
+// full-object queries). Jackson would throw on missing required fields if we
+// asked for `id` only — so every nested `buildType(...)` here lists all five
+// required fields, both for the direct entries in `buildTypes(...)` and for the
+// nested entries inside `template(...)` / `templates(buildType(...))`.
+//
+// Both `template` (legacy single, TC <2018) and `templates` (multi, TC2018+) are
+// requested because TC populates only one of the two depending on installation/
+// version; checking both keeps the detection robust at minor extra-bytes cost.
+// Direct buildTypes only — sub-projects are not walked, on the convention that
+// the project carrying COMPONENT_NAME also owns the release build.
+private const val BUILD_TYPE_REQUIRED = "id,name,projectId,projectName,href"
 private const val PROJECT_FIELDS =
     "project(id,name,webUrl,href," +
         "parameters(property(name,value))," +
-        "buildTypes(buildType(id,template(id),templates(buildType(id)))))"
+        "buildTypes(buildType($BUILD_TYPE_REQUIRED," +
+        "template($BUILD_TYPE_REQUIRED)," +
+        "templates(buildType($BUILD_TYPE_REQUIRED)))))"
 
 @Configuration
 class TeamcityClientConfig {
