@@ -200,6 +200,16 @@ class TeamcitySyncService(
      * then pick the lexicographically smallest by id so the choice is stable
      * across reruns. Returns null when no candidate has a release build — caller
      * counts that as `skippedAmbiguous` (manual override is the escape hatch).
+     *
+     * Log-level policy:
+     *  - `withCdRelease.size == 1` → INFO. The auto-pick is the *intended*
+     *    outcome — exactly one project carries the release build, the other
+     *    candidates are typically legacy/archived duplicates of the
+     *    COMPONENT_NAME. Ops want this counted, not paged on.
+     *  - `withCdRelease.size > 1` → WARN. Genuine ambiguity (multiple "release"
+     *    projects share the same COMPONENT_NAME) where lexicographic tie-break
+     *    is just a deterministic last-resort; the row needs a TC cleanup.
+     *  - `withCdRelease.isEmpty()` → WARN. Skipped, ops should fix in TC.
      */
     private fun resolveAmbiguous(
         component: ComponentEntity,
@@ -216,15 +226,26 @@ class TeamcitySyncService(
             }
             return null
         }
+        // String.compareTo on TC ids: TC project ids are conventionally
+        // [A-Za-z0-9_], so ASCII-lexicographic order is total and
+        // case-insensitivity is moot. minBy returns the first occurrence on
+        // a tie; ties on id can't happen (TC enforces unique project ids).
         val pick = withCdRelease.minBy { it.id }
-        log.warn {
-            // WARN, not INFO: the row needs a manual fix in TC long-term, the
-            // auto-pick is a temporary escape hatch (see TODO in class KDoc).
-            "TC sync: ambiguous match for component '${component.name}' " +
-                "(id=$componentId): ${candidates.size} TC projects share " +
-                "COMPONENT_NAME=${component.name}, ${withCdRelease.size} have a CDRelease build " +
-                "(${withCdRelease.joinToString { it.id }}); auto-picking '${pick.id}' " +
-                "(lexicographically smallest)."
+        if (withCdRelease.size == 1) {
+            log.info {
+                "TC sync: ambiguous match for component '${component.name}' " +
+                    "(id=$componentId): ${candidates.size} TC projects share " +
+                    "COMPONENT_NAME=${component.name}, exactly one has a CDRelease build " +
+                    "(${pick.id}); auto-picking it."
+            }
+        } else {
+            log.warn {
+                "TC sync: ambiguous match for component '${component.name}' " +
+                    "(id=$componentId): ${candidates.size} TC projects share " +
+                    "COMPONENT_NAME=${component.name}, ${withCdRelease.size} have a CDRelease build " +
+                    "(${withCdRelease.joinToString { it.id }}); auto-picking '${pick.id}' " +
+                    "(lexicographically smallest) — TC cleanup recommended."
+            }
         }
         return pick
     }
