@@ -106,7 +106,8 @@ Wide typed `component_configurations` with base + sparse single-attribute overri
 
 Phases tracked in `implementation-progress.md` under "Schema v2 refactor":
 
-1. `V1__schema.sql` baseline (this ADR; replaces V1..V6) — **done**.
+1a. Design artifacts (this ADR, `schema-spec.md`) — **done**.
+1b. `V1__schema.sql` baseline (replaces V1..V6) — **pending**, bundled with Phase 2 entity refactor to keep DB and JPA aligned in one merge.
 2. Entity refactor (≈16 → ≈22 classes due to dictionaries + distribution split).
 3. Mapper / resolver rewrite.
 4. v4 DTO update.

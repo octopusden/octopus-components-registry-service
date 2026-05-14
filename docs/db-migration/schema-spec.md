@@ -1,7 +1,7 @@
 # CRS Schema v2 — Specification
 
 **Status:** Proposed (see [ADR-014](adr/014-schema-v2.md))
-**Implementation:** [`V1__schema.sql`](../../components-registry-service-server/src/main/resources/db/migration/V1__schema.sql)
+**Implementation status:** specified here; the Flyway baseline (`V1__schema.sql`) ships in Phase 1b alongside the entity refactor (see [`implementation-progress.md`](implementation-progress.md)).
 
 This document is the canonical reference for the v2 schema. ADR-014 records the decision and alternatives; this file specifies the exact shape, semantics, and intended usage of every table.
 

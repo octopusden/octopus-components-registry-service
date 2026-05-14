@@ -70,7 +70,7 @@ CREATE TABLE component_source (
 
 ## 3. Database Schema
 
-**Schema v2 is the authoritative model.** See [`schema-spec.md`](schema-spec.md) for the full reference (22 tables, column-by-column inventory, resolve algorithm, API mapping, migration approach) and [ADR-014](adr/014-schema-v2.md) for the decision record and rejected alternatives.
+**Schema v2 is the authoritative model.** See [`schema-spec.md`](schema-spec.md) for the full reference (column-by-column inventory of all tables, resolve algorithm, API mapping, migration approach) and [ADR-014](adr/014-schema-v2.md) for the decision record and rejected alternatives.
 
 ### 3.1 Summary
 
@@ -86,7 +86,7 @@ Schema v2 (Model A') replaces the V1..V6 polymorphic-FK / JSONB-metadata model:
 - **Reference dictionaries** for `labels`, `systems`, `tools` (admin-managed).
 - **MIG-029 fixed.** `is_synthetic_base` flag on base rows; legacy variants enumeration skips synthetic bases.
 
-22 tables total. See `schema-spec.md` §2 for the ER diagram, §3 for resolve semantics, and §6 for migration approach.
+See `schema-spec.md` §1 for the full table count and grouping, §2 for the ER diagram, §3 for resolve semantics, and §6 for migration approach.
 
 ### 3.2 Flyway
 
@@ -94,72 +94,7 @@ Single consolidated baseline `V1__schema.sql` replaces V1..V6 (project not yet i
 
 ## 4. JPA Entities
 
-### 4.1 Core Entity Example (Kotlin)
-
-```kotlin
-@Entity
-@Table(name = "components")
-class ComponentEntity(
-    @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    var id: UUID? = null,
-
-    // name is the public API identifier (Component.id in v1/v2/v3 is the component name)
-    @Column(nullable = false, unique = true)
-    val name: String,
-
-    // Tier 1 — stable core (columns)
-    @Column(name = "component_owner", nullable = false)
-    var componentOwner: String,
-
-    var productType: String? = null,
-    // NOTE: current model uses Set<String> for system (Component.system: Set<String>)
-    // DB: stored as array or join table; mapped to Set<String> in DTO
-    @Column(columnDefinition = "text[]")
-    var system: Set<String> = emptySet(),
-    var clientCode: String? = null,
-    var archived: Boolean = false,
-    var solution: Boolean? = null,
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "parent_component_id")
-    var parentComponent: ComponentEntity? = null,
-
-    // Tier 3 — extensible metadata (JSONB)
-    // Contains: displayName, releaseManager, securityChampion,
-    //           labels, doc, copyright, releasesInDefaultBranch, and future fields
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(columnDefinition = "jsonb")
-    var metadata: MutableMap<String, Any?> = mutableMapOf(),
-
-    // Tier 2 — domain configs (separate tables, via relations)
-    @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true)
-    val versions: MutableList<ComponentVersionEntity> = mutableListOf(),
-
-    @Version
-    var version: Long = 0,  // optimistic locking
-
-    @CreationTimestamp
-    @Column(updatable = false)
-    val createdAt: Instant? = null,
-
-    @UpdateTimestamp
-    var updatedAt: Instant? = null
-)
-```
-
-### 4.2 Repository Example
-
-```kotlin
-interface ComponentRepository : JpaRepository<ComponentEntity, UUID> {
-    fun findByName(name: String): ComponentEntity?
-    fun findBySystem(system: String): List<ComponentEntity>
-    fun findByArchivedFalse(): List<ComponentEntity>
-
-    @Query("SELECT c FROM ComponentEntity c LEFT JOIN FETCH c.versions WHERE c.name = :name")
-    fun findByNameWithVersions(@Param("name") name: String): ComponentEntity?
-}
-```
+The JPA entity layout for schema v2 is specified in [`schema-spec.md`](schema-spec.md) (column-by-column inventory of every table) and lands in Phase 2 (entity refactor). See [`implementation-progress.md`](implementation-progress.md) for current phase status.
 
 ## 5. API Design
 
