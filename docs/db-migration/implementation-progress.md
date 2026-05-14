@@ -159,5 +159,22 @@ Driven by MIG-029 investigation + cross-installation DSL audit. See [ADR-014](ad
 | 6 | Test suite (Layer 1 synthetic fixtures; Layer 2 env-gated integration; Layer 3 internal-CI baselines) | 🚧 Pending | MIG-029..MIG-038 coverage |
 | 7 | QA DB recreate + full `gradlew build` | 🚧 Pending | Requires `AUTH_SERVER` env + standard excludes |
 | 8 | Supersede ADR-010 | ✅ Done | ADR-010 marked superseded; ADR-014 active |
+| 9 | Final docs cleanup (mandatory before merging the refactor into `main`) | 🚧 Pending | See "Final docs cleanup scope" below. |
 
 Requirements traceability: MIG-029..MIG-038 in [`requirements-migration.md`](requirements-migration.md). Each phase ends with an independent subagent review (Sonnet default).
+
+### Final docs cleanup scope (Phase 9)
+
+Once Phases 1b–7 land, the refactor narrative ("V1..V6 → V2", MIG-029 investigation, phase tracking) stops being useful. The permanent reference docs are rewritten to describe the new state from the perspective of a reader who never knew V1..V6 existed. The intermediate Flyway evolution was never released; it should not appear in the final documentation.
+
+**Rewrite (kept as canonical reference):**
+- `adr/014-schema-v2.md` — reframe as **"Storage redesign: Groovy DSL → PostgreSQL"**. Context = portal needs DB-backed CRUD over the Component Registry. Remove all references to V1..V6, polymorphic FKs, JSONB extensibility, MIG-029 investigation. Keep the alternative-models section (A, B, C, D, A') — that is the value of the ADR.
+- `schema-spec.md` — strip "current schema (V1..V6)" framing; drop the resolve-algorithm reference to "synthetic base for legacy variants-Map" once enumeration endpoints are formally retired. Becomes a pure column-by-column reference of the live schema.
+
+**Delete (transient implementation aids, no permanent value):**
+- `implementation-progress.md` — phase tracking is done.
+- `requirements-migration.md` — MIG-029..MIG-038 acceptance criteria were implementation gates; their structural fixes live in the schema itself.
+- `technical-design.md` — the "how to migrate from V1..V6" guide is no longer needed.
+- `adr/010-schema-extensibility.md` — never implemented; superseded; remove rather than leave a tombstone.
+
+Phase 9 ships as a single PR titled "docs: clean up DB migration artifacts" once Phases 1b–7 are merged and the refactor is observably working in QA.
