@@ -98,9 +98,9 @@ The JPA entity layout for schema v2 is specified in [`schema-spec.md`](schema-sp
 
 ## 5. API Design
 
-### 5.1 Existing API (unchanged)
+### 5.1 Existing API
 
-All 34 endpoints across v1/v2/v3 remain identical. The only change is the backing `ComponentRegistryResolver` implementation.
+All non-kill-listed v1/v2/v3 endpoints preserve response shape; the backing `ComponentRegistryResolver` implementation changes under the hood. See [`schema-spec.md`](schema-spec.md) §5.1 for the list of dropped/stubbed low-traffic endpoints under schema v2.
 
 ### 5.2 New API v4
 
