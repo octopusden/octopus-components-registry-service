@@ -141,3 +141,40 @@ The original 4-test smoke pack at `components-registry-ui/e2e/smoke.spec.ts` was
 - TLS migration to Ingress + shared wildcard Secret on Portal side — Portal `TD-004`.
 - OpenAPI v4 spec generation + sharing with Portal — TD-003 (CRS) / Portal TD-002.
 - Cutover Phase 5: drop `component_source` table and remove Git resolver / JGit dependency once stability is confirmed — see [ADR-013](adr/013-cutover-strategy.md) (Proposed).
+
+---
+
+## Schema v2 Refactor
+
+Driven by MIG-029 investigation + cross-installation DSL audit. See [ADR-014](adr/014-schema-v2.md) and [`schema-spec.md`](schema-spec.md). Project not yet in production; QA/dev databases recreate from baseline.
+
+| Phase | Task | Status | Notes |
+|---|---|---|---|
+| 1a | Design artifacts: ADR-014, `schema-spec.md`, MIG-030..MIG-038, supersede ADR-010 | ✅ Done | This PR (docs-only). Canonical reference for v2 schema. |
+| 1b | Land `V1__schema.sql` baseline (replaces V1..V6) in Flyway path | 🚧 Pending | 23 tables; Model A'. Held back from docs-only PR; ships alongside Phase 2 to avoid Hibernate `validate` startup crash. |
+| 2 | Refactor entities & repositories (delete `ComponentVersionEntity` + polymorphic FK pairs; introduce `ComponentGroupEntity`, distribution-split entities, etc.) | 🚧 Pending | ≈16 → ≈22 entity classes. Bundled with Phase 1b so DB and JPA align in one merge. |
+| 3 | Rewrite `EntityMappers` + `DatabaseComponentRegistryResolver` (base + override merge; marker rows; synthetic-base handling; doc-links resolution; unified VCS mapping) | 🚧 Pending | |
+| 4 | Update v4 DTOs + `ComponentControllerV4` (replace `metadata: Map` with explicit fields; surface group membership; doc links as `docs[]`) | 🚧 Pending | |
+| 5 | Rewrite `ImportServiceImpl` + `MigrationServiceImpl` (pre-pass dictionary discovery; aggregator detection; two-pass `parentComponent`; per-attribute override emission; distribution family split) | 🚧 Pending | |
+| 6 | Test suite (Layer 1 synthetic fixtures; Layer 2 env-gated integration; Layer 3 internal-CI baselines) | 🚧 Pending | MIG-029..MIG-038 coverage |
+| 7 | QA DB recreate + full `gradlew build` | 🚧 Pending | Requires `AUTH_SERVER` env + standard excludes |
+| 8 | Supersede ADR-010 | ✅ Done | ADR-010 marked superseded; ADR-014 active |
+| 9 | Final docs cleanup (mandatory before merging the refactor into `main`) | 🚧 Pending | See "Final docs cleanup scope" below. |
+
+Requirements traceability: MIG-029..MIG-038 in [`requirements-migration.md`](requirements-migration.md). Each phase ends with an independent subagent review (Sonnet default).
+
+### Final docs cleanup scope (Phase 9)
+
+Once Phases 1b–7 land, the refactor narrative ("V1..V6 → V2", MIG-029 investigation, phase tracking) stops being useful. The permanent reference docs are rewritten to describe the new state from the perspective of a reader who never knew V1..V6 existed. The intermediate Flyway evolution was never released; it should not appear in the final documentation.
+
+**Rewrite (kept as canonical reference):**
+- `adr/014-schema-v2.md` — reframe as **"Storage redesign: Groovy DSL → PostgreSQL"**. Context = portal needs DB-backed CRUD over the Component Registry. Remove all references to V1..V6, polymorphic FKs, JSONB extensibility, MIG-029 investigation. Keep the alternative-models section (A, B, C, D, A') — that is the value of the ADR.
+- `schema-spec.md` — strip "current schema (V1..V6)" framing; drop the resolve-algorithm reference to "synthetic base for legacy variants-Map" once enumeration endpoints are formally retired. Becomes a pure column-by-column reference of the live schema.
+
+**Delete (transient implementation aids, no permanent value):**
+- `implementation-progress.md` — phase tracking is done.
+- `requirements-migration.md` — MIG-029..MIG-038 acceptance criteria were implementation gates; their structural fixes live in the schema itself.
+- `technical-design.md` — the "how to migrate from V1..V6" guide is no longer needed.
+- `adr/010-schema-extensibility.md` — never implemented; superseded; remove rather than leave a tombstone.
+
+Phase 9 ships as a single PR titled "docs: clean up DB migration artifacts" once Phases 1b–7 are merged and the refactor is observably working in QA.

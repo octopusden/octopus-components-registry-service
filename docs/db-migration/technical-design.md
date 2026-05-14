@@ -70,152 +70,37 @@ CREATE TABLE component_source (
 
 ## 3. Database Schema
 
-### 3.1 Entity-Relationship Overview
+**Schema v2 is the authoritative model.** See [`schema-spec.md`](schema-spec.md) for the full reference (column-by-column inventory of all tables, resolve algorithm, API mapping, migration approach) and [ADR-014](adr/014-schema-v2.md) for the decision record and rejected alternatives.
 
-```
-components (1) ──→ (N) component_versions
-    │                       │
-    ├──→ build_configurations ←──┤
-    ├──→ escrow_configurations ←─┤
-    ├──→ vcs_settings ←──────────┤
-    ├──→ distributions ←─────────┤
-    ├──→ jira_component_configs ←┤
-    │
-    ├──→ component_artifact_ids
-    └──→ components (self-ref: parent_component_id)
+### 3.1 Summary
 
-distributions (1) ──→ (N) distribution_artifacts
-                  ──→ (N) distribution_security_groups
+Schema v2 (Model A') replaces the V1..V6 polymorphic-FK / JSONB-metadata model:
 
-vcs_settings (1) ──→ (N) vcs_settings_entries (for MULTIPLY type)
+- **Polymorphic FK pairs removed.** All per-version data lives on `component_configurations` with a single FK to `components`.
+- **No JSONB metadata.** Typed columns for all known fields; legitimate polymorphic JSON (audit_log, registry_config) kept as TEXT via `@JdbcTypeCode(SqlTypes.JSON)`.
+- **`component_versions` table removed.** Version_range lives directly on `component_configurations` rows.
+- **Per-attribute version-range overrides.** Each override is a row keyed by `(component_id, version_range, overridden_attribute)`: NULL (base), `'aspect.field'` (scalar), or marker (replacement of a child collection).
+- **Unified VCS model.** SINGLE-VCS = 1 entry in `vcs_settings_entries` with `name = NULL`; MULTI-VCS = N named entries.
+- **Distribution split** into four specialized child tables (Maven coords, file URLs, Docker images, DEB/RPM packages).
+- **Aggregator grouping.** `component_groups` table + `components.component_group_id` FK preserve the DSL `components { ... }` nesting relationship that was previously lost in migration.
+- **Reference dictionaries** for `labels`, `systems`, `tools` (admin-managed).
+- **MIG-029 fixed.** `is_synthetic_base` flag on base rows; legacy variants enumeration skips synthetic bases.
 
-audit_log (standalone, indexed by entity_type + entity_id, source ∈ {api, git-history})
-dependency_mappings (standalone key-value)
-git_history_import_state (single-row idempotency state for /admin/migrate-history)
-field_overrides (per-component per-field per-version-range overrides)
-component_artifact_ids (owner XOR: component_id OR component_version_id, V4)
-```
+See `schema-spec.md` §1 for the full table count and grouping, §2 for the ER diagram, §3 for resolve semantics, and §6 for migration approach.
 
-### 3.2 Polymorphic Owner Pattern
+### 3.2 Flyway
 
-Build, escrow, VCS, distribution, and Jira configs can belong to either a **component** (defaults) or a **component_version** (overrides). This uses a CHECK constraint:
-
-```sql
-CONSTRAINT chk_owner CHECK (
-    (component_id IS NOT NULL AND component_version_id IS NULL) OR
-    (component_id IS NULL AND component_version_id IS NOT NULL)
-)
-```
-
-> **Note — per-field version overrides:** The schema will support independent version ranges per parameter field (e.g., `buildSystem` overridden for `[1.0, 2.0)` while `jiraProjectKey` is overridden for `[1.5, 2.5)`). Overlapping ranges across different fields are allowed; overlapping ranges for the same field are forbidden. The final schema design for per-field overrides is deferred to implementation.
-
-### 3.3 Schema Extensibility
-
-Component properties are classified into three tiers by stability. See [ADR-010](adr/010-schema-extensibility.md) for full rationale.
-
-| Tier | Storage | Fields | Adding new field |
-|------|---------|--------|------------------|
-| 1 — Stable core | Columns | `name`, `component_owner`, `archived`, `system`, `product_type`, `client_code`, `solution`, `parent_component_id` | Flyway + Entity + Mapper + DTO |
-| 2 — Domain configs | Separate tables | build, escrow, VCS, distribution, jira | Flyway + Entity + Mapper + DTO |
-| 3 — Extensible metadata | `metadata JSONB` | `releaseManager`, `securityChampion`, `labels`, `doc`, `copyright`, `releasesInDefaultBranch` | DTO only |
-
-```sql
--- metadata column on components table
-ALTER TABLE components ADD COLUMN metadata JSONB NOT NULL DEFAULT '{}';
-CREATE INDEX idx_components_metadata ON components USING GIN (metadata);
-```
-
-**Promotion path:** if a Tier 3 field becomes critical for performance or joins, it can be promoted to a Tier 1 column via Flyway migration + backfill from JSONB.
-
-### 3.4 Full DDL
-
-Complete DDL is maintained in Flyway migration files (see §3.1 ERD above for entity relationships). The full SQL will be finalized at implementation start and placed in:
-
-
-Flyway migration files live at `components-registry-service-server/src/main/resources/db/migration/`:
-
-| Version | File | Purpose |
-|---|---|---|
-| V1 | `V1__initial_schema.sql` | Initial schema — components, versions, build/escrow/vcs/distribution/jira configs, audit_log, field_overrides, component_artifact_ids, etc. |
-| V2 | `V2__indexes.sql` | Performance indexes on hot lookup paths. |
-| V3 | `V3__text_columns.sql` | Widen VARCHAR(500) columns to TEXT to fix overflow regressions. |
-| V4 | `V4__artifact_ids_version_level.sql` | Allow `component_artifact_ids` to belong to either a component or a `component_version` (XOR `CHECK` + nullable `component_id`, new nullable `component_version_id`). Mirrors the polymorphic owner pattern used by other config tables. |
-| V5 | `V5__audit_source_and_history_state.sql` | Add `audit_log.source VARCHAR(20) NOT NULL DEFAULT 'api'` (distinguishes runtime API events from synthetic backfill rows produced by `/admin/migrate-history`); plain `CREATE INDEX idx_audit_source` (acceptable while the table is small — see file header for the CONCURRENTLY workaround if replayed against a large table). Create `git_history_import_state` (single-row idempotency state, no resume support; PK `import_key`, fields `target_ref`, `target_sha`, `status`, `updated_at`). |
+Single consolidated baseline `V1__schema.sql` replaces V1..V6 (project not yet in production; databases recreated). Hibernate runs in `validate` mode against the baseline. Tests use `ddl-auto: create-drop` directly from JPA annotations.
 
 ## 4. JPA Entities
 
-### 4.1 Core Entity Example (Kotlin)
-
-```kotlin
-@Entity
-@Table(name = "components")
-class ComponentEntity(
-    @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    var id: UUID? = null,
-
-    // name is the public API identifier (Component.id in v1/v2/v3 is the component name)
-    @Column(nullable = false, unique = true)
-    val name: String,
-
-    // Tier 1 — stable core (columns)
-    @Column(name = "component_owner", nullable = false)
-    var componentOwner: String,
-
-    var productType: String? = null,
-    // NOTE: current model uses Set<String> for system (Component.system: Set<String>)
-    // DB: stored as array or join table; mapped to Set<String> in DTO
-    @Column(columnDefinition = "text[]")
-    var system: Set<String> = emptySet(),
-    var clientCode: String? = null,
-    var archived: Boolean = false,
-    var solution: Boolean? = null,
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "parent_component_id")
-    var parentComponent: ComponentEntity? = null,
-
-    // Tier 3 — extensible metadata (JSONB)
-    // Contains: displayName, releaseManager, securityChampion,
-    //           labels, doc, copyright, releasesInDefaultBranch, and future fields
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(columnDefinition = "jsonb")
-    var metadata: MutableMap<String, Any?> = mutableMapOf(),
-
-    // Tier 2 — domain configs (separate tables, via relations)
-    @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true)
-    val versions: MutableList<ComponentVersionEntity> = mutableListOf(),
-
-    @Version
-    var version: Long = 0,  // optimistic locking
-
-    @CreationTimestamp
-    @Column(updatable = false)
-    val createdAt: Instant? = null,
-
-    @UpdateTimestamp
-    var updatedAt: Instant? = null
-)
-```
-
-### 4.2 Repository Example
-
-```kotlin
-interface ComponentRepository : JpaRepository<ComponentEntity, UUID> {
-    fun findByName(name: String): ComponentEntity?
-    fun findBySystem(system: String): List<ComponentEntity>
-    fun findByArchivedFalse(): List<ComponentEntity>
-
-    @Query("SELECT c FROM ComponentEntity c LEFT JOIN FETCH c.versions WHERE c.name = :name")
-    fun findByNameWithVersions(@Param("name") name: String): ComponentEntity?
-}
-```
+The JPA entity layout for schema v2 is specified in [`schema-spec.md`](schema-spec.md) (column-by-column inventory of every table) and lands in Phase 2 (entity refactor). See [`implementation-progress.md`](implementation-progress.md) for current phase status.
 
 ## 5. API Design
 
-### 5.1 Existing API (unchanged)
+### 5.1 Existing API
 
-All 34 endpoints across v1/v2/v3 remain identical. The only change is the backing `ComponentRegistryResolver` implementation.
+All non-kill-listed v1/v2/v3 endpoints preserve response shape; the backing `ComponentRegistryResolver` implementation changes under the hood. See [`schema-spec.md`](schema-spec.md) §5.1 for the list of dropped/stubbed low-traffic endpoints under schema v2.
 
 ### 5.2 New API v4
 

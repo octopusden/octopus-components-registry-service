@@ -1,7 +1,15 @@
 # ADR-010: Schema Extensibility — Hybrid Columns + JSONB Strategy
 
 ## Status
-Proposed
+**Superseded by [ADR-014](014-schema-v2.md)**
+
+The Tier-3 JSONB extensibility envisioned here was never used in practice: empirical audit found zero PostgreSQL-specific JSONB features in the codebase, no GIN index hits, and no `@>`/`->`/`?` operators. All seven JSONB `metadata` columns store known stable fields and have been promoted to typed columns in v2.
+
+The extensibility friction this ADR sought to address (DDL change per new field) remains, but is now considered acceptable: empirically, new fields are added in scheduled batches (V6 added six fields at once) rather than continuously. The historical evolution cadence does not justify the trade-offs of polymorphic JSON storage.
+
+Original content preserved below for historical context.
+
+---
 
 ## Context
 
