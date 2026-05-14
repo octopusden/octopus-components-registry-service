@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.entity.v2
 
+import jakarta.persistence.CascadeType
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.FetchType
@@ -8,6 +9,7 @@ import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
 import jakarta.persistence.JoinColumn
 import jakarta.persistence.ManyToOne
+import jakarta.persistence.OneToMany
 import jakarta.persistence.Table
 import jakarta.persistence.Version
 import org.hibernate.annotations.CreationTimestamp
@@ -129,4 +131,27 @@ class ComponentEntity(
     @UpdateTimestamp
     @Column(name = "updated_at")
     var updatedAt: Instant? = null,
+
+    // --- Bidirectional collections (parent-owned children) ---
+
+    @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
+    var configurations: MutableList<ComponentConfigurationEntity> = mutableListOf(),
+
+    @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
+    var artifactIds: MutableList<ComponentArtifactIdEntity> = mutableListOf(),
+
+    @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
+    var securityGroups: MutableList<DistributionSecurityGroupEntity> = mutableListOf(),
+
+    @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
+    var teamcityProjects: MutableList<ComponentTeamcityProjectEntity> = mutableListOf(),
+
+    @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
+    var docLinks: MutableList<ComponentDocLinkEntity> = mutableListOf(),
+
+    @OneToMany(mappedBy = "component", fetch = FetchType.LAZY)
+    var labelJunctions: MutableList<ComponentLabelEntity> = mutableListOf(),
+
+    @OneToMany(mappedBy = "component", fetch = FetchType.LAZY)
+    var systemJunctions: MutableList<ComponentSystemEntity> = mutableListOf(),
 )

@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.entity.v2
 
+import jakarta.persistence.CascadeType
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.FetchType
@@ -8,6 +9,7 @@ import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
 import jakarta.persistence.JoinColumn
 import jakarta.persistence.ManyToOne
+import jakarta.persistence.OneToMany
 import jakarta.persistence.Table
 import jakarta.persistence.UniqueConstraint
 import org.hibernate.annotations.CreationTimestamp
@@ -158,4 +160,25 @@ class ComponentConfigurationEntity(
     @UpdateTimestamp
     @Column(name = "updated_at")
     var updatedAt: Instant? = null,
+
+    // --- Bidirectional collections (children of this configuration row;
+    //     populated when overridden_attribute is a marker, or part of base) ---
+
+    @OneToMany(mappedBy = "componentConfiguration", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
+    var vcsEntries: MutableList<VcsSettingsEntryEntity> = mutableListOf(),
+
+    @OneToMany(mappedBy = "componentConfiguration", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
+    var mavenArtifacts: MutableList<DistributionMavenArtifactEntity> = mutableListOf(),
+
+    @OneToMany(mappedBy = "componentConfiguration", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
+    var fileUrlArtifacts: MutableList<DistributionFileUrlArtifactEntity> = mutableListOf(),
+
+    @OneToMany(mappedBy = "componentConfiguration", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
+    var dockerImages: MutableList<DistributionDockerImageEntity> = mutableListOf(),
+
+    @OneToMany(mappedBy = "componentConfiguration", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
+    var packages: MutableList<DistributionPackageEntity> = mutableListOf(),
+
+    @OneToMany(mappedBy = "componentConfiguration", fetch = FetchType.LAZY)
+    var requiredToolJunctions: MutableList<ComponentRequiredToolEntity> = mutableListOf(),
 )
