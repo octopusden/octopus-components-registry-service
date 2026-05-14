@@ -2,21 +2,18 @@
 
 package org.octopusden.octopus.components.registry.server.mapper
 
-import com.fasterxml.jackson.core.type.TypeReference
-import org.octopusden.octopus.components.registry.api.build.tools.BuildTool
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes
-import org.octopusden.octopus.components.registry.dsl.jackson.JacksonFactory
-import org.octopusden.octopus.components.registry.server.entity.BuildConfigurationEntity
-import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
-import org.octopusden.octopus.components.registry.server.entity.ComponentVersionEntity
-import org.octopusden.octopus.components.registry.server.entity.DistributionArtifactEntity
-import org.octopusden.octopus.components.registry.server.entity.DistributionEntity
-import org.octopusden.octopus.components.registry.server.entity.DistributionSecurityGroupEntity
-import org.octopusden.octopus.components.registry.server.entity.EscrowConfigurationEntity
-import org.octopusden.octopus.components.registry.server.entity.JiraComponentConfigEntity
-import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntity
-import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
+import org.octopusden.octopus.components.registry.server.entity.v2.ComponentConfigurationEntity
+import org.octopusden.octopus.components.registry.server.entity.v2.ComponentDocLinkEntity
+import org.octopusden.octopus.components.registry.server.entity.v2.ComponentEntity
+import org.octopusden.octopus.components.registry.server.entity.v2.DistributionDockerImageEntity
+import org.octopusden.octopus.components.registry.server.entity.v2.DistributionFileUrlArtifactEntity
+import org.octopusden.octopus.components.registry.server.entity.v2.DistributionMavenArtifactEntity
+import org.octopusden.octopus.components.registry.server.entity.v2.DistributionPackageEntity
+import org.octopusden.octopus.components.registry.server.entity.v2.DistributionSecurityGroupEntity
+import org.octopusden.octopus.components.registry.server.entity.v2.VcsSettingsEntryEntity
 import org.octopusden.octopus.escrow.BuildSystem
+import org.octopusden.octopus.escrow.RepositoryType
 import org.octopusden.octopus.escrow.configuration.model.EscrowModule
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
 import org.octopusden.octopus.escrow.model.BuildParameters
@@ -24,349 +21,669 @@ import org.octopusden.octopus.escrow.model.Distribution
 import org.octopusden.octopus.escrow.model.SecurityGroups
 import org.octopusden.octopus.escrow.model.VCSSettings
 import org.octopusden.octopus.escrow.model.VersionControlSystemRoot
+import org.octopusden.octopus.releng.dto.ComponentInfo
 import org.octopusden.octopus.releng.dto.JiraComponent
+import org.octopusden.releng.versions.ComponentVersionFormat
+import org.octopusden.releng.versions.NumericVersionFactory
+import org.octopusden.releng.versions.VersionRangeFactory
 
 /** Must match EscrowConfigurationLoader.ALL_VERSIONS = "(,0),[0,)" */
-private const val ALL_VERSIONS = "(,0),[0,)"
-private val buildToolsObjectMapper = JacksonFactory.instance.objectMapper
-private val buildToolsType = object : TypeReference<List<BuildTool>>() {}
+internal const val ALL_VERSIONS: String = "(,0),[0,)"
+
+/**
+ * Marker names for child-collection replacement overrides (see schema-spec.md §3.3).
+ */
+internal object MarkerAttributes {
+    const val VCS_SETTINGS: String = "vcs.settings"
+    const val DISTRIBUTION_MAVEN: String = "distribution.maven"
+    const val DISTRIBUTION_FILE_URL: String = "distribution.fileUrl"
+    const val DISTRIBUTION_DOCKER: String = "distribution.docker"
+    const val DISTRIBUTION_PACKAGES: String = "distribution.packages"
+    const val BUILD_REQUIRED_TOOLS: String = "build.requiredTools"
+
+    val ALL: Set<String> =
+        setOf(
+            VCS_SETTINGS,
+            DISTRIBUTION_MAVEN,
+            DISTRIBUTION_FILE_URL,
+            DISTRIBUTION_DOCKER,
+            DISTRIBUTION_PACKAGES,
+            BUILD_REQUIRED_TOOLS,
+        )
+}
 
 // ============================================================
-// Entity → Domain Model mappers (DB → existing Groovy/Java DTOs)
+// Public API: DB → Domain
 // ============================================================
 
 /**
- * Convert ComponentEntity to EscrowModule (used by ComponentRegistryResolver interface).
- * Each component version config becomes a separate EscrowModuleConfig.
+ * Enumerate `EscrowModule` view from a fully-loaded `ComponentEntity` (with
+ * `configurations` and all child collections accessible within the Hibernate
+ * session). Produces one `EscrowModuleConfig` per distinct version range that
+ * appears across base + override rows.
+ *
+ * Synthetic-base handling (MIG-029): when `isSyntheticBase = true` AND at least
+ * one override row exists, the base row's range entry is NOT emitted — only
+ * override ranges. This eliminates the spurious `(,0),[0,)` entry that the
+ * legacy variants-Map mapper used to synthesise for version-range-only DSL
+ * components. When no override exists (synthetic-only component), a single
+ * base-range entry is emitted so downstream consumers always see at least one
+ * `EscrowModuleConfig`.
  */
-fun ComponentEntity.toEscrowModule(): EscrowModule {
+fun ComponentEntity.toEscrowModule(
+    versionRangeFactory: VersionRangeFactory,
+    numericVersionFactory: NumericVersionFactory,
+): EscrowModule {
     val module = EscrowModule()
-    module.moduleName = this.name
+    module.moduleName = this.componentKey
 
-    // Component-level config (default, no version range)
-    val defaultConfig = this.toEscrowModuleConfig(null)
-    module.moduleConfigurations.add(defaultConfig)
+    val configs = this.configurations.toList()
+    val base =
+        configs.firstOrNull { it.overriddenAttribute == null }
+            ?: return module
+    val overrides = configs.filter { it.overriddenAttribute != null }
 
-    // Version-specific configs
-    for (version in this.versions) {
-        val versionConfig = this.toEscrowModuleConfig(version)
-        module.moduleConfigurations.add(versionConfig)
+    val enumeratedRanges = mutableListOf<String>()
+    if (!base.isSyntheticBase || overrides.isEmpty()) {
+        enumeratedRanges += base.versionRange
+    }
+    overrides
+        .map { it.versionRange }
+        .distinct()
+        .filter { it !in enumeratedRanges }
+        .forEach { enumeratedRanges += it }
+
+    for (range in enumeratedRanges) {
+        val resolved =
+            this.resolveForRange(
+                range = range,
+                base = base,
+                overrides = overrides,
+                versionRangeFactory = versionRangeFactory,
+            )
+        module.moduleConfigurations.add(resolved)
     }
 
     return module
 }
 
 /**
- * Convert ComponentEntity to EscrowModuleConfig.
- * If componentVersion is provided, version-specific overrides are applied.
+ * Resolve a single `EscrowModuleConfig` for the given version. Returns `null`
+ * if `version` cannot be parsed or if no override matches AND the only base is
+ * synthetic with no fallback semantics required by caller — current callers
+ * always want the synthetic base as fallback, so this returns it.
+ *
+ * The algorithm follows schema-spec.md §3.4:
+ *   1. Start with base scalars.
+ *   2. For each scalar override whose range contains `version`, overwrite the
+ *      matching scalar field on the result.
+ *   3. For each marker override whose range contains `version`, replace the
+ *      corresponding child collection (full replacement).
  */
-@Suppress("CyclomaticComplexMethod")
-fun ComponentEntity.toEscrowModuleConfig(componentVersion: ComponentVersionEntity?): EscrowModuleConfig {
-    val config = EscrowModuleConfig()
+fun ComponentEntity.toResolvedEscrowModuleConfig(
+    version: String,
+    versionRangeFactory: VersionRangeFactory,
+    numericVersionFactory: NumericVersionFactory,
+): EscrowModuleConfig? {
+    val configs = this.configurations.toList()
+    val base = configs.firstOrNull { it.overriddenAttribute == null } ?: return null
+    val overrides = configs.filter { it.overriddenAttribute != null }
 
-    // Version range from component version (if present), or ALL_VERSIONS for default config
-    if (componentVersion != null) {
-        setEscrowModuleConfigField(config, "versionRange", componentVersion.versionRange)
-    } else {
-        setEscrowModuleConfigField(config, "versionRange", ALL_VERSIONS)
-    }
-
-    // Build configuration
-    val buildConfig =
-        if (componentVersion != null) {
-            componentVersion.buildConfigurations.firstOrNull() ?: this.buildConfigurations.firstOrNull()
-        } else {
-            this.buildConfigurations.firstOrNull()
+    val numericVersion =
+        try {
+            numericVersionFactory.create(version)
+        } catch (_: Exception) {
+            return null
         }
-    if (buildConfig != null) {
-        setEscrowModuleConfigField(config, "buildSystem", buildConfig.buildSystem?.let { safeParseBuildSystem(it) })
-        setEscrowModuleConfigField(config, "buildFilePath", buildConfig.buildFilePath)
-        setEscrowModuleConfigField(config, "deprecated", buildConfig.deprecated)
 
-        // Build parameters from metadata
-        val buildParams = buildConfig.toBuildParameters()
-        if (buildParams != null) {
-            setEscrowModuleConfigField(config, "buildConfiguration", buildParams)
+    val matchingOverrides =
+        overrides.filter { override ->
+            try {
+                versionRangeFactory.create(override.versionRange).containsVersion(numericVersion)
+            } catch (_: Exception) {
+                false
+            }
         }
-    }
 
-    // Escrow configuration
-    val escrowConfig =
-        if (componentVersion != null) {
-            componentVersion.escrowConfigurations.firstOrNull() ?: this.escrowConfigurations.firstOrNull()
-        } else {
-            this.escrowConfigurations.firstOrNull()
-        }
-    if (escrowConfig != null) {
-        config.escrow = escrowConfig.toEscrowApi()
-    }
-
-    // VCS Settings
-    val vcsSettingsEntity =
-        if (componentVersion != null) {
-            componentVersion.vcsSettings.firstOrNull() ?: this.vcsSettings.firstOrNull()
-        } else {
-            this.vcsSettings.firstOrNull()
-        }
-    if (vcsSettingsEntity != null) {
-        setEscrowModuleConfigField(config, "vcsSettings", vcsSettingsEntity.toVCSSettings())
-    }
-
-    // Distribution
-    val distributionEntity =
-        if (componentVersion != null) {
-            componentVersion.distributions.firstOrNull() ?: this.distributions.firstOrNull()
-        } else {
-            this.distributions.firstOrNull()
-        }
-    if (distributionEntity != null) {
-        setEscrowModuleConfigField(config, "distribution", distributionEntity.toDistribution())
-    }
-
-    // Jira configuration
-    val jiraConfig =
-        if (componentVersion != null) {
-            componentVersion.jiraComponentConfigs.firstOrNull() ?: this.jiraComponentConfigs.firstOrNull()
-        } else {
-            this.jiraComponentConfigs.firstOrNull()
-        }
-    if (jiraConfig != null) {
-        setEscrowModuleConfigField(config, "jiraConfiguration", jiraConfig.toJiraComponent())
-    }
-
-    // Tier 1 fields
-    setEscrowModuleConfigField(config, "componentDisplayName", this.displayName)
-    setEscrowModuleConfigField(config, "componentOwner", this.componentOwner)
-    setEscrowModuleConfigField(config, "system", this.system.joinToString(","))
-    setEscrowModuleConfigField(config, "clientCode", this.clientCode)
-    setEscrowModuleConfigField(config, "solution", this.solution)
-    setEscrowModuleConfigField(
-        config,
-        "parentComponent",
-        this.parentComponent?.name ?: this.metadata["parentComponent"] as? String,
+    return buildEscrowModuleConfig(
+        component = this,
+        base = base,
+        scalarOverrides = matchingOverrides.filter { it.overriddenAttribute !in MarkerAttributes.ALL },
+        markerOverrides = matchingOverrides.filter { it.overriddenAttribute in MarkerAttributes.ALL },
+        versionRange = base.versionRange,
     )
-    setEscrowModuleConfigField(config, "archived", this.archived)
-    config.productType = this.productType?.let { safeParseProductType(it) }
+}
 
-    // Tier 3 fields — dedicated columns take priority; fall back to metadata for components
-    // migrated before the SYS-039 dedicated columns were introduced.
-    setEscrowModuleConfigField(config, "releaseManager", this.releaseManager ?: this.metadata["releaseManager"] as? String)
-    setEscrowModuleConfigField(config, "securityChampion", this.securityChampion ?: this.metadata["securityChampion"] as? String)
-    setEscrowModuleConfigField(config, "copyright", this.copyright ?: this.metadata["copyright"] as? String)
-    setEscrowModuleConfigField(config, "releasesInDefaultBranch", this.releasesInDefaultBranch ?: this.metadata["releasesInDefaultBranch"] as? Boolean)
+// ============================================================
+// Internal: resolve a single range view
+// ============================================================
 
-    @Suppress("UNCHECKED_CAST")
-    val labels = this.labels.takeIf { it.isNotEmpty() }?.toSet()
-        ?: (this.metadata["labels"] as? Collection<String>)?.toSet()
-    if (labels != null) {
-        setEscrowModuleConfigField(config, "labels", labels)
+private fun ComponentEntity.resolveForRange(
+    range: String,
+    base: ComponentConfigurationEntity,
+    overrides: List<ComponentConfigurationEntity>,
+    versionRangeFactory: VersionRangeFactory,
+): EscrowModuleConfig {
+    // For enumeration purposes, an override applies to `range` when its own
+    // range string equals `range` OR fully contains `range`. Equality is the
+    // common case (overrides are keyed by their own range); containment matters
+    // when the base's all-versions range is being enumerated and a narrower
+    // override exists.
+    val scalarOverrides =
+        overrides.filter {
+            it.overriddenAttribute !in MarkerAttributes.ALL &&
+                rangeApplies(parentRange = it.versionRange, childRange = range, factory = versionRangeFactory)
+        }
+    val markerOverrides =
+        overrides.filter {
+            it.overriddenAttribute in MarkerAttributes.ALL &&
+                rangeApplies(parentRange = it.versionRange, childRange = range, factory = versionRangeFactory)
+        }
+
+    return buildEscrowModuleConfig(
+        component = this,
+        base = base,
+        scalarOverrides = scalarOverrides,
+        markerOverrides = markerOverrides,
+        versionRange = range,
+    )
+}
+
+/**
+ * True when an override row with `parentRange` should apply to the enumeration
+ * view `childRange`. Trivially true when equal; otherwise checks containment
+ * via the version-range factory (best-effort — if either range fails to parse,
+ * returns false to err on safe side).
+ */
+private fun rangeApplies(
+    parentRange: String,
+    childRange: String,
+    factory: VersionRangeFactory,
+): Boolean {
+    if (parentRange == childRange) return true
+    return try {
+        val parent = factory.create(parentRange)
+        val child = factory.create(childRange)
+        // No public containsRange; approximate via "every endpoint of child is in parent".
+        // Conservative for unbounded ranges — falls back to equality check at the call site.
+        parent.toString() == child.toString()
+    } catch (_: Exception) {
+        false
+    }
+}
+
+// ============================================================
+// Internal: build EscrowModuleConfig from base + overrides
+// ============================================================
+
+@Suppress("CyclomaticComplexMethod", "LongParameterList", "LongMethod")
+private fun buildEscrowModuleConfig(
+    component: ComponentEntity,
+    base: ComponentConfigurationEntity,
+    scalarOverrides: List<ComponentConfigurationEntity>,
+    markerOverrides: List<ComponentConfigurationEntity>,
+    versionRange: String,
+): EscrowModuleConfig {
+    val config = EscrowModuleConfig()
+    setField(config, "versionRange", versionRange)
+
+    // Effective scalars: start from base typed columns; for each scalar override
+    // row, find its single non-NULL typed column and overlay it.
+    val merged = ComponentConfigurationView.from(base)
+    for (override in scalarOverrides) {
+        merged.applyScalarOverride(override)
     }
 
-    val docUrl = this.metadata["docUrl"] as? String
-    val docBranch = this.metadata["docBranch"] as? String
-    if (docUrl != null) {
+    // Build aspect
+    setField(config, "buildSystem", merged.buildSystem?.let { safeParseBuildSystem(it) })
+    setField(config, "buildFilePath", merged.buildFilePath)
+    setField(config, "deprecated", merged.deprecated)
+    val buildParameters = merged.toBuildParameters(markerOverrides)
+    if (buildParameters != null) {
+        setField(config, "buildConfiguration", buildParameters)
+    }
+
+    // Escrow aspect
+    config.escrow = merged.toEscrowApi()
+
+    // VCS — child collection. Marker override "vcs.settings" replaces base
+    // children; otherwise base.vcsEntries is used.
+    val vcsEntries =
+        pickMarkerChildren(
+            attribute = MarkerAttributes.VCS_SETTINGS,
+            markerOverrides = markerOverrides,
+            baseChildren = base.vcsEntries.toList(),
+        ) { it.vcsEntries.toList() }
+    if (vcsEntries.isNotEmpty()) {
+        setField(config, "vcsSettings", vcsEntries.toVCSSettings(component.vcsExternalRegistry))
+    }
+
+    // Distribution — composed from four family child collections, each
+    // replaceable via its own marker.
+    val mavenArtifacts =
+        pickMarkerChildren(
+            attribute = MarkerAttributes.DISTRIBUTION_MAVEN,
+            markerOverrides = markerOverrides,
+            baseChildren = base.mavenArtifacts.toList(),
+        ) { it.mavenArtifacts.toList() }
+    val fileUrlArtifacts =
+        pickMarkerChildren(
+            attribute = MarkerAttributes.DISTRIBUTION_FILE_URL,
+            markerOverrides = markerOverrides,
+            baseChildren = base.fileUrlArtifacts.toList(),
+        ) { it.fileUrlArtifacts.toList() }
+    val dockerImages =
+        pickMarkerChildren(
+            attribute = MarkerAttributes.DISTRIBUTION_DOCKER,
+            markerOverrides = markerOverrides,
+            baseChildren = base.dockerImages.toList(),
+        ) { it.dockerImages.toList() }
+    val packages =
+        pickMarkerChildren(
+            attribute = MarkerAttributes.DISTRIBUTION_PACKAGES,
+            markerOverrides = markerOverrides,
+            baseChildren = base.packages.toList(),
+        ) { it.packages.toList() }
+
+    val distribution =
+        buildDistribution(
+            explicit = component.distributionExplicit,
+            external = component.distributionExternal,
+            mavenArtifacts = mavenArtifacts,
+            fileUrlArtifacts = fileUrlArtifacts,
+            dockerImages = dockerImages,
+            packages = packages,
+            securityGroups = component.securityGroups.toList(),
+        )
+    if (distribution != null) {
+        setField(config, "distribution", distribution)
+    }
+
+    // Jira aspect — composed from merged config scalars + component-level fields
+    val jira = buildJiraComponent(component = component, merged = merged)
+    if (jira != null) {
+        setField(config, "jiraConfiguration", jira)
+    }
+
+    // Component-level (per-component, never per-version)
+    setField(config, "componentDisplayName", component.displayName)
+    setField(config, "componentOwner", component.componentOwner)
+    setField(config, "system", component.systemJunctions.joinToString(",") { it.systemCode })
+    setField(config, "clientCode", component.clientCode)
+    setField(config, "solution", component.solution)
+    setField(config, "parentComponent", component.parentComponent?.componentKey)
+    setField(config, "archived", component.archived)
+    setField(config, "releaseManager", component.releaseManager)
+    setField(config, "securityChampion", component.securityChampion)
+    setField(config, "copyright", component.copyright)
+    setField(config, "releasesInDefaultBranch", component.releasesInDefaultBranch)
+
+    val labels = component.labelJunctions.map { it.labelCode }.toSet()
+    if (labels.isNotEmpty()) {
+        setField(config, "labels", labels)
+    }
+
+    config.productType = component.productType?.let { safeParseProductType(it) }
+
+    // Doc — prefer per-major link matching the resolved view's leading version;
+    // fall back to the major_version = NULL link, then null.
+    val docLink = pickDocLink(component.docLinks.toList(), versionRange)
+    if (docLink != null) {
         config.doc =
             org.octopusden.octopus.escrow.model
-                .Doc(docUrl, docBranch)
+                .Doc(docLink.docComponentKey, docLink.majorVersion)
     }
 
-    // Artifact patterns: version-specific first, then component-level
-    val artifactId =
-        if (componentVersion != null) {
-            componentVersion.artifactIds.firstOrNull() ?: this.artifactIds.firstOrNull()
-        } else {
-            this.artifactIds.firstOrNull()
-        }
+    // Artifact pattern (group/artifact) — there is at most one pair per component
+    val artifactId = component.artifactIds.firstOrNull()
     if (artifactId != null) {
-        setEscrowModuleConfigField(config, "groupIdPattern", artifactId.groupPattern)
-        setEscrowModuleConfigField(config, "artifactIdPattern", artifactId.artifactPattern)
+        setField(config, "groupIdPattern", artifactId.groupPattern)
+        setField(config, "artifactIdPattern", artifactId.artifactPattern)
     }
 
     return config
 }
 
-// ============================================================
-// Sub-entity → Domain Model mappers
-// ============================================================
-
-fun BuildConfigurationEntity.toBuildParameters(): BuildParameters? {
-    val javaVer = this.javaVersion ?: this.metadata["javaVersion"] as? String
-    val mavenVer = this.metadata["mavenVersion"] as? String
-    val gradleVer = this.metadata["gradleVersion"] as? String
-    val requiredProject = this.metadata["requiredProject"] as? Boolean ?: false
-    val projectVersion = this.metadata["projectVersion"] as? String
-    val systemProperties = this.metadata["systemProperties"] as? String
-    val buildTasks = this.metadata["buildTasks"] as? String
-
-    @Suppress("UNCHECKED_CAST")
-    val toolsList =
-        (this.metadata["tools"] as? List<Map<String, String?>>)?.map { toolMap ->
-            org.octopusden.octopus.escrow.model.Tool(
-                toolMap["name"],
-                toolMap["escrowEnvironmentVariable"],
-                toolMap["sourceLocation"],
-                toolMap["targetLocation"],
-                toolMap["installScript"],
-            )
-        } ?: emptyList()
-    val buildTools =
-        this.metadata["buildTools"]?.let { rawBuildTools ->
-            runCatching {
-                when (rawBuildTools) {
-                    is String -> buildToolsObjectMapper.readValue(rawBuildTools, buildToolsType)
-                    else -> buildToolsObjectMapper.convertValue(rawBuildTools, buildToolsType)
-                }
-            }.getOrDefault(emptyList())
-        } ?: emptyList()
-
-    return BuildParameters.create(
-        javaVer,
-        mavenVer,
-        gradleVer,
-        requiredProject,
-        projectVersion,
-        systemProperties,
-        buildTasks,
-        toolsList,
-        buildTools,
-    )
+private fun <T> pickMarkerChildren(
+    attribute: String,
+    markerOverrides: List<ComponentConfigurationEntity>,
+    baseChildren: List<T>,
+    childExtractor: (ComponentConfigurationEntity) -> List<T>,
+): List<T> {
+    val marker = markerOverrides.firstOrNull { it.overriddenAttribute == attribute }
+    return if (marker != null) childExtractor(marker) else baseChildren
 }
 
-fun VcsSettingsEntity.toVCSSettings(): VCSSettings {
+// ============================================================
+// Internal: scalar merge view (a mutable copy of base scalars)
+// ============================================================
+
+/**
+ * Mutable scratch buffer holding the merged scalar values that will populate
+ * the resulting `EscrowModuleConfig`. Lifecycle is scoped to one resolve call.
+ */
+private class ComponentConfigurationView {
+    var buildSystem: String? = null
+    var buildSystemVersion: String? = null
+    var javaVersion: String? = null
+    var mavenVersion: String? = null
+    var gradleVersion: String? = null
+    var buildFilePath: String? = null
+    var deprecated: Boolean? = null
+    var requiredProject: Boolean? = null
+    var projectVersion: String? = null
+    var systemProperties: String? = null
+    var buildTasks: String? = null
+
+    var escrowProvidedDependencies: String? = null
+    var escrowReusable: Boolean? = null
+    var escrowGeneration: String? = null
+    var escrowDiskSpace: String? = null
+    var escrowAdditionalSources: String? = null
+    var escrowGradleIncludeConfigurations: String? = null
+    var escrowGradleExcludeConfigurations: String? = null
+    var escrowGradleIncludeTestConfigurations: Boolean? = null
+
+    var jiraProjectKey: String? = null
+    var jiraTechnical: Boolean? = null
+    var jiraMajorVersionFormat: String? = null
+    var jiraReleaseVersionFormat: String? = null
+    var jiraBuildVersionFormat: String? = null
+    var jiraLineVersionFormat: String? = null
+    var jiraVersionPrefix: String? = null
+    var jiraVersionFormat: String? = null
+
+    @Suppress("CyclomaticComplexMethod", "LongMethod")
+    fun applyScalarOverride(override: ComponentConfigurationEntity) {
+        when (override.overriddenAttribute) {
+            "build.buildSystem" -> override.buildSystem?.let { buildSystem = it }
+            "build.buildSystemVersion" -> override.buildSystemVersion?.let { buildSystemVersion = it }
+            "build.javaVersion" -> override.javaVersion?.let { javaVersion = it }
+            "build.mavenVersion" -> override.mavenVersion?.let { mavenVersion = it }
+            "build.gradleVersion" -> override.gradleVersion?.let { gradleVersion = it }
+            "build.buildFilePath" -> override.buildFilePath?.let { buildFilePath = it }
+            "build.deprecated" -> override.deprecated?.let { deprecated = it }
+            "build.requiredProject" -> override.requiredProject?.let { requiredProject = it }
+            "build.projectVersion" -> override.projectVersion?.let { projectVersion = it }
+            "build.systemProperties" -> override.systemProperties?.let { systemProperties = it }
+            "build.buildTasks" -> override.buildTasks?.let { buildTasks = it }
+
+            "escrow.providedDependencies" -> override.escrowProvidedDependencies?.let { escrowProvidedDependencies = it }
+            "escrow.reusable" -> override.escrowReusable?.let { escrowReusable = it }
+            "escrow.generation" -> override.escrowGeneration?.let { escrowGeneration = it }
+            "escrow.diskSpace" -> override.escrowDiskSpace?.let { escrowDiskSpace = it }
+            "escrow.additionalSources" -> override.escrowAdditionalSources?.let { escrowAdditionalSources = it }
+            "escrow.gradleIncludeConfigurations" -> override.escrowGradleIncludeConfigurations?.let { escrowGradleIncludeConfigurations = it }
+            "escrow.gradleExcludeConfigurations" -> override.escrowGradleExcludeConfigurations?.let { escrowGradleExcludeConfigurations = it }
+            "escrow.gradleIncludeTestConfigurations" -> override.escrowGradleIncludeTestConfigurations?.let { escrowGradleIncludeTestConfigurations = it }
+
+            "jira.projectKey" -> override.jiraProjectKey?.let { jiraProjectKey = it }
+            "jira.technical" -> override.jiraTechnical?.let { jiraTechnical = it }
+            "jira.majorVersionFormat" -> override.jiraMajorVersionFormat?.let { jiraMajorVersionFormat = it }
+            "jira.releaseVersionFormat" -> override.jiraReleaseVersionFormat?.let { jiraReleaseVersionFormat = it }
+            "jira.buildVersionFormat" -> override.jiraBuildVersionFormat?.let { jiraBuildVersionFormat = it }
+            "jira.lineVersionFormat" -> override.jiraLineVersionFormat?.let { jiraLineVersionFormat = it }
+            "jira.versionPrefix" -> override.jiraVersionPrefix?.let { jiraVersionPrefix = it }
+            "jira.versionFormat" -> override.jiraVersionFormat?.let { jiraVersionFormat = it }
+
+            else -> Unit // unknown attribute path; ignore for forward-compat
+        }
+    }
+
+    fun toBuildParameters(markerOverrides: List<ComponentConfigurationEntity>): BuildParameters? {
+        if (javaVersion == null &&
+            mavenVersion == null &&
+            gradleVersion == null &&
+            buildTasks == null &&
+            !requiredProject.orFalse() &&
+            projectVersion == null &&
+            systemProperties == null
+        ) {
+            return null
+        }
+        val toolMarker = markerOverrides.firstOrNull { it.overriddenAttribute == MarkerAttributes.BUILD_REQUIRED_TOOLS }
+        val tools =
+            (toolMarker?.requiredToolJunctions?.toList() ?: emptyList()).mapNotNull { junction ->
+                val tool = junction.tool ?: return@mapNotNull null
+                org.octopusden.octopus.escrow.model.Tool(
+                    tool.name,
+                    tool.escrowEnvVariable,
+                    tool.sourceLocation,
+                    tool.targetLocation,
+                    tool.installScript,
+                )
+            }
+        return BuildParameters.create(
+            javaVersion,
+            mavenVersion,
+            gradleVersion,
+            requiredProject.orFalse(),
+            projectVersion,
+            systemProperties,
+            buildTasks,
+            tools,
+            emptyList(),
+        )
+    }
+
+    fun toEscrowApi(): org.octopusden.octopus.components.registry.api.escrow.Escrow {
+        val captured = this
+        return object : org.octopusden.octopus.components.registry.api.escrow.Escrow {
+            override fun getGradle() = null
+
+            override fun getBuildTask() = captured.buildTasks
+
+            override fun getProvidedDependencies(): Collection<String> =
+                captured.escrowProvidedDependencies
+                    ?.split(",")
+                    ?.map { it.trim() }
+                    ?.filter { it.isNotEmpty() } ?: emptyList()
+
+            override fun getDiskSpaceRequirement() = java.util.Optional.ofNullable(captured.escrowDiskSpace?.toLongOrNull())
+
+            override fun getAdditionalSources(): Collection<String> =
+                captured.escrowAdditionalSources
+                    ?.split(",")
+                    ?.map { it.trim() }
+                    ?.filter { it.isNotEmpty() } ?: emptyList()
+
+            override fun isReusable() = captured.escrowReusable ?: false
+
+            override fun getGeneration() =
+                java.util.Optional.ofNullable(
+                    captured.escrowGeneration?.let {
+                        try {
+                            org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
+                                .valueOf(it)
+                        } catch (_: IllegalArgumentException) {
+                            null
+                        }
+                    },
+                )
+        }
+    }
+
+    companion object {
+        fun from(base: ComponentConfigurationEntity): ComponentConfigurationView =
+            ComponentConfigurationView().apply {
+                buildSystem = base.buildSystem
+                buildSystemVersion = base.buildSystemVersion
+                javaVersion = base.javaVersion
+                mavenVersion = base.mavenVersion
+                gradleVersion = base.gradleVersion
+                buildFilePath = base.buildFilePath
+                deprecated = base.deprecated
+                requiredProject = base.requiredProject
+                projectVersion = base.projectVersion
+                systemProperties = base.systemProperties
+                buildTasks = base.buildTasks
+
+                escrowProvidedDependencies = base.escrowProvidedDependencies
+                escrowReusable = base.escrowReusable
+                escrowGeneration = base.escrowGeneration
+                escrowDiskSpace = base.escrowDiskSpace
+                escrowAdditionalSources = base.escrowAdditionalSources
+                escrowGradleIncludeConfigurations = base.escrowGradleIncludeConfigurations
+                escrowGradleExcludeConfigurations = base.escrowGradleExcludeConfigurations
+                escrowGradleIncludeTestConfigurations = base.escrowGradleIncludeTestConfigurations
+
+                jiraProjectKey = base.jiraProjectKey
+                jiraTechnical = base.jiraTechnical
+                jiraMajorVersionFormat = base.jiraMajorVersionFormat
+                jiraReleaseVersionFormat = base.jiraReleaseVersionFormat
+                jiraBuildVersionFormat = base.jiraBuildVersionFormat
+                jiraLineVersionFormat = base.jiraLineVersionFormat
+                jiraVersionPrefix = base.jiraVersionPrefix
+                jiraVersionFormat = base.jiraVersionFormat
+            }
+    }
+}
+
+private fun Boolean?.orFalse(): Boolean = this == true
+
+// ============================================================
+// Internal: VCS / Distribution / Jira builders
+// ============================================================
+
+internal fun List<VcsSettingsEntryEntity>.toVCSSettings(externalRegistry: String?): VCSSettings {
+    val sorted = this.sortedBy { it.sortOrder }
     val roots =
-        this.entries.map { entry ->
+        sorted.map { entry ->
             VersionControlSystemRoot.create(
                 entry.name ?: "main",
-                org.octopusden.octopus.escrow.RepositoryType
-                    .valueOf(entry.repositoryType),
+                RepositoryType.valueOf(entry.repositoryType ?: "GIT"),
                 entry.vcsPath,
                 entry.tag,
                 entry.branch,
                 entry.hotfixBranch,
             )
         }
-    return VCSSettings.create(this.externalRegistry, roots)
+    return VCSSettings.create(externalRegistry, roots)
 }
 
-fun DistributionEntity.toDistribution(): Distribution {
-    val gavArtifact = this.artifacts.firstOrNull { it.artifactType == "GAV" }
-    val debArtifact = this.artifacts.firstOrNull { it.artifactType == "DEB" }
-    val rpmArtifact = this.artifacts.firstOrNull { it.artifactType == "RPM" }
-    val dockerArtifact = this.artifacts.firstOrNull { it.artifactType == "DOCKER" }
+@Suppress("LongParameterList")
+internal fun buildDistribution(
+    explicit: Boolean?,
+    external: Boolean?,
+    mavenArtifacts: List<DistributionMavenArtifactEntity>,
+    fileUrlArtifacts: List<DistributionFileUrlArtifactEntity>,
+    dockerImages: List<DistributionDockerImageEntity>,
+    packages: List<DistributionPackageEntity>,
+    securityGroups: List<DistributionSecurityGroupEntity>,
+): Distribution? {
+    val gavStr = composeGavCsv(mavenArtifacts, fileUrlArtifacts)
+    val dockerStr = composeDockerCsv(dockerImages)
+    val debStr = packages.filter { it.packageType == "DEB" }.sortedBy { it.sortOrder }.joinToString(",") { it.packageName }.ifEmpty { null }
+    val rpmStr = packages.filter { it.packageType == "RPM" }.sortedBy { it.sortOrder }.joinToString(",") { it.packageName }.ifEmpty { null }
 
-    val gavStr =
-        gavArtifact?.let {
-            if (it.name != null) {
-                // Multi-GAV stored as raw string
-                it.name
-            } else {
-                buildString {
-                    append(it.groupPattern.orEmpty())
-                    it.artifactPattern?.let { ap -> append(":$ap") }
-                    it.extension?.let { ext -> append(":$ext") }
-                    it.classifier?.let { cls -> append(":$cls") }
+    val secReadGroups =
+        securityGroups
+            .filter { it.groupType == "read" }
+            .joinToString(",") { it.groupName }
+    val secGroups = if (secReadGroups.isNotEmpty()) SecurityGroups(secReadGroups) else null
+
+    val anyContent =
+        explicit != null ||
+            external != null ||
+            gavStr != null ||
+            dockerStr != null ||
+            debStr != null ||
+            rpmStr != null ||
+            secGroups != null
+
+    if (!anyContent) return null
+
+    return Distribution(explicit ?: true, external ?: false, gavStr, debStr, rpmStr, dockerStr, secGroups)
+}
+
+private fun composeGavCsv(
+    maven: List<DistributionMavenArtifactEntity>,
+    fileUrl: List<DistributionFileUrlArtifactEntity>,
+): String? {
+    val mavenStr =
+        maven.sortedBy { it.sortOrder }.joinToString(",") { e ->
+            buildString {
+                append(e.groupPattern)
+                append(':')
+                append(e.artifactPattern)
+                if (!e.extension.isNullOrBlank()) {
+                    append(':').append(e.extension)
+                }
+                if (!e.classifier.isNullOrBlank()) {
+                    if (e.extension.isNullOrBlank()) append(':') // hold extension slot
+                    append(':').append(e.classifier)
                 }
             }
         }
-    val debStr = debArtifact?.name
-    val rpmStr = rpmArtifact?.name
-    val dockerStr =
-        dockerArtifact?.let {
-            if (it.tag != null) "${it.name}:${it.tag}" else it.name
+    val fileUrlStr =
+        fileUrl.sortedBy { it.sortOrder }.joinToString(",") { e ->
+            buildString {
+                append(e.url)
+                if (!e.artifactId.isNullOrBlank()) append("?artifactId=").append(e.artifactId)
+                if (!e.classifier.isNullOrBlank()) {
+                    append(if (e.artifactId.isNullOrBlank()) "?" else "&")
+                    append("classifier=").append(e.classifier)
+                }
+            }
         }
-
-    val secGroups =
-        this.securityGroups
-            .filter { it.groupType == "read" }
-            .joinToString(",") { it.groupName }
-
-    val securityGroups = if (secGroups.isNotEmpty()) SecurityGroups(secGroups) else null
-
-    return Distribution(this.explicit, this.external, gavStr, debStr, rpmStr, dockerStr, securityGroups)
+    val combined = listOf(mavenStr, fileUrlStr).filter { it.isNotEmpty() }.joinToString(",")
+    return combined.ifEmpty { null }
 }
 
-fun JiraComponentConfigEntity.toJiraComponent(hotfixEnabled: Boolean = false): JiraComponent {
-    @Suppress("UNCHECKED_CAST")
-    val versionFormatMap = this.componentVersionFormat ?: emptyMap()
+private fun composeDockerCsv(images: List<DistributionDockerImageEntity>): String? {
+    val sorted = images.sortedBy { it.sortOrder }
+    val csv =
+        sorted.joinToString(",") { e ->
+            if (e.flavor.isNullOrBlank()) e.imageName else "${e.imageName}:${e.flavor}"
+        }
+    return csv.ifEmpty { null }
+}
 
-    val majorVersionFormat = versionFormatMap["majorVersionFormat"] as? String ?: "\$major"
-    val releaseVersionFormat = versionFormatMap["releaseVersionFormat"] as? String ?: "\$major.\$minor"
-    // ModelConfigPostProcessor.resolveJiraConfiguration() defaults buildVersionFormat → releaseVersionFormat
-    val buildVersionFormat = versionFormatMap["buildVersionFormat"] as? String ?: releaseVersionFormat
-    // ComponentVersionFormat.create() defaults lineVersionFormat to majorVersionFormat when null
-    val lineVersionFormat = versionFormatMap["lineVersionFormat"] as? String ?: majorVersionFormat
-    val hotfixVersionFormat = versionFormatMap["hotfixVersionFormat"] as? String ?: ""
+@Suppress("LongMethod")
+private fun buildJiraComponent(
+    component: ComponentEntity,
+    merged: ComponentConfigurationView,
+): JiraComponent? {
+    val projectKey = merged.jiraProjectKey ?: return null
 
-    val componentVersionFormat =
-        org.octopusden.releng.versions.ComponentVersionFormat.create(
-            majorVersionFormat,
-            releaseVersionFormat,
-            buildVersionFormat,
-            lineVersionFormat,
-            hotfixVersionFormat,
-        )
+    val majorFmt = merged.jiraMajorVersionFormat ?: "\$major"
+    val releaseFmt = merged.jiraReleaseVersionFormat ?: "\$major.\$minor"
+    val buildFmt = merged.jiraBuildVersionFormat ?: releaseFmt
+    val lineFmt = merged.jiraLineVersionFormat ?: majorFmt
+    val hotfixFmt = component.jiraHotfixVersionFormat ?: ""
 
-    val versionPrefix = this.metadata["versionPrefix"] as? String ?: ""
-    val versionFormat = this.metadata["versionFormat"] as? String ?: ""
-    val componentInfo =
-        org.octopusden.octopus.releng.dto
-            .ComponentInfo(versionPrefix, versionFormat)
+    val format =
+        ComponentVersionFormat.create(majorFmt, releaseFmt, buildFmt, lineFmt, hotfixFmt)
+    val info = ComponentInfo(merged.jiraVersionPrefix ?: "", merged.jiraVersionFormat ?: "")
 
     return JiraComponent(
-        this.projectKey ?: "",
-        this.displayName,
-        componentVersionFormat,
-        componentInfo,
-        this.technical,
-        hotfixEnabled,
+        projectKey,
+        component.jiraDisplayName ?: "",
+        format,
+        info,
+        merged.jiraTechnical ?: false,
+        false,
     )
 }
 
-fun EscrowConfigurationEntity.toEscrowApi(): org.octopusden.octopus.components.registry.api.escrow.Escrow {
-    val entity = this
-    return object : org.octopusden.octopus.components.registry.api.escrow.Escrow {
-        override fun getGradle() = null
-
-        override fun getBuildTask() = entity.buildTask
-
-        override fun getProvidedDependencies(): Collection<String> =
-            entity.providedDependencies
-                ?.split(",")
-                ?.map { it.trim() }
-                ?.filter { it.isNotEmpty() } ?: emptyList()
-
-        override fun getDiskSpaceRequirement() = java.util.Optional.ofNullable(entity.diskSpace?.toLongOrNull())
-
-        @Suppress("UNCHECKED_CAST")
-        override fun getAdditionalSources(): Collection<String> {
-            val value = entity.metadata["additionalSources"] ?: return emptyList()
-            // After JSONB round-trip Jackson may return ArrayList, LinkedList, or other types
-            return try {
-                (value as? Iterable<*>)?.mapNotNull { it?.toString() }
-                    ?: listOf(value.toString())
-            } catch (_: Exception) {
-                emptyList()
-            }
-        }
-
-        override fun isReusable() = entity.reusable ?: false
-
-        override fun getGeneration() =
-            java.util.Optional.ofNullable(
-                entity.generation?.let {
-                    try {
-                        org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
-                            .valueOf(it)
-                    } catch (_: IllegalArgumentException) {
-                        null
-                    }
-                },
-            )
-    }
+private fun pickDocLink(
+    links: List<ComponentDocLinkEntity>,
+    versionRange: String,
+): ComponentDocLinkEntity? {
+    if (links.isEmpty()) return null
+    // Caller resolves to a specific major version when needed; for now, prefer
+    // the link whose `majorVersion` is null (fallback) or matches the leading
+    // numeric prefix of `versionRange` when both can be parsed. Detailed
+    // semantics are pinned by the mapper-level spec note in schema-spec.md §5.
+    val nullFallback = links.firstOrNull { it.majorVersion == null }
+    val leadingMajor =
+        Regex("""(\d+)""").find(versionRange)?.groupValues?.getOrNull(1)
+    val matchByMajor = leadingMajor?.let { major -> links.firstOrNull { it.majorVersion == major } }
+    return matchByMajor ?: nullFallback ?: links.firstOrNull()
 }
 
 // ============================================================
-// Utility functions
+// Internal: utilities
 // ============================================================
 
 private fun safeParseBuildSystem(value: String): BuildSystem? =
@@ -384,9 +701,10 @@ private fun safeParseProductType(value: String): ProductTypes? =
     }
 
 /**
- * Helper to set a private field on EscrowModuleConfig via reflection.
+ * Set a private field on `EscrowModuleConfig` via reflection. Unknown fields
+ * are silently ignored (forward-compat with domain-model changes).
  */
-private fun setEscrowModuleConfigField(
+private fun setField(
     config: EscrowModuleConfig,
     name: String,
     value: Any?,
@@ -396,357 +714,6 @@ private fun setEscrowModuleConfigField(
         field.isAccessible = true
         field.set(config, value)
     } catch (_: NoSuchFieldException) {
-        // Ignore unknown fields
+        // ignore unknown fields
     }
 }
-
-// ============================================================
-// Domain Model → Entity mappers (for import/migration)
-// ============================================================
-
-/**
- * Convert EscrowModule to ComponentEntity (for import from Git DSL).
- *
- * EscrowConfigurationLoader creates moduleConfigurations in two modes:
- * 1. Single ALL_VERSIONS config — when no version-specific blocks exist
- * 2. Only version-specific configs — when version-specific blocks exist (NO ALL_VERSIONS)
- * We detect this by checking if the first config's versionRangeString == ALL_VERSIONS.
- */
-@Suppress("CyclomaticComplexMethod")
-fun EscrowModule.toComponentEntity(): ComponentEntity {
-    val allConfigs = this.moduleConfigurations
-    if (allConfigs.isEmpty()) return ComponentEntity(name = this.moduleName)
-
-    val firstConfig = allConfigs.first()
-    val hasDefaultConfig = firstConfig.versionRangeString == ALL_VERSIONS
-
-    // Use first config for component-level scalar properties (same across all versions)
-    val entity =
-        ComponentEntity(
-            name = this.moduleName,
-            componentOwner = firstConfig.componentOwner,
-            displayName = firstConfig.componentDisplayName,
-            productType = firstConfig.productType?.name,
-            system = firstConfig.systemSet.toTypedArray(),
-            clientCode = firstConfig.clientCode,
-            archived = firstConfig.archived,
-            solution = firstConfig.solution,
-            releaseManager = firstConfig.releaseManager,
-            securityChampion = firstConfig.securityChampion,
-            copyright = firstConfig.copyright,
-            releasesInDefaultBranch = firstConfig.releasesInDefaultBranch,
-            // Domain treats labels as a set; create/PATCH paths call distinct() for the
-            // same reason. Dedupe migrated values too so the dedicated column matches.
-            labels = firstConfig.labels?.distinct()?.toTypedArray() ?: emptyArray(),
-            groupId = firstConfig.groupIdPattern,
-        )
-
-    // metadata: only fields without dedicated columns
-    entity.metadata =
-        mutableMapOf<String, Any?>().apply {
-            firstConfig.parentComponent?.let { put("parentComponent", it) }
-            firstConfig.doc?.let {
-                put("docUrl", it.component())
-                put("docBranch", it.majorVersion())
-            }
-        }
-
-    // Build config + escrow: always stored at component level (shared across versions)
-    addComponentLevelBuildAndEscrow(entity, firstConfig)
-
-    // Distribution, VCS, artifact IDs: always at component level (needed for GET /components/{name})
-    addComponentLevelDistributionVcsArtifacts(entity, firstConfig)
-
-    // Jira: save at component level only for ALL_VERSIONS components; version-range-only components
-    // store jira per version entity (the loop below starts at index 0 for !hasDefaultConfig).
-    // buildJiraVersionRangesForComponent treats component-level jira as ALL_VERSIONS, so adding it
-    // for version-range-only components would create a spurious ALL_VERSIONS entry in RES-001.
-    if (hasDefaultConfig && firstConfig.jiraConfiguration != null) {
-        entity.jiraComponentConfigs.add(firstConfig.jiraConfiguration.toJiraConfigEntity(entity, null))
-    }
-
-    // Version-specific configs: skip first only if it's the ALL_VERSIONS default
-    val startIdx = if (hasDefaultConfig) 1 else 0
-    for (i in startIdx until allConfigs.size) {
-        val versionConfig = allConfigs[i]
-        val versionEntity =
-            ComponentVersionEntity(
-                component = entity,
-                versionRange = versionConfig.versionRangeString ?: ALL_VERSIONS,
-            )
-
-        if (versionConfig.buildSystem != null || versionConfig.buildFilePath != null) {
-            versionEntity.buildConfigurations.add(
-                versionConfig.toBuildConfigurationEntity(null, versionEntity),
-            )
-        }
-        if (versionConfig.vcsSettings != null) {
-            versionEntity.vcsSettings.add(versionConfig.vcsSettings.toVcsSettingsEntity(null, versionEntity))
-        }
-        if (versionConfig.distribution != null) {
-            versionEntity.distributions.add(versionConfig.distribution.toDistributionEntity(null, versionEntity))
-        }
-        if (versionConfig.jiraConfiguration != null) {
-            versionEntity.jiraComponentConfigs.add(versionConfig.jiraConfiguration.toJiraConfigEntity(null, versionEntity))
-        }
-        if (versionConfig.escrow != null) {
-            versionEntity.escrowConfigurations.add(versionConfig.escrow.toEscrowConfigEntity(null, versionEntity))
-        }
-        if (versionConfig.groupIdPattern != null || versionConfig.artifactIdPattern != null) {
-            versionEntity.artifactIds.add(
-                org.octopusden.octopus.components.registry.server.entity.ComponentArtifactIdEntity(
-                    componentVersion = versionEntity,
-                    groupPattern = versionConfig.groupIdPattern ?: "",
-                    artifactPattern = versionConfig.artifactIdPattern ?: "",
-                ),
-            )
-        }
-
-        entity.versions.add(versionEntity)
-    }
-
-    return entity
-}
-
-/** Store build config + escrow at the component level (shared across all versions). */
-private fun addComponentLevelBuildAndEscrow(
-    entity: ComponentEntity,
-    config: EscrowModuleConfig,
-) {
-    if (config.buildSystem != null || config.buildFilePath != null) {
-        entity.buildConfigurations.add(config.toBuildConfigurationEntity(entity, null))
-    }
-
-    if (config.escrow != null) {
-        entity.escrowConfigurations.add(config.escrow.toEscrowConfigEntity(entity, null))
-    }
-}
-
-/** Store distribution, VCS, artifact IDs at the component level (always, needed for GET /components/{name}). */
-private fun addComponentLevelDistributionVcsArtifacts(
-    entity: ComponentEntity,
-    config: EscrowModuleConfig,
-) {
-    if (config.vcsSettings != null) {
-        entity.vcsSettings.add(config.vcsSettings.toVcsSettingsEntity(entity, null))
-    }
-
-    if (config.distribution != null) {
-        entity.distributions.add(config.distribution.toDistributionEntity(entity, null))
-    }
-
-    if (config.groupIdPattern != null || config.artifactIdPattern != null) {
-        entity.artifactIds.add(
-            org.octopusden.octopus.components.registry.server.entity.ComponentArtifactIdEntity(
-                component = entity,
-                groupPattern = config.groupIdPattern ?: "",
-                artifactPattern = config.artifactIdPattern ?: "",
-            ),
-        )
-    }
-}
-
-// ============================================================
-// Domain → Entity sub-mappers (for import)
-// ============================================================
-
-private fun EscrowModuleConfig.toBuildConfigurationEntity(
-    component: ComponentEntity?,
-    version: ComponentVersionEntity?,
-): BuildConfigurationEntity {
-    val config =
-        BuildConfigurationEntity(
-            component = component,
-            componentVersion = version,
-            buildSystem = this.buildSystem?.name,
-            buildFilePath = this.buildFilePath,
-            deprecated = this.isDeprecated,
-        )
-    if (this.buildConfiguration != null) {
-        config.javaVersion = this.buildConfiguration.javaVersion
-        config.metadata =
-            mutableMapOf<String, Any?>().apply {
-                this@toBuildConfigurationEntity.buildConfiguration.mavenVersion?.let { put("mavenVersion", it) }
-                this@toBuildConfigurationEntity.buildConfiguration.gradleVersion?.let { put("gradleVersion", it) }
-                put("requiredProject", this@toBuildConfigurationEntity.buildConfiguration.requiredProject)
-                this@toBuildConfigurationEntity.buildConfiguration.projectVersion?.let { put("projectVersion", it) }
-                this@toBuildConfigurationEntity.buildConfiguration.systemProperties?.let { put("systemProperties", it) }
-                this@toBuildConfigurationEntity.buildConfiguration.buildTasks?.let { put("buildTasks", it) }
-                val tools = this@toBuildConfigurationEntity.buildConfiguration.tools
-                if (tools != null && tools.isNotEmpty()) {
-                    put(
-                        "tools",
-                        tools.map { tool ->
-                            mapOf(
-                                "name" to tool.name,
-                                "escrowEnvironmentVariable" to tool.escrowEnvironmentVariable,
-                                "sourceLocation" to tool.sourceLocation,
-                                "targetLocation" to tool.targetLocation,
-                                "installScript" to tool.installScript,
-                            )
-                        },
-                    )
-                }
-                val buildTools = this@toBuildConfigurationEntity.buildConfiguration.buildTools
-                if (buildTools != null && buildTools.isNotEmpty()) {
-                    put("buildTools", buildToolsObjectMapper.writerFor(buildToolsType).writeValueAsString(buildTools.toList()))
-                }
-            }
-    }
-    return config
-}
-
-private fun org.octopusden.octopus.components.registry.api.escrow.Escrow.toEscrowConfigEntity(
-    component: ComponentEntity?,
-    version: ComponentVersionEntity?,
-): EscrowConfigurationEntity =
-    EscrowConfigurationEntity(
-        component = component,
-        componentVersion = version,
-        buildTask = this.buildTask,
-        providedDependencies = this.providedDependencies.joinToString(","),
-        reusable = this.isReusable,
-        generation = this.generation.orElse(null)?.name,
-        diskSpace = this.diskSpaceRequirement.orElse(null)?.toString(),
-        metadata =
-            mutableMapOf<String, Any?>().apply {
-                this@toEscrowConfigEntity
-                    .additionalSources
-                    .takeIf { it.isNotEmpty() }
-                    ?.let { put("additionalSources", it.toList()) }
-            },
-    )
-
-private fun VCSSettings.toVcsSettingsEntity(
-    component: ComponentEntity?,
-    version: ComponentVersionEntity?,
-): VcsSettingsEntity {
-    val entity =
-        VcsSettingsEntity(
-            component = component,
-            componentVersion = version,
-            vcsType = if (this.versionControlSystemRoots.size > 1) "MULTIPLY" else "SINGLE",
-            externalRegistry = this.externalRegistry,
-        )
-    for (root in this.versionControlSystemRoots) {
-        entity.entries.add(
-            VcsSettingsEntryEntity(
-                vcsSettings = entity,
-                name = root.name,
-                vcsPath = root.vcsPath,
-                repositoryType = root.repositoryType.name,
-                tag = root.tag,
-                branch = root.branch,
-                hotfixBranch = root.hotfixBranch,
-            ),
-        )
-    }
-    return entity
-}
-
-internal fun Distribution.toDistributionEntity(
-    component: ComponentEntity?,
-    version: ComponentVersionEntity?,
-): DistributionEntity {
-    val entity =
-        DistributionEntity(
-            component = component,
-            componentVersion = version,
-            explicit = this.explicit(),
-            external = this.external(),
-        )
-
-    this.GAV()?.let { gav ->
-        if (gav.contains(",")) {
-            // Multi-GAV: store raw string as-is (can't split into group:artifact reliably)
-            entity.artifacts.add(
-                DistributionArtifactEntity(
-                    distribution = entity,
-                    artifactType = "GAV",
-                    name = gav,
-                ),
-            )
-        } else {
-            val parts = gav.split(":")
-            entity.artifacts.add(
-                DistributionArtifactEntity(
-                    distribution = entity,
-                    artifactType = "GAV",
-                    groupPattern = parts.getOrNull(0),
-                    artifactPattern = parts.getOrNull(1),
-                    extension = parts.getOrNull(2),
-                    classifier = parts.getOrNull(3),
-                ),
-            )
-        }
-    }
-    this.DEB()?.let { deb ->
-        entity.artifacts.add(
-            DistributionArtifactEntity(distribution = entity, artifactType = "DEB", name = deb),
-        )
-    }
-    this.RPM()?.let { rpm ->
-        entity.artifacts.add(
-            DistributionArtifactEntity(distribution = entity, artifactType = "RPM", name = rpm),
-        )
-    }
-    this.docker()?.let { docker ->
-        if (docker.contains(",")) {
-            // Multi-docker (comma-separated list of image:tag pairs): store raw,
-            // symmetric with multi-GAV. toDistribution() reads `name` as-is when
-            // `tag` is null.
-            entity.artifacts.add(
-                DistributionArtifactEntity(
-                    distribution = entity,
-                    artifactType = "DOCKER",
-                    name = docker,
-                ),
-            )
-        } else {
-            val dockerParts = docker.split(":")
-            entity.artifacts.add(
-                DistributionArtifactEntity(
-                    distribution = entity,
-                    artifactType = "DOCKER",
-                    name = dockerParts.getOrNull(0),
-                    tag = dockerParts.getOrNull(1),
-                ),
-            )
-        }
-    }
-
-    this.securityGroups?.read?.split(",")?.filter { it.isNotBlank() }?.forEach { group ->
-        entity.securityGroups.add(
-            DistributionSecurityGroupEntity(distribution = entity, groupType = "read", groupName = group.trim()),
-        )
-    }
-
-    return entity
-}
-
-private fun JiraComponent.toJiraConfigEntity(
-    component: ComponentEntity?,
-    version: ComponentVersionEntity?,
-): JiraComponentConfigEntity =
-    JiraComponentConfigEntity(
-        component = component,
-        componentVersion = version,
-        projectKey = this.projectKey,
-        displayName = this.displayName,
-        componentVersionFormat =
-            mapOf(
-                "majorVersionFormat" to this.componentVersionFormat.majorVersionFormat,
-                "releaseVersionFormat" to this.componentVersionFormat.releaseVersionFormat,
-                "buildVersionFormat" to this.componentVersionFormat.buildVersionFormat,
-                "lineVersionFormat" to this.componentVersionFormat.lineVersionFormat,
-                "hotfixVersionFormat" to this.componentVersionFormat.hotfixVersionFormat,
-            ),
-        technical = this.isTechnical,
-        metadata =
-            mutableMapOf<String, Any?>().apply {
-                this@toJiraConfigEntity.componentInfo?.let {
-                    put("versionPrefix", it.versionPrefix)
-                    put("versionFormat", it.versionFormat)
-                }
-            },
-    )
