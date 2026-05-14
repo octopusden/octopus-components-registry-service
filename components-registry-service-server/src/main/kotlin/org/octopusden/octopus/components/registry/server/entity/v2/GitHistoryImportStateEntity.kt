@@ -6,12 +6,22 @@ import jakarta.persistence.Id
 import jakarta.persistence.Table
 import java.time.Instant
 
+/** Allowed values for `git_history_import_state.status`. Persisted as a plain VARCHAR. */
+enum class GitHistoryImportStatus {
+    PENDING,
+    IN_PROGRESS,
+    COMPLETED,
+    FAILED,
+    ;
+
+    companion object {
+        fun safeValueOf(value: String?): GitHistoryImportStatus? =
+            value?.let { runCatching { valueOf(it) }.getOrNull() }
+    }
+}
+
 /**
  * Schema v2 — per-import-key state row tracking a git-history import run.
- *
- * Status values come from `GitHistoryImportStatus` (`IN_PROGRESS`, `COMPLETED`,
- * `FAILED`); the enum lives next to the legacy entity in
- * `entity/GitHistoryImportStateEntity.kt` for now and stays valid until Phase 2.5.
  *
  * See `ComponentEntity` kdoc for the cross-cutting v2 entity conventions.
  */
