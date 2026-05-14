@@ -39,6 +39,15 @@
 | MIG-027 | POST /admin/migrate is async; 202 new / 409 re-run guard / GET /admin/migrate/job polling | High | integration-test | ✅ Tested |
 | MIG-028 | Async migration job state survives pod restart | Medium | design | ❌ Open |
 | MIG-029 | DB → EscrowModule round-trip preserves the absence of a default ALL_VERSIONS config for version-range-only components | High | integration-test | ❌ Not tested |
+| MIG-030 | Polymorphic FK pairs removed; all per-version data on `component_configurations` | High | integration-test | ❌ Not tested |
+| MIG-031 | JSONB `metadata` columns promoted to typed columns | High | unit-test | ❌ Not tested |
+| MIG-032 | Reference dictionaries for `labels`, `systems`, `tools` | Medium | integration-test | ❌ Not tested |
+| MIG-033 | Distribution split into four specialized child tables | Medium | unit-test | ❌ Not tested |
+| MIG-034 | `component_doc_links` M:N with `major_version` | Medium | unit-test | ❌ Not tested |
+| MIG-035 | Aggregator groups (`component_groups`) | High | integration-test | ❌ Not tested |
+| MIG-036 | Per-attribute version-range overrides via Model A' | High | integration-test | ❌ Not tested |
+| MIG-037 | Unified VCS model (no discriminator) | Medium | unit-test | ❌ Not tested |
+| MIG-038 | Endpoint kill-list (5 endpoints dropped/stubbed) | Low | integration-test | ❌ Not tested |
 
 ---
 
@@ -890,3 +899,148 @@ The criteria therefore cover both real shapes:
 - Test data already covers the version-range-only shape via `TEST_COMPONENT3`; add a focused MIG-029 test method in `MigrationIntegrationTest`.
 
 **Test method:** `MigrationIntegrationTest.MIG-029 version-range-only component does not produce a synthetic ALL_VERSIONS config in toEscrowModule`
+
+> **Note on suggested implementation sketch above:** v2 schema (ADR-014) supersedes the `has_default_config` proposal. The structural fix uses `component_configurations.is_synthetic_base BOOLEAN` on the base row; legacy variants-Map mappers skip rows with `is_synthetic_base = true`. See `schema-spec.md` §3.4.
+
+---
+
+### MIG-030: Polymorphic FK pairs removed; all per-version data on `component_configurations`
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ❌ Not tested
+
+Schema v2 removes the `component_id` / `component_version_id` polymorphic FK pair from all configuration tables. Per-version data lives on `component_configurations` with a single FK to `components`. The `component_versions` table is gone.
+
+**Acceptance criteria:**
+1. `V1__schema.sql` contains no `component_version_id` column.
+2. JPA entity inventory has no `ComponentVersionEntity` class.
+3. Resolve queries succeed without referencing any polymorphic CHECK constraint.
+
+---
+
+### MIG-031: JSONB `metadata` columns promoted to typed columns
+
+**Priority:** High
+**Test layer:** unit-test
+**Status:** ❌ Not tested
+
+Seven JSONB columns from V1..V6 are replaced with explicit typed columns on `components` and `component_configurations`. Legitimate polymorphic JSON (audit_log, registry_config) is stored as TEXT with `@JdbcTypeCode(SqlTypes.JSON)`.
+
+**Acceptance criteria:**
+1. No `columnDefinition = "jsonb"` annotations remain on any entity.
+2. `metadata["X"]` field accesses replaced with typed column reads in mappers and services.
+3. v1-v3 API responses for unchanged components match a prod-aligned fixture suite byte-for-byte.
+
+---
+
+### MIG-032: Reference dictionaries for `labels`, `systems`, `tools`
+
+**Priority:** Medium
+**Test layer:** integration-test
+**Status:** ❌ Not tested
+
+After migration, three dictionary tables exist:
+- `labels` — seeded from installation's `validation-config.yaml`.
+- `systems` — auto-discovered from DSL `system = "X,Y"` values.
+- `tools` — auto-discovered from DSL top-level `Tools { ToolName { ... } ... }` block.
+
+Component-to-dictionary relationships via M:N junctions (`component_labels`, `component_systems`, `component_required_tools`).
+
+**Acceptance criteria:**
+1. After migration, `systems` contains exactly the union of distinct `system` tokens from DSL.
+2. `tools` contains exactly the tools defined by `Tools { ... }` blocks.
+3. `labels` matches `validation-config.yaml` content.
+4. Component create/update via v4 rejects unknown label/system/tool references with 400.
+
+---
+
+### MIG-033: Distribution split into four specialized child tables
+
+**Priority:** Medium
+**Test layer:** unit-test
+**Status:** ❌ Not tested
+
+DSL `distribution { GAV, docker, DEB, RPM, securityGroups }` decomposes into four child tables of `component_configurations` plus `distribution_security_groups` on `components`. Per-family `sort_order` preserves DSL CSV order within each family; mapper concatenates families canonically (Maven, then file-URL) for v1-v3 responses.
+
+**Acceptance criteria:**
+1. DSL `GAV = "g:a:ext:cls, file://url?artifactId=X"` produces 1 row in `distribution_maven_artifacts` (sort_order=0) and 1 in `distribution_file_url_artifacts` (sort_order=0).
+2. DSL `docker = "img1, img2:flavor"` produces 2 rows in `distribution_docker_images` with `flavor` set only on the second (sort_order 0, 1).
+3. v1-v3 `GAV` response CSV recomposes correctly from per-family ordered reads.
+
+---
+
+### MIG-034: `component_doc_links` M:N with `major_version`
+
+**Priority:** Medium
+**Test layer:** unit-test
+**Status:** ❌ Not tested
+
+DSL `doc { component = "X"; majorVersion = "Y" }` maps to a row in `component_doc_links`. Schema supports multiple links per component (v4 API may create more even though DSL allows one block per component).
+
+**Acceptance criteria:**
+1. Migration of a component with `doc { component = "X" }` produces exactly one `component_doc_links` row.
+2. v1-v3 mapper for `doc: { component, majorVersion }` applies major-version rule: for requested version `X.Y.Z`, pick row WHERE `major_version = 'X.Y'`; else WHERE `major_version IS NULL`; else null.
+3. v4 API exposes the full list as `docs[]`.
+
+---
+
+### MIG-035: Aggregator groups (`component_groups`)
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ❌ Not tested
+
+DSL nested `components { ... }` block creates a `component_groups` row. Detection rule classifies as REAL (own valid vcsUrl) or FAKE (no/placeholder vcsUrl or fake artifactId marker).
+
+**Acceptance criteria:**
+1. Standalone component (no nested block) produces 0 rows in `component_groups`; its `components.component_group_id IS NULL`.
+2. REAL aggregator produces 1 `component_groups` row with `is_fake = false` + 1 `components` row for the aggregator + N rows for sub-components, all linked to the same group.
+3. FAKE aggregator (artifactId or vcsUrl matches fake markers) produces 1 `component_groups` row with `is_fake = true` + N sub-component rows linked to the group; NO `components` row for the aggregator itself.
+4. v1-v3 responses do not expose group membership.
+
+---
+
+### MIG-036: Per-attribute version-range overrides via Model A'
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ❌ Not tested
+
+DSL version-range blocks produce override rows on `component_configurations`. Each scalar attribute change is a separate row (`overridden_attribute = 'aspect.field'`); each child-collection replacement is a marker row.
+
+**Acceptance criteria:**
+1. DSL `"[1,2)" { build { javaVersion = "11" } }` produces one scalar override row with `overridden_attribute = 'build.javaVersion'`, `java_version = '11'`, all other typed columns NULL.
+2. DSL `"[1,2)" { vcsSettings { "name1" { ... } } }` produces one marker row with `overridden_attribute = 'vcs.settings'`, all typed scalars NULL, plus corresponding `vcs_settings_entries` child rows.
+3. Resolve at version V applies the matching override per attribute; falls back to base row values for non-overridden fields.
+4. Transitional non-overlap constraint enforced at create/update: partial range overlap rejected with 400.
+
+---
+
+### MIG-037: Unified VCS model
+
+**Priority:** Medium
+**Test layer:** unit-test
+**Status:** ❌ Not tested
+
+All VCS data lives in `vcs_settings_entries`. `component_configurations` has no VCS columns.
+
+**Acceptance criteria:**
+1. SINGLE-VCS DSL component produces 1 row in `vcs_settings_entries` with `name IS NULL`.
+2. MULTI-VCS DSL component produces N rows with `name` populated.
+3. v1-v3 API `vcs.type` mapper computes correctly: `EXTERNAL` when `components.vcs_external_registry IS NOT NULL`; `null` when no entries; `GIT` (or repository_type) otherwise.
+
+---
+
+### MIG-038: Endpoint kill-list
+
+**Priority:** Low
+**Test layer:** integration-test
+**Status:** ❌ Not tested
+
+Five effectively-dead endpoints (≤2 calls in 2 production days) are removed or stubbed per `schema-spec.md` §5.1.
+
+**Acceptance criteria:**
+1. `GET /rest/api/3/components` returns 410 Gone.
+2. `PUT /rest/api/2/components-registry/service/updateCache` returns 410 Gone (matches deployed behaviour).
+3. `GET /rest/api/2/components` (no params), `GET /rest/api/2/projects/{k}/jira-component-version-ranges`, `GET /rest/api/1/components` (no filter) each return 200 with empty array.

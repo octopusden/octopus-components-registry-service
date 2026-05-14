@@ -141,3 +141,23 @@ The original 4-test smoke pack at `components-registry-ui/e2e/smoke.spec.ts` was
 - TLS migration to Ingress + shared wildcard Secret on Portal side — Portal `TD-004`.
 - OpenAPI v4 spec generation + sharing with Portal — TD-003 (CRS) / Portal TD-002.
 - Cutover Phase 5: drop `component_source` table and remove Git resolver / JGit dependency once stability is confirmed — see [ADR-013](adr/013-cutover-strategy.md) (Proposed).
+
+---
+
+## Schema v2 Refactor
+
+Driven by MIG-029 investigation + cross-installation DSL audit. See [ADR-014](adr/014-schema-v2.md) and [`schema-spec.md`](schema-spec.md). Project not yet in production; QA/dev databases recreate from baseline.
+
+| Phase | Task | Status | Notes |
+|---|---|---|---|
+| 1a | Design artifacts: ADR-014, `schema-spec.md`, MIG-030..MIG-038, supersede ADR-010 | ✅ Done | This PR (docs-only). Canonical reference for v2 schema. |
+| 1b | Land `V1__schema.sql` baseline (replaces V1..V6) in Flyway path | 🚧 Pending | 23 tables; Model A'. Held back from docs-only PR; ships alongside Phase 2 to avoid Hibernate `validate` startup crash. |
+| 2 | Refactor entities & repositories (delete `ComponentVersionEntity` + polymorphic FK pairs; introduce `ComponentGroupEntity`, distribution-split entities, etc.) | 🚧 Pending | ≈16 → ≈22 entity classes. Bundled with Phase 1b so DB and JPA align in one merge. |
+| 3 | Rewrite `EntityMappers` + `DatabaseComponentRegistryResolver` (base + override merge; marker rows; synthetic-base handling; doc-links resolution; unified VCS mapping) | 🚧 Pending | |
+| 4 | Update v4 DTOs + `ComponentControllerV4` (replace `metadata: Map` with explicit fields; surface group membership; doc links as `docs[]`) | 🚧 Pending | |
+| 5 | Rewrite `ImportServiceImpl` + `MigrationServiceImpl` (pre-pass dictionary discovery; aggregator detection; two-pass `parentComponent`; per-attribute override emission; distribution family split) | 🚧 Pending | |
+| 6 | Test suite (Layer 1 synthetic fixtures; Layer 2 env-gated integration; Layer 3 internal-CI baselines) | 🚧 Pending | MIG-029..MIG-038 coverage |
+| 7 | QA DB recreate + full `gradlew build` | 🚧 Pending | Requires `AUTH_SERVER` env + standard excludes |
+| 8 | Supersede ADR-010 | ✅ Done | ADR-010 marked superseded; ADR-014 active |
+
+Requirements traceability: MIG-029..MIG-038 in [`requirements-migration.md`](requirements-migration.md). Each phase ends with an independent subagent review (Sonnet default).
