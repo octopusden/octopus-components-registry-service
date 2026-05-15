@@ -100,7 +100,9 @@ class ImportServiceImpl(
     ): MigrationResult {
         LOG.info("Migrating single component: {} (dryRun={})", name, dryRun)
         return try {
-            val fullConfig = configurationLoader.loadFullConfiguration(emptyMap())
+            // Use lenient loader (skip semantic validation) so migration tolerates
+            // fixture DSL entries that have labels/hotfix/VCS validation warnings.
+            val fullConfig = configurationLoader.loadFullConfigurationWithoutValidationForUnknownAttributes(emptyMap())
             val module =
                 fullConfig.escrowModules[name]
                     ?: return MigrationResult(
@@ -149,7 +151,11 @@ class ImportServiceImpl(
     @Transactional
     override fun migrateAllComponents(progress: MigrationProgressListener): BatchMigrationResult {
         LOG.info("Starting full DSL → DB component migration (schema v2 §6 pipeline)")
-        val fullConfig = configurationLoader.loadFullConfiguration(emptyMap())
+        // Use lenient loader so migration tolerates DSL entries that have semantic
+        // validation warnings (labels-not-available, hotfix-format, missing VCS roots,
+        // etc.). The git-backed resolver validates at request time; the import pipeline
+        // should import what is there, not refuse to run due to pre-existing warnings.
+        val fullConfig = configurationLoader.loadFullConfigurationWithoutValidationForUnknownAttributes(emptyMap())
         val allModules = fullConfig.escrowModules
 
         // §6.1 Pre-pass dictionary discovery
@@ -793,7 +799,9 @@ class ImportServiceImpl(
         // build aspect
         row.buildSystem = cfg.buildSystem?.name
         row.buildFilePath = cfg.buildFilePath
-        row.deprecated = cfg.isDeprecated.takeIf { it }
+        // Store false explicitly (not null) so EntityMappers.setField can assign
+        // it to the primitive-boolean EscrowModuleConfig.deprecated without NPE.
+        row.deprecated = cfg.isDeprecated
 
         cfg.buildConfiguration?.let { bp ->
             row.javaVersion = bp.javaVersion

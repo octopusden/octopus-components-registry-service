@@ -21,6 +21,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.test.context.ActiveProfiles
+import org.springframework.transaction.annotation.Transactional
 import java.nio.file.Paths
 
 /**
@@ -145,6 +146,7 @@ class MigrationIntegrationTest {
     // =========================================================================
 
     @Test
+    @Transactional
     @DisplayName(
         "MIG-033: TESTONE distribution.GAV splits — 'org.octopusden.octopus.test:versions-api:jar' " +
             "→ distribution_maven_artifacts; no file-URL artifacts",
@@ -166,6 +168,7 @@ class MigrationIntegrationTest {
     }
 
     @Test
+    @Transactional
     @DisplayName("MIG-033: TEST_COMPONENT3 fileUrl artifact from GAV file:///acs:... parsed into fileUrlArtifacts")
     fun mig033_fileUrlArtifactSplit() {
         val component = componentRepository.findByComponentKey("TEST_COMPONENT3")
@@ -182,6 +185,7 @@ class MigrationIntegrationTest {
     }
 
     @Test
+    @Transactional
     @DisplayName("MIG-033: TESTONE distribution.docker → distribution_docker_images")
     fun mig033_dockerImageSplit() {
         val component = componentRepository.findByComponentKey("TESTONE")
@@ -248,6 +252,7 @@ class MigrationIntegrationTest {
     // =========================================================================
 
     @Test
+    @Transactional
     @DisplayName(
         "MIG-037: TEST_COMPONENT has single VCS entry with name=null " +
             "(unified VCS model, no discriminator column)",
@@ -271,6 +276,7 @@ class MigrationIntegrationTest {
     }
 
     @Test
+    @Transactional
     @DisplayName(
         "MIG-037: TEST_COMPONENT2_WITH_SEVERAL_ROOTS has two VCS entries " +
             "with distinct names (multi-VCS unified model)",
