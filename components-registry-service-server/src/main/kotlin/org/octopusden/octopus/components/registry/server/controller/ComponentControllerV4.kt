@@ -1,5 +1,8 @@
 package org.octopusden.octopus.components.registry.server.controller
 
+import org.octopusden.octopus.components.registry.core.dto.BuildSystem
+import org.octopusden.octopus.components.registry.core.dto.EscrowGenerationMode
+import org.octopusden.octopus.components.registry.core.dto.RepositoryType
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentCreateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentDetailResponse
@@ -48,6 +51,25 @@ class ComponentControllerV4(
     @GetMapping("/meta/owners")
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
     fun getDistinctOwners(): List<String> = componentRepository.findDistinctOwners()
+
+    // Domain-named option lists for the three free-form aspect string fields
+    // (buildSystem, repositoryType, generation). The portal's EnumSelect uses
+    // these to populate dropdowns when the admin field-config registry has no
+    // explicit options[] seeded. The endpoint names are domain-named, not
+    // implementation-named (no `/meta/enums`), so the wire surface survives
+    // a future move of the option source from a Kotlin enum to a config
+    // table or admin-editable registry.
+    @GetMapping("/meta/build-systems")
+    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
+    fun getBuildSystems(): List<String> = BuildSystem.values().map { it.name }
+
+    @GetMapping("/meta/repository-types")
+    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
+    fun getRepositoryTypes(): List<String> = RepositoryType.values().map { it.name }
+
+    @GetMapping("/meta/escrow-generations")
+    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
+    fun getEscrowGenerations(): List<String> = EscrowGenerationMode.values().map { it.name }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
