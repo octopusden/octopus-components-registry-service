@@ -77,8 +77,8 @@ class MetaOptionsEndpointsTest {
     }
 
     @Test
-    @DisplayName("GET /meta/build-systems returns canonical BuildSystem values")
-    fun buildSystems_returnsCanonicalSet() {
+    @DisplayName("SYS-038: GET /meta/build-systems returns canonical BuildSystem values")
+    fun `SYS-038 GET meta build-systems returns canonical BuildSystem values`() {
         val expected = BuildSystem.values().map { it.name }
         val result =
             mvc
@@ -92,8 +92,8 @@ class MetaOptionsEndpointsTest {
     }
 
     @Test
-    @DisplayName("GET /meta/repository-types returns canonical RepositoryType values")
-    fun repositoryTypes_returnsCanonicalSet() {
+    @DisplayName("SYS-038: GET /meta/repository-types returns canonical RepositoryType values")
+    fun `SYS-038 GET meta repository-types returns canonical RepositoryType values`() {
         val expected = RepositoryType.values().map { it.name }
         val result =
             mvc
@@ -107,8 +107,8 @@ class MetaOptionsEndpointsTest {
     }
 
     @Test
-    @DisplayName("GET /meta/build-systems uses persistence enum tokens (ESCROW_NOT_SUPPORTED, not NOT_SUPPORTED)")
-    fun buildSystems_advertisesPersistenceTokens() {
+    @DisplayName("SYS-038: /meta/build-systems uses persistence enum tokens (ESCROW_NOT_SUPPORTED, not NOT_SUPPORTED)")
+    fun `SYS-038 GET meta build-systems uses persistence enum tokens not DTO mirror`() {
         // Pins the choice of persistence-layer enum over the DTO enum. If a
         // future refactor accidentally reverts the controller to
         // `core.dto.BuildSystem`, this test catches it because that enum has
@@ -121,8 +121,8 @@ class MetaOptionsEndpointsTest {
     }
 
     @Test
-    @DisplayName("GET /meta/escrow-generations returns canonical EscrowGenerationMode values")
-    fun escrowGenerations_returnsCanonicalSet() {
+    @DisplayName("SYS-038: GET /meta/escrow-generations returns canonical EscrowGenerationMode values")
+    fun `SYS-038 GET meta escrow-generations returns canonical EscrowGenerationMode values`() {
         val expected = EscrowGenerationMode.values().map { it.name }
         val result =
             mvc
