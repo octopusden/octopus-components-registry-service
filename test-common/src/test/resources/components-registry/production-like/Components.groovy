@@ -2384,3 +2384,49 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
         }
     }
 }
+
+// VAL-011 regression fixture: synthetic shape mirroring a real-world component
+// reported broken on the schema-v2 candidate — multi-range, top-level `build {}`
+// block with NO own `requiredTools` (must inherit `BuildEnv` from Defaults),
+// first range empty, second range with jira override + tag at the range level.
+// Distinct from cache-service (no top-level `build {}`) and auth-service
+// (single-range): this is the exact pattern where the Groovy baseline emits
+// BuildEnv but the DB-backed resolver returned `[]` on real production data.
+"legacy-multi-range-tool-inherit" {
+    componentDisplayName = "Legacy Multi-Range Tool Inherit"
+    componentOwner = "owner-i"
+    securityChampion = "champion-i"
+    releaseManager = "manager-i"
+    groupId = "org.octopusden.octopus.legacy"
+    artifactId = "legacy-multi-range-tool"
+    buildSystem = MAVEN
+    jira {
+        projectKey = "PROJ_I"
+    }
+    build {
+        javaVersion = "1.8"
+    }
+    vcsSettings {
+        vcsUrl = "ssh://git@git.example.com/team/legacy-multi-range.git"
+        tag = 'legacy-$version'
+    }
+    distribution {
+        explicit = true
+        external = true
+        GAV = "org.octopusden.octopus.legacy:legacy-multi-range-tool:war"
+        securityGroups {
+            read = "team-i#legacy-rd"
+        }
+    }
+
+    "(,1.0.107)" {
+
+    }
+
+    "[1.0.107,)" {
+        jira {
+            releaseVersionFormat = '$major.$minor.$service-$fix'
+        }
+        tag = 'legacy-tool-$version'
+    }
+}

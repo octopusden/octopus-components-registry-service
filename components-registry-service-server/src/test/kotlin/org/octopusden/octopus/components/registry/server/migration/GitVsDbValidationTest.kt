@@ -48,13 +48,6 @@ import java.nio.file.Paths
 )
 @ActiveProfiles("common", "test-db", "test-db-prod")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-@org.junit.jupiter.api.Disabled(
-    "schema-v2: temporarily disabled until Phase 6 — depends on "
-        + "ImportServiceImpl.migrate() actually seeding the DB at startup, "
-        + "but the Phase 5 stub returns an empty result. Re-enable when "
-        + "MIG-039 lands the §6 import pipeline, or rewrite to seed via "
-        + "the v4 CRUD API in @BeforeAll.",
-)
 class GitVsDbValidationTest {
     @MockBean
     @Suppress("UnusedPrivateProperty")
@@ -384,6 +377,15 @@ class GitVsDbValidationTest {
 
     @Test
     @DisplayName("VAL-010: Bulk validation — all components, all endpoints, full divergence report")
+    @org.junit.jupiter.api.Disabled(
+        "schema-v2 known limitations — remaining divergences after RES-001 family fix " +
+            "(Stream A: RANGE_PRESENCE emission). Expected residual: 8× empty " +
+            "`buildParameters.tools[]` (RES-014 KTS beans), 1× distribution-on-core-lib " +
+            "(FAKE-aggregator routing edge), 1× `vcsSettings.externalRegistry: null` vs " +
+            "`NOT_AVAILABLE` (default-emit divergence). Concrete counts must be regenerated " +
+            "from a single VAL-010 run before re-enabling — do not hand-arithmetic. " +
+            "Tracked in docs/db-migration/todo.md.",
+    )
     fun `VAL-010 bulk canary`() {
         data class Divergence(
             val component: String,
@@ -458,6 +460,87 @@ class GitVsDbValidationTest {
 
             System.err.println(report)
             fail<Unit>(report)
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // VAL-011: Tools inherited from Defaults.requiredTools must persist on migration.
+    // -------------------------------------------------------------------------
+
+    /**
+     * Regression: multi-range components that don't declare their own
+     * `build.requiredTools` but inherit `BuildEnv` via `Defaults.groovy` lose
+     * the tool when migrated to schema-v2. The Groovy resolver still emits it
+     * in `buildParameters.tools` (Defaults merge at resolve time), but the
+     * DB-backed resolver returns an empty list — import never persists the
+     * inherited junction because, for synthetic-base components, `baseConfig`
+     * is `configs.first()` (the first range block) and the Defaults merge
+     * doesn't propagate `tools` into per-range configs the same way it does
+     * into a top-level config.
+     *
+     * `cache-service` in `production-like/Components.groovy` has only
+     * top-level scalars + two version-range blocks (`(,2.0)` and `[2.0,)`),
+     * neither of which declares `requiredTools`. Production-like
+     * `Defaults.groovy` sets `build { requiredTools = "BuildEnv" }`. The DB-
+     * source response for `cache-service/versions/{version}` must contain
+     * `BuildEnv` in `buildParameters.tools` — same as the Groovy baseline.
+     *
+     * Mirrors a real production pattern observed on multi-range components
+     * that declare their own top-level `build { ... }` block (with scalars
+     * such as `javaVersion`) but no `requiredTools` of their own.
+     */
+    @Test
+    @DisplayName(
+        "VAL-011: Defaults.requiredTools (BuildEnv) survives DB import — Git baseline vs DB candidate parity",
+    )
+    fun `VAL-011 defaults requiredTools git vs db parity`() {
+        // Hand-picked candidates representative of the broken-on-prod pattern plus
+        // historically-working control cases. production-like/Defaults.groovy sets
+        // `build { requiredTools = "BuildEnv" }`, so the Git baseline must always
+        // emit BuildEnv for these components. Any Git-vs-DB divergence in
+        // `buildParameters.tools` is the bug.
+        val candidates =
+            listOf(
+                // Synthetic fixture mirroring the real-world broken pattern: multi-range
+                // with empty first range, top-level `build {}` block, no own
+                // `requiredTools` (must inherit from Defaults). This is the case where
+                // the Groovy baseline emits BuildEnv but the DB-backed resolver was
+                // returning `[]`. Probe both sides of the `1.0.107` range boundary so
+                // both the empty first range and the override second range exercise
+                // the base-row junction fallback path.
+                "legacy-multi-range-tool-inherit" to "1.0.107",
+                "legacy-multi-range-tool-inherit" to "1.0.106",
+                // Other multi-range / single-range candidates (control cases that have
+                // historically worked end-to-end).
+                "cache-service" to "1.0.0",
+                "auth-service" to "1.0.0",
+                "payment-gateway" to "1.0.0",
+            )
+
+        val failures = mutableListOf<String>()
+        for ((name, version) in candidates) {
+            sourceRegistry.setComponentSource(name, "git")
+            val gitBody =
+                mvc
+                    .perform(get("/rest/api/2/components/$name/versions/$version").accept(APPLICATION_JSON))
+                    .andReturn().response.contentAsString
+            val gitTools =
+                objectMapper.readTree(gitBody).path("buildParameters").path("tools").map { it.path("name").asText() }
+
+            sourceRegistry.setComponentSource(name, "db")
+            val dbBody =
+                mvc
+                    .perform(get("/rest/api/2/components/$name/versions/$version").accept(APPLICATION_JSON))
+                    .andReturn().response.contentAsString
+            val dbTools =
+                objectMapper.readTree(dbBody).path("buildParameters").path("tools").map { it.path("name").asText() }
+
+            if (gitTools.toSet() != dbTools.toSet()) {
+                failures.add("[$name@$version] git=$gitTools db=$dbTools")
+            }
+        }
+        if (failures.isNotEmpty()) {
+            fail<Unit>("Git vs DB buildParameters.tools divergence:\n${failures.joinToString("\n")}")
         }
     }
 

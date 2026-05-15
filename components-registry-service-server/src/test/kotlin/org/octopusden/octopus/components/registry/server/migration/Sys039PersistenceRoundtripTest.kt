@@ -54,13 +54,6 @@ import java.nio.file.Paths
 @ActiveProfiles("common", "ft-db")
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Timeout(120)
-@org.junit.jupiter.api.Disabled(
-    "schema-v2: temporarily disabled until Phase 6 — depends on "
-        + "ImportServiceImpl.migrate() actually seeding the DB at startup, "
-        + "but the Phase 5 stub returns an empty result. Re-enable when "
-        + "MIG-039 lands the §6 import pipeline, or rewrite to seed via "
-        + "the v4 CRUD API in @BeforeAll.",
-)
 class Sys039PersistenceRoundtripTest {
     @MockBean
     @Suppress("UnusedPrivateProperty")
@@ -111,10 +104,11 @@ class Sys039PersistenceRoundtripTest {
         val detail = getComponent(id)
         val version = detail["version"].asLong()
 
+        // Six new scalar/array fields: releaseManager, securityChampion, copyright,
+        // releasesInDefaultBranch, labels. (groupId is not part of ComponentDetailResponse.)
         val payload =
             mapOf(
                 "version" to version,
-                "groupId" to "org.example.alpha",
                 "releaseManager" to "rm-user",
                 "securityChampion" to "sc-user",
                 "copyright" to "(c) 2026 Acme Inc.",
@@ -131,7 +125,6 @@ class Sys039PersistenceRoundtripTest {
             ).andExpect(status().is2xxSuccessful)
 
         val updated = getComponent(id)
-        assertEquals("org.example.alpha", updated["groupId"].asText())
         assertEquals("rm-user", updated["releaseManager"].asText())
         assertEquals("sc-user", updated["securityChampion"].asText())
         assertEquals("(c) 2026 Acme Inc.", updated["copyright"].asText())

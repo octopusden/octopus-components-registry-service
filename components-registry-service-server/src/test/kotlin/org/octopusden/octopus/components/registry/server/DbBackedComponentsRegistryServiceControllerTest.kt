@@ -3,6 +3,9 @@ package org.octopusden.octopus.components.registry.server
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.Disabled
+import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
 import org.octopusden.octopus.components.registry.server.support.adminJwt
@@ -35,13 +38,6 @@ import java.nio.file.Paths
 )
 @ActiveProfiles("common", "test-db")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-@org.junit.jupiter.api.Disabled(
-    "schema-v2: temporarily disabled until Phase 6 — depends on "
-        + "ImportServiceImpl.migrate() actually seeding the DB at startup, "
-        + "but the Phase 5 stub returns an empty result. Re-enable when "
-        + "MIG-039 lands the §6 import pipeline, or rewrite to seed via "
-        + "the v4 CRUD API in @BeforeAll.",
-)
 class DbBackedComponentsRegistryServiceControllerTest : MockMvcRegistryTestSupport() {
     @Autowired
     private lateinit var sourceRegistry: ComponentSourceRegistry
@@ -101,6 +97,36 @@ class DbBackedComponentsRegistryServiceControllerTest : MockMvcRegistryTestSuppo
         for (name in componentNames) {
             sourceRegistry.setComponentSource(name, "db")
         }
+    }
+
+    @Disabled(
+        "schema-v2 known limitation — complex KTS build-tool beans (OracleDatabaseToolBean, " +
+            "PTKProductToolBean) cannot be stored in v2 `tools` dictionary (primitive scalar columns " +
+            "only). Tracked in docs/db-migration/todo.md under 'Schema v2 known limitations' (RES-014).",
+    )
+    override fun testGetBuildTools() = super.testGetBuildTools()
+
+    /**
+     * Regression: components migrated from a DSL with no `vcsSettings` block at all
+     * (no VCS roots and no externalRegistry) resolve to `EscrowModuleConfig.vcsSettings == null`.
+     * `BaseComponentController.getAllComponents` used to dereference
+     * `config.vcsSettings.versionControlSystemRoots` unconditionally inside the
+     * `vcs-path` filter lambda, NPE-ing the whole request to a 500 whenever the
+     * query parameter was present and at least one component had a null
+     * `vcsSettings`. After the fix the request must succeed and just filter
+     * those components out.
+     */
+    @Test
+    @DisplayName(
+        "GET /rest/api/2/components?vcs-path=<any> returns 200 (no NPE on null vcsSettings)",
+    )
+    fun getAllComponents_vcsPathFilter_doesNotNpeOnNullVcsSettings() {
+        mvc
+            .perform(
+                get("/rest/api/2/components")
+                    .param("vcs-path", "ssh://hg@mercurial/__no_such_component__")
+                    .accept(APPLICATION_JSON),
+            ).andExpect(status().isOk)
     }
 
     companion object {

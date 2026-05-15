@@ -5,7 +5,7 @@ import java.util.UUID
 /**
  * One row of `component_configurations`, projected for the v4 editor view.
  *
- * Three shapes per schema-spec.md §3 (Model A' override taxonomy):
+ * Three editor-visible shapes per schema-spec.md §3 (Model A' override taxonomy):
  *
  *  - `BASE`: `overriddenAttribute == null`. Base scalars populated; all child
  *    collections (when non-empty) carry the component's default child rows.
@@ -17,6 +17,11 @@ import java.util.UUID
  *  - `MARKER`: `overriddenAttribute` is one of the six marker names. All scalar
  *    aspects are null; the matching child collection carries the replacement
  *    rows for the row's version range.
+ *
+ * A fourth storage-only row shape `RANGE_PRESENCE` exists on the entity but is
+ * never serialised here — V4 mappers filter it out (it marks DSL-declared
+ * ranges with no real override for resolver enumeration). The enum value
+ * exists for completeness so audit/admin tooling can reference it.
  *
  * Resolution (merging base + overrides for a concrete version) is the
  * resolver's job — v4 deliberately exposes rows individually so the Portal can
@@ -43,6 +48,16 @@ enum class ConfigurationRowType {
     BASE,
     SCALAR_OVERRIDE,
     MARKER,
+
+    /**
+     * Storage-only row: marks a DSL `componentVersion(R)` block whose
+     * scalars/markers all match base. Resolver enumerates the range; V4
+     * editor APIs and field-override mutations exclude these rows. Never
+     * appears in `ComponentConfigurationResponse` or `FieldOverrideResponse`
+     * payloads — the enum value exists only for entity-side classification
+     * and admin/internal tooling.
+     */
+    RANGE_PRESENCE,
 }
 
 data class BuildAspectResponse(
@@ -68,6 +83,7 @@ data class EscrowAspectResponse(
     val gradleIncludeConfigurations: String? = null,
     val gradleExcludeConfigurations: String? = null,
     val gradleIncludeTestConfigurations: Boolean? = null,
+    val buildTask: String? = null,
 )
 
 data class JiraAspectResponse(
@@ -171,6 +187,7 @@ data class EscrowAspectRequest(
     val gradleIncludeConfigurations: String? = null,
     val gradleExcludeConfigurations: String? = null,
     val gradleIncludeTestConfigurations: Boolean? = null,
+    val buildTask: String? = null,
 )
 
 data class JiraAspectRequest(

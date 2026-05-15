@@ -36,6 +36,7 @@ internal val SCALAR_ATTRIBUTE_PATHS: Set<String> =
         "escrow.gradleIncludeConfigurations",
         "escrow.gradleExcludeConfigurations",
         "escrow.gradleIncludeTestConfigurations",
+        "escrow.buildTask",
         "jira.projectKey",
         "jira.technical",
         "jira.majorVersionFormat",
@@ -82,6 +83,7 @@ internal fun ComponentConfigurationEntity.extractScalarValue(): Any? =
         "escrow.gradleIncludeConfigurations" -> escrowGradleIncludeConfigurations
         "escrow.gradleExcludeConfigurations" -> escrowGradleExcludeConfigurations
         "escrow.gradleIncludeTestConfigurations" -> escrowGradleIncludeTestConfigurations
+        "escrow.buildTask" -> escrowBuildTask
         "jira.projectKey" -> jiraProjectKey
         "jira.technical" -> jiraTechnical
         "jira.majorVersionFormat" -> jiraMajorVersionFormat
@@ -139,6 +141,7 @@ internal fun ComponentConfigurationEntity.applyScalarValue(
         "escrow.gradleIncludeConfigurations" -> escrowGradleIncludeConfigurations = requireString(attributePath, value)
         "escrow.gradleExcludeConfigurations" -> escrowGradleExcludeConfigurations = requireString(attributePath, value)
         "escrow.gradleIncludeTestConfigurations" -> escrowGradleIncludeTestConfigurations = requireBoolean(attributePath, value)
+        "escrow.buildTask" -> escrowBuildTask = requireString(attributePath, value)
         "jira.projectKey" -> jiraProjectKey = requireString(attributePath, value)
         "jira.technical" -> jiraTechnical = requireBoolean(attributePath, value)
         "jira.majorVersionFormat" -> jiraMajorVersionFormat = requireString(attributePath, value)
@@ -171,6 +174,7 @@ private fun ComponentConfigurationEntity.clearAllScalarColumns() {
     escrowGradleIncludeConfigurations = null
     escrowGradleExcludeConfigurations = null
     escrowGradleIncludeTestConfigurations = null
+    escrowBuildTask = null
     jiraProjectKey = null
     jiraTechnical = null
     jiraMajorVersionFormat = null

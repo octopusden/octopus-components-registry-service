@@ -62,13 +62,11 @@ internal object MarkerAttributes {
  * session). Produces one `EscrowModuleConfig` per distinct version range that
  * appears across base + override rows.
  *
- * Synthetic-base handling (MIG-029): when `isSyntheticBase = true` AND at least
- * one override row exists, the base row's range entry is NOT emitted — only
- * override ranges. This eliminates the spurious `(,0),[0,)` entry that the
- * legacy variants-Map mapper used to synthesise for version-range-only DSL
- * components. When no override exists (synthetic-only component), a single
- * base-range entry is emitted so downstream consumers always see at least one
- * `EscrowModuleConfig`.
+ * The base row's version range is always emitted first, followed by any override
+ * range strings that are not already included. For version-range-only components
+ * (`isSyntheticBase = true`), the base row holds the first explicit version range
+ * from the DSL — this range must be emitted so that version resolution finds it.
+ * Downstream consumers always see at least one `EscrowModuleConfig`.
  */
 fun ComponentEntity.toEscrowModule(
     versionRangeFactory: VersionRangeFactory,
@@ -79,12 +77,22 @@ fun ComponentEntity.toEscrowModule(
 
     val configs = this.configurations.toList()
     val base =
-        configs.firstOrNull { it.overriddenAttribute == null }
+        configs.firstOrNull { it.rowType == "BASE" }
             ?: return module
-    val overrides = configs.filter { it.overriddenAttribute != null }
+    // "non-base" here covers SCALAR_OVERRIDE, MARKER, and RANGE_PRESENCE. The
+    // presence rows participate in enumeration (their `versionRange` adds an
+    // entry to the distinct list) but `resolveForRange` filters them out
+    // before applying overrides.
+    val overrides = configs.filter { it.rowType != "BASE" }
 
+    // Per schema-spec.md §3.4 (MIG-029): a synthetic-base row exists only as a
+    // schema-required anchor for a version-range-only component (one with no
+    // shared scalars across its ranges). When overrides exist, the base range
+    // (which is `(,)` by convention for synthetic bases) is a placeholder and
+    // must NOT be enumerated as a view of its own. For non-synthetic bases the
+    // base range IS the default view and must be enumerated.
     val enumeratedRanges = mutableListOf<String>()
-    if (!base.isSyntheticBase || overrides.isEmpty()) {
+    if (!(base.isSyntheticBase && overrides.isNotEmpty())) {
         enumeratedRanges += base.versionRange
     }
     overrides
@@ -126,8 +134,8 @@ fun ComponentEntity.toResolvedEscrowModuleConfig(
     numericVersionFactory: NumericVersionFactory,
 ): EscrowModuleConfig? {
     val configs = this.configurations.toList()
-    val base = configs.firstOrNull { it.overriddenAttribute == null } ?: return null
-    val overrides = configs.filter { it.overriddenAttribute != null }
+    val base = configs.firstOrNull { it.rowType == "BASE" } ?: return null
+    val overrides = configs.filter { it.rowType == "SCALAR_OVERRIDE" || it.rowType == "MARKER" }
 
     val numericVersion =
         try {
@@ -148,8 +156,8 @@ fun ComponentEntity.toResolvedEscrowModuleConfig(
     return buildEscrowModuleConfig(
         component = this,
         base = base,
-        scalarOverrides = matchingOverrides.filter { it.overriddenAttribute !in MarkerAttributes.ALL },
-        markerOverrides = matchingOverrides.filter { it.overriddenAttribute in MarkerAttributes.ALL },
+        scalarOverrides = matchingOverrides.filter { it.rowType == "SCALAR_OVERRIDE" },
+        markerOverrides = matchingOverrides.filter { it.rowType == "MARKER" },
         versionRange = base.versionRange,
     )
 }
@@ -171,12 +179,12 @@ private fun ComponentEntity.resolveForRange(
     // override exists.
     val scalarOverrides =
         overrides.filter {
-            it.overriddenAttribute !in MarkerAttributes.ALL &&
+            it.rowType == "SCALAR_OVERRIDE" &&
                 rangeApplies(parentRange = it.versionRange, childRange = range, factory = versionRangeFactory)
         }
     val markerOverrides =
         overrides.filter {
-            it.overriddenAttribute in MarkerAttributes.ALL &&
+            it.rowType == "MARKER" &&
                 rangeApplies(parentRange = it.versionRange, childRange = range, factory = versionRangeFactory)
         }
 
@@ -254,13 +262,20 @@ private fun buildEscrowModuleConfig(
 
     // VCS — child collection. Marker override "vcs.settings" replaces base
     // children; otherwise base.vcsEntries is used.
+    //
+    // `externalRegistry` is per-component scalar — a sibling of the VCS roots,
+    // not a child entry. Emit `vcsSettings` whenever either is present so a
+    // component declared in DSL as `vcsSettings { externalRegistry = "..." }`
+    // with no VCS roots round-trips correctly (the Groovy resolver kept the
+    // VCSSettings instance with externalRegistry set and roots empty; v2 was
+    // silently dropping it).
     val vcsEntries =
         pickMarkerChildren(
             attribute = MarkerAttributes.VCS_SETTINGS,
             markerOverrides = markerOverrides,
             baseChildren = base.vcsEntries.toList(),
         ) { it.vcsEntries.toList() }
-    if (vcsEntries.isNotEmpty()) {
+    if (vcsEntries.isNotEmpty() || component.vcsExternalRegistry != null) {
         setField(config, "vcsSettings", vcsEntries.toVCSSettings(component.vcsExternalRegistry))
     }
 
@@ -340,11 +355,11 @@ private fun buildEscrowModuleConfig(
                 .Doc(docLink.docComponentKey, docLink.majorVersion)
     }
 
-    // Artifact pattern (group/artifact) — there is at most one pair per component
-    val artifactId = component.artifactIds.firstOrNull()
-    if (artifactId != null) {
-        setField(config, "groupIdPattern", artifactId.groupPattern)
-        setField(config, "artifactIdPattern", artifactId.artifactPattern)
+    // Artifact pattern (group/artifact) — may have multiple artifact patterns for same group
+    val artifactIds = component.artifactIds.toList()
+    if (artifactIds.isNotEmpty()) {
+        setField(config, "groupIdPattern", artifactIds.first().groupPattern)
+        setField(config, "artifactIdPattern", artifactIds.joinToString(",") { it.artifactPattern })
     }
 
     return config
@@ -380,6 +395,7 @@ private class ComponentConfigurationView {
     var projectVersion: String? = null
     var systemProperties: String? = null
     var buildTasks: String? = null
+    var escrowBuildTask: String? = null
 
     var escrowProvidedDependencies: String? = null
     var escrowReusable: Boolean? = null
@@ -414,6 +430,7 @@ private class ComponentConfigurationView {
             "build.systemProperties" -> override.systemProperties?.let { systemProperties = it }
             "build.buildTasks" -> override.buildTasks?.let { buildTasks = it }
 
+            "escrow.buildTask" -> override.escrowBuildTask?.let { escrowBuildTask = it }
             "escrow.providedDependencies" -> override.escrowProvidedDependencies?.let { escrowProvidedDependencies = it }
             "escrow.reusable" -> override.escrowReusable?.let { escrowReusable = it }
             "escrow.generation" -> override.escrowGeneration?.let { escrowGeneration = it }
@@ -490,7 +507,7 @@ private class ComponentConfigurationView {
         return object : org.octopusden.octopus.components.registry.api.escrow.Escrow {
             override fun getGradle() = null
 
-            override fun getBuildTask() = captured.buildTasks
+            override fun getBuildTask() = captured.escrowBuildTask
 
             override fun getProvidedDependencies(): Collection<String> =
                 captured.escrowProvidedDependencies
@@ -536,6 +553,7 @@ private class ComponentConfigurationView {
                 projectVersion = base.projectVersion
                 systemProperties = base.systemProperties
                 buildTasks = base.buildTasks
+                escrowBuildTask = base.escrowBuildTask
 
                 escrowProvidedDependencies = base.escrowProvidedDependencies
                 escrowReusable = base.escrowReusable
@@ -673,11 +691,15 @@ private fun buildJiraComponent(
 
     val format =
         ComponentVersionFormat.create(majorFmt, releaseFmt, buildFmt, lineFmt, hotfixFmt)
-    val info = ComponentInfo(merged.jiraVersionPrefix ?: "", merged.jiraVersionFormat ?: "")
+    val info = if (merged.jiraVersionPrefix != null || merged.jiraVersionFormat != null) {
+        ComponentInfo(merged.jiraVersionPrefix, merged.jiraVersionFormat)
+    } else {
+        null
+    }
 
     return JiraComponent(
         projectKey,
-        component.jiraDisplayName ?: "",
+        component.jiraDisplayName,
         format,
         info,
         merged.jiraTechnical ?: false,

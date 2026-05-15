@@ -19,24 +19,35 @@ import java.util.UUID
 /**
  * Schema v2 — wide typed per-(component, version_range) row.
  *
- * Three row shapes (enforced by service-layer validation + targeted DB CHECKs):
+ * Four row shapes. `rowType` is the source-of-truth classifier; `overriddenAttribute`
+ * is the payload discriminator for SCALAR_OVERRIDE/MARKER and MUST be NULL for
+ * BASE/RANGE_PRESENCE. DB-level CHECKs enforce the row_type ↔ overridden_attribute
+ * pairing and the all-typed-cols-NULL rule for MARKER + RANGE_PRESENCE.
  *
- *   1. **Base row**: `overriddenAttribute IS NULL`, typed columns may carry the
- *      component's default values. Partial UNIQUE index ensures at most one
- *      base row per component. `isSyntheticBase = true` indicates a base
- *      populated purely from `Defaults.groovy` — legacy variants-Map mapping
- *      skips synthetic bases (MIG-029 structural fix), but single-version
- *      resolve still uses the base as fallback.
+ *   1. **BASE** (`rowType = "BASE"`, `overriddenAttribute IS NULL`): typed
+ *      columns may carry the component's default values. Partial UNIQUE index
+ *      ensures at most one base row per component. `isSyntheticBase = true`
+ *      indicates a base populated purely from `Defaults.groovy` — legacy
+ *      variants-Map mapping skips synthetic bases (MIG-029 structural fix),
+ *      but single-version resolve still uses the base as fallback.
  *
- *   2. **Scalar override row**: `overriddenAttribute = '<aspect.field>'`
- *      (e.g., `build.javaVersion`, `escrow.generation`, `jira.projectKey`).
- *      Exactly one typed column non-NULL — the column matching the attribute
- *      path. No attached child rows. Enforced in the service layer.
+ *   2. **SCALAR_OVERRIDE** (`rowType = "SCALAR_OVERRIDE"`,
+ *      `overriddenAttribute = '<aspect.field>'`, e.g., `build.javaVersion`,
+ *      `escrow.generation`, `jira.projectKey`). Exactly one typed column
+ *      non-NULL — the column matching the attribute path. No attached child
+ *      rows. The DB CHECK forbids reusing a marker name here; the
+ *      "exactly one non-NULL" rule is enforced in the service layer.
  *
- *   3. **Marker row**: `overriddenAttribute` is one of the marker names
- *      (see schema-spec.md §3.3). All typed columns are NULL — DB CHECK
- *      constraints enforce this. Child rows carry the data via FK back to
- *      this row.
+ *   3. **MARKER** (`rowType = "MARKER"`, `overriddenAttribute` is one of the
+ *      six marker names — see schema-spec.md §3.3). All typed columns are
+ *      NULL — DB CHECK enforces this. Child rows carry the data via FK back
+ *      to this row.
+ *
+ *   4. **RANGE_PRESENCE** (`rowType = "RANGE_PRESENCE"`,
+ *      `overriddenAttribute IS NULL`, all typed columns NULL): storage
+ *      artifact that marks a DSL `componentVersion(R)` block exists for the
+ *      given range so the resolver enumerates it even when the range's
+ *      scalars/markers match base. Hidden from V4 editor APIs.
  *
  * See `ComponentEntity` kdoc for the cross-cutting v2 entity conventions.
  */
@@ -64,6 +75,9 @@ class ComponentConfigurationEntity(
 
     @Column(name = "overridden_attribute", length = 50)
     var overriddenAttribute: String? = null,
+
+    @Column(name = "row_type", length = 32, nullable = false)
+    var rowType: String,
 
     @Column(name = "is_synthetic_base", nullable = false)
     var isSyntheticBase: Boolean = false,
@@ -101,6 +115,9 @@ class ComponentConfigurationEntity(
 
     @Column(name = "build_tasks", columnDefinition = "TEXT")
     var buildTasks: String? = null,
+
+    @Column(name = "escrow_build_task", columnDefinition = "TEXT")
+    var escrowBuildTask: String? = null,
 
     // --- ESCROW aspect ---
     @Column(name = "escrow_provided_dependencies", columnDefinition = "TEXT")

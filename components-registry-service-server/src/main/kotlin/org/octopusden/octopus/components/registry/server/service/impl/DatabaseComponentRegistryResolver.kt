@@ -27,6 +27,7 @@ import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
 import org.octopusden.octopus.escrow.dto.ComponentArtifactConfiguration
 import org.octopusden.octopus.escrow.model.Distribution
 import org.octopusden.octopus.escrow.model.SecurityGroups
+import org.octopusden.octopus.components.registry.api.escrow.Escrow
 import org.octopusden.octopus.escrow.model.VCSSettings
 import org.octopusden.octopus.escrow.resolvers.ComponentHotfixSupportResolver
 import org.octopusden.octopus.releng.JiraComponentVersionFormatter
@@ -72,13 +73,14 @@ class DatabaseComponentRegistryResolver(
     override fun getComponents(): MutableCollection<EscrowModule> =
         componentRepository
             .findAll()
-            .map { it.toEscrowModule(versionRangeFactory, numericVersionFactory) }
+            .map { it.toEscrowModule(versionRangeFactory, numericVersionFactory).nullifyEmptyEscrow() }
             .toMutableList()
 
     override fun getComponentById(id: String): EscrowModule? =
         componentRepository
             .findByComponentKey(id)
             ?.toEscrowModule(versionRangeFactory, numericVersionFactory)
+            ?.nullifyEmptyEscrow()
 
     override fun getResolvedComponentDefinition(
         id: String,
@@ -91,6 +93,10 @@ class DatabaseComponentRegistryResolver(
                 versionRangeFactory = versionRangeFactory,
                 numericVersionFactory = numericVersionFactory,
             ) ?: return null
+
+        // Null out escrow that has no meaningful data (matches Git-path behaviour
+        // for sub-components without an explicit escrow block).
+        config.nullifyEmptyEscrow()
 
         // Mirror the Git resolver: when distribution is present, calculate
         // dist-time substitutions against the jira-normalised version, falling
@@ -260,8 +266,13 @@ class DatabaseComponentRegistryResolver(
         val componentEntity =
             componentRepository.findByComponentKey(component)
                 ?: throw NotFoundException("Component '$component' is not found")
-        val artifactId = componentEntity.artifactIds.firstOrNull() ?: return emptyMap()
-        val pair = ComponentArtifactConfiguration(artifactId.groupPattern, artifactId.artifactPattern)
+        val artifactIds = componentEntity.artifactIds.toList()
+        if (artifactIds.isEmpty()) return emptyMap()
+        // Reconstruct the original multi-artifact patterns: all rows share the same groupPattern;
+        // artifactPattern values are joined back into a CSV to match Git resolver output.
+        val groupPattern = artifactIds.first().groupPattern
+        val artifactPattern = artifactIds.joinToString(",") { it.artifactPattern }
+        val pair = ComponentArtifactConfiguration(groupPattern, artifactPattern)
 
         // Enumerate distinct version_ranges (base + override rows) to surface the
         // same shape the Git resolver returned, keyed by version_range string.
@@ -532,6 +543,45 @@ class DatabaseComponentRegistryResolver(
             org.octopusden.octopus.escrow.BuildSystem.GOLANG -> BuildSystem.GOLANG
             org.octopusden.octopus.escrow.BuildSystem.IN_CONTAINER -> BuildSystem.IN_CONTAINER
         }
+
+    /**
+     * Null out `config.escrow` when ALL meaningful escrow fields are absent.
+     *
+     * `EntityMappers.buildEscrowModuleConfig` always sets `config.escrow` to a
+     * non-null anonymous `Escrow` object (because `toEscrowApi()` is
+     * unconditional). For components that have no escrow data in the DB
+     * (all escrow columns are null), this produces an empty EscrowDTO that
+     * the controller serializes as `escrow=EscrowDTO(buildTask=null, ...)`.
+     *
+     * The Git-path resolver returns `null` for such components, so we match
+     * that behaviour here: if none of the meaningful fields carry a real value
+     * the escrow object is treated as absent.
+     *
+     * NOTE: `isReusable()` is intentionally excluded from the emptiness check
+     * because the DB column is nullable (null means "not specified") but the
+     * `Escrow` interface method returns a primitive `boolean` (defaults to
+     * `false`), making `false` indistinguishable from "not specified" at the
+     * model level.  All other fields can be checked for meaningful content.
+     */
+    private fun EscrowModuleConfig.nullifyEmptyEscrow(): EscrowModuleConfig {
+        val e: Escrow = escrow ?: return this
+        val meaningfulEscrow =
+            e.buildTask != null ||
+                e.providedDependencies.isNotEmpty() ||
+                e.diskSpaceRequirement.isPresent ||
+                e.additionalSources.isNotEmpty() ||
+                e.generation.isPresent
+        if (!meaningfulEscrow) {
+            escrow = null
+        }
+        return this
+    }
+
+    /** Apply [nullifyEmptyEscrow] to every config in the module. */
+    private fun EscrowModule.nullifyEmptyEscrow(): EscrowModule {
+        moduleConfigurations.forEach { it.nullifyEmptyEscrow() }
+        return this
+    }
 
     companion object {
         private val log = LoggerFactory.getLogger(DatabaseComponentRegistryResolver::class.java)

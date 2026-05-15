@@ -1,29 +1,184 @@
 package org.octopusden.octopus.components.registry.server.migration
 
-import org.junit.jupiter.api.Disabled
+import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.ObjectMapper
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Timeout
+import org.octopusden.cloud.commons.security.client.AuthServerClient
+import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
+import org.octopusden.octopus.components.registry.server.support.adminJwt
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.test.mock.mockito.MockBean
+import org.springframework.http.MediaType
+import org.springframework.test.annotation.DirtiesContext
+import org.springframework.test.context.ActiveProfiles
+import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import java.nio.file.Paths
+import java.util.UUID
 
 /**
- * Stubbed during the schema-v2 refactor. The original implementation
- * references entities, columns, or repository methods that were removed
- * in Phase 2/4 (e.g., `metadata: Map`, `BuildConfigurationEntity`,
- * `FieldOverrideEntity`, `teamcityProjectId` column, the
- * `EscrowModule.toComponentEntity()` shortcut).
+ * Persistence round-trip for the v2 multi-row `component_teamcity_projects` table.
  *
- * The original assertions and test methods are preserved in git history
- * — recover them with `git log --follow <this-file>` and read the parent
- * of the "Phase 5: stub schema-v2-broken test classes" commit. They are
- * also listed in the Phase 6 ledger
- * (docs/db-migration/implementation-progress.md) alongside the rewrite
- * action required to re-enable each test.
+ * Replaces the old [TeamcityProjectIdPersistenceRoundtripTest] that tested the
+ * now-deleted scalar `teamcityProjectId`/`teamcityProjectUrl` columns on
+ * `components`. The new test seeds its own component via the v4 CRUD API so it
+ * does not depend on auto-migrate / the ImportServiceImpl DSL pipeline (phase 5
+ * stub returns empty — MIG-039 will restore that path).
  *
- * Phase 6 will rewrite each test against the v2 schema and re-enable.
+ * Three scenarios:
+ *  1. POST with `teamcityProjects` list → GET returns the persisted row.
+ *  2. PATCH replaces the TC project list → old row gone, new row at sortOrder=0.
+ *  3. PATCH with empty list clears all TC project rows.
+ *
+ * `teamcity.base-url` is set via `properties` so projectUrl is non-null and
+ * verifiable without starting a real TC server.
  */
-@Disabled("schema-v2: temporarily disabled until Phase 6 test-suite rewrite")
+@AutoConfigureMockMvc
+@SpringBootTest(
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    classes = [ComponentRegistryServiceApplication::class],
+    properties = ["teamcity.base-url=https://tc.example.com"],
+)
+@ActiveProfiles("common", "ft-db")
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+@Timeout(120)
 class TeamcityProjectIdPersistenceRoundtripTest {
+    @MockBean
+    @Suppress("UnusedPrivateProperty")
+    private lateinit var authServerClient: AuthServerClient
+
+    @Autowired
+    private lateinit var mvc: MockMvc
+
+    @Autowired
+    private lateinit var objectMapper: ObjectMapper
+
+    init {
+        val testResourcesPath =
+            Paths
+                .get(TeamcityProjectIdPersistenceRoundtripTest::class.java.getResource("/expected-data")!!.toURI())
+                .parent
+        System.setProperty("COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR", testResourcesPath.toString())
+    }
+
+    // -- Helpers --------------------------------------------------------------
+
+    private fun uniqueName(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(8)}"
+
+    private fun createComponent(name: String, tcProjectId: String? = null): JsonNode {
+        val body = buildMap<String, Any?> {
+            put("name", name)
+            if (tcProjectId != null) {
+                put("teamcityProjects", listOf(mapOf("projectId" to tcProjectId)))
+            }
+        }
+        val response =
+            mvc
+                .perform(
+                    post("/rest/api/4/components")
+                        .with(adminJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(body)),
+                ).andExpect(status().isCreated)
+                .andReturn()
+                .response.contentAsString
+        return objectMapper.readTree(response)
+    }
+
+    private fun getComponent(id: String): JsonNode {
+        val response =
+            mvc
+                .perform(get("/rest/api/4/components/$id").with(adminJwt()))
+                .andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString
+        return objectMapper.readTree(response)
+    }
+
+    // -- Tests ----------------------------------------------------------------
+
     @Test
-    @Suppress("ClassName")
-    fun `Phase 6 rewrite pending`() {
-        // Intentionally empty. See class-level KDoc for recovery instructions.
+    @DisplayName("v2: teamcityProject round-trips via POST + GET (projectId + projectUrl composed from base-url)")
+    fun teamcityProject_createAndGet() {
+        val created = createComponent(uniqueName("TC_RT"), tcProjectId = "TcProj_Alpha")
+        val id = created["id"].asText()
+
+        val detail = getComponent(id)
+        val tcProjects = detail["teamcityProjects"]
+
+        assertTrue(tcProjects.isArray && tcProjects.size() == 1, "expected exactly one TC project row")
+        val row = tcProjects[0]
+        assertEquals("TcProj_Alpha", row["projectId"].asText())
+        // projectUrl is composed at read-time: base-url + "/project/" + projectId
+        assertEquals("https://tc.example.com/project/TcProj_Alpha", row["projectUrl"].asText())
+        assertEquals(0, row["sortOrder"].asInt())
+    }
+
+    @Test
+    @DisplayName("v2: PATCH teamcityProjects replaces existing row — old row deleted, new row at sortOrder=0")
+    fun teamcityProject_patchReplaces() {
+        val created = createComponent(uniqueName("TC_PATCH"), tcProjectId = "TcProj_Initial")
+        val id = created["id"].asText()
+        val version = getComponent(id)["version"].asLong()
+
+        mvc
+            .perform(
+                patch("/rest/api/4/components/$id")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        objectMapper.writeValueAsBytes(
+                            mapOf(
+                                "version" to version,
+                                "teamcityProjects" to listOf(mapOf("projectId" to "TcProj_Replaced")),
+                            ),
+                        ),
+                    ),
+            ).andExpect(status().isOk)
+
+        val updated = getComponent(id)
+        val tcProjects = updated["teamcityProjects"]
+
+        assertTrue(tcProjects.isArray && tcProjects.size() == 1, "expected exactly one row after PATCH replace")
+        val row = tcProjects[0]
+        assertEquals("TcProj_Replaced", row["projectId"].asText(), "old row deleted, new row present")
+        assertEquals(0, row["sortOrder"].asInt(), "single row is at sortOrder=0")
+        assertEquals("https://tc.example.com/project/TcProj_Replaced", row["projectUrl"].asText())
+    }
+
+    @Test
+    @DisplayName("v2: PATCH teamcityProjects with empty list clears all TC project rows")
+    fun teamcityProject_patchClearsAll() {
+        val created = createComponent(uniqueName("TC_CLEAR"), tcProjectId = "TcProj_ToBeCleared")
+        val id = created["id"].asText()
+        val version = getComponent(id)["version"].asLong()
+
+        mvc
+            .perform(
+                patch("/rest/api/4/components/$id")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        objectMapper.writeValueAsBytes(
+                            mapOf("version" to version, "teamcityProjects" to emptyList<Any>()),
+                        ),
+                    ),
+            ).andExpect(status().isOk)
+
+        val updated = getComponent(id)
+        val tcProjects = updated["teamcityProjects"]
+        assertTrue(
+            tcProjects == null || (tcProjects.isArray && tcProjects.size() == 0),
+            "expected no TC project rows after PATCH with empty list",
+        )
     }
 }

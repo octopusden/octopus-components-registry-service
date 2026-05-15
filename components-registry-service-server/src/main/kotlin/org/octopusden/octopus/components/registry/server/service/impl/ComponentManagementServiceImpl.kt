@@ -61,7 +61,9 @@ import org.octopusden.octopus.components.registry.server.teamcity.TeamcityProper
 import org.octopusden.releng.versions.VersionRangeFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.data.domain.Page
+import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Pageable
+import org.springframework.data.domain.Sort
 import org.springframework.data.jpa.domain.Specification
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -143,7 +145,7 @@ class ComponentManagementServiceImpl(
         addDocLinks(entity, request.docs.map { it.docComponentKey to it.majorVersion })
 
         // Base configuration row (cascade = ALL — flushed with the parent)
-        val baseConfig = ComponentConfigurationEntity(component = entity, versionRange = ALL_VERSIONS)
+        val baseConfig = ComponentConfigurationEntity(component = entity, versionRange = ALL_VERSIONS, rowType = "BASE")
         applyBaseConfigurationCreate(baseConfig, request.baseConfiguration)
         entity.configurations.add(baseConfig)
 
@@ -299,8 +301,8 @@ class ComponentManagementServiceImpl(
         val baseConfigForToolsSync =
             request.baseConfiguration?.let { patch ->
                 val base =
-                    entity.configurations.firstOrNull { it.overriddenAttribute == null }
-                        ?: ComponentConfigurationEntity(component = entity, versionRange = ALL_VERSIONS).also {
+                    entity.configurations.firstOrNull { it.rowType == "BASE" }
+                        ?: ComponentConfigurationEntity(component = entity, versionRange = ALL_VERSIONS, rowType = "BASE").also {
                             entity.configurations.add(it)
                         }
                 applyBaseConfigurationPatch(base, patch)
@@ -371,7 +373,41 @@ class ComponentManagementServiceImpl(
         filter: ComponentFilter,
         pageable: Pageable,
     ): Page<ComponentSummaryResponse> =
-        componentRepository.findAll(buildSpecification(filter), pageable).map { it.toSummaryResponse(teamcityProperties.baseUrl) }
+        componentRepository
+            .findAll(buildSpecification(filter), translateSort(pageable))
+            .map { it.toSummaryResponse(teamcityProperties.baseUrl) }
+
+    /**
+     * Translate API-facing sort field names to `ComponentEntity` property names.
+     * The v4 `ComponentSummaryResponse` exposes `name` (mapped from `componentKey`),
+     * so a natural `?sort=name,asc` from the Portal would otherwise raise
+     * `PropertyReferenceException` ("no property 'name' on ComponentEntity") and
+     * surface as a 500. Other summary fields (`id`, `displayName`, `componentOwner`,
+     * `productType`, `archived`, `updatedAt`) already match entity properties
+     * 1:1 and need no translation. Derived/joined fields on the summary
+     * (`systems`, `labels`, `buildSystem`, etc.) intentionally have NO translation
+     * — sorting on them would still raise `PropertyReferenceException` and end
+     * up as a clean 400, which is the right answer until and unless someone
+     * adds a dedicated query for those. Unknown fields fall through to Spring
+     * Data and end up as a clean 400 via `ControllerExceptionHandler`.
+     */
+    private fun translateSort(pageable: Pageable): Pageable {
+        if (pageable.sort.isUnsorted) return pageable
+        val translated =
+            Sort.by(
+                pageable.sort.map { order ->
+                    when (order.property) {
+                        "name" ->
+                            // 4-arg ctor — preserves `ignoreCase` alongside direction
+                            // and null-handling. The 3-arg variant defaults
+                            // ignoreCase to false and would silently drop the flag.
+                            Sort.Order(order.direction, "componentKey", order.isIgnoreCase, order.nullHandling)
+                        else -> order
+                    }
+                }.toList(),
+            )
+        return PageRequest.of(pageable.pageNumber, pageable.pageSize, translated)
+    }
 
     // ============================================================
     // Field overrides — backed by `component_configurations`
@@ -391,11 +427,21 @@ class ComponentManagementServiceImpl(
             "Override row for attribute '${request.overriddenAttribute}' and range '${request.versionRange}' already exists"
         }
 
+        val rowType =
+            when {
+                request.overriddenAttribute in MarkerAttributes.ALL -> "MARKER"
+                request.overriddenAttribute in SCALAR_ATTRIBUTE_PATHS -> "SCALAR_OVERRIDE"
+                else -> throw IllegalArgumentException(
+                    "Unknown overriddenAttribute: '${request.overriddenAttribute}'. " +
+                        "Must be a scalar aspect.field path or one of ${MarkerAttributes.ALL}",
+                )
+            }
         val row =
             ComponentConfigurationEntity(
                 component = component,
                 versionRange = request.versionRange,
                 overriddenAttribute = request.overriddenAttribute,
+                rowType = rowType,
             )
 
         val pendingTools: List<String>? =
@@ -447,8 +493,8 @@ class ComponentManagementServiceImpl(
         if (row.component.id != componentId) {
             throw NotFoundException("FieldOverride '$overrideId' does not belong to component '$componentId'")
         }
-        require(row.overriddenAttribute != null) {
-            "Cannot update base row via field-override endpoint (id $overrideId is a BASE row)"
+        require(row.rowType != "BASE" && row.rowType != "RANGE_PRESENCE") {
+            "Cannot update id $overrideId via field-override endpoint (row_type=${row.rowType})"
         }
 
         request.versionRange?.let {
@@ -490,8 +536,8 @@ class ComponentManagementServiceImpl(
         if (row.component.id != componentId) {
             throw NotFoundException("FieldOverride '$overrideId' does not belong to component '$componentId'")
         }
-        require(row.overriddenAttribute != null) {
-            "Cannot delete base row via field-override endpoint (id $overrideId is a BASE row)"
+        require(row.rowType != "BASE" && row.rowType != "RANGE_PRESENCE") {
+            "Cannot delete id $overrideId via field-override endpoint (row_type=${row.rowType})"
         }
         val owningComponent = row.component
         configurationRepository.delete(row)
@@ -505,7 +551,7 @@ class ComponentManagementServiceImpl(
         }
         return configurationRepository
             .findByComponentId(componentId)
-            .filter { it.overriddenAttribute != null }
+            .filter { it.rowType == "SCALAR_OVERRIDE" || it.rowType == "MARKER" }
             .map { it.toFieldOverrideResponse() }
     }
 
@@ -755,6 +801,7 @@ class ComponentManagementServiceImpl(
             config.escrowGradleIncludeConfigurations = e.gradleIncludeConfigurations
             config.escrowGradleExcludeConfigurations = e.gradleExcludeConfigurations
             config.escrowGradleIncludeTestConfigurations = e.gradleIncludeTestConfigurations
+            config.escrowBuildTask = e.buildTask
         }
         request.jira?.let { j ->
             config.jiraProjectKey = j.projectKey
@@ -807,6 +854,7 @@ class ComponentManagementServiceImpl(
             e.gradleIncludeConfigurations?.let { config.escrowGradleIncludeConfigurations = it }
             e.gradleExcludeConfigurations?.let { config.escrowGradleExcludeConfigurations = it }
             e.gradleIncludeTestConfigurations?.let { config.escrowGradleIncludeTestConfigurations = it }
+            e.buildTask?.let { config.escrowBuildTask = it }
         }
         patch.jira?.let { j ->
             j.projectKey?.let { config.jiraProjectKey = it }
@@ -1069,7 +1117,7 @@ class ComponentManagementServiceImpl(
                         val join = root.join<ComponentEntity, ComponentConfigurationEntity>("configurations")
                         query?.distinct(true)
                         cb.and(
-                            cb.isNull(join.get<String>("overriddenAttribute")),
+                            cb.equal(join.get<String>("rowType"), "BASE"),
                             cb.equal(join.get<String>("buildSystem"), bs),
                         )
                     },
