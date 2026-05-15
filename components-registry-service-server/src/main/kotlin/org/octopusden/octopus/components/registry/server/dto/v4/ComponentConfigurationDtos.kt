@@ -83,6 +83,7 @@ data class EscrowAspectResponse(
     val gradleIncludeConfigurations: String? = null,
     val gradleExcludeConfigurations: String? = null,
     val gradleIncludeTestConfigurations: Boolean? = null,
+    val buildTask: String? = null,
 )
 
 data class JiraAspectResponse(
@@ -186,6 +187,7 @@ data class EscrowAspectRequest(
     val gradleIncludeConfigurations: String? = null,
     val gradleExcludeConfigurations: String? = null,
     val gradleIncludeTestConfigurations: Boolean? = null,
+    val buildTask: String? = null,
 )
 
 data class JiraAspectRequest(
