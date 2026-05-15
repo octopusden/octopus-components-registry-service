@@ -33,13 +33,6 @@ import java.nio.file.Paths
 )
 @ActiveProfiles("common", "ft-db")
 @Timeout(120)
-@org.junit.jupiter.api.Disabled(
-    "schema-v2: temporarily disabled until Phase 6 — depends on "
-        + "ImportServiceImpl.migrate() actually seeding the DB at startup, "
-        + "but the Phase 5 stub returns an empty result. Re-enable when "
-        + "MIG-039 lands the §6 import pipeline, or rewrite to seed via "
-        + "the v4 CRUD API in @BeforeAll.",
-)
 class FtDbProfileTest {
     @MockBean
     @Suppress("UnusedPrivateProperty")
