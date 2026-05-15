@@ -9,12 +9,12 @@ import org.octopusden.octopus.components.registry.core.dto.ComponentImage
 import org.octopusden.octopus.components.registry.core.dto.Image
 import org.octopusden.octopus.components.registry.core.dto.VersionedComponent
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
-import org.octopusden.octopus.components.registry.server.entity.v2.ComponentArtifactIdEntity
-import org.octopusden.octopus.components.registry.server.entity.v2.ComponentEntity
+import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactIdEntity
+import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.mapper.toEscrowModule
 import org.octopusden.octopus.components.registry.server.mapper.toResolvedEscrowModuleConfig
-import org.octopusden.octopus.components.registry.server.repository.v2.ComponentRepository
-import org.octopusden.octopus.components.registry.server.repository.v2.DependencyMappingRepository
+import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
+import org.octopusden.octopus.components.registry.server.repository.DependencyMappingRepository
 import org.octopusden.octopus.components.registry.server.service.ComponentRegistryResolver
 import org.octopusden.octopus.components.registry.server.util.formatVersion
 import org.octopusden.octopus.escrow.MavenArtifactMatcher

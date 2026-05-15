@@ -1,10 +1,10 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
-import org.octopusden.octopus.components.registry.server.entity.v2.AuditLogEntity
-import org.octopusden.octopus.components.registry.server.entity.v2.GitHistoryImportStateEntity
-import org.octopusden.octopus.components.registry.server.entity.v2.GitHistoryImportStatus
-import org.octopusden.octopus.components.registry.server.repository.v2.AuditLogRepository
-import org.octopusden.octopus.components.registry.server.repository.v2.GitHistoryImportStateRepository
+import org.octopusden.octopus.components.registry.server.entity.AuditLogEntity
+import org.octopusden.octopus.components.registry.server.entity.GitHistoryImportStateEntity
+import org.octopusden.octopus.components.registry.server.entity.GitHistoryImportStatus
+import org.octopusden.octopus.components.registry.server.repository.AuditLogRepository
+import org.octopusden.octopus.components.registry.server.repository.GitHistoryImportStateRepository
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Propagation
 import org.springframework.transaction.annotation.Transactional

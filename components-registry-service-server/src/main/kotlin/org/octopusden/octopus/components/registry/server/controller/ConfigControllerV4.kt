@@ -1,8 +1,8 @@
 package org.octopusden.octopus.components.registry.server.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import org.octopusden.octopus.components.registry.server.entity.v2.RegistryConfigEntity
-import org.octopusden.octopus.components.registry.server.repository.v2.RegistryConfigRepository
+import org.octopusden.octopus.components.registry.server.entity.RegistryConfigEntity
+import org.octopusden.octopus.components.registry.server.repository.RegistryConfigRepository
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.web.bind.annotation.GetMapping

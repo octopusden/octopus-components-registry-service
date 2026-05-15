@@ -1,8 +1,8 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
 import org.octopusden.octopus.components.registry.server.config.ComponentsRegistryProperties
-import org.octopusden.octopus.components.registry.server.entity.v2.ComponentSourceEntity
-import org.octopusden.octopus.components.registry.server.repository.v2.ComponentSourceRepository
+import org.octopusden.octopus.components.registry.server.entity.ComponentSourceEntity
+import org.octopusden.octopus.components.registry.server.repository.ComponentSourceRepository
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
 import org.springframework.stereotype.Service
 import java.time.Instant

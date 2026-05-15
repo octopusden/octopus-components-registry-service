@@ -3,15 +3,15 @@
 package org.octopusden.octopus.components.registry.server.mapper
 
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes
-import org.octopusden.octopus.components.registry.server.entity.v2.ComponentConfigurationEntity
-import org.octopusden.octopus.components.registry.server.entity.v2.ComponentDocLinkEntity
-import org.octopusden.octopus.components.registry.server.entity.v2.ComponentEntity
-import org.octopusden.octopus.components.registry.server.entity.v2.DistributionDockerImageEntity
-import org.octopusden.octopus.components.registry.server.entity.v2.DistributionFileUrlArtifactEntity
-import org.octopusden.octopus.components.registry.server.entity.v2.DistributionMavenArtifactEntity
-import org.octopusden.octopus.components.registry.server.entity.v2.DistributionPackageEntity
-import org.octopusden.octopus.components.registry.server.entity.v2.DistributionSecurityGroupEntity
-import org.octopusden.octopus.components.registry.server.entity.v2.VcsSettingsEntryEntity
+import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
+import org.octopusden.octopus.components.registry.server.entity.ComponentDocLinkEntity
+import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
+import org.octopusden.octopus.components.registry.server.entity.DistributionDockerImageEntity
+import org.octopusden.octopus.components.registry.server.entity.DistributionFileUrlArtifactEntity
+import org.octopusden.octopus.components.registry.server.entity.DistributionMavenArtifactEntity
+import org.octopusden.octopus.components.registry.server.entity.DistributionPackageEntity
+import org.octopusden.octopus.components.registry.server.entity.DistributionSecurityGroupEntity
+import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.RepositoryType
 import org.octopusden.octopus.escrow.configuration.model.EscrowModule
