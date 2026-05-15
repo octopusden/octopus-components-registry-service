@@ -204,15 +204,16 @@ If any other test class fails to compile once Phase 5 lands, add it here with th
 
 **Phase 5b MIG-039 fixup #3** wired synthetic-base suppression through `toEscrowModule` (skip base range when `isSyntheticBase=true` AND overrides exist). Re-enabled `DatabaseComponentRegistryResolverTest.(5 MIG-029)`.
 
-**Stream A (RES-001 enumeration-coverage fix)** added `row_type` as the source-of-truth row classifier and a new `RANGE_PRESENCE` row shape emitted at import time for DSL ranges with no real override. Enumeration parity restored (47/53 → 53/53). Re-enabled `GitVsDbValidationTest.VAL-006 maven-artifacts`. Added MIG-040 (RANGE_PRESENCE emission). `DbBackedComponentsRegistryServiceControllerTest.testGetAllJiraComponentVersionRanges` still @Disabled because the per-DTO equality assertion surfaces 5 components diverging on `vcsSettings.externalRegistry` (null vs `NOT_AVAILABLE`); rolls into the externalRegistry default-emit item. VAL-010 stays @Disabled — recount empirically once Stream B residuals are addressed.
+**Stream A (RES-001 enumeration-coverage fix)** added `row_type` as the source-of-truth row classifier and a new `RANGE_PRESENCE` row shape emitted at import time for DSL ranges with no real override. Enumeration parity restored (47/53 → 53/53). Re-enabled `GitVsDbValidationTest.VAL-006 maven-artifacts`. Added MIG-040 (RANGE_PRESENCE emission).
 
-Three method-level `@Disabled` markers remain for known v2-vs-v1 semantic deltas:
+**Stream B (externalRegistry fix)** patched `EntityMappers.toEscrowModule` to emit `vcsSettings` whenever `component.vcsExternalRegistry != null` (not only when VCS roots are non-empty). Components declared in DSL as `vcsSettings { externalRegistry = "..." }` with no VCS roots now round-trip correctly. Re-enabled `DbBackedComponentsRegistryServiceControllerTest.testGetAllJiraComponentVersionRanges`. VAL-010 stays @Disabled — recount empirically once the remaining FAKE-aggregator residual is addressed.
+
+Two method-level `@Disabled` markers remain for known v2-vs-v1 semantic deltas:
 
 | Test method | Reason | Tracked in todo.md |
 |---|---|---|
-| `BaseComponentsRegistryServiceTest.testGetAllJiraComponentVersionRanges` (overridden in `DbBackedComponentsRegistryServiceControllerTest`) | externalRegistry default-emit divergence on 5 components (Stream A fixed only the enumeration-coverage piece, 47/53 → 53/53). | Schema v2 known limitations §externalRegistry |
 | `BaseComponentsRegistryServiceTest.testGetBuildTools` (overridden in `DbBackedComponentsRegistryServiceControllerTest`) | RES-014 — complex KTS build-tool beans (`OracleDatabaseToolBean`, `PTKProductToolBean`) cannot round-trip the v2 `tools` dictionary. | Schema v2 known limitations §RES-014 |
-| `GitVsDbValidationTest.VAL-010 bulk canary` | Residual divergences after Stream A: 8× RES-014 family, 1× FAKE-aggregator distribution routing, 1× `externalRegistry` default-emit divergence. Concrete count must be regenerated from a VAL-010 run before re-enable. | Schema v2 known limitations §RES-014 + FAKE-aggregator + externalRegistry |
+| `GitVsDbValidationTest.VAL-010 bulk canary` | Residual divergences after Stream A + Stream B externalRegistry fix: 8× RES-014 family + 1× FAKE-aggregator distribution inheritance on `core-lib`. Concrete count must be regenerated from a VAL-010 run before re-enable. | Schema v2 known limitations §RES-014 + §FAKE-aggregator |
 
 Compile-only checklist (Phase 6 cannot ship until all are ✅):
 - [ ] No source file carries `@Disabled("schema-v2: …")`.
