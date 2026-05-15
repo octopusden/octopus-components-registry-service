@@ -106,7 +106,12 @@ class ComponentManagementServiceImpl(
         require(!componentRepository.existsByComponentKey(normalizedKey)) {
             "Component with name '$normalizedKey' already exists"
         }
+        request.productType?.let { validateProductType(it) }
         request.baseConfiguration?.versionRange?.let { validateRangeSyntax(it) }
+        request.baseConfiguration?.build?.buildSystem?.let { validateBuildSystem(it) }
+        // vcsEntries[].repositoryType / packages[].packageType are validated
+        // inside `replaceVcsEntries` / `replacePackages` (covers both base-config
+        // and field-override marker paths).
 
         val parent =
             request.parentComponentName?.let { parentKey ->
@@ -223,6 +228,14 @@ class ComponentManagementServiceImpl(
             }
         }
         val isRename = normalizedNewKey != null && normalizedNewKey != oldKey
+
+        request.productType?.let { validateProductType(it) }
+        // `baseConfiguration.versionRange` is validated downstream inside the
+        // base-configuration patch block via `validateRangeSyntax` — no
+        // top-level guard needed here.
+        request.baseConfiguration?.build?.buildSystem?.let { validateBuildSystem(it) }
+        // vcsEntries[].repositoryType / packages[].packageType are validated
+        // inside `replaceVcsEntries` / `replacePackages` (see service helpers).
 
         // Capture the pre-update label / system membership so the post-sync audit
         // `newValue` (which is computed after `syncLabels` / `syncSystems` have
@@ -882,6 +895,7 @@ class ComponentManagementServiceImpl(
         config: ComponentConfigurationEntity,
         entries: List<VcsEntryRequest>,
     ) {
+        entries.forEach { req -> req.repositoryType?.let { validateRepositoryType(it) } }
         config.vcsEntries.clear()
         entries.forEachIndexed { index, req ->
             config.vcsEntries.add(
@@ -957,6 +971,7 @@ class ComponentManagementServiceImpl(
         config: ComponentConfigurationEntity,
         packages: List<PackageRequest>,
     ) {
+        packages.forEach { validatePackageType(it.packageType) }
         config.packages.clear()
         packages.forEachIndexed { index, req ->
             config.packages.add(
@@ -1084,6 +1099,67 @@ class ComponentManagementServiceImpl(
         } catch (e: Exception) {
             throw IllegalArgumentException("Invalid version range: '$range'", e)
         }
+    }
+
+    /**
+     * Reject write-time enum-typed values that the resolver would later parse
+     * with `Enum.valueOf` and silently drop on mismatch. Without these checks
+     * the v4 API would accept the bad value with 201 / 200, then v1-v3
+     * resolver calls for the same component would see `null` and either 500
+     * or silently emit incomplete data — see PR #192 review thread.
+     */
+    private fun validateProductType(value: String) {
+        require(value.isNotBlank()) { "productType must not be blank" }
+        require(value in PRODUCT_TYPES) {
+            "Invalid productType: '$value'. Allowed: $PRODUCT_TYPES"
+        }
+    }
+
+    private fun validateBuildSystem(value: String) {
+        require(value.isNotBlank()) { "build.buildSystem must not be blank" }
+        require(value in BUILD_SYSTEMS) {
+            "Invalid build.buildSystem: '$value'. Allowed: $BUILD_SYSTEMS"
+        }
+    }
+
+    private fun validateRepositoryType(value: String) {
+        require(value.isNotBlank()) { "vcsEntry.repositoryType must not be blank" }
+        require(value in REPOSITORY_TYPES) {
+            "Invalid vcsEntry.repositoryType: '$value'. Allowed: $REPOSITORY_TYPES"
+        }
+    }
+
+    private fun validatePackageType(value: String) {
+        require(value.isNotBlank()) { "package.packageType must not be blank" }
+        require(value in PACKAGE_TYPES) {
+            "Invalid package.packageType: '$value'. Allowed: $PACKAGE_TYPES"
+        }
+    }
+
+    private companion object {
+        private val PRODUCT_TYPES: Set<String> =
+            org.octopusden.octopus.components.registry.api.enums.ProductTypes
+                .values()
+                .map { it.name }
+                .toSet()
+        private val BUILD_SYSTEMS: Set<String> =
+            org.octopusden.octopus.components.registry.core.dto.BuildSystem
+                .values()
+                .map { it.name }
+                .toSet()
+        private val REPOSITORY_TYPES: Set<String> =
+            org.octopusden.octopus.escrow.RepositoryType
+                .values()
+                .map { it.name }
+                .toSet()
+        // `Distribution.DEB` / `Distribution.RPM` are the only types emitted by
+        // the resolver. There is no enum class for them at the API layer, so
+        // hand-list the allowed values.
+        // TODO: replace with `PackageType.values().map { it.name }.toSet()`
+        // if a `PackageType` enum is ever extracted to the API module; until
+        // then any DSL change that introduces a new package type must update
+        // this set in lockstep.
+        private val PACKAGE_TYPES: Set<String> = setOf("DEB", "RPM")
     }
 
     private fun buildSpecification(filter: ComponentFilter): Specification<ComponentEntity> {
