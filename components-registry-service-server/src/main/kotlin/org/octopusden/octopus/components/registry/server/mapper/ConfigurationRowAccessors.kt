@@ -213,9 +213,9 @@ private fun requireBoolean(
  * unknown values at the write boundary so the editor surface stays consistent
  * with what the legacy reader can interpret.
  *
- * Both [BUILD_SYSTEM_NAMES] and [ESCROW_GENERATION_MODE_NAMES] are sourced from
- * [EnumValidValues] — the single source of truth shared with
- * [ComponentManagementServiceImpl].
+ * Both [BUILD_SYSTEM_NAMES] and [ESCROW_GENERATION_MODE_NAMES] are declared in
+ * the package-level `EnumValidValues.kt` file — the single source of truth
+ * shared with [ComponentManagementServiceImpl][org.octopusden.octopus.components.registry.server.service.impl.ComponentManagementServiceImpl].
  */
 private fun requireBuildSystem(
     path: String,

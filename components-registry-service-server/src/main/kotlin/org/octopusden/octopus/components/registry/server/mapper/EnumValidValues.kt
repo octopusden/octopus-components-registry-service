@@ -2,10 +2,12 @@ package org.octopusden.octopus.components.registry.server.mapper
 
 /**
  * Single source of truth for the sets of valid enum names used by write-side
- * validation in [ConfigurationRowAccessors] and [ComponentManagementServiceImpl].
+ * validation. Consumed by `ConfigurationRowAccessors.applyScalarValue`
+ * (file-level top-level helpers in this package) and by the per-axis
+ * `validate*` helpers on [ComponentManagementServiceImpl][org.octopusden.octopus.components.registry.server.service.impl.ComponentManagementServiceImpl].
  *
  * Each `val` is initialised once at class-load time (equivalent to a
- * companion-object or top-level `object` initialiser).  Callers should reference
+ * companion-object or top-level `object` initialiser). Callers should reference
  * the symbol directly — no caching needed on the call site.
  */
 
