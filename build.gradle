@@ -24,7 +24,7 @@ plugins {
 }
 
 octopusQuality {
-    excludeProjects('components-registry-automation', 'test-common')
+    excludeProjects('components-registry-automation', 'components-registry-compat-test', 'test-common')
     java { failOnViolation = true }
     kotlin { failOnViolation = true }
     coverage {
@@ -357,7 +357,7 @@ ${sectionsHtml}
 // task so the shared workflow default command (./gradlew qualityCoverage) remains correct.
 gradle.projectsEvaluated {
     def coverageProjects = subprojects.findAll {
-        !(it.name in ['components-registry-automation', 'test-common'])
+        !(it.name in ['components-registry-automation', 'components-registry-compat-test', 'test-common'])
     }
     def testTargets = coverageProjects.findAll { it.tasks.findByName('test') != null }
 

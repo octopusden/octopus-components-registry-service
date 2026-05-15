@@ -1,0 +1,12 @@
+# Components used by smoke compat-test runs. One name per line; # lines ignored.
+#
+# This file is intentionally empty in the repo. Real production component
+# names are confidential and must not be committed here. Provide the list at
+# runtime via either:
+#   - environment: COMPAT_SMOKE_COMPONENTS=name1,name2,...
+#   - gradle:      -Pcompat.smoke-components=name1,name2,...
+#   - TeamCity:    parameter `compat.smoke-components` mapped to the above.
+#
+# Without an override, `CompatibilityTestBase.smokeComponents()` returns an
+# empty list. Smoke runs then exercise only env preconditions + endpoints
+# that don't enumerate components.
