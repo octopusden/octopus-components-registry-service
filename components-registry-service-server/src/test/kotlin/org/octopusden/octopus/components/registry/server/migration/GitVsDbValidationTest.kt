@@ -544,6 +544,86 @@ class GitVsDbValidationTest {
         }
     }
 
+    // -------------------------------------------------------------------------
+    // VAL-012: Cross-component groupPattern isolation.
+    // -------------------------------------------------------------------------
+
+    /**
+     * Defensive: two components with distinct `groupId` values must not have their
+     * `groupPattern` cross-contaminate in either source (Git or DB).
+     *
+     * Background: a compat-test against prod (2026-05-15) flagged a single component
+     * whose `groupPattern` on one version-range had two CSV tokens on candidate vs one
+     * on baseline (direction-inverted relative to the other drift cases). Code
+     * inspection ruled it out as a code regression:
+     *
+     *   - `component_artifact_ids.component_id` is an FK to `components(id)`
+     *     (V1__initial_schema.sql:149-154), one row per (component_id, version_range).
+     *   - Write path: `EntityMappers.kt:495-546` assigns `groupPattern = config.groupIdPattern`
+     *     directly (no append/concat across components).
+     *   - Read path: `DatabaseComponentRegistryResolver.getMavenArtifactParameters(component)`
+     *     queries by `componentEntity.artifactIds` — scoped to one component_id.
+     *
+     * The diff was pure DSL-revision drift on a CSV-valued `groupPattern` field.
+     * This test pins the invariant for the future: even if multiple components share
+     * a prefix or sit in the same project, their `groupPattern` values stay isolated
+     * across Git and DB sources.
+     */
+    @Test
+    @DisplayName(
+        "VAL-012: cross-component groupPattern isolation — distinct groupIds do not bleed across Git or DB",
+    )
+    fun `VAL-012 cross-component groupPattern isolation git vs db parity`() {
+        // Two production-like fixtures with deliberately distinct groupIds:
+        //  cache-service: org.octopusden.octopus.cache
+        //  auth-service:  org.octopusden.octopus.auth
+        val a = "cache-service"
+        val b = "auth-service"
+
+        fun groupPatternTokens(component: String, source: String): Set<String> {
+            sourceRegistry.setComponentSource(component, source)
+            val body =
+                mvc
+                    .perform(get("/rest/api/2/components/$component/maven-artifacts").accept(APPLICATION_JSON))
+                    .andExpect(status().isOk)
+                    .andReturn().response.contentAsString
+            val tree = objectMapper.readTree(body)
+            // groupPattern is a comma-separated list of Maven groupIds. Split into
+            // individual tokens so isolation can be checked as a set operation rather
+            // than via substring matching (which is fragile across fixture renames).
+            return tree
+                .fields()
+                .asSequence()
+                .flatMap { (_, cfg) -> cfg.path("groupPattern").asText("").split(",").asSequence() }
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .toSet()
+        }
+
+        // Set-level isolation invariant: the two components must not share any
+        // groupPattern token in either source. Substring checks would be fragile
+        // (the test must survive renames of either fixture without producing false
+        // positives or false negatives).
+        val failures = mutableListOf<String>()
+        for (source in listOf("git", "db")) {
+            val tokensA = groupPatternTokens(a, source)
+            val tokensB = groupPatternTokens(b, source)
+            if (tokensA.isEmpty()) {
+                failures += "[$a/$source] no groupPattern tokens returned — isolation test cannot run; check fixture"
+            }
+            if (tokensB.isEmpty()) {
+                failures += "[$b/$source] no groupPattern tokens returned — isolation test cannot run; check fixture"
+            }
+            val shared = tokensA intersect tokensB
+            if (shared.isNotEmpty()) {
+                failures += "[$source] cross-contamination: components '$a' and '$b' share groupPattern tokens $shared (tokensA=$tokensA, tokensB=$tokensB)"
+            }
+        }
+        if (failures.isNotEmpty()) {
+            fail<Unit>("Cross-component groupPattern isolation violated:\n${failures.joinToString("\n")}")
+        }
+    }
+
     companion object {
         @JvmStatic
         val postgres = PostgreSQLContainer("postgres:16-alpine").apply { start() }

@@ -1,0 +1,300 @@
+plugins {
+    id 'java-library'
+}
+
+description = 'API v1/v2/v3 compatibility tests — baseline (prod, main) vs candidate (v3 migration)'
+
+// Compat tests run only on demand (TeamCity manual button or explicit local invocation).
+// Regular `./gradlew build` MUST NOT trigger them: the `test` task is gated on
+// AT LEAST ONE of the compat URLs being set. Same for `check` — disabled so this
+// module contributes nothing to the verification lifecycle.
+//
+// The asymmetric "at least one" gate (rather than "both") is deliberate: it lets
+// the test JVM run when the caller provides any compat config so that
+// `CompatConfig.explainInvalid()` produces a clear fail-fast error if exactly
+// one URL is missing. Gating on "both" at the Gradle layer would silently skip
+// a partial-config run and report BUILD SUCCESSFUL, hiding the misconfiguration
+// that the README documents as fail-fast.
+def compatActivated = {
+    def baseline = project.findProperty('compat.baseline.url') ?: System.getenv('COMPAT_BASELINE_URL')
+    def candidate = project.findProperty('compat.candidate.url') ?: System.getenv('COMPAT_CANDIDATE_URL')
+    def hasBaseline = baseline != null && !baseline.toString().isBlank()
+    def hasCandidate = candidate != null && !candidate.toString().isBlank()
+    return hasBaseline || hasCandidate
+}
+tasks.named('check') { enabled = false }
+
+dependencies {
+    testImplementation project(':components-registry-service-client')
+    testImplementation project(':components-registry-service-core')
+
+    testImplementation "com.fasterxml.jackson.core:jackson-databind"
+    testImplementation "com.fasterxml.jackson.module:jackson-module-kotlin"
+    testImplementation "com.squareup.okhttp3:okhttp:4.12.0"
+    testImplementation "org.assertj:assertj-core:3.25.3"
+    testImplementation "org.slf4j:slf4j-api:2.0.13"
+    testRuntimeOnly "ch.qos.logback:logback-classic:1.3.14"
+}
+
+tasks.named('publish') { enabled = false }
+tasks.named('publishToMavenLocal') { enabled = false }
+
+test {
+    onlyIf("at least one of compat.baseline.url / compat.candidate.url is set (partial config triggers explainInvalid)") { compatActivated() }
+    // Compat runs hit live stands whose state (cache snapshots, deployments) changes
+    // independently of source. Gradle's input-hash-based UP-TO-DATE check considers two
+    // back-to-back invocations identical and skips the second one — leaving the previous
+    // ndjson on disk for compatibilityReporter to re-aggregate. Always re-run.
+    outputs.upToDateWhen { false }
+    // Each run starts with a fresh report dir so per-worker ndjson files don't accumulate
+    // across re-runs (the file names contain a UUID — old files would otherwise be merged
+    // into summary.md again, double-counting diffs).
+    doFirst {
+        def reportDir = layout.buildDirectory.dir('reports/compat').get().asFile
+        if (reportDir.exists()) {
+            reportDir.listFiles({ f -> f.name.endsWith('.ndjson') } as FileFilter)?.each { it.delete() }
+            new File(reportDir, 'summary.md').delete()
+            new File(reportDir, 'execution-log.md').delete()
+        } else {
+            reportDir.mkdirs()
+        }
+    }
+    useJUnitPlatform()
+    systemProperties = [
+        'junit.jupiter.execution.parallel.enabled': true,
+        'junit.jupiter.execution.parallel.mode.default': 'concurrent',
+        'junit.jupiter.execution.parallel.config.strategy': 'fixed',
+        'junit.jupiter.execution.parallel.config.fixed.parallelism': (project.findProperty('compat.parallelism') ?: '8') as String,
+    ]
+    // Surface compat config as system properties for the test code.
+    ['compat.baseline.url', 'compat.candidate.url', 'compat.rms.url',
+     'compat.full', 'compat.malformed', 'compat.versions-fallback',
+     'compat.max-components',
+     'compat.smoke-components'].each { name ->
+        def value = project.findProperty(name) ?: System.getenv(name.toUpperCase().replace('.', '_').replace('-', '_'))
+        if (value != null) {
+            systemProperty name, value
+        }
+    }
+    // Reports land in build/reports/compat
+    finalizedBy 'compatibilityReporter'
+    // Always show test outcomes for diagnostic purposes
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        showStandardStreams = false
+    }
+}
+
+tasks.register('compatibilityReporter') {
+    group = 'verification'
+    description = 'Aggregates per-worker diff/exec ndjson into summary.md and execution-log.md; fails the build if any unclassified diffs remain.'
+    // Gate on the same condition as `test`. Without this, a `./gradlew build` run that
+    // doesn't supply COMPAT_BASELINE_URL skips the `test` task (so no fresh ndjson is
+    // written), but Gradle still runs the finalizer — which would aggregate any stale
+    // ndjson left in build/reports/compat from a previous run and fail the build on
+    // diffs that have nothing to do with the current code.
+    onlyIf("at least one of compat.baseline.url / compat.candidate.url is set (partial config triggers explainInvalid)") { compatActivated() }
+    def reportDir = layout.buildDirectory.dir('reports/compat')
+    outputs.dir(reportDir)
+    doLast {
+        def dir = reportDir.get().asFile
+        if (!dir.exists()) {
+            return
+        }
+        def slurper = new groovy.json.JsonSlurper()
+        // Environment categories surface at the top of summary.md regardless of count.
+        // They are NOT suppressible via known-deltas — they signal that the comparison
+        // itself is unsound (different snapshots, wrong service mode) and must be
+        // resolved at the operator level, not papered over.
+        def envCategories = ['SNAPSHOT_MISMATCH', 'CANDIDATE_NOT_DB_MODE'] as Set
+
+        // Load known-deltas.json. Each entry suppresses matching diffs from the
+        // "Endpoint divergences" section into a separate "Suppressed (known deltas)"
+        // section, with the entry's reason + regressionTest fields surfaced for review.
+        // Spec: docs/db-migration/api-compat-deltas.md
+        def knownDeltasFile = file('src/test/resources/known-deltas.json')
+        def knownDeltas = []
+        if (knownDeltasFile.exists()) {
+            try {
+                def parsed = slurper.parseText(knownDeltasFile.text)
+                knownDeltas = (parsed?.deltas as List) ?: []
+            } catch (Exception e) {
+                logger.warn("[compat] failed to parse known-deltas.json: ${e.message}; treating as empty")
+            }
+        }
+        def matchesDelta = { Map delta, Map record ->
+            // endpoint + category are required match keys (endpoint already encodes the
+            // HTTP method as its first token, e.g. "PUT /rest/api/...").
+            if (delta.endpoint != record.endpoint) return false
+            if (delta.category != record.category) return false
+            // Optional match keys — null/omitted on the delta means "any value on the
+            // record matches this field". A delta that *specifies* a value requires the
+            // record to carry exactly that value: a null record-side value is coerced
+            // to the empty string for comparison, so it cannot match a non-null delta
+            // value. To suppress diffs where the record's value is legitimately null,
+            // omit the field from the delta entry entirely.
+            if (delta.baselineValue != null && delta.baselineValue.toString() != (record.baselineValue ?: '').toString()) return false
+            if (delta.candidateValue != null && delta.candidateValue.toString() != (record.candidateValue ?: '').toString()) return false
+            if (delta.pathParams != null && delta.pathParams != (record.pathParams ?: [:])) return false
+            // queryParams optional match. Required so an intentional delta on, e.g.,
+            // `?ignore-required=true` doesn't accidentally also suppress the diff for
+            // `?ignore-required=false` (and vice-versa). Omitting queryParams from the
+            // delta entry still matches records with any queryParams.
+            if (delta.queryParams != null && delta.queryParams != (record.queryParams ?: [:])) return false
+            return true
+        }
+        def findDeltaFor = { Map record ->
+            knownDeltas.find { delta -> matchesDelta(delta as Map, record) }
+        }
+
+        def diffFiles = dir.listFiles({ f -> f.name.startsWith('diff-worker-') && f.name.endsWith('.ndjson') } as FileFilter) ?: []
+        def execFiles = dir.listFiles({ f -> f.name.startsWith('exec-worker-') && f.name.endsWith('.ndjson') } as FileFilter) ?: []
+        def summary = new File(dir, 'summary.md')
+        def execMd = new File(dir, 'execution-log.md')
+        def execNd = new File(dir, 'execution-log.ndjson')
+
+        def diffsByCategory = [:].withDefault { [] }
+        diffFiles.each { f ->
+            f.eachLine('UTF-8') { line ->
+                def trimmed = line.trim()
+                if (trimmed.isEmpty()) return
+                def rec = null
+                try { rec = slurper.parseText(trimmed) } catch (Exception ignored) {}
+                def categoryKey = (rec?.category ?: 'UNKNOWN').toString()
+                diffsByCategory[categoryKey] << (rec ?: [raw: trimmed])
+            }
+        }
+        def envDiffs = diffsByCategory.findAll { k, _ -> envCategories.contains(k) }
+        def nonEnvDiffs = diffsByCategory.findAll { k, _ -> !envCategories.contains(k) }
+
+        // Partition non-env diffs into suppressed (matched known-delta) and active.
+        // Each suppressed record is augmented with .matchedDelta for reporting.
+        def suppressedByCategory = [:].withDefault { [] }
+        def activeByCategory = [:].withDefault { [] }
+        nonEnvDiffs.each { cat, recs ->
+            recs.each { rec ->
+                def delta = findDeltaFor(rec as Map)
+                if (delta != null) {
+                    suppressedByCategory[cat] << (rec + [matchedDelta: delta])
+                } else {
+                    activeByCategory[cat] << rec
+                }
+            }
+        }
+        def envTotal = envDiffs.values().sum { it.size() } ?: 0
+        def suppressedTotal = suppressedByCategory.values().sum { it.size() } ?: 0
+        def activeRegularTotal = activeByCategory.values().sum { it.size() } ?: 0
+        def activeTotal = envTotal + activeRegularTotal
+        def totalDiffs = envTotal + suppressedTotal + activeRegularTotal
+
+        def mdEscape = { Object v ->
+            (v == null ? '' : v.toString()).replace('|', '\\|').replace('\n', ' ').replace('\r', ' ')
+        }
+        def truncate = { Object v, int max ->
+            def s = v == null ? '' : v.toString()
+            s.length() > max ? s.substring(0, max) + '…' : s
+        }
+        def renderParams = { Map params ->
+            if (params == null || params.isEmpty()) return ''
+            params.collect { k, v -> "${k}=${v}" }.join('; ')
+        }
+        def renderTable = { List<Map> recs, StringBuilder out ->
+            out << "| Endpoint | Params | Layer | Detail | Baseline | Candidate |\n"
+            out << "|---|---|---|---|---|---|\n"
+            recs.each { r ->
+                def detail = r.message ?: ''
+                out << '| ' << mdEscape(r.endpoint) <<
+                    ' | ' << mdEscape(renderParams(r.pathParams as Map ?: [:] as Map)) <<
+                    ' | ' << mdEscape(r.layer) <<
+                    ' | ' << mdEscape(truncate(detail, 800)) <<
+                    ' | ' << mdEscape(truncate(r.baselineValue, 120)) <<
+                    ' | ' << mdEscape(truncate(r.candidateValue, 120)) <<
+                    ' |\n'
+            }
+        }
+        def renderSuppressedTable = { List<Map> recs, StringBuilder out ->
+            out << "| Endpoint | Params | Layer | Baseline | Candidate | Reason | Regression Test |\n"
+            out << "|---|---|---|---|---|---|---|\n"
+            recs.each { r ->
+                def delta = (r.matchedDelta as Map) ?: [:]
+                out << '| ' << mdEscape(r.endpoint) <<
+                    ' | ' << mdEscape(renderParams(r.pathParams as Map ?: [:] as Map)) <<
+                    ' | ' << mdEscape(r.layer) <<
+                    ' | ' << mdEscape(truncate(r.baselineValue, 60)) <<
+                    ' | ' << mdEscape(truncate(r.candidateValue, 60)) <<
+                    ' | ' << mdEscape(truncate(delta.reason, 200)) <<
+                    ' | ' << mdEscape(delta.regressionTest) <<
+                    ' |\n'
+            }
+        }
+
+        def sb = new StringBuilder()
+        sb << "# Compatibility Run Summary\n\n"
+        sb << "Generated: ${new Date().format("yyyy-MM-dd HH:mm:ss Z")}\n\n"
+        sb << "- Total recorded diffs: **${totalDiffs}**\n"
+        sb << "- Environment / precondition: ${envTotal}\n"
+        sb << "- Suppressed (known deltas): ${suppressedTotal}\n"
+        sb << "- Active endpoint divergences: ${activeRegularTotal}\n\n"
+
+        if (!envDiffs.isEmpty()) {
+            sb << "## ⚠ Environment / precondition warnings\n\n"
+            sb << "These appear *before* endpoint diffs because they may explain or invalidate downstream divergences. Not suppressible via known-deltas.\n\n"
+            envDiffs.each { cat, recs ->
+                sb << "### ${cat} (${recs.size()})\n\n"
+                renderTable(recs as List<Map>, sb)
+                sb << "\n"
+            }
+        }
+
+        if (!suppressedByCategory.isEmpty()) {
+            sb << "## Suppressed (known deltas)\n\n"
+            sb << "Diffs matched by entries in `src/test/resources/known-deltas.json`. Each has a regression test pinning the intended behavior.\n\n"
+            suppressedByCategory.each { cat, recs ->
+                sb << "### ${cat} (${recs.size()})\n\n"
+                renderSuppressedTable(recs as List<Map>, sb)
+                sb << "\n"
+            }
+        }
+
+        if (!activeByCategory.isEmpty()) {
+            sb << "## Endpoint divergences\n\n"
+            activeByCategory.each { cat, recs ->
+                sb << "### ${cat} (${recs.size()})\n\n"
+                def shown = recs.take(50)
+                renderTable(shown as List<Map>, sb)
+                if (recs.size() > 50) sb << "\n_…and ${recs.size() - 50} more (see diff-worker-*.ndjson for full records)._\n"
+                sb << "\n"
+            }
+            sb << "\n_Long `Detail` cells are truncated to 800 chars in the table above. Full text is in diff-worker-\\*.ndjson._\n"
+        }
+        if (totalDiffs == 0) {
+            sb << "_No diffs recorded — clean compat run._\n"
+        }
+        summary.text = sb.toString()
+
+        execNd.withWriter('UTF-8') { w ->
+            execFiles.each { f -> f.eachLine('UTF-8') { line -> w.writeLine(line) } }
+        }
+        def total = 0
+        def withDiffs = 0
+        execFiles.each { f -> f.eachLine('UTF-8') { line -> total++; if (line.contains('"diffCount":') && !line.contains('"diffCount":0')) withDiffs++ } }
+        execMd.text = """# Compatibility Execution Log
+
+Generated: ${new Date().format("yyyy-MM-dd HH:mm:ss Z")}
+
+- Total test cases executed: ${total}
+- Cases with diffs: ${withDiffs}
+- Cases clean: ${total - withDiffs}
+
+Raw per-line records: `execution-log.ndjson`
+"""
+        logger.lifecycle("[compat] ${suppressedTotal} suppressed via known-deltas, ${activeTotal} active diffs (${envTotal} env-warnings)")
+        if (activeTotal > 0) {
+            throw new GradleException(
+                "Compatibility run produced ${activeTotal} active divergence(s) " +
+                "(${envTotal} env-warnings + ${activeRegularTotal} unsuppressed endpoint diffs; " +
+                "${suppressedTotal} suppressed via known-deltas). See ${summary.toPath()}."
+            )
+        }
+    }
+}
