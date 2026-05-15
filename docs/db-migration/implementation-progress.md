@@ -150,18 +150,43 @@ Driven by MIG-029 investigation + cross-installation DSL audit. See [ADR-014](ad
 
 | Phase | Task | Status | Notes |
 |---|---|---|---|
-| 1a | Design artifacts: ADR-014, `schema-spec.md`, MIG-030..MIG-038, supersede ADR-010 | ✅ Done | This PR (docs-only). Canonical reference for v2 schema. |
-| 1b | Land `V1__schema.sql` baseline (replaces V1..V6) in Flyway path | 🚧 Pending | 23 tables; Model A'. Held back from docs-only PR; ships alongside Phase 2 to avoid Hibernate `validate` startup crash. |
-| 2 | Refactor entities & repositories (delete `ComponentVersionEntity` + polymorphic FK pairs; introduce `ComponentGroupEntity`, distribution-split entities, etc.) | 🚧 Pending | ≈16 → ≈22 entity classes. Bundled with Phase 1b so DB and JPA align in one merge. |
-| 3 | Rewrite `EntityMappers` + `DatabaseComponentRegistryResolver` (base + override merge; marker rows; synthetic-base handling; doc-links resolution; unified VCS mapping) | 🚧 Pending | |
-| 4 | Update v4 DTOs + `ComponentControllerV4` (replace `metadata: Map` with explicit fields; surface group membership; doc links as `docs[]`) | 🚧 Pending | |
-| 5 | Rewrite `ImportServiceImpl` + `MigrationServiceImpl` (pre-pass dictionary discovery; aggregator detection; two-pass `parentComponent`; per-attribute override emission; distribution family split) | 🚧 Pending | |
-| 6 | Test suite (Layer 1 synthetic fixtures; Layer 2 env-gated integration; Layer 3 internal-CI baselines) | 🚧 Pending | MIG-029..MIG-038 coverage |
+| 1a | Design artifacts: ADR-014, `schema-spec.md`, MIG-030..MIG-038, supersede ADR-010 | ✅ Done | PR #191 (docs-only). Canonical reference for v2 schema. |
+| 1b | Land `V1__schema.sql` baseline (replaces V1..V6) in Flyway path | ✅ Done | Commit `94b52d4` (held back from docs-only PR). 23 tables; Model A'. |
+| 2 | Refactor entities & repositories (delete `ComponentVersionEntity` + polymorphic FK pairs; introduce `ComponentGroupEntity`, distribution-split entities, etc.) | ✅ Done | Commits `f552a39` → `47e4849` (Phase 2.0–2.5). 23 entity classes + 22 repos. |
+| 3 | Rewrite `EntityMappers` + `DatabaseComponentRegistryResolver` (base + override merge; marker rows; synthetic-base handling; doc-links resolution; unified VCS mapping) | ✅ Done | Commits `1934dab` (bidi collections), `2b13521` (EntityMappers), `7196099` (resolver). Phase 3b.1 (`c31869a`) adapted `AuditEventListener`, `ConfigControllerV4`, `ComponentSourceRegistryImpl`, `GitHistoryCommitWriter`, `AuditEvent` to v2 entities. |
+| 4 | Update v4 DTOs + `ComponentControllerV4` (replace `metadata: Map` with explicit fields; surface group membership; doc links as `docs[]`) | ✅ Done | Commits `72d0c76` (rename `.v2` package suffix → drop) + `89e8792` (Phase 4: rewrite v4 layer). New DTOs (`ComponentConfigurationDtos`), V4Mappers, `ComponentManagementServiceImpl`, field-override CRUD against `component_configurations`. `OverrideApplicator` retired. |
+| 5 | Rewrite `ImportServiceImpl` + `MigrationServiceImpl` (pre-pass dictionary discovery; aggregator detection; two-pass `parentComponent`; per-attribute override emission; distribution family split) | 🚧 Pending | Also covers `GitHistoryImportServiceImpl`, `HistoryMigrationJobServiceImpl`, `TeamcitySyncService` rewrite. Phase 4 left these compile-broken on purpose (legacy entity refs); branch is not yet buildable end-to-end. |
+| 6 | Test suite (Layer 1 synthetic fixtures; Layer 2 env-gated integration; Layer 3 internal-CI baselines) | 🚧 Pending | MIG-029..MIG-038 coverage. **Includes the schema-v2 @Disabled test-suite cleanup** — see the disabled list below; Phase 6 is INCOMPLETE until every entry is either removed, rewritten, or re-enabled. |
 | 7 | QA DB recreate + full `gradlew build` | 🚧 Pending | Requires `AUTH_SERVER` env + standard excludes |
 | 8 | Supersede ADR-010 | ✅ Done | ADR-010 marked superseded; ADR-014 active |
 | 9 | Final docs cleanup (mandatory before merging the refactor into `main`) | 🚧 Pending | See "Final docs cleanup scope" below. |
 
 Requirements traceability: MIG-029..MIG-038 in [`requirements-migration.md`](requirements-migration.md). Each phase ends with an independent subagent review (Sonnet default).
+
+### Phase 6 — schema-v2 disabled-test inventory
+
+Once Phase 5 lands the rewritten import / TC services and the `compileKotlin` step is green again, every entry below must be either **removed**, **rewritten**, or **re-enabled** before Phase 6 can be marked done. Each file carries class-level `@Disabled("schema-v2: temporarily disabled until Phase 6 test-suite rewrite")`. **Assertion bodies are preserved** (do not delete) — see [user guidance recorded with Phase 4].
+
+| Test class | Why disabled | Phase 6 action |
+|---|---|---|
+| `mapper/ComponentDetailMapperTest` | Constructs legacy `ComponentEntity` via `name` / `metadata` fields; asserts on dropped DTO fields. | Rewrite against v2 entity graph + new `ComponentDetailResponse`. |
+| `mapper/ComponentSummaryMapperTest` | Same legacy field set + `BuildConfigurationEntity` references. | Rewrite against v2 + new `ComponentSummaryResponse`. |
+| `mapper/DistributionEntityMapperTest` | Asserts on retired `DistributionEntity` / `DistributionArtifactEntity` shapes. | Rewrite against `distribution_*` family entities (maven / fileUrl / docker / packages). |
+| `service/impl/DatabaseComponentRegistryResolverTest` | Constructs legacy entities with `.name` + `.metadata`; covers resolve algorithm. | Rewrite against v2 entities (base + override rows). MIG-029 coverage. |
+| `teamcity/TeamcitySyncServiceTest` | Depends on broken `TeamcitySyncService` + uses `component.name` / `teamcityProjectId` columns. | Rewrite alongside the service in Phase 5 (carries over to Phase 6 for assertions). |
+| `migration/TeamcityProjectIdPersistenceRoundtripTest` | Asserts on the deleted `teamcityProjectId` column; replaced by `component_teamcity_projects` rows. | Rewrite to assert on the child table. |
+| `migration/FtDbProfileWriteTest` | Uses legacy `entity.name` + `.metadata`. | Update to `componentKey` and the new flat scalar fields. |
+| `migration/MigrationIntegrationTest` | Heavy DSL→DB cross-cut; uses legacy entity field set. | Rewrite alongside `ImportServiceImpl` in Phase 5. |
+| `migration/MigrateHistoryAsyncEndpointTest` | Depends on broken `GitHistoryImportServiceImpl` / `HistoryMigrationJobService`. | Re-enable after Phase 5. |
+| `service/impl/MigrateHistoryIntegrationTest` | Same. | Re-enable after Phase 5. |
+| `service/impl/HistoryMigrationJobServiceImplTest` | Same. | Re-enable after Phase 5. |
+
+If any other test class fails to compile once Phase 5 lands, add it here with the same `@Disabled` reason string and a Phase 6 action.
+
+Compile-only checklist (Phase 6 cannot ship until all are ✅):
+- [ ] No source file carries `@Disabled("schema-v2: …")`.
+- [ ] No source file imports a deleted v1/v2-transition entity (e.g., `FieldOverrideEntity`).
+- [ ] `./gradlew :components-registry-service-server:compileTestKotlin` is green.
 
 ### Final docs cleanup scope (Phase 9)
 
