@@ -61,7 +61,9 @@ import org.octopusden.octopus.components.registry.server.teamcity.TeamcityProper
 import org.octopusden.releng.versions.VersionRangeFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.data.domain.Page
+import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Pageable
+import org.springframework.data.domain.Sort
 import org.springframework.data.jpa.domain.Specification
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -371,7 +373,37 @@ class ComponentManagementServiceImpl(
         filter: ComponentFilter,
         pageable: Pageable,
     ): Page<ComponentSummaryResponse> =
-        componentRepository.findAll(buildSpecification(filter), pageable).map { it.toSummaryResponse(teamcityProperties.baseUrl) }
+        componentRepository
+            .findAll(buildSpecification(filter), translateSort(pageable))
+            .map { it.toSummaryResponse(teamcityProperties.baseUrl) }
+
+    /**
+     * Translate API-facing sort field names to `ComponentEntity` property names.
+     * The v4 `ComponentSummaryResponse` exposes `name` (mapped from `componentKey`),
+     * so a natural `?sort=name,asc` from the Portal would otherwise raise
+     * `PropertyReferenceException` ("no property 'name' on ComponentEntity") and
+     * surface as a 500. Other summary fields (`id`, `displayName`, `componentOwner`,
+     * `productType`, `archived`, `updatedAt`) already match entity properties
+     * 1:1 and need no translation. Derived/joined fields on the summary
+     * (`systems`, `labels`, `buildSystem`, etc.) intentionally have NO translation
+     * — sorting on them would still raise `PropertyReferenceException` and end
+     * up as a clean 400, which is the right answer until and unless someone
+     * adds a dedicated query for those. Unknown fields fall through to Spring
+     * Data and end up as a clean 400 via `ControllerExceptionHandler`.
+     */
+    private fun translateSort(pageable: Pageable): Pageable {
+        if (pageable.sort.isUnsorted) return pageable
+        val translated =
+            Sort.by(
+                pageable.sort.map { order ->
+                    when (order.property) {
+                        "name" -> Sort.Order(order.direction, "componentKey", order.nullHandling)
+                        else -> order
+                    }
+                }.toList(),
+            )
+        return PageRequest.of(pageable.pageNumber, pageable.pageSize, translated)
+    }
 
     // ============================================================
     // Field overrides — backed by `component_configurations`
