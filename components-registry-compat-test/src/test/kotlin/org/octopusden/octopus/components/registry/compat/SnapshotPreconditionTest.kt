@@ -67,7 +67,7 @@ class SnapshotPreconditionTest : CompatibilityTestBase() {
                     ).joinToString(" and ") + " — precondition for any compat run cannot be evaluated",
                 ),
             )
-        } else if (baseline.versionControlRevision != candidate.versionControlRevision) {
+        } else if (baseline!!.versionControlRevision != candidate!!.versionControlRevision) {
             DiffCollector.record(
                 DiffRecord(
                     ts = ts,
