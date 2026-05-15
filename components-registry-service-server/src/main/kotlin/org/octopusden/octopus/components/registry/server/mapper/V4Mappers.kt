@@ -263,6 +263,7 @@ private fun ComponentConfigurationEntity.escrowAspectResponse(): EscrowAspectRes
         gradleIncludeConfigurations = escrowGradleIncludeConfigurations,
         gradleExcludeConfigurations = escrowGradleExcludeConfigurations,
         gradleIncludeTestConfigurations = escrowGradleIncludeTestConfigurations,
+        buildTask = escrowBuildTask,
     )
 
 private fun ComponentConfigurationEntity.jiraAspectResponse(): JiraAspectResponse =

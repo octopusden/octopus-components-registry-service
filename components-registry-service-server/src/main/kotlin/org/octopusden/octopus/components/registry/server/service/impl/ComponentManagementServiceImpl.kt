@@ -801,6 +801,7 @@ class ComponentManagementServiceImpl(
             config.escrowGradleIncludeConfigurations = e.gradleIncludeConfigurations
             config.escrowGradleExcludeConfigurations = e.gradleExcludeConfigurations
             config.escrowGradleIncludeTestConfigurations = e.gradleIncludeTestConfigurations
+            config.escrowBuildTask = e.buildTask
         }
         request.jira?.let { j ->
             config.jiraProjectKey = j.projectKey
@@ -853,6 +854,7 @@ class ComponentManagementServiceImpl(
             e.gradleIncludeConfigurations?.let { config.escrowGradleIncludeConfigurations = it }
             e.gradleExcludeConfigurations?.let { config.escrowGradleExcludeConfigurations = it }
             e.gradleIncludeTestConfigurations?.let { config.escrowGradleIncludeTestConfigurations = it }
+            e.buildTask?.let { config.escrowBuildTask = it }
         }
         patch.jira?.let { j ->
             j.projectKey?.let { config.jiraProjectKey = it }
