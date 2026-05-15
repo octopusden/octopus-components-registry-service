@@ -494,10 +494,11 @@ class GitVsDbValidationTest {
         "VAL-011: Defaults.requiredTools (BuildEnv) survives DB import — Git baseline vs DB candidate parity",
     )
     fun `VAL-011 defaults requiredTools git vs db parity`() {
-        // Pick every multi-range / top-level component in production-like that does NOT
-        // declare its own `requiredTools` block and compare Git vs DB responses.
-        // production-like/Defaults.groovy sets `build { requiredTools = "BuildEnv" }`,
-        // so Git baseline must always emit BuildEnv. Any divergence is the bug.
+        // Hand-picked candidates representative of the broken-on-prod pattern plus
+        // historically-working control cases. production-like/Defaults.groovy sets
+        // `build { requiredTools = "BuildEnv" }`, so the Git baseline must always
+        // emit BuildEnv for these components. Any Git-vs-DB divergence in
+        // `buildParameters.tools` is the bug.
         val candidates =
             listOf(
                 // Synthetic fixture mirroring the real-world broken pattern: multi-range
@@ -534,7 +535,6 @@ class GitVsDbValidationTest {
             val dbTools =
                 objectMapper.readTree(dbBody).path("buildParameters").path("tools").map { it.path("name").asText() }
 
-            System.err.println("VAL-011 [$name@$version] git=$gitTools db=$dbTools")
             if (gitTools.toSet() != dbTools.toSet()) {
                 failures.add("[$name@$version] git=$gitTools db=$dbTools")
             }
