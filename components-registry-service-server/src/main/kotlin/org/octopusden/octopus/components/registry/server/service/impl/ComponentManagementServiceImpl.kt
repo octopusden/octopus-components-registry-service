@@ -39,7 +39,12 @@ import org.octopusden.octopus.components.registry.server.entity.ToolEntity
 import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
 import org.octopusden.octopus.components.registry.server.event.AuditEvent
 import org.octopusden.octopus.components.registry.server.mapper.ALL_VERSIONS
+import org.octopusden.octopus.components.registry.server.mapper.BUILD_SYSTEM_NAMES
+import org.octopusden.octopus.components.registry.server.mapper.ESCROW_GENERATION_MODE_NAMES
 import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
+import org.octopusden.octopus.components.registry.server.mapper.PACKAGE_TYPE_NAMES
+import org.octopusden.octopus.components.registry.server.mapper.PRODUCT_TYPE_NAMES
+import org.octopusden.octopus.components.registry.server.mapper.REPOSITORY_TYPE_NAMES
 import org.octopusden.octopus.components.registry.server.mapper.SCALAR_ATTRIBUTE_PATHS
 import org.octopusden.octopus.components.registry.server.mapper.applyScalarValue
 import org.octopusden.octopus.components.registry.server.mapper.toDetailResponse
@@ -109,6 +114,7 @@ class ComponentManagementServiceImpl(
         request.productType?.let { validateProductType(it) }
         request.baseConfiguration?.versionRange?.let { validateRangeSyntax(it) }
         request.baseConfiguration?.build?.buildSystem?.let { validateBuildSystem(it) }
+        request.baseConfiguration?.escrow?.generation?.let { validateEscrowGenerationMode(it) }
         // vcsEntries[].repositoryType / packages[].packageType are validated
         // inside `replaceVcsEntries` / `replacePackages` (covers both base-config
         // and field-override marker paths).
@@ -234,6 +240,7 @@ class ComponentManagementServiceImpl(
         // base-configuration patch block via `validateRangeSyntax` — no
         // top-level guard needed here.
         request.baseConfiguration?.build?.buildSystem?.let { validateBuildSystem(it) }
+        request.baseConfiguration?.escrow?.generation?.let { validateEscrowGenerationMode(it) }
         // vcsEntries[].repositoryType / packages[].packageType are validated
         // inside `replaceVcsEntries` / `replacePackages` (see service helpers).
 
@@ -1110,56 +1117,37 @@ class ComponentManagementServiceImpl(
      */
     private fun validateProductType(value: String) {
         require(value.isNotBlank()) { "productType must not be blank" }
-        require(value in PRODUCT_TYPES) {
-            "Invalid productType: '$value'. Allowed: $PRODUCT_TYPES"
+        require(value in PRODUCT_TYPE_NAMES) {
+            "Invalid productType: '$value'. Allowed: $PRODUCT_TYPE_NAMES"
         }
     }
 
     private fun validateBuildSystem(value: String) {
         require(value.isNotBlank()) { "build.buildSystem must not be blank" }
-        require(value in BUILD_SYSTEMS) {
-            "Invalid build.buildSystem: '$value'. Allowed: $BUILD_SYSTEMS"
+        require(value in BUILD_SYSTEM_NAMES) {
+            "Invalid build.buildSystem: '$value'. Allowed: $BUILD_SYSTEM_NAMES"
+        }
+    }
+
+    private fun validateEscrowGenerationMode(value: String) {
+        require(value.isNotBlank()) { "escrow.generation must not be blank" }
+        require(value in ESCROW_GENERATION_MODE_NAMES) {
+            "Invalid escrow.generation: '$value'. Allowed: $ESCROW_GENERATION_MODE_NAMES"
         }
     }
 
     private fun validateRepositoryType(value: String) {
         require(value.isNotBlank()) { "vcsEntry.repositoryType must not be blank" }
-        require(value in REPOSITORY_TYPES) {
-            "Invalid vcsEntry.repositoryType: '$value'. Allowed: $REPOSITORY_TYPES"
+        require(value in REPOSITORY_TYPE_NAMES) {
+            "Invalid vcsEntry.repositoryType: '$value'. Allowed: $REPOSITORY_TYPE_NAMES"
         }
     }
 
     private fun validatePackageType(value: String) {
         require(value.isNotBlank()) { "package.packageType must not be blank" }
-        require(value in PACKAGE_TYPES) {
-            "Invalid package.packageType: '$value'. Allowed: $PACKAGE_TYPES"
+        require(value in PACKAGE_TYPE_NAMES) {
+            "Invalid package.packageType: '$value'. Allowed: $PACKAGE_TYPE_NAMES"
         }
-    }
-
-    private companion object {
-        private val PRODUCT_TYPES: Set<String> =
-            org.octopusden.octopus.components.registry.api.enums.ProductTypes
-                .values()
-                .map { it.name }
-                .toSet()
-        private val BUILD_SYSTEMS: Set<String> =
-            org.octopusden.octopus.components.registry.core.dto.BuildSystem
-                .values()
-                .map { it.name }
-                .toSet()
-        private val REPOSITORY_TYPES: Set<String> =
-            org.octopusden.octopus.escrow.RepositoryType
-                .values()
-                .map { it.name }
-                .toSet()
-        // `Distribution.DEB` / `Distribution.RPM` are the only types emitted by
-        // the resolver. There is no enum class for them at the API layer, so
-        // hand-list the allowed values.
-        // TODO: replace with `PackageType.values().map { it.name }.toSet()`
-        // if a `PackageType` enum is ever extracted to the API module; until
-        // then any DSL change that introduces a new package type must update
-        // this set in lockstep.
-        private val PACKAGE_TYPES: Set<String> = setOf("DEB", "RPM")
     }
 
     private fun buildSpecification(filter: ComponentFilter): Specification<ComponentEntity> {

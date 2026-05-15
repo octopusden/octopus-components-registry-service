@@ -206,6 +206,42 @@ class V4WriteValidationTest {
     }
 
     @Test
+    @DisplayName("CREATE rejects unknown baseConfiguration.escrow.generation")
+    fun create_rejects_unknownEscrowGeneration() {
+        val body =
+            """{"name": "validation-test-comp-gen", "baseConfiguration": {"escrow": {"generation": "NOT_A_GENERATION_MODE"}}}"""
+        postCreate(body).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    @DisplayName("POST /field-overrides rejects scalar escrow.generation with unknown enum value")
+    fun fieldOverride_rejects_unknownEscrowGenerationScalar() {
+        val createBody = """{"name": "validation-test-comp-gen-fo", "baseConfiguration": {}}"""
+        val seedResponse =
+            postCreate(createBody)
+                .andExpect(status().is2xxSuccessful)
+                .andReturn()
+                .response.contentAsString
+        val id = objectMapper.readTree(seedResponse)["id"].asText()
+
+        val payload =
+            """
+            {
+              "overriddenAttribute": "escrow.generation",
+              "versionRange": "[99.0.0,)",
+              "value": "NOT_A_GENERATION_MODE"
+            }
+            """.trimIndent()
+        mvc
+            .perform(
+                post("/rest/api/4/components/$id/field-overrides")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(payload),
+            ).andExpect(status().isBadRequest)
+    }
+
+    @Test
     @DisplayName("PATCH baseConfiguration.versionRange with bad syntax returns 400 (pre-existing)")
     fun patch_rejects_invalidVersionRangeSyntax() {
         // Seed a minimal valid component first.
