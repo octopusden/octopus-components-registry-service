@@ -11,7 +11,6 @@ import org.octopusden.octopus.components.registry.server.support.viewerJwt
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.context.annotation.Import
 import org.springframework.http.HttpStatus
@@ -166,9 +165,10 @@ class ErrorHandlingHardeningTest {
      * full DispatcherServlet → `@ControllerAdvice` chain. Service-layer code
      * (e.g. `GitHistoryImportServiceImpl.preflight`) throws `ResponseStatusException`
      * with a non-500 status; the broad `@ExceptionHandler(Throwable::class)`
-     * catch-all must NOT swallow it back into a 500.
+     * catch-all must NOT swallow it back into a 500. Registered via `@Import`
+     * on the test class — a plain `@RestController` bean, not a `@TestConfiguration`,
+     * to avoid CGLIB proxying of an MVC controller.
      */
-    @TestConfiguration
     @RestController
     @RequestMapping("/test-error-helpers")
     class TestThrowingController {
