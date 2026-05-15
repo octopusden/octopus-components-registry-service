@@ -397,7 +397,11 @@ class ComponentManagementServiceImpl(
             Sort.by(
                 pageable.sort.map { order ->
                     when (order.property) {
-                        "name" -> Sort.Order(order.direction, "componentKey", order.nullHandling)
+                        "name" ->
+                            // 4-arg ctor — preserves `ignoreCase` alongside direction
+                            // and null-handling. The 3-arg variant defaults
+                            // ignoreCase to false and would silently drop the flag.
+                            Sort.Order(order.direction, "componentKey", order.isIgnoreCase, order.nullHandling)
                         else -> order
                     }
                 }.toList(),

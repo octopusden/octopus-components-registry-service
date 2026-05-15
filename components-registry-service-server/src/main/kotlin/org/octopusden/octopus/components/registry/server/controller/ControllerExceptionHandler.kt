@@ -173,10 +173,11 @@ class ControllerExceptionHandler {
     @ExceptionHandler(ResponseStatusException::class)
     fun responseStatusExceptionHandler(e: ResponseStatusException): ResponseEntity<ErrorResponse> {
         log.warn("Mapped HTTP exception: {} {}", e.statusCode, e.reason)
-        // `e.reason` is the explicit reason phrase passed at the throw site;
-        // `e.message` adds the status prefix. Fall back to a numeric-only
-        // message so we never echo Spring's internal status enum name.
-        val body = e.reason ?: e.message ?: "HTTP ${e.statusCode.value()}"
+        // Use only the explicit reason phrase (set at the throw site) — never
+        // `e.message`, which is prefixed with Spring's status enum name
+        // (e.g. "409 CONFLICT \"reason\""). Fall back to a numeric-only string
+        // so a caller-facing body never leaks framework formatting.
+        val body = e.reason ?: "HTTP ${e.statusCode.value()}"
         return ResponseEntity.status(e.statusCode).body(ErrorResponse(body))
     }
 
