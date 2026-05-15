@@ -152,7 +152,12 @@ class ComponentManagementServiceImpl(
         publishAuditEvent(
             action = "CREATE",
             entityId = saved.id.toString(),
-            newValue = scalarAuditMap(saved),
+            newValue =
+                scalarAuditMap(
+                    saved,
+                    overrideLabels = request.labels,
+                    overrideSystems = request.systems,
+                ),
         )
 
         return saved.toDetailResponse(teamcityProperties.baseUrl)
@@ -200,7 +205,13 @@ class ComponentManagementServiceImpl(
         }
         val isRename = normalizedNewKey != null && normalizedNewKey != oldKey
 
-        val oldValue = scalarAuditMap(entity)
+        // Capture the pre-update label / system membership so the post-sync audit
+        // `newValue` (which is computed after `syncLabels` / `syncSystems` have
+        // bypassed the entity's in-memory junction collections) can compose the
+        // effective new set as `request.X ?: original`.
+        val originalLabels = entity.labelJunctions.map { it.labelCode }.toSet()
+        val originalSystems = entity.systemJunctions.map { it.systemCode }.toSet()
+        val oldValue = scalarAuditMap(entity, originalLabels, originalSystems)
 
         if (isRename) entity.componentKey = normalizedNewKey!!
 
@@ -295,7 +306,12 @@ class ComponentManagementServiceImpl(
             action = if (isRename) "RENAME" else "UPDATE",
             entityId = saved.id.toString(),
             oldValue = oldValue,
-            newValue = scalarAuditMap(saved),
+            newValue =
+                scalarAuditMap(
+                    saved,
+                    overrideLabels = request.labels ?: originalLabels,
+                    overrideSystems = request.systems ?: originalSystems,
+                ),
         )
 
         return saved.toDetailResponse(teamcityProperties.baseUrl)
@@ -920,7 +936,19 @@ class ComponentManagementServiceImpl(
         return spec
     }
 
-    private fun scalarAuditMap(entity: ComponentEntity): Map<String, Any?> =
+    /**
+     * Snapshot of the component's scalar fields + label/system memberships for
+     * audit-log purposes. `overrideLabels` and `overrideSystems` short-circuit
+     * the entity's in-memory junction collections — needed after the
+     * `syncLabels` / `syncSystems` repo-direct writes, since those bypass
+     * the entity's `labelJunctions` / `systemJunctions` and the in-memory
+     * collections still hold the pre-sync set.
+     */
+    private fun scalarAuditMap(
+        entity: ComponentEntity,
+        overrideLabels: Set<String>? = null,
+        overrideSystems: Set<String>? = null,
+    ): Map<String, Any?> =
         mapOf(
             "name" to entity.componentKey,
             "displayName" to entity.displayName,
@@ -940,8 +968,8 @@ class ComponentManagementServiceImpl(
             "vcsExternalRegistry" to entity.vcsExternalRegistry,
             "distributionExplicit" to entity.distributionExplicit,
             "distributionExternal" to entity.distributionExternal,
-            "labels" to entity.labelJunctions.map { it.labelCode }.toSet(),
-            "systems" to entity.systemJunctions.map { it.systemCode }.toSet(),
+            "labels" to (overrideLabels ?: entity.labelJunctions.map { it.labelCode }.toSet()),
+            "systems" to (overrideSystems ?: entity.systemJunctions.map { it.systemCode }.toSet()),
         )
 
     private fun publishAuditEvent(
