@@ -28,7 +28,8 @@ import java.time.Instant
  * v1-style `ComponentEntity` (with `metadata: Map`, single VCS settings
  * entity, etc.) and is no longer compatible with the v2 schema. Until the
  * §6 pipeline lands, the migrate endpoints surface
- * [UnsupportedOperationException] (HTTP 501 via `GlobalExceptionHandler`).
+ * [UnsupportedOperationException] (mapped to HTTP 501 Not Implemented in
+ * `ControllerExceptionHandler`).
  *
  * **Still working under v2:**
  *   - [migrateDefaults] — writes `registry_config[component-defaults]`

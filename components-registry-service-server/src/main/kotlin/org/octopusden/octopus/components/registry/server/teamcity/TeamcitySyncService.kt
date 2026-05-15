@@ -22,10 +22,14 @@ import java.util.UUID
  *    that carries a `COMPONENT_NAME` parameter (any value), then group the
  *    response client-side by the parameter value.
  * 3. For each component:
- *      - 0 matches → leave `component_teamcity_projects` rows untouched if any
- *        exist (the value was operator-curated) but for components with no rows
- *        already, count `skippedNoMatch`. To clear a curated assignment the
- *        operator deletes the row via the v4 API.
+ *      - 0 matches → no write. Any existing rows in `component_teamcity_projects`
+ *        are preserved as-is (the sync path only writes when [applyMatch]
+ *        actually runs, and it only runs for components with a non-null TC
+ *        `pick`). To clear a curated assignment, the operator deletes the
+ *        row via the v4 API. The `skippedNoMatch` counter increments for
+ *        every such component regardless of whether the existing rows hold
+ *        operator-curated data — it reports "no TC match this run", not
+ *        "no link in the DB".
  *      - 1 match with non-blank webUrl → upsert one row in
  *        `component_teamcity_projects` with the matched project id; count
  *        `updated` or `unchanged`.

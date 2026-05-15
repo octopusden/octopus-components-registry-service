@@ -83,6 +83,20 @@ class ControllerExceptionHandler {
         return HttpEntity(ErrorResponse(e.localizedMessage))
     }
 
+    /**
+     * Schema-v2 transitional: `ImportServiceImpl.migrateComponent` /
+     * `migrateAllComponents` / `validateMigration` throw this until MIG-039
+     * (the §6 import pipeline) lands. Map to 501 Not Implemented so operators
+     * hitting `POST /admin/migrate*` get a clean signal instead of a 500 +
+     * stack trace.
+     */
+    @ExceptionHandler(UnsupportedOperationException::class)
+    @ResponseStatus(HttpStatus.NOT_IMPLEMENTED)
+    fun unsupportedOperationExceptionHandler(e: UnsupportedOperationException): HttpEntity<ErrorResponse> {
+        log.warn("Unsupported operation: {}", e.localizedMessage)
+        return HttpEntity(ErrorResponse(e.localizedMessage ?: "Operation not implemented"))
+    }
+
     // Note: AccessDeniedException and AuthenticationException are intercepted by Spring
     // Security's ExceptionTranslationFilter BEFORE they ever reach @ControllerAdvice.
     // Consistent JSON 401/403 bodies are produced by the AuthenticationEntryPoint /
