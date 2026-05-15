@@ -274,14 +274,20 @@ class TeamcitySyncService(
 
     /**
      * Write the match if it differs from current state. Returns true when the
-     * `(component_teamcity_projects)` row set actually changed (drives the
+     * `component_teamcity_projects` row set actually changed (drives the
      * `updated` counter and the audit-log emission).
      *
-     * Schema v2: one row per component, slot `sortOrder = 0`. Existing rows
-     * (if any) are wiped via `deleteAllInBatch` and a fresh row is inserted —
-     * the table has no UPDATE-in-place semantic and `findByComponentId` is
-     * the only key handle (composite-on-`(component_id, project_id)` is
-     * theoretical; the schema's UNIQUE here is per-component).
+     * Schema v2: TC sync writes exactly one row per matched component
+     * (`sortOrder = 0`). The table has no DB-level UNIQUE constraint on
+     * `component_id` — only an index — so this "one row" invariant is
+     * enforced purely by service logic: every successful sync run
+     * `deleteAllInBatch`s ALL existing rows for the component and inserts a
+     * single fresh row. That means even when `oldId == newId` (sortOrder 0
+     * row matches the TC pick), if the component has SECONDARY rows from
+     * a prior multi-write or manual curation, we still wipe them so the
+     * invariant holds. Idempotency (`updated` vs `unchanged`) is judged on
+     * whether the visible (sortOrder=0) projectId changed AND whether any
+     * extra rows had to be removed.
      */
     private fun applyMatch(
         component: ComponentEntity,
@@ -294,8 +300,10 @@ class TeamcitySyncService(
         val oldUrl = oldId?.let { composeTeamcityProjectUrl(teamcityProperties.baseUrl, it) }
         val newId = match.id
         val newUrl = composeTeamcityProjectUrl(teamcityProperties.baseUrl, newId)
+        val hasExtraRows = existing.size > 1 || existing.any { it.projectId != newId }
 
-        if (oldId == newId) {
+        if (oldId == newId && !hasExtraRows) {
+            // Truly nothing to do — sortOrder=0 row matches AND no leftovers.
             return false
         }
 

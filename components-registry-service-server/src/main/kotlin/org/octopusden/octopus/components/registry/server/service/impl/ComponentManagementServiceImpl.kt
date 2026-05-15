@@ -35,6 +35,7 @@ import org.octopusden.octopus.components.registry.server.entity.DistributionPack
 import org.octopusden.octopus.components.registry.server.entity.DistributionSecurityGroupEntity
 import org.octopusden.octopus.components.registry.server.entity.LabelEntity
 import org.octopusden.octopus.components.registry.server.entity.SystemEntity
+import org.octopusden.octopus.components.registry.server.entity.ToolEntity
 import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
 import org.octopusden.octopus.components.registry.server.event.AuditEvent
 import org.octopusden.octopus.components.registry.server.mapper.ALL_VERSIONS
@@ -52,6 +53,7 @@ import org.octopusden.octopus.components.registry.server.repository.ComponentReq
 import org.octopusden.octopus.components.registry.server.repository.ComponentSystemRepository
 import org.octopusden.octopus.components.registry.server.repository.LabelRepository
 import org.octopusden.octopus.components.registry.server.repository.SystemRepository
+import org.octopusden.octopus.components.registry.server.repository.ToolRepository
 import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
@@ -84,6 +86,7 @@ class ComponentManagementServiceImpl(
     private val componentRequiredToolRepository: ComponentRequiredToolRepository,
     private val labelRepository: LabelRepository,
     private val systemRepository: SystemRepository,
+    private val toolRepository: ToolRepository,
     private val sourceRegistry: ComponentSourceRegistry,
     private val applicationEventPublisher: ApplicationEventPublisher,
     private val currentUserResolver: CurrentUserResolver,
@@ -96,9 +99,12 @@ class ComponentManagementServiceImpl(
     // ============================================================
 
     override fun createComponent(request: ComponentCreateRequest): ComponentDetailResponse {
-        require(!componentRepository.existsByComponentKey(request.name)) {
-            "Component with name '${request.name}' already exists"
+        val normalizedKey = request.name.trim()
+        require(normalizedKey.isNotEmpty()) { "name must not be blank" }
+        require(!componentRepository.existsByComponentKey(normalizedKey)) {
+            "Component with name '$normalizedKey' already exists"
         }
+        request.baseConfiguration?.versionRange?.let { validateRangeSyntax(it) }
 
         val parent =
             request.parentComponentName?.let { parentKey ->
@@ -110,7 +116,7 @@ class ComponentManagementServiceImpl(
 
         val entity =
             ComponentEntity(
-                componentKey = request.name,
+                componentKey = normalizedKey,
                 displayName = request.displayName,
                 componentOwner = request.componentOwner,
                 productType = request.productType,
@@ -147,7 +153,18 @@ class ComponentManagementServiceImpl(
         // persisted via their own repositories AFTER the parent has an assigned id.
         syncLabels(saved.id!!, request.labels)
         syncSystems(saved.id!!, request.systems)
-        request.baseConfiguration?.requiredTools?.let { syncRequiredTools(baseConfig.id!!, it) }
+        val baseRequiredTools = request.baseConfiguration?.requiredTools
+        if (baseRequiredTools != null) syncRequiredTools(baseConfig.id!!, baseRequiredTools)
+
+        // Refresh in-memory junction collections so the response DTO reflects the
+        // synced DB state — repo-direct writes bypass the entity's collections.
+        refreshComponentLabelsInMemory(saved, request.labels)
+        refreshComponentSystemsInMemory(saved, request.systems)
+        if (baseRequiredTools != null) refreshConfigRequiredToolsInMemory(baseConfig, baseRequiredTools)
+
+        // Mark this component as DB-sourced so the v1–v3 routing path lands on
+        // `DatabaseComponentRegistryResolver` even when the env-wide default is `git`.
+        sourceRegistry.setComponentSource(saved.componentKey, "db")
 
         publishAuditEvent(
             action = "CREATE",
@@ -278,6 +295,7 @@ class ComponentManagementServiceImpl(
         }
 
         // Base configuration patch (scalars + cascaded child collections only)
+        request.baseConfiguration?.versionRange?.let { validateRangeSyntax(it) }
         val baseConfigForToolsSync =
             request.baseConfiguration?.let { patch ->
                 val base =
@@ -296,8 +314,17 @@ class ComponentManagementServiceImpl(
         // assigned ids (for newly-created rows) are visible.
         request.systems?.let { syncSystems(saved.id!!, it) }
         request.labels?.let { syncLabels(saved.id!!, it) }
-        if (baseConfigForToolsSync != null) {
-            syncRequiredTools(baseConfigForToolsSync.id!!, request.baseConfiguration.requiredTools!!)
+        val patchedRequiredTools = request.baseConfiguration?.requiredTools
+        if (baseConfigForToolsSync != null && patchedRequiredTools != null) {
+            syncRequiredTools(baseConfigForToolsSync.id!!, patchedRequiredTools)
+        }
+
+        // Refresh in-memory junction collections so the response DTO reflects the
+        // synced DB state — repo-direct writes bypass the entity's collections.
+        request.labels?.let { refreshComponentLabelsInMemory(saved, it) }
+        request.systems?.let { refreshComponentSystemsInMemory(saved, it) }
+        if (baseConfigForToolsSync != null && patchedRequiredTools != null) {
+            refreshConfigRequiredToolsInMemory(baseConfigForToolsSync, patchedRequiredTools)
         }
 
         if (isRename) sourceRegistry.renameComponent(oldKey, saved.componentKey)
@@ -399,7 +426,11 @@ class ComponentManagementServiceImpl(
 
         component.configurations.add(row)
         val saved = configurationRepository.save(row)
-        if (pendingTools != null) syncRequiredTools(saved.id!!, pendingTools)
+        if (pendingTools != null) {
+            syncRequiredTools(saved.id!!, pendingTools)
+            refreshConfigRequiredToolsInMemory(saved, pendingTools)
+        }
+        bumpParentVersion(component)
         return saved.toFieldOverrideResponse()
     }
 
@@ -440,7 +471,11 @@ class ComponentManagementServiceImpl(
             }
 
         val saved = configurationRepository.save(row)
-        if (pendingTools != null) syncRequiredTools(saved.id!!, pendingTools)
+        if (pendingTools != null) {
+            syncRequiredTools(saved.id!!, pendingTools)
+            refreshConfigRequiredToolsInMemory(saved, pendingTools)
+        }
+        bumpParentVersion(row.component)
         return saved.toFieldOverrideResponse()
     }
 
@@ -458,7 +493,9 @@ class ComponentManagementServiceImpl(
         require(row.overriddenAttribute != null) {
             "Cannot delete base row via field-override endpoint (id $overrideId is a BASE row)"
         }
+        val owningComponent = row.component
         configurationRepository.delete(row)
+        bumpParentVersion(owningComponent)
     }
 
     @Transactional(readOnly = true)
@@ -585,6 +622,7 @@ class ComponentManagementServiceImpl(
         val existing = componentRequiredToolRepository.findByComponentConfigurationId(configId)
         if (existing.isNotEmpty()) componentRequiredToolRepository.deleteAllInBatch(existing)
         desired.distinct().forEach { tool ->
+            ensureToolExists(tool)
             componentRequiredToolRepository.save(
                 ComponentRequiredToolEntity(componentConfigurationId = configId, toolName = tool),
             )
@@ -601,6 +639,78 @@ class ComponentManagementServiceImpl(
         if (systemRepository.findByCode(code) == null) {
             systemRepository.save(SystemEntity(code = code))
         }
+    }
+
+    /**
+     * Auto-create a dictionary row for `name` if missing so the FK from
+     * `component_required_tools.tool_name → tools.name` doesn't reject a v4
+     * write referencing a tool that the operator hasn't seeded through DSL
+     * import. Only the PK column is populated; the env-specific metadata
+     * (`escrow_env_variable`, `target_location`, etc.) stays NULL and is
+     * filled in later either by the import pipeline or by a future tools
+     * admin endpoint.
+     */
+    private fun ensureToolExists(name: String) {
+        if (toolRepository.findByName(name) == null) {
+            toolRepository.save(ToolEntity(name = name))
+        }
+    }
+
+    /**
+     * Refresh the entity's in-memory `labelJunctions` so the response DTO
+     * reflects the synced DB state. `syncLabels` writes through the
+     * repository and bypasses the entity's collection — without this
+     * refresh, `entity.toDetailResponse()` would surface the pre-sync
+     * (stale) labels and the API caller would see an empty / wrong list
+     * until a subsequent GET.
+     */
+    private fun refreshComponentLabelsInMemory(
+        component: ComponentEntity,
+        desired: Set<String>,
+    ) {
+        component.labelJunctions.clear()
+        desired.distinct().forEach { code ->
+            component.labelJunctions.add(
+                ComponentLabelEntity(componentId = component.id!!, labelCode = code),
+            )
+        }
+    }
+
+    /** See [refreshComponentLabelsInMemory]; same pattern for `systemJunctions`. */
+    private fun refreshComponentSystemsInMemory(
+        component: ComponentEntity,
+        desired: Set<String>,
+    ) {
+        component.systemJunctions.clear()
+        desired.distinct().forEach { code ->
+            component.systemJunctions.add(
+                ComponentSystemEntity(componentId = component.id!!, systemCode = code),
+            )
+        }
+    }
+
+    /** See [refreshComponentLabelsInMemory]; same pattern for `requiredToolJunctions` on a configuration row. */
+    private fun refreshConfigRequiredToolsInMemory(
+        config: ComponentConfigurationEntity,
+        desired: List<String>,
+    ) {
+        config.requiredToolJunctions.clear()
+        desired.distinct().forEach { tool ->
+            config.requiredToolJunctions.add(
+                ComponentRequiredToolEntity(componentConfigurationId = config.id!!, toolName = tool),
+            )
+        }
+    }
+
+    /**
+     * Touch the owning `ComponentEntity` so that override-row CRUD bumps the
+     * aggregate root's `@Version` + `updatedAt`. Without this, clients can
+     * keep using a stale component `version` after override changes —
+     * undermining optimistic locking for the detail view.
+     */
+    private fun bumpParentVersion(component: ComponentEntity) {
+        component.updatedAt = Instant.now()
+        componentRepository.saveAndFlush(component)
     }
 
     private fun upsertGroup(request: ComponentGroupRequest): ComponentGroupEntity =
@@ -814,7 +924,11 @@ class ComponentManagementServiceImpl(
 
     /**
      * Apply a marker children payload to a marker row. Validates that the
-     * payload's populated list matches the marker name on the row.
+     * payload's populated list matches the marker name on the row AND that no
+     * other child-family list is also populated — a strict check so a
+     * malformed request (e.g., `vcs.settings` marker with both `vcsEntries`
+     * and `mavenArtifacts` set) fails fast instead of silently dropping the
+     * extra fields.
      *
      * Returns the desired `requiredTools` list when the marker is
      * `build.requiredTools` (caller syncs the junction via
@@ -826,8 +940,9 @@ class ComponentManagementServiceImpl(
         row: ComponentConfigurationEntity,
         markerName: String,
         payload: MarkerChildrenPayload,
-    ): List<String>? =
-        when (markerName) {
+    ): List<String>? {
+        rejectExtraneousMarkerFields(markerName, payload)
+        return when (markerName) {
             MarkerAttributes.VCS_SETTINGS -> {
                 requireNotNull(payload.vcsEntries) { "Marker '$markerName' requires vcsEntries payload" }
                 replaceVcsEntries(row, payload.vcsEntries)
@@ -859,6 +974,43 @@ class ComponentManagementServiceImpl(
             }
             else -> error("Unknown marker '$markerName' — caller did not validate")
         }
+    }
+
+    /**
+     * Strict check: a marker payload must populate exactly the one child-family
+     * list that corresponds to the marker name and leave the others null.
+     * Silently dropping unrelated lists masks malformed requests; reject them
+     * with a clear 400.
+     */
+    private fun rejectExtraneousMarkerFields(
+        markerName: String,
+        payload: MarkerChildrenPayload,
+    ) {
+        val populated =
+            buildList {
+                if (payload.vcsEntries != null) add("vcsEntries")
+                if (payload.mavenArtifacts != null) add("mavenArtifacts")
+                if (payload.fileUrlArtifacts != null) add("fileUrlArtifacts")
+                if (payload.dockerImages != null) add("dockerImages")
+                if (payload.packages != null) add("packages")
+                if (payload.requiredTools != null) add("requiredTools")
+            }
+        val expected =
+            when (markerName) {
+                MarkerAttributes.VCS_SETTINGS -> "vcsEntries"
+                MarkerAttributes.DISTRIBUTION_MAVEN -> "mavenArtifacts"
+                MarkerAttributes.DISTRIBUTION_FILE_URL -> "fileUrlArtifacts"
+                MarkerAttributes.DISTRIBUTION_DOCKER -> "dockerImages"
+                MarkerAttributes.DISTRIBUTION_PACKAGES -> "packages"
+                MarkerAttributes.BUILD_REQUIRED_TOOLS -> "requiredTools"
+                else -> error("Unknown marker '$markerName' — caller did not validate")
+            }
+        val extras = populated.filter { it != expected }
+        require(extras.isEmpty()) {
+            "Marker '$markerName' accepts only the '$expected' payload list; " +
+                "request also populated: ${extras.joinToString(", ")}"
+        }
+    }
 
     // ============================================================
     // Helpers — query specification, validation, audit

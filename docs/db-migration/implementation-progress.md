@@ -166,7 +166,7 @@ Requirements traceability: MIG-029..MIG-038 in [`requirements-migration.md`](req
 
 ### Phase 6 — schema-v2 disabled-test inventory
 
-Once Phase 5 lands the rewritten import / TC services and the `compileKotlin` step is green again, every entry below must be either **removed**, **rewritten**, or **re-enabled** before Phase 6 can be marked done. Each file carries class-level `@Disabled("schema-v2: temporarily disabled until Phase 6 test-suite rewrite")`. **Assertion bodies are preserved** (do not delete) — see [user guidance recorded with Phase 4].
+Once Phase 5 lands the rewritten import / TC services and the `compileKotlin` step is green again, every entry below must be either **removed**, **rewritten**, or **re-enabled** before Phase 6 can be marked done. Each file carries class-level `@Disabled("schema-v2: temporarily disabled until Phase 6 test-suite rewrite")`. The original assertion bodies are preserved **in git history** (parent of the stub commit `f47eaf1`); the stubs themselves are minimal placeholder classes that point future maintainers back to the git log for the pre-stub revision. Phase 6 recovers each test by reading the original from git history and re-implementing against the v2 entity graph.
 
 | Test class | Why disabled | Phase 6 action |
 |---|---|---|

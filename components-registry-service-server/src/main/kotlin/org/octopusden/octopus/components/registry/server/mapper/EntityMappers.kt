@@ -191,26 +191,28 @@ private fun ComponentEntity.resolveForRange(
 
 /**
  * True when an override row with `parentRange` should apply to the enumeration
- * view `childRange`. Trivially true when equal; otherwise checks containment
- * via the version-range factory (best-effort — if either range fails to parse,
- * returns false to err on safe side).
+ * view `childRange`. Trivially true when equal; otherwise this should be
+ * containment (`child ⊆ parent`), but the version-range library currently
+ * exposes only `containsVersion` (point-in-range), not `containsRange`.
+ *
+ * Current behaviour: returns true ONLY for the equal case. Strict-containment
+ * overrides (e.g., override on `[1.0,3.0)` should apply when enumerating a
+ * narrower `[1.0,2.0)` range) are NOT picked up. This is the conservative
+ * choice — better to miss an override than to apply a non-matching one —
+ * but it does mean a broader override on a real component is silently
+ * dropped during enumeration.
+ *
+ * FIXME (tracked in `docs/db-migration/todo.md` alongside the partial-overlap
+ * rejection item): implement a sample-points heuristic over `containsVersion`
+ * to approximate `child ⊆ parent`. Needs `NumericVersionFactory` threaded
+ * through `resolveForRange` → `toEscrowModule` so the sampling can parse the
+ * range endpoints.
  */
 private fun rangeApplies(
     parentRange: String,
     childRange: String,
-    factory: VersionRangeFactory,
-): Boolean {
-    if (parentRange == childRange) return true
-    return try {
-        val parent = factory.create(parentRange)
-        val child = factory.create(childRange)
-        // No public containsRange; approximate via "every endpoint of child is in parent".
-        // Conservative for unbounded ranges — falls back to equality check at the call site.
-        parent.toString() == child.toString()
-    } catch (_: Exception) {
-        false
-    }
-}
+    @Suppress("UNUSED_PARAMETER") factory: VersionRangeFactory,
+): Boolean = parentRange == childRange
 
 // ============================================================
 // Internal: build EscrowModuleConfig from base + overrides
@@ -237,8 +239,12 @@ private fun buildEscrowModuleConfig(
     // Build aspect
     setField(config, "buildSystem", merged.buildSystem?.let { safeParseBuildSystem(it) })
     setField(config, "buildFilePath", merged.buildFilePath)
-    setField(config, "deprecated", merged.deprecated)
-    val buildParameters = merged.toBuildParameters(markerOverrides)
+    // EscrowModuleConfig.deprecated is a primitive `boolean` — Java reflection
+    // rejects null for primitive fields. A configuration with no override on
+    // `build.deprecated` and a NULL base column must collapse to `false`
+    // instead of crashing the resolver.
+    setField(config, "deprecated", merged.deprecated ?: false)
+    val buildParameters = merged.toBuildParameters(base, markerOverrides)
     if (buildParameters != null) {
         setField(config, "buildConfiguration", buildParameters)
     }
@@ -430,20 +436,19 @@ private class ComponentConfigurationView {
         }
     }
 
-    fun toBuildParameters(markerOverrides: List<ComponentConfigurationEntity>): BuildParameters? {
-        if (javaVersion == null &&
-            mavenVersion == null &&
-            gradleVersion == null &&
-            buildTasks == null &&
-            !requiredProject.orFalse() &&
-            projectVersion == null &&
-            systemProperties == null
-        ) {
-            return null
-        }
+    fun toBuildParameters(
+        base: ComponentConfigurationEntity,
+        markerOverrides: List<ComponentConfigurationEntity>,
+    ): BuildParameters? {
+        // Tools: a `build.requiredTools` marker REPLACES the base junctions for
+        // its version range; otherwise the base row's tools propagate. The
+        // legacy implementation only consulted the marker and dropped base
+        // tools entirely — components whose tools live on the base row would
+        // resolve as if no tools were required.
         val toolMarker = markerOverrides.firstOrNull { it.overriddenAttribute == MarkerAttributes.BUILD_REQUIRED_TOOLS }
+        val sourceJunctions = toolMarker?.requiredToolJunctions?.toList() ?: base.requiredToolJunctions.toList()
         val tools =
-            (toolMarker?.requiredToolJunctions?.toList() ?: emptyList()).mapNotNull { junction ->
+            sourceJunctions.mapNotNull { junction ->
                 val tool = junction.tool ?: return@mapNotNull null
                 org.octopusden.octopus.escrow.model.Tool(
                     tool.name,
@@ -453,6 +458,20 @@ private class ComponentConfigurationView {
                     tool.installScript,
                 )
             }
+        // Early-return must now consider tools too: a build aspect with ONLY
+        // requiredTools (no java/maven/gradle/buildTasks/etc.) was previously
+        // dropped entirely.
+        if (javaVersion == null &&
+            mavenVersion == null &&
+            gradleVersion == null &&
+            buildTasks == null &&
+            !requiredProject.orFalse() &&
+            projectVersion == null &&
+            systemProperties == null &&
+            tools.isEmpty()
+        ) {
+            return null
+        }
         return BuildParameters.create(
             javaVersion,
             mavenVersion,
