@@ -4,6 +4,8 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Disabled
+import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
 import org.octopusden.octopus.components.registry.server.support.adminJwt
@@ -103,6 +105,29 @@ class DbBackedComponentsRegistryServiceControllerTest : MockMvcRegistryTestSuppo
             "only). Tracked in docs/db-migration/todo.md under 'Schema v2 known limitations' (RES-014).",
     )
     override fun testGetBuildTools() = super.testGetBuildTools()
+
+    /**
+     * Regression: components migrated from a DSL with no `vcsSettings` block at all
+     * (no VCS roots and no externalRegistry) resolve to `EscrowModuleConfig.vcsSettings == null`.
+     * `BaseComponentController.getAllComponents` used to dereference
+     * `config.vcsSettings.versionControlSystemRoots` unconditionally inside the
+     * `vcs-path` filter lambda, NPE-ing the whole request to a 500 whenever the
+     * query parameter was present and at least one component had a null
+     * `vcsSettings`. After the fix the request must succeed and just filter
+     * those components out.
+     */
+    @Test
+    @DisplayName(
+        "GET /rest/api/2/components?vcs-path=<any> returns 200 (no NPE on null vcsSettings)",
+    )
+    fun getAllComponents_vcsPathFilter_doesNotNpeOnNullVcsSettings() {
+        mvc
+            .perform(
+                get("/rest/api/2/components")
+                    .param("vcs-path", "ssh://hg@mercurial/__no_such_component__")
+                    .accept(APPLICATION_JSON),
+            ).andExpect(status().isOk)
+    }
 
     companion object {
         @JvmStatic
