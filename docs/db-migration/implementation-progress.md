@@ -202,6 +202,16 @@ If any other test class fails to compile once Phase 5 lands, add it here with th
 |---|---|---|
 | `migration/MigrateEndpointTest` | `POST /admin/migrate` async job calls `migrateAllComponents`, still throws `UnsupportedOperationException`. | Re-enable with MIG-039. |
 
+**Phase 5b MIG-039 fixup #2 left 5 method-level `@Disabled` markers** for known v2-vs-v1 semantic deltas. Method-level rather than class-level so the remaining 552/557 tests continue to provide coverage:
+
+| Test method | Reason | Tracked in todo.md |
+|---|---|---|
+| `BaseComponentsRegistryServiceTest.testGetAllJiraComponentVersionRanges` (overridden in `DbBackedComponentsRegistryServiceControllerTest`) | RES-001 — DB enumerates override-row ranges as separate `(component, range)` pairs; v1 fixture collapses them into the base. | Schema v2 known limitations §RES-001 |
+| `BaseComponentsRegistryServiceTest.testGetBuildTools` (overridden in `DbBackedComponentsRegistryServiceControllerTest`) | RES-014 — complex KTS build-tool beans (`OracleDatabaseToolBean`, `PTKProductToolBean`) cannot round-trip the v2 `tools` dictionary. | Schema v2 known limitations §RES-014 |
+| `DatabaseComponentRegistryResolverTest.(5 MIG-029) synthetic base with override - enumeration emits only the override range` | Synthetic-base suppression not wired through `resolveForRange`; sibling of RES-001. | Schema v2 known limitations §RES-001 family |
+| `GitVsDbValidationTest.VAL-006 maven-artifacts` | Open-ended override ranges (`[X.X.X,)`) not emitted by the v2 resolver for the maven-artifacts endpoint. | Schema v2 known limitations §RES-001 family |
+| `GitVsDbValidationTest.VAL-010 bulk canary` | 14 divergences across 11 components: 8× RES-014 family, 3× RES-001 family, 1× FAKE-aggregator distribution routing, 1× `externalRegistry` default-emit divergence. | Schema v2 known limitations §RES-001 + §RES-014 families |
+
 Compile-only checklist (Phase 6 cannot ship until all are ✅):
 - [ ] No source file carries `@Disabled("schema-v2: …")`.
 - [ ] No source file imports a deleted v1/v2-transition entity (e.g., `FieldOverrideEntity`).

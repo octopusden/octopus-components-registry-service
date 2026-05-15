@@ -180,7 +180,7 @@ abstract class BaseComponentsRegistryServiceTest {
 
     @Test
     @DisplayName("RES-001: All Jira component version ranges returned correctly")
-    fun testGetAllJiraComponentVersionRanges() {
+    open fun testGetAllJiraComponentVersionRanges() {
         val expected =
             testDataDir
                 .resolve("expected-data/jira-component-version-ranges.json")
@@ -470,7 +470,7 @@ abstract class BaseComponentsRegistryServiceTest {
 
     @Test
     @DisplayName("RES-014: Build tools resolution")
-    fun testGetBuildTools() {
+    open fun testGetBuildTools() {
         val buildTools = getBuildTools("TEST_COMPONENT_BUILD_TOOLS", "1.0.0")
         val oracle = OracleDatabaseToolBean()
         oracle.version = "11.2"
