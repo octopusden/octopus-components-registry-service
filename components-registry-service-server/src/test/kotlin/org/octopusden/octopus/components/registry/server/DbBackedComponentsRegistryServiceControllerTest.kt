@@ -104,14 +104,6 @@ class DbBackedComponentsRegistryServiceControllerTest : MockMvcRegistryTestSuppo
     )
     override fun testGetBuildTools() = super.testGetBuildTools()
 
-    @Disabled(
-        "schema-v2: Stream A fixed missing entries (47/53 -> 53/53 via RANGE_PRESENCE) but the " +
-            "test does full per-DTO equality and 5 components still diverge on " +
-            "vcsSettings.externalRegistry (null vs NOT_AVAILABLE default-emit). Re-enable once " +
-            "the externalRegistry-default-emission fix lands (Stream B / VAL-010 residual family).",
-    )
-    override fun testGetAllJiraComponentVersionRanges() = super.testGetAllJiraComponentVersionRanges()
-
     companion object {
         @JvmStatic
         val postgres =

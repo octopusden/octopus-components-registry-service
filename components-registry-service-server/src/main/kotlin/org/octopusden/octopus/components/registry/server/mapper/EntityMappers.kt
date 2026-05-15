@@ -262,13 +262,20 @@ private fun buildEscrowModuleConfig(
 
     // VCS — child collection. Marker override "vcs.settings" replaces base
     // children; otherwise base.vcsEntries is used.
+    //
+    // `externalRegistry` is per-component scalar — a sibling of the VCS roots,
+    // not a child entry. Emit `vcsSettings` whenever either is present so a
+    // component declared in DSL as `vcsSettings { externalRegistry = "..." }`
+    // with no VCS roots round-trips correctly (the Groovy resolver kept the
+    // VCSSettings instance with externalRegistry set and roots empty; v2 was
+    // silently dropping it).
     val vcsEntries =
         pickMarkerChildren(
             attribute = MarkerAttributes.VCS_SETTINGS,
             markerOverrides = markerOverrides,
             baseChildren = base.vcsEntries.toList(),
         ) { it.vcsEntries.toList() }
-    if (vcsEntries.isNotEmpty()) {
+    if (vcsEntries.isNotEmpty() || component.vcsExternalRegistry != null) {
         setField(config, "vcsSettings", vcsEntries.toVCSSettings(component.vcsExternalRegistry))
     }
 
