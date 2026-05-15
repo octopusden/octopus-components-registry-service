@@ -1179,3 +1179,25 @@ NON_ARCHIVED_TEST_COMPONENT {
         external = true
     }
 }
+
+// MIG-041 fixture: FAKE aggregator + sub-component for §6.3 aggregator-handling
+// integration test. Intentionally has NO `jira { ... }` block on either
+// component so it stays out of `getAllJiraComponentVersionRanges` and
+// doesn't drift the expected-data fixture maintained by RES-001.
+"TEST_AGGREGATOR_FAKE" {
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.test.aggregator"
+    artifactId = "test-aggregator-fake-stub"
+    components {
+        "TEST_AGGREGATOR_MEMBER" {
+            componentOwner = "user9"
+            parentComponent = "TEST_AGGREGATOR_FAKE"
+            groupId = "org.octopusden.octopus.test.aggregator"
+            artifactId = "test-aggregator-member"
+            vcsSettings {
+                repositoryType = GIT
+                vcsUrl = "ssh://git@gitlab:test/aggregator-member.git"
+            }
+        }
+    }
+}

@@ -44,6 +44,7 @@ import org.octopusden.octopus.components.registry.server.service.MigrationResult
 import org.octopusden.octopus.components.registry.server.service.MigrationStatus
 import org.octopusden.octopus.components.registry.server.service.ValidationResult
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
+import org.octopusden.octopus.escrow.configuration.model.EscrowModule
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
 import org.octopusden.octopus.escrow.model.Distribution
 import org.octopusden.octopus.escrow.model.VCSSettings
@@ -130,6 +131,16 @@ class ImportServiceImpl(
 
                 importModule(name, module.moduleConfigurations)
                 sourceRegistry.setComponentSource(name, "db")
+
+                // §6.3 Pass 3 for the single-component path: if the component
+                // declares a parentComponent, link it to (or create) the
+                // parent's aggregator group. The batch path handles this
+                // across the full DSL; here we only have the one component,
+                // so reverse-map just its parent.
+                val firstConfig = module.moduleConfigurations.firstOrNull()
+                firstConfig?.parentComponent?.takeIf { it.isNotBlank() }?.let { parentKey ->
+                    linkAggregatorGroups(fullConfig.escrowModules, mapOf(name to parentKey))
+                }
             }
             MigrationResult(
                 componentName = name,
@@ -266,6 +277,11 @@ class ImportServiceImpl(
                 LOG.warn("Failed to link parentComponent '{}' → '{}': {}", childKey, parentKey, e.message)
             }
         }
+
+        // §6.3 Pass 3: upsert component_groups rows and link component_group_id FKs.
+        // Runs after Pass 2 so all ComponentEntity rows are present and parentComponent FKs are resolved.
+        LOG.info("§6.3 Pass 3: linking aggregator groups for {} parent references", pendingParentByKey.size)
+        linkAggregatorGroups(allModules, pendingParentByKey)
 
         LOG.info(
             "Migration complete: total={}, migrated={}, failed={}, skipped={}",
@@ -1444,29 +1460,127 @@ class ImportServiceImpl(
     }
 
     // =========================================================================
+    // §6.3 Aggregator handling — Pass 3
+    // =========================================================================
+
+    /**
+     * Pass 3 (§6.3): create `component_groups` rows and set `component_group_id` FKs.
+     *
+     * Strategy: build a reverse map parentKey → [childKeys] from [pendingParentByKey], then
+     * for each aggregator parent:
+     *  1. Classify REAL vs FAKE via [isFakeAggregator] against the parent's first DSL config.
+     *  2. Upsert a [ComponentGroupEntity] (idempotent — re-runs skip existing rows).
+     *  3. Set `componentGroup` on every child component.
+     *  4. For a REAL aggregator: also set `componentGroup` on the parent itself.
+     */
+    private fun linkAggregatorGroups(
+        allModules: Map<String, EscrowModule>,
+        pendingParentByKey: Map<String, String>,
+    ) {
+        // Reverse the child→parent map to parent→[children]
+        val childrenByParent = mutableMapOf<String, MutableList<String>>()
+        for ((childKey, parentKey) in pendingParentByKey) {
+            childrenByParent.getOrPut(parentKey) { mutableListOf() }.add(childKey)
+        }
+
+        // Aggregate per-parent failures and log a single summary at the end
+        // instead of letting individual WARN lines hide a systemic issue. A
+        // migration step is a one-shot batch — silent partial-success is the
+        // wrong default. Callers that need stricter behaviour can inspect the
+        // summary log or wire this list into BatchMigrationResult later.
+        val failures = mutableListOf<Pair<String, String>>()
+        for ((parentKey, childKeys) in childrenByParent) {
+            try {
+                val parentModule = allModules[parentKey]
+                if (parentModule == null) {
+                    LOG.warn("§6.3 Pass 3: aggregator parent '{}' not found in DSL; skipping group creation", parentKey)
+                    continue
+                }
+                val parentFirstConfig = parentModule.moduleConfigurations.firstOrNull()
+                if (parentFirstConfig == null) {
+                    LOG.warn("§6.3 Pass 3: aggregator parent '{}' has no DSL configs; skipping", parentKey)
+                    continue
+                }
+                val fake = isFakeAggregator(parentFirstConfig)
+
+                // Upsert the group (idempotent)
+                val group = upsertComponentGroup(parentKey, fake)
+
+                // Link every sub-component to the group
+                for (childKey in childKeys) {
+                    val child = componentRepository.findByComponentKey(childKey)
+                    if (child == null) {
+                        LOG.warn("§6.3 Pass 3: child '{}' not found in DB; skipping group link", childKey)
+                        continue
+                    }
+                    if (child.componentGroup == null) {
+                        child.componentGroup = group
+                        componentRepository.save(child)
+                        LOG.debug("§6.3 Pass 3: linked child '{}' → group '{}'", childKey, parentKey)
+                    }
+                }
+
+                // For a REAL aggregator, also link the parent itself to its own group
+                if (!fake) {
+                    val parent = componentRepository.findByComponentKey(parentKey)
+                    if (parent != null && parent.componentGroup == null) {
+                        parent.componentGroup = group
+                        componentRepository.save(parent)
+                        LOG.debug("§6.3 Pass 3: linked REAL aggregator '{}' → its own group", parentKey)
+                    }
+                }
+
+                LOG.info(
+                    "§6.3 Pass 3: group '{}' (isFake={}) created; {} sub-component(s) linked",
+                    parentKey,
+                    fake,
+                    childKeys.size,
+                )
+            } catch (e: Exception) {
+                LOG.error("§6.3 Pass 3: failed to create group for aggregator '{}': {}", parentKey, e.message, e)
+                failures += parentKey to (e.message ?: e.javaClass.simpleName)
+            }
+        }
+        if (failures.isNotEmpty()) {
+            LOG.error(
+                "§6.3 Pass 3 finished with {} group-creation failure(s): {}",
+                failures.size,
+                failures.joinToString { "${it.first}=${it.second}" },
+            )
+        }
+    }
+
+    /** Upsert a [ComponentGroupEntity] by [groupKey]. Idempotent. */
+    private fun upsertComponentGroup(
+        groupKey: String,
+        isFake: Boolean,
+    ): ComponentGroupEntity {
+        val existing = componentGroupRepository.findByGroupKey(groupKey)
+        if (existing != null) return existing
+        return componentGroupRepository.save(ComponentGroupEntity(groupKey = groupKey, isFake = isFake))
+    }
+
+    // =========================================================================
     // §6.3 Aggregator detection helpers (per schema-spec.md §4.3)
     // =========================================================================
 
-    @Suppress("unused")
-    fun isFakeAggregator(cfg: EscrowModuleConfig): Boolean {
+    internal fun isFakeAggregator(cfg: EscrowModuleConfig): Boolean {
         val vcsUrl = cfg.vcsSettings?.versionControlSystemRoots?.firstOrNull()?.vcsPath
         val artifactId = cfg.artifactIdPattern ?: ""
         return vcsUrl.isNullOrBlank() || isFakeVcsUrl(vcsUrl) || isFakeArtifactId(artifactId)
     }
 
-    @Suppress("unused")
-    fun isFakeVcsUrl(url: String): Boolean =
+    internal fun isFakeVcsUrl(url: String): Boolean =
         "/fake/" in url ||
             "/dummy/" in url ||
             url.endsWith("fake.git") ||
             url.endsWith("dummy.git") ||
             url.endsWith("stub.git")
 
-    @Suppress("unused")
-    fun isFakeArtifactId(aid: String): Boolean {
+    internal fun isFakeArtifactId(aid: String): Boolean {
         val lower = aid.lowercase().trim()
-        if (lower in setOf("fake", "dummy", "stub")) return true
-        return Regex("(^|-)(fake|dummy|stub)(-|$|,)").containsMatchIn(lower)
+        if (lower in FAKE_ARTIFACT_ID_LITERALS) return true
+        return FAKE_ARTIFACT_ID_TOKEN.containsMatchIn(lower)
     }
 
     // =========================================================================
@@ -1541,5 +1655,15 @@ class ImportServiceImpl(
 
     companion object {
         private val LOG = LoggerFactory.getLogger(ImportServiceImpl::class.java)
+
+        /** Exact-string FAKE-aggregator artifactId markers. */
+        private val FAKE_ARTIFACT_ID_LITERALS: Set<String> = setOf("fake", "dummy", "stub")
+
+        /**
+         * Token-based FAKE-aggregator artifactId marker: matches `fake`/`dummy`/`stub`
+         * as a hyphen- or comma-delimited token (e.g. `aggregator-core-stub`,
+         * `dummy-tool`). Compiled once at class-init.
+         */
+        private val FAKE_ARTIFACT_ID_TOKEN: Regex = Regex("(^|-)(fake|dummy|stub)(-|$|,)")
     }
 }

@@ -14,6 +14,7 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentConfigu
 import org.octopusden.octopus.components.registry.server.mapper.ALL_VERSIONS
 import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
 import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
+import org.octopusden.octopus.components.registry.server.repository.ComponentGroupRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.LabelRepository
 import org.octopusden.octopus.components.registry.server.repository.SystemRepository
@@ -49,6 +50,9 @@ class MigrationIntegrationTest {
 
     @Autowired
     private lateinit var configurationRepository: ComponentConfigurationRepository
+
+    @Autowired
+    private lateinit var componentGroupRepository: ComponentGroupRepository
 
     @Autowired
     private lateinit var systemRepository: SystemRepository
@@ -429,6 +433,72 @@ class MigrationIntegrationTest {
             sameRangeRows.any { it.rowType == "BASE" },
             "Synthetic base row at '(,1.0.107)' must coexist with the RANGE_PRESENCE row " +
                 "(MIG-029 + Stream A). Found rowTypes: ${sameRangeRows.map { it.rowType }}",
+        )
+    }
+
+    // =========================================================================
+    // MIG-041: §6.3 aggregator handling — component_groups rows + is_fake + component_group_id FK
+    // =========================================================================
+
+    @Test
+    @Transactional // required: `ComponentEntity.componentGroup` is LAZY; without an
+    // active session, accessing it here would throw LazyInitializationException.
+    @DisplayName(
+        "MIG-041/§6.3: FAKE aggregator TEST_AGGREGATOR_FAKE — " +
+            "ComponentGroupEntity(is_fake=true) created; member's component_group_id is linked",
+    )
+    fun mig041_componentGroupsAndIsFakeFromImport() {
+        // ---- FAKE aggregator assertions ----
+        // TEST_AGGREGATOR_FAKE has artifactId = "test-aggregator-fake-stub" → isFakeArtifactId returns true.
+        // No vcsUrl is declared → isFakeAggregator returns true regardless.
+        val fakeGroup = componentGroupRepository.findByGroupKey("TEST_AGGREGATOR_FAKE")
+        assertNotNull(fakeGroup, "ComponentGroupEntity with groupKey='TEST_AGGREGATOR_FAKE' must be created by Pass 3")
+        assertTrue(fakeGroup!!.isFake, "TEST_AGGREGATOR_FAKE group must have isFake=true (artifactId contains 'stub')")
+
+        // The member sub-component must have its component_group_id set
+        val member = componentRepository.findByComponentKey("TEST_AGGREGATOR_MEMBER")
+        assertNotNull(member, "TEST_AGGREGATOR_MEMBER must be present in the DB after migration")
+        assertNotNull(
+            member!!.componentGroup,
+            "TEST_AGGREGATOR_MEMBER must have componentGroup set (component_group_id FK)",
+        )
+        assertEquals(
+            fakeGroup.id,
+            member.componentGroup!!.id,
+            "TEST_AGGREGATOR_MEMBER.componentGroup must reference the TEST_AGGREGATOR_FAKE group",
+        )
+
+        // ---- REAL aggregator assertions ----
+        // TESTONE has vcsUrl + non-stub artifactId → isFakeAggregator returns false.
+        // versions-api sub-component declares parentComponent = "TESTONE".
+        val realGroup = componentGroupRepository.findByGroupKey("TESTONE")
+        assertNotNull(realGroup, "ComponentGroupEntity with groupKey='TESTONE' must be created for REAL aggregator")
+        assertFalse(realGroup!!.isFake, "TESTONE group must have isFake=false")
+
+        // REAL aggregator itself must be linked to its own group
+        val testone = componentRepository.findByComponentKey("TESTONE")
+        assertNotNull(testone, "TESTONE must be in DB")
+        assertNotNull(
+            testone!!.componentGroup,
+            "REAL aggregator TESTONE must have its own componentGroup set",
+        )
+        assertEquals(
+            realGroup.id,
+            testone.componentGroup!!.id,
+            "TESTONE.componentGroup must reference its own group",
+        )
+
+        // versions-api sub-component must be linked to the TESTONE group
+        val versionsApi = componentRepository.findByComponentKey("versions-api")
+        assertNotNull(versionsApi, "versions-api sub-component must be in DB")
+        assertNotNull(
+            versionsApi!!.componentGroup,
+            "versions-api must have componentGroup set",
+        )
+        assertEquals(
+            realGroup.id,
+            versionsApi.componentGroup!!.id,
+            "versions-api.componentGroup must reference the TESTONE group",
         )
     }
 
