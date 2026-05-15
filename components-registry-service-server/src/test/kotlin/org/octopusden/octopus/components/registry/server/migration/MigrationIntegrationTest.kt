@@ -85,7 +85,7 @@ class MigrationIntegrationTest {
         // The component has only explicit version ranges — no ALL_VERSIONS block in DSL.
         // The base row must be marked synthetic.
         val baseRow: ComponentConfigurationEntity? =
-            configurationRepository.findByComponentIdAndRowType(component.id!!, "BASE")
+            configurationRepository.findBaseByComponentId(component.id!!)
         assertNotNull(baseRow, "Must have a base row (overridden_attribute IS NULL)")
         assertTrue(
             baseRow!!.isSyntheticBase,
@@ -157,7 +157,7 @@ class MigrationIntegrationTest {
         assertNotNull(component, "TESTONE must be migrated")
 
         val baseRow =
-            configurationRepository.findByComponentIdAndRowType(component!!.id!!, "BASE")
+            configurationRepository.findBaseByComponentId(component!!.id!!)
         assertNotNull(baseRow, "TESTONE must have a base row")
 
         // TESTONE distribution.GAV = "org.octopusden.octopus.test:versions-api:jar"
@@ -269,7 +269,7 @@ class MigrationIntegrationTest {
         assertNotNull(component, "TEST_COMPONENT must be migrated")
 
         val baseRow =
-            configurationRepository.findByComponentIdAndRowType(component!!.id!!, "BASE")
+            configurationRepository.findBaseByComponentId(component!!.id!!)
         assertNotNull(baseRow, "TEST_COMPONENT must have a base row")
 
         // TEST_COMPONENT has single vcsUrl = "ssh://hg@mercurial/test-component"
@@ -293,7 +293,7 @@ class MigrationIntegrationTest {
         assertNotNull(component, "TEST_COMPONENT2_WITH_SEVERAL_ROOTS must be migrated")
 
         val baseRow =
-            configurationRepository.findByComponentIdAndRowType(component!!.id!!, "BASE")
+            configurationRepository.findBaseByComponentId(component!!.id!!)
         assertNotNull(baseRow, "TEST_COMPONENT2_WITH_SEVERAL_ROOTS must have a base row")
 
         // Has vcsSettings { cvs { ... }; mercurial { ... } } → two named entries

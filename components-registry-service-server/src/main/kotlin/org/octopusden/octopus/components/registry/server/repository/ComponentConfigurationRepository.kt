@@ -10,14 +10,17 @@ interface ComponentConfigurationRepository : JpaRepository<ComponentConfiguratio
     fun findByComponentId(componentId: UUID): List<ComponentConfigurationEntity>
 
     /**
-     * Single row for a component with the given `row_type`. Pass `"BASE"` to
-     * locate the base row (enforced unique by `uq_component_configurations_one_base`
-     * partial index). Other row types may match multiple rows; callers that
-     * pass `"RANGE_PRESENCE"`/`"SCALAR_OVERRIDE"`/`"MARKER"` should expect
-     * `null` when no such row exists and must handle the not-unique case for
-     * those non-BASE shapes via a different finder if they need to enumerate.
+     * Single BASE row for a component. Uniqueness is enforced by the partial
+     * unique index `uq_component_configurations_one_base WHERE row_type = 'BASE'`.
+     * Non-BASE row types may match multiple rows per component — callers that
+     * need to enumerate them should use `findByComponentId` and filter, not a
+     * derived single-result finder.
      */
-    fun findByComponentIdAndRowType(componentId: UUID, rowType: String): ComponentConfigurationEntity?
+    @org.springframework.data.jpa.repository.Query(
+        "SELECT c FROM ComponentConfigurationEntity c " +
+            "WHERE c.component.id = :componentId AND c.rowType = 'BASE'",
+    )
+    fun findBaseByComponentId(componentId: UUID): ComponentConfigurationEntity?
 
     /** Exact match used by service-layer overlap validation. */
     fun findByComponentIdAndVersionRangeAndOverriddenAttribute(

@@ -119,7 +119,6 @@ class ComponentConfigurationEntity(
     @Column(name = "escrow_build_task", columnDefinition = "TEXT")
     var escrowBuildTask: String? = null,
 
-
     // --- ESCROW aspect ---
     @Column(name = "escrow_provided_dependencies", columnDefinition = "TEXT")
     var escrowProvidedDependencies: String? = null,
