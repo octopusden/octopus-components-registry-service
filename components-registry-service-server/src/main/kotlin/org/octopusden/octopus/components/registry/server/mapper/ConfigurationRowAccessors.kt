@@ -50,6 +50,15 @@ internal val SCALAR_ATTRIBUTE_PATHS: Set<String> =
  * Read the single typed column corresponding to `overriddenAttribute` on a
  * SCALAR_OVERRIDE row. Returns null if the path is unknown or the column is
  * NULL.
+ *
+ * **Asymmetry with the resolver:** `EntityMappers.applyScalarOverride` uses
+ * `else -> Unit` for unknown paths — forward-compat tolerance on the read
+ * side, in case a new column is added to the entity ahead of the resolver
+ * being aware of it. `applyScalarValue` below takes the opposite stance:
+ * unknown paths throw, so a write of an unknown attribute is rejected at
+ * the service boundary rather than silently no-oping. Asymmetry is
+ * intentional — the editor must not produce data the resolver cannot
+ * subsequently interpret.
  */
 @Suppress("CyclomaticComplexMethod", "LongMethod")
 internal fun ComponentConfigurationEntity.extractScalarValue(): Any? =

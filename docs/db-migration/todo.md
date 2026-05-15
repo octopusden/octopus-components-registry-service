@@ -38,6 +38,7 @@ _(будет пополняться по мере реализации)_
 - [ ] Enable Flyway on all environments and remove `columnDefinition = "TEXT"` workarounds from entity classes. See [TD-002](tech-debt/002-enable-flyway-remove-columnDefinition-workarounds.md).
 - [ ] **OpenAPI v4 spec generation + share with Portal SPA** — mirror of Portal `TD-002`; closes the API/UI drift gap that came with the separate-repo decision (ADR-012). See [TD-003](tech-debt/003-openapi-v4-spec-generation.md).
 - [ ] **Persist async migration job state across pod restarts.** See `MIG-028` in [requirements-migration.md](requirements-migration.md). Currently `MigrationJobServiceImpl` keeps state in `AtomicReference` (single-pod, lost on restart).
+- [ ] **Field-override partial-range-overlap rejection.** `ComponentManagementServiceImpl.validateRangeSyntax` (Phase 4) currently only parses the range and relies on the DB UNIQUE `(component_id, version_range, overridden_attribute)` to block equal ranges. Per `schema-spec.md §7` the service should additionally reject *partial* overlap on the same `(component_id, overriddenAttribute)` while still permitting strict containment and disjoint ranges. Deferred from Phase 4 because the version-range library lacks a public range-intersection API; needs a small ad-hoc partial-overlap check (parse both ranges, sample boundaries, reject if neither contains the other). Land in Phase 5 or 6.
 
 ## Cutover (PRD Phase 5)
 

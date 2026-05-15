@@ -130,20 +130,24 @@ class ComponentManagementServiceImpl(
                 distributionExternal = request.distributionExternal,
             )
 
-        // Per-component child collections
+        // Per-component child collections (cascade = ALL on these — flushed with the parent)
         addArtifactIds(entity, request.artifactIds)
         addSecurityGroups(entity, request.securityGroups.map { it.groupType to it.groupName })
         addTeamcityProjects(entity, request.teamcityProjects.map { it.projectId })
         addDocLinks(entity, request.docs.map { it.docComponentKey to it.majorVersion })
-        replaceLabels(entity, request.labels)
-        replaceSystems(entity, request.systems)
 
-        // Base configuration row
+        // Base configuration row (cascade = ALL — flushed with the parent)
         val baseConfig = ComponentConfigurationEntity(component = entity, versionRange = ALL_VERSIONS)
         applyBaseConfigurationCreate(baseConfig, request.baseConfiguration)
         entity.configurations.add(baseConfig)
 
         val saved = componentRepository.save(entity)
+
+        // M:N junctions (no cascade — see ComponentEntity kdoc convention) must be
+        // persisted via their own repositories AFTER the parent has an assigned id.
+        syncLabels(saved.id!!, request.labels)
+        syncSystems(saved.id!!, request.systems)
+        request.baseConfiguration?.requiredTools?.let { syncRequiredTools(baseConfig.id!!, it) }
 
         publishAuditEvent(
             action = "CREATE",
@@ -227,8 +231,8 @@ class ComponentManagementServiceImpl(
             if (!fieldConfigService.isHidden("component.distributionExternal")) entity.distributionExternal = it
         }
 
-        request.systems?.let { replaceSystems(entity, it) }
-        request.labels?.let { replaceLabels(entity, it) }
+        // Junctions are synced via their repositories below — after the parent save —
+        // because @OneToMany on `labelJunctions` / `systemJunctions` has no cascade.
 
         // Parent (rename to null is not expressible by JSON Merge Patch; null parent → use clearGroup style if needed later)
         request.parentComponentName?.let { parentKey ->
@@ -262,18 +266,28 @@ class ComponentManagementServiceImpl(
             addDocLinks(entity, it.map { req -> req.docComponentKey to req.majorVersion })
         }
 
-        // Base configuration patch
-        request.baseConfiguration?.let { patch ->
-            val base =
-                entity.configurations.firstOrNull { it.overriddenAttribute == null }
-                    ?: ComponentConfigurationEntity(component = entity, versionRange = ALL_VERSIONS).also {
-                        entity.configurations.add(it)
-                    }
-            applyBaseConfigurationPatch(base, patch)
-        }
+        // Base configuration patch (scalars + cascaded child collections only)
+        val baseConfigForToolsSync =
+            request.baseConfiguration?.let { patch ->
+                val base =
+                    entity.configurations.firstOrNull { it.overriddenAttribute == null }
+                        ?: ComponentConfigurationEntity(component = entity, versionRange = ALL_VERSIONS).also {
+                            entity.configurations.add(it)
+                        }
+                applyBaseConfigurationPatch(base, patch)
+                base.takeIf { patch.requiredTools != null }
+            }
 
         entity.updatedAt = Instant.now()
         val saved = componentRepository.saveAndFlush(entity)
+
+        // Junctions — synced via their repositories after the parent flush so the
+        // assigned ids (for newly-created rows) are visible.
+        request.systems?.let { syncSystems(saved.id!!, it) }
+        request.labels?.let { syncLabels(saved.id!!, it) }
+        if (baseConfigForToolsSync != null) {
+            syncRequiredTools(baseConfigForToolsSync.id!!, request.baseConfiguration!!.requiredTools!!)
+        }
 
         if (isRename) sourceRegistry.renameComponent(oldKey, saved.componentKey)
 
@@ -341,32 +355,35 @@ class ComponentManagementServiceImpl(
                 overriddenAttribute = request.overriddenAttribute,
             )
 
-        when {
-            request.overriddenAttribute in MarkerAttributes.ALL -> {
-                require(request.value == null) {
-                    "Marker override '${request.overriddenAttribute}' must not carry a scalar value"
+        val pendingTools: List<String>? =
+            when {
+                request.overriddenAttribute in MarkerAttributes.ALL -> {
+                    require(request.value == null) {
+                        "Marker override '${request.overriddenAttribute}' must not carry a scalar value"
+                    }
+                    requireNotNull(request.markerChildren) {
+                        "Marker override '${request.overriddenAttribute}' requires markerChildren payload"
+                    }
+                    applyMarkerChildren(row, request.overriddenAttribute, request.markerChildren)
                 }
-                requireNotNull(request.markerChildren) {
-                    "Marker override '${request.overriddenAttribute}' requires markerChildren payload"
-                }
-                applyMarkerChildren(row, request.overriddenAttribute, request.markerChildren)
-            }
 
-            request.overriddenAttribute in SCALAR_ATTRIBUTE_PATHS -> {
-                require(request.markerChildren == null) {
-                    "Scalar override '${request.overriddenAttribute}' must not carry markerChildren"
+                request.overriddenAttribute in SCALAR_ATTRIBUTE_PATHS -> {
+                    require(request.markerChildren == null) {
+                        "Scalar override '${request.overriddenAttribute}' must not carry markerChildren"
+                    }
+                    row.applyScalarValue(request.overriddenAttribute, request.value)
+                    null
                 }
-                row.applyScalarValue(request.overriddenAttribute, request.value)
-            }
 
-            else -> throw IllegalArgumentException(
-                "Unknown overriddenAttribute: '${request.overriddenAttribute}'. " +
-                    "Must be a scalar aspect.field path or one of ${MarkerAttributes.ALL}",
-            )
-        }
+                else -> throw IllegalArgumentException(
+                    "Unknown overriddenAttribute: '${request.overriddenAttribute}'. " +
+                        "Must be a scalar aspect.field path or one of ${MarkerAttributes.ALL}",
+                )
+            }
 
         component.configurations.add(row)
         val saved = configurationRepository.save(row)
+        if (pendingTools != null) syncRequiredTools(saved.id!!, pendingTools)
         return saved.toFieldOverrideResponse()
     }
 
@@ -392,19 +409,22 @@ class ComponentManagementServiceImpl(
             row.versionRange = it
         }
 
-        when {
-            row.overriddenAttribute in MarkerAttributes.ALL -> {
-                require(request.value == null) { "Marker override does not accept a scalar value" }
-                request.markerChildren?.let { applyMarkerChildren(row, row.overriddenAttribute!!, it) }
-            }
+        val pendingTools: List<String>? =
+            when {
+                row.overriddenAttribute in MarkerAttributes.ALL -> {
+                    require(request.value == null) { "Marker override does not accept a scalar value" }
+                    request.markerChildren?.let { applyMarkerChildren(row, row.overriddenAttribute!!, it) }
+                }
 
-            else -> {
-                require(request.markerChildren == null) { "Scalar override does not accept markerChildren" }
-                request.value?.let { row.applyScalarValue(row.overriddenAttribute!!, it) }
+                else -> {
+                    require(request.markerChildren == null) { "Scalar override does not accept markerChildren" }
+                    request.value?.let { row.applyScalarValue(row.overriddenAttribute!!, it) }
+                    null
+                }
             }
-        }
 
         val saved = configurationRepository.save(row)
+        if (pendingTools != null) syncRequiredTools(saved.id!!, pendingTools)
         return saved.toFieldOverrideResponse()
     }
 
@@ -501,34 +521,56 @@ class ComponentManagementServiceImpl(
         }
     }
 
-    private fun replaceLabels(
-        component: ComponentEntity,
-        labels: Set<String>,
+    /**
+     * Replace the `component_labels` rows for [componentId] with exactly the
+     * labels in [desired]. Junctions have no JPA cascade — they must be written
+     * through their own repository (see `ComponentEntity` kdoc convention).
+     * Caller must invoke this AFTER `componentRepository.save(...)` has
+     * assigned an id; passing a transient component leads to an FK violation.
+     */
+    private fun syncLabels(
+        componentId: UUID,
+        desired: Set<String>,
     ) {
-        component.labelJunctions.clear()
-        labels.distinct().forEach { code ->
+        val existing = componentLabelRepository.findByComponentId(componentId)
+        if (existing.isNotEmpty()) componentLabelRepository.deleteAllInBatch(existing)
+        desired.forEach { code ->
             ensureLabelExists(code)
-            component.labelJunctions.add(
-                ComponentLabelEntity(
-                    componentId = component.id ?: UUID(0, 0),
-                    labelCode = code,
-                ),
+            componentLabelRepository.save(
+                ComponentLabelEntity(componentId = componentId, labelCode = code),
             )
         }
     }
 
-    private fun replaceSystems(
-        component: ComponentEntity,
-        systems: Set<String>,
+    /** See [syncLabels]; same cascade-free convention applies. */
+    private fun syncSystems(
+        componentId: UUID,
+        desired: Set<String>,
     ) {
-        component.systemJunctions.clear()
-        systems.distinct().forEach { code ->
+        val existing = componentSystemRepository.findByComponentId(componentId)
+        if (existing.isNotEmpty()) componentSystemRepository.deleteAllInBatch(existing)
+        desired.forEach { code ->
             ensureSystemExists(code)
-            component.systemJunctions.add(
-                ComponentSystemEntity(
-                    componentId = component.id ?: UUID(0, 0),
-                    systemCode = code,
-                ),
+            componentSystemRepository.save(
+                ComponentSystemEntity(componentId = componentId, systemCode = code),
+            )
+        }
+    }
+
+    /**
+     * Replace the `component_required_tools` rows for [configId] with exactly
+     * [desired]. Same cascade-free convention as labels/systems — the parent
+     * `component_configurations` row must be flushed first.
+     */
+    private fun syncRequiredTools(
+        configId: UUID,
+        desired: List<String>,
+    ) {
+        val existing = componentRequiredToolRepository.findByComponentConfigurationId(configId)
+        if (existing.isNotEmpty()) componentRequiredToolRepository.deleteAllInBatch(existing)
+        desired.distinct().forEach { tool ->
+            componentRequiredToolRepository.save(
+                ComponentRequiredToolEntity(componentConfigurationId = configId, toolName = tool),
             )
         }
     }
@@ -603,7 +645,8 @@ class ComponentManagementServiceImpl(
         request.fileUrlArtifacts?.let { replaceFileUrlArtifacts(config, it) }
         request.dockerImages?.let { replaceDockerImages(config, it) }
         request.packages?.let { replacePackages(config, it) }
-        request.requiredTools?.let { replaceRequiredTools(config, it) }
+        // requiredTools is a non-cascaded M:N junction — caller syncs via syncRequiredTools
+        // after the configuration row's id has been assigned (post parent flush).
     }
 
     /**
@@ -654,7 +697,7 @@ class ComponentManagementServiceImpl(
         patch.fileUrlArtifacts?.let { replaceFileUrlArtifacts(config, it) }
         patch.dockerImages?.let { replaceDockerImages(config, it) }
         patch.packages?.let { replacePackages(config, it) }
-        patch.requiredTools?.let { replaceRequiredTools(config, it) }
+        // requiredTools: caller syncs via syncRequiredTools after flush — see updateComponent.
     }
 
     // ============================================================
@@ -753,58 +796,53 @@ class ComponentManagementServiceImpl(
         }
     }
 
-    private fun replaceRequiredTools(
-        config: ComponentConfigurationEntity,
-        toolNames: List<String>,
-    ) {
-        config.requiredToolJunctions.clear()
-        toolNames.distinct().forEach { tool ->
-            config.requiredToolJunctions.add(
-                ComponentRequiredToolEntity(
-                    componentConfigurationId = config.id ?: UUID(0, 0),
-                    toolName = tool,
-                ),
-            )
-        }
-    }
-
     /**
      * Apply a marker children payload to a marker row. Validates that the
      * payload's populated list matches the marker name on the row.
+     *
+     * Returns the desired `requiredTools` list when the marker is
+     * `build.requiredTools` (caller syncs the junction via
+     * [syncRequiredTools] after the row's id is assigned), else null.
+     * Cascaded child families (vcs, maven, fileUrl, docker, packages) are
+     * mutated on `row` in place and flushed with the row.
      */
     private fun applyMarkerChildren(
         row: ComponentConfigurationEntity,
         markerName: String,
         payload: MarkerChildrenPayload,
-    ) {
+    ): List<String>? =
         when (markerName) {
             MarkerAttributes.VCS_SETTINGS -> {
                 requireNotNull(payload.vcsEntries) { "Marker '$markerName' requires vcsEntries payload" }
                 replaceVcsEntries(row, payload.vcsEntries)
+                null
             }
             MarkerAttributes.DISTRIBUTION_MAVEN -> {
                 requireNotNull(payload.mavenArtifacts) { "Marker '$markerName' requires mavenArtifacts payload" }
                 replaceMavenArtifacts(row, payload.mavenArtifacts)
+                null
             }
             MarkerAttributes.DISTRIBUTION_FILE_URL -> {
                 requireNotNull(payload.fileUrlArtifacts) { "Marker '$markerName' requires fileUrlArtifacts payload" }
                 replaceFileUrlArtifacts(row, payload.fileUrlArtifacts)
+                null
             }
             MarkerAttributes.DISTRIBUTION_DOCKER -> {
                 requireNotNull(payload.dockerImages) { "Marker '$markerName' requires dockerImages payload" }
                 replaceDockerImages(row, payload.dockerImages)
+                null
             }
             MarkerAttributes.DISTRIBUTION_PACKAGES -> {
                 requireNotNull(payload.packages) { "Marker '$markerName' requires packages payload" }
                 replacePackages(row, payload.packages)
+                null
             }
             MarkerAttributes.BUILD_REQUIRED_TOOLS -> {
                 requireNotNull(payload.requiredTools) { "Marker '$markerName' requires requiredTools payload" }
-                replaceRequiredTools(row, payload.requiredTools)
+                payload.requiredTools
             }
             else -> error("Unknown marker '$markerName' — caller did not validate")
         }
-    }
 
     // ============================================================
     // Helpers — query specification, validation, audit
@@ -821,7 +859,8 @@ class ComponentManagementServiceImpl(
      * detection across other override rows is intentionally NOT enforced here —
      * the DB UNIQUE on (component_id, version_range, overridden_attribute)
      * blocks equal ranges; strict containment and disjoint ranges are allowed
-     * per schema-spec.md §7 (transitional). See `todo.md` for the follow-up.
+     * per schema-spec.md §7 (transitional). See [`todo.md`](../../../../../../../docs/db-migration/todo.md)
+     * entry "field-override partial-range-overlap rejection" for the follow-up.
      */
     private fun validateRangeSyntax(range: String) {
         try {
@@ -901,6 +940,8 @@ class ComponentManagementServiceImpl(
             "vcsExternalRegistry" to entity.vcsExternalRegistry,
             "distributionExplicit" to entity.distributionExplicit,
             "distributionExternal" to entity.distributionExternal,
+            "labels" to entity.labelJunctions.map { it.labelCode }.toSet(),
+            "systems" to entity.systemJunctions.map { it.systemCode }.toSet(),
         )
 
     private fun publishAuditEvent(

@@ -19,7 +19,7 @@ import java.util.UUID
 /**
  * Schema v2 — top-level component entity.
  *
- * **Entity conventions for the v2 package (apply to all classes under `entity.v2`):**
+ * **Entity conventions (apply to all classes under the `entity` package):**
  *
  *   - **Cascade default:** `cascade = [CascadeType.ALL]`, `orphanRemoval = true`
  *     on `@OneToMany` collections that are parent-owned (e.g., child rows of
