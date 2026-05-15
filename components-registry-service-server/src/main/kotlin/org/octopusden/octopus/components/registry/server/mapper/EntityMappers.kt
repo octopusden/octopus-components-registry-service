@@ -411,6 +411,7 @@ private class ComponentConfigurationView {
             "build.systemProperties" -> override.systemProperties?.let { systemProperties = it }
             "build.buildTasks" -> override.buildTasks?.let { buildTasks = it }
 
+            "escrow.buildTask" -> override.escrowBuildTask?.let { escrowBuildTask = it }
             "escrow.providedDependencies" -> override.escrowProvidedDependencies?.let { escrowProvidedDependencies = it }
             "escrow.reusable" -> override.escrowReusable?.let { escrowReusable = it }
             "escrow.generation" -> override.escrowGeneration?.let { escrowGeneration = it }

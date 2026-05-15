@@ -761,7 +761,6 @@ class ImportServiceImpl(
         cfg: EscrowModuleConfig,
     ) {
         val systemStr = cfg.system ?: return
-        var order = 0
         for (code in systemStr.split(",").map { it.trim() }.filter { it.isNotEmpty() }) {
             upsertSystem(code) // ensure dictionary exists
             val junction =
@@ -770,7 +769,6 @@ class ImportServiceImpl(
                     systemCode = code,
                 )
             componentSystemRepository.save(junction)
-            order++
         }
     }
 
@@ -1220,6 +1218,7 @@ class ImportServiceImpl(
         diffScalar("build.systemProperties", base.systemProperties, override.systemProperties)
         diffScalar("build.buildTasks", base.buildTasks, override.buildTasks)
 
+        diffScalar("escrow.buildTask", base.escrowBuildTask, override.escrowBuildTask)
         diffScalar("escrow.providedDependencies", base.escrowProvidedDependencies, override.escrowProvidedDependencies)
         if (override.escrowReusable != null && override.escrowReusable != base.escrowReusable) {
             diffs["escrow.reusable"] = override.escrowReusable as Any
@@ -1263,6 +1262,7 @@ class ImportServiceImpl(
             "build.projectVersion" -> row.projectVersion = value.toString()
             "build.systemProperties" -> row.systemProperties = value.toString()
             "build.buildTasks" -> row.buildTasks = value.toString()
+            "escrow.buildTask" -> row.escrowBuildTask = value.toString()
             "escrow.providedDependencies" -> row.escrowProvidedDependencies = value.toString()
             "escrow.reusable" -> row.escrowReusable = value as? Boolean ?: value.toString().toBooleanStrictOrNull()
             "escrow.generation" -> row.escrowGeneration = value.toString()
