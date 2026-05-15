@@ -15,6 +15,8 @@ interface ComponentRepository :
 
     fun findByComponentKeyAndArchivedFalse(componentKey: String): ComponentEntity?
 
+    fun findByArchivedFalse(): List<ComponentEntity>
+
     fun existsByComponentKey(componentKey: String): Boolean
 
     @Query(

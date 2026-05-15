@@ -2,8 +2,11 @@ package org.octopusden.octopus.components.registry.server.teamcity
 
 import mu.KotlinLogging
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
+import org.octopusden.octopus.components.registry.server.entity.ComponentTeamcityProjectEntity
 import org.octopusden.octopus.components.registry.server.event.AuditEvent
+import org.octopusden.octopus.components.registry.server.mapper.composeTeamcityProjectUrl
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
+import org.octopusden.octopus.components.registry.server.repository.ComponentTeamcityProjectRepository
 import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
@@ -19,8 +22,12 @@ import java.util.UUID
  *    that carries a `COMPONENT_NAME` parameter (any value), then group the
  *    response client-side by the parameter value.
  * 3. For each component:
- *      - 0 matches → leave nulls, count `skippedNoMatch`.
- *      - 1 match with non-blank webUrl → upsert id+url if changed; count
+ *      - 0 matches → leave `component_teamcity_projects` rows untouched if any
+ *        exist (the value was operator-curated) but for components with no rows
+ *        already, count `skippedNoMatch`. To clear a curated assignment the
+ *        operator deletes the row via the v4 API.
+ *      - 1 match with non-blank webUrl → upsert one row in
+ *        `component_teamcity_projects` with the matched project id; count
  *        `updated` or `unchanged`.
  *      - 1 match with blank webUrl → treat as no-match (cannot link).
  *      - 2+ matches → CDRelease tie-break:
@@ -33,9 +40,18 @@ import java.util.UUID
  *        Manual override remains the escape hatch for rows that still skip.
  *        TODO: properly support multiple TC projects per component (DTO/UI work).
  *
- * Idempotent: only writes when `id` or `url` actually changes. Audit log
- * emitted via existing [AuditEvent] flow when fields change so admins can
- * trace the source of writes.
+ * Schema v2: the per-component TC pointer is now a child table
+ * (`component_teamcity_projects`) rather than a pair of scalar columns on
+ * `components`. TC sync writes exactly one row per matched component (the
+ * `sortOrder = 0` slot). Multi-project support is still future work; for
+ * now sync collapses to one row to preserve v1–v3 wire compatibility.
+ *
+ * Idempotent: only writes when the matched project id actually changes. Audit
+ * log emitted via existing [AuditEvent] flow when fields change so admins can
+ * trace the source of writes. Audit field names — `teamcityProjectId` and
+ * `teamcityProjectUrl` — are kept on the wire even though the underlying
+ * `components` columns are gone; consumers (Portal audit timeline,
+ * downstream log indexers) still key off those names.
  *
  * Error handling: a fetcher failure (TC unreachable, auth refused, malformed
  * response) propagates out of [resync] — for the admin endpoint that surfaces
@@ -46,6 +62,7 @@ import java.util.UUID
 @Service
 class TeamcitySyncService(
     private val componentRepository: ComponentRepository,
+    private val componentTeamcityProjectRepository: ComponentTeamcityProjectRepository,
     private val tcProjectFetcher: TcProjectFetcher,
     private val applicationEventPublisher: ApplicationEventPublisher,
     private val currentUserResolver: CurrentUserResolver,
@@ -77,10 +94,10 @@ class TeamcitySyncService(
         val componentsByName =
             components
                 .filter { it.id != null }
-                .groupBy { it.name }
-                .mapValues { (name, group) ->
+                .groupBy { it.componentKey }
+                .mapValues { (key, group) ->
                     if (group.size > 1) {
-                        log.warn { "TC sync: duplicate component name '$name' in non-archived set; only first will be synced" }
+                        log.warn { "TC sync: duplicate componentKey '$key' in non-archived set; only first will be synced" }
                     }
                     group.first().id!!
                 }
@@ -156,7 +173,7 @@ class TeamcitySyncService(
                             // so the result KDoc invariant "sub-counter of updated+unchanged"
                             // holds.
                             log.warn {
-                                "TC sync: component '${component.name}' (id=$componentId) " +
+                                "TC sync: component '${component.componentKey}' (id=$componentId) " +
                                     "matched TC project '${pick.id}' but webUrl " +
                                     "'${pick.webUrl}' is blank or not http/https; " +
                                     "treating as no-match."
@@ -173,7 +190,7 @@ class TeamcitySyncService(
                 // Per-component error: log + count, keep processing the rest.
                 // A top-level TC client failure short-circuits earlier and
                 // propagates out.
-                val msg = "Failed to sync component '${component.name}' (id=$componentId): ${e.message}"
+                val msg = "Failed to sync component '${component.componentKey}' (id=$componentId): ${e.message}"
                 log.error(e) { msg }
                 errors.add(msg)
             }
@@ -219,9 +236,9 @@ class TeamcitySyncService(
         val withCdRelease = candidates.filter { it.hasCdReleaseBuild }
         if (withCdRelease.isEmpty()) {
             log.warn {
-                "TC sync: ambiguous match for component '${component.name}' " +
+                "TC sync: ambiguous match for component '${component.componentKey}' " +
                     "(id=$componentId): ${candidates.size} TC projects share " +
-                    "COMPONENT_NAME=${component.name} but none has a CDRelease build " +
+                    "COMPONENT_NAME=${component.componentKey} but none has a CDRelease build " +
                     "(${candidates.joinToString { it.id }}) — skipping."
             }
             return null
@@ -234,16 +251,16 @@ class TeamcitySyncService(
         val pick = withCdRelease.minByOrNull { it.id }!!
         if (withCdRelease.size == 1) {
             log.info {
-                "TC sync: ambiguous match for component '${component.name}' " +
+                "TC sync: ambiguous match for component '${component.componentKey}' " +
                     "(id=$componentId): ${candidates.size} TC projects share " +
-                    "COMPONENT_NAME=${component.name}, exactly one has a CDRelease build " +
+                    "COMPONENT_NAME=${component.componentKey}, exactly one has a CDRelease build " +
                     "(${pick.id}); auto-picking it."
             }
         } else {
             log.warn {
-                "TC sync: ambiguous match for component '${component.name}' " +
+                "TC sync: ambiguous match for component '${component.componentKey}' " +
                     "(id=$componentId): ${candidates.size} TC projects share " +
-                    "COMPONENT_NAME=${component.name}, ${withCdRelease.size} have a CDRelease build " +
+                    "COMPONENT_NAME=${component.componentKey}, ${withCdRelease.size} have a CDRelease build " +
                     "(${withCdRelease.joinToString { it.id }}); auto-picking '${pick.id}' " +
                     "(lexicographically smallest) — TC cleanup recommended."
             }
@@ -252,30 +269,40 @@ class TeamcitySyncService(
     }
 
     /**
-     * Write the match if it differs from current state. Returns true when
-     * either column actually changed (drives the `updated` counter and the
-     * audit-log emission).
+     * Write the match if it differs from current state. Returns true when the
+     * `(component_teamcity_projects)` row set actually changed (drives the
+     * `updated` counter and the audit-log emission).
+     *
+     * Schema v2: one row per component, slot `sortOrder = 0`. Existing rows
+     * (if any) are wiped via `deleteAllInBatch` and a fresh row is inserted —
+     * the table has no UPDATE-in-place semantic and `findByComponentId` is
+     * the only key handle (composite-on-`(component_id, project_id)` is
+     * theoretical; the schema's UNIQUE here is per-component).
      */
     private fun applyMatch(
         component: ComponentEntity,
         match: TcProject,
         changedBy: String,
     ): Boolean {
-        val oldId = component.teamcityProjectId
-        val oldUrl = component.teamcityProjectUrl
+        val componentId = component.id!!
+        val existing = componentTeamcityProjectRepository.findByComponentId(componentId)
+        val oldId = existing.minByOrNull { it.sortOrder }?.projectId
+        val oldUrl = oldId?.let { composeTeamcityProjectUrl(teamcityProperties.baseUrl, it) }
         val newId = match.id
-        val newUrl = match.webUrl
+        val newUrl = composeTeamcityProjectUrl(teamcityProperties.baseUrl, newId)
 
-        if (oldId == newId && oldUrl == newUrl) {
+        if (oldId == newId) {
             return false
         }
 
-        component.teamcityProjectId = newId
-        component.teamcityProjectUrl = newUrl
-        // Save through the component repository to ensure the @Version
-        // optimistic-locking column is bumped and any change-tracking
-        // listeners fire as they would on a regular PATCH write.
-        componentRepository.save(component)
+        if (existing.isNotEmpty()) componentTeamcityProjectRepository.deleteAllInBatch(existing)
+        componentTeamcityProjectRepository.save(
+            ComponentTeamcityProjectEntity(
+                component = component,
+                projectId = newId,
+                sortOrder = 0,
+            ),
+        )
 
         applicationEventPublisher.publishEvent(
             AuditEvent(
