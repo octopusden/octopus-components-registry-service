@@ -1,148 +1,66 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
 import org.octopusden.octopus.components.registry.server.entity.RegistryConfigEntity
-import org.octopusden.octopus.components.registry.server.mapper.toComponentEntity
-import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentSourceRepository
 import org.octopusden.octopus.components.registry.server.repository.RegistryConfigRepository
 import org.octopusden.octopus.components.registry.server.service.BatchMigrationResult
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
 import org.octopusden.octopus.components.registry.server.service.FullMigrationResult
 import org.octopusden.octopus.components.registry.server.service.ImportService
-import org.octopusden.octopus.components.registry.server.service.MigrationProgressEvent
 import org.octopusden.octopus.components.registry.server.service.MigrationProgressListener
 import org.octopusden.octopus.components.registry.server.service.MigrationResult
 import org.octopusden.octopus.components.registry.server.service.MigrationStatus
 import org.octopusden.octopus.components.registry.server.service.ValidationResult
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
-import org.octopusden.octopus.escrow.configuration.model.EscrowModule
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
 
+/**
+ * Schema-v2 stub: the DSL → DB import pipeline is being rewritten per
+ * `docs/db-migration/schema-spec.md` §6 (pre-pass dictionary discovery,
+ * aggregator detection, two-pass `parentComponent`, per-attribute scalar
+ * override emission, distribution family split, synthetic-base flag).
+ *
+ * The legacy `EscrowModule.toComponentEntity()` shortcut wrote the flat
+ * v1-style `ComponentEntity` (with `metadata: Map`, single VCS settings
+ * entity, etc.) and is no longer compatible with the v2 schema. Until the
+ * §6 pipeline lands, the migrate endpoints surface
+ * [UnsupportedOperationException] (HTTP 501 via `GlobalExceptionHandler`).
+ *
+ * **Still working under v2:**
+ *   - [migrateDefaults] — writes `registry_config[component-defaults]`
+ *     from `Defaults.groovy`. Reuses `RegistryConfigEntity` which mapped
+ *     cleanly to v2; no entity-graph changes.
+ *   - [getMigrationStatus] — counts component_source rows; v2-compatible.
+ *
+ * **Stubbed (Phase 5b — `MIG-039`):**
+ *   - [migrateComponent], [migrateAllComponents], [migrate],
+ *     [validateMigration]. These need the full §6 pipeline; tracked in
+ *     `todo.md`. QA / FT seeding currently goes through the v4 CRUD API
+ *     directly until the pipeline lands.
+ */
 @Service
 class ImportServiceImpl(
     private val gitResolver: ComponentRegistryResolverImpl,
     @Qualifier("databaseComponentRegistryResolver")
-    private val dbResolver: DatabaseComponentRegistryResolver,
-    private val componentRepository: ComponentRepository,
+    @Suppress("unused") private val dbResolver: DatabaseComponentRegistryResolver,
     private val componentSourceRepository: ComponentSourceRepository,
-    private val sourceRegistry: ComponentSourceRegistry,
+    @Suppress("unused") private val sourceRegistry: ComponentSourceRegistry,
     private val configurationLoader: EscrowConfigurationLoader,
     private val registryConfigRepository: RegistryConfigRepository,
 ) : ImportService {
-    @Suppress("TooGenericExceptionCaught")
     @Transactional
     override fun migrateComponent(
         name: String,
         dryRun: Boolean,
-    ): MigrationResult {
-        LOG.info("Migrating component '{}' (dryRun={})", name, dryRun)
+    ): MigrationResult =
+        throw UnsupportedOperationException(SCHEMA_V2_STUB_MESSAGE)
 
-        // 1. Get from Git resolver
-        val escrowModule =
-            gitResolver.getComponentById(name)
-                ?: return MigrationResult(name, false, dryRun, "Component '$name' not found in Git DSL")
-
-        // 2. Check if already migrated
-        if (sourceRegistry.isDbComponent(name) && !dryRun) {
-            return MigrationResult(name, false, dryRun, "Component '$name' is already migrated to DB")
-        }
-
-        // 3. Convert to entity
-        val entity =
-            try {
-                escrowModule.toComponentEntity()
-            } catch (e: Exception) {
-                LOG.error("Failed to convert component '{}' to entity", name, e)
-                return MigrationResult(name, false, dryRun, "Conversion error: ${e.message}")
-            }
-
-        if (dryRun) {
-            return MigrationResult(name, true, true, "Dry run: component can be migrated")
-        }
-
-        // 4. Save to DB (delete existing if re-migrating)
-        val existing = componentRepository.findByName(name)
-        if (existing != null) {
-            componentRepository.delete(existing)
-            componentRepository.flush()
-        }
-
-        try {
-            componentRepository.save(entity)
-            componentRepository.flush()
-        } catch (e: Exception) {
-            LOG.error("Failed to save component '{}' to DB", name, e)
-            return MigrationResult(name, false, false, "Save error: ${e.message}")
-        }
-
-        // 5. Validate: compare git vs db output
-        val discrepancies = validateComponentData(name, escrowModule)
-
-        // 6. Switch source
-        if (discrepancies.isEmpty()) {
-            sourceRegistry.setComponentSource(name, "db")
-            return MigrationResult(name, true, false, "Successfully migrated")
-        } else {
-            // Still switch to DB but report discrepancies
-            sourceRegistry.setComponentSource(name, "db")
-            return MigrationResult(name, true, false, "Migrated with ${discrepancies.size} discrepancies", discrepancies)
-        }
-    }
-
-    override fun migrateAllComponents(progress: MigrationProgressListener): BatchMigrationResult {
-        val allComponents = gitResolver.getComponents()
-        val results = mutableListOf<MigrationResult>()
-        var migrated = 0
-        var failed = 0
-        var skipped = 0
-        val total = allComponents.size
-
-        for (module in allComponents) {
-            if (sourceRegistry.isDbComponent(module.moduleName)) {
-                skipped++
-                results.add(MigrationResult(module.moduleName, true, false, "Already migrated, skipped"))
-            } else {
-                val result = migrateComponent(module.moduleName, false)
-                results.add(result)
-                if (result.success) migrated++ else failed++
-            }
-            // Emit progress AFTER each component (skipped or attempted) so the
-            // SPA can advance the counter even when nothing was actually written.
-            // Catching Throwable is intentional: a misbehaving listener — wired in
-            // by some future caller of `migrate(progress = ...)` — must not be able
-            // to poison the migration loop. The listener is observability only;
-            // if it throws, the migration carries on without it.
-            @Suppress("TooGenericExceptionCaught")
-            try {
-                progress.onProgress(
-                    MigrationProgressEvent(
-                        componentName = module.moduleName,
-                        migrated = migrated,
-                        failed = failed,
-                        skipped = skipped,
-                        total = total,
-                    ),
-                )
-            } catch (e: Throwable) {
-                LOG.warn("Progress listener threw on component '{}': {}", module.moduleName, e.message)
-            }
-        }
-
-        // Resolve parent-child relationships (requires all components to be saved first)
-        resolveParentComponentReferences()
-
-        return BatchMigrationResult(
-            total = total,
-            migrated = migrated,
-            failed = failed,
-            skipped = skipped,
-            results = results,
-        )
-    }
+    override fun migrateAllComponents(progress: MigrationProgressListener): BatchMigrationResult =
+        throw UnsupportedOperationException(SCHEMA_V2_STUB_MESSAGE)
 
     override fun getMigrationStatus(): MigrationStatus {
         val dbCount = componentSourceRepository.countBySource("db")
@@ -159,28 +77,18 @@ class ImportServiceImpl(
         )
     }
 
-    override fun validateMigration(name: String): ValidationResult {
-        val gitModule =
-            gitResolver.getComponentById(name)
-                ?: return ValidationResult(name, false, listOf("Component not found in Git DSL"))
+    override fun validateMigration(name: String): ValidationResult =
+        throw UnsupportedOperationException(SCHEMA_V2_STUB_MESSAGE)
 
-        val discrepancies = validateComponentData(name, gitModule)
-        return ValidationResult(name, discrepancies.isEmpty(), discrepancies)
-    }
+    override fun migrate(progress: MigrationProgressListener): FullMigrationResult =
+        throw UnsupportedOperationException(SCHEMA_V2_STUB_MESSAGE)
 
-    override fun migrate(progress: MigrationProgressListener): FullMigrationResult {
-        val defaults = migrateDefaults()
-        val components = migrateAllComponents(progress)
-        return FullMigrationResult(defaults = defaults, components = components)
-    }
-
-    @Suppress("CyclomaticComplexMethod", "TooGenericExceptionCaught")
+    @Suppress("CyclomaticComplexMethod", "TooGenericExceptionCaught", "LongMethod")
     override fun migrateDefaults(): Map<String, Any?> {
         LOG.info("Migrating component defaults from Git DSL")
         val defaults = configurationLoader.loadCommonDefaults(emptyMap())
         val map =
             buildMap<String, Any?> {
-                // Existing scalar fields
                 defaults.buildSystem?.let { put("buildSystem", it.name) }
                 defaults.buildFilePath?.let { put("buildFilePath", it) }
                 defaults.artifactIdPattern?.let { put("artifactIdPattern", it) }
@@ -197,14 +105,9 @@ class ImportServiceImpl(
                 defaults.archived?.let { put("archived", it) }
                 defaults.copyright?.let { put("copyright", it) }
                 defaults.labels?.takeIf { it.isNotEmpty() }?.let { put("labels", it.toList()) }
-
-                // deprecated
                 defaults.deprecated?.let { put("deprecated", it) }
-
-                // octopusVersion
                 defaults.octopusVersion?.let { put("octopusVersion", it) }
 
-                // build parameters (nested map)
                 defaults.buildParameters?.let { bp ->
                     try {
                         val buildMap =
@@ -223,7 +126,6 @@ class ImportServiceImpl(
                     }
                 }
 
-                // jira component (nested map)
                 defaults.jiraComponent?.let { jira ->
                     try {
                         val jiraMap =
@@ -249,7 +151,6 @@ class ImportServiceImpl(
                     }
                 }
 
-                // distribution (nested map)
                 defaults.distribution?.let { dist ->
                     try {
                         val distMap =
@@ -274,7 +175,6 @@ class ImportServiceImpl(
                     }
                 }
 
-                // VCS settings wrapper (nested map)
                 defaults.vcsSettingsWrapper?.let { wrapper ->
                     try {
                         val vcsMap =
@@ -295,7 +195,6 @@ class ImportServiceImpl(
                     }
                 }
 
-                // escrow (nested map)
                 defaults.escrow?.let { escrow ->
                     try {
                         val escrowMap =
@@ -317,7 +216,6 @@ class ImportServiceImpl(
                     }
                 }
 
-                // doc (nested map)
                 defaults.doc?.let { doc ->
                     try {
                         val docMap =
@@ -342,81 +240,11 @@ class ImportServiceImpl(
         return map
     }
 
-    @Suppress("TooGenericExceptionCaught")
-    private fun validateComponentData(
-        name: String,
-        gitModule: EscrowModule,
-    ): List<String> {
-        val discrepancies = mutableListOf<String>()
-
-        val dbModule =
-            try {
-                dbResolver.getComponentById(name)
-            } catch (e: Exception) {
-                return listOf("DB resolver error: ${e.message}")
-            }
-
-        if (dbModule == null) {
-            return listOf("Component not found in DB after migration")
-        }
-
-        // Compare module names
-        if (gitModule.moduleName != dbModule.moduleName) {
-            discrepancies.add("Module name mismatch: git='${gitModule.moduleName}', db='${dbModule.moduleName}'")
-        }
-
-        // Compare configuration count
-        if (gitModule.moduleConfigurations.size != dbModule.moduleConfigurations.size) {
-            discrepancies.add(
-                "Configuration count mismatch: git=${gitModule.moduleConfigurations.size}, " +
-                    "db=${dbModule.moduleConfigurations.size}",
-            )
-        }
-
-        // Compare default config fields
-        val gitDefault = gitModule.moduleConfigurations.firstOrNull()
-        val dbDefault = dbModule.moduleConfigurations.firstOrNull()
-        if (gitDefault != null && dbDefault != null) {
-            if (gitDefault.componentOwner != dbDefault.componentOwner) {
-                discrepancies.add("componentOwner mismatch: git='${gitDefault.componentOwner}', db='${dbDefault.componentOwner}'")
-            }
-            if (gitDefault.componentDisplayName != dbDefault.componentDisplayName) {
-                discrepancies.add("displayName mismatch: git='${gitDefault.componentDisplayName}', db='${dbDefault.componentDisplayName}'")
-            }
-            if (gitDefault.buildSystem != dbDefault.buildSystem) {
-                discrepancies.add("buildSystem mismatch: git='${gitDefault.buildSystem}', db='${dbDefault.buildSystem}'")
-            }
-        }
-
-        return discrepancies
-    }
-
-    /**
-     * Second pass: resolve parentComponent string references (stored in metadata)
-     * to actual JPA @ManyToOne relationships. Must run after all components are saved.
-     */
-    private fun resolveParentComponentReferences() {
-        val allComponents = componentRepository.findAll()
-        val componentByName = allComponents.associateBy { it.name }
-        var resolved = 0
-
-        for (component in allComponents) {
-            val parentName = component.metadata["parentComponent"] as? String ?: continue
-            val parent = componentByName[parentName]
-            if (parent != null && component.parentComponent == null) {
-                component.parentComponent = parent
-                componentRepository.save(component)
-                resolved++
-            }
-        }
-
-        if (resolved > 0) {
-            componentRepository.flush()
-            LOG.info("Resolved {} parent-component relationships", resolved)
-        }
-    }
-
     companion object {
         private val LOG = LoggerFactory.getLogger(ImportServiceImpl::class.java)
+        private const val SCHEMA_V2_STUB_MESSAGE =
+            "Component import is not yet ported to schema v2 (Model A'); see " +
+                "docs/db-migration/schema-spec.md §6 and MIG-039 in todo.md. " +
+                "Seed test data via the v4 CRUD API in the meantime."
     }
 }
