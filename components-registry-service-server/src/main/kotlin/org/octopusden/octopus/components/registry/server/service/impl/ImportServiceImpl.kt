@@ -502,6 +502,28 @@ class ImportServiceImpl(
         }
     }
 
+    /**
+     * Common-defaults tools (`Defaults.groovy` → `build { requiredTools = "..." }`),
+     * lazy-loaded once per `ImportServiceImpl` instance and reused as a fallback
+     * when a component's own merged `buildConfiguration.tools` came back empty
+     * (the Groovy loader drops Defaults-inherited tools whenever the component
+     * declares its own `build { ... }` block — see `importModule` for context).
+     *
+     * Limitation: this fallback cannot distinguish "loader merge dropped tools"
+     * from "component explicitly cleared tools" — both surface as an empty list
+     * on `EscrowModuleConfig.buildConfiguration.tools`. A future opt-out for
+     * components that want NO tools would require loader changes (preserve the
+     * null-vs-empty distinction). No current DSL component exercises that case.
+     */
+    private val commonDefaultsToolsCache: List<org.octopusden.octopus.escrow.model.Tool> by lazy {
+        configurationLoader
+            .loadCommonDefaults(emptyMap())
+            .buildParameters
+            ?.tools
+            ?.toList()
+            ?: emptyList()
+    }
+
     private fun preupsertToolsFromLoader(
         @Suppress("UNUSED_PARAMETER") fullConfig: org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration,
     ) {
@@ -647,28 +669,33 @@ class ImportServiceImpl(
         // until the session closes, so mutations after persist are invisible to
         // the flush.
         //
-        // Required tools MUST be stored as a dedicated BUILD_REQUIRED_TOOLS marker
-        // row (overriddenAttribute = "build.requiredTools", row_type = MARKER), NOT
-        // on the base config row.  EntityMappers.toBuildParameters reads tools only
-        // from markerOverrides (rows pre-filtered by rowType == "MARKER" upstream);
-        // the BASE row is excluded.
+        // Base required-tools junctions are attached DIRECTLY to the base row
+        // (not a separate BUILD_REQUIRED_TOOLS marker). EntityMappers.toBuildParameters
+        // falls back to `base.requiredToolJunctions` when no per-range marker
+        // matches, which is the correct semantic for tools inherited via
+        // `Defaults.groovy`. The previous design wrote a marker row at
+        // `savedBase.versionRange`, but for synthetic-base components that range
+        // is the DSL's first explicit range (e.g. `(,1.0.107)`) and would not
+        // match version queries against any other range — collapsing
+        // `buildParameters.tools` to `[]` for those versions. Per-range tool
+        // overrides still get a dedicated marker via `emitMarkerOverrides`.
         val baseRow = buildBaseConfigRow(saved, baseConfig, isSyntheticBase)
         attachVcsEntries(baseRow, baseConfig.vcsSettings)
         attachDistribution(baseRow, baseConfig.distribution)
         val savedBase = configurationRepository.save(baseRow)
-        // Store base-config required tools as a marker row so EntityMappers can find them.
-        val baseTools = baseConfig.buildConfiguration?.tools
-        if (!baseTools.isNullOrEmpty()) {
-            val toolMarkerRow =
-                ComponentConfigurationEntity(
-                    component = saved,
-                    versionRange = savedBase.versionRange,
-                    overriddenAttribute = MarkerAttributes.BUILD_REQUIRED_TOOLS,
-                    rowType = "MARKER",
-                    isSyntheticBase = false,
-                )
-            configurationRepository.save(toolMarkerRow)
-            attachRequiredTools(toolMarkerRow, baseTools)
+        // The Groovy loader's per-range merge drops `requiredTools` inherited
+        // from `Defaults.groovy` whenever the component declares its OWN
+        // `build { ... }` block (the block REPLACES Defaults' build, so an
+        // inherited `requiredTools` is lost from the per-range merged config —
+        // observed reproducibly on multi-range components with a top-level
+        // `build {}` block). The legacy Git resolver compensates with a
+        // Defaults fallback at request time; restore parity here by reading
+        // common-defaults tools when the per-config merge came back empty.
+        val baseTools =
+            baseConfig.buildConfiguration?.tools.takeUnless { it.isNullOrEmpty() }
+                ?: commonDefaultsToolsCache
+        if (baseTools.isNotEmpty()) {
+            attachRequiredTools(savedBase, baseTools)
         }
 
         // For synthetic-base components, the base row's versionRange is the
@@ -1035,10 +1062,17 @@ class ImportServiceImpl(
             }?.let { saved += it }
         }
 
-        // Required tools override (junction rows need the config ID; handled inside)
-        val baseTools = base.buildConfiguration?.tools?.map { it.name }?.toSet() ?: emptySet()
+        // Required tools override (junction rows need the config ID; handled inside).
+        // Use the same effective base tools that were attached to the BASE row in
+        // `importModule` (loader merge + common-defaults fallback) so that an
+        // override range whose tools match the effective base does NOT produce a
+        // redundant marker row.
+        val effectiveBaseToolNames =
+            (base.buildConfiguration?.tools.takeUnless { it.isNullOrEmpty() } ?: commonDefaultsToolsCache)
+                .mapNotNull { it.name }
+                .toSet()
         val overTools = override.buildConfiguration?.tools?.map { it.name }?.toSet() ?: emptySet()
-        if (baseTools != overTools) {
+        if (effectiveBaseToolNames != overTools) {
             saveMarkerRowWithChildren(component, versionRange, MarkerAttributes.BUILD_REQUIRED_TOOLS) { row ->
                 // Required tool junctions use the config ID explicitly, so we must
                 // persist the marker row first (to get the ID), then attach tools.
