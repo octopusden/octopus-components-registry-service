@@ -3,6 +3,7 @@ package org.octopusden.octopus.components.registry.server.migration
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
@@ -84,7 +85,7 @@ class MigrationIntegrationTest {
         // The component has only explicit version ranges — no ALL_VERSIONS block in DSL.
         // The base row must be marked synthetic.
         val baseRow: ComponentConfigurationEntity? =
-            configurationRepository.findByComponentIdAndOverriddenAttributeIsNull(component.id!!)
+            configurationRepository.findBaseByComponentId(component.id!!)
         assertNotNull(baseRow, "Must have a base row (overridden_attribute IS NULL)")
         assertTrue(
             baseRow!!.isSyntheticBase,
@@ -156,7 +157,7 @@ class MigrationIntegrationTest {
         assertNotNull(component, "TESTONE must be migrated")
 
         val baseRow =
-            configurationRepository.findByComponentIdAndOverriddenAttributeIsNull(component!!.id!!)
+            configurationRepository.findBaseByComponentId(component!!.id!!)
         assertNotNull(baseRow, "TESTONE must have a base row")
 
         // TESTONE distribution.GAV = "org.octopusden.octopus.test:versions-api:jar"
@@ -217,13 +218,19 @@ class MigrationIntegrationTest {
 
         // TEST_COMPONENT3 has:
         // - top-level: GAV, explicit=true, external=true, jira.projectKey=TC3, build.javaVersion=1.8
-        // - "(,1.0.107)" {} — empty block (no overrides)
+        // - "(,1.0.107)" {} — empty block (no overrides → RANGE_PRESENCE row)
         // - "[1.0.107,)" { jira { releaseVersionFormat = '...' }; tag = '...' }
-        // So we should have at least one override row for range "[1.0.107,)"
+        // So we should have at least one real override row for range "[1.0.107,)"
+        // (not just a RANGE_PRESENCE row).
         val rangeRows = allRows.filter { it.versionRange == "[1.0.107,)" }
         assertTrue(
             rangeRows.isNotEmpty(),
             "Must have override rows for version range '[1.0.107,)'; found rows: ${allRows.map { it.versionRange }}",
+        )
+        assertTrue(
+            rangeRows.any { it.rowType != "RANGE_PRESENCE" },
+            "Range '[1.0.107,)' must include at least one SCALAR_OVERRIDE/MARKER row, not just RANGE_PRESENCE. " +
+                "Found rowTypes: ${rangeRows.map { it.rowType }}",
         )
     }
 
@@ -262,7 +269,7 @@ class MigrationIntegrationTest {
         assertNotNull(component, "TEST_COMPONENT must be migrated")
 
         val baseRow =
-            configurationRepository.findByComponentIdAndOverriddenAttributeIsNull(component!!.id!!)
+            configurationRepository.findBaseByComponentId(component!!.id!!)
         assertNotNull(baseRow, "TEST_COMPONENT must have a base row")
 
         // TEST_COMPONENT has single vcsUrl = "ssh://hg@mercurial/test-component"
@@ -286,7 +293,7 @@ class MigrationIntegrationTest {
         assertNotNull(component, "TEST_COMPONENT2_WITH_SEVERAL_ROOTS must be migrated")
 
         val baseRow =
-            configurationRepository.findByComponentIdAndOverriddenAttributeIsNull(component!!.id!!)
+            configurationRepository.findBaseByComponentId(component!!.id!!)
         assertNotNull(baseRow, "TEST_COMPONENT2_WITH_SEVERAL_ROOTS must have a base row")
 
         // Has vcsSettings { cvs { ... }; mercurial { ... } } → two named entries
@@ -360,6 +367,69 @@ class MigrationIntegrationTest {
             val c = componentRepository.findByComponentKey(key)
             assertNotNull(c, "Component '$key' must be in DB after auto-migrate")
         }
+    }
+
+    // =========================================================================
+    // MIG-040: RANGE_PRESENCE rows for DSL ranges with no real override.
+    // =========================================================================
+
+    @Test
+    @DisplayName(
+        "MIG-040: TEST_COMPONENT3 empty `(,1.0.107)` DSL block emits a RANGE_PRESENCE row " +
+            "with NULL overridden_attribute and all typed cols NULL; `[1.0.107,)` keeps its real overrides",
+    )
+    fun mig040_rangePresenceRowsEmittedForEmptyDslBlocks() {
+        val component = componentRepository.findByComponentKey("TEST_COMPONENT3")
+        assertNotNull(component, "TEST_COMPONENT3 must be migrated")
+
+        val allRows = configurationRepository.findByComponentId(component!!.id!!)
+
+        // Exactly one presence row at `(,1.0.107)`.
+        val presenceRows =
+            allRows.filter { it.versionRange == "(,1.0.107)" && it.rowType == "RANGE_PRESENCE" }
+        assertEquals(
+            1, presenceRows.size,
+            "Must have exactly one RANGE_PRESENCE row for '(,1.0.107)'; found rows: " +
+                "${allRows.map { "${it.versionRange}/${it.rowType}" }}",
+        )
+        val presence = presenceRows.single()
+        assertNull(presence.overriddenAttribute, "RANGE_PRESENCE row must have NULL overridden_attribute")
+        assertFalse(presence.isSyntheticBase, "RANGE_PRESENCE row must not be marked synthetic")
+        // All 28 typed scalar columns must be NULL on a presence row.
+        assertNull(presence.buildSystem); assertNull(presence.buildSystemVersion)
+        assertNull(presence.javaVersion); assertNull(presence.mavenVersion)
+        assertNull(presence.gradleVersion); assertNull(presence.buildFilePath)
+        assertNull(presence.deprecated); assertNull(presence.requiredProject)
+        assertNull(presence.projectVersion); assertNull(presence.systemProperties)
+        assertNull(presence.buildTasks); assertNull(presence.escrowBuildTask)
+        assertNull(presence.escrowProvidedDependencies); assertNull(presence.escrowReusable)
+        assertNull(presence.escrowGeneration); assertNull(presence.escrowDiskSpace)
+        assertNull(presence.escrowAdditionalSources)
+        assertNull(presence.escrowGradleIncludeConfigurations)
+        assertNull(presence.escrowGradleExcludeConfigurations)
+        assertNull(presence.escrowGradleIncludeTestConfigurations)
+        assertNull(presence.jiraProjectKey); assertNull(presence.jiraTechnical)
+        assertNull(presence.jiraMajorVersionFormat); assertNull(presence.jiraReleaseVersionFormat)
+        assertNull(presence.jiraBuildVersionFormat); assertNull(presence.jiraLineVersionFormat)
+        assertNull(presence.jiraVersionPrefix); assertNull(presence.jiraVersionFormat)
+
+        // `[1.0.107,)` must NOT get an extra presence row — it has real overrides.
+        val rangeRows = allRows.filter { it.versionRange == "[1.0.107,)" }
+        assertTrue(
+            rangeRows.none { it.rowType == "RANGE_PRESENCE" },
+            "Range '[1.0.107,)' must not get a presence row when it already has real overrides. " +
+                "Found: ${rangeRows.map { it.rowType }}",
+        )
+
+        // The synthetic-base row at `(,1.0.107)` (BASE) must exist alongside the
+        // RANGE_PRESENCE row at the same range — the two share `version_range`
+        // and NULL `overridden_attribute` but are distinguished by `row_type`.
+        val sameRangeRows = allRows.filter { it.versionRange == "(,1.0.107)" }
+        assertTrue(
+            sameRangeRows.any { it.rowType == "BASE" },
+            "Synthetic base row at '(,1.0.107)' must coexist with the RANGE_PRESENCE row " +
+                "(MIG-029 + Stream A). Found rowTypes: ${sameRangeRows.map { it.rowType }}",
+        )
     }
 
     // =========================================================================

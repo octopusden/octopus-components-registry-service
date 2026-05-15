@@ -47,6 +47,7 @@ class ComponentSummaryMapperTest {
             component = component,
             versionRange = "(,0),[0,)",
             overriddenAttribute = null, // BASE row
+            rowType = "BASE",
         )
 
     // -----------------------------------------------------------------------
@@ -137,6 +138,7 @@ class ComponentSummaryMapperTest {
             component = component,
             versionRange = "[2,3)",
             overriddenAttribute = "build.javaVersion",
+            rowType = "SCALAR_OVERRIDE",
             javaVersion = "21",
         )
         component.configurations.add(override)

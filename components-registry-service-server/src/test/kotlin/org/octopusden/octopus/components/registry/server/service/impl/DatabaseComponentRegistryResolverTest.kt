@@ -107,6 +107,7 @@ class DatabaseComponentRegistryResolverTest {
             component = component,
             versionRange = versionRange,
             overriddenAttribute = null,
+            rowType = "BASE",
             isSyntheticBase = isSyntheticBase,
             buildSystem = buildSystem,
             javaVersion = javaVersion,
@@ -127,6 +128,7 @@ class DatabaseComponentRegistryResolverTest {
             component = component,
             versionRange = versionRange,
             overriddenAttribute = attribute,
+            rowType = "SCALAR_OVERRIDE",
         )
 
     /**
@@ -142,6 +144,7 @@ class DatabaseComponentRegistryResolverTest {
             component = component,
             versionRange = versionRange,
             overriddenAttribute = attribute,
+            rowType = "MARKER",
         )
 
     private fun makeVcsEntry(

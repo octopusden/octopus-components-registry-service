@@ -98,18 +98,19 @@ class DbBackedComponentsRegistryServiceControllerTest : MockMvcRegistryTestSuppo
     }
 
     @Disabled(
-        "schema-v2 known limitation — DB enumeration semantics surface override-row ranges " +
-            "as separate (component, range) pairs; v1 fixture collapses them into the base. " +
-            "Tracked in docs/db-migration/todo.md under 'Schema v2 known limitations' (RES-001).",
-    )
-    override fun testGetAllJiraComponentVersionRanges() = super.testGetAllJiraComponentVersionRanges()
-
-    @Disabled(
         "schema-v2 known limitation — complex KTS build-tool beans (OracleDatabaseToolBean, " +
             "PTKProductToolBean) cannot be stored in v2 `tools` dictionary (primitive scalar columns " +
             "only). Tracked in docs/db-migration/todo.md under 'Schema v2 known limitations' (RES-014).",
     )
     override fun testGetBuildTools() = super.testGetBuildTools()
+
+    @Disabled(
+        "schema-v2: Stream A fixed missing entries (47/53 -> 53/53 via RANGE_PRESENCE) but the " +
+            "test does full per-DTO equality and 5 components still diverge on " +
+            "vcsSettings.externalRegistry (null vs NOT_AVAILABLE default-emit). Re-enable once " +
+            "the externalRegistry-default-emission fix lands (Stream B / VAL-010 residual family).",
+    )
+    override fun testGetAllJiraComponentVersionRanges() = super.testGetAllJiraComponentVersionRanges()
 
     companion object {
         @JvmStatic

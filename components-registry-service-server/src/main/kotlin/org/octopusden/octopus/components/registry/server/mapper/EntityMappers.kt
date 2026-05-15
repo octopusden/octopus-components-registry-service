@@ -77,9 +77,13 @@ fun ComponentEntity.toEscrowModule(
 
     val configs = this.configurations.toList()
     val base =
-        configs.firstOrNull { it.overriddenAttribute == null }
+        configs.firstOrNull { it.rowType == "BASE" }
             ?: return module
-    val overrides = configs.filter { it.overriddenAttribute != null }
+    // "non-base" here covers SCALAR_OVERRIDE, MARKER, and RANGE_PRESENCE. The
+    // presence rows participate in enumeration (their `versionRange` adds an
+    // entry to the distinct list) but `resolveForRange` filters them out
+    // before applying overrides.
+    val overrides = configs.filter { it.rowType != "BASE" }
 
     // Per schema-spec.md §3.4 (MIG-029): a synthetic-base row exists only as a
     // schema-required anchor for a version-range-only component (one with no
@@ -130,8 +134,8 @@ fun ComponentEntity.toResolvedEscrowModuleConfig(
     numericVersionFactory: NumericVersionFactory,
 ): EscrowModuleConfig? {
     val configs = this.configurations.toList()
-    val base = configs.firstOrNull { it.overriddenAttribute == null } ?: return null
-    val overrides = configs.filter { it.overriddenAttribute != null }
+    val base = configs.firstOrNull { it.rowType == "BASE" } ?: return null
+    val overrides = configs.filter { it.rowType == "SCALAR_OVERRIDE" || it.rowType == "MARKER" }
 
     val numericVersion =
         try {
@@ -152,8 +156,8 @@ fun ComponentEntity.toResolvedEscrowModuleConfig(
     return buildEscrowModuleConfig(
         component = this,
         base = base,
-        scalarOverrides = matchingOverrides.filter { it.overriddenAttribute !in MarkerAttributes.ALL },
-        markerOverrides = matchingOverrides.filter { it.overriddenAttribute in MarkerAttributes.ALL },
+        scalarOverrides = matchingOverrides.filter { it.rowType == "SCALAR_OVERRIDE" },
+        markerOverrides = matchingOverrides.filter { it.rowType == "MARKER" },
         versionRange = base.versionRange,
     )
 }
@@ -175,12 +179,12 @@ private fun ComponentEntity.resolveForRange(
     // override exists.
     val scalarOverrides =
         overrides.filter {
-            it.overriddenAttribute !in MarkerAttributes.ALL &&
+            it.rowType == "SCALAR_OVERRIDE" &&
                 rangeApplies(parentRange = it.versionRange, childRange = range, factory = versionRangeFactory)
         }
     val markerOverrides =
         overrides.filter {
-            it.overriddenAttribute in MarkerAttributes.ALL &&
+            it.rowType == "MARKER" &&
                 rangeApplies(parentRange = it.versionRange, childRange = range, factory = versionRangeFactory)
         }
 

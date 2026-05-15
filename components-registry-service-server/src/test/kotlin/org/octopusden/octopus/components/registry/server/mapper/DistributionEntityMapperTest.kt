@@ -52,6 +52,7 @@ class DistributionEntityMapperTest {
             component = minimalComponent(),
             versionRange = "(,0),[0,)",
             overriddenAttribute = null,
+            rowType = "BASE",
         )
 
     /** MARKER row — only the child family matching `markerName` is surfaced. */
@@ -61,6 +62,7 @@ class DistributionEntityMapperTest {
             component = minimalComponent(),
             versionRange = "[2,3)",
             overriddenAttribute = markerName,
+            rowType = "MARKER",
         )
 
     // -----------------------------------------------------------------------

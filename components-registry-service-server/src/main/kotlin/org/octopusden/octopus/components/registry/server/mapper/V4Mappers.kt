@@ -80,18 +80,21 @@ fun ComponentEntity.toDetailResponse(teamcityBaseUrl: String? = null): Component
                         sortOrder = tc.sortOrder,
                     )
                 },
-        configurations = this.configurations.map { it.toConfigurationResponse() },
+        configurations =
+            this.configurations
+                .filter { it.rowType != "RANGE_PRESENCE" }
+                .map { it.toConfigurationResponse() },
     )
 
 /**
  * Compact list-view projection. SYS-040 fields (`buildSystem`, `jiraProjectKey`,
  * `vcsPath`, `teamcityProjectId`, `teamcityProjectUrl`) are derived from the
- * BASE configuration row (`overriddenAttribute IS NULL`) and the first child
+ * BASE configuration row (`row_type = 'BASE'`) and the first child
  * (`sort_order = 0`) so multi-VCS / multi-TC components render their primary
  * link the same way single-target components do. Blank strings → null.
  */
 fun ComponentEntity.toSummaryResponse(teamcityBaseUrl: String? = null): ComponentSummaryResponse {
-    val base = this.configurations.firstOrNull { it.overriddenAttribute == null }
+    val base = this.configurations.firstOrNull { it.rowType == "BASE" }
     val firstTcProject = this.teamcityProjects.minByOrNull { it.sortOrder }
     val firstVcsEntry = base?.vcsEntries?.minByOrNull { it.sortOrder }
     return ComponentSummaryResponse(
@@ -114,11 +117,13 @@ fun ComponentEntity.toSummaryResponse(teamcityBaseUrl: String? = null): Componen
 
 /**
  * One row of `component_configurations` → v4 wire representation. The row's
- * shape is classified by `overriddenAttribute`:
+ * shape is read from the stored `row_type` column (source of truth):
  *
- *  - null → BASE (all aspects + all child collections populated from this row)
- *  - in `MarkerAttributes.ALL` → MARKER (no aspects; one child family populated)
- *  - else → SCALAR_OVERRIDE (one aspect with one field; no child collections)
+ *  - BASE → all aspects + all child collections populated from this row
+ *  - MARKER → no aspects; one child family populated (per `overriddenAttribute`)
+ *  - SCALAR_OVERRIDE → one aspect with one field; no child collections
+ *  - RANGE_PRESENCE → storage-only; never serialised (`toDetailResponse`
+ *    filters these out before calling this function).
  *
  * For SCALAR_OVERRIDE rows the aspect prefix on `overriddenAttribute` selects
  * which aspect carries the single overridden field; the other two aspects are
@@ -171,8 +176,8 @@ fun ComponentConfigurationEntity.toConfigurationResponse(): ComponentConfigurati
  */
 fun ComponentConfigurationEntity.toFieldOverrideResponse(): FieldOverrideResponse {
     val rowType = classifyRowType()
-    require(rowType != ConfigurationRowType.BASE) {
-        "Base rows are not field overrides — caller filtered the wrong configuration"
+    require(rowType != ConfigurationRowType.BASE && rowType != ConfigurationRowType.RANGE_PRESENCE) {
+        "Only SCALAR_OVERRIDE / MARKER rows can be projected as field overrides (got $rowType)"
     }
     val markerChildren =
         if (rowType == ConfigurationRowType.MARKER) toMarkerChildrenPayload() else null
@@ -208,11 +213,7 @@ fun AuditLogEntity.toResponse(): AuditLogResponse =
 // ============================================================
 
 private fun ComponentConfigurationEntity.classifyRowType(): ConfigurationRowType =
-    when {
-        overriddenAttribute == null -> ConfigurationRowType.BASE
-        overriddenAttribute in MarkerAttributes.ALL -> ConfigurationRowType.MARKER
-        else -> ConfigurationRowType.SCALAR_OVERRIDE
-    }
+    ConfigurationRowType.valueOf(this.rowType)
 
 private fun ComponentConfigurationEntity.shouldEmitBuildAspect(rowType: ConfigurationRowType): Boolean =
     rowType == ConfigurationRowType.BASE ||

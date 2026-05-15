@@ -8,8 +8,10 @@
 -- Design: ADR-014. Detailed reference: docs/db-migration/schema-spec.md.
 --
 -- Key model elements:
---   - Model A': wide typed `component_configurations` with three row shapes
---     (base, scalar override, marker override). UNIQUE(component_id, version_range,
+--   - Model A': wide typed `component_configurations` with four row shapes
+--     (base, scalar override, marker override, range presence). `row_type` is
+--     the source-of-truth classifier; `overridden_attribute` is the payload
+--     discriminator for scalar/marker rows only. UNIQUE(component_id, version_range,
 --     overridden_attribute). Partial unique index ensures one base per component.
 --   - Unified VCS: SINGLE = MULTI with one entry. All VCS scalars live on
 --     `vcs_settings_entries` regardless of cardinality.
@@ -76,17 +78,27 @@ CREATE INDEX idx_components_live              ON components(component_key) WHERE
 -- -----------------------------------------------------------------------------
 -- component_configurations: per-(component, version_range) sparse rows.
 --
--- Three row shapes (enforced by app validation + targeted DB CHECKs):
---   1) Base row     — overridden_attribute IS NULL; all typed columns may be filled
---   2) Scalar       — overridden_attribute = 'aspect.field'; exactly one typed col non-NULL
---   3) Marker       — overridden_attribute in marker set; ALL typed cols NULL;
---                     child rows attached via FK
+-- Four row shapes (enforced by `row_type` CHECK + targeted DB CHECKs):
+--   1) BASE            — overridden_attribute IS NULL; all typed columns may be filled
+--   2) SCALAR_OVERRIDE — overridden_attribute = 'aspect.field' (non-marker);
+--                        exactly one typed col non-NULL (enforced in service layer)
+--   3) MARKER          — overridden_attribute in marker set; ALL typed cols NULL;
+--                        child rows attached via FK
+--   4) RANGE_PRESENCE  — overridden_attribute IS NULL; ALL typed cols NULL.
+--                        Storage artifact: marks that a DSL `componentVersion(R)`
+--                        block exists for the given range so resolver enumerates
+--                        it even when scalars/markers match base. Hidden from
+--                        V4 editor APIs; resolver-only.
+--
+-- `row_type` is the source of truth. `overridden_attribute` is the payload
+-- discriminator for SCALAR_OVERRIDE/MARKER and MUST be NULL for BASE/RANGE_PRESENCE.
 -- -----------------------------------------------------------------------------
 CREATE TABLE component_configurations (
     id                                          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     component_id                                UUID NOT NULL REFERENCES components(id) ON DELETE CASCADE,
     version_range                               VARCHAR(255) NOT NULL,
-    overridden_attribute                        VARCHAR(50),                  -- NULL = base; non-NULL = override
+    overridden_attribute                        VARCHAR(50),                  -- NULL for BASE/RANGE_PRESENCE; non-NULL for SCALAR_OVERRIDE/MARKER
+    row_type                                    VARCHAR(32) NOT NULL,         -- BASE | SCALAR_OVERRIDE | MARKER | RANGE_PRESENCE
     is_synthetic_base                           BOOLEAN NOT NULL DEFAULT false, -- true on base row when DSL had no top-level fields
     -- BUILD aspect:
     build_system                                VARCHAR(50),
@@ -99,7 +111,8 @@ CREATE TABLE component_configurations (
     required_project                            BOOLEAN,
     project_version                             VARCHAR(255),
     system_properties                           TEXT,
-    build_tasks                                 TEXT,                          -- used for both build and escrow
+    build_tasks                                 TEXT,                          -- used for build only (escrow has its own column)
+    escrow_build_task                           TEXT,                          -- escrow.buildTask (was V2 incremental, folded into V1)
     -- ESCROW aspect:
     escrow_provided_dependencies                TEXT,                          -- comma-separated
     escrow_reusable                             BOOLEAN,
@@ -123,95 +136,45 @@ CREATE TABLE component_configurations (
 
     UNIQUE (component_id, version_range, overridden_attribute),
 
-    -- DB-level CHECK constraints for marker rows: when overridden_attribute is a
-    -- marker, all typed scalar columns must be NULL (children carry the data).
-    -- The full "scalar override = exactly one non-NULL typed column" rule is
-    -- enforced in the service layer (too verbose for CHECK with 30+ columns).
-    CHECK (overridden_attribute != 'vcs.settings' OR (
+    -- row_type domain.
+    CHECK (row_type IN ('BASE', 'SCALAR_OVERRIDE', 'MARKER', 'RANGE_PRESENCE')),
+
+    -- Positive taxonomy CHECK pairing row_type with overridden_attribute.
+    -- SQL three-valued logic: CHECK passes when the predicate is TRUE *or*
+    -- UNKNOWN. Each branch is written so its conjunction evaluates to a
+    -- known TRUE/FALSE for every row:
+    --   - The MARKER branch guards the IN-list with `overridden_attribute IS NOT NULL`
+    --     because `NULL IN (...)` returns UNKNOWN, which would otherwise let
+    --     `row_type='MARKER', overridden_attribute=NULL` slip through.
+    --   - The SCALAR_OVERRIDE branch likewise pins non-NULL before evaluating
+    --     `NOT IN (...)`, and forbids reusing a marker name as a scalar
+    --     attribute path.
+    CHECK (
+        (row_type IN ('BASE', 'RANGE_PRESENCE') AND overridden_attribute IS NULL)
+        OR (row_type = 'MARKER'
+            AND overridden_attribute IS NOT NULL
+            AND overridden_attribute IN (
+                'vcs.settings', 'distribution.maven', 'distribution.fileUrl',
+                'distribution.docker', 'distribution.packages', 'build.requiredTools'
+            ))
+        OR (row_type = 'SCALAR_OVERRIDE'
+            AND overridden_attribute IS NOT NULL
+            AND overridden_attribute NOT IN (
+                'vcs.settings', 'distribution.maven', 'distribution.fileUrl',
+                'distribution.docker', 'distribution.packages', 'build.requiredTools'
+            ))
+    ),
+
+    -- All 28 typed scalar columns must be NULL on MARKER and RANGE_PRESENCE
+    -- rows (children carry the data on markers; presence rows are pure
+    -- enumeration anchors). The full "scalar override = exactly one non-NULL
+    -- typed column" rule is enforced in the service layer (too verbose for
+    -- CHECK with 28 columns).
+    CHECK (row_type NOT IN ('MARKER', 'RANGE_PRESENCE') OR (
         build_system IS NULL AND build_system_version IS NULL AND java_version IS NULL
         AND maven_version IS NULL AND gradle_version IS NULL AND build_file_path IS NULL
         AND deprecated IS NULL AND required_project IS NULL AND project_version IS NULL
-        AND system_properties IS NULL AND build_tasks IS NULL
-        AND escrow_provided_dependencies IS NULL AND escrow_reusable IS NULL
-        AND escrow_generation IS NULL AND escrow_disk_space IS NULL
-        AND escrow_additional_sources IS NULL
-        AND escrow_gradle_include_configurations IS NULL
-        AND escrow_gradle_exclude_configurations IS NULL
-        AND escrow_gradle_include_test_configurations IS NULL
-        AND jira_project_key IS NULL AND jira_technical IS NULL
-        AND jira_major_version_format IS NULL AND jira_release_version_format IS NULL
-        AND jira_build_version_format IS NULL AND jira_line_version_format IS NULL
-        AND jira_version_prefix IS NULL AND jira_version_format IS NULL
-    )),
-    CHECK (overridden_attribute != 'distribution.maven' OR (
-        build_system IS NULL AND build_system_version IS NULL AND java_version IS NULL
-        AND maven_version IS NULL AND gradle_version IS NULL AND build_file_path IS NULL
-        AND deprecated IS NULL AND required_project IS NULL AND project_version IS NULL
-        AND system_properties IS NULL AND build_tasks IS NULL
-        AND escrow_provided_dependencies IS NULL AND escrow_reusable IS NULL
-        AND escrow_generation IS NULL AND escrow_disk_space IS NULL
-        AND escrow_additional_sources IS NULL
-        AND escrow_gradle_include_configurations IS NULL
-        AND escrow_gradle_exclude_configurations IS NULL
-        AND escrow_gradle_include_test_configurations IS NULL
-        AND jira_project_key IS NULL AND jira_technical IS NULL
-        AND jira_major_version_format IS NULL AND jira_release_version_format IS NULL
-        AND jira_build_version_format IS NULL AND jira_line_version_format IS NULL
-        AND jira_version_prefix IS NULL AND jira_version_format IS NULL
-    )),
-    CHECK (overridden_attribute != 'distribution.fileUrl' OR (
-        build_system IS NULL AND build_system_version IS NULL AND java_version IS NULL
-        AND maven_version IS NULL AND gradle_version IS NULL AND build_file_path IS NULL
-        AND deprecated IS NULL AND required_project IS NULL AND project_version IS NULL
-        AND system_properties IS NULL AND build_tasks IS NULL
-        AND escrow_provided_dependencies IS NULL AND escrow_reusable IS NULL
-        AND escrow_generation IS NULL AND escrow_disk_space IS NULL
-        AND escrow_additional_sources IS NULL
-        AND escrow_gradle_include_configurations IS NULL
-        AND escrow_gradle_exclude_configurations IS NULL
-        AND escrow_gradle_include_test_configurations IS NULL
-        AND jira_project_key IS NULL AND jira_technical IS NULL
-        AND jira_major_version_format IS NULL AND jira_release_version_format IS NULL
-        AND jira_build_version_format IS NULL AND jira_line_version_format IS NULL
-        AND jira_version_prefix IS NULL AND jira_version_format IS NULL
-    )),
-    CHECK (overridden_attribute != 'distribution.docker' OR (
-        build_system IS NULL AND build_system_version IS NULL AND java_version IS NULL
-        AND maven_version IS NULL AND gradle_version IS NULL AND build_file_path IS NULL
-        AND deprecated IS NULL AND required_project IS NULL AND project_version IS NULL
-        AND system_properties IS NULL AND build_tasks IS NULL
-        AND escrow_provided_dependencies IS NULL AND escrow_reusable IS NULL
-        AND escrow_generation IS NULL AND escrow_disk_space IS NULL
-        AND escrow_additional_sources IS NULL
-        AND escrow_gradle_include_configurations IS NULL
-        AND escrow_gradle_exclude_configurations IS NULL
-        AND escrow_gradle_include_test_configurations IS NULL
-        AND jira_project_key IS NULL AND jira_technical IS NULL
-        AND jira_major_version_format IS NULL AND jira_release_version_format IS NULL
-        AND jira_build_version_format IS NULL AND jira_line_version_format IS NULL
-        AND jira_version_prefix IS NULL AND jira_version_format IS NULL
-    )),
-    CHECK (overridden_attribute != 'distribution.packages' OR (
-        build_system IS NULL AND build_system_version IS NULL AND java_version IS NULL
-        AND maven_version IS NULL AND gradle_version IS NULL AND build_file_path IS NULL
-        AND deprecated IS NULL AND required_project IS NULL AND project_version IS NULL
-        AND system_properties IS NULL AND build_tasks IS NULL
-        AND escrow_provided_dependencies IS NULL AND escrow_reusable IS NULL
-        AND escrow_generation IS NULL AND escrow_disk_space IS NULL
-        AND escrow_additional_sources IS NULL
-        AND escrow_gradle_include_configurations IS NULL
-        AND escrow_gradle_exclude_configurations IS NULL
-        AND escrow_gradle_include_test_configurations IS NULL
-        AND jira_project_key IS NULL AND jira_technical IS NULL
-        AND jira_major_version_format IS NULL AND jira_release_version_format IS NULL
-        AND jira_build_version_format IS NULL AND jira_line_version_format IS NULL
-        AND jira_version_prefix IS NULL AND jira_version_format IS NULL
-    )),
-    CHECK (overridden_attribute != 'build.requiredTools' OR (
-        build_system IS NULL AND build_system_version IS NULL AND java_version IS NULL
-        AND maven_version IS NULL AND gradle_version IS NULL AND build_file_path IS NULL
-        AND deprecated IS NULL AND required_project IS NULL AND project_version IS NULL
-        AND system_properties IS NULL AND build_tasks IS NULL
+        AND system_properties IS NULL AND build_tasks IS NULL AND escrow_build_task IS NULL
         AND escrow_provided_dependencies IS NULL AND escrow_reusable IS NULL
         AND escrow_generation IS NULL AND escrow_disk_space IS NULL
         AND escrow_additional_sources IS NULL
@@ -228,7 +191,16 @@ CREATE TABLE component_configurations (
 -- Partial unique index: at most one base row per component.
 CREATE UNIQUE INDEX uq_component_configurations_one_base
     ON component_configurations(component_id)
-    WHERE overridden_attribute IS NULL;
+    WHERE row_type = 'BASE';
+
+-- Partial unique index: at most one RANGE_PRESENCE row per (component, range).
+-- The broad UNIQUE(component_id, version_range, overridden_attribute) above
+-- does NOT enforce this because Postgres treats NULLs as distinct in unique
+-- constraints (NULLS DISTINCT is the default), and presence rows have NULL
+-- overridden_attribute.
+CREATE UNIQUE INDEX uq_component_configurations_one_range_presence
+    ON component_configurations(component_id, version_range)
+    WHERE row_type = 'RANGE_PRESENCE';
 
 CREATE INDEX idx_config_component             ON component_configurations(component_id);
 CREATE INDEX idx_config_component_range       ON component_configurations(component_id, version_range);
