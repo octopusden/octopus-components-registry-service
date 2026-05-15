@@ -143,7 +143,7 @@ class ComponentManagementServiceImpl(
         addDocLinks(entity, request.docs.map { it.docComponentKey to it.majorVersion })
 
         // Base configuration row (cascade = ALL — flushed with the parent)
-        val baseConfig = ComponentConfigurationEntity(component = entity, versionRange = ALL_VERSIONS)
+        val baseConfig = ComponentConfigurationEntity(component = entity, versionRange = ALL_VERSIONS, rowType = "BASE")
         applyBaseConfigurationCreate(baseConfig, request.baseConfiguration)
         entity.configurations.add(baseConfig)
 
@@ -299,8 +299,8 @@ class ComponentManagementServiceImpl(
         val baseConfigForToolsSync =
             request.baseConfiguration?.let { patch ->
                 val base =
-                    entity.configurations.firstOrNull { it.overriddenAttribute == null }
-                        ?: ComponentConfigurationEntity(component = entity, versionRange = ALL_VERSIONS).also {
+                    entity.configurations.firstOrNull { it.rowType == "BASE" }
+                        ?: ComponentConfigurationEntity(component = entity, versionRange = ALL_VERSIONS, rowType = "BASE").also {
                             entity.configurations.add(it)
                         }
                 applyBaseConfigurationPatch(base, patch)
@@ -391,11 +391,21 @@ class ComponentManagementServiceImpl(
             "Override row for attribute '${request.overriddenAttribute}' and range '${request.versionRange}' already exists"
         }
 
+        val rowType =
+            when {
+                request.overriddenAttribute in MarkerAttributes.ALL -> "MARKER"
+                request.overriddenAttribute in SCALAR_ATTRIBUTE_PATHS -> "SCALAR_OVERRIDE"
+                else -> throw IllegalArgumentException(
+                    "Unknown overriddenAttribute: '${request.overriddenAttribute}'. " +
+                        "Must be a scalar aspect.field path or one of ${MarkerAttributes.ALL}",
+                )
+            }
         val row =
             ComponentConfigurationEntity(
                 component = component,
                 versionRange = request.versionRange,
                 overriddenAttribute = request.overriddenAttribute,
+                rowType = rowType,
             )
 
         val pendingTools: List<String>? =
@@ -447,8 +457,8 @@ class ComponentManagementServiceImpl(
         if (row.component.id != componentId) {
             throw NotFoundException("FieldOverride '$overrideId' does not belong to component '$componentId'")
         }
-        require(row.overriddenAttribute != null) {
-            "Cannot update base row via field-override endpoint (id $overrideId is a BASE row)"
+        require(row.rowType != "BASE" && row.rowType != "RANGE_PRESENCE") {
+            "Cannot update id $overrideId via field-override endpoint (row_type=${row.rowType})"
         }
 
         request.versionRange?.let {
@@ -490,8 +500,8 @@ class ComponentManagementServiceImpl(
         if (row.component.id != componentId) {
             throw NotFoundException("FieldOverride '$overrideId' does not belong to component '$componentId'")
         }
-        require(row.overriddenAttribute != null) {
-            "Cannot delete base row via field-override endpoint (id $overrideId is a BASE row)"
+        require(row.rowType != "BASE" && row.rowType != "RANGE_PRESENCE") {
+            "Cannot delete id $overrideId via field-override endpoint (row_type=${row.rowType})"
         }
         val owningComponent = row.component
         configurationRepository.delete(row)
@@ -505,7 +515,7 @@ class ComponentManagementServiceImpl(
         }
         return configurationRepository
             .findByComponentId(componentId)
-            .filter { it.overriddenAttribute != null }
+            .filter { it.rowType == "SCALAR_OVERRIDE" || it.rowType == "MARKER" }
             .map { it.toFieldOverrideResponse() }
     }
 
@@ -1069,7 +1079,7 @@ class ComponentManagementServiceImpl(
                         val join = root.join<ComponentEntity, ComponentConfigurationEntity>("configurations")
                         query?.distinct(true)
                         cb.and(
-                            cb.isNull(join.get<String>("overriddenAttribute")),
+                            cb.equal(join.get<String>("rowType"), "BASE"),
                             cb.equal(join.get<String>("buildSystem"), bs),
                         )
                     },

@@ -348,11 +348,6 @@ class GitVsDbValidationTest {
 
     @Test
     @DisplayName("VAL-006: GET .../maven-artifacts returns identical JSON")
-    @org.junit.jupiter.api.Disabled(
-        "schema-v2 known limitation — open-ended override ranges (e.g. `[1.0.336,)`) for the " +
-            "maven-artifacts endpoint are not emitted by the v2 resolver. Sibling of RES-001 " +
-            "enumeration semantics. Tracked in docs/db-migration/todo.md (RES-001 family).",
-    )
     fun `VAL-006 maven-artifacts`() {
         val sampleComponents =
             listOf(
@@ -383,10 +378,12 @@ class GitVsDbValidationTest {
     @Test
     @DisplayName("VAL-010: Bulk validation — all components, all endpoints, full divergence report")
     @org.junit.jupiter.api.Disabled(
-        "schema-v2 known limitations — 14 divergences across 11 components, all in already-tracked " +
-            "families: 8× empty `buildParameters.tools[]` (RES-014 KTS beans), 3× missing open-ended " +
-            "ranges (RES-001 enumeration), 1× distribution-on-core-lib (FAKE-aggregator routing edge), " +
-            "1× `vcsSettings.externalRegistry: null` vs `NOT_AVAILABLE` (default-emit divergence). " +
+        "schema-v2 known limitations — remaining divergences after RES-001 family fix " +
+            "(Stream A: RANGE_PRESENCE emission). Expected residual: 8× empty " +
+            "`buildParameters.tools[]` (RES-014 KTS beans), 1× distribution-on-core-lib " +
+            "(FAKE-aggregator routing edge), 1× `vcsSettings.externalRegistry: null` vs " +
+            "`NOT_AVAILABLE` (default-emit divergence). Concrete counts must be regenerated " +
+            "from a single VAL-010 run before re-enabling — do not hand-arithmetic. " +
             "Tracked in docs/db-migration/todo.md.",
     )
     fun `VAL-010 bulk canary`() {

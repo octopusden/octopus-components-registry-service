@@ -648,9 +648,10 @@ class ImportServiceImpl(
         // the flush.
         //
         // Required tools MUST be stored as a dedicated BUILD_REQUIRED_TOOLS marker
-        // row (overriddenAttribute = "build.requiredTools"), NOT on the base config
-        // row.  EntityMappers.toBuildParameters reads tools only from markerOverrides
-        // (rows with overriddenAttribute != null); the base row is excluded.
+        // row (overriddenAttribute = "build.requiredTools", row_type = MARKER), NOT
+        // on the base config row.  EntityMappers.toBuildParameters reads tools only
+        // from markerOverrides (rows pre-filtered by rowType == "MARKER" upstream);
+        // the BASE row is excluded.
         val baseRow = buildBaseConfigRow(saved, baseConfig, isSyntheticBase)
         attachVcsEntries(baseRow, baseConfig.vcsSettings)
         attachDistribution(baseRow, baseConfig.distribution)
@@ -663,20 +664,43 @@ class ImportServiceImpl(
                     component = saved,
                     versionRange = savedBase.versionRange,
                     overriddenAttribute = MarkerAttributes.BUILD_REQUIRED_TOOLS,
+                    rowType = "MARKER",
                     isSyntheticBase = false,
                 )
             configurationRepository.save(toolMarkerRow)
             attachRequiredTools(toolMarkerRow, baseTools)
         }
 
+        // For synthetic-base components, the base row's versionRange is the
+        // DSL's first range (e.g. `(,1.0.107)` for TEST_COMPONENT3) and
+        // `toEscrowModule` suppresses it from enumeration whenever overrides
+        // exist (MIG-029). Emit a RANGE_PRESENCE row at that same range so
+        // the resolver re-enumerates it (RES-001 family). Skip when the base
+        // is a real `(,)`/ALL_VERSIONS placeholder — non-synthetic bases are
+        // enumerated as their own view.
+        if (isSyntheticBase) {
+            val syntheticBaseRange = baseConfig.versionRangeString
+            if (syntheticBaseRange != null) {
+                emitRangePresenceRow(saved, syntheticBaseRange)
+            }
+        }
+
         // §6.5 Override rows: diff all non-base configs against the base.
         // For ALL_VERSIONS base: nonBaseConfigs = configs with explicit version ranges.
         // For synthetic base (isSyntheticBase): baseConfig = configs.first(), nonBaseConfigs = rest.
         // In both cases, `filter { it != baseConfig }` is the correct set.
+        //
+        // If neither scalar nor marker emission produced any row for a given
+        // override config, emit a RANGE_PRESENCE row so the resolver still
+        // enumerates this DSL range (RES-001 family fix).
         val nonBaseConfigs = configs.filter { it !== baseConfig }
         for (override in nonBaseConfigs) {
-            emitScalarOverrides(saved, baseConfig, override)
-            emitMarkerOverrides(saved, savedBase, baseConfig, override)
+            val scalarRows = emitScalarOverrides(saved, baseConfig, override)
+            val markerRows = emitMarkerOverrides(saved, savedBase, baseConfig, override)
+            val overrideRange = override.versionRangeString
+            if (scalarRows.isEmpty() && markerRows.isEmpty() && overrideRange != null) {
+                emitRangePresenceRow(saved, overrideRange)
+            }
         }
 
         LOG.debug("Imported component '{}' with {} config rows", componentKey, configs.size)
@@ -803,10 +827,45 @@ class ImportServiceImpl(
                 component = component,
                 versionRange = cfg.versionRangeString ?: ALL_VERSIONS,
                 overriddenAttribute = null,
+                rowType = "BASE",
                 isSyntheticBase = isSyntheticBase,
             )
         populateScalarsFromConfig(row, cfg)
         return row
+    }
+
+    /**
+     * Emit a RANGE_PRESENCE row for a DSL-declared version range whose
+     * scalars/markers all match base (so neither `emitScalarOverrides` nor
+     * `emitMarkerOverrides` produced any row). Without this, the range is
+     * invisible to the resolver and disappears from
+     * `/jira-component-version-ranges` and `/{component}/maven-artifacts`
+     * responses — RES-001 family.
+     */
+    private fun emitRangePresenceRow(
+        component: ComponentEntity,
+        versionRange: String,
+    ) {
+        // Idempotent: skip if a presence row for this (component, range)
+        // already exists (re-import). The partial unique index
+        // `uq_component_configurations_one_range_presence` would also reject
+        // duplicates; this is a defence-in-depth pre-check.
+        val existing =
+            configurationRepository.findByComponentIdAndVersionRangeAndRowType(
+                component.id!!,
+                versionRange,
+                "RANGE_PRESENCE",
+            )
+        if (existing != null) return
+        configurationRepository.save(
+            ComponentConfigurationEntity(
+                component = component,
+                versionRange = versionRange,
+                overriddenAttribute = null,
+                rowType = "RANGE_PRESENCE",
+                isSyntheticBase = false,
+            ),
+        )
     }
 
     /** Write all scalar aspect fields from DSL config onto an entity row. */
@@ -877,15 +936,30 @@ class ImportServiceImpl(
         component: ComponentEntity,
         base: EscrowModuleConfig,
         override: EscrowModuleConfig,
-    ) {
-        val baseRow = ComponentConfigurationEntity(component = component, versionRange = "")
+    ): List<ComponentConfigurationEntity> {
+        // Transient throwaway entities used only as carriers for the diff
+        // computation; never persisted. They still need a `rowType` because
+        // the column is NOT NULL on the entity definition — set to BASE for
+        // both since they mirror config-shape, not on-disk row-shape.
+        val baseRow =
+            ComponentConfigurationEntity(
+                component = component,
+                versionRange = "",
+                rowType = "BASE",
+            )
         populateScalarsFromConfig(baseRow, base)
 
-        val overRow = ComponentConfigurationEntity(component = component, versionRange = "")
+        val overRow =
+            ComponentConfigurationEntity(
+                component = component,
+                versionRange = "",
+                rowType = "BASE",
+            )
         populateScalarsFromConfig(overRow, override)
 
-        val versionRange = override.versionRangeString ?: return
+        val versionRange = override.versionRangeString ?: return emptyList()
 
+        val saved = mutableListOf<ComponentConfigurationEntity>()
         // Collect changed scalar attribute → value pairs
         val changed = collectScalarDiffs(baseRow, overRow)
         for ((attrPath, newValue) in changed) {
@@ -896,18 +970,23 @@ class ImportServiceImpl(
                     versionRange,
                     attrPath,
                 )
-            if (existing != null) continue // idempotent
+            if (existing != null) {
+                saved += existing
+                continue // idempotent
+            }
 
             val scalarRow =
                 ComponentConfigurationEntity(
                     component = component,
                     versionRange = versionRange,
                     overriddenAttribute = attrPath,
+                    rowType = "SCALAR_OVERRIDE",
                     isSyntheticBase = false,
                 )
             applyScalarValueToRow(scalarRow, attrPath, newValue)
-            configurationRepository.save(scalarRow)
+            saved += configurationRepository.save(scalarRow)
         }
+        return saved
     }
 
     /**
@@ -920,14 +999,15 @@ class ImportServiceImpl(
         @Suppress("UNUSED_PARAMETER") baseConfigRow: ComponentConfigurationEntity,
         base: EscrowModuleConfig,
         override: EscrowModuleConfig,
-    ) {
-        val versionRange = override.versionRangeString ?: return
+    ): List<ComponentConfigurationEntity> {
+        val versionRange = override.versionRangeString ?: return emptyList()
+        val saved = mutableListOf<ComponentConfigurationEntity>()
 
         // VCS override
         if (vcsSettingsDiffer(base.vcsSettings, override.vcsSettings)) {
             saveMarkerRowWithChildren(component, versionRange, MarkerAttributes.VCS_SETTINGS) { row ->
                 attachVcsEntries(row, override.vcsSettings)
-            }
+            }?.let { saved += it }
         }
 
         // Distribution overrides — check each family
@@ -937,22 +1017,22 @@ class ImportServiceImpl(
         if (mavenArtifactsDiffer(baseDist, overDist)) {
             saveMarkerRowWithChildren(component, versionRange, MarkerAttributes.DISTRIBUTION_MAVEN) { row ->
                 attachMavenArtifacts(row, overDist)
-            }
+            }?.let { saved += it }
         }
         if (fileUrlArtifactsDiffer(baseDist, overDist)) {
             saveMarkerRowWithChildren(component, versionRange, MarkerAttributes.DISTRIBUTION_FILE_URL) { row ->
                 attachFileUrlArtifacts(row, overDist)
-            }
+            }?.let { saved += it }
         }
         if (dockerImagesDiffer(baseDist, overDist)) {
             saveMarkerRowWithChildren(component, versionRange, MarkerAttributes.DISTRIBUTION_DOCKER) { row ->
                 attachDockerImages(row, overDist)
-            }
+            }?.let { saved += it }
         }
         if (packagesDiffer(baseDist, overDist)) {
             saveMarkerRowWithChildren(component, versionRange, MarkerAttributes.DISTRIBUTION_PACKAGES) { row ->
                 attachPackages(row, overDist)
-            }
+            }?.let { saved += it }
         }
 
         // Required tools override (junction rows need the config ID; handled inside)
@@ -966,8 +1046,9 @@ class ImportServiceImpl(
                 // save and skips the redundant second save in its own body.
                 configurationRepository.save(row)
                 attachRequiredTools(row, override.buildConfiguration?.tools)
-            }
+            }?.let { saved += it }
         }
+        return saved
     }
 
     /**
@@ -983,21 +1064,23 @@ class ImportServiceImpl(
         versionRange: String,
         marker: String,
         populate: (ComponentConfigurationEntity) -> Unit,
-    ) {
-        // Idempotent: if the row already exists (re-run), skip.
+    ): ComponentConfigurationEntity? {
+        // Idempotent: if the row already exists (re-run), return it so callers
+        // can still count it toward the "did anything land?" check.
         val existing =
             configurationRepository.findByComponentIdAndVersionRangeAndOverriddenAttribute(
                 component.id!!,
                 versionRange,
                 marker,
             )
-        if (existing != null) return
+        if (existing != null) return existing
 
         val row =
             ComponentConfigurationEntity(
                 component = component,
                 versionRange = versionRange,
                 overriddenAttribute = marker,
+                rowType = "MARKER",
                 isSyntheticBase = false,
             )
         // Attach children BEFORE save so cascade-persist picks them up
@@ -1006,6 +1089,7 @@ class ImportServiceImpl(
         if (row.id == null) {
             configurationRepository.save(row)
         }
+        return row
     }
 
     // =========================================================================

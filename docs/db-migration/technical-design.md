@@ -79,7 +79,7 @@ Schema v2 (Model A') replaces the V1..V6 polymorphic-FK / JSONB-metadata model:
 - **Polymorphic FK pairs removed.** All per-version data lives on `component_configurations` with a single FK to `components`.
 - **No JSONB metadata.** Typed columns for all known fields; legitimate polymorphic JSON (audit_log, registry_config) kept as TEXT via `@JdbcTypeCode(SqlTypes.JSON)`.
 - **`component_versions` table removed.** Version_range lives directly on `component_configurations` rows.
-- **Per-attribute version-range overrides.** Each override is a row keyed by `(component_id, version_range, overridden_attribute)`: NULL (base), `'aspect.field'` (scalar), or marker (replacement of a child collection).
+- **Per-attribute version-range overrides.** Each row carries an explicit `row_type` classifier with four values: BASE, SCALAR_OVERRIDE (`overridden_attribute = 'aspect.field'`), MARKER (`overridden_attribute` is one of six marker names, replaces a child collection), and RANGE_PRESENCE (storage-only enumeration anchor for DSL-declared ranges with no real override; hidden from V4 editor APIs).
 - **Unified VCS model.** SINGLE-VCS = 1 entry in `vcs_settings_entries` with `name = NULL`; MULTI-VCS = N named entries.
 - **Distribution split** into four specialized child tables (Maven coords, file URLs, Docker images, DEB/RPM packages).
 - **Aggregator grouping.** `component_groups` table + `components.component_group_id` FK preserve the DSL `components { ... }` nesting relationship that was previously lost in migration.

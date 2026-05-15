@@ -53,6 +53,7 @@ class ComponentDetailMapperTest {
             component = component,
             versionRange = "(,0),[0,)",
             overriddenAttribute = null, // BASE row
+            rowType = "BASE",
         )
 
     // -----------------------------------------------------------------------
@@ -218,6 +219,7 @@ class ComponentDetailMapperTest {
             component = component,
             versionRange = "[2,3)",
             overriddenAttribute = "build.javaVersion",
+            rowType = "SCALAR_OVERRIDE",
             javaVersion = "21",
         )
         component.configurations.add(cfg)
@@ -240,6 +242,7 @@ class ComponentDetailMapperTest {
             component = component,
             versionRange = "[3,4)",
             overriddenAttribute = "escrow.generation",
+            rowType = "SCALAR_OVERRIDE",
             escrowGeneration = "G2",
         )
         component.configurations.add(cfg)
@@ -260,6 +263,7 @@ class ComponentDetailMapperTest {
             component = component,
             versionRange = "[4,5)",
             overriddenAttribute = "jira.projectKey",
+            rowType = "SCALAR_OVERRIDE",
             jiraProjectKey = "HOTFIX",
         )
         component.configurations.add(cfg)
@@ -280,6 +284,7 @@ class ComponentDetailMapperTest {
             component = component,
             versionRange = "[5,6)",
             overriddenAttribute = MarkerAttributes.VCS_SETTINGS,
+            rowType = "MARKER",
         )
         val vcsEntry = VcsSettingsEntryEntity(
             id = UUID.randomUUID(),
@@ -309,6 +314,7 @@ class ComponentDetailMapperTest {
             component = component,
             versionRange = "[6,7)",
             overriddenAttribute = MarkerAttributes.DISTRIBUTION_MAVEN,
+            rowType = "MARKER",
         )
         val maven = DistributionMavenArtifactEntity(
             id = UUID.randomUUID(),
@@ -338,6 +344,7 @@ class ComponentDetailMapperTest {
             component = component,
             versionRange = "[2,3)",
             overriddenAttribute = "build.javaVersion",
+            rowType = "SCALAR_OVERRIDE",
             javaVersion = "21",
         )
         val marker = ComponentConfigurationEntity(
@@ -345,6 +352,7 @@ class ComponentDetailMapperTest {
             component = component,
             versionRange = "[3,4)",
             overriddenAttribute = MarkerAttributes.VCS_SETTINGS,
+            rowType = "MARKER",
         )
         component.configurations.addAll(listOf(base, scalar, marker))
 
