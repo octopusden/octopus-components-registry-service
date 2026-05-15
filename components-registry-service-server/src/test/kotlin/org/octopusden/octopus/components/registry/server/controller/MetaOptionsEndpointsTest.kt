@@ -4,10 +4,10 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
-import org.octopusden.octopus.components.registry.core.dto.BuildSystem
-import org.octopusden.octopus.components.registry.core.dto.EscrowGenerationMode
-import org.octopusden.octopus.components.registry.core.dto.RepositoryType
+import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
+import org.octopusden.octopus.escrow.BuildSystem
+import org.octopusden.octopus.escrow.RepositoryType
 import org.octopusden.octopus.components.registry.server.support.viewerJwt
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
@@ -27,6 +27,24 @@ import java.nio.file.Paths
  * repositoryType, generation). The Portal calls these to populate its
  * EnumSelect dropdowns when the admin field-config registry has no
  * options[] seeded for the matching field.
+ *
+ * Canonical-set choice — the persistence-layer enums (NOT the DTO enums)
+ * are the source of truth, so the values the endpoint advertises are
+ * exactly the values that round-trip through write/read via
+ * `EntityMappers`:
+ *   - `org.octopusden.octopus.escrow.BuildSystem` — used by
+ *     `EntityMappers.safeParseBuildSystem`. Differs from the
+ *     `core.dto.BuildSystem` enum on a single token: persistence has
+ *     `ESCROW_NOT_SUPPORTED`, DTO has `NOT_SUPPORTED`. Advertising the
+ *     DTO token would silently drop user input on save because the
+ *     mapper's `BuildSystem.valueOf(value)` would throw and
+ *     `safeParseBuildSystem` returns null.
+ *   - `org.octopusden.octopus.escrow.RepositoryType` — used by
+ *     `EntityMappers.vcsRoot(...)`. Token set is identical to the DTO
+ *     enum (GIT/MERCURIAL/CVS) but we still source from persistence
+ *     so the choice is unambiguous.
+ *   - `org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode`
+ *     — what `Mappers.toDTO()` reads off the escrow model.
  *
  * The endpoint names are domain-named (NOT `/meta/enums`) so the wire
  * surface does not pre-commit to "values come from a Java enum" — the
@@ -86,6 +104,20 @@ class MetaOptionsEndpointsTest {
         expected.forEachIndexed { idx, value ->
             result.andExpect(jsonPath("$[$idx]").value(value))
         }
+    }
+
+    @Test
+    @DisplayName("GET /meta/build-systems uses persistence enum tokens (ESCROW_NOT_SUPPORTED, not NOT_SUPPORTED)")
+    fun buildSystems_advertisesPersistenceTokens() {
+        // Pins the choice of persistence-layer enum over the DTO enum. If a
+        // future refactor accidentally reverts the controller to
+        // `core.dto.BuildSystem`, this test catches it because that enum has
+        // `NOT_SUPPORTED` (which would NOT round-trip through EntityMappers).
+        mvc
+            .perform(get("/rest/api/4/components/meta/build-systems").with(viewerJwt()))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$").value(org.hamcrest.Matchers.hasItem("ESCROW_NOT_SUPPORTED")))
+            .andExpect(jsonPath("$").value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem("NOT_SUPPORTED"))))
     }
 
     @Test

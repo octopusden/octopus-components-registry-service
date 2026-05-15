@@ -1,9 +1,9 @@
 package org.octopusden.octopus.components.registry.server.controller
 
-import org.octopusden.octopus.components.registry.core.dto.BuildSystem
-import org.octopusden.octopus.components.registry.core.dto.EscrowGenerationMode
-import org.octopusden.octopus.components.registry.core.dto.RepositoryType
+import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
+import org.octopusden.octopus.escrow.BuildSystem
+import org.octopusden.octopus.escrow.RepositoryType
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentCreateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentDetailResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentFilter
@@ -55,10 +55,17 @@ class ComponentControllerV4(
     // Domain-named option lists for the three free-form aspect string fields
     // (buildSystem, repositoryType, generation). The portal's EnumSelect uses
     // these to populate dropdowns when the admin field-config registry has no
-    // explicit options[] seeded. The endpoint names are domain-named, not
+    // explicit options[] seeded. Endpoint names are domain-named, not
     // implementation-named (no `/meta/enums`), so the wire surface survives
     // a future move of the option source from a Kotlin enum to a config
     // table or admin-editable registry.
+    //
+    // The enums sourced here are the *persistence-layer* ones used by
+    // `EntityMappers` on read/write — NOT the `core.dto.*` mirrors. The DTO
+    // variant of `BuildSystem` carries `NOT_SUPPORTED` while
+    // `EntityMappers.safeParseBuildSystem` calls `BuildSystem.valueOf` on
+    // the escrow variant (which has `ESCROW_NOT_SUPPORTED`). Advertising the
+    // DTO token would silently drop that value on save.
     @GetMapping("/meta/build-systems")
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
     fun getBuildSystems(): List<String> = BuildSystem.values().map { it.name }
