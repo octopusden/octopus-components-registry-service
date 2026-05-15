@@ -62,13 +62,11 @@ internal object MarkerAttributes {
  * session). Produces one `EscrowModuleConfig` per distinct version range that
  * appears across base + override rows.
  *
- * Synthetic-base handling (MIG-029): when `isSyntheticBase = true` AND at least
- * one override row exists, the base row's range entry is NOT emitted — only
- * override ranges. This eliminates the spurious `(,0),[0,)` entry that the
- * legacy variants-Map mapper used to synthesise for version-range-only DSL
- * components. When no override exists (synthetic-only component), a single
- * base-range entry is emitted so downstream consumers always see at least one
- * `EscrowModuleConfig`.
+ * The base row's version range is always emitted first, followed by any override
+ * range strings that are not already included. For version-range-only components
+ * (`isSyntheticBase = true`), the base row holds the first explicit version range
+ * from the DSL — this range must be emitted so that version resolution finds it.
+ * Downstream consumers always see at least one `EscrowModuleConfig`.
  */
 fun ComponentEntity.toEscrowModule(
     versionRangeFactory: VersionRangeFactory,
@@ -84,9 +82,7 @@ fun ComponentEntity.toEscrowModule(
     val overrides = configs.filter { it.overriddenAttribute != null }
 
     val enumeratedRanges = mutableListOf<String>()
-    if (!base.isSyntheticBase || overrides.isEmpty()) {
-        enumeratedRanges += base.versionRange
-    }
+    enumeratedRanges += base.versionRange
     overrides
         .map { it.versionRange }
         .distinct()
@@ -340,11 +336,11 @@ private fun buildEscrowModuleConfig(
                 .Doc(docLink.docComponentKey, docLink.majorVersion)
     }
 
-    // Artifact pattern (group/artifact) — there is at most one pair per component
-    val artifactId = component.artifactIds.firstOrNull()
-    if (artifactId != null) {
-        setField(config, "groupIdPattern", artifactId.groupPattern)
-        setField(config, "artifactIdPattern", artifactId.artifactPattern)
+    // Artifact pattern (group/artifact) — may have multiple artifact patterns for same group
+    val artifactIds = component.artifactIds.toList()
+    if (artifactIds.isNotEmpty()) {
+        setField(config, "groupIdPattern", artifactIds.first().groupPattern)
+        setField(config, "artifactIdPattern", artifactIds.joinToString(",") { it.artifactPattern })
     }
 
     return config
@@ -380,6 +376,7 @@ private class ComponentConfigurationView {
     var projectVersion: String? = null
     var systemProperties: String? = null
     var buildTasks: String? = null
+    var escrowBuildTask: String? = null
 
     var escrowProvidedDependencies: String? = null
     var escrowReusable: Boolean? = null
@@ -490,7 +487,7 @@ private class ComponentConfigurationView {
         return object : org.octopusden.octopus.components.registry.api.escrow.Escrow {
             override fun getGradle() = null
 
-            override fun getBuildTask() = captured.buildTasks
+            override fun getBuildTask() = captured.escrowBuildTask
 
             override fun getProvidedDependencies(): Collection<String> =
                 captured.escrowProvidedDependencies
@@ -536,6 +533,7 @@ private class ComponentConfigurationView {
                 projectVersion = base.projectVersion
                 systemProperties = base.systemProperties
                 buildTasks = base.buildTasks
+                escrowBuildTask = base.escrowBuildTask
 
                 escrowProvidedDependencies = base.escrowProvidedDependencies
                 escrowReusable = base.escrowReusable
@@ -673,11 +671,15 @@ private fun buildJiraComponent(
 
     val format =
         ComponentVersionFormat.create(majorFmt, releaseFmt, buildFmt, lineFmt, hotfixFmt)
-    val info = ComponentInfo(merged.jiraVersionPrefix ?: "", merged.jiraVersionFormat ?: "")
+    val info = if (merged.jiraVersionPrefix != null || merged.jiraVersionFormat != null) {
+        ComponentInfo(merged.jiraVersionPrefix, merged.jiraVersionFormat)
+    } else {
+        null
+    }
 
     return JiraComponent(
         projectKey,
-        component.jiraDisplayName ?: "",
+        component.jiraDisplayName,
         format,
         info,
         merged.jiraTechnical ?: false,

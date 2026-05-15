@@ -639,14 +639,35 @@ class ImportServiceImpl(
         linkSystems(saved, baseConfig)
         linkLabels(saved, baseConfig)
 
-        // §6.4 Base configuration row
+        // §6.4 Base configuration row.
+        // IMPORTANT: VCS entries and distribution artifacts are added to the
+        // entity's collections BEFORE the first save so that JPA/Hibernate
+        // cascade-persists them in the same flush.  A freshly-constructed entity
+        // holds a plain ArrayList that is never replaced by a PersistentBag
+        // until the session closes, so mutations after persist are invisible to
+        // the flush.
+        //
+        // Required tools MUST be stored as a dedicated BUILD_REQUIRED_TOOLS marker
+        // row (overriddenAttribute = "build.requiredTools"), NOT on the base config
+        // row.  EntityMappers.toBuildParameters reads tools only from markerOverrides
+        // (rows with overriddenAttribute != null); the base row is excluded.
         val baseRow = buildBaseConfigRow(saved, baseConfig, isSyntheticBase)
+        attachVcsEntries(baseRow, baseConfig.vcsSettings)
+        attachDistribution(baseRow, baseConfig.distribution)
         val savedBase = configurationRepository.save(baseRow)
-
-        // Attach children to base row
-        attachVcsEntries(savedBase, baseConfig.vcsSettings)
-        attachDistribution(savedBase, baseConfig.distribution)
-        attachRequiredTools(savedBase, baseConfig.buildConfiguration?.tools)
+        // Store base-config required tools as a marker row so EntityMappers can find them.
+        val baseTools = baseConfig.buildConfiguration?.tools
+        if (!baseTools.isNullOrEmpty()) {
+            val toolMarkerRow =
+                ComponentConfigurationEntity(
+                    component = saved,
+                    versionRange = savedBase.versionRange,
+                    overriddenAttribute = MarkerAttributes.BUILD_REQUIRED_TOOLS,
+                    isSyntheticBase = false,
+                )
+            configurationRepository.save(toolMarkerRow)
+            attachRequiredTools(toolMarkerRow, baseTools)
+        }
 
         // §6.5 Override rows: diff all non-base configs against the base.
         // For ALL_VERSIONS base: nonBaseConfigs = configs with explicit version ranges.
@@ -812,6 +833,8 @@ class ImportServiceImpl(
             row.systemProperties = bp.systemProperties
             row.buildTasks = bp.buildTasks
         }
+        // escrow.buildTask is stored in its own column (separate from build.buildTasks).
+        cfg.escrow?.buildTask?.let { row.escrowBuildTask = it }
 
         // escrow aspect
         cfg.escrow?.let { escrow ->
@@ -904,8 +927,9 @@ class ImportServiceImpl(
 
         // VCS override
         if (vcsSettingsDiffer(base.vcsSettings, override.vcsSettings)) {
-            val markerRow = saveMarkerRow(component, versionRange, MarkerAttributes.VCS_SETTINGS)
-            attachVcsEntries(markerRow, override.vcsSettings)
+            saveMarkerRowWithChildren(component, versionRange, MarkerAttributes.VCS_SETTINGS) { row ->
+                attachVcsEntries(row, override.vcsSettings)
+            }
         }
 
         // Distribution overrides — check each family
@@ -913,44 +937,64 @@ class ImportServiceImpl(
         val overDist = override.distribution
 
         if (mavenArtifactsDiffer(baseDist, overDist)) {
-            val markerRow = saveMarkerRow(component, versionRange, MarkerAttributes.DISTRIBUTION_MAVEN)
-            attachMavenArtifacts(markerRow, overDist)
+            saveMarkerRowWithChildren(component, versionRange, MarkerAttributes.DISTRIBUTION_MAVEN) { row ->
+                attachMavenArtifacts(row, overDist)
+            }
         }
         if (fileUrlArtifactsDiffer(baseDist, overDist)) {
-            val markerRow = saveMarkerRow(component, versionRange, MarkerAttributes.DISTRIBUTION_FILE_URL)
-            attachFileUrlArtifacts(markerRow, overDist)
+            saveMarkerRowWithChildren(component, versionRange, MarkerAttributes.DISTRIBUTION_FILE_URL) { row ->
+                attachFileUrlArtifacts(row, overDist)
+            }
         }
         if (dockerImagesDiffer(baseDist, overDist)) {
-            val markerRow = saveMarkerRow(component, versionRange, MarkerAttributes.DISTRIBUTION_DOCKER)
-            attachDockerImages(markerRow, overDist)
+            saveMarkerRowWithChildren(component, versionRange, MarkerAttributes.DISTRIBUTION_DOCKER) { row ->
+                attachDockerImages(row, overDist)
+            }
         }
         if (packagesDiffer(baseDist, overDist)) {
-            val markerRow = saveMarkerRow(component, versionRange, MarkerAttributes.DISTRIBUTION_PACKAGES)
-            attachPackages(markerRow, overDist)
+            saveMarkerRowWithChildren(component, versionRange, MarkerAttributes.DISTRIBUTION_PACKAGES) { row ->
+                attachPackages(row, overDist)
+            }
         }
 
-        // Required tools override
+        // Required tools override (junction rows need the config ID; handled inside)
         val baseTools = base.buildConfiguration?.tools?.map { it.name }?.toSet() ?: emptySet()
         val overTools = override.buildConfiguration?.tools?.map { it.name }?.toSet() ?: emptySet()
         if (baseTools != overTools) {
-            val markerRow = saveMarkerRow(component, versionRange, MarkerAttributes.BUILD_REQUIRED_TOOLS)
-            attachRequiredTools(markerRow, override.buildConfiguration?.tools)
+            saveMarkerRowWithChildren(component, versionRange, MarkerAttributes.BUILD_REQUIRED_TOOLS) { row ->
+                // Required tool junctions use the config ID explicitly, so we must
+                // persist the marker row first (to get the ID), then attach tools.
+                // saveMarkerRowWithChildren detects that row.id is non-null after this
+                // save and skips the redundant second save in its own body.
+                configurationRepository.save(row)
+                attachRequiredTools(row, override.buildConfiguration?.tools)
+            }
         }
     }
 
-    private fun saveMarkerRow(
+    /**
+     * Idempotent helper: if a marker row for (component, versionRange, marker) does not
+     * yet exist, builds a transient [ComponentConfigurationEntity], passes it to [populate]
+     * so children can be added BEFORE the first persist (ensuring cascade), then saves.
+     *
+     * Children that rely on the generated ID (e.g. required-tool junctions) must be
+     * handled separately inside [populate] after they call `repository.save(row)` themselves.
+     */
+    private fun saveMarkerRowWithChildren(
         component: ComponentEntity,
         versionRange: String,
         marker: String,
-    ): ComponentConfigurationEntity {
-        // Idempotent: check for existing
+        populate: (ComponentConfigurationEntity) -> Unit,
+    ) {
+        // Idempotent: if the row already exists (re-run), skip.
         val existing =
             configurationRepository.findByComponentIdAndVersionRangeAndOverriddenAttribute(
                 component.id!!,
                 versionRange,
                 marker,
             )
-        if (existing != null) return existing
+        if (existing != null) return
+
         val row =
             ComponentConfigurationEntity(
                 component = component,
@@ -958,7 +1002,12 @@ class ImportServiceImpl(
                 overriddenAttribute = marker,
                 isSyntheticBase = false,
             )
-        return configurationRepository.save(row)
+        // Attach children BEFORE save so cascade-persist picks them up
+        populate(row)
+        // Only save if the lambda didn't already do so
+        if (row.id == null) {
+            configurationRepository.save(row)
+        }
     }
 
     // =========================================================================
