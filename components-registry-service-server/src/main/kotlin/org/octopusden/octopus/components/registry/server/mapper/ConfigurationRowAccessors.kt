@@ -122,7 +122,7 @@ internal fun ComponentConfigurationEntity.applyScalarValue(
     clearAllScalarColumns()
 
     when (attributePath) {
-        "build.buildSystem" -> buildSystem = requireString(attributePath, value)
+        "build.buildSystem" -> buildSystem = requireBuildSystem(attributePath, value)
         "build.buildSystemVersion" -> buildSystemVersion = requireString(attributePath, value)
         "build.javaVersion" -> javaVersion = requireString(attributePath, value)
         "build.mavenVersion" -> mavenVersion = requireString(attributePath, value)
@@ -206,3 +206,26 @@ private fun requireBoolean(
                 ?: throw IllegalArgumentException("Attribute '$path' expects boolean; got non-boolean string '$value'")
         else -> throw IllegalArgumentException("Attribute '$path' expects a boolean value; got ${value::class.simpleName}")
     }
+
+/**
+ * `build.buildSystem` is special: the resolver parses the stored string with
+ * `BuildSystem.valueOf` and silently returns `null` for unknown values. Reject
+ * unknown values at the write boundary so the editor surface stays consistent
+ * with what the legacy reader can interpret.
+ */
+private val BUILD_SYSTEM_NAMES: Set<String> =
+    org.octopusden.octopus.components.registry.core.dto.BuildSystem
+        .values()
+        .map { it.name }
+        .toSet()
+
+private fun requireBuildSystem(
+    path: String,
+    value: Any,
+): String {
+    val asString = requireString(path, value)
+    require(asString in BUILD_SYSTEM_NAMES) {
+        "Attribute '$path' expects one of $BUILD_SYSTEM_NAMES; got '$asString'"
+    }
+    return asString
+}
