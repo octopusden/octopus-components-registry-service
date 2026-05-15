@@ -155,7 +155,8 @@ Driven by MIG-029 investigation + cross-installation DSL audit. See [ADR-014](ad
 | 2 | Refactor entities & repositories (delete `ComponentVersionEntity` + polymorphic FK pairs; introduce `ComponentGroupEntity`, distribution-split entities, etc.) | ✅ Done | Commits `f552a39` → `47e4849` (Phase 2.0–2.5). 23 entity classes + 22 repos. |
 | 3 | Rewrite `EntityMappers` + `DatabaseComponentRegistryResolver` (base + override merge; marker rows; synthetic-base handling; doc-links resolution; unified VCS mapping) | ✅ Done | Commits `1934dab` (bidi collections), `2b13521` (EntityMappers), `7196099` (resolver). Phase 3b.1 (`c31869a`) adapted `AuditEventListener`, `ConfigControllerV4`, `ComponentSourceRegistryImpl`, `GitHistoryCommitWriter`, `AuditEvent` to v2 entities. |
 | 4 | Update v4 DTOs + `ComponentControllerV4` (replace `metadata: Map` with explicit fields; surface group membership; doc links as `docs[]`) | ✅ Done | Commits `72d0c76` (rename `.v2` package suffix → drop) + `89e8792` (Phase 4: rewrite v4 layer). New DTOs (`ComponentConfigurationDtos`), V4Mappers, `ComponentManagementServiceImpl`, field-override CRUD against `component_configurations`. `OverrideApplicator` retired. |
-| 5 | Rewrite `ImportServiceImpl` + `MigrationServiceImpl` (pre-pass dictionary discovery; aggregator detection; two-pass `parentComponent`; per-attribute override emission; distribution family split) | 🚧 Pending | Also covers `GitHistoryImportServiceImpl`, `HistoryMigrationJobServiceImpl`, `TeamcitySyncService` rewrite. Phase 4 left these compile-broken on purpose (legacy entity refs); branch is not yet buildable end-to-end. |
+| 5a | Adapt `TeamcitySyncService` to `component_teamcity_projects`; restore `GitHistoryImportServiceImpl` / `HistoryMigrationJobServiceImpl`; stub `ImportServiceImpl` so the app boots; @Disabled the auto-migrate-dependent tests | ✅ Done | Commits `1b8aea8` (TC sync rewrite), `849a7a9` (history services + ImportServiceImpl stub), `f47eaf1` (12 schema-v2 broken test stubs), `f226aa5` (triage fixup: empty migrate result, @Disabled 7 ft-db tests, Bucket b/f fixes). `AUTH_SERVER_URL=… AUTH_SERVER_REALM=octopus ./gradlew build -x dockerBuildImage -x dockerPushImage -x ocCreate -x ocProcess -x :components-registry-automation:test` exits 0. |
+| 5b (MIG-039) | Port `ImportServiceImpl` to schema v2 per §6 (pre-pass dictionary discovery; aggregator detection; two-pass `parentComponent`; per-attribute override emission; distribution family split; synthetic-base flag) | 🚧 Pending | The §6 pipeline replaces the deleted `EscrowModule.toComponentEntity()` shortcut. Until it lands, `migrate{Component,AllComponents}` throw and operator-driven `POST /admin/migrate` is unavailable; the startup auto-migrate path (`migrate()`) is a no-op. See `todo.md` MIG-039. |
 | 6 | Test suite (Layer 1 synthetic fixtures; Layer 2 env-gated integration; Layer 3 internal-CI baselines) | 🚧 Pending | MIG-029..MIG-038 coverage. **Includes the schema-v2 @Disabled test-suite cleanup** — see the disabled list below; Phase 6 is INCOMPLETE until every entry is either removed, rewritten, or re-enabled. |
 | 7 | QA DB recreate + full `gradlew build` | 🚧 Pending | Requires `AUTH_SERVER` env + standard excludes |
 | 8 | Supersede ADR-010 | ✅ Done | ADR-010 marked superseded; ADR-014 active |
@@ -182,6 +183,24 @@ Once Phase 5 lands the rewritten import / TC services and the `compileKotlin` st
 | `service/impl/HistoryMigrationJobServiceImplTest` | Same. | Re-enable after Phase 5. |
 
 If any other test class fails to compile once Phase 5 lands, add it here with the same `@Disabled` reason string and a Phase 6 action.
+
+**Phase 5 also disabled 7 more classes** that depend on auto-migrate actually seeding the DB. Listed for Phase 6:
+
+| Test class | Why disabled | Phase 6 action |
+|---|---|---|
+| `DbBackedComponentsRegistryServiceControllerTest` | `@BeforeAll` calls `POST /admin/migrate-components`; `ImportServiceImpl.migrateAllComponents` throws. | Re-enable once MIG-039 lands the §6 import pipeline. |
+| `migration/GitVsDbValidationTest` | Same — `@BeforeAll` calls the migrate endpoint. | Re-enable with MIG-039. |
+| `migration/AutoMigrateOnStartupTest` | Asserts components are in DB after startup auto-migrate. | Re-enable with MIG-039, or rewrite to seed via v4 CRUD API. |
+| `migration/FtDbProfileTest` | Same auto-migrate assumption. | Same. |
+| `migration/GhostComponentAfterRenameTest` | Uses `ft-db` profile + `firstComponent()` helper that expects a seeded DB. | Rewrite to seed the renamed component via v4 CRUD API in `@BeforeAll`. |
+| `migration/Sys039PersistenceRoundtripTest` | Uses `ft-db` profile + `firstComponent()`. | Rewrite to seed via v4 CRUD API. |
+| `service/impl/FieldConfigEnforcementIntegrationTest` | Uses `ft-db` profile + `firstComponent()`. | Rewrite to seed via v4 CRUD API. |
+
+**Plus one test class explicitly disabled because `POST /admin/migrate` cannot succeed until MIG-039 lands:**
+
+| Test class | Why disabled | Phase 6 action |
+|---|---|---|
+| `migration/MigrateEndpointTest` | `POST /admin/migrate` async job calls `migrateAllComponents`, still throws `UnsupportedOperationException`. | Re-enable with MIG-039. |
 
 Compile-only checklist (Phase 6 cannot ship until all are ✅):
 - [ ] No source file carries `@Disabled("schema-v2: …")`.
