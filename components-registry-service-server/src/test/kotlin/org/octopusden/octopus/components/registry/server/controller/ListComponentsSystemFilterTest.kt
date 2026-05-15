@@ -18,13 +18,12 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.nio.file.Paths
 
 /**
- * Review finding #7: `ComponentManagementServiceImpl.buildSpecification` accepts a
- * `system` filter but the implementation returns the base spec unchanged — the
- * comment promises an in-memory post-filter but the code never filters. JPA
- * Criteria can't portably do `text[]` contains across H2 PG-compat and
- * PostgreSQL, and the endpoint has no native query yet. For now `?system=foo`
- * must be rejected with 400 so callers get a clear signal instead of a page of
- * unfiltered results that silently doesn't match their intent.
+ * Schema v2: `system` was a `text[]` column on the legacy schema, which JPA
+ * Criteria couldn't filter portably across H2 PG-compat and Postgres, so the
+ * v1 implementation rejected `?system=…` with 400. With the v2 normalised
+ * `component_systems` junction table the filter is expressible as a plain
+ * JOIN (see `ComponentManagementServiceImpl.buildSpecification`), so the
+ * endpoint now returns 200 and a filtered (possibly empty) page.
  */
 @AutoConfigureMockMvc
 @SpringBootTest(
@@ -55,10 +54,10 @@ class ListComponentsSystemFilterTest {
     }
 
     @Test
-    @DisplayName("listComponents with filter.system must return 400 until native array-contains is implemented")
-    fun listComponents_withSystemFilter_rejected() {
+    @DisplayName("listComponents with filter.system returns 200 (v2 junction-based filter)")
+    fun listComponents_withSystemFilter_ok() {
         mvc
             .perform(get("/rest/api/4/components").with(viewerJwt()).param("system", "ANYSYSTEM"))
-            .andExpect(status().isBadRequest)
+            .andExpect(status().isOk)
     }
 }

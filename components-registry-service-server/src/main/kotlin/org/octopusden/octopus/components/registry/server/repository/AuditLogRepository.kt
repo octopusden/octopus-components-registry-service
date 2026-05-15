@@ -5,7 +5,9 @@ import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor
+import org.springframework.data.jpa.repository.Modifying
 import org.springframework.stereotype.Repository
+import org.springframework.transaction.annotation.Transactional
 
 @Repository
 interface AuditLogRepository :
@@ -24,5 +26,7 @@ interface AuditLogRepository :
 
     fun findAllByOrderByChangedAtDesc(pageable: Pageable): Page<AuditLogEntity>
 
-    fun deleteBySource(source: String)
+    @Modifying
+    @Transactional
+    fun deleteBySource(source: String): Int
 }

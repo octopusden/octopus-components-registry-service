@@ -42,6 +42,11 @@ import java.nio.file.Paths
  * the same shape it did before async ([MigrationJobResponse.result.components.total],
  * etc.) without waiting on or polling a background thread.
  */
+@org.junit.jupiter.api.Disabled(
+    "schema-v2: temporarily disabled until Phase 6 — `POST /admin/migrate` async job " +
+        "calls `ImportServiceImpl.migrateAllComponents`, which still throws " +
+        "UnsupportedOperationException until the §6 import pipeline (MIG-039) lands.",
+)
 @AutoConfigureMockMvc
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,

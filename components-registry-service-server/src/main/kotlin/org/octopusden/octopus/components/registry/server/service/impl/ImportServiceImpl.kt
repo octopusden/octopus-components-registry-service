@@ -80,8 +80,28 @@ class ImportServiceImpl(
     override fun validateMigration(name: String): ValidationResult =
         throw UnsupportedOperationException(SCHEMA_V2_STUB_MESSAGE)
 
-    override fun migrate(progress: MigrationProgressListener): FullMigrationResult =
-        throw UnsupportedOperationException(SCHEMA_V2_STUB_MESSAGE)
+    /**
+     * Startup-friendly variant: callers (incl. `ComponentsRegistryServiceImpl.cloneVcsData`
+     * during `@PostConstruct` when `components-registry.auto-migrate=true`) need a
+     * working call. Until the §6 import pipeline lands we still migrate the defaults
+     * (which works under v2) and return zero components migrated. Operator-driven
+     * `POST /admin/migrate` goes through [migrateAllComponents], which still throws —
+     * the auto-migrate path here just gets the empty result + a warning log so the
+     * application can boot.
+     */
+    override fun migrate(progress: MigrationProgressListener): FullMigrationResult {
+        LOG.warn(SCHEMA_V2_STUB_MESSAGE)
+        val defaults = migrateDefaults()
+        val components =
+            BatchMigrationResult(
+                total = 0,
+                migrated = 0,
+                failed = 0,
+                skipped = 0,
+                results = emptyList(),
+            )
+        return FullMigrationResult(defaults = defaults, components = components)
+    }
 
     @Suppress("CyclomaticComplexMethod", "TooGenericExceptionCaught", "LongMethod")
     override fun migrateDefaults(): Map<String, Any?> {
