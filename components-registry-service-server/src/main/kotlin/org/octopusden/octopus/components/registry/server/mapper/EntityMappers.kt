@@ -72,7 +72,7 @@ internal object MarkerAttributes {
  */
 fun ComponentEntity.toEscrowModule(
     versionRangeFactory: VersionRangeFactory,
-    numericVersionFactory: NumericVersionFactory,
+    @Suppress("UNUSED_PARAMETER") numericVersionFactory: NumericVersionFactory,
 ): EscrowModule {
     val module = EscrowModule()
     module.moduleName = this.componentKey

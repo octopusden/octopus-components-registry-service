@@ -297,7 +297,7 @@ class ComponentManagementServiceImpl(
         request.systems?.let { syncSystems(saved.id!!, it) }
         request.labels?.let { syncLabels(saved.id!!, it) }
         if (baseConfigForToolsSync != null) {
-            syncRequiredTools(baseConfigForToolsSync.id!!, request.baseConfiguration!!.requiredTools!!)
+            syncRequiredTools(baseConfigForToolsSync.id!!, request.baseConfiguration.requiredTools!!)
         }
 
         if (isRename) sourceRegistry.renameComponent(oldKey, saved.componentKey)
