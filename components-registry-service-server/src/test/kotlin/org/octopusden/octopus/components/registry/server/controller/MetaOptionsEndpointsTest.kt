@@ -6,9 +6,9 @@ import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
+import org.octopusden.octopus.components.registry.server.support.viewerJwt
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.RepositoryType
-import org.octopusden.octopus.components.registry.server.support.viewerJwt
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
@@ -28,10 +28,11 @@ import java.nio.file.Paths
  * EnumSelect dropdowns when the admin field-config registry has no
  * options[] seeded for the matching field.
  *
- * Canonical-set choice — the persistence-layer enums (NOT the DTO enums)
- * are the source of truth, so the values the endpoint advertises are
- * exactly the values that round-trip through write/read via
- * `EntityMappers`:
+ * Canonical-set choice — for buildSystem and repositoryType the
+ * persistence-layer enums (NOT the `core.dto.*` mirrors) are the source,
+ * so the values the endpoint advertises are exactly the values that
+ * round-trip through write/read via `EntityMappers`. The generation
+ * enum has a single canonical source in the API module:
  *   - `org.octopusden.octopus.escrow.BuildSystem` — used by
  *     `EntityMappers.safeParseBuildSystem`. Differs from the
  *     `core.dto.BuildSystem` enum on a single token: persistence has
@@ -44,7 +45,10 @@ import java.nio.file.Paths
  *     enum (GIT/MERCURIAL/CVS) but we still source from persistence
  *     so the choice is unambiguous.
  *   - `org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode`
- *     — what `Mappers.toDTO()` reads off the escrow model.
+ *     — the API-module enum that `Mappers.toDTO()` reads off the escrow
+ *     model. The `core.dto.EscrowGenerationMode` mirror has the same
+ *     token set; sourcing from the API enum keeps the mapping path
+ *     direct.
  *
  * The endpoint names are domain-named (NOT `/meta/enums`) so the wire
  * surface does not pre-commit to "values come from a Java enum" — the

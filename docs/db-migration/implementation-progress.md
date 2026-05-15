@@ -82,6 +82,7 @@ Backend tasks (B2, B3) live in this repo. Frontend tasks (U4, U5) moved to Porta
 | V5 schema | ✅ Done | `V5__audit_source_and_history_state.sql` — `audit_log.source` (api / git-history) + `git_history_import_state` table. |
 | `ft-db` profile | ✅ Done | H2 + auto-migrate for downstream FT testing. PR #148 (commit `7733f83`). Contracts: SYS-026, SYS-027. |
 | UI extracted to Portal | ✅ Done | `components-registry-ui/` module + `SpaWebConfig.kt` removed; UI now lives in `octopus-components-management-portal`. PR #147 (commit `26278f2`). Decision recorded in [ADR-012](adr/012-portal-architecture.md), supersedes ADR-009. |
+| Meta option-list endpoints | ✅ Done | `ComponentControllerV4.getBuildSystems()` / `getRepositoryTypes()` / `getEscrowGenerations()` — domain-named meta endpoints sourced from persistence (`escrow.BuildSystem` / `escrow.RepositoryType`) and API (`api.enums.EscrowGenerationMode`) enums. Portal's `useFieldOptions` consumes these as the fallback when admin field-config has no `options[]` seeded. PR #202. Contract: SYS-038. |
 
 ## Known Bugs Fixed During Development
 

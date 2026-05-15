@@ -1158,12 +1158,12 @@ Add three GET endpoints under `/rest/api/4/components/meta/*` that return the ca
 | `GET /rest/api/4/components/meta/repository-types` | `org.octopusden.octopus.escrow.RepositoryType` |
 | `GET /rest/api/4/components/meta/escrow-generations` | `org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode` |
 
-The enums sourced are the **persistence-layer** ones used by `EntityMappers` on read/write — NOT the `core.dto.*` mirrors. The DTO variant of `BuildSystem` carries `NOT_SUPPORTED` while persistence carries `ESCROW_NOT_SUPPORTED`; advertising the DTO token would silently drop user input on save because `EntityMappers.safeParseBuildSystem` calls `BuildSystem.valueOf` against the escrow variant.
+For `buildSystem` and `repositoryType` the **persistence-layer** enums (NOT the `core.dto.*` mirrors) are the source. The DTO variant of `BuildSystem` carries `NOT_SUPPORTED` while persistence carries `ESCROW_NOT_SUPPORTED`; advertising the DTO token would silently drop user input on save because `EntityMappers.safeParseBuildSystem` calls `BuildSystem.valueOf` against the escrow variant. For `generation` the source is `components-registry-api`'s `EscrowGenerationMode` (the `core.dto.EscrowGenerationMode` mirror has the same token set; the API enum is the one `Mappers.toDTO()` reads off the escrow model).
 
-Auth: `@PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")` — same gate as `/meta/owners`.
+Auth: `@PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")` — same gate as `/meta/owners`. `ACCESS_COMPONENTS` is granted to `ROLE_ANONYMOUS` in the current security config, matching the rest of the v4 component-read surface, so anonymous callers can read the option lists.
 
 **Preconditions:**
-- Caller authenticated with `ACCESS_COMPONENTS`.
+- Caller has `ACCESS_COMPONENTS` (granted to `ROLE_ANONYMOUS` by default — no JWT required).
 - No DB state required — endpoint reads from compile-time enum metadata.
 
 **Acceptance criteria:**

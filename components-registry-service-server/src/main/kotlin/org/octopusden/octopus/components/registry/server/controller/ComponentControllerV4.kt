@@ -2,8 +2,6 @@ package org.octopusden.octopus.components.registry.server.controller
 
 import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
-import org.octopusden.octopus.escrow.BuildSystem
-import org.octopusden.octopus.escrow.RepositoryType
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentCreateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentDetailResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentFilter
@@ -14,6 +12,8 @@ import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideRes
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideUpdateRequest
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
+import org.octopusden.octopus.escrow.BuildSystem
+import org.octopusden.octopus.escrow.RepositoryType
 import org.slf4j.LoggerFactory
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
@@ -60,12 +60,17 @@ class ComponentControllerV4(
     // a future move of the option source from a Kotlin enum to a config
     // table or admin-editable registry.
     //
-    // The enums sourced here are the *persistence-layer* ones used by
-    // `EntityMappers` on read/write — NOT the `core.dto.*` mirrors. The DTO
-    // variant of `BuildSystem` carries `NOT_SUPPORTED` while
+    // For buildSystem and repositoryType the *persistence-layer* enums
+    // (`org.octopusden.octopus.escrow.BuildSystem` / `RepositoryType`) are
+    // sourced rather than the `core.dto.*` mirrors. The DTO variant of
+    // `BuildSystem` carries `NOT_SUPPORTED` while
     // `EntityMappers.safeParseBuildSystem` calls `BuildSystem.valueOf` on
-    // the escrow variant (which has `ESCROW_NOT_SUPPORTED`). Advertising the
-    // DTO token would silently drop that value on save.
+    // the escrow variant (which has `ESCROW_NOT_SUPPORTED`); advertising
+    // the DTO token would silently drop that value on save. For generation
+    // there is only one canonical source in `components-registry-api`'s
+    // `EscrowGenerationMode` (the `core.dto.EscrowGenerationMode` mirror
+    // has the same token set; we use the API enum because `Mappers.toDTO`
+    // reads it directly off the escrow model).
     @GetMapping("/meta/build-systems")
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
     fun getBuildSystems(): List<String> = BuildSystem.values().map { it.name }
