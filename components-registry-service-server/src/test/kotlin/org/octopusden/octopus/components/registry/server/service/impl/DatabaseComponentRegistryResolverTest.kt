@@ -409,11 +409,6 @@ class DatabaseComponentRegistryResolverTest {
     // ========================================================================
 
     @Test
-    @org.junit.jupiter.api.Disabled(
-        "schema-v2 known limitation — synthetic-base suppression in enumeration is not yet wired " +
-            "through resolveForRange; both base and override ranges are currently returned. " +
-            "Sibling of RES-001 (enumeration semantics). Tracked in docs/db-migration/todo.md.",
-    )
     fun `(5 MIG-029) synthetic base with override - enumeration emits only the override range`() {
         val comp = makeComponent("COMP5")
         val base = makeBase(comp, isSyntheticBase = true, javaVersion = "8")

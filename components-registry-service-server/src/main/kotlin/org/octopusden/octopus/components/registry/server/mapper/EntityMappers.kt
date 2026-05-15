@@ -81,8 +81,16 @@ fun ComponentEntity.toEscrowModule(
             ?: return module
     val overrides = configs.filter { it.overriddenAttribute != null }
 
+    // Per schema-spec.md §3.4 (MIG-029): a synthetic-base row exists only as a
+    // schema-required anchor for a version-range-only component (one with no
+    // shared scalars across its ranges). When overrides exist, the base range
+    // (which is `(,)` by convention for synthetic bases) is a placeholder and
+    // must NOT be enumerated as a view of its own. For non-synthetic bases the
+    // base range IS the default view and must be enumerated.
     val enumeratedRanges = mutableListOf<String>()
-    enumeratedRanges += base.versionRange
+    if (!(base.isSyntheticBase && overrides.isNotEmpty())) {
+        enumeratedRanges += base.versionRange
+    }
     overrides
         .map { it.versionRange }
         .distinct()
