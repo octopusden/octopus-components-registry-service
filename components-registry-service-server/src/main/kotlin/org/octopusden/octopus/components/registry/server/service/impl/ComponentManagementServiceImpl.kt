@@ -230,10 +230,9 @@ class ComponentManagementServiceImpl(
         val isRename = normalizedNewKey != null && normalizedNewKey != oldKey
 
         request.productType?.let { validateProductType(it) }
-        // `baseConfiguration.versionRange` is also validated by the downstream
-        // base-configuration patch block via `validateRangeSyntax`. Keep this
-        // top-level guard as an explicit fail-fast (and to match the create
-        // path's ordering); the duplicate cost is one parse on PATCH only.
+        // `baseConfiguration.versionRange` is validated downstream inside the
+        // base-configuration patch block via `validateRangeSyntax` — no
+        // top-level guard needed here.
         request.baseConfiguration?.build?.buildSystem?.let { validateBuildSystem(it) }
         // vcsEntries[].repositoryType / packages[].packageType are validated
         // inside `replaceVcsEntries` / `replacePackages` (see service helpers).
@@ -1156,6 +1155,10 @@ class ComponentManagementServiceImpl(
         // `Distribution.DEB` / `Distribution.RPM` are the only types emitted by
         // the resolver. There is no enum class for them at the API layer, so
         // hand-list the allowed values.
+        // TODO: replace with `PackageType.values().map { it.name }.toSet()`
+        // if a `PackageType` enum is ever extracted to the API module; until
+        // then any DSL change that introduces a new package type must update
+        // this set in lockstep.
         private val PACKAGE_TYPES: Set<String> = setOf("DEB", "RPM")
     }
 
