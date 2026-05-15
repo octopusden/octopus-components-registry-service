@@ -9,12 +9,15 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpEntity
 import org.springframework.http.HttpStatus
+import org.springframework.http.ResponseEntity
 import org.springframework.http.converter.HttpMessageNotReadableException
+import org.springframework.web.ErrorResponseException
 import org.springframework.web.bind.annotation.ControllerAdvice
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.client.RestClientException
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
+import org.springframework.web.server.ResponseStatusException
 
 @ControllerAdvice
 class ControllerExceptionHandler {
@@ -158,6 +161,25 @@ class ControllerExceptionHandler {
         return HttpEntity(ErrorResponse("Validation failed: $errors"))
     }
 
+    /**
+     * Service code (e.g. `GitHistoryImportServiceImpl.preflight`) intentionally
+     * throws `ResponseStatusException` with non-500 statuses (409 for concurrent
+     * import claim). Without this explicit handler the `Throwable` catch-all
+     * below would intercept it and downgrade to 500 — because Spring's
+     * `ExceptionHandlerExceptionResolver` runs ahead of `ResponseStatusExceptionResolver`
+     * and the first matching `@ExceptionHandler` wins. Map back to the caller's
+     * declared status code while keeping the `ErrorResponse` envelope.
+     */
+    @ExceptionHandler(ResponseStatusException::class)
+    fun responseStatusExceptionHandler(e: ResponseStatusException): ResponseEntity<ErrorResponse> {
+        log.warn("Mapped HTTP exception: {} {}", e.statusCode, e.reason)
+        // `e.reason` is the explicit reason phrase passed at the throw site;
+        // `e.message` adds the status prefix. Fall back to a numeric-only
+        // message so we never echo Spring's internal status enum name.
+        val body = e.reason ?: e.message ?: "HTTP ${e.statusCode.value()}"
+        return ResponseEntity.status(e.statusCode).body(ErrorResponse(body))
+    }
+
     // Note: AccessDeniedException and AuthenticationException are intercepted by Spring
     // Security's ExceptionTranslationFilter BEFORE they ever reach @ControllerAdvice.
     // Consistent JSON 401/403 bodies are produced by the AuthenticationEntryPoint /
@@ -174,19 +196,34 @@ class ControllerExceptionHandler {
      * shouldn't see. Declared last so Spring's most-specific-handler dispatch leaves
      * the dedicated 4xx handlers above untouched.
      *
-     * **Security carve-out:** `AccessDeniedException` (incl. Spring Security 6's
-     * `AuthorizationDeniedException`) and `AuthenticationException` are thrown at
-     * method-invocation time by `@PreAuthorize` / authentication interceptors and
-     * propagate UP through DispatcherServlet — which means they would otherwise be
-     * caught here BEFORE Spring Security's `ExceptionTranslationFilter` ever sees
-     * them, silently downgrading 401/403 to 500. Re-throw them so the security
-     * filter chain produces the canonical envelope (see WebSecurityConfig).
+     * **Re-throw carve-outs.** This `Throwable` catch-all is broad enough to
+     * intercept exceptions that other resolvers/filters are responsible for —
+     * silently downgrading their canonical 4xx/401/403 into a 500. Re-throw to
+     * let the right machinery handle them:
+     *
+     *  - `AccessDeniedException` (incl. Spring Security 6's `AuthorizationDeniedException`)
+     *    and `AuthenticationException` — thrown at method-invocation time by
+     *    `@PreAuthorize` / authentication interceptors; Spring Security's
+     *    `ExceptionTranslationFilter` produces the canonical 401/403 envelope
+     *    (see WebSecurityConfig).
+     *  - `ErrorResponseException` — Spring 6+ base for many MVC framework
+     *    exceptions (and any explicit `ResponseStatusException` not caught by the
+     *    handler above). `DefaultHandlerExceptionResolver` maps these to their
+     *    declared status codes.
+     *  - `jakarta.servlet.ServletException` — older Spring MVC framework
+     *    exceptions: `HttpRequestMethodNotSupportedException` (405),
+     *    `HttpMediaTypeNotSupportedException` (415),
+     *    `MissingServletRequestParameterException` (400),
+     *    `NoHandlerFoundException` (404). These predate `ErrorResponseException`
+     *    and are still classified via Spring's resolver chain.
      */
     @ExceptionHandler(Throwable::class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     fun fallbackExceptionHandler(e: Throwable): HttpEntity<ErrorResponse> {
         if (e is org.springframework.security.access.AccessDeniedException ||
-            e is org.springframework.security.core.AuthenticationException
+            e is org.springframework.security.core.AuthenticationException ||
+            e is ErrorResponseException ||
+            e is jakarta.servlet.ServletException
         ) {
             throw e
         }

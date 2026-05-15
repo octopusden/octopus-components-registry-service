@@ -11,7 +11,10 @@ import org.octopusden.octopus.components.registry.server.support.viewerJwt
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.boot.test.mock.mockito.MockBean
+import org.springframework.context.annotation.Import
+import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.test.annotation.DirtiesContext
 import org.springframework.test.context.ActiveProfiles
@@ -20,6 +23,10 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.server.ResponseStatusException
 import java.nio.file.Paths
 import java.util.UUID
 
@@ -43,6 +50,7 @@ import java.util.UUID
 @ActiveProfiles("common", "ft-db")
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Timeout(120)
+@Import(ErrorHandlingHardeningTest.TestThrowingController::class)
 class ErrorHandlingHardeningTest {
     @MockBean
     @Suppress("UnusedPrivateProperty")
@@ -115,6 +123,18 @@ class ErrorHandlingHardeningTest {
     }
 
     @Test
+    @DisplayName("ResponseStatusException(CONFLICT) is preserved as 409, not collapsed to 500 by Throwable catch-all")
+    fun responseStatusException_preservesOriginalStatusCode() {
+        mvc
+            .perform(
+                get("/test-error-helpers/response-status-conflict")
+                    .with(viewerJwt()),
+            ).andExpect(status().isConflict)
+            .andExpect(jsonPath("$.errorMessage").exists())
+            .andExpect(jsonPath("$.errorMessage", containsSubstring("synthetic conflict")))
+    }
+
+    @Test
     @DisplayName("non-UUID path variable on PATCH returns 400 ErrorResponse")
     fun patchComponent_nonUuidPath_returns400ErrorResponse() {
         mvc
@@ -140,4 +160,20 @@ class ErrorHandlingHardeningTest {
 
     private fun containsSubstring(needle: String) =
         org.hamcrest.Matchers.containsString(needle)
+
+    /**
+     * Test-only controller used to drive a `ResponseStatusException` through the
+     * full DispatcherServlet → `@ControllerAdvice` chain. Service-layer code
+     * (e.g. `GitHistoryImportServiceImpl.preflight`) throws `ResponseStatusException`
+     * with a non-500 status; the broad `@ExceptionHandler(Throwable::class)`
+     * catch-all must NOT swallow it back into a 500.
+     */
+    @TestConfiguration
+    @RestController
+    @RequestMapping("/test-error-helpers")
+    class TestThrowingController {
+        @GetMapping("/response-status-conflict")
+        fun conflict(): Nothing =
+            throw ResponseStatusException(HttpStatus.CONFLICT, "synthetic conflict for handler test")
+    }
 }
