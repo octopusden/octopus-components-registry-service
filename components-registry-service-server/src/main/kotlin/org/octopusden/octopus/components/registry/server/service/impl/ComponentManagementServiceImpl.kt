@@ -1,470 +1,373 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
+import jakarta.persistence.OptimisticLockException
 import org.octopusden.octopus.components.registry.core.exceptions.ComponentNameConflictException
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
+import org.octopusden.octopus.components.registry.server.dto.v4.BaseConfigurationRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentCreateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentDetailResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentFilter
+import org.octopusden.octopus.components.registry.server.dto.v4.ComponentGroupRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentSummaryResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentUpdateRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.DockerImageRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideCreateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideUpdateRequest
-import org.octopusden.octopus.components.registry.server.entity.BuildConfigurationEntity
+import org.octopusden.octopus.components.registry.server.dto.v4.FileUrlArtifactRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.MarkerChildrenPayload
+import org.octopusden.octopus.components.registry.server.dto.v4.MavenArtifactRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.PackageRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.VcsEntryRequest
+import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactIdEntity
+import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
+import org.octopusden.octopus.components.registry.server.entity.ComponentDocLinkEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
-import org.octopusden.octopus.components.registry.server.entity.DistributionArtifactEntity
-import org.octopusden.octopus.components.registry.server.entity.DistributionEntity
+import org.octopusden.octopus.components.registry.server.entity.ComponentGroupEntity
+import org.octopusden.octopus.components.registry.server.entity.ComponentLabelEntity
+import org.octopusden.octopus.components.registry.server.entity.ComponentRequiredToolEntity
+import org.octopusden.octopus.components.registry.server.entity.ComponentSystemEntity
+import org.octopusden.octopus.components.registry.server.entity.ComponentTeamcityProjectEntity
+import org.octopusden.octopus.components.registry.server.entity.DistributionDockerImageEntity
+import org.octopusden.octopus.components.registry.server.entity.DistributionFileUrlArtifactEntity
+import org.octopusden.octopus.components.registry.server.entity.DistributionMavenArtifactEntity
+import org.octopusden.octopus.components.registry.server.entity.DistributionPackageEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionSecurityGroupEntity
-import org.octopusden.octopus.components.registry.server.entity.EscrowConfigurationEntity
-import org.octopusden.octopus.components.registry.server.entity.FieldOverrideEntity
-import org.octopusden.octopus.components.registry.server.entity.JiraComponentConfigEntity
-import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntity
+import org.octopusden.octopus.components.registry.server.entity.LabelEntity
+import org.octopusden.octopus.components.registry.server.entity.SystemEntity
 import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
 import org.octopusden.octopus.components.registry.server.event.AuditEvent
+import org.octopusden.octopus.components.registry.server.mapper.ALL_VERSIONS
+import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
+import org.octopusden.octopus.components.registry.server.mapper.SCALAR_ATTRIBUTE_PATHS
+import org.octopusden.octopus.components.registry.server.mapper.applyScalarValue
 import org.octopusden.octopus.components.registry.server.mapper.toDetailResponse
-import org.octopusden.octopus.components.registry.server.mapper.toResponse
+import org.octopusden.octopus.components.registry.server.mapper.toFieldOverrideResponse
 import org.octopusden.octopus.components.registry.server.mapper.toSummaryResponse
+import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
+import org.octopusden.octopus.components.registry.server.repository.ComponentGroupRepository
+import org.octopusden.octopus.components.registry.server.repository.ComponentLabelRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
-import org.octopusden.octopus.components.registry.server.repository.FieldOverrideRepository
+import org.octopusden.octopus.components.registry.server.repository.ComponentRequiredToolRepository
+import org.octopusden.octopus.components.registry.server.repository.ComponentSystemRepository
+import org.octopusden.octopus.components.registry.server.repository.LabelRepository
+import org.octopusden.octopus.components.registry.server.repository.SystemRepository
 import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
+import org.octopusden.octopus.components.registry.server.teamcity.TeamcityProperties
+import org.octopusden.releng.versions.VersionRangeFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.domain.Specification
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.Instant
 import java.util.UUID
 
+/**
+ * v4 CRUD against the v2 schema (Model A'). Top-level scalars and per-component
+ * child rows map 1:1 with `components` columns + child tables; per-version
+ * configuration lives on `component_configurations` rows — base + scalar/marker
+ * overrides — and is edited via the field-override sub-resource.
+ */
 @Service
 @Transactional
-@Suppress("TooManyFunctions")
+@Suppress("TooManyFunctions", "LongParameterList", "LargeClass")
 class ComponentManagementServiceImpl(
     private val componentRepository: ComponentRepository,
-    private val fieldOverrideRepository: FieldOverrideRepository,
+    private val configurationRepository: ComponentConfigurationRepository,
+    private val componentGroupRepository: ComponentGroupRepository,
+    private val componentLabelRepository: ComponentLabelRepository,
+    private val componentSystemRepository: ComponentSystemRepository,
+    private val componentRequiredToolRepository: ComponentRequiredToolRepository,
+    private val labelRepository: LabelRepository,
+    private val systemRepository: SystemRepository,
     private val sourceRegistry: ComponentSourceRegistry,
     private val applicationEventPublisher: ApplicationEventPublisher,
     private val currentUserResolver: CurrentUserResolver,
-    // Risk-1 mitigation: see FieldConfigService class doc. Used by
-    // updateComponent to silently strip writes to hidden fields,
-    // matching the Portal-side filter so a buggy client can't bypass
-    // it. Create path is admin-driven (component import) and reads
-    // the full payload — not gated.
     private val fieldConfigService: FieldConfigService,
+    private val teamcityProperties: TeamcityProperties,
+    private val versionRangeFactory: VersionRangeFactory,
 ) : ComponentManagementService {
-    @Suppress("CyclomaticComplexMethod")
+    // ============================================================
+    // Create
+    // ============================================================
+
     override fun createComponent(request: ComponentCreateRequest): ComponentDetailResponse {
-        require(!componentRepository.existsByName(request.name)) {
+        require(!componentRepository.existsByComponentKey(request.name)) {
             "Component with name '${request.name}' already exists"
         }
 
-        val parentComponent =
-            request.parentComponentName?.let { parentName ->
-                componentRepository.findByName(parentName)
-                    ?: throw NotFoundException("Parent component '$parentName' not found")
+        val parent =
+            request.parentComponentName?.let { parentKey ->
+                componentRepository.findByComponentKey(parentKey)
+                    ?: throw NotFoundException("Parent component '$parentKey' not found")
             }
+
+        val group = request.group?.let { upsertGroup(it) }
 
         val entity =
             ComponentEntity(
-                name = request.name,
+                componentKey = request.name,
                 displayName = request.displayName,
                 componentOwner = request.componentOwner,
                 productType = request.productType,
-                system = request.system.toTypedArray(),
                 clientCode = request.clientCode,
-                solution = request.solution,
-                parentComponent = parentComponent,
                 archived = request.archived,
-                metadata = request.metadata.toMutableMap(),
-                // SYS-039
-                groupId = request.groupId,
+                solution = request.solution,
+                parentComponent = parent,
+                componentGroup = group,
                 releaseManager = request.releaseManager,
                 securityChampion = request.securityChampion,
                 copyright = request.copyright,
                 releasesInDefaultBranch = request.releasesInDefaultBranch,
-                // labels is a `text[]`; the column allows duplicates but the
-                // domain treats labels as a set. Dedup here so `["a","a","b"]`
-                // round-trips as `["a","b"]` rather than relying on the
-                // mapper's Array→Set conversion to mask the dupes only on
-                // reads (a DB-level UNIQUE constraint on array elements is
-                // unsupported by Postgres without a custom CHECK).
-                labels = request.labels.distinct().toTypedArray(),
+                jiraDisplayName = request.jiraDisplayName,
+                jiraHotfixVersionFormat = request.jiraHotfixVersionFormat,
+                vcsExternalRegistry = request.vcsExternalRegistry,
+                distributionExplicit = request.distributionExplicit,
+                distributionExternal = request.distributionExternal,
             )
+
+        // Per-component child collections
+        addArtifactIds(entity, request.artifactIds)
+        addSecurityGroups(entity, request.securityGroups.map { it.groupType to it.groupName })
+        addTeamcityProjects(entity, request.teamcityProjects.map { it.projectId })
+        addDocLinks(entity, request.docs.map { it.docComponentKey to it.majorVersion })
+        replaceLabels(entity, request.labels)
+        replaceSystems(entity, request.systems)
+
+        // Base configuration row
+        val baseConfig = ComponentConfigurationEntity(component = entity, versionRange = ALL_VERSIONS)
+        applyBaseConfigurationCreate(baseConfig, request.baseConfiguration)
+        entity.configurations.add(baseConfig)
 
         val saved = componentRepository.save(entity)
 
-        applicationEventPublisher.publishEvent(
-            AuditEvent(
-                entityType = "Component",
-                entityId = saved.id.toString(),
-                action = "CREATE",
-                changedBy = currentUserResolver.currentUsername(),
-                newValue =
-                    mapOf(
-                        "name" to saved.name,
-                        "displayName" to saved.displayName,
-                        "componentOwner" to saved.componentOwner,
-                        "productType" to saved.productType,
-                        "archived" to saved.archived,
-                    ),
-            ),
+        publishAuditEvent(
+            action = "CREATE",
+            entityId = saved.id.toString(),
+            newValue = scalarAuditMap(saved),
         )
 
-        return saved.toDetailResponse()
+        return saved.toDetailResponse(teamcityProperties.baseUrl)
     }
 
-    @Transactional(readOnly = true)
-    override fun getComponent(id: UUID): ComponentDetailResponse {
-        val entity =
-            componentRepository.findById(id).orElse(null)
-                ?: throw NotFoundException("Component with id '$id' not found")
-        return entity.toDetailResponse()
-    }
+    // ============================================================
+    // Read
+    // ============================================================
 
     @Transactional(readOnly = true)
-    override fun getComponentByName(name: String): ComponentDetailResponse {
-        val entity =
-            componentRepository.findByName(name)
+    override fun getComponent(id: UUID): ComponentDetailResponse =
+        findComponentOr404(id).toDetailResponse(teamcityProperties.baseUrl)
+
+    @Transactional(readOnly = true)
+    override fun getComponentByName(name: String): ComponentDetailResponse =
+        (
+            componentRepository.findByComponentKey(name)
                 ?: throw NotFoundException("Component with name '$name' not found")
-        return entity.toDetailResponse()
-    }
+        ).toDetailResponse(teamcityProperties.baseUrl)
 
-    @Suppress("CyclomaticComplexMethod")
+    // ============================================================
+    // Update
+    // ============================================================
+
+    @Suppress("CyclomaticComplexMethod", "LongMethod")
     override fun updateComponent(
         id: UUID,
         request: ComponentUpdateRequest,
     ): ComponentDetailResponse {
-        val entity =
-            componentRepository.findById(id).orElse(null)
-                ?: throw NotFoundException("Component with id '$id' not found")
+        val entity = findComponentOr404(id)
 
         if (entity.version != request.version) {
-            throw jakarta.persistence.OptimisticLockException(
+            throw OptimisticLockException(
                 "Optimistic locking conflict: expected version ${request.version} but found ${entity.version}",
             )
         }
 
-        val oldName = entity.name
-        val normalizedName = request.name?.trim()
+        val oldKey = entity.componentKey
+        val normalizedNewKey = request.name?.trim()
         if (request.name != null) {
-            require(!normalizedName.isNullOrEmpty()) { "name must not be blank" }
-            if (normalizedName != oldName && componentRepository.existsByName(normalizedName)) {
-                throw ComponentNameConflictException("Component with name '$normalizedName' already exists")
+            require(!normalizedNewKey.isNullOrEmpty()) { "name must not be blank" }
+            if (normalizedNewKey != oldKey && componentRepository.existsByComponentKey(normalizedNewKey)) {
+                throw ComponentNameConflictException("Component with name '$normalizedNewKey' already exists")
             }
         }
-        val isRename = normalizedName != null && normalizedName != oldName
+        val isRename = normalizedNewKey != null && normalizedNewKey != oldKey
 
-        val oldValue =
-            mapOf(
-                "name" to oldName,
-                "displayName" to entity.displayName,
-                "componentOwner" to entity.componentOwner,
-                "productType" to entity.productType,
-                "system" to entity.system.toList(),
-                "clientCode" to entity.clientCode,
-                "teamcityProjectId" to entity.teamcityProjectId,
-                "teamcityProjectUrl" to entity.teamcityProjectUrl,
-                "solution" to entity.solution,
-                "parentComponentName" to entity.parentComponent?.name,
-                "archived" to entity.archived,
-                "metadata" to entity.metadata.toMap(),
-                // SYS-039
-                "groupId" to entity.groupId,
-                "releaseManager" to entity.releaseManager,
-                "securityChampion" to entity.securityChampion,
-                "copyright" to entity.copyright,
-                "releasesInDefaultBranch" to entity.releasesInDefaultBranch,
-                "labels" to entity.labels.toList(),
-            )
+        val oldValue = scalarAuditMap(entity)
 
-        if (isRename) {
-            entity.name = normalizedName!!
-        }
-        // Risk-1 mitigation: each component-section scalar is gated on
-        // FieldConfig visibility. A request that arrives with a value
-        // for a field whose admin-configured visibility is "hidden" gets
-        // silently stripped — defence-in-depth against buggy / outdated
-        // clients. `archived`, `metadata`, `parentComponentName`, and
-        // `name` (rename) are NOT FC-controlled and stay un-gated; they
-        // have their own permission gates (@PreAuthorize at the
-        // controller). All field-config paths follow the section-prefixed
-        // ADR-011 convention — `productType` is `component.productType`
-        // even though the Portal renders the editor from EscrowTab; FC
-        // path is keyed by the entity owner, not the UX placement.
-        //
-        // Null-skip: `request.X?.let { ... }` already short-circuits when
-        // the request field is absent, but isHidden() runs first under
-        // the original layout and would still hit FieldConfigService once
-        // per scalar even on a no-op patch. Reorder so null check comes
-        // first — the JPA query lands at most once per actually-present
-        // field, which on a typical Portal save is 1–3 keys.
-        request.displayName?.let {
-            if (!fieldConfigService.isHidden("component.displayName")) entity.displayName = it
-        }
-        request.componentOwner?.let {
-            if (!fieldConfigService.isHidden("component.componentOwner")) entity.componentOwner = it
-        }
-        request.productType?.let {
-            if (!fieldConfigService.isHidden("component.productType")) entity.productType = it
-        }
-        request.system?.let {
-            if (!fieldConfigService.isHidden("component.system")) entity.system = it.toTypedArray()
-        }
-        request.clientCode?.let {
-            if (!fieldConfigService.isHidden("component.clientCode")) entity.clientCode = it
-        }
-        request.teamcityProjectId?.let {
-            if (!fieldConfigService.isHidden("component.teamcityProjectId")) entity.teamcityProjectId = it
-        }
-        request.teamcityProjectUrl?.let { url ->
-            require(url.isBlank() || url.startsWith("http://") || url.startsWith("https://")) {
-                "teamcityProjectUrl must be an http/https URL or blank"
-            }
-            if (!fieldConfigService.isHidden("component.teamcityProjectUrl")) entity.teamcityProjectUrl = url
-        }
-        request.solution?.let {
-            if (!fieldConfigService.isHidden("component.solution")) entity.solution = it
-        }
+        if (isRename) entity.componentKey = normalizedNewKey!!
+
+        // FC-gated scalar patches (null = "don't touch"; hidden = silently stripped) ——
+        request.displayName?.let { if (!fieldConfigService.isHidden("component.displayName")) entity.displayName = it }
+        request.componentOwner?.let { if (!fieldConfigService.isHidden("component.componentOwner")) entity.componentOwner = it }
+        request.productType?.let { if (!fieldConfigService.isHidden("component.productType")) entity.productType = it }
+        request.clientCode?.let { if (!fieldConfigService.isHidden("component.clientCode")) entity.clientCode = it }
+        request.solution?.let { if (!fieldConfigService.isHidden("component.solution")) entity.solution = it }
         request.archived?.let { entity.archived = it }
-        request.metadata?.let { entity.metadata = it.toMutableMap() }
-        // SYS-039 — same gating, same null-skip ordering
-        request.groupId?.let {
-            if (!fieldConfigService.isHidden("component.groupId")) entity.groupId = it
-        }
-        // SYS-039 dedicated columns: when writing the dedicated column, also drop the legacy
-        // metadata key. Components migrated before the dedicated columns existed kept these
-        // values in `metadata`, and toEscrowModuleConfig() falls back to metadata when the
-        // column is empty. Without this purge a PATCH that intentionally clears (or rewrites)
-        // a field would leave the stale metadata value visible to v2/v3 consumers.
-        request.releaseManager?.let {
-            if (!fieldConfigService.isHidden("component.releaseManager")) {
-                entity.releaseManager = it
-                entity.metadata.remove("releaseManager")
-            }
-        }
-        request.securityChampion?.let {
-            if (!fieldConfigService.isHidden("component.securityChampion")) {
-                entity.securityChampion = it
-                entity.metadata.remove("securityChampion")
-            }
-        }
-        request.copyright?.let {
-            if (!fieldConfigService.isHidden("component.copyright")) {
-                entity.copyright = it
-                entity.metadata.remove("copyright")
-            }
-        }
+        request.releaseManager?.let { if (!fieldConfigService.isHidden("component.releaseManager")) entity.releaseManager = it }
+        request.securityChampion?.let { if (!fieldConfigService.isHidden("component.securityChampion")) entity.securityChampion = it }
+        request.copyright?.let { if (!fieldConfigService.isHidden("component.copyright")) entity.copyright = it }
         request.releasesInDefaultBranch?.let {
-            if (!fieldConfigService.isHidden("component.releasesInDefaultBranch")) {
-                entity.releasesInDefaultBranch = it
-                entity.metadata.remove("releasesInDefaultBranch")
-            }
+            if (!fieldConfigService.isHidden("component.releasesInDefaultBranch")) entity.releasesInDefaultBranch = it
         }
-        request.labels?.let {
-            // Dedup matches the create path — see ComponentEntity init for
-            // rationale. Writes through here pass through the FC hidden gate.
-            if (!fieldConfigService.isHidden("component.labels")) {
-                entity.labels = it.distinct().toTypedArray()
-                entity.metadata.remove("labels")
-            }
+        request.jiraDisplayName?.let { if (!fieldConfigService.isHidden("component.jiraDisplayName")) entity.jiraDisplayName = it }
+        request.jiraHotfixVersionFormat?.let {
+            if (!fieldConfigService.isHidden("component.jiraHotfixVersionFormat")) entity.jiraHotfixVersionFormat = it
         }
-
-        request.parentComponentName?.let { parentName ->
-            entity.parentComponent = componentRepository.findByName(parentName)
-                ?: throw NotFoundException("Parent component '$parentName' not found")
+        request.vcsExternalRegistry?.let {
+            if (!fieldConfigService.isHidden("component.vcsExternalRegistry")) entity.vcsExternalRegistry = it
+        }
+        request.distributionExplicit?.let {
+            if (!fieldConfigService.isHidden("component.distributionExplicit")) entity.distributionExplicit = it
+        }
+        request.distributionExternal?.let {
+            if (!fieldConfigService.isHidden("component.distributionExternal")) entity.distributionExternal = it
         }
 
-        // Update nested sub-entities
-        request.buildConfiguration?.let { bc ->
-            val buildEntity =
-                entity.buildConfigurations.firstOrNull()
-                    ?: BuildConfigurationEntity(component = entity).also { entity.buildConfigurations.add(it) }
-            bc.buildSystem?.let { buildEntity.buildSystem = it }
-            bc.buildFilePath?.let { buildEntity.buildFilePath = it }
-            bc.javaVersion?.let { buildEntity.javaVersion = it }
-            bc.deprecated?.let { buildEntity.deprecated = it }
-            bc.metadata?.let { buildEntity.metadata = it.toMutableMap() }
+        request.systems?.let { replaceSystems(entity, it) }
+        request.labels?.let { replaceLabels(entity, it) }
+
+        // Parent (rename to null is not expressible by JSON Merge Patch; null parent → use clearGroup style if needed later)
+        request.parentComponentName?.let { parentKey ->
+            entity.parentComponent =
+                componentRepository.findByComponentKey(parentKey)
+                    ?: throw NotFoundException("Parent component '$parentKey' not found")
         }
 
-        request.vcsSettings?.let { vcs ->
-            val vcsEntity =
-                entity.vcsSettings.firstOrNull()
-                    ?: VcsSettingsEntity(component = entity).also { entity.vcsSettings.add(it) }
-            vcs.vcsType?.let { vcsEntity.vcsType = it }
-            vcs.externalRegistry?.let { vcsEntity.externalRegistry = it }
-            vcs.entries?.let { requestEntries ->
-                vcsEntity.entries.clear()
-                requestEntries.forEach { re ->
-                    vcsEntity.entries.add(
-                        VcsSettingsEntryEntity(
-                            vcsSettings = vcsEntity,
-                            name = re.name,
-                            vcsPath = re.vcsPath ?: "",
-                            repositoryType = re.repositoryType ?: "GIT",
-                            tag = re.tag,
-                            branch = re.branch,
-                        ),
-                    )
-                }
-            }
+        // Group: clearGroup flag wins over group payload when both present
+        when {
+            request.clearGroup -> entity.componentGroup = null
+            request.group != null -> entity.componentGroup = upsertGroup(request.group)
+            else -> Unit
         }
 
-        request.distribution?.let { dist ->
-            val distEntity =
-                entity.distributions.firstOrNull()
-                    ?: DistributionEntity(component = entity).also { entity.distributions.add(it) }
-            dist.explicit?.let { distEntity.explicit = it }
-            dist.external?.let { distEntity.external = it }
-            dist.artifacts?.let { requestArtifacts ->
-                distEntity.artifacts.clear()
-                requestArtifacts.forEach { ra ->
-                    distEntity.artifacts.add(
-                        DistributionArtifactEntity(
-                            distribution = distEntity,
-                            artifactType = ra.artifactType ?: "",
-                            groupPattern = ra.groupPattern,
-                            artifactPattern = ra.artifactPattern,
-                            name = ra.name,
-                            tag = ra.tag,
-                        ),
-                    )
-                }
-            }
-            dist.securityGroups?.let { requestGroups ->
-                distEntity.securityGroups.clear()
-                requestGroups.forEach { rg ->
-                    distEntity.securityGroups.add(
-                        DistributionSecurityGroupEntity(
-                            distribution = distEntity,
-                            groupType = rg.groupType ?: "read",
-                            groupName = rg.groupName ?: "",
-                        ),
-                    )
-                }
-            }
+        // Per-component child REPLACE — present collection wipes and refills
+        request.artifactIds?.let {
+            entity.artifactIds.clear()
+            addArtifactIds(entity, it)
+        }
+        request.securityGroups?.let {
+            entity.securityGroups.clear()
+            addSecurityGroups(entity, it.map { req -> req.groupType to req.groupName })
+        }
+        request.teamcityProjects?.let {
+            entity.teamcityProjects.clear()
+            addTeamcityProjects(entity, it.map { req -> req.projectId })
+        }
+        request.docs?.let {
+            entity.docLinks.clear()
+            addDocLinks(entity, it.map { req -> req.docComponentKey to req.majorVersion })
         }
 
-        request.jiraComponentConfig?.let { jira ->
-            val jiraEntity =
-                entity.jiraComponentConfigs.firstOrNull()
-                    ?: JiraComponentConfigEntity(component = entity).also { entity.jiraComponentConfigs.add(it) }
-            jira.projectKey?.let { jiraEntity.projectKey = it }
-            jira.displayName?.let { jiraEntity.displayName = it }
-            jira.componentVersionFormat?.let { jiraEntity.componentVersionFormat = it }
-            jira.technical?.let { jiraEntity.technical = it }
-            jira.metadata?.let { jiraEntity.metadata = it.toMutableMap() }
+        // Base configuration patch
+        request.baseConfiguration?.let { patch ->
+            val base =
+                entity.configurations.firstOrNull { it.overriddenAttribute == null }
+                    ?: ComponentConfigurationEntity(component = entity, versionRange = ALL_VERSIONS).also {
+                        entity.configurations.add(it)
+                    }
+            applyBaseConfigurationPatch(base, patch)
         }
 
-        request.escrowConfiguration?.let { esc ->
-            val escrowEntity =
-                entity.escrowConfigurations.firstOrNull()
-                    ?: EscrowConfigurationEntity(component = entity).also { entity.escrowConfigurations.add(it) }
-            esc.buildTask?.let { escrowEntity.buildTask = it }
-            esc.providedDependencies?.let { escrowEntity.providedDependencies = it }
-            esc.reusable?.let { escrowEntity.reusable = it }
-            esc.generation?.let { escrowEntity.generation = it }
-            esc.diskSpace?.let { escrowEntity.diskSpace = it }
-        }
-
-        // Touch parent entity to ensure @Version increments even when only child entities changed
-        entity.updatedAt = java.time.Instant.now()
-
+        entity.updatedAt = Instant.now()
         val saved = componentRepository.saveAndFlush(entity)
 
-        if (isRename) {
-            sourceRegistry.renameComponent(oldName, saved.name)
-        }
+        if (isRename) sourceRegistry.renameComponent(oldKey, saved.componentKey)
 
-        val newValue =
-            mapOf(
-                "name" to saved.name,
-                "displayName" to saved.displayName,
-                "componentOwner" to saved.componentOwner,
-                "productType" to saved.productType,
-                "system" to saved.system.toList(),
-                "clientCode" to saved.clientCode,
-                "teamcityProjectId" to saved.teamcityProjectId,
-                "teamcityProjectUrl" to saved.teamcityProjectUrl,
-                "solution" to saved.solution,
-                "parentComponentName" to saved.parentComponent?.name,
-                "archived" to saved.archived,
-                "metadata" to saved.metadata.toMap(),
-                // SYS-039 — must mirror the oldValue map above; without these
-                // keys the audit changeDiff would report a spurious deletion
-                // (oldValue has the field, newValue doesn't) on every update
-                // that touches a SYS-039 field.
-                "groupId" to saved.groupId,
-                "releaseManager" to saved.releaseManager,
-                "securityChampion" to saved.securityChampion,
-                "copyright" to saved.copyright,
-                "releasesInDefaultBranch" to saved.releasesInDefaultBranch,
-                "labels" to saved.labels.toList(),
-            )
-
-        applicationEventPublisher.publishEvent(
-            AuditEvent(
-                entityType = "Component",
-                entityId = saved.id.toString(),
-                action = if (isRename) "RENAME" else "UPDATE",
-                changedBy = currentUserResolver.currentUsername(),
-                oldValue = oldValue,
-                newValue = newValue,
-            ),
+        publishAuditEvent(
+            action = if (isRename) "RENAME" else "UPDATE",
+            entityId = saved.id.toString(),
+            oldValue = oldValue,
+            newValue = scalarAuditMap(saved),
         )
 
-        return saved.toDetailResponse()
+        return saved.toDetailResponse(teamcityProperties.baseUrl)
     }
 
-    override fun deleteComponent(id: UUID) {
-        val entity =
-            componentRepository
-                .findById(id)
-                .orElseThrow { NotFoundException("Component with id '$id' not found") }
+    // ============================================================
+    // Delete (soft)
+    // ============================================================
 
+    override fun deleteComponent(id: UUID) {
+        val entity = findComponentOr404(id)
+        val wasArchived = entity.archived
         entity.archived = true
         componentRepository.save(entity)
 
-        applicationEventPublisher.publishEvent(
-            AuditEvent(
-                entityType = "Component",
-                entityId = id.toString(),
-                action = "DELETE",
-                changedBy = currentUserResolver.currentUsername(),
-                oldValue = mapOf("name" to entity.name, "archived" to false),
-                newValue = mapOf("name" to entity.name, "archived" to true),
-            ),
+        publishAuditEvent(
+            action = "DELETE",
+            entityId = id.toString(),
+            oldValue = mapOf("name" to entity.componentKey, "archived" to wasArchived),
+            newValue = mapOf("name" to entity.componentKey, "archived" to true),
         )
     }
+
+    // ============================================================
+    // List
+    // ============================================================
 
     @Transactional(readOnly = true)
     override fun listComponents(
         filter: ComponentFilter,
         pageable: Pageable,
-    ): Page<ComponentSummaryResponse> {
-        val spec = buildSpecification(filter)
-        return componentRepository.findAll(spec, pageable).map { it.toSummaryResponse() }
-    }
+    ): Page<ComponentSummaryResponse> =
+        componentRepository.findAll(buildSpecification(filter), pageable).map { it.toSummaryResponse(teamcityProperties.baseUrl) }
+
+    // ============================================================
+    // Field overrides — backed by `component_configurations`
+    // ============================================================
 
     override fun createFieldOverride(
         componentId: UUID,
         request: FieldOverrideCreateRequest,
     ): FieldOverrideResponse {
-        val component =
-            componentRepository
-                .findById(componentId)
-                .orElseThrow { NotFoundException("Component with id '$componentId' not found") }
+        val component = findComponentOr404(componentId)
+        validateRangeSyntax(request.versionRange)
+        require(configurationRepository.findByComponentIdAndVersionRangeAndOverriddenAttribute(
+            componentId,
+            request.versionRange,
+            request.overriddenAttribute,
+        ) == null) {
+            "Override row for attribute '${request.overriddenAttribute}' and range '${request.versionRange}' already exists"
+        }
 
-        val entity =
-            FieldOverrideEntity(
+        val row =
+            ComponentConfigurationEntity(
                 component = component,
-                fieldPath = request.fieldPath,
                 versionRange = request.versionRange,
-                value = request.value,
+                overriddenAttribute = request.overriddenAttribute,
             )
 
-        val saved = fieldOverrideRepository.save(entity)
-        return saved.toResponse()
+        when {
+            request.overriddenAttribute in MarkerAttributes.ALL -> {
+                require(request.value == null) {
+                    "Marker override '${request.overriddenAttribute}' must not carry a scalar value"
+                }
+                requireNotNull(request.markerChildren) {
+                    "Marker override '${request.overriddenAttribute}' requires markerChildren payload"
+                }
+                applyMarkerChildren(row, request.overriddenAttribute, request.markerChildren)
+            }
+
+            request.overriddenAttribute in SCALAR_ATTRIBUTE_PATHS -> {
+                require(request.markerChildren == null) {
+                    "Scalar override '${request.overriddenAttribute}' must not carry markerChildren"
+                }
+                row.applyScalarValue(request.overriddenAttribute, request.value)
+            }
+
+            else -> throw IllegalArgumentException(
+                "Unknown overriddenAttribute: '${request.overriddenAttribute}'. " +
+                    "Must be a scalar aspect.field path or one of ${MarkerAttributes.ALL}",
+            )
+        }
+
+        component.configurations.add(row)
+        val saved = configurationRepository.save(row)
+        return saved.toFieldOverrideResponse()
     }
 
     override fun updateFieldOverride(
@@ -472,36 +375,54 @@ class ComponentManagementServiceImpl(
         overrideId: UUID,
         request: FieldOverrideUpdateRequest,
     ): FieldOverrideResponse {
-        val entity =
-            fieldOverrideRepository
+        val row =
+            configurationRepository
                 .findById(overrideId)
                 .orElseThrow { NotFoundException("FieldOverride with id '$overrideId' not found") }
 
-        if (entity.component?.id != componentId) {
+        if (row.component.id != componentId) {
             throw NotFoundException("FieldOverride '$overrideId' does not belong to component '$componentId'")
         }
+        require(row.overriddenAttribute != null) {
+            "Cannot update base row via field-override endpoint (id $overrideId is a BASE row)"
+        }
 
-        request.versionRange?.let { entity.versionRange = it }
-        request.value?.let { entity.value = it }
+        request.versionRange?.let {
+            validateRangeSyntax(it)
+            row.versionRange = it
+        }
 
-        val saved = fieldOverrideRepository.save(entity)
-        return saved.toResponse()
+        when {
+            row.overriddenAttribute in MarkerAttributes.ALL -> {
+                require(request.value == null) { "Marker override does not accept a scalar value" }
+                request.markerChildren?.let { applyMarkerChildren(row, row.overriddenAttribute!!, it) }
+            }
+
+            else -> {
+                require(request.markerChildren == null) { "Scalar override does not accept markerChildren" }
+                request.value?.let { row.applyScalarValue(row.overriddenAttribute!!, it) }
+            }
+        }
+
+        val saved = configurationRepository.save(row)
+        return saved.toFieldOverrideResponse()
     }
 
     override fun deleteFieldOverride(
         componentId: UUID,
         overrideId: UUID,
     ) {
-        val entity =
-            fieldOverrideRepository
+        val row =
+            configurationRepository
                 .findById(overrideId)
                 .orElseThrow { NotFoundException("FieldOverride with id '$overrideId' not found") }
-
-        if (entity.component?.id != componentId) {
+        if (row.component.id != componentId) {
             throw NotFoundException("FieldOverride '$overrideId' does not belong to component '$componentId'")
         }
-
-        fieldOverrideRepository.delete(entity)
+        require(row.overriddenAttribute != null) {
+            "Cannot delete base row via field-override endpoint (id $overrideId is a BASE row)"
+        }
+        configurationRepository.delete(row)
     }
 
     @Transactional(readOnly = true)
@@ -509,7 +430,405 @@ class ComponentManagementServiceImpl(
         if (!componentRepository.existsById(componentId)) {
             throw NotFoundException("Component with id '$componentId' not found")
         }
-        return fieldOverrideRepository.findByComponentId(componentId).map { it.toResponse() }
+        return configurationRepository
+            .findByComponentId(componentId)
+            .filter { it.overriddenAttribute != null }
+            .map { it.toFieldOverrideResponse() }
+    }
+
+    // ============================================================
+    // Helpers — child collection management
+    // ============================================================
+
+    private fun addArtifactIds(
+        component: ComponentEntity,
+        requests: List<org.octopusden.octopus.components.registry.server.dto.v4.ArtifactIdRequest>,
+    ) {
+        requests.forEach { req ->
+            component.artifactIds.add(
+                ComponentArtifactIdEntity(
+                    component = component,
+                    groupPattern = req.groupPattern,
+                    artifactPattern = req.artifactPattern,
+                ),
+            )
+        }
+    }
+
+    private fun addSecurityGroups(
+        component: ComponentEntity,
+        groups: List<Pair<String, String>>,
+    ) {
+        groups.forEach { (type, name) ->
+            component.securityGroups.add(
+                DistributionSecurityGroupEntity(
+                    component = component,
+                    groupType = type,
+                    groupName = name,
+                ),
+            )
+        }
+    }
+
+    private fun addTeamcityProjects(
+        component: ComponentEntity,
+        projectIds: List<String>,
+    ) {
+        projectIds.forEachIndexed { index, projectId ->
+            component.teamcityProjects.add(
+                ComponentTeamcityProjectEntity(
+                    component = component,
+                    projectId = projectId,
+                    sortOrder = index,
+                ),
+            )
+        }
+    }
+
+    private fun addDocLinks(
+        component: ComponentEntity,
+        docs: List<Pair<String, String?>>,
+    ) {
+        docs.forEachIndexed { index, (docKey, majorVersion) ->
+            component.docLinks.add(
+                ComponentDocLinkEntity(
+                    component = component,
+                    docComponentKey = docKey,
+                    majorVersion = majorVersion,
+                    sortOrder = index,
+                ),
+            )
+        }
+    }
+
+    private fun replaceLabels(
+        component: ComponentEntity,
+        labels: Set<String>,
+    ) {
+        component.labelJunctions.clear()
+        labels.distinct().forEach { code ->
+            ensureLabelExists(code)
+            component.labelJunctions.add(
+                ComponentLabelEntity(
+                    componentId = component.id ?: UUID(0, 0),
+                    labelCode = code,
+                ),
+            )
+        }
+    }
+
+    private fun replaceSystems(
+        component: ComponentEntity,
+        systems: Set<String>,
+    ) {
+        component.systemJunctions.clear()
+        systems.distinct().forEach { code ->
+            ensureSystemExists(code)
+            component.systemJunctions.add(
+                ComponentSystemEntity(
+                    componentId = component.id ?: UUID(0, 0),
+                    systemCode = code,
+                ),
+            )
+        }
+    }
+
+    private fun ensureLabelExists(code: String) {
+        if (labelRepository.findByCode(code) == null) {
+            labelRepository.save(LabelEntity(code = code))
+        }
+    }
+
+    private fun ensureSystemExists(code: String) {
+        if (systemRepository.findByCode(code) == null) {
+            systemRepository.save(SystemEntity(code = code))
+        }
+    }
+
+    private fun upsertGroup(request: ComponentGroupRequest): ComponentGroupEntity =
+        componentGroupRepository.findByGroupKey(request.groupKey)
+            ?: componentGroupRepository.save(
+                ComponentGroupEntity(
+                    groupKey = request.groupKey,
+                    isFake = request.isFake,
+                ),
+            )
+
+    // ============================================================
+    // Helpers — base configuration apply/patch
+    // ============================================================
+
+    @Suppress("CyclomaticComplexMethod")
+    private fun applyBaseConfigurationCreate(
+        config: ComponentConfigurationEntity,
+        request: BaseConfigurationRequest?,
+    ) {
+        if (request == null) return
+        request.versionRange?.let { config.versionRange = it }
+        request.build?.let { b ->
+            config.buildSystem = b.buildSystem
+            config.buildSystemVersion = b.buildSystemVersion
+            config.javaVersion = b.javaVersion
+            config.mavenVersion = b.mavenVersion
+            config.gradleVersion = b.gradleVersion
+            config.buildFilePath = b.buildFilePath
+            config.deprecated = b.deprecated
+            config.requiredProject = b.requiredProject
+            config.projectVersion = b.projectVersion
+            config.systemProperties = b.systemProperties
+            config.buildTasks = b.buildTasks
+        }
+        request.escrow?.let { e ->
+            config.escrowProvidedDependencies = e.providedDependencies
+            config.escrowReusable = e.reusable
+            config.escrowGeneration = e.generation
+            config.escrowDiskSpace = e.diskSpace
+            config.escrowAdditionalSources = e.additionalSources
+            config.escrowGradleIncludeConfigurations = e.gradleIncludeConfigurations
+            config.escrowGradleExcludeConfigurations = e.gradleExcludeConfigurations
+            config.escrowGradleIncludeTestConfigurations = e.gradleIncludeTestConfigurations
+        }
+        request.jira?.let { j ->
+            config.jiraProjectKey = j.projectKey
+            config.jiraTechnical = j.technical
+            config.jiraMajorVersionFormat = j.majorVersionFormat
+            config.jiraReleaseVersionFormat = j.releaseVersionFormat
+            config.jiraBuildVersionFormat = j.buildVersionFormat
+            config.jiraLineVersionFormat = j.lineVersionFormat
+            config.jiraVersionPrefix = j.versionPrefix
+            config.jiraVersionFormat = j.versionFormat
+        }
+        request.vcsEntries?.let { replaceVcsEntries(config, it) }
+        request.mavenArtifacts?.let { replaceMavenArtifacts(config, it) }
+        request.fileUrlArtifacts?.let { replaceFileUrlArtifacts(config, it) }
+        request.dockerImages?.let { replaceDockerImages(config, it) }
+        request.packages?.let { replacePackages(config, it) }
+        request.requiredTools?.let { replaceRequiredTools(config, it) }
+    }
+
+    /**
+     * PATCH variant: null scalar fields preserve the existing column; present
+     * scalars overwrite; present collections REPLACE.
+     */
+    @Suppress("CyclomaticComplexMethod", "LongMethod")
+    private fun applyBaseConfigurationPatch(
+        config: ComponentConfigurationEntity,
+        patch: BaseConfigurationRequest,
+    ) {
+        patch.versionRange?.let { config.versionRange = it }
+        patch.build?.let { b ->
+            b.buildSystem?.let { config.buildSystem = it }
+            b.buildSystemVersion?.let { config.buildSystemVersion = it }
+            b.javaVersion?.let { config.javaVersion = it }
+            b.mavenVersion?.let { config.mavenVersion = it }
+            b.gradleVersion?.let { config.gradleVersion = it }
+            b.buildFilePath?.let { config.buildFilePath = it }
+            b.deprecated?.let { config.deprecated = it }
+            b.requiredProject?.let { config.requiredProject = it }
+            b.projectVersion?.let { config.projectVersion = it }
+            b.systemProperties?.let { config.systemProperties = it }
+            b.buildTasks?.let { config.buildTasks = it }
+        }
+        patch.escrow?.let { e ->
+            e.providedDependencies?.let { config.escrowProvidedDependencies = it }
+            e.reusable?.let { config.escrowReusable = it }
+            e.generation?.let { config.escrowGeneration = it }
+            e.diskSpace?.let { config.escrowDiskSpace = it }
+            e.additionalSources?.let { config.escrowAdditionalSources = it }
+            e.gradleIncludeConfigurations?.let { config.escrowGradleIncludeConfigurations = it }
+            e.gradleExcludeConfigurations?.let { config.escrowGradleExcludeConfigurations = it }
+            e.gradleIncludeTestConfigurations?.let { config.escrowGradleIncludeTestConfigurations = it }
+        }
+        patch.jira?.let { j ->
+            j.projectKey?.let { config.jiraProjectKey = it }
+            j.technical?.let { config.jiraTechnical = it }
+            j.majorVersionFormat?.let { config.jiraMajorVersionFormat = it }
+            j.releaseVersionFormat?.let { config.jiraReleaseVersionFormat = it }
+            j.buildVersionFormat?.let { config.jiraBuildVersionFormat = it }
+            j.lineVersionFormat?.let { config.jiraLineVersionFormat = it }
+            j.versionPrefix?.let { config.jiraVersionPrefix = it }
+            j.versionFormat?.let { config.jiraVersionFormat = it }
+        }
+        patch.vcsEntries?.let { replaceVcsEntries(config, it) }
+        patch.mavenArtifacts?.let { replaceMavenArtifacts(config, it) }
+        patch.fileUrlArtifacts?.let { replaceFileUrlArtifacts(config, it) }
+        patch.dockerImages?.let { replaceDockerImages(config, it) }
+        patch.packages?.let { replacePackages(config, it) }
+        patch.requiredTools?.let { replaceRequiredTools(config, it) }
+    }
+
+    // ============================================================
+    // Helpers — child-row family replacements (used by base config + markers)
+    // ============================================================
+
+    private fun replaceVcsEntries(
+        config: ComponentConfigurationEntity,
+        entries: List<VcsEntryRequest>,
+    ) {
+        config.vcsEntries.clear()
+        entries.forEachIndexed { index, req ->
+            config.vcsEntries.add(
+                VcsSettingsEntryEntity(
+                    componentConfiguration = config,
+                    name = req.name,
+                    vcsPath = req.vcsPath,
+                    branch = req.branch,
+                    tag = req.tag,
+                    hotfixBranch = req.hotfixBranch,
+                    repositoryType = req.repositoryType,
+                    sortOrder = index,
+                ),
+            )
+        }
+    }
+
+    private fun replaceMavenArtifacts(
+        config: ComponentConfigurationEntity,
+        artifacts: List<MavenArtifactRequest>,
+    ) {
+        config.mavenArtifacts.clear()
+        artifacts.forEachIndexed { index, req ->
+            config.mavenArtifacts.add(
+                DistributionMavenArtifactEntity(
+                    componentConfiguration = config,
+                    groupPattern = req.groupPattern,
+                    artifactPattern = req.artifactPattern,
+                    extension = req.extension,
+                    classifier = req.classifier,
+                    sortOrder = index,
+                ),
+            )
+        }
+    }
+
+    private fun replaceFileUrlArtifacts(
+        config: ComponentConfigurationEntity,
+        artifacts: List<FileUrlArtifactRequest>,
+    ) {
+        config.fileUrlArtifacts.clear()
+        artifacts.forEachIndexed { index, req ->
+            config.fileUrlArtifacts.add(
+                DistributionFileUrlArtifactEntity(
+                    componentConfiguration = config,
+                    url = req.url,
+                    artifactId = req.artifactId,
+                    classifier = req.classifier,
+                    sortOrder = index,
+                ),
+            )
+        }
+    }
+
+    private fun replaceDockerImages(
+        config: ComponentConfigurationEntity,
+        images: List<DockerImageRequest>,
+    ) {
+        config.dockerImages.clear()
+        images.forEachIndexed { index, req ->
+            config.dockerImages.add(
+                DistributionDockerImageEntity(
+                    componentConfiguration = config,
+                    imageName = req.imageName,
+                    flavor = req.flavor,
+                    sortOrder = index,
+                ),
+            )
+        }
+    }
+
+    private fun replacePackages(
+        config: ComponentConfigurationEntity,
+        packages: List<PackageRequest>,
+    ) {
+        config.packages.clear()
+        packages.forEachIndexed { index, req ->
+            config.packages.add(
+                DistributionPackageEntity(
+                    componentConfiguration = config,
+                    packageType = req.packageType,
+                    packageName = req.packageName,
+                    sortOrder = index,
+                ),
+            )
+        }
+    }
+
+    private fun replaceRequiredTools(
+        config: ComponentConfigurationEntity,
+        toolNames: List<String>,
+    ) {
+        config.requiredToolJunctions.clear()
+        toolNames.distinct().forEach { tool ->
+            config.requiredToolJunctions.add(
+                ComponentRequiredToolEntity(
+                    componentConfigurationId = config.id ?: UUID(0, 0),
+                    toolName = tool,
+                ),
+            )
+        }
+    }
+
+    /**
+     * Apply a marker children payload to a marker row. Validates that the
+     * payload's populated list matches the marker name on the row.
+     */
+    private fun applyMarkerChildren(
+        row: ComponentConfigurationEntity,
+        markerName: String,
+        payload: MarkerChildrenPayload,
+    ) {
+        when (markerName) {
+            MarkerAttributes.VCS_SETTINGS -> {
+                requireNotNull(payload.vcsEntries) { "Marker '$markerName' requires vcsEntries payload" }
+                replaceVcsEntries(row, payload.vcsEntries)
+            }
+            MarkerAttributes.DISTRIBUTION_MAVEN -> {
+                requireNotNull(payload.mavenArtifacts) { "Marker '$markerName' requires mavenArtifacts payload" }
+                replaceMavenArtifacts(row, payload.mavenArtifacts)
+            }
+            MarkerAttributes.DISTRIBUTION_FILE_URL -> {
+                requireNotNull(payload.fileUrlArtifacts) { "Marker '$markerName' requires fileUrlArtifacts payload" }
+                replaceFileUrlArtifacts(row, payload.fileUrlArtifacts)
+            }
+            MarkerAttributes.DISTRIBUTION_DOCKER -> {
+                requireNotNull(payload.dockerImages) { "Marker '$markerName' requires dockerImages payload" }
+                replaceDockerImages(row, payload.dockerImages)
+            }
+            MarkerAttributes.DISTRIBUTION_PACKAGES -> {
+                requireNotNull(payload.packages) { "Marker '$markerName' requires packages payload" }
+                replacePackages(row, payload.packages)
+            }
+            MarkerAttributes.BUILD_REQUIRED_TOOLS -> {
+                requireNotNull(payload.requiredTools) { "Marker '$markerName' requires requiredTools payload" }
+                replaceRequiredTools(row, payload.requiredTools)
+            }
+            else -> error("Unknown marker '$markerName' — caller did not validate")
+        }
+    }
+
+    // ============================================================
+    // Helpers — query specification, validation, audit
+    // ============================================================
+
+    private fun findComponentOr404(id: UUID): ComponentEntity =
+        componentRepository.findById(id).orElseThrow {
+            NotFoundException("Component with id '$id' not found")
+        }
+
+    /**
+     * Parse `range` via the shared `VersionRangeFactory`; throws
+     * [IllegalArgumentException] if the syntax is invalid. Partial-overlap
+     * detection across other override rows is intentionally NOT enforced here —
+     * the DB UNIQUE on (component_id, version_range, overridden_attribute)
+     * blocks equal ranges; strict containment and disjoint ranges are allowed
+     * per schema-spec.md §7 (transitional). See `todo.md` for the follow-up.
+     */
+    private fun validateRangeSyntax(range: String) {
+        try {
+            versionRangeFactory.create(range)
+        } catch (e: Exception) {
+            throw IllegalArgumentException("Invalid version range: '$range'", e)
+        }
     }
 
     private fun buildSpecification(filter: ComponentFilter): Specification<ComponentEntity> {
@@ -518,55 +837,87 @@ class ComponentManagementServiceImpl(
         filter.productType?.let { pt ->
             spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<String>("productType"), pt) })
         }
-
         filter.archived?.let { archived ->
             spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<Boolean>("archived"), archived) })
         }
-
         filter.owner?.let { owner ->
-            // Exact match on `componentOwner` (the entity's column for the user-facing
-            // "owner"). Case-sensitive — the values come from `/components/meta/owners`
-            // which returns the canonical strings, so the Portal autocomplete picker
-            // hands back exactly what is in the column.
             spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<String>("componentOwner"), owner) })
         }
-
         filter.search?.let { search ->
             val pattern = "%${search.lowercase()}%"
             spec =
                 spec.and(
                     Specification { root, _, cb ->
                         cb.or(
-                            cb.like(cb.lower(root.get("name")), pattern),
+                            cb.like(cb.lower(root.get("componentKey")), pattern),
                             cb.like(cb.lower(root.get("displayName")), pattern),
                         )
                     },
                 )
         }
-
         filter.buildSystem?.let { bs ->
-            // INNER JOIN on buildConfigurations: components without any build config
-            // row are excluded (the join produces no match). Components that have at
-            // least one row with the matching buildSystem value are included.
             spec =
                 spec.and(
                     Specification { root, query, cb ->
-                        val join = root.join<ComponentEntity, BuildConfigurationEntity>("buildConfigurations")
+                        val join = root.join<ComponentEntity, ComponentConfigurationEntity>("configurations")
                         query?.distinct(true)
-                        cb.equal(join.get<String>("buildSystem"), bs)
+                        cb.and(
+                            cb.isNull(join.get<String>("overriddenAttribute")),
+                            cb.equal(join.get<String>("buildSystem"), bs),
+                        )
                     },
                 )
         }
-
-        // filter.system is not yet supported against the text[] column. JPA Criteria
-        // can't portably express "array contains" across H2 PG-compat and PostgreSQL,
-        // and we don't have a native query for it yet. The earlier implementation
-        // silently accepted the parameter and returned unfiltered results, which is
-        // worse than a clear rejection. Callers that need the filter should either
-        // drop the parameter or wait for the native-query follow-up.
-        require(filter.system == null) {
-            "filter.system is not yet supported; omit the parameter or filter client-side"
+        filter.system?.let { systemCode ->
+            spec =
+                spec.and(
+                    Specification { root, query, cb ->
+                        val join = root.join<ComponentEntity, ComponentSystemEntity>("systemJunctions")
+                        query?.distinct(true)
+                        cb.equal(join.get<String>("systemCode"), systemCode)
+                    },
+                )
         }
         return spec
+    }
+
+    private fun scalarAuditMap(entity: ComponentEntity): Map<String, Any?> =
+        mapOf(
+            "name" to entity.componentKey,
+            "displayName" to entity.displayName,
+            "componentOwner" to entity.componentOwner,
+            "productType" to entity.productType,
+            "clientCode" to entity.clientCode,
+            "archived" to entity.archived,
+            "solution" to entity.solution,
+            "parentComponentName" to entity.parentComponent?.componentKey,
+            "groupKey" to entity.componentGroup?.groupKey,
+            "releaseManager" to entity.releaseManager,
+            "securityChampion" to entity.securityChampion,
+            "copyright" to entity.copyright,
+            "releasesInDefaultBranch" to entity.releasesInDefaultBranch,
+            "jiraDisplayName" to entity.jiraDisplayName,
+            "jiraHotfixVersionFormat" to entity.jiraHotfixVersionFormat,
+            "vcsExternalRegistry" to entity.vcsExternalRegistry,
+            "distributionExplicit" to entity.distributionExplicit,
+            "distributionExternal" to entity.distributionExternal,
+        )
+
+    private fun publishAuditEvent(
+        action: String,
+        entityId: String,
+        oldValue: Map<String, Any?>? = null,
+        newValue: Map<String, Any?>? = null,
+    ) {
+        applicationEventPublisher.publishEvent(
+            AuditEvent(
+                entityType = "Component",
+                entityId = entityId,
+                action = action,
+                changedBy = currentUserResolver.currentUsername(),
+                oldValue = oldValue,
+                newValue = newValue,
+            ),
+        )
     }
 }

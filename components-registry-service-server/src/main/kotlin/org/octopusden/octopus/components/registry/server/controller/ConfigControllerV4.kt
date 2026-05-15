@@ -1,6 +1,5 @@
 package org.octopusden.octopus.components.registry.server.controller
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import org.octopusden.octopus.components.registry.server.entity.RegistryConfigEntity
 import org.octopusden.octopus.components.registry.server.repository.RegistryConfigRepository
 import org.springframework.http.ResponseEntity
@@ -13,16 +12,14 @@ import org.springframework.web.bind.annotation.RestController
 import java.time.Instant
 
 /**
- * `registry_config.value` is TEXT-as-JSON under schema v2 (no JSONB). We
- * serialize to a JSON string at the boundary and let the @JdbcTypeCode mapping
- * on the entity persist it; on read we deserialize through Jackson so the
- * response shape stays a `Map<String, Any?>` for v4 clients.
+ * `registry_config.value` is a `Map<String, Any?>` column serialized to TEXT
+ * via `@JdbcTypeCode(SqlTypes.JSON)`. Hibernate handles JSON marshalling on
+ * read and write — the controller just passes the map through.
  */
 @RestController
 @RequestMapping("rest/api/4")
 class ConfigControllerV4(
     private val registryConfigRepository: RegistryConfigRepository,
-    private val objectMapper: ObjectMapper,
 ) {
     @GetMapping("/config/field-config")
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
@@ -44,15 +41,10 @@ class ConfigControllerV4(
         @RequestBody value: Map<String, Any?>,
     ): ResponseEntity<Map<String, Any?>> = writeConfig("component-defaults", value)
 
-    private fun readConfig(key: String): ResponseEntity<Map<String, Any?>> {
-        val config = registryConfigRepository.findById(key)
-        return if (config.isPresent) {
-            val parsed = parseJsonMap(config.get().value)
-            ResponseEntity.ok(parsed)
-        } else {
-            ResponseEntity.ok(emptyMap())
-        }
-    }
+    private fun readConfig(key: String): ResponseEntity<Map<String, Any?>> =
+        registryConfigRepository.findById(key)
+            .map { ResponseEntity.ok(it.value) }
+            .orElse(ResponseEntity.ok(emptyMap()))
 
     private fun writeConfig(
         key: String,
@@ -60,17 +52,9 @@ class ConfigControllerV4(
     ): ResponseEntity<Map<String, Any?>> {
         val entity =
             registryConfigRepository.findById(key).orElse(RegistryConfigEntity(key = key))
-        entity.value = objectMapper.writeValueAsString(value)
+        entity.value = value
         entity.updatedAt = Instant.now()
         registryConfigRepository.save(entity)
         return ResponseEntity.ok(value)
     }
-
-    @Suppress("UNCHECKED_CAST")
-    private fun parseJsonMap(json: String): Map<String, Any?> =
-        try {
-            objectMapper.readValue(json, Map::class.java) as Map<String, Any?>
-        } catch (_: Exception) {
-            emptyMap()
-        }
 }

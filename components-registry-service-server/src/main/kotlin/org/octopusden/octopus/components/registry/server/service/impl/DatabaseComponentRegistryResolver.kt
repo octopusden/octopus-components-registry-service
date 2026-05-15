@@ -198,8 +198,7 @@ class DatabaseComponentRegistryResolver(
             .toSet()
 
     override fun getJiraComponentVersionRangesByProject(projectKey: String): Set<JiraComponentVersionRange> {
-        val ranges = getAllJiraComponentVersionRanges().filter { it.component.componentVersion.component != null }
-        val byProject = ranges.filter { it.component.projectKey == projectKey }
+        val byProject = getAllJiraComponentVersionRanges().filter { it.component.projectKey == projectKey }
         if (byProject.isEmpty()) {
             throw NotFoundException("Project '$projectKey' is not found")
         }
