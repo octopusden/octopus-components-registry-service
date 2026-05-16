@@ -285,19 +285,21 @@ class ImportServiceImpl(
         // Batch-load existing component keys + source flags so the per-iteration
         // findByComponentKey / componentSourceRepository.findById round-trips drop out.
         // For a 1000-component prod DSL on a remote DB, the saved per-query latency
-        // dominates the local sub-millisecond cost.
+        // dominates the local sub-millisecond cost. Targeted queries (`IN (...)` on the
+        // DSL key set) rather than `findAll()` so the cost stays bounded by DSL size,
+        // not total DB size (ghost rows from removed-from-DSL components don't matter).
+        val moduleKeys = allModules.keys
         val existingComponentKeys: Set<String> =
-            componentRepository.findAll().mapTo(HashSet()) { it.componentKey }
+            componentRepository.findByComponentKeyIn(moduleKeys).mapTo(HashSet()) { it.componentKey }
         val existingSources: MutableMap<String, ComponentSourceEntity> =
-            componentSourceRepository.findAll().associateByTo(HashMap()) { it.componentKey }
+            componentSourceRepository.findAllById(moduleKeys).associateByTo(HashMap()) { it.componentKey }
         val sourcesToUpsert = mutableListOf<ComponentSourceEntity>()
-        val now = Instant.now()
         fun stageSource(name: String) {
             val entity =
                 existingSources[name]
                     ?: ComponentSourceEntity(componentKey = name).also { existingSources[name] = it }
             entity.source = "db"
-            entity.migratedAt = now
+            entity.migratedAt = Instant.now()
             sourcesToUpsert += entity
         }
         for ((componentKey, escrowModule) in allModules) {
@@ -700,7 +702,7 @@ class ImportServiceImpl(
     }
 
     private fun preupsertToolsFromLoader(
-        @Suppress("UNUSED_PARAMETER") fullConfig: org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration,
+        fullConfig: org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration,
     ) {
         // Tools are loaded via EscrowConfigurationLoader.getToolsConfiguration(configObject).
         // We re-use the loadCommonDefaults call (which calls getToolsConfiguration internally)
@@ -943,10 +945,12 @@ class ImportServiceImpl(
         }
         val tOverridesMs = (System.nanoTime() - tOverridesStart) / 1_000_000
 
-        LOG.info(
-            "importModule[{}] ms: entity={} junctions={} base={} tools={} overrides={} (configs={}, nonBase={})",
-            componentKey, tEntityMs, tJunctionsMs, tBaseMs, tToolsMs, tOverridesMs, configs.size, nonBaseConfigs.size,
-        )
+        if (LOG.isDebugEnabled) {
+            LOG.debug(
+                "importModule[{}] ms: entity={} junctions={} base={} tools={} overrides={} (configs={}, nonBase={})",
+                componentKey, tEntityMs, tJunctionsMs, tBaseMs, tToolsMs, tOverridesMs, configs.size, nonBaseConfigs.size,
+            )
+        }
     }
 
     /**

@@ -13,6 +13,8 @@ interface ComponentRepository :
     JpaSpecificationExecutor<ComponentEntity> {
     fun findByComponentKey(componentKey: String): ComponentEntity?
 
+    fun findByComponentKeyIn(componentKeys: Collection<String>): List<ComponentEntity>
+
     fun findByComponentKeyAndArchivedFalse(componentKey: String): ComponentEntity?
 
     fun findByArchivedFalse(): List<ComponentEntity>
