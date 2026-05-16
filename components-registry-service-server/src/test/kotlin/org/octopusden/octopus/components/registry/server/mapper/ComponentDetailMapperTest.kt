@@ -289,6 +289,7 @@ class ComponentDetailMapperTest {
         val vcsEntry = VcsSettingsEntryEntity(
             id = UUID.randomUUID(),
             componentConfiguration = cfg,
+            name = "main",
             vcsPath = "org/repo",
             sortOrder = 0,
         )

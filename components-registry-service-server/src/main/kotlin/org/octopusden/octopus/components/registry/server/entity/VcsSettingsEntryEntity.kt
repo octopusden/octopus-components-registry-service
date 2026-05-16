@@ -11,7 +11,9 @@ import jakarta.persistence.Table
 import java.util.UUID
 
 /**
- * Unified VCS model: SINGLE-VCS is a single row with `name = NULL`;
+ * Unified VCS model: all VCS entries carry a non-null `name`.
+ * Inline DSL form (`vcsUrl=` / `branch=` at module level) yields `name = "main"`;
+ * named-block form (`vcsSettings { key { ... } }`) yields `name = "<key>"`.
  * MULTI-VCS is N rows with distinct `name` values. No discriminator column.
  * `repository_type` carries the VCS engine (`GIT` / `MERCURIAL` / `CVS`);
  * typically `GIT`.
@@ -27,8 +29,8 @@ class VcsSettingsEntryEntity(
     @JoinColumn(name = "component_configuration_id", nullable = false)
     var componentConfiguration: ComponentConfigurationEntity,
 
-    @Column(name = "name")
-    var name: String? = null,
+    @Column(name = "name", nullable = false)
+    var name: String,
 
     @Column(name = "vcs_path", columnDefinition = "TEXT", nullable = false)
     var vcsPath: String = "",

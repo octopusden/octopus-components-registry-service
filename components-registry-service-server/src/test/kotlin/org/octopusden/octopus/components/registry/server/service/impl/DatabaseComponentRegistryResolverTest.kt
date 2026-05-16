@@ -150,7 +150,7 @@ class DatabaseComponentRegistryResolverTest {
     private fun makeVcsEntry(
         config: ComponentConfigurationEntity,
         vcsPath: String,
-        name: String? = null,
+        name: String = "main",
         branch: String? = "master",
         sortOrder: Int = 0,
     ): VcsSettingsEntryEntity =

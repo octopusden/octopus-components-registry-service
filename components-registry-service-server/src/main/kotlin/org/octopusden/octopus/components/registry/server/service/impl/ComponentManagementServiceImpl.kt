@@ -908,7 +908,7 @@ class ComponentManagementServiceImpl(
             config.vcsEntries.add(
                 VcsSettingsEntryEntity(
                     componentConfiguration = config,
-                    name = req.name,
+                    name = req.name ?: "main",
                     vcsPath = req.vcsPath,
                     branch = req.branch,
                     tag = req.tag,

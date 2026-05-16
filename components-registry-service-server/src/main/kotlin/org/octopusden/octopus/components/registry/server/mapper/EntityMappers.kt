@@ -587,7 +587,7 @@ internal fun List<VcsSettingsEntryEntity>.toVCSSettings(externalRegistry: String
     val roots =
         sorted.map { entry ->
             VersionControlSystemRoot.create(
-                entry.name ?: "main",
+                entry.name,
                 RepositoryType.valueOf(entry.repositoryType ?: "GIT"),
                 entry.vcsPath,
                 entry.tag,
