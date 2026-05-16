@@ -9,8 +9,8 @@ test against them — bypassing the TeamCity build + OKD deploy cycle.
 | Worktree | `_wt/local-baseline` | `_wt/schema-v2-sql` |
 | Port | `4567` | `4568` |
 | Runtime | fat JAR (`java -jar`, built once via `bootJar`) | Gradle `bootRun` (incremental iteration) |
-| Mode | VCS (Git-DSL) | DB (Postgres + auto-migrate from VCS at startup) |
-| Profiles | `dev,dev-vcs-local,local` | `dev,dev-vcs-local,dev-db-automigrate,local` |
+| Mode | VCS (Git-DSL) | DB (Postgres + auto-migrate from VCS at startup; `default-source=db` so `DatabaseComponentRegistryResolver` serves the migrated components) |
+| Profiles | `dev,dev-vcs-local,local` | `dev,dev-vcs-local,dev-db-automigrate,dev-db-only,local` (default — `candidate.sh --mode=db`); fallback `dev,dev-vcs-local,dev-db-automigrate,local` (`--mode=vcs`, for V1-vs-V1 parity-debug) |
 | Cloud Config | disabled (yamls mounted from local `service-config` clone) | not used (`dev` profile) |
 
 Both stands point at the same local Git-DSL clone (no remote git fetch) so the
@@ -133,6 +133,19 @@ Pass any of these to override the defaults before invoking the script:
 export LOCAL_VCS_ROOT="$HOME/your-registry-dsl-clone"
 ./scripts/local-stands/baseline.sh
 ```
+
+## `candidate.sh --mode` flag
+
+The candidate spawns the schema-v2 service in one of two modes — pick which resolver
+serves component reads:
+
+| Mode | When | Profile added | Effect |
+|---|---|---|---|
+| `--mode=db` (**default**) | Validating cluster-fix PRs (#208/#209/#211/#212 family); measuring real schema-v2-vs-V1 deltas | `dev-db-only` — sets `components-registry.default-source=db` | `ComponentRoutingResolver` picks `DatabaseComponentRegistryResolver` for unmigrated components (post-automigrate everything is migrated, so DB serves all). |
+| `--mode=vcs` | V1-vs-V1 parity-debug only (e.g., comparing two test-builds of the V1 in-memory resolver) | (none added — falls back to global `default-source=git`) | V1 `EscrowConfigurationLoader` serves; schema-v2 code path is dormant. |
+
+`verify.sh --restart` invokes `candidate.sh` without args → mode `db` by default.
+Use `--mode=vcs` only when you need to reproduce the V1-only behaviour.
 
 ## Polluted-run guard
 
