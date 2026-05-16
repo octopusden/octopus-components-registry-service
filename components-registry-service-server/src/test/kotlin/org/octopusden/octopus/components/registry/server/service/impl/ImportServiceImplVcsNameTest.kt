@@ -12,6 +12,7 @@ import org.mockito.Mockito.mock
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.mapper.ALL_VERSIONS
+import org.octopusden.octopus.components.registry.server.repository.ComponentBuildToolBeanRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentGroupRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentLabelRepository
@@ -70,6 +71,7 @@ class ImportServiceImplVcsNameTest {
             componentLabelRepository = mock(ComponentLabelRepository::class.java),
             componentSystemRepository = mock(ComponentSystemRepository::class.java),
             componentRequiredToolRepository = mock(ComponentRequiredToolRepository::class.java),
+            componentBuildToolBeanRepository = mock(ComponentBuildToolBeanRepository::class.java),
         )
 
         attachVcsEntriesMethod = ImportServiceImpl::class.java
