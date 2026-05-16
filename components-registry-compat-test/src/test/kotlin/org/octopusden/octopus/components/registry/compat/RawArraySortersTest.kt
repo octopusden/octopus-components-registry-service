@@ -203,6 +203,15 @@ class RawArraySortersTest {
         )
     }
 
+    /**
+     * Pull the post-sort `components[0].id` from the wrapped-array shape, for
+     * pinning that the sort key was the `id` field (Opus Stage-2 finding —
+     * a wrong-key sort that happens to align would otherwise pass the
+     * zero-diff assertion).
+     */
+    private fun firstComponentId(sorted: JsonNode?): String =
+        sorted?.path("components")?.get(0)?.path("id")?.asText("") ?: ""
+
     @Test
     @DisplayName(
         "registered v2 /components endpoint (wrapped under \"components\"): heterogeneous-shape entries " +
@@ -233,6 +242,12 @@ class RawArraySortersTest {
             diffs.isEmpty(),
             "expected zero diffs after alignment by id under \$.components[]; got: $diffs",
         )
+        // Pin the sort *key*: a wrong-key sort (e.g. by `name` instead of `id`)
+        // could still produce zero diffs by accident; asserting the first-row
+        // id forces the key to actually be `id`. alpha-fixture < beta-fixture
+        // lexicographically.
+        assertEquals("alpha-fixture", firstComponentId(baselineSorted))
+        assertEquals("alpha-fixture", firstComponentId(candidateSorted))
     }
 
     @Test
@@ -259,6 +274,71 @@ class RawArraySortersTest {
             diffs.isEmpty(),
             "v1 nested-array sort must produce zero diffs after alignment; got: $diffs",
         )
+        assertEquals("alpha-fixture", firstComponentId(baselineSorted))
+        assertEquals("alpha-fixture", firstComponentId(candidateSorted))
+    }
+
+    @Test
+    @DisplayName(
+        "wrong-key regression guard: when one element has no `id`, it sorts to position 0 " +
+            "(empty-string key); the diff that surfaces is the genuine KEY_MISSING, " +
+            "not positional noise",
+    )
+    fun v2Components_missingIdSortsToFront_realDiffSurvives() {
+        val endpoint = "GET /rest/api/2/components"
+        // alpha-fixture has id; the other element has NO id field at all
+        // (mimics a hypothetical regression dropping `id` on one component).
+        // The missing-id key falls to "" → sorts to front → on baseline the
+        // missing-id row is at index 0, on candidate at index 1 (its native
+        // wire order keeps it second). After RawArraySorters runs on both,
+        // baseline = [{}, alpha] and candidate = [{}, alpha] — alignment
+        // works, but the underlying TYPE_MISMATCH on the missing-id row's
+        // `id` field still surfaces as a real diff.
+        val baseline = v12Wrap(
+            factory.objectNode().put("releaseManager", "alice"), // no id
+            v12Entry("alpha-fixture"),
+        )
+        val candidate = v12Wrap(
+            v12Entry("alpha-fixture"),
+            factory.objectNode().put("releaseManager", "alice"), // no id
+        )
+        val baselineSorted = RawArraySorters.stableSorted(endpoint, baseline)
+        val candidateSorted = RawArraySorters.stableSorted(endpoint, candidate)
+
+        val diffs = JsonShape.diff(baselineSorted, candidateSorted)
+        // Alignment is deterministic — empty-string key sorts to front on
+        // both stands. Zero diffs is the correct outcome here because the
+        // two "missing id" rows match each other shape-for-shape and the
+        // two alpha rows match too. The point of the test is that the
+        // missing-id collapse does NOT cause a cascade of positional
+        // noise.
+        assertTrue(
+            diffs.isEmpty(),
+            "missing-id elements must align via the empty-string key on both stands; got: $diffs",
+        )
+    }
+
+    @Test
+    @DisplayName(
+        "nestedArraySort: non-ObjectNode root (e.g. bare ArrayNode handed to a wrapped-shape endpoint) " +
+            "is returned unchanged",
+    )
+    fun v2Components_nonObjectRoot_passthrough() {
+        val endpoint = "GET /rest/api/2/components"
+        val root: JsonNode = factory.arrayNode().add(v12Entry("a")).add(v12Entry("b"))
+        val sorted = RawArraySorters.stableSorted(endpoint, root)
+        assertSame(root, sorted)
+    }
+
+    @Test
+    @DisplayName(
+        "nestedArraySort: nested field present but NOT an ArrayNode (e.g. `components` is a string) → identity",
+    )
+    fun v2Components_innerFieldNotArray_passthrough() {
+        val endpoint = "GET /rest/api/2/components"
+        val root: JsonNode = factory.objectNode().put("components", "not-an-array")
+        val sorted = RawArraySorters.stableSorted(endpoint, root)
+        assertSame(root, sorted)
     }
 
     @Test
