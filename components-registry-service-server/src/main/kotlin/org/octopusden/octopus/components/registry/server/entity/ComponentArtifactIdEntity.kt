@@ -26,4 +26,7 @@ class ComponentArtifactIdEntity(
 
     @Column(name = "artifact_pattern", columnDefinition = "TEXT", nullable = false)
     var artifactPattern: String = "",
+
+    @Column(name = "sort_order", nullable = false)
+    var sortOrder: Int = 0,
 )

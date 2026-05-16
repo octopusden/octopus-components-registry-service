@@ -890,15 +890,27 @@ class ImportServiceImpl(
             entity.distributionExternal = dist.external()
         }
 
-        // Artifact IDs: parse groupId:artifactId pattern from first config
+        // Artifact IDs: parse groupId:artifactId pattern from first config.
+        // `sortOrder` records the position of each token in the original CSV so
+        // that `/maven-artifacts` re-joins them in the same order V1 returns — V1
+        // reads `EscrowModuleConfig.artifactIdPattern` (the raw DSL string),
+        // V2 reads these rows and CSV-joins by `sortOrder` ASC.
         val groupId = cfg.groupIdPattern
         val artifactIdCsv = cfg.artifactIdPattern
         if (!groupId.isNullOrBlank() && !artifactIdCsv.isNullOrBlank()) {
-            for (artId in artifactIdCsv.split(",").map { it.trim() }.filter { it.isNotEmpty() }) {
-                entity.artifactIds.add(
-                    ComponentArtifactIdEntity(component = entity, groupPattern = groupId, artifactPattern = artId),
-                )
-            }
+            artifactIdCsv.split(",")
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .forEachIndexed { index, artId ->
+                    entity.artifactIds.add(
+                        ComponentArtifactIdEntity(
+                            component = entity,
+                            groupPattern = groupId,
+                            artifactPattern = artId,
+                            sortOrder = index,
+                        ),
+                    )
+                }
         }
 
         // Distribution security groups (never per-version)
