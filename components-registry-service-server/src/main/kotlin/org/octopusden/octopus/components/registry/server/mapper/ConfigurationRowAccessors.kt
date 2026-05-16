@@ -12,6 +12,20 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentConfigu
  * in lock-step. Adding a new column requires three edits: the entity, this
  * file (both `extractScalarValue` and `applyScalarValue`), and the resolver's
  * `applyScalarOverride` table.
+ *
+ * ## Null-handling contract across the four code paths
+ *
+ * Null values on scalar columns have different semantics depending on the path:
+ *
+ * | Path | File | Null-handling |
+ * |------|------|---------------|
+ * | Groovy import (write) | `ImportServiceImpl.collectScalarDiffs` + `applyScalarValueToRow` | Emits null-valued SCALAR_OVERRIDE rows when a DSL override range clears a base scalar (null = "explicit clear"). |
+ * | Resolver merge (read) | `EntityMappers.applyScalarOverride` | Unconditional assignment per discriminator — null column on a SCALAR_OVERRIDE row clears the merged value for the range (symmetric with import). |
+ * | V4 POST create | `applyScalarValue` (this file, line ~115) | **Rejects null** with "use DELETE /field-overrides/{id} to remove the override". Creating a null-clear override via V4 is not supported — import is the only path. |
+ * | V4 PUT update | `ComponentManagementServiceImpl.updateFieldOverride` | **No-op when null** (PATCH semantic). `FieldOverrideUpdateRequest.value: Any? = null` cannot distinguish omitted from explicit JSON null at the Jackson layer. See KDoc on `FieldOverrideUpdateRequest.value`. |
+ *
+ * The V4 GET path (`extractScalarValue`) returns whatever the column holds — null for
+ * import-created null-clear rows, a typed value otherwise.
  */
 
 /** All scalar `aspect.field` paths supported by `component_configurations`. */

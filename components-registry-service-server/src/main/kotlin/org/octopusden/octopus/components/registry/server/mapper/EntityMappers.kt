@@ -417,37 +417,41 @@ private class ComponentConfigurationView {
 
     @Suppress("CyclomaticComplexMethod", "LongMethod")
     fun applyScalarOverride(override: ComponentConfigurationEntity) {
+        // Unconditional assignment: the `overriddenAttribute` discriminator is the source of truth.
+        // A null column value means "explicitly clear this scalar for this range" (import-only
+        // null-clear pattern). Using `?.let` would silently skip null and let the base value bleed
+        // through — that was the root cause of bugs F (bug-F-component.buildFilePath) and G (bug-G-component.versionPrefix).
         when (override.overriddenAttribute) {
-            "build.buildSystem" -> override.buildSystem?.let { buildSystem = it }
-            "build.buildSystemVersion" -> override.buildSystemVersion?.let { buildSystemVersion = it }
-            "build.javaVersion" -> override.javaVersion?.let { javaVersion = it }
-            "build.mavenVersion" -> override.mavenVersion?.let { mavenVersion = it }
-            "build.gradleVersion" -> override.gradleVersion?.let { gradleVersion = it }
-            "build.buildFilePath" -> override.buildFilePath?.let { buildFilePath = it }
-            "build.deprecated" -> override.deprecated?.let { deprecated = it }
-            "build.requiredProject" -> override.requiredProject?.let { requiredProject = it }
-            "build.projectVersion" -> override.projectVersion?.let { projectVersion = it }
-            "build.systemProperties" -> override.systemProperties?.let { systemProperties = it }
-            "build.buildTasks" -> override.buildTasks?.let { buildTasks = it }
+            "build.buildSystem" -> buildSystem = override.buildSystem
+            "build.buildSystemVersion" -> buildSystemVersion = override.buildSystemVersion
+            "build.javaVersion" -> javaVersion = override.javaVersion
+            "build.mavenVersion" -> mavenVersion = override.mavenVersion
+            "build.gradleVersion" -> gradleVersion = override.gradleVersion
+            "build.buildFilePath" -> buildFilePath = override.buildFilePath
+            "build.deprecated" -> deprecated = override.deprecated
+            "build.requiredProject" -> requiredProject = override.requiredProject
+            "build.projectVersion" -> projectVersion = override.projectVersion
+            "build.systemProperties" -> systemProperties = override.systemProperties
+            "build.buildTasks" -> buildTasks = override.buildTasks
 
-            "escrow.buildTask" -> override.escrowBuildTask?.let { escrowBuildTask = it }
-            "escrow.providedDependencies" -> override.escrowProvidedDependencies?.let { escrowProvidedDependencies = it }
-            "escrow.reusable" -> override.escrowReusable?.let { escrowReusable = it }
-            "escrow.generation" -> override.escrowGeneration?.let { escrowGeneration = it }
-            "escrow.diskSpace" -> override.escrowDiskSpace?.let { escrowDiskSpace = it }
-            "escrow.additionalSources" -> override.escrowAdditionalSources?.let { escrowAdditionalSources = it }
-            "escrow.gradleIncludeConfigurations" -> override.escrowGradleIncludeConfigurations?.let { escrowGradleIncludeConfigurations = it }
-            "escrow.gradleExcludeConfigurations" -> override.escrowGradleExcludeConfigurations?.let { escrowGradleExcludeConfigurations = it }
-            "escrow.gradleIncludeTestConfigurations" -> override.escrowGradleIncludeTestConfigurations?.let { escrowGradleIncludeTestConfigurations = it }
+            "escrow.buildTask" -> escrowBuildTask = override.escrowBuildTask
+            "escrow.providedDependencies" -> escrowProvidedDependencies = override.escrowProvidedDependencies
+            "escrow.reusable" -> escrowReusable = override.escrowReusable
+            "escrow.generation" -> escrowGeneration = override.escrowGeneration
+            "escrow.diskSpace" -> escrowDiskSpace = override.escrowDiskSpace
+            "escrow.additionalSources" -> escrowAdditionalSources = override.escrowAdditionalSources
+            "escrow.gradleIncludeConfigurations" -> escrowGradleIncludeConfigurations = override.escrowGradleIncludeConfigurations
+            "escrow.gradleExcludeConfigurations" -> escrowGradleExcludeConfigurations = override.escrowGradleExcludeConfigurations
+            "escrow.gradleIncludeTestConfigurations" -> escrowGradleIncludeTestConfigurations = override.escrowGradleIncludeTestConfigurations
 
-            "jira.projectKey" -> override.jiraProjectKey?.let { jiraProjectKey = it }
-            "jira.technical" -> override.jiraTechnical?.let { jiraTechnical = it }
-            "jira.majorVersionFormat" -> override.jiraMajorVersionFormat?.let { jiraMajorVersionFormat = it }
-            "jira.releaseVersionFormat" -> override.jiraReleaseVersionFormat?.let { jiraReleaseVersionFormat = it }
-            "jira.buildVersionFormat" -> override.jiraBuildVersionFormat?.let { jiraBuildVersionFormat = it }
-            "jira.lineVersionFormat" -> override.jiraLineVersionFormat?.let { jiraLineVersionFormat = it }
-            "jira.versionPrefix" -> override.jiraVersionPrefix?.let { jiraVersionPrefix = it }
-            "jira.versionFormat" -> override.jiraVersionFormat?.let { jiraVersionFormat = it }
+            "jira.projectKey" -> jiraProjectKey = override.jiraProjectKey
+            "jira.technical" -> jiraTechnical = override.jiraTechnical
+            "jira.majorVersionFormat" -> jiraMajorVersionFormat = override.jiraMajorVersionFormat
+            "jira.releaseVersionFormat" -> jiraReleaseVersionFormat = override.jiraReleaseVersionFormat
+            "jira.buildVersionFormat" -> jiraBuildVersionFormat = override.jiraBuildVersionFormat
+            "jira.lineVersionFormat" -> jiraLineVersionFormat = override.jiraLineVersionFormat
+            "jira.versionPrefix" -> jiraVersionPrefix = override.jiraVersionPrefix
+            "jira.versionFormat" -> jiraVersionFormat = override.jiraVersionFormat
 
             else -> Unit // unknown attribute path; ignore for forward-compat
         }

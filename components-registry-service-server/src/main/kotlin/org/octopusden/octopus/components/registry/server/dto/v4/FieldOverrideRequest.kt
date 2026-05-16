@@ -30,6 +30,23 @@ data class FieldOverrideCreateRequest(
 
 data class FieldOverrideUpdateRequest(
     val versionRange: String? = null,
+    /**
+     * New scalar value for this override row. **null = don't touch this field (PATCH semantic).**
+     *
+     * `FieldOverrideUpdateRequest.value: Any? = null` cannot distinguish an omitted JSON field
+     * from an explicit JSON `null` at the Jackson layer without a presence-aware wrapper such as
+     * `JsonNullable<Any>`. Introducing that wrapper is V4 ergonomics work tracked as a separate
+     * tech-debt item. Until then, null here is silently treated as "no-op" — the row's typed
+     * column is left unchanged.
+     *
+     * To clear an override entirely, use `DELETE /field-overrides/{id}`.
+     * To set an explicit scalar value, pass the value here.
+     *
+     * **There is currently no V4 way to create a null-clearing scalar override row via PUT.**
+     * Null-clearing rows are import-only (the Groovy DSL import pipeline emits them when a
+     * DSL override range sets a scalar to null, clearing an inherited base value). See
+     * `ConfigurationRowAccessors.kt` for the full null-handling contract across all four paths.
+     */
     val value: Any? = null,
     val markerChildren: MarkerChildrenPayload? = null,
 )
