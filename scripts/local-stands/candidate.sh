@@ -40,13 +40,16 @@ CANDIDATE_PORT="${CANDIDATE_PORT:-4568}"
 ADDITIONAL_LOCATION="file:$CANDIDATE_WORKTREE/components-registry-service-server/dev/"
 ADDITIONAL_LOCATION="$ADDITIONAL_LOCATION,file:$SERVICE_CONFIG_DIR/components-registry-service.yml"
 
+WORK_DIR="${WORK_DIR:-/tmp/crs-candidate-work}"
 cd "$CANDIDATE_WORKTREE"
 echo ">>> candidate: $CANDIDATE_WORKTREE @ $(git rev-parse --short HEAD)"
-echo ">>> port: $CANDIDATE_PORT,  VCS root: $LOCAL_VCS_ROOT,  DB: localhost:${CRS_DB_PORT:-5432}"
+echo ">>> port: $CANDIDATE_PORT,  VCS root: $LOCAL_VCS_ROOT  (work-dir: $WORK_DIR),  DB: localhost:${CRS_DB_PORT:-5432}"
 echo ">>> config: $SERVICE_CONFIG_DIR (overlaid on dev/)"
 exec ./gradlew :components-registry-service-server:bootRun --no-daemon --console=plain \
   --args="--server.port=$CANDIDATE_PORT \
           --spring.profiles.active=dev,dev-vcs-local,dev-db-automigrate,local \
           --spring.config.additional-location=$ADDITIONAL_LOCATION \
           --components-registry.vcs.root=file://$LOCAL_VCS_ROOT \
+          --components-registry.work-dir=$WORK_DIR \
+          --components-registry.groovy-path=$WORK_DIR/src/main/resources \
           --auth-server.disabled=true"

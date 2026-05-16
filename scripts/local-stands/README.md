@@ -121,8 +121,9 @@ remove it with `docker volume rm <name>` to fully reset.
 | `SERVICE_CONFIG_DIR` | _required for both stands, no default_ — local clone of the service-config repo |
 | `BASELINE_WORKTREE` | absolute path of `_wt/local-baseline` |
 | `CANDIDATE_WORKTREE` | absolute path of `_wt/schema-v2-sql` |
-| `CRS_DB_PORT` | `5432` (Postgres) |
-| `CRS_DB_USER` / `CRS_DB_PASSWORD` / `CRS_DB_NAME` | `crs` / `crs` / `components_registry` |
+| `CRS_DB_PORT` | `5432` — _docker side only_: host port the Postgres container binds to. The candidate JVM reads `POSTGRES_HOST`/`POSTGRES_PORT`/… from the `dev-db-automigrate` profile (defaults `localhost`/`5432`); changing `CRS_DB_PORT` alone makes the JVM and the container disagree. |
+| `CRS_DB_USER` / `CRS_DB_PASSWORD` / `CRS_DB_NAME` | `crs` / `crs` / `components_registry` — _docker side only_, same caveat as above. |
+| `WORK_DIR` | `/tmp/crs-baseline-work` (baseline) / `/tmp/crs-candidate-work` (candidate) — distinct per stand so the `dev-vcs-local` clone-then-delete cycle on one doesn't race with the other. |
 | `COMPAT_SMOKE_COMPONENTS` | _required for component-bearing tests_ — comma-separated real names from prod listing. **Never commit.** |
 | `COMPAT_RMS_URL` | _required for version-bearing tests_ — URL of Release Management Service used for sampling real release versions |
 

@@ -41,12 +41,12 @@ kill_port() {
   local port="$1"
   command -v lsof >/dev/null 2>&1 || { echo "WARN: lsof not available; skipping port-$port kill"; return 0; }
   local pids
-  pids=$(lsof -ti tcp:"$port" 2>/dev/null || true)
+  pids=$(lsof -ti -sTCP:LISTEN tcp:"$port" 2>/dev/null || true)
   [ -z "$pids" ] && return 0
   echo "    sending TERM to PID(s) on :$port — $pids"
   kill $pids 2>/dev/null || true
   for i in $(seq 1 10); do
-    pids=$(lsof -ti tcp:"$port" 2>/dev/null || true)
+    pids=$(lsof -ti -sTCP:LISTEN tcp:"$port" 2>/dev/null || true)
     [ -z "$pids" ] && return 0
     sleep 1
   done
@@ -57,8 +57,14 @@ kill_port() {
 # Wait until $port is free, capped at $2 seconds.
 wait_port_free() {
   local port="$1" cap="${2:-15}"
+  local have_lsof=0
+  command -v lsof >/dev/null 2>&1 && have_lsof=1
   for i in $(seq 1 "$cap"); do
-    if ! health "$port" && ! lsof -i tcp:"$port" >/dev/null 2>&1; then return 0; fi
+    if ! health "$port"; then
+      # If lsof is missing, fall back to health-only as the readiness signal.
+      [ "$have_lsof" -eq 0 ] && return 0
+      lsof -i -sTCP:LISTEN tcp:"$port" >/dev/null 2>&1 || return 0
+    fi
     sleep 1
   done
   return 1
@@ -98,8 +104,9 @@ if [ "$RESTART" -eq 1 ]; then
   echo ">>> --restart: stopping candidate JVM on :$CANDIDATE_PORT"
   kill_port "$CANDIDATE_PORT"
   wait_port_free "$CANDIDATE_PORT" 10 || echo "WARN: :$CANDIDATE_PORT still bound; continuing anyway"
-  echo ">>> starting candidate.sh in background (logs: /tmp/crs-candidate.log)"
-  nohup bash "$SCRIPT_DIR/candidate.sh" >/tmp/crs-candidate.log 2>&1 &
+  CANDIDATE_LOG="/tmp/crs-candidate-${CANDIDATE_PORT}.log"
+  echo ">>> starting candidate.sh in background (logs: $CANDIDATE_LOG)"
+  nohup bash "$SCRIPT_DIR/candidate.sh" >"$CANDIDATE_LOG" 2>&1 &
   echo -n ">>> waiting for candidate health on :$CANDIDATE_PORT (up to 5 min)"
   for i in $(seq 1 75); do
     if health "$CANDIDATE_PORT"; then
@@ -113,8 +120,8 @@ if [ "$RESTART" -eq 1 ]; then
   done
   echo
   if ! health "$CANDIDATE_PORT"; then
-    echo "ERROR: candidate failed to come up — tail of /tmp/crs-candidate.log:"
-    tail -n 40 /tmp/crs-candidate.log || true
+    echo "ERROR: candidate failed to come up — tail of $CANDIDATE_LOG:"
+    tail -n 40 "$CANDIDATE_LOG" || true
     exit 3
   fi
 elif ! health "$CANDIDATE_PORT"; then

@@ -57,19 +57,40 @@ find_boot_jar() {
 }
 
 JAR="$(find_boot_jar || true)"
-if [ -z "$JAR" ]; then
-  echo ">>> baseline JAR not found in $LIBS_DIR — building (one-time, ~2-3 min)..."
+
+# Stale-JAR guard: if any source file changed since the JAR was built, rebuild.
+# Catches the common "git pulled origin/main, forgot to rebuild" case where the
+# script would otherwise report the new commit hash but run yesterday's bytecode.
+SRC_ROOT="$BASELINE_WORKTREE/components-registry-service-server/src"
+needs_build() {
+  [ -z "$JAR" ] && return 0
+  [ ! -f "$JAR" ] && return 0
+  [ ! -d "$SRC_ROOT" ] && return 1
+  local newer
+  newer=$(find "$SRC_ROOT" "$BASELINE_WORKTREE"/*.gradle "$BASELINE_WORKTREE"/*/build.gradle \
+            -newer "$JAR" \( -name '*.kt' -o -name '*.java' -o -name '*.gradle' \) \
+            -print -quit 2>/dev/null || true)
+  [ -n "$newer" ]
+}
+
+if needs_build; then
+  if [ -z "$JAR" ]; then
+    echo ">>> baseline JAR not found in $LIBS_DIR — building (one-time, ~2-3 min)..."
+  else
+    echo ">>> source newer than $(basename "$JAR") — rebuilding..."
+  fi
   cd "$BASELINE_WORKTREE"
   ./gradlew :components-registry-service-server:bootJar --no-daemon --console=plain -x test
   JAR="$(find_boot_jar)"
 fi
 [ -n "$JAR" ] && [ -f "$JAR" ] || { echo "ERROR: failed to locate or build baseline JAR under $LIBS_DIR"; exit 1; }
 
+WORK_DIR="${WORK_DIR:-/tmp/crs-baseline-work}"
 echo ">>> baseline: $BASELINE_WORKTREE @ $(git -C "$BASELINE_WORKTREE" rev-parse --short HEAD)"
 echo ">>> JAR:    $JAR"
 echo ">>> port:   $BASELINE_PORT"
 echo ">>> config: $SERVICE_CONFIG_DIR (cloud-config disabled)"
-echo ">>> VCS:    $LOCAL_VCS_ROOT"
+echo ">>> VCS:    $LOCAL_VCS_ROOT  (work-dir: $WORK_DIR)"
 
 # additional-location is searched left-to-right; later entries win for overlapping keys.
 # Order: profile yamls from main worktree's dev/ dir, then service-config defaults,
@@ -86,4 +107,6 @@ exec java -jar "$JAR" \
   --spring.config.additional-location="$ADDITIONAL_LOCATION" \
   --spring.profiles.active=dev,dev-vcs-local,local \
   --components-registry.vcs.root="file://$LOCAL_VCS_ROOT" \
+  --components-registry.work-dir="$WORK_DIR" \
+  --components-registry.groovy-path="$WORK_DIR/src/main/resources" \
   --auth-server.disabled=true
