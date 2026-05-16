@@ -5,6 +5,8 @@ package org.octopusden.octopus.components.registry.server.mapper
 import org.octopusden.octopus.components.registry.server.dto.v4.ArtifactIdResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.AuditLogResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.BuildAspectResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.BuildToolBeanRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.BuildToolBeanResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentConfigurationResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentDetailResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentGroupResponse
@@ -29,6 +31,7 @@ import org.octopusden.octopus.components.registry.server.dto.v4.VcsEntryResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.DockerImageRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FileUrlArtifactRequest
 import org.octopusden.octopus.components.registry.server.entity.AuditLogEntity
+import org.octopusden.octopus.components.registry.server.entity.ComponentBuildToolBeanEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 
@@ -150,6 +153,9 @@ fun ComponentConfigurationEntity.toConfigurationResponse(): ComponentConfigurati
         this.packages.sortedBy { it.sortOrder }.map { it.toResponse() }
     }
     val tools = pickChildRows(rowType, MarkerAttributes.BUILD_REQUIRED_TOOLS) { requiredToolJunctions.map { it.toolName } }
+    val buildBeans = pickChildRows(rowType, MarkerAttributes.BUILD_TOOLS) {
+        buildToolBeans.sortedBy { it.sortOrder }.map { it.toBuildToolBeanResponse() }
+    }
 
     return ComponentConfigurationResponse(
         id = this.id!!,
@@ -166,6 +172,7 @@ fun ComponentConfigurationEntity.toConfigurationResponse(): ComponentConfigurati
         dockerImages = docker,
         packages = packages,
         requiredTools = tools,
+        buildToolBeans = buildBeans,
     )
 }
 
@@ -345,6 +352,12 @@ private fun ComponentConfigurationEntity.toMarkerChildrenPayload(): MarkerChildr
         MarkerAttributes.BUILD_REQUIRED_TOOLS ->
             MarkerChildrenPayload(requiredTools = requiredToolJunctions.map { it.toolName })
 
+        MarkerAttributes.BUILD_TOOLS ->
+            MarkerChildrenPayload(
+                buildToolBeans =
+                    buildToolBeans.sortedBy { it.sortOrder }.map { it.toBuildToolBeanRequest() },
+            )
+
         else -> error("Marker row has unknown overriddenAttribute '$overriddenAttribute'")
     }
 
@@ -419,6 +432,26 @@ private fun org.octopusden.octopus.components.registry.server.entity.Distributio
         id = this.id!!,
         groupType = this.groupType,
         groupName = this.groupName,
+    )
+
+private fun ComponentBuildToolBeanEntity.toBuildToolBeanResponse(): BuildToolBeanResponse =
+    BuildToolBeanResponse(
+        id = this.id!!,
+        beanType = this.beanType,
+        toolType = this.toolType,
+        settingsProperty = this.settingsProperty,
+        versionPattern = this.versionPattern,
+        edition = this.edition,
+        sortOrder = this.sortOrder,
+    )
+
+private fun ComponentBuildToolBeanEntity.toBuildToolBeanRequest(): BuildToolBeanRequest =
+    BuildToolBeanRequest(
+        beanType = this.beanType,
+        toolType = this.toolType,
+        settingsProperty = this.settingsProperty,
+        versionPattern = this.versionPattern,
+        edition = this.edition,
     )
 
 private fun org.octopusden.octopus.components.registry.server.entity.ComponentGroupEntity.toResponse(
