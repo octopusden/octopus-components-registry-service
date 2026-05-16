@@ -162,7 +162,14 @@ abstract class CompatibilityTestBase {
 
         // Skip shape diffing if status codes already diverged or no JSON
         if (baseline.status == candidate.status && baseline.json != null && candidate.json != null) {
-            val shapeDiffs = JsonShape.diff(baseline.json, candidate.json)
+            // For Set-shape endpoints (`/jira-component-version-ranges`, `/v3/components`)
+            // the wire-order of elements is non-deterministic across stands. Pre-sort
+            // both sides by a stable per-endpoint key so JsonShape.diff doesn't report
+            // positional false-positives. Pass-through for unregistered endpoints
+            // (see RawArraySorters and its unit test for the registered list + contract).
+            val baselineForShape = RawArraySorters.stableSorted(endpoint, baseline.json)
+            val candidateForShape = RawArraySorters.stableSorted(endpoint, candidate.json)
+            val shapeDiffs = JsonShape.diff(baselineForShape, candidateForShape)
             for (sd in shapeDiffs) {
                 categories += DiffClassifier.STRUCTURAL_DIFF
                 DiffCollector.record(
