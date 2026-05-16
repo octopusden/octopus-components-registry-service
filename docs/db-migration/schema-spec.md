@@ -16,7 +16,7 @@ This document is the canonical reference for the v2 schema. ADR-014 records the 
 | Dictionaries | `labels`, `systems`, `tools` | 3 |
 | M:N junctions | `component_labels`, `component_systems`, `component_required_tools` | 3 |
 | Children of `components` | `component_artifact_ids`, `distribution_security_groups`, `component_teamcity_projects`, `component_doc_links` | 4 |
-| Children of `component_configurations` | `vcs_settings_entries`, `distribution_maven_artifacts`, `distribution_file_url_artifacts`, `distribution_docker_images`, `distribution_packages` | 5 |
+| Children of `component_configurations` | `vcs_settings_entries`, `distribution_maven_artifacts`, `distribution_file_url_artifacts`, `distribution_docker_images`, `distribution_packages`, `component_build_tool_beans` | 6 |
 | Cross-cutting | `audit_log`, `registry_config`, `component_source`, `dependency_mappings`, `git_history_import_state` | 5 |
 
 ## 2. ER overview
@@ -79,6 +79,7 @@ This document is the canonical reference for the v2 schema. ADR-014 records the 
 | `distribution.docker` | `distribution_docker_images` |
 | `distribution.packages` | `distribution_packages` |
 | `build.requiredTools` | `component_required_tools` |
+| `build.buildTools` | `component_build_tool_beans` |
 
 - **All typed scalar columns must be NULL** — enforced by a consolidated DB CHECK that covers both MARKER and RANGE_PRESENCE rows
 - Child rows attached via FK to this marker row's `id`
@@ -294,6 +295,23 @@ DSL `distribution { GAV = "...", docker = "...", DEB = "...", RPM = "..." }` dec
 | `distribution_packages` | `package_type ∈ {DEB, RPM}, package_name` |
 
 API mapper recomposes the v1-v3 `GAV` CSV by reading Maven entries (sort_order), then file-URL entries (sort_order), concatenating canonically. `docker`, `DEB`, `RPM` are separate DSL fields; each family's order is preserved by its own `sort_order`.
+
+#### Build-tool beans — `component_build_tool_beans`
+
+DSL `build { tools { database { oracle { version = "11.2" } } ... } }` decomposes into typed rows. `sort_order` is per `component_configuration_id`.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | UUID PK | |
+| `component_configuration_id` | UUID FK | References `component_configurations(id)` |
+| `bean_type` | VARCHAR(30) NOT NULL | Discriminator: `oracleDatabase`, `cProduct`, `kProduct`, `dProduct`, `dDbProduct`, `odbc` |
+| `tool_type` | VARCHAR(50), nullable | Optional sub-type hint (e.g., `PT_K`) |
+| `settings_property` | TEXT, nullable | |
+| `version_pattern` | TEXT, nullable | |
+| `edition` | VARCHAR(50), nullable | `oracleDatabase` only; CHECK `edition IS NULL OR bean_type = 'oracleDatabase'` |
+| `sort_order` | INT NOT NULL DEFAULT 0 | |
+
+Resolver path: `EntityMappers.toBuildToolBean()` reconstructs the typed `BuildTool` subclass from a row; `toBuildParameters()` applies a `build.buildTools` marker override via `pickMarkerChildren`.
 
 ### 4.8 Cross-cutting
 
