@@ -5,8 +5,12 @@ package org.octopusden.octopus.components.registry.compat
  */
 enum class DiffClassifier {
     // Environment / precondition issues — surfaced once at the top of the report.
+    // Both categories are non-suppressible via known-deltas.json (see envCategories in build.gradle).
     SNAPSHOT_MISMATCH,         // baseline vs candidate /service/status .versionControlRevision differ
-    CANDIDATE_NOT_DB_MODE,     // reserved — currently unused (no DB value in ServiceMode enum on this branch)
+    CANDIDATE_NOT_DB_MODE,     // candidate /service/status .defaultSource != "db" or .dbComponentCount == 0 —
+                               // the candidate is serving the V1 in-memory resolver, schema-v2 DB code path
+                               // is dormant, and any diff measurements will reflect V1-vs-V1 drift, not real
+                               // schema-v2-vs-V1 regressions. SnapshotPreconditionTest records this.
 
     // Per-endpoint divergence categories.
     MISSING_COMPONENT,
