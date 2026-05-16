@@ -158,6 +158,16 @@ wait_port_free() {
   return 1
 }
 
+# === ALL HELPER FUNCTIONS MUST BE DEFINED ABOVE THIS LINE ===
+#
+# Anything below runs only when verify.sh is executed directly. When sourced
+# (by scripts/local-stands/test/test-verify-lib.sh for self-tests), this guard
+# short-circuits before the orchestration block fires, so a new helper added
+# after this marker would be silently invisible to the tests.
+if [ "${BASH_SOURCE[0]}" != "${0}" ]; then
+  return 0
+fi
+
 if ! health "$BASELINE_PORT"; then
   echo "ERROR: baseline (:$BASELINE_PORT) is not running."
   echo "       Start with: ./scripts/local-stands/baseline.sh"
