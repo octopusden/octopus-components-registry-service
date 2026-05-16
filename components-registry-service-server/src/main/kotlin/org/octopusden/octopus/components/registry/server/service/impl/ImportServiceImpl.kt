@@ -43,6 +43,9 @@ import org.octopusden.octopus.components.registry.server.service.MigrationProgre
 import org.octopusden.octopus.components.registry.server.service.MigrationResult
 import org.octopusden.octopus.components.registry.server.service.MigrationStatus
 import org.octopusden.octopus.components.registry.server.service.ValidationResult
+import org.octopusden.octopus.components.registry.server.util.MavenCoords
+import org.octopusden.octopus.components.registry.server.util.parseMavenGavEntry
+import org.octopusden.octopus.components.registry.server.util.splitCsv
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
 import org.octopusden.octopus.escrow.configuration.model.EscrowModule
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
@@ -1676,29 +1679,9 @@ class ImportServiceImpl(
     }
 
     // =========================================================================
-    // Distribution parsing helpers
+    // Distribution parsing helpers (splitCsv / MavenCoords / parseMavenGavEntry
+    // are now in util/GavParsing.kt and imported at the top of this file)
     // =========================================================================
-
-    private fun splitCsv(csv: String): List<String> =
-        csv.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-
-    private data class MavenCoords(
-        val groupId: String,
-        val artifactId: String,
-        val extension: String?,
-        val classifier: String?,
-    )
-
-    private fun parseMavenGavEntry(entry: String): MavenCoords? {
-        val parts = entry.split(":").map { it.trim() }
-        if (parts.size < 2) return null
-        val group = parts[0]
-        val artifact = parts[1]
-        if (group.isEmpty() || artifact.isEmpty()) return null
-        val extension = parts.getOrNull(2)?.takeIf { it.isNotEmpty() }
-        val classifier = parts.getOrNull(3)?.takeIf { it.isNotEmpty() }
-        return MavenCoords(group, artifact, extension, classifier)
-    }
 
     private data class FileUrlCoords(
         val url: String,
