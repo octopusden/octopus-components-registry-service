@@ -3,6 +3,7 @@ package org.octopusden.octopus.components.registry.compat
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.databind.node.JsonNodeFactory
+import com.fasterxml.jackson.databind.node.ObjectNode
 
 /**
  * Stable pre-sort for raw-layer JSON arrays whose underlying server type is `Set<T>`.
@@ -50,17 +51,34 @@ object RawArraySorters {
         componentName + KEY_SEP + versionRange
     }
 
-    private val sorters: Map<String, (JsonNode) -> String> =
+    /**
+     * A transform applied to the JSON root when an endpoint is registered. Two
+     * shapes are supported today via the helpers below:
+     *
+     *  - `topLevelArraySort(keyOf)` — the wire root IS the array (v3 `/components`,
+     *    `/jira-component-version-ranges`).
+     *  - `nestedArraySort(field, keyOf)` — the wire root is an object `{ <field>: [...] }`
+     *    (v1 / v2 `/components` wrap the array under `"components"`).
+     *
+     * Anything more elaborate (multiple nested arrays per response, etc.) should
+     * land as a new helper rather than inline lambdas, so the registry below
+     * stays readable.
+     */
+    private fun interface Transform {
+        fun apply(root: JsonNode): JsonNode
+    }
+
+    private val transforms: Map<String, Transform> =
         mapOf(
             // `/jira-component-version-ranges` (global) — Set<JiraComponentVersionRangeDTO>.
             // Stable key = componentName + NUL + versionRange — covers both kinds of
             // duplication (same component, different ranges; same range, different components).
-            "GET /rest/api/2/common/jira-component-version-ranges" to jiraComponentVersionRangeKey,
+            "GET /rest/api/2/common/jira-component-version-ranges" to topLevelArraySort(jiraComponentVersionRangeKey),
             // `/projects/{projectKey}/jira-component-version-ranges` — same DTO type,
             // same Set semantics, just filtered by projectKey on the server. Used by
             // ProjectControllerV2CompatTest; without registration the per-project run
             // would re-introduce the same positional false-positives.
-            "GET /rest/api/2/projects/{projectKey}/jira-component-version-ranges" to jiraComponentVersionRangeKey,
+            "GET /rest/api/2/projects/{projectKey}/jira-component-version-ranges" to topLevelArraySort(jiraComponentVersionRangeKey),
             // `/v3/components` returns a list of `{component, variants}` records — the server
             // contract is one entry per `component.id`. Sort by that id. `Set` guarantees
             // uniqueness but NOT a deterministic iteration order for equal sort keys; if
@@ -68,34 +86,73 @@ object RawArraySorters {
             // each stand's potentially-different input order, leaving residual positional
             // drift. Acceptable today because the server-side contract makes duplicates
             // a contract violation, not because of any Set-iteration guarantee.
-            "GET /rest/api/3/components" to { node ->
+            "GET /rest/api/3/components" to topLevelArraySort { node ->
                 node.path("component").path("id").asText("")
+            },
+            // `/v1/components` and `/v2/components` wrap the array under `"components"`.
+            // The server's source-of-truth for V1 is `EscrowConfiguration.escrowModules`
+            // — a `java.util.HashMap` (component-resolver-core/.../EscrowConfiguration.groovy:
+            // `Map<String, EscrowModule> escrowModules = new HashMap<>()`). HashMap
+            // iteration order depends on key hashes and bucket-array sizing, so two JVM
+            // instances of the same V1 codebase can — and do — return the 948 components
+            // in different orders. Until the V1 contract is upgraded to a deterministic
+            // map (which would also be a backward-compat extension affecting clients),
+            // this endpoint is Set-shape and must be pre-sorted in the harness.
+            "GET /rest/api/1/components" to nestedArraySort("components") { node ->
+                node.path("id").asText("")
+            },
+            "GET /rest/api/2/components" to nestedArraySort("components") { node ->
+                node.path("id").asText("")
             },
         )
 
     /**
-     * Return a stable-sorted copy of [root] when [endpoint] is registered AND
-     * [root] is an `ArrayNode`. Otherwise return [root] unchanged (identity).
+     * Return a copy of [root] with any registered Set-shape array stable-sorted.
+     * For unregistered endpoints, non-array roots (under the top-level helper),
+     * or roots without the expected nested field (under the nested helper),
+     * the input is returned unchanged.
      *
      * **Caller contract:** the returned node must be treated as read-only.
-     * On the identity-pass-through path (unregistered endpoint or non-array
-     * root) the return value aliases the input — mutating it would change the
-     * caller's input as a side effect. On the sorted-copy path the return value
-     * is a fresh `ArrayNode` whose element references are shared with the input,
-     * so mutating elements is similarly visible from outside. `compareRaw` only
-     * reads, so the alias is safe for the current call site; future callers
-     * adding mutation must take a defensive copy themselves.
+     * On the identity-pass-through path the return value aliases the input.
+     * On the transformed path the returned root is a fresh node, but its
+     * element references may still alias the input — mutating elements is
+     * visible from outside. `compareRaw` only reads, so the alias is safe for
+     * the current call site; future callers adding mutation must take a
+     * defensive copy themselves.
      *
-     * The unit test `unregisteredEndpoint_passthrough` pins the identity contract.
+     * The unit tests `unregisteredEndpoint_passthrough` and `nonArrayRoot_passthrough`
+     * pin the identity contract.
      */
     fun stableSorted(endpoint: String, root: JsonNode?): JsonNode? {
-        if (root !is ArrayNode) return root
-        val keyOf = sorters[endpoint] ?: return root
-        val sorted = root.toList().sortedBy(keyOf)
+        if (root == null) return null
+        val transform = transforms[endpoint] ?: return root
+        return transform.apply(root)
+    }
+
+    private fun topLevelArraySort(keyOf: (JsonNode) -> String): Transform =
+        Transform { root ->
+            if (root !is ArrayNode) root else sortedCopy(root, keyOf)
+        }
+
+    private fun nestedArraySort(field: String, keyOf: (JsonNode) -> String): Transform =
+        Transform { root ->
+            if (root !is ObjectNode) return@Transform root
+            val inner = root.get(field) as? ArrayNode ?: return@Transform root
+            // Shallow copy: same field set, but the target field is replaced with
+            // the sorted array. Avoids deep-copying every element — expensive on
+            // 948-entry responses and unnecessary since downstream only reads.
+            val out = JsonNodeFactory.instance.objectNode()
+            out.setAll<ObjectNode>(root)
+            out.set<JsonNode>(field, sortedCopy(inner, keyOf))
+            out
+        }
+
+    private fun sortedCopy(arr: ArrayNode, keyOf: (JsonNode) -> String): ArrayNode {
         // Preserve the original sort order ("stable") within equal keys: Kotlin's
         // `sortedBy` delegates to a stable JDK sort. `arrayNode(int)` is an
         // ArrayList capacity hint, not a fixed-size initialisation — we still
         // populate via `add`.
+        val sorted = arr.toList().sortedBy(keyOf)
         val out = JsonNodeFactory.instance.arrayNode(sorted.size)
         sorted.forEach { out.add(it) }
         return out
