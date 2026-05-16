@@ -31,20 +31,19 @@ import java.util.UUID
  * MIG-040 V4 contract tests for null scalar override rows.
  *
  * Covers the four V4 paths described in the F+G boundary doc:
- *   1. GET on an import-created null-column SCALAR_OVERRIDE row → `value: null` in response.
- *   2. POST `/field-overrides` with `value: null` → 400 "use DELETE" (regression guard).
- *   3. PUT (PATCH) with `value: null` → 200 no-op (PATCH semantic; row unchanged).
- *   4. DELETE on a null-column row → row gone; subsequent GET no longer includes it.
+ *   1. POST `/field-overrides` with `value: null` → 400 "use DELETE" (regression guard).
+ *   2. PUT (PATCH) with `value: null` → 200 no-op (PATCH semantic; row unchanged).
+ *   3. Non-null scalar override value created via POST round-trips through GET — surrogate
+ *      for the import-created null-column row shape (entity injection out of scope here).
+ *   4. DELETE on the override row → row gone; subsequent GET no longer includes it.
  *
  * The test seeds its own component via the V4 POST endpoint so it is self-contained
  * and does not depend on the auto-migrate fixture data.
  *
  * Note: the V4 POST endpoint does not accept null values (contract: use DELETE to remove
- * an override). Null-column rows can only be created by the import pipeline. This test
- * bypasses that by directly inspecting the repository after the row is created via
- * direct entity injection would require a different approach. Instead, test 1 verifies the
- * V4 layer correctly surfaces a non-null override value, and tests 2-4 verify the null
- * contract at the API boundary.
+ * an override). Null-column rows can only be created by the import pipeline. Null-column
+ * rows require entity injection to seed, which is out of scope here — those resolver-merge
+ * semantics are covered by [ScalarNullOverrideRoundTripTest].
  */
 @AutoConfigureMockMvc
 @SpringBootTest(
