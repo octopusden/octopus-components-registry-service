@@ -59,7 +59,20 @@ test {
             reportDir.mkdirs()
         }
     }
-    useJUnitPlatform()
+    useJUnitPlatform {
+        // Include-by-tag polarity: `:test` runs ONLY suites that extend
+        // CompatibilityTestBase (which carries `@Tag("http")` — inherited to
+        // every subclass). Pure-Kotlin unit suites lack the `http` tag and run
+        // via the separate `:unitTest` task below.
+        //
+        // Why include rather than exclude `unit`: a new pure-unit test class
+        // that forgets the `@Tag("unit")` marker would, under exclude-based
+        // polarity, fall into `:test` here and be silently skipped on PR runs
+        // (no URLs configured). With include-by-`http`, an untagged class
+        // automatically lands in `:unitTest` instead — the PR-time gate
+        // catches the new code regardless of whether the author tagged it.
+        includeTags 'http'
+    }
     systemProperties = [
         'junit.jupiter.execution.parallel.enabled': true,
         'junit.jupiter.execution.parallel.mode.default': 'concurrent',
@@ -83,6 +96,38 @@ test {
         events 'passed', 'skipped', 'failed'
         showStandardStreams = false
     }
+}
+
+// Fast-lane Test task for everything that does NOT need a live stand: pure Kotlin +
+// JUnit5, no compat URL config. Runs in seconds and is the PR-time gate for compat
+// framework correctness.
+//
+// The partition is `excludeTags 'http'` here vs. `includeTags 'http'` on `:test`.
+// `@Tag("http")` is inherited from CompatibilityTestBase, so every live-stand suite
+// is auto-routed to `:test` and every pure-Kotlin suite — tagged or not — falls
+// here. That is by design: a future pure-unit test class that forgets `@Tag("unit")`
+// must still execute on PRs, not vanish into the URL-gated bucket.
+//
+// NOTE on `check` integration: this module's `check` is `enabled = false` (line ~25
+// above) — `gradlew build` does NOT auto-call `:unitTest`. Operators invoke it
+// directly: `./gradlew :components-registry-compat-test:unitTest`. CI configuration
+// (TeamCity / GitHub Actions step) names this task explicitly. Keeping `check`
+// disabled preserves the existing "compat module is opt-in" guarantee for the root
+// `./gradlew build`.
+tasks.register('unitTest', Test) {
+    group = 'verification'
+    description = 'Pure-Kotlin unit tests (everything not tagged `http`) — no live HTTP, no compat URL config.'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        excludeTags 'http'
+    }
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+    }
+    // No `finalizedBy compatibilityReporter` here — unit tests don't write ndjson,
+    // and re-running the reporter on a clean dir would just regenerate an empty
+    // summary.md noisily.
 }
 
 tasks.register('compatibilityReporter') {

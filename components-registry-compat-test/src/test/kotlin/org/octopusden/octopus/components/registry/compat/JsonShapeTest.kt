@@ -3,6 +3,7 @@ package org.octopusden.octopus.components.registry.compat
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 
 /**
@@ -19,6 +20,7 @@ import org.junit.jupiter.api.Test
  * `JsonShape.ShapeDiff`s the function should produce. A change to `JsonShape` that
  * silently misclassifies (FP or FN) breaks the corresponding test by going RED.
  */
+@Tag("unit")
 class JsonShapeTest {
 
     private val mapper = jacksonObjectMapper()
