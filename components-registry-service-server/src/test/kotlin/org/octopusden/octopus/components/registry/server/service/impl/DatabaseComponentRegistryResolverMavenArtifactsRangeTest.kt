@@ -157,6 +157,10 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
         val comp = makeComponent("bug-C-component-A-like")
         comp.distributionExplicit = true
 
+        // Component-level fallback: ImportServiceImpl writes this from the BASE
+        // EscrowModuleConfig.artifactIdPattern — non-marker ranges return it verbatim.
+        addComponentLevelArtifact(comp, "com.example.ic", "bug-C-component-A")
+
         val base = makeBase(comp, "[1.1,)")
         addMavenArtifact(base, "com.example.ic", "bug-C-component-A")
 
@@ -197,6 +201,9 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
         //     (com.example.cardsmodel2, bug-C-fixture-v2) and (com.example.cardsmodel, bug-C-fixture-legacy)
         val comp = makeComponent("bug-C-fixture-B-shape")
         comp.distributionExplicit = true
+
+        // Component-level fallback (production import writes this from BASE artifactIdPattern).
+        addComponentLevelArtifact(comp, "com.example.cardsmodel2.dummy", "bug-C-component-B")
 
         val base = makeBase(comp, "[03.51.29.15,)")
         addMavenArtifact(base, "com.example.cardsmodel2.dummy", "bug-C-component-B", sortOrder = 0)
@@ -244,8 +251,12 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
     )
     fun `RES-C-003 getMavenArtifactParameters falls back to component-level artifactIds when no GAV override`() {
         // No per-range overrides: only a BASE row with maven artifact at ALL_VERSIONS
+        // and a component-level row (production-shape: import writes both from a single
+        // BASE EscrowModuleConfig).
         val comp = makeComponent("simple-component")
         comp.distributionExplicit = true
+
+        addComponentLevelArtifact(comp, "com.example", "simple-lib")
 
         val base = makeBase(comp, ALL_VERSIONS)
         addMavenArtifact(base, "com.example", "simple-lib")
