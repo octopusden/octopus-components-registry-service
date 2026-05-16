@@ -356,6 +356,9 @@ class GitVsDbValidationTest {
                 "platform-commons",
                 "data-mapper",
                 "logging-service",
+                // RES-C regression guard: per-range DISTRIBUTION_MAVEN marker override
+                // (tokenization-service has (,2.0) → zip and [2.0,) → tgz extension).
+                "tokenization-service",
             )
         val failures = mutableListOf<String>()
         for (name in sampleComponents) {
