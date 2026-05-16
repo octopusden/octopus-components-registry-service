@@ -22,6 +22,7 @@ import org.octopusden.octopus.components.registry.server.repository.ToolReposito
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.mock.mockito.MockBean
+import org.springframework.test.annotation.DirtiesContext
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.transaction.annotation.Transactional
 import java.nio.file.Paths
@@ -33,12 +34,18 @@ import java.nio.file.Paths
  * (H2 in-memory + auto-migrate from test fixtures in TestComponents.groovy).
  *
  * Test IDs reference requirements-migration.md.
+ *
+ * `@DirtiesContext(BEFORE_CLASS)` guarantees a fresh Spring context and a fresh
+ * H2 in-memory database when this class starts — regardless of the test execution
+ * order. Without it, any preceding `@DirtiesContext(AFTER_CLASS)` class could
+ * destroy the shared H2 instance, leaving the auto-migrate path with no schema.
  */
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     classes = [ComponentRegistryServiceApplication::class],
 )
 @ActiveProfiles("common", "ft-db")
+@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_CLASS)
 @Timeout(120)
 class MigrationIntegrationTest {
     @MockBean
