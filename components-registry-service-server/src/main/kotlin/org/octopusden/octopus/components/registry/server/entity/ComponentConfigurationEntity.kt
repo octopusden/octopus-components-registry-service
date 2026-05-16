@@ -197,4 +197,7 @@ class ComponentConfigurationEntity(
 
     @OneToMany(mappedBy = "componentConfiguration", fetch = FetchType.LAZY)
     var requiredToolJunctions: MutableList<ComponentRequiredToolEntity> = mutableListOf(),
+
+    @OneToMany(mappedBy = "componentConfiguration", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
+    var buildToolBeans: MutableList<ComponentBuildToolBeanEntity> = mutableListOf(),
 )

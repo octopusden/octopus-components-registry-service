@@ -155,13 +155,15 @@ CREATE TABLE component_configurations (
             AND overridden_attribute IS NOT NULL
             AND overridden_attribute IN (
                 'vcs.settings', 'distribution.maven', 'distribution.fileUrl',
-                'distribution.docker', 'distribution.packages', 'build.requiredTools'
+                'distribution.docker', 'distribution.packages', 'build.requiredTools',
+                'build.buildTools'
             ))
         OR (row_type = 'SCALAR_OVERRIDE'
             AND overridden_attribute IS NOT NULL
             AND overridden_attribute NOT IN (
                 'vcs.settings', 'distribution.maven', 'distribution.fileUrl',
-                'distribution.docker', 'distribution.packages', 'build.requiredTools'
+                'distribution.docker', 'distribution.packages', 'build.requiredTools',
+                'build.buildTools'
             ))
     ),
 
@@ -369,6 +371,24 @@ CREATE TABLE distribution_packages (
     sort_order                  INT NOT NULL DEFAULT 0
 );
 CREATE INDEX idx_dist_packages_config ON distribution_packages(component_configuration_id);
+
+-- Build-tool beans: structured build-tool requirements that cannot be represented
+-- as plain tool-name strings in `component_required_tools`.
+-- Supports 6 bean types: oracleDatabase, cProduct, kProduct, dProduct, dDbProduct, odbc.
+-- `edition` is only valid for oracleDatabase (enforced by cross-column CHECK).
+CREATE TABLE component_build_tool_beans (
+    id                          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    component_configuration_id  UUID NOT NULL REFERENCES component_configurations(id) ON DELETE CASCADE,
+    bean_type                   VARCHAR(32) NOT NULL,
+    tool_type                   VARCHAR(32),
+    settings_property           VARCHAR(64),
+    version_pattern             TEXT,
+    edition                     VARCHAR(32),
+    sort_order                  INT NOT NULL DEFAULT 0,
+    CHECK (bean_type IN ('oracleDatabase','cProduct','kProduct','dProduct','dDbProduct','odbc')),
+    CHECK (edition IS NULL OR bean_type = 'oracleDatabase')
+);
+CREATE INDEX idx_build_tool_beans_config ON component_build_tool_beans(component_configuration_id);
 
 
 -- -----------------------------------------------------------------------------

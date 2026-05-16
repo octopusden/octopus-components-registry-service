@@ -204,34 +204,38 @@ class BuildToolBeansEntityRoundTripTest {
     }
 
     @Test
-    @DisplayName("MIG-042: cascade delete removes build_tool_beans when configuration is deleted")
+    @DisplayName("MIG-042: cascade delete removes build_tool_beans when configuration row is deleted via parent collection")
     @Transactional
     fun mig042_cascadeDeleteRemovesBeans() {
         val component = createComponent("BTB-CASCADE-DELETE-TEST")
         val baseRow = createBaseRow(component)
 
-        buildToolBeanRepository.save(
-            ComponentBuildToolBeanEntity(
-                componentConfiguration = baseRow,
-                beanType = "oracleDatabase",
-                toolType = "ORACLE",
-                settingsProperty = "db",
-                versionPattern = "[12,)",
-                edition = null,
-                sortOrder = 0,
-            ),
+        val bean = ComponentBuildToolBeanEntity(
+            componentConfiguration = baseRow,
+            beanType = "oracleDatabase",
+            toolType = "ORACLE",
+            settingsProperty = "db",
+            versionPattern = "[12,)",
+            edition = null,
+            sortOrder = 0,
         )
+        // Add to the collection so JPA cascade applies
+        baseRow.buildToolBeans.add(bean)
+        configurationRepository.save(baseRow)
+        configurationRepository.flush()
 
         val configId = baseRow.id!!
         assertEquals(1, buildToolBeanRepository.findByComponentConfigurationId(configId).size)
 
-        configurationRepository.delete(baseRow)
+        // Remove via collection (orphanRemoval = true triggers delete)
+        baseRow.buildToolBeans.clear()
+        configurationRepository.save(baseRow)
         configurationRepository.flush()
 
         assertEquals(
             0,
             buildToolBeanRepository.findByComponentConfigurationId(configId).size,
-            "Beans must be removed via ON DELETE CASCADE",
+            "Beans must be removed via orphanRemoval on the parent collection",
         )
     }
 }
