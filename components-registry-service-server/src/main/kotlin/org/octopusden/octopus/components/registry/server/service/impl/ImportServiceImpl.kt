@@ -215,20 +215,35 @@ class ImportServiceImpl(
     }
 
     @Transactional
+    @Suppress("LongMethod")
     override fun migrateAllComponents(progress: MigrationProgressListener): BatchMigrationResult {
+        val totalStart = System.nanoTime()
         LOG.info("Starting full DSL → DB component migration (schema v2 §6 pipeline)")
         // Use lenient loader so migration tolerates DSL entries that have semantic
         // validation warnings (labels-not-available, hotfix-format, missing VCS roots,
         // etc.). The git-backed resolver validates at request time; the import pipeline
         // should import what is there, not refuse to run due to pre-existing warnings.
+        val loadStart = System.nanoTime()
         val fullConfig = configurationLoader.loadFullConfigurationWithoutValidationForUnknownAttributes(emptyMap())
         val allModules = fullConfig.escrowModules
+        LOG.info("§6 DSL load: {} ms ({} modules)", (System.nanoTime() - loadStart) / 1_000_000, allModules.size)
 
         // §6.1 Pre-pass dictionary discovery
         LOG.info("§6.1 Pre-pass: upserting systems, tools, labels")
+        val dictStart = System.nanoTime()
+        val sysStart = System.nanoTime()
         preupsertSystemsFromConfig(allModules.values.flatMap { it.moduleConfigurations })
+        val sysMs = (System.nanoTime() - sysStart) / 1_000_000
+        val toolStart = System.nanoTime()
         preupsertToolsFromLoader(fullConfig)
+        val toolMs = (System.nanoTime() - toolStart) / 1_000_000
+        val labelStart = System.nanoTime()
         preupsertLabelsFromLoader()
+        val labelMs = (System.nanoTime() - labelStart) / 1_000_000
+        LOG.info(
+            "§6.1 dictionary preupsert complete: {} ms (systems={} ms, tools={} ms, labels={} ms)",
+            (System.nanoTime() - dictStart) / 1_000_000, sysMs, toolMs, labelMs,
+        )
 
         // §6.2 Two-pass component import
         LOG.info("§6.2 Two-pass component import for {} modules", allModules.size)
@@ -237,6 +252,7 @@ class ImportServiceImpl(
         // insert/skip decisions. This keeps Passes 2 and 3 idempotent on re-runs: even when
         // a component is already in the DB and Pass 1 skips it, its parent FK and aggregator-
         // group membership are still resolved against the current DSL.
+        val deriveStart = System.nanoTime()
         val pendingParentByKey: Map<String, String> =
             allModules.mapNotNull { (componentKey, escrowModule) ->
                 val firstConfig = escrowModule.moduleConfigurations.firstOrNull() ?: return@mapNotNull null
@@ -253,6 +269,10 @@ class ImportServiceImpl(
                 val firstConfig = allModules[parentKey]?.moduleConfigurations?.firstOrNull()
                 firstConfig != null && isFakeAggregator(firstConfig)
             }.toSet()
+        LOG.info(
+            "§6 DSL derivation: {} ms ({} parent refs, {} FAKE aggregators)",
+            (System.nanoTime() - deriveStart) / 1_000_000, pendingParentByKey.size, fakeAggregatorKeys.size,
+        )
 
         var total = 0
         var migrated = 0
@@ -261,6 +281,27 @@ class ImportServiceImpl(
         val results = mutableListOf<MigrationResult>()
 
         // Pass 1: create all components (parentComponent = null)
+        val pass1Start = System.nanoTime()
+        // Batch-load existing component keys + source flags so the per-iteration
+        // findByComponentKey / componentSourceRepository.findById round-trips drop out.
+        // For a 1000-component prod DSL on a remote DB, the saved per-query latency
+        // dominates the local sub-millisecond cost. Targeted queries (`IN (...)` on the
+        // DSL key set) rather than `findAll()` so the cost stays bounded by DSL size,
+        // not total DB size (ghost rows from removed-from-DSL components don't matter).
+        val moduleKeys = allModules.keys
+        val existingComponentKeys: Set<String> =
+            componentRepository.findByComponentKeyIn(moduleKeys).mapTo(HashSet()) { it.componentKey }
+        val existingSources: MutableMap<String, ComponentSourceEntity> =
+            componentSourceRepository.findAllById(moduleKeys).associateByTo(HashMap()) { it.componentKey }
+        val sourcesToUpsert = mutableListOf<ComponentSourceEntity>()
+        fun stageSource(name: String) {
+            val entity =
+                existingSources[name]
+                    ?: ComponentSourceEntity(componentKey = name).also { existingSources[name] = it }
+            entity.source = "db"
+            entity.migratedAt = Instant.now()
+            sourcesToUpsert += entity
+        }
         for ((componentKey, escrowModule) in allModules) {
             total++
             try {
@@ -269,7 +310,7 @@ class ImportServiceImpl(
                     // ComponentEntity row — Pass 3 still owns its ComponentGroupEntity,
                     // and the source flag keeps `getMigrationStatus` totals balanced
                     // (total == db) so the orchestrator does not retry this component.
-                    sourceRegistry.setComponentSource(componentKey, "db")
+                    stageSource(componentKey)
                     skipped++
                     results.add(
                         MigrationResult(
@@ -282,8 +323,7 @@ class ImportServiceImpl(
                     continue
                 }
 
-                val existing = componentRepository.findByComponentKey(componentKey)
-                if (existing != null) {
+                if (componentKey in existingComponentKeys) {
                     skipped++
                     results.add(
                         MigrationResult(
@@ -312,7 +352,7 @@ class ImportServiceImpl(
                 }
 
                 importModule(componentKey, configs)
-                sourceRegistry.setComponentSource(componentKey, "db")
+                stageSource(componentKey)
                 migrated++
                 results.add(
                     MigrationResult(
@@ -345,8 +385,19 @@ class ImportServiceImpl(
             }
         }
 
+        if (sourcesToUpsert.isNotEmpty()) {
+            componentSourceRepository.saveAll(sourcesToUpsert.distinct())
+        }
+
+        val pass1Ms = (System.nanoTime() - pass1Start) / 1_000_000
+        LOG.info(
+            "§6.2 Pass 1 complete: {} ms ({} migrated, {} skipped, {} failed of {} total)",
+            pass1Ms, migrated, skipped, failed, total,
+        )
+
         // Pass 2: resolve parentComponent FK references
         LOG.info("§6.2 Pass 2: resolving {} parentComponent references", pendingParentByKey.size)
+        val pass2Start = System.nanoTime()
         for ((childKey, parentKey) in pendingParentByKey) {
             try {
                 val parent = componentRepository.findByComponentKey(parentKey)
@@ -366,10 +417,17 @@ class ImportServiceImpl(
             }
         }
 
+        LOG.info("§6.2 Pass 2 complete: {} ms ({} parent refs)", (System.nanoTime() - pass2Start) / 1_000_000, pendingParentByKey.size)
+
         // §6.3 Pass 3: upsert component_groups rows and link component_group_id FKs.
         // Runs after Pass 2 so all ComponentEntity rows are present and parentComponent FKs are resolved.
         LOG.info("§6.3 Pass 3: linking aggregator groups for {} parent references", pendingParentByKey.size)
+        val pass3Start = System.nanoTime()
         val pass3Failures = linkAggregatorGroups(allModules, pendingParentByKey)
+        LOG.info(
+            "§6.3 Pass 3 complete: {} ms ({} failures)",
+            (System.nanoTime() - pass3Start) / 1_000_000, pass3Failures.size,
+        )
         for ((parentKey, errorMessage) in pass3Failures) {
             failed++
             results.add(
@@ -383,7 +441,8 @@ class ImportServiceImpl(
         }
 
         LOG.info(
-            "Migration complete: total={}, migrated={}, failed={}, skipped={}",
+            "Migration complete in {} ms: total={}, migrated={}, failed={}, skipped={}",
+            (System.nanoTime() - totalStart) / 1_000_000,
             total,
             migrated,
             failed,
@@ -606,9 +665,12 @@ class ImportServiceImpl(
             val systemStr = cfg.system ?: continue
             systemStr.split(",").mapNotNullTo(distinctSystems) { it.trim().takeIf { t -> t.isNotEmpty() } }
         }
-        for (code in distinctSystems) {
-            upsertSystem(code)
-        }
+        if (distinctSystems.isEmpty()) return
+        // Batch upsert: one findAll() to learn what already exists, then a single
+        // saveAll() for the missing rows. Replaces N round-trips with at most 2.
+        val existing = systemRepository.findAll().mapTo(HashSet<String>(distinctSystems.size)) { it.code }
+        val toSave = distinctSystems.filter { it !in existing }.map { SystemEntity(code = it) }
+        if (toSave.isNotEmpty()) systemRepository.saveAll(toSave)
     }
 
     private fun upsertSystem(code: String) {
@@ -640,7 +702,7 @@ class ImportServiceImpl(
     }
 
     private fun preupsertToolsFromLoader(
-        @Suppress("UNUSED_PARAMETER") fullConfig: org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration,
+        fullConfig: org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration,
     ) {
         // Tools are loaded via EscrowConfigurationLoader.getToolsConfiguration(configObject).
         // We re-use the loadCommonDefaults call (which calls getToolsConfiguration internally)
@@ -652,18 +714,39 @@ class ImportServiceImpl(
         // within each component's config.
         //
         // To upsert tools: collect from all component build configs.
-        val toolsSeen = mutableSetOf<String>()
+        data class ToolSpec(val name: String, val env: String?, val src: String?, val tgt: String?, val script: String?)
+        val seen = LinkedHashMap<String, ToolSpec>()
         for ((_, module) in fullConfig.escrowModules) {
             for (cfg in module.moduleConfigurations) {
                 val buildCfg = cfg.buildConfiguration ?: continue
                 for (tool in buildCfg.tools ?: emptyList()) {
                     val toolName = tool.name ?: continue
-                    if (toolsSeen.add(toolName)) {
-                        upsertTool(toolName, tool.escrowEnvironmentVariable, tool.sourceLocation, tool.targetLocation, tool.installScript)
-                    }
+                    seen.putIfAbsent(
+                        toolName,
+                        ToolSpec(
+                            name = toolName,
+                            env = tool.escrowEnvironmentVariable,
+                            src = tool.sourceLocation,
+                            tgt = tool.targetLocation,
+                            script = tool.installScript,
+                        ),
+                    )
                 }
             }
         }
+        if (seen.isEmpty()) return
+        // Batch: one findAll() to learn existing tool names, then saveAll() for missing.
+        val existing = toolRepository.findAll().mapTo(HashSet<String>(seen.size)) { it.name }
+        val toSave = seen.values.filter { it.name !in existing }.map {
+            ToolEntity(
+                name = it.name,
+                escrowEnvVariable = it.env,
+                sourceLocation = it.src,
+                targetLocation = it.tgt,
+                installScript = it.script,
+            )
+        }
+        if (toSave.isNotEmpty()) toolRepository.saveAll(toSave)
     }
 
     private fun upsertTool(
@@ -699,11 +782,14 @@ class ImportServiceImpl(
             // Labels seen in DSL components are the real source of truth.
             // FIXME(MIG-039 review): expose ValidationConfig via EscrowConfigurationLoader or
             // inject IConfigLoader to access loadAndParseValidationConfigFile() for label seeding
-            validationConfig.labels?.let { labels ->
-                for (code in labels) {
-                    upsertLabel(code)
-                }
-            }
+            val labels = validationConfig.labels?.toSet() ?: return
+            if (labels.isEmpty()) return
+            // Batch upsert: one findAll() + one saveAll(). The prod DSL has hundreds of
+            // labels — the per-label `findByCode + save` pattern was the single biggest
+            // dictionary cost (measured ~3.3 s in prod-scale local runs).
+            val existing = labelRepository.findAll().mapTo(HashSet<String>(labels.size)) { it.code }
+            val toSave = labels.filter { it !in existing }.map { LabelEntity(code = it) }
+            if (toSave.isNotEmpty()) labelRepository.saveAll(toSave)
         } catch (e: Exception) {
             LOG.warn("Could not seed labels from defaults: {}", e.message)
         }
@@ -756,7 +842,7 @@ class ImportServiceImpl(
      * parentComponent in Pass 2. ComponentGroupEntity is created as a follow-on
      * step based on parentComponent graph.
      */
-    @Suppress("CyclomaticComplexMethod")
+    @Suppress("CyclomaticComplexMethod", "LongMethod")
     private fun importModule(
         componentKey: String,
         configs: List<EscrowModuleConfig>,
@@ -769,12 +855,16 @@ class ImportServiceImpl(
         val isSyntheticBase = hasOnlyVersionRangeBlocks
 
         // §6.4 Build the ComponentEntity from the first/base config
+        val tEntityStart = System.nanoTime()
         val componentEntity = buildComponentEntity(componentKey, baseConfig)
         val saved = componentRepository.save(componentEntity)
+        val tEntityMs = (System.nanoTime() - tEntityStart) / 1_000_000
 
         // Wire M:N junctions (systems, labels)
+        val tJunctionsStart = System.nanoTime()
         linkSystems(saved, baseConfig)
         linkLabels(saved, baseConfig)
+        val tJunctionsMs = (System.nanoTime() - tJunctionsStart) / 1_000_000
 
         // §6.4 Base configuration row.
         // IMPORTANT: VCS entries and distribution artifacts are added to the
@@ -794,10 +884,12 @@ class ImportServiceImpl(
         // match version queries against any other range — collapsing
         // `buildParameters.tools` to `[]` for those versions. Per-range tool
         // overrides still get a dedicated marker via `emitMarkerOverrides`.
+        val tBaseStart = System.nanoTime()
         val baseRow = buildBaseConfigRow(saved, baseConfig, isSyntheticBase)
         attachVcsEntries(baseRow, baseConfig.vcsSettings)
         attachDistribution(baseRow, baseConfig.distribution)
         val savedBase = configurationRepository.save(baseRow)
+        val tBaseMs = (System.nanoTime() - tBaseStart) / 1_000_000
         // The Groovy loader's per-range merge drops `requiredTools` inherited
         // from `Defaults.groovy` whenever the component declares its OWN
         // `build { ... }` block (the block REPLACES Defaults' build, so an
@@ -806,6 +898,7 @@ class ImportServiceImpl(
         // `build {}` block). The legacy Git resolver compensates with a
         // Defaults fallback at request time; restore parity here by reading
         // common-defaults tools when the per-config merge came back empty.
+        val tToolsStart = System.nanoTime()
         val baseTools =
             baseConfig.buildConfiguration?.tools.takeUnless { it.isNullOrEmpty() }
                 ?: commonDefaultsToolsCache
@@ -816,6 +909,7 @@ class ImportServiceImpl(
         if (baseBuildTools.isNotEmpty()) {
             attachBuildToolBeans(savedBase, baseBuildTools)
         }
+        val tToolsMs = (System.nanoTime() - tToolsStart) / 1_000_000
 
         // For synthetic-base components, the base row's versionRange is the
         // DSL's first range (e.g. `(,1.0.107)` for TEST_COMPONENT3) and
@@ -839,6 +933,7 @@ class ImportServiceImpl(
         // If neither scalar nor marker emission produced any row for a given
         // override config, emit a RANGE_PRESENCE row so the resolver still
         // enumerates this DSL range (RES-001 family fix).
+        val tOverridesStart = System.nanoTime()
         val nonBaseConfigs = configs.filter { it !== baseConfig }
         for (override in nonBaseConfigs) {
             val scalarRows = emitScalarOverrides(saved, baseConfig, override)
@@ -848,8 +943,14 @@ class ImportServiceImpl(
                 emitRangePresenceRow(saved, overrideRange)
             }
         }
+        val tOverridesMs = (System.nanoTime() - tOverridesStart) / 1_000_000
 
-        LOG.debug("Imported component '{}' with {} config rows", componentKey, configs.size)
+        if (LOG.isDebugEnabled) {
+            LOG.debug(
+                "importModule[{}] ms: entity={} junctions={} base={} tools={} overrides={} (configs={}, nonBase={})",
+                componentKey, tEntityMs, tJunctionsMs, tBaseMs, tToolsMs, tOverridesMs, configs.size, nonBaseConfigs.size,
+            )
+        }
     }
 
     /**

@@ -533,6 +533,9 @@ class TeamcitySyncServiceTest {
         override fun findByComponentKey(componentKey: String): ComponentEntity? =
             components.firstOrNull { it.componentKey == componentKey }
 
+        override fun findByComponentKeyIn(componentKeys: Collection<String>): List<ComponentEntity> =
+            components.filter { it.componentKey in componentKeys }
+
         override fun findByComponentKeyAndArchivedFalse(componentKey: String): ComponentEntity? =
             components.firstOrNull { it.componentKey == componentKey && !it.archived }
 
