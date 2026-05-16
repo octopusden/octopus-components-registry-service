@@ -266,14 +266,14 @@ class MigrationIntegrationTest {
     }
 
     // =========================================================================
-    // MIG-037: Unified VCS model (single row with name=null for single-VCS).
+    // MIG-037: Unified VCS model (VCS root name stored verbatim, never NULL).
     // =========================================================================
 
     @Test
     @Transactional
     @DisplayName(
-        "MIG-037: TEST_COMPONENT has single VCS entry with name=null " +
-            "(unified VCS model, no discriminator column)",
+        "MIG-037: TEST_COMPONENT has single VCS entry with name='main' " +
+            "(inline DSL form: vcsUrl= produces VersionControlSystemRoot.name='main')",
     )
     fun mig037_unifiedVcsModel_singleRoot() {
         val component = componentRepository.findByComponentKey("TEST_COMPONENT")
@@ -283,13 +283,14 @@ class MigrationIntegrationTest {
             configurationRepository.findBaseByComponentId(component!!.id!!)
         assertNotNull(baseRow, "TEST_COMPONENT must have a base row")
 
-        // TEST_COMPONENT has single vcsUrl = "ssh://hg@mercurial/test-component"
-        // → must produce one VcsSettingsEntryEntity with name=null
+        // TEST_COMPONENT uses inline DSL form: vcsUrl = "ssh://hg@mercurial/test-component"
+        // The Groovy DSL wraps this as VersionControlSystemRoot.create("main", ...).
+        // → entity name must be "main" (literal), NOT null.
         val vcsEntries = baseRow!!.vcsEntries
         assertTrue(vcsEntries.isNotEmpty(), "Must have at least one VCS entry")
         assertTrue(
-            vcsEntries.any { it.name == null },
-            "Single-VCS component must have a VCS entry with name=null (unified VCS model)",
+            vcsEntries.any { it.name == "main" },
+            "Inline DSL form must produce name='main'; found: ${vcsEntries.map { it.name }}",
         )
     }
 
@@ -313,7 +314,7 @@ class MigrationIntegrationTest {
             vcsEntries.size >= 2,
             "Multi-VCS component must have 2+ VCS entries, found: ${vcsEntries.size}",
         )
-        val distinctNames = vcsEntries.mapNotNull { it.name }.toSet()
+        val distinctNames = vcsEntries.map { it.name }.toSet()
         assertTrue(
             distinctNames.size >= 2,
             "Multi-VCS entries must have distinct non-null names, found: $distinctNames",

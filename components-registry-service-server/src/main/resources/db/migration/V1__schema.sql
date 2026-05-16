@@ -13,8 +13,8 @@
 --     the source-of-truth classifier; `overridden_attribute` is the payload
 --     discriminator for scalar/marker rows only. UNIQUE(component_id, version_range,
 --     overridden_attribute). Partial unique index ensures one base per component.
---   - Unified VCS: SINGLE = MULTI with one entry. All VCS scalars live on
---     `vcs_settings_entries` regardless of cardinality.
+--   - Unified VCS: SINGLE = MULTI with one entry. `name` is always non-null.
+--     All VCS scalars live on `vcs_settings_entries` regardless of cardinality.
 --   - Reference dictionaries: labels, systems, tools (admin-managed).
 --   - Aggregator groups: `component_groups` + `components.component_group_id`.
 --   - Distribution split into 4 specialized child tables (Maven/file-URL/Docker/packages).
@@ -317,11 +317,11 @@ CREATE UNIQUE INDEX uq_doc_links_null_major_version
 -- -----------------------------------------------------------------------------
 -- 1:N children of component_configurations (per-version-rangeable)
 -- -----------------------------------------------------------------------------
--- Unified VCS model: SINGLE-VCS = 1 entry (name=NULL); MULTI-VCS = N entries (named).
+-- Unified VCS model: all VCS entries have a non-null name.
 CREATE TABLE vcs_settings_entries (
     id                          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     component_configuration_id  UUID NOT NULL REFERENCES component_configurations(id) ON DELETE CASCADE,
-    name                        VARCHAR(255),                                -- NULL for single-VCS; named for multi-VCS
+    name                        VARCHAR(255) NOT NULL,                       -- DSL-assigned root name: 'main' for inline form, named-block key otherwise.
     vcs_path                    TEXT NOT NULL,
     branch                      TEXT,
     tag                         TEXT,

@@ -1389,7 +1389,7 @@ class ImportServiceImpl(
         var sortOrder = 0
         for (root in roots) {
             val path = root.vcsPath ?: continue // skip roots with no path
-            val name = if (roots.size == 1 || root.name == "main") null else root.name
+            val name = root.name
             row.vcsEntries.add(
                 VcsSettingsEntryEntity(
                     componentConfiguration = row,

@@ -183,6 +183,7 @@ class ComponentSummaryMapperTest {
             VcsSettingsEntryEntity(
                 id = UUID.randomUUID(),
                 componentConfiguration = cfg,
+                name = "main",
                 vcsPath = "org/repo",
                 sortOrder = 0,
             ),
@@ -201,6 +202,7 @@ class ComponentSummaryMapperTest {
             VcsSettingsEntryEntity(
                 id = UUID.randomUUID(),
                 componentConfiguration = cfg,
+                name = "main",
                 vcsPath = "",
                 sortOrder = 0,
             ),
@@ -226,12 +228,12 @@ class ComponentSummaryMapperTest {
         val cfg = baseConfigFor(component)
         cfg.vcsEntries.add(
             VcsSettingsEntryEntity(
-                id = UUID.randomUUID(), componentConfiguration = cfg, vcsPath = "org/repo-b", sortOrder = 2,
+                id = UUID.randomUUID(), componentConfiguration = cfg, name = "main", vcsPath = "org/repo-b", sortOrder = 2,
             ),
         )
         cfg.vcsEntries.add(
             VcsSettingsEntryEntity(
-                id = UUID.randomUUID(), componentConfiguration = cfg, vcsPath = "org/repo-a", sortOrder = 1,
+                id = UUID.randomUUID(), componentConfiguration = cfg, name = "main", vcsPath = "org/repo-a", sortOrder = 1,
             ),
         )
         component.configurations.add(cfg)
@@ -248,6 +250,7 @@ class ComponentSummaryMapperTest {
             VcsSettingsEntryEntity(
                 id = UUID.randomUUID(),
                 componentConfiguration = cfg,
+                name = "main",
                 vcsPath = "ssh://git@bitbucket.spb.example.com/neo/access-contol.git",
                 sortOrder = 0,
             ),
