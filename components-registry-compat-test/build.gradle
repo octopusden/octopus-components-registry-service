@@ -59,7 +59,13 @@ test {
             reportDir.mkdirs()
         }
     }
-    useJUnitPlatform()
+    useJUnitPlatform {
+        // Unit tests (tagged `unit` — JsonShapeTest, RawArraySortersTest,
+        // EnvironmentPreflightEvaluatorTest, …) run via the separate `:unitTest` task
+        // below. The `:test` task here covers ONLY the live-HTTP integration cases,
+        // which are also the ones that need the compat URL gate.
+        excludeTags 'unit'
+    }
     systemProperties = [
         'junit.jupiter.execution.parallel.enabled': true,
         'junit.jupiter.execution.parallel.mode.default': 'concurrent',
@@ -83,6 +89,33 @@ test {
         events 'passed', 'skipped', 'failed'
         showStandardStreams = false
     }
+}
+
+// Fast-lane Test task for the `unit`-tagged classes: pure Kotlin + JUnit5, no live
+// HTTP, no compat URL config required. Runs in seconds and can be wired into CI on
+// every PR without arguing about credentials. Existing `:test` task above excludes
+// the same `unit` tag, so the two tasks partition the suite (no double-execution).
+//
+// NOTE on `check` integration: this module's `check` is `enabled = false` (line ~25
+// above) — `gradlew build` does NOT auto-call `:unitTest`. Operators invoke it
+// directly: `./gradlew :components-registry-compat-test:unitTest`. CI configuration
+// (TeamCity / GitHub Actions step) names this task explicitly. Keeping `check`
+// disabled preserves the existing "compat module is opt-in" guarantee for the root
+// `./gradlew build`.
+tasks.register('unitTest', Test) {
+    group = 'verification'
+    description = 'Pure-Kotlin unit tests (tag=unit) — no live HTTP, no compat URL config.'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        includeTags 'unit'
+    }
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+    }
+    // No `finalizedBy compatibilityReporter` here — unit tests don't write ndjson,
+    // and re-running the reporter on a clean dir would just regenerate an empty
+    // summary.md noisily.
 }
 
 tasks.register('compatibilityReporter') {

@@ -1,6 +1,7 @@
 package org.octopusden.octopus.components.registry.compat
 
 import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 
 /**
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.Test
  * shouldn't) breaks the corresponding test by going RED — exactly the regression
  * signal the protocol mandates.
  */
+@Tag("unit")
 class EnvironmentPreflightEvaluatorTest {
 
     private val ts = "2026-05-16T20:00:00Z"
