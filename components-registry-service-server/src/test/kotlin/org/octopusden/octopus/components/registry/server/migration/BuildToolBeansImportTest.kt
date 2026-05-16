@@ -137,4 +137,40 @@ class BuildToolBeansImportTest {
             "Expected PTKProductToolBean(03.49) in $buildTools"
         }
     }
+
+    // -------------------------------------------------------------------------
+    // IMP-003: cards_db-shape — KTS carries build.tools, Groovy has NO build block
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName(
+        "IMP-003: TEST_COMPONENT_BUILD_TOOLS_KTS_ONLY (KTS-only build block, Groovy without build) " +
+            "MUST persist its Oracle bean after auto-migrate — reproduces production cards_db shape",
+    )
+    @Transactional
+    fun imp003_ktsOnlyBuildBlock_persistsOracleBean() {
+        val component = componentRepository.findByComponentKey("TEST_COMPONENT_BUILD_TOOLS_KTS_ONLY")
+        assertNotNull(component, "TEST_COMPONENT_BUILD_TOOLS_KTS_ONLY must be migrated")
+
+        val baseRow = configurationRepository.findBaseByComponentId(component!!.id!!)
+        assertNotNull(baseRow, "BASE row must exist for TEST_COMPONENT_BUILD_TOOLS_KTS_ONLY")
+
+        val beans = buildToolBeanRepository
+            .findByComponentConfigurationId(baseRow!!.id!!)
+            .sortedBy { it.sortOrder }
+
+        assertEquals(
+            1,
+            beans.size,
+            "Expected 1 build-tool bean row (oracleDatabase 12.0); got ${beans.size}. " +
+                "The KTS-only-build-block shape (matching production cards_db) MUST flow " +
+                "through the merge so that ImportServiceImpl.attachBuildToolBeans sees " +
+                "the Oracle bean. If this test is red, the merge is short-circuiting " +
+                "for components whose Groovy side has no `build` block.",
+        )
+
+        val oracle = beans.firstOrNull { it.beanType == "oracleDatabase" }
+        assertNotNull(oracle, "oracleDatabase bean must be persisted")
+        assertEquals("12.0", oracle!!.versionPattern)
+    }
 }

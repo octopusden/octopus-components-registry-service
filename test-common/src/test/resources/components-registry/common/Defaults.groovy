@@ -18,4 +18,10 @@ Defaults {
         explicit = false
         external = true
     }
+    // Mirror production Defaults.groovy shape: presence of a `build` block makes
+    // `Defaults.buildParameters` non-null so that components without their own
+    // `build` block (e.g. cards_db in production) inherit it as the clone-base
+    // and the KTS-side `tools { database { oracle { ... } } }` merge has a
+    // non-null `buildConfiguration` to clear+addAll into.
+    build { }
 }

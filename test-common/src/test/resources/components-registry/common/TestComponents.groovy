@@ -981,6 +981,54 @@ TEST_COMPONENT4 {
     build { }
 }
 
+// Reproduces production-DSL shape: Groovy carries NO `build` block at the
+// component level — relies on `Defaults.groovy`. Build tools come from the
+// KTS counterpart via merge. Two version-range subcomponents matching
+// production cards_db / dwh_db shape, including a per-range `build` block
+// that triggers `parseBuildSection` (which hardcodes `buildTools = emptyList()`),
+// per-range overrides for buildSystem and escrow.generation, and a
+// component-level jira block — full cards_db shape minus the customer DSL.
+"TEST_COMPONENT_BUILD_TOOLS_KTS_ONLY" {
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.test.build.tools"
+    artifactId = "test-build-tools-kts-only"
+
+    jira {
+        projectKey = "TBTKO"
+        technical = true
+        majorVersionFormat = '$major.$minor'
+        releaseVersionFormat = '$major.$minor.$service'
+        buildVersionFormat = '$major.$minor.$service-$build'
+        displayName = "Test build tools KTS-only"
+    }
+
+    "[2.0,)" {
+        groupId = "org.octopusden.octopus.test.kts-only.v2"
+        buildSystem = MAVEN
+        build {
+            requiredTools = "BuildEnv"
+        }
+        vcsSettings {
+            externalRegistry = "kts-only"
+        }
+    }
+    "(,2.0)" {
+        groupId = "org.octopusden.octopus.test.kts-only.v1"
+        buildSystem = ESCROW_NOT_SUPPORTED
+        escrow {
+            generation = EscrowGenerationMode.UNSUPPORTED
+        }
+        vcsSettings {
+            externalRegistry = "kts-only"
+        }
+    }
+
+    distribution {
+        explicit = false
+        external = false
+    }
+}
+
 "TEST_COMPONENT_VERSIONED_ARTIFACT" {
     componentOwner = "user9"
     buildSystem = MAVEN
