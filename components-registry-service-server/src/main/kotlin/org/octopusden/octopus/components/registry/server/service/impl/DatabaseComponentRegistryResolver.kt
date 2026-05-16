@@ -11,6 +11,7 @@ import org.octopusden.octopus.components.registry.core.dto.VersionedComponent
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactIdEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
+import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
 import org.octopusden.octopus.components.registry.server.mapper.toEscrowModule
 import org.octopusden.octopus.components.registry.server.mapper.toResolvedEscrowModuleConfig
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
@@ -270,7 +271,18 @@ class DatabaseComponentRegistryResolver(
                 ?: throw NotFoundException("Component '$component' is not found")
 
         // Component-level fallback: the top-level groupId/artifactId rows imported from DSL.
-        val artifactIdRows = componentEntity.artifactIds.toList()
+        // For components whose DSL omits an explicit `artifactId` line, the import path
+        // writes the inherited `Defaults.artifactId = ANY_ARTIFACT (/[\w-\.]+/)` verbatim;
+        // the V1 in-memory resolver returns that wildcard literal as-is (RES-C-prime).
+        //
+        // `componentEntity.artifactIds` is a JPA `@OneToMany` without `@OrderBy`, so the
+        // DB load order is not contractual. Sort by `id` (UUID) for a deterministic
+        // CSV across reloads of the same DB state. Note: the import writes one row per
+        // CSV-split entry with a SHARED `groupPattern` (the per-component groupId
+        // from `EscrowModuleConfig.groupIdPattern`), so `first().groupPattern` is stable
+        // by construction — any row picks the same group. Multi-artifact DSL order
+        // preservation is a known follow-up; see TD-008 once filed.
+        val artifactIdRows = componentEntity.artifactIds.sortedBy { it.id?.toString().orEmpty() }
         val componentLevelFallback =
             if (artifactIdRows.isEmpty()) {
                 null
@@ -280,6 +292,21 @@ class DatabaseComponentRegistryResolver(
                     artifactIdRows.joinToString(",") { it.artifactPattern },
                 )
             }
+
+        // Per-range MARKER `distribution.maven` rows: only these ranges have a real
+        // per-range override of the maven coordinate. For ranges without such a marker,
+        // the BASE row's per-config maven-artifacts are merely the inherited GAV used
+        // by other read paths (packaging resolution etc.); they MUST NOT be re-synthesized
+        // into the `/maven-artifacts` response, because the V1 contract returns the
+        // component-level `artifactIdPattern` verbatim (RES-C-prime).
+        val markerRanges: Set<String> =
+            componentEntity.configurations
+                .asSequence()
+                .filter {
+                    it.rowType == ROW_TYPE_MARKER && it.overriddenAttribute == MarkerAttributes.DISTRIBUTION_MAVEN
+                }
+                .map { it.versionRange }
+                .toSet()
 
         // Walk the per-range EscrowModule view so that DISTRIBUTION_MAVEN marker
         // overrides are respected: each EscrowModuleConfig already has the correct
@@ -294,29 +321,39 @@ class DatabaseComponentRegistryResolver(
         return module.moduleConfigurations
             .associate { config ->
                 val rangeKey = config.versionRangeString ?: ALL_VERSIONS
-                val gavCsv = config.distribution?.GAV()
                 val artifact =
-                    if (!gavCsv.isNullOrBlank()) {
-                        // Per-range GAV present: parse maven entries (skip URL entries).
-                        val coords =
-                            splitCsv(gavCsv)
-                                .filterNot {
-                                    it.startsWith("file://") ||
-                                        it.startsWith("http://") ||
-                                        it.startsWith("https://")
-                                }
-                                .mapNotNull { parseMavenGavEntry(it) }
-                        if (coords.isNotEmpty()) {
-                            ComponentArtifactConfiguration(
-                                coords.first().groupId,
-                                coords.joinToString(",") { it.artifactId },
-                            )
+                    if (rangeKey in markerRanges) {
+                        // Real per-range override → GAV-extraction branch (RES-C bug fix from PR #209).
+                        val gavCsv = config.distribution?.GAV()
+                        if (!gavCsv.isNullOrBlank()) {
+                            val coords =
+                                splitCsv(gavCsv)
+                                    .filterNot {
+                                        it.startsWith("file://") ||
+                                            it.startsWith("http://") ||
+                                            it.startsWith("https://")
+                                    }
+                                    .mapNotNull { parseMavenGavEntry(it) }
+                            if (coords.isNotEmpty()) {
+                                ComponentArtifactConfiguration(
+                                    coords.first().groupId,
+                                    coords.joinToString(",") { it.artifactId },
+                                )
+                            } else {
+                                componentLevelFallback
+                            }
                         } else {
                             componentLevelFallback
                         }
                     } else {
+                        // No per-range marker: V1 parity — return component-level fallback
+                        // verbatim (wildcard literal when DSL omitted `artifactId`).
                         componentLevelFallback
                     }
+                // Empty pair is the "no data" sentinel when both the marker-gated GAV
+                // branch and the component-level fallback returned nothing. The
+                // `filterValues` below drops these so the empty ranges aren't reported
+                // — matches the legacy contract for components with no maven artifacts.
                 rangeKey to (artifact ?: ComponentArtifactConfiguration("", ""))
             }
             .filterValues { it.groupPattern.isNotEmpty() || it.artifactPattern.isNotEmpty() }
@@ -627,5 +664,12 @@ class DatabaseComponentRegistryResolver(
         /** Must match EscrowConfigurationLoader.ALL_VERSIONS = "(,0),[0,)" */
         @Suppress("VariableNaming")
         private const val ALL_VERSIONS = "(,0),[0,)"
+
+        /**
+         * SoT literal for `ComponentConfigurationEntity.rowType`. Matches the
+         * String constants used throughout `EntityMappers`. The entity field is
+         * a `String` — there is no shared enum to reference.
+         */
+        private const val ROW_TYPE_MARKER = "MARKER"
     }
 }
