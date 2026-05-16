@@ -2,7 +2,16 @@
 
 package org.octopusden.octopus.components.registry.server.mapper
 
+import org.octopusden.octopus.components.registry.api.beans.OdbcToolBean
+import org.octopusden.octopus.components.registry.api.beans.OracleDatabaseToolBean
+import org.octopusden.octopus.components.registry.api.beans.PTCProductToolBean
+import org.octopusden.octopus.components.registry.api.beans.PTDDbProductToolBean
+import org.octopusden.octopus.components.registry.api.beans.PTDProductToolBean
+import org.octopusden.octopus.components.registry.api.beans.PTKProductToolBean
+import org.octopusden.octopus.components.registry.api.build.tools.BuildTool
+import org.octopusden.octopus.components.registry.api.enums.OracleDatabaseEditions
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes
+import org.octopusden.octopus.components.registry.server.entity.ComponentBuildToolBeanEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentDocLinkEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
@@ -40,6 +49,7 @@ internal object MarkerAttributes {
     const val DISTRIBUTION_DOCKER: String = "distribution.docker"
     const val DISTRIBUTION_PACKAGES: String = "distribution.packages"
     const val BUILD_REQUIRED_TOOLS: String = "build.requiredTools"
+    const val BUILD_TOOLS: String = "build.buildTools"
 
     val ALL: Set<String> =
         setOf(
@@ -49,6 +59,7 @@ internal object MarkerAttributes {
             DISTRIBUTION_DOCKER,
             DISTRIBUTION_PACKAGES,
             BUILD_REQUIRED_TOOLS,
+            BUILD_TOOLS,
         )
 }
 
@@ -383,7 +394,7 @@ private fun <T> pickMarkerChildren(
  * Mutable scratch buffer holding the merged scalar values that will populate
  * the resulting `EscrowModuleConfig`. Lifecycle is scoped to one resolve call.
  */
-private class ComponentConfigurationView {
+internal class ComponentConfigurationView {
     var buildSystem: String? = null
     var buildSystemVersion: String? = null
     var javaVersion: String? = null
@@ -475,9 +486,18 @@ private class ComponentConfigurationView {
                     tool.installScript,
                 )
             }
-        // Early-return must now consider tools too: a build aspect with ONLY
-        // requiredTools (no java/maven/gradle/buildTasks/etc.) was previously
-        // dropped entirely.
+        // Build-tool beans (OracleDatabaseToolBean, PTKProductToolBean, etc.):
+        // a `build.buildTools` marker row REPLACES the base row's beans for its
+        // version range; otherwise the base row's beans propagate.
+        val buildToolBeanEntities =
+            pickMarkerChildren(MarkerAttributes.BUILD_TOOLS, markerOverrides, base.buildToolBeans.toList()) {
+                it.buildToolBeans.sortedBy { b -> b.sortOrder }
+            }
+        val buildTools: List<BuildTool> = buildToolBeanEntities.mapNotNull { it.toBuildToolBean() }
+
+        // Early-return must now consider tools and buildTools too: a build aspect
+        // with ONLY requiredTools (no java/maven/gradle/buildTasks/etc.) was
+        // previously dropped entirely.
         if (javaVersion == null &&
             mavenVersion == null &&
             gradleVersion == null &&
@@ -485,7 +505,8 @@ private class ComponentConfigurationView {
             !requiredProject.orFalse() &&
             projectVersion == null &&
             systemProperties == null &&
-            tools.isEmpty()
+            tools.isEmpty() &&
+            buildTools.isEmpty()
         ) {
             return null
         }
@@ -498,7 +519,7 @@ private class ComponentConfigurationView {
             systemProperties,
             buildTasks,
             tools,
-            emptyList(),
+            buildTools,
         )
     }
 
@@ -756,5 +777,61 @@ private fun setField(
         field.set(config, value)
     } catch (_: NoSuchFieldException) {
         // ignore unknown fields
+    }
+}
+
+/**
+ * Convert a persisted `ComponentBuildToolBeanEntity` row into the corresponding
+ * `BuildTool` subtype. Returns `null` for unknown `beanType` values so callers
+ * can use `mapNotNull` to silently skip forward-compat unknowns.
+ */
+internal fun ComponentBuildToolBeanEntity.toBuildToolBean(): BuildTool? {
+    // Capture entity fields before entering bean apply-blocks, where `this`
+    // changes to the bean type and shadows the entity's property names.
+    val entityVersionPattern = versionPattern
+    val entitySettingsProperty = settingsProperty
+    val entityEdition = edition
+
+    return when (beanType) {
+        "oracleDatabase" -> {
+            val bean = OracleDatabaseToolBean()
+            entityVersionPattern?.let { bean.setVersion(it) }
+            entitySettingsProperty?.let { bean.setSettingsProperty(it) }
+            entityEdition?.let { edStr ->
+                OracleDatabaseEditions.values().firstOrNull { it.name == edStr }
+                    ?.let { bean.setEdition(it) }
+            }
+            bean
+        }
+        "cProduct" -> {
+            val bean = PTCProductToolBean()
+            entityVersionPattern?.let { bean.setVersion(it) }
+            entitySettingsProperty?.let { bean.setSettingsProperty(it) }
+            bean
+        }
+        "kProduct" -> {
+            val bean = PTKProductToolBean()
+            entityVersionPattern?.let { bean.setVersion(it) }
+            entitySettingsProperty?.let { bean.setSettingsProperty(it) }
+            bean
+        }
+        "dProduct" -> {
+            val bean = PTDProductToolBean()
+            entityVersionPattern?.let { bean.setVersion(it) }
+            entitySettingsProperty?.let { bean.setSettingsProperty(it) }
+            bean
+        }
+        "dDbProduct" -> {
+            val bean = PTDDbProductToolBean()
+            entityVersionPattern?.let { bean.setVersion(it) }
+            entitySettingsProperty?.let { bean.setSettingsProperty(it) }
+            bean
+        }
+        "odbc" -> {
+            val bean = OdbcToolBean()
+            entityVersionPattern?.let { bean.setVersion(it) }
+            bean
+        }
+        else -> null
     }
 }
