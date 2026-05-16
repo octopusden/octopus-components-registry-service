@@ -33,15 +33,28 @@ Available properties (also accepted as `COMPAT_*` env variables, dots/dashes →
 | `compat.versions-fallback` | `false` | Allow `versions-fallback.json` fixture to count as real version coverage |
 | `compat.smoke-components` | (file) | Comma-separated component name list; overrides `/smoke-components.txt`. Provide real names via env (`COMPAT_SMOKE_COMPONENTS`) or TC parameter — do not commit them. |
 
-## Run only on demand
+## Two tasks: `:test` (live HTTP) and `:unitTest` (pure Kotlin)
+
+The module exposes two complementary Gradle tasks. Polarity is anchored by the
+class-level `@Tag("http")` on `CompatibilityTestBase`, which JUnit Jupiter
+inherits to every subclass:
+
+| Task | Filter | URL gate | Use |
+|---|---|---|---|
+| `:components-registry-compat-test:test` | `includeTags 'http'` (every `CompatibilityTestBase` subclass) | required: at least one of `compat.baseline.url` / `compat.candidate.url` | TeamCity manual run; full baseline-vs-candidate compat sweep |
+| `:components-registry-compat-test:unitTest` | `excludeTags 'http'` (everything else) | none | PR-time fast lane for framework self-tests — JsonShape, RawArraySorters, EnvironmentPreflightEvaluator, future `DiffClassifierTest`, etc. Runs in ~8s |
+
+A new pure-unit test class that forgets a `@Tag` annotation still executes via
+`:unitTest` — the polarity is "everything not tagged `http`" rather than "only
+tagged `unit`", which keeps the gate strong against silent skips.
 
 This module deliberately does **not** participate in the regular `gradlew build` lifecycle:
 
 - The module's `check` task is disabled.
-- The `test` task has `onlyIf { at least one of compat.baseline.url / compat.candidate.url is set }` — if **both** are missing (or their `COMPAT_BASELINE_URL` / `COMPAT_CANDIDATE_URL` env equivalents), the task is **skipped at the Gradle level** (no JVM fork, no JUnit launcher). `gradlew build` therefore costs nothing extra for contributors who don't pass compat URLs.
+- The `:test` task has `onlyIf { at least one of compat.baseline.url / compat.candidate.url is set }` — if **both** are missing (or their `COMPAT_BASELINE_URL` / `COMPAT_CANDIDATE_URL` env equivalents), the task is **skipped at the Gradle level** (no JVM fork, no JUnit launcher). `gradlew build` therefore costs nothing extra for contributors who don't pass compat URLs.
 - Setting exactly one of `compat.baseline.url` / `compat.candidate.url` lets the test JVM start so `CompatConfig.explainInvalid()` can surface a fail-fast configuration error at `@BeforeAll`. Gating on "both" at the Gradle layer would silently skip the partial-config case as BUILD SUCCESSFUL, which would hide misconfigured TC / manual runs.
 
-These tests are intended to be triggered from a TeamCity manual-run build configuration (or explicit local `./gradlew :components-registry-compat-test:test -P...`), not from any automated PR/build trigger.
+The `:test` task is intended to be triggered from a TeamCity manual-run build configuration (or explicit local `./gradlew :components-registry-compat-test:test -P...`), not from any automated PR/build trigger. `:unitTest` is the opposite: it has no external dependencies and is suitable for any per-PR CI step.
 
 ## Failure model
 
@@ -50,7 +63,7 @@ The test task itself does not throw on a single divergence — every diff is _re
 Two diff categories are surfaced as environment warnings at the top of `summary.md`:
 
 - **`SNAPSHOT_MISMATCH`** — baseline and candidate `/service/status .versionControlRevision` differ. The compat run is non-authoritative: data drift between snapshots cannot be distinguished from migration regression. Resolve by re-syncing the candidate stand to the baseline VCS revision.
-- **`CANDIDATE_NOT_DB_MODE`** — reserved env category, not currently emitted. The public `ServiceStatusDTO.serviceMode` enum on this branch is `{FS, VCS}` only; there is no DB value to compare against. The candidate's source mode is an internal selector via `ComponentSourceRegistry` / profile settings and must be verified out-of-band. Slot kept for the day a DB-mode signal is exposed.
+- **`CANDIDATE_NOT_DB_MODE`** — emitted by `SnapshotPreconditionTest` when the candidate's `/service/status` reports `defaultSource != "db"` OR `dbComponentCount` below the `0.9 × baselineComponentCount` threshold (i.e. migration didn't import meaningfully). Indicates the candidate is still serving the V1 in-memory resolver, so the compat run is measuring V1 vs V1 rather than schema-v2 vs V1. Resolve by switching the candidate stand into DB mode (`-Pcompat.allow-non-db-candidate=true` is the documented escape hatch for the rare parity-debug case).
 
 Both env categories cause the build to fail. They are **not** suppressible via `known-deltas.json` — the reporter explicitly excludes env categories from known-delta matching, since they signal that the comparison itself is unsound (different snapshots, wrong service mode) rather than an intentional v3 delta. Resolve at the operator level.
 
