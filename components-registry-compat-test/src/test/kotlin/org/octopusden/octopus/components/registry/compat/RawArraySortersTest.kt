@@ -20,13 +20,21 @@ import org.junit.jupiter.api.Test
 class RawArraySortersTest {
     private val factory = JsonNodeFactory.instance
 
-    private fun rangeEntry(componentId: String, versionRange: String, displayName: String? = null): JsonNode {
+    /**
+     * Mirrors the wire shape of `JiraComponentVersionRangeDTO`:
+     *   { componentName: <top-level>, versionRange, component: { displayName, ... }, ... }
+     * `componentName` lives at the TOP level. The nested `component` object is a
+     * `JiraComponentDTO` and does NOT carry an `id` field. `displayName` is the
+     * field used in the prod responses (and the one the compat report shows
+     * STRUCTURAL_DIFFs against).
+     */
+    private fun rangeEntry(componentName: String, versionRange: String, displayName: String? = null): JsonNode {
         val obj = factory.objectNode()
+        obj.put("componentName", componentName)
+        obj.put("versionRange", versionRange)
         val component = factory.objectNode()
-        component.put("id", componentId)
         if (displayName != null) component.put("displayName", displayName)
         obj.set<JsonNode>("component", component)
-        obj.put("versionRange", versionRange)
         return obj
     }
 
@@ -65,6 +73,39 @@ class RawArraySortersTest {
         assertTrue(
             diffs.isEmpty(),
             "after stable sort, JsonShape.diff must see zero structural divergence for Set-equivalent payloads, got: $diffs",
+        )
+    }
+
+    @Test
+    @DisplayName(
+        "regression guard: entries sharing versionRange but distinct componentName MUST sort deterministically " +
+            "(would FAIL if the key reached for a non-existent `component.id` field)",
+    )
+    fun jiraComponentVersionRanges_distinctComponentNameSameRange_zeroShapeDiffs() {
+        val endpoint = "GET /rest/api/2/common/jira-component-version-ranges"
+
+        // Both entries share the same versionRange. The composite key must use `componentName`
+        // (the TOP-LEVEL field on JiraComponentVersionRangeDTO) to differentiate them.
+        // An earlier draft of this PR keyed on `component.id`, which does not exist on the
+        // DTO — the key collapsed to "" + sep + versionRange and identical-range entries
+        // stayed in input order. That would re-introduce positional drift between stands.
+        // This test would FAIL under that buggy key shape; it must stay GREEN.
+        val baseline = factory.arrayNode().apply {
+            add(rangeEntry("alpha-fixture", "[1.0,)", displayName = "Alpha A"))
+            add(rangeEntry("beta-fixture", "[1.0,)", displayName = "Beta A"))
+        }
+        val candidate = factory.arrayNode().apply {
+            add(rangeEntry("beta-fixture", "[1.0,)", displayName = "Beta A"))
+            add(rangeEntry("alpha-fixture", "[1.0,)", displayName = "Alpha A"))
+        }
+
+        val baselineSorted = RawArraySorters.stableSorted(endpoint, baseline)
+        val candidateSorted = RawArraySorters.stableSorted(endpoint, candidate)
+
+        val diffs = JsonShape.diff(baselineSorted, candidateSorted)
+        assertTrue(
+            diffs.isEmpty(),
+            "componentName must differentiate entries sharing the same versionRange; got diffs: $diffs",
         )
     }
 

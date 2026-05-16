@@ -38,12 +38,16 @@ object RawArraySorters {
     private val sorters: Map<String, (JsonNode) -> String> =
         mapOf(
             // `/jira-component-version-ranges` returns Set<JiraComponentVersionRangeDTO>.
-            // Stable key = component id + NUL + version range — covers both kinds of
+            // Stable key = componentName + NUL + versionRange — covers both kinds of
             // duplication (same component, different ranges; same range, different components).
+            // Wire shape (per JiraComponentVersionRangeDTO):
+            //   { "componentName": "...", "versionRange": "...", "component": { ... }, ... }
+            // `componentName` lives at the TOP LEVEL, NOT under `component` (which is a
+            // JiraComponentDTO with projectKey / displayName / componentInfo — no `id`).
             "GET /rest/api/2/common/jira-component-version-ranges" to { node ->
-                val componentId = node.path("component").path("id").asText("")
+                val componentName = node.path("componentName").asText("")
                 val versionRange = node.path("versionRange").asText("")
-                componentId + KEY_SEP + versionRange
+                componentName + KEY_SEP + versionRange
             },
             // `/v3/components` returns a list of `{component, variants}` records — the server
             // contract is one entry per `component.id`. Sort by that id. If duplicate ids ever
