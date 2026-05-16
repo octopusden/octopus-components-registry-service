@@ -13,12 +13,12 @@ CANDIDATE_PORT="${CANDIDATE_PORT:-4568}"
 kill_port() {
   command -v lsof >/dev/null 2>&1 || { echo "WARN: lsof missing; skipping port-$1 kill"; return 0; }
   local pids
-  pids=$(lsof -ti -sTCP:LISTEN tcp:"$1" 2>/dev/null || true)
+  pids=$(lsof -t -i tcp:"$1" -sTCP:LISTEN 2>/dev/null || true)
   [ -z "$pids" ] && return 0
   echo "    :$1 — TERM $pids"
   kill $pids 2>/dev/null || true
   for i in $(seq 1 10); do
-    pids=$(lsof -ti -sTCP:LISTEN tcp:"$1" 2>/dev/null || true)
+    pids=$(lsof -t -i tcp:"$1" -sTCP:LISTEN 2>/dev/null || true)
     [ -z "$pids" ] && return 0
     sleep 1
   done

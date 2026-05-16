@@ -64,12 +64,12 @@ kill_port() {
   local port="$1"
   command -v lsof >/dev/null 2>&1 || { echo "WARN: lsof not available; skipping port-$port kill"; return 0; }
   local pids
-  pids=$(lsof -ti -sTCP:LISTEN tcp:"$port" 2>/dev/null || true)
+  pids=$(lsof -t -i tcp:"$port" -sTCP:LISTEN 2>/dev/null || true)
   [ -z "$pids" ] && return 0
   echo "    sending TERM to PID(s) on :$port — $pids"
   kill $pids 2>/dev/null || true
   for i in $(seq 1 10); do
-    pids=$(lsof -ti -sTCP:LISTEN tcp:"$port" 2>/dev/null || true)
+    pids=$(lsof -t -i tcp:"$port" -sTCP:LISTEN 2>/dev/null || true)
     [ -z "$pids" ] && return 0
     sleep 1
   done
@@ -151,7 +151,7 @@ wait_port_free() {
     if ! health "$port"; then
       # If lsof is missing, fall back to health-only as the readiness signal.
       [ "$have_lsof" -eq 0 ] && return 0
-      lsof -i -sTCP:LISTEN tcp:"$port" >/dev/null 2>&1 || return 0
+      lsof -i tcp:"$port" -sTCP:LISTEN >/dev/null 2>&1 || return 0
     fi
     sleep 1
   done
@@ -191,7 +191,13 @@ fi
 if [ "$RESTART" -eq 1 ]; then
   echo ">>> --restart: stopping candidate JVM on :$CANDIDATE_PORT"
   kill_port "$CANDIDATE_PORT"
-  wait_port_free "$CANDIDATE_PORT" 10 || echo "WARN: :$CANDIDATE_PORT still bound; continuing anyway"
+  if ! wait_port_free "$CANDIDATE_PORT" 15; then
+    echo "ERROR: :$CANDIDATE_PORT still bound after kill — refusing to spawn a new candidate"
+    echo "       that would race with the surviving JVM (PR #216 shows this race leaves the"
+    echo "       DB in a half-migrated state and produces garbage compat diffs)."
+    echo "       Manually inspect with: lsof -i tcp:$CANDIDATE_PORT -sTCP:LISTEN"
+    exit 3
+  fi
   CANDIDATE_LOG="/tmp/crs-candidate-${CANDIDATE_PORT}.log"
   echo ">>> starting candidate.sh in background (logs: $CANDIDATE_LOG)"
   nohup bash "$SCRIPT_DIR/candidate.sh" >"$CANDIDATE_LOG" 2>&1 &
@@ -223,4 +229,8 @@ elif ! health "$CANDIDATE_PORT"; then
 fi
 
 echo ">>> running compat"
-exec "$SCRIPT_DIR/compat.sh" "${PASS_ARGS[@]}"
+# `set -u` rejects bare "${PASS_ARGS[@]}" when the array is empty; use the
+# `${var+...}` empty-safe expansion so the array forwards verbatim when
+# present and expands to nothing when absent. (Regression-introduced by the
+# polluted-run guard merge — restored.)
+exec "$SCRIPT_DIR/compat.sh" ${PASS_ARGS[@]+"${PASS_ARGS[@]}"}
