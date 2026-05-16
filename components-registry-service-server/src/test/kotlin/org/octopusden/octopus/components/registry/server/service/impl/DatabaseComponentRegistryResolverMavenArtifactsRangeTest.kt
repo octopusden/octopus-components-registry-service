@@ -416,6 +416,19 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
     }
 
     // ========================================================================
+    // Coverage gaps (out of scope for this PR, tracked for follow-up)
+    // ========================================================================
+    //
+    // RES-C-006 (TODO): synthetic-base + DISTRIBUTION_MAVEN MARKER. Per
+    // EntityMappers.kt:106, `toEscrowModule` suppresses the synthetic-base range
+    // `(,)` when overrides are present. A MARKER row whose `versionRange` is the
+    // synthetic placeholder ends up in `markerRanges` here but is never emitted
+    // by `toEscrowModule`, so the resolver short-circuits to fallback for any
+    // real range — which is the correct outcome. No reproducer in production
+    // today, but the path is untested and worth a dedicated fixture if the
+    // schema ever evolves.
+
+    // ========================================================================
     // Companion
     // ========================================================================
 

@@ -292,13 +292,11 @@ class DatabaseComponentRegistryResolver(
         // by other read paths (packaging resolution etc.); they MUST NOT be re-synthesized
         // into the `/maven-artifacts` response, because the V1 contract returns the
         // component-level `artifactIdPattern` verbatim (RES-C-prime).
-        // `rowType` is a String on the entity; the literal matches the SoT used inside
-        // EntityMappers.kt (lines 148/170/198 — "MARKER").
         val markerRanges: Set<String> =
             componentEntity.configurations
                 .asSequence()
                 .filter {
-                    it.rowType == "MARKER" && it.overriddenAttribute == MarkerAttributes.DISTRIBUTION_MAVEN
+                    it.rowType == ROW_TYPE_MARKER && it.overriddenAttribute == MarkerAttributes.DISTRIBUTION_MAVEN
                 }
                 .map { it.versionRange }
                 .toSet()
@@ -345,6 +343,10 @@ class DatabaseComponentRegistryResolver(
                         // verbatim (wildcard literal when DSL omitted `artifactId`).
                         componentLevelFallback
                     }
+                // Empty pair is the "no data" sentinel when both the marker-gated GAV
+                // branch and the component-level fallback returned nothing. The
+                // `filterValues` below drops these so the empty ranges aren't reported
+                // — matches the legacy contract for components with no maven artifacts.
                 rangeKey to (artifact ?: ComponentArtifactConfiguration("", ""))
             }
             .filterValues { it.groupPattern.isNotEmpty() || it.artifactPattern.isNotEmpty() }
@@ -655,5 +657,12 @@ class DatabaseComponentRegistryResolver(
         /** Must match EscrowConfigurationLoader.ALL_VERSIONS = "(,0),[0,)" */
         @Suppress("VariableNaming")
         private const val ALL_VERSIONS = "(,0),[0,)"
+
+        /**
+         * SoT literal for `ComponentConfigurationEntity.rowType`. Matches the
+         * String constants used inside `EntityMappers.kt` (lines 91/148/170/198 etc.).
+         * The entity field is a `String` — there is no shared enum to reference.
+         */
+        private const val ROW_TYPE_MARKER = "MARKER"
     }
 }
