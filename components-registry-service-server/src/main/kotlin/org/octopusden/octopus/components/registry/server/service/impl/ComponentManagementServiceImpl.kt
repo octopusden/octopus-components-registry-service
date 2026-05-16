@@ -588,12 +588,13 @@ class ComponentManagementServiceImpl(
         component: ComponentEntity,
         requests: List<org.octopusden.octopus.components.registry.server.dto.v4.ArtifactIdRequest>,
     ) {
-        requests.forEach { req ->
+        requests.forEachIndexed { index, req ->
             component.artifactIds.add(
                 ComponentArtifactIdEntity(
                     component = component,
                     groupPattern = req.groupPattern,
                     artifactPattern = req.artifactPattern,
+                    sortOrder = index,
                 ),
             )
         }

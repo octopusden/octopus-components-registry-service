@@ -115,12 +115,14 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
         component: ComponentEntity,
         groupPattern: String,
         artifactPattern: String,
+        sortOrder: Int = component.artifactIds.size,
     ) {
         component.artifactIds.add(
             ComponentArtifactIdEntity(
                 component = component,
                 groupPattern = groupPattern,
                 artifactPattern = artifactPattern,
+                sortOrder = sortOrder,
             ),
         )
     }
@@ -360,6 +362,45 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
             assertEquals("com.example.test", entry!!.groupPattern, "$range groupPattern must be from fallback")
             assertEquals(V1_WILDCARD, entry.artifactPattern, "$range artifactPattern must be the V1 wildcard")
         }
+    }
+
+    @Test
+    @DisplayName(
+        "RES-C-006: multi-artifact component-level CSV is re-joined in DSL declaration order " +
+            "(sort_order ASC), NOT in UUID order — regression guard for VAL-006",
+    )
+    fun `RES-C-006 component-level multi-artifact CSV preserves DSL declaration order`() {
+        // VAL-006 failure mode from TC build 3456: a sort-by-UUID fallback for
+        // componentEntity.artifactIds joined the CSV in random order. V1 reads the
+        // raw DSL `artifactIdPattern` string ("art-core,art-cli,art-xml") verbatim;
+        // V2 must re-join the imported rows in the same declaration order via
+        // `sort_order` ASC.
+        val comp = makeComponent("res-c-prime-fixture-order-preservation")
+        comp.distributionExplicit = true
+
+        // Add artifacts in NON-alphabetical order to force the test to fail if
+        // the resolver falls back to alphabetical (or UUID-random) sorting.
+        addComponentLevelArtifact(comp, "com.example.test", "art-core", sortOrder = 0)
+        addComponentLevelArtifact(comp, "com.example.test", "art-cli", sortOrder = 1)
+        addComponentLevelArtifact(comp, "com.example.test", "art-xml", sortOrder = 2)
+        addComponentLevelArtifact(comp, "com.example.test", "art-zeta", sortOrder = 3)
+        addComponentLevelArtifact(comp, "com.example.test", "art-alpha", sortOrder = 4)
+
+        val base = makeBase(comp, ALL_VERSIONS)
+        comp.configurations.add(base)
+        stubComponent(comp)
+
+        val result = resolver.getMavenArtifactParameters("res-c-prime-fixture-order-preservation")
+
+        assertEquals(1, result.size, "Expected one range entry")
+        val entry = result[ALL_VERSIONS]
+        assertNotNull(entry, "ALL_VERSIONS entry must be present")
+        assertEquals(
+            "art-core,art-cli,art-xml,art-zeta,art-alpha",
+            entry!!.artifactPattern,
+            "artifactPattern CSV must preserve sort_order ASC (DSL declaration order), " +
+                "NOT collapse to alphabetical (`art-alpha,art-cli,...`) or UUID-random order.",
+        )
     }
 
     @Test

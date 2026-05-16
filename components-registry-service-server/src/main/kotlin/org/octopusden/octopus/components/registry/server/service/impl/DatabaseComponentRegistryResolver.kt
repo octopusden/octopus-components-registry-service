@@ -275,14 +275,13 @@ class DatabaseComponentRegistryResolver(
         // writes the inherited `Defaults.artifactId = ANY_ARTIFACT (/[\w-\.]+/)` verbatim;
         // the V1 in-memory resolver returns that wildcard literal as-is (RES-C-prime).
         //
-        // `componentEntity.artifactIds` is a JPA `@OneToMany` without `@OrderBy`, so the
-        // DB load order is not contractual. Sort by `id` (UUID) for a deterministic
-        // CSV across reloads of the same DB state. Note: the import writes one row per
-        // CSV-split entry with a SHARED `groupPattern` (the per-component groupId
-        // from `EscrowModuleConfig.groupIdPattern`), so `first().groupPattern` is stable
-        // by construction — any row picks the same group. Multi-artifact DSL order
-        // preservation is a known follow-up; see TD-008 once filed.
-        val artifactIdRows = componentEntity.artifactIds.sortedBy { it.id?.toString().orEmpty() }
+        // Sort by `sortOrder` ASC so multi-artifact CSV strings round-trip in their
+        // original DSL declaration order — V1 reads the raw DSL string verbatim, V2 must
+        // re-join in the same order or `GitVsDbValidationTest.VAL-006` fails. The import
+        // writes one row per CSV token with `sortOrder = index in DSL list`. All rows
+        // share the same `groupPattern` (per-component groupId), so `first().groupPattern`
+        // is stable by construction — any row picks the same group.
+        val artifactIdRows = componentEntity.artifactIds.sortedBy { it.sortOrder }
         val componentLevelFallback =
             if (artifactIdRows.isEmpty()) {
                 null
