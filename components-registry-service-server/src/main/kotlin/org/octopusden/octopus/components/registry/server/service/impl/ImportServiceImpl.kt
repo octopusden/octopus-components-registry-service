@@ -1046,8 +1046,12 @@ class ImportServiceImpl(
                 // hotfixVersionFormat goes to component level; skip here
             }
             jira.componentInfo?.let { info ->
-                row.jiraVersionPrefix = info.versionPrefix?.takeIf { it.isNotBlank() }
-                row.jiraVersionFormat = info.versionFormat?.takeIf { it.isNotBlank() }
+                // Do NOT collapse empty string to null for versionPrefix/versionFormat:
+                // bug-G-component DSL sets versionPrefix="" (override range clears "wallet") and baseline
+                // preserves "". Collapsing "" → null would prevent the null-clear diff from being
+                // emitted and the value would bleed from the base range (bug G).
+                row.jiraVersionPrefix = info.versionPrefix
+                row.jiraVersionFormat = info.versionFormat
             }
         }
     }
@@ -1404,21 +1408,27 @@ class ImportServiceImpl(
     /**
      * Collect (attributePath → newValue) for all scalar columns that differ
      * between [base] and [override] rows.
+     *
+     * A null [overVal] is a legal "clear" value: it means the override range
+     * explicitly clears the inherited base scalar. Previously the predicate
+     * `if (overVal != null && overVal != baseVal)` dropped all null overrides,
+     * causing the base value to bleed into ranges that should show null (bugs F/G).
      */
     @Suppress("CyclomaticComplexMethod")
     private fun collectScalarDiffs(
         base: ComponentConfigurationEntity,
         override: ComponentConfigurationEntity,
-    ): Map<String, Any> {
-        val diffs = mutableMapOf<String, Any>()
+    ): Map<String, Any?> {
+        val diffs = mutableMapOf<String, Any?>()
 
         fun <T> diffScalar(
             attrPath: String,
             baseVal: T?,
             overVal: T?,
         ) {
-            if (overVal != null && overVal != baseVal) {
-                diffs[attrPath] = overVal as Any
+            // Emit whenever values differ, including when overVal is null (null-clear override).
+            if (overVal != baseVal) {
+                diffs[attrPath] = overVal
             }
         }
 
@@ -1428,29 +1438,21 @@ class ImportServiceImpl(
         diffScalar("build.mavenVersion", base.mavenVersion, override.mavenVersion)
         diffScalar("build.gradleVersion", base.gradleVersion, override.gradleVersion)
         diffScalar("build.buildFilePath", base.buildFilePath, override.buildFilePath)
-        if (override.deprecated != null && override.deprecated != base.deprecated) {
-            diffs["build.deprecated"] = override.deprecated as Any
-        }
-        if (override.requiredProject != null && override.requiredProject != base.requiredProject) {
-            diffs["build.requiredProject"] = override.requiredProject as Any
-        }
+        diffScalar("build.deprecated", base.deprecated, override.deprecated)
+        diffScalar("build.requiredProject", base.requiredProject, override.requiredProject)
         diffScalar("build.projectVersion", base.projectVersion, override.projectVersion)
         diffScalar("build.systemProperties", base.systemProperties, override.systemProperties)
         diffScalar("build.buildTasks", base.buildTasks, override.buildTasks)
 
         diffScalar("escrow.buildTask", base.escrowBuildTask, override.escrowBuildTask)
         diffScalar("escrow.providedDependencies", base.escrowProvidedDependencies, override.escrowProvidedDependencies)
-        if (override.escrowReusable != null && override.escrowReusable != base.escrowReusable) {
-            diffs["escrow.reusable"] = override.escrowReusable as Any
-        }
+        diffScalar("escrow.reusable", base.escrowReusable, override.escrowReusable)
         diffScalar("escrow.generation", base.escrowGeneration, override.escrowGeneration)
         diffScalar("escrow.diskSpace", base.escrowDiskSpace, override.escrowDiskSpace)
         diffScalar("escrow.additionalSources", base.escrowAdditionalSources, override.escrowAdditionalSources)
 
         diffScalar("jira.projectKey", base.jiraProjectKey, override.jiraProjectKey)
-        if (override.jiraTechnical != null && override.jiraTechnical != base.jiraTechnical) {
-            diffs["jira.technical"] = override.jiraTechnical as Any
-        }
+        diffScalar("jira.technical", base.jiraTechnical, override.jiraTechnical)
         diffScalar("jira.majorVersionFormat", base.jiraMajorVersionFormat, override.jiraMajorVersionFormat)
         diffScalar("jira.releaseVersionFormat", base.jiraReleaseVersionFormat, override.jiraReleaseVersionFormat)
         diffScalar("jira.buildVersionFormat", base.jiraBuildVersionFormat, override.jiraBuildVersionFormat)
@@ -1463,39 +1465,47 @@ class ImportServiceImpl(
 
     /**
      * Apply a single typed value to the appropriate column on [row].
-     * Clears all other scalar columns first (scalar override invariant).
+     *
+     * [value] may be null for import-originated null-clear override rows (the import pipeline
+     * represents "this range clears the inherited base scalar" by emitting a SCALAR_OVERRIDE row
+     * with the discriminator column set and the typed column left null). The `overriddenAttribute`
+     * discriminator is the source of truth; null typed column = explicit clear, not absent override.
+     *
+     * **V4 POST path (`ConfigurationRowAccessors.applyScalarValue`) rejects null with "use DELETE"
+     * — that contract is unchanged. This function is import-only.**
      */
+    @Suppress("CyclomaticComplexMethod")
     private fun applyScalarValueToRow(
         row: ComponentConfigurationEntity,
         attrPath: String,
-        value: Any,
+        value: Any?,
     ) {
         when (attrPath) {
-            "build.buildSystem" -> row.buildSystem = value.toString()
-            "build.buildSystemVersion" -> row.buildSystemVersion = value.toString()
-            "build.javaVersion" -> row.javaVersion = value.toString()
-            "build.mavenVersion" -> row.mavenVersion = value.toString()
-            "build.gradleVersion" -> row.gradleVersion = value.toString()
-            "build.buildFilePath" -> row.buildFilePath = value.toString()
-            "build.deprecated" -> row.deprecated = value as? Boolean ?: value.toString().toBooleanStrictOrNull()
-            "build.requiredProject" -> row.requiredProject = value as? Boolean ?: value.toString().toBooleanStrictOrNull()
-            "build.projectVersion" -> row.projectVersion = value.toString()
-            "build.systemProperties" -> row.systemProperties = value.toString()
-            "build.buildTasks" -> row.buildTasks = value.toString()
-            "escrow.buildTask" -> row.escrowBuildTask = value.toString()
-            "escrow.providedDependencies" -> row.escrowProvidedDependencies = value.toString()
-            "escrow.reusable" -> row.escrowReusable = value as? Boolean ?: value.toString().toBooleanStrictOrNull()
-            "escrow.generation" -> row.escrowGeneration = value.toString()
-            "escrow.diskSpace" -> row.escrowDiskSpace = value.toString()
-            "escrow.additionalSources" -> row.escrowAdditionalSources = value.toString()
-            "jira.projectKey" -> row.jiraProjectKey = value.toString()
-            "jira.technical" -> row.jiraTechnical = value as? Boolean ?: value.toString().toBooleanStrictOrNull()
-            "jira.majorVersionFormat" -> row.jiraMajorVersionFormat = value.toString()
-            "jira.releaseVersionFormat" -> row.jiraReleaseVersionFormat = value.toString()
-            "jira.buildVersionFormat" -> row.jiraBuildVersionFormat = value.toString()
-            "jira.lineVersionFormat" -> row.jiraLineVersionFormat = value.toString()
-            "jira.versionPrefix" -> row.jiraVersionPrefix = value.toString()
-            "jira.versionFormat" -> row.jiraVersionFormat = value.toString()
+            "build.buildSystem" -> row.buildSystem = value?.toString()
+            "build.buildSystemVersion" -> row.buildSystemVersion = value?.toString()
+            "build.javaVersion" -> row.javaVersion = value?.toString()
+            "build.mavenVersion" -> row.mavenVersion = value?.toString()
+            "build.gradleVersion" -> row.gradleVersion = value?.toString()
+            "build.buildFilePath" -> row.buildFilePath = value?.toString()
+            "build.deprecated" -> row.deprecated = value as? Boolean ?: value?.toString()?.toBooleanStrictOrNull()
+            "build.requiredProject" -> row.requiredProject = value as? Boolean ?: value?.toString()?.toBooleanStrictOrNull()
+            "build.projectVersion" -> row.projectVersion = value?.toString()
+            "build.systemProperties" -> row.systemProperties = value?.toString()
+            "build.buildTasks" -> row.buildTasks = value?.toString()
+            "escrow.buildTask" -> row.escrowBuildTask = value?.toString()
+            "escrow.providedDependencies" -> row.escrowProvidedDependencies = value?.toString()
+            "escrow.reusable" -> row.escrowReusable = value as? Boolean ?: value?.toString()?.toBooleanStrictOrNull()
+            "escrow.generation" -> row.escrowGeneration = value?.toString()
+            "escrow.diskSpace" -> row.escrowDiskSpace = value?.toString()
+            "escrow.additionalSources" -> row.escrowAdditionalSources = value?.toString()
+            "jira.projectKey" -> row.jiraProjectKey = value?.toString()
+            "jira.technical" -> row.jiraTechnical = value as? Boolean ?: value?.toString()?.toBooleanStrictOrNull()
+            "jira.majorVersionFormat" -> row.jiraMajorVersionFormat = value?.toString()
+            "jira.releaseVersionFormat" -> row.jiraReleaseVersionFormat = value?.toString()
+            "jira.buildVersionFormat" -> row.jiraBuildVersionFormat = value?.toString()
+            "jira.lineVersionFormat" -> row.jiraLineVersionFormat = value?.toString()
+            "jira.versionPrefix" -> row.jiraVersionPrefix = value?.toString()
+            "jira.versionFormat" -> row.jiraVersionFormat = value?.toString()
             else -> LOG.warn("Unknown scalar attribute path: '{}'", attrPath)
         }
     }
