@@ -1,0 +1,16 @@
+# DB-mode overlay for local stand.
+#
+# Layered on top of `dev,dev-vcs-local,dev-db-automigrate,local` to switch the
+# resolver default from git (V1 in-memory EscrowConfigurationLoader) to db
+# (schema-v2 DatabaseComponentRegistryResolver). Component-source routing per
+# `ComponentRoutingResolver` is per-component via `component_sources` table; this
+# property sets only the fallback for components without an explicit row. After
+# a successful `dev-db-automigrate` run, every imported component has a row with
+# `source='db'`, so the fallback effectively governs unmigrated components only.
+#
+# Keep `vcs.enabled` at its default (true): the candidate still needs the DSL
+# clone for `dev-db-automigrate` to import from. Setting `vcs.enabled=false`
+# activates `NoOpVcsServiceImpl` (`NoOpVcsServiceImpl.kt:12`) which makes the
+# clone a no-op — auto-migrate then has nothing to import.
+components-registry:
+  default-source: db
