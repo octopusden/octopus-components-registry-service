@@ -183,6 +183,9 @@ configure(subprojects) {
         // detekt + ktlint (Kotlin, blocking), CodeNarc (Groovy, report-only) — already covers
         // each language with native rule sets. Keeping SpotBugs would require ongoing exclude-filter
         // maintenance for marginal signal. See AGENTS.md Quality Gates section.
+        //
+        // We disable the *tasks* rather than apply-false the plugin: the SpotBugs plugin is owned
+        // by octopus-quality (shared convention), so opting out happens at the consumer side here.
         if (pluginManager.hasPlugin('com.github.spotbugs')) {
             tasks.matching { it.name.startsWith('spotbugs') }.configureEach { enabled = false }
         }
@@ -271,8 +274,7 @@ def writeQualityReportsIndex = {
                     [pattern: '**/build/reports/pmd/*.html', artifactPrefix: 'pmd'],
                     [pattern: '**/build/reports/codenarc/*.html', artifactPrefix: 'codenarc'],
                     [pattern: '**/build/reports/detekt/*.html', artifactPrefix: 'detekt'],
-                    [pattern: '**/build/reports/ktlint/*.html', artifactPrefix: 'ktlint'],
-                    [pattern: '**/build/reports/spotbugs/*.html', artifactPrefix: 'spotbugs']
+                    [pattern: '**/build/reports/ktlint/*.html', artifactPrefix: 'ktlint']
             ],
             'Coverage': [
                     [pattern: '**/build/reports/jacoco/*/html/index.html', artifactPrefix: 'jacoco'],

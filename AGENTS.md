@@ -96,7 +96,7 @@ All existing v1/v2/v3 endpoints (34 endpoints, 28 Feign client methods) must rem
 - Java checks (Checkstyle, PMD) are **blocking**.
 - Kotlin checks (detekt, ktlint) are **blocking** with module-level baselines.
 - Groovy CodeNarc is **report-only** — do not make blocking without explicit decision.
-- **SpotBugs intentionally disabled** in `build.gradle` (see `afterEvaluate { tasks.matching { spotbugs } }`). Bytecode-flow analysis gave high false-positive rate on Kotlin lateinit / DSL getter / test code; the per-language tools above already cover the same ground. Do not re-enable without an explicit policy decision.
+- **SpotBugs intentionally disabled** in `build.gradle` via `tasks.matching { it.name.startsWith('spotbugs') }.configureEach { enabled = false }` (the plugin itself stays applied because it's owned by the `octopus-quality` convention plugin). Bytecode-flow analysis gave high false-positive rate on Kotlin lateinit / DSL getter / test code; the per-language tools above already cover the same ground. Do not re-enable without an explicit policy decision.
 - JaCoCo coverage: per-module minimum 10%, overall weighted minimum 70%.
 
 ## CI Workflows
