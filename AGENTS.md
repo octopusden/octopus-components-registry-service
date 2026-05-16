@@ -135,7 +135,22 @@ What it does, per flag:
 |---|---|---|
 | `--restart` | code-only change (import / mapper / resolver) | port-scoped kill of the candidate JVM, respawn from `$CANDIDATE_WORKTREE` via `candidate.sh`, wait `/actuator/health` UP, run `:components-registry-compat-test:test`. DSL→DB automigrate re-runs through the new code on every restart. |
 | `--reset-db` | edit to `V1__schema.sql` | implies `--restart`, plus `docker compose down -v` so Flyway re-applies the schema from scratch before automigrate. |
+| `--allow-partial-migration` | targeted smoke knowingly excluding failed components | after restart, the gate parses the auto-migrate summary; without this flag, any `failed > 0` makes verify exit `4` (POLLUTED RUN). With it, the gate prints the warning + failed-component list but proceeds. Only use when your test filter skips the failed set. |
 | _(no flag)_ | re-read state | runs compat against the existing stands without touching them. |
+
+**Exit codes:** `0` clean / `2` baseline down or env missing / `3` candidate failed to come up / `4` polluted run / `*` gradle exit code from compat.
+
+**Polluted run — how to recognize one from the diff signature alone:**
+
+If you have a `summary.md` and don't know whether the run was polluted (e.g. you didn't see the verify banner):
+
+- `STATUS_CODE_DIFF` dominated by `200 → 500` (not `200 → 404`) — endpoints crash on missing-component refs.
+- `NULL_VS_EMPTY` on `GET /rest/api/3/components` for many distinct `componentId=` — those components weren't imported.
+- `VALUE_DIFF` count is small or zero while `STRUCTURAL_DIFF` and `STATUS_CODE_DIFF` are huge.
+
+This combination is the characteristic signature of a partially-migrated DB. **Do not classify these diffs as your cluster's regressions** without first ruling out the polluted-state hypothesis — re-run with `--restart` (which always invokes the migration health-check) or grep the candidate log for `Failed to migrate component '`. The no-flag path of `verify.sh` does NOT invoke the health-check (it has no fresh log to look at), so a polluted candidate started by an earlier `--restart` could keep serving stale state until the next restart-flagged run.
+
+**When `--reset-db` surfaces an upstream import regression:** if the gate exits `4` and the failed components are not in *your* cluster (B / C / D+E / F+G), the regression belongs to an earlier merged PR — file it separately, don't fold the fix into your cluster PR. To continue validating *your* cluster while the upstream fix is in flight, use `--allow-partial-migration` together with a smoke filter (`COMPAT_SMOKE_COMPONENTS=` or `--tests`) that excludes the failed components.
 
 **Env contract** (verify.sh fails fast with a clear message if any required var is missing when a restart-flag is used):
 

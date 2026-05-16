@@ -134,6 +134,19 @@ export LOCAL_VCS_ROOT="$HOME/your-registry-dsl-clone"
 ./scripts/local-stands/baseline.sh
 ```
 
+## Polluted-run guard
+
+`verify.sh --restart` (and `--reset-db`) parses the candidate log right after
+health-up for the auto-migrate summary line. If any component failed to import,
+it exits `4` with a `POLLUTED RUN` banner and the failed-component list — the
+following compat diffs would be dominated by `NULL_VS_EMPTY` / `200→500` noise
+on the missing components rather than real backward-compat regressions.
+
+Override with `--allow-partial-migration` only when you're running a targeted
+smoke that explicitly excludes the failed set (e.g. via `COMPAT_SMOKE_COMPONENTS=`
+or `--tests`). See `AGENTS.md` § "Compatibility Verification" for the cluster
+classification rule of thumb.
+
 ## Caveats
 
 - `baseline.sh` runs from a fat JAR. On first invocation it executes
