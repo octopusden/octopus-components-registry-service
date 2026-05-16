@@ -268,11 +268,16 @@ CREATE INDEX idx_required_tools_tool ON component_required_tools(tool_name);
 -- -----------------------------------------------------------------------------
 -- 1:N children of components (never per-version)
 -- -----------------------------------------------------------------------------
+-- `sort_order` preserves the DSL declaration order of the CSV-split artifact-id
+-- entries. ImportServiceImpl writes one row per CSV token with sort_order = index,
+-- so the V2 `/maven-artifacts` CSV reload matches V1's `artifactIdPattern` string
+-- byte-for-byte (V1 reads the raw DSL string, V2 reads sorted rows and re-joins).
 CREATE TABLE component_artifact_ids (
     id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     component_id      UUID NOT NULL REFERENCES components(id) ON DELETE CASCADE,
     group_pattern     TEXT NOT NULL,
-    artifact_pattern  TEXT NOT NULL
+    artifact_pattern  TEXT NOT NULL,
+    sort_order        INT NOT NULL DEFAULT 0
 );
 CREATE INDEX idx_artifact_ids_component        ON component_artifact_ids(component_id);
 CREATE INDEX idx_artifact_ids_group_artifact   ON component_artifact_ids(group_pattern, artifact_pattern);
