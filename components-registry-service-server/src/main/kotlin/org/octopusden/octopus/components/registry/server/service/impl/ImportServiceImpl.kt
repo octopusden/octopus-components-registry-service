@@ -131,22 +131,33 @@ class ImportServiceImpl(
 
                 // schema-spec §4.3: when this name is referenced as parentComponent by some
                 // other DSL entry AND its first config classifies as a FAKE aggregator, it is
-                // group-only — no ComponentEntity row, just a ComponentGroupEntity created by
-                // Pass 3 (handled below via the sub-component's own migration). Register the
-                // source so the migration-status totals stay balanced.
+                // group-only — no ComponentEntity row. Still upsert the ComponentGroupEntity
+                // and link any children that already exist in DB; otherwise an operator-driven
+                // single-component migration of the aggregator key would leave the group
+                // uncreated while marking source = "db".
                 val firstCfgForCheck = module.moduleConfigurations.firstOrNull()
-                val referencedAsParent =
-                    fullConfig.escrowModules.any { (otherKey, otherModule) ->
-                        otherKey != name &&
-                            otherModule.moduleConfigurations.firstOrNull()?.parentComponent == name
-                    }
-                if (firstCfgForCheck != null && referencedAsParent && isFakeAggregator(firstCfgForCheck)) {
+                val childrenReferencingThis: Map<String, String> =
+                    fullConfig.escrowModules.mapNotNull { (otherKey, otherModule) ->
+                        val parentRef = otherModule.moduleConfigurations.firstOrNull()?.parentComponent
+                        if (otherKey != name && parentRef == name) otherKey to name else null
+                    }.toMap()
+                if (firstCfgForCheck != null && childrenReferencingThis.isNotEmpty() && isFakeAggregator(firstCfgForCheck)) {
                     sourceRegistry.setComponentSource(name, "db")
+                    val fakePass3Failures = linkAggregatorGroups(fullConfig.escrowModules, childrenReferencingThis)
+                    if (fakePass3Failures.isNotEmpty()) {
+                        val msg = fakePass3Failures.joinToString(" | ") { "${it.first}=${it.second}" }
+                        return MigrationResult(
+                            componentName = name,
+                            success = false,
+                            dryRun = false,
+                            message = "§6.3 Pass 3 group-linking failed: ${msg.take(280)}",
+                        )
+                    }
                     return MigrationResult(
                         componentName = name,
                         success = true,
                         dryRun = false,
-                        message = "Skipped (FAKE aggregator: group-only per schema-spec §4.3)",
+                        message = "Skipped insert (FAKE aggregator: group-only per schema-spec §4.3); group upserted",
                     )
                 }
 
