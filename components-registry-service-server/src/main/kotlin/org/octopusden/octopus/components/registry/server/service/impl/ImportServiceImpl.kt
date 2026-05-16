@@ -129,6 +129,27 @@ class ImportServiceImpl(
                     )
                 }
 
+                // schema-spec §4.3: when this name is referenced as parentComponent by some
+                // other DSL entry AND its first config classifies as a FAKE aggregator, it is
+                // group-only — no ComponentEntity row, just a ComponentGroupEntity created by
+                // Pass 3 (handled below via the sub-component's own migration). Register the
+                // source so the migration-status totals stay balanced.
+                val firstCfgForCheck = module.moduleConfigurations.firstOrNull()
+                val referencedAsParent =
+                    fullConfig.escrowModules.any { (otherKey, otherModule) ->
+                        otherKey != name &&
+                            otherModule.moduleConfigurations.firstOrNull()?.parentComponent == name
+                    }
+                if (firstCfgForCheck != null && referencedAsParent && isFakeAggregator(firstCfgForCheck)) {
+                    sourceRegistry.setComponentSource(name, "db")
+                    return MigrationResult(
+                        componentName = name,
+                        success = true,
+                        dryRun = false,
+                        message = "Skipped (FAKE aggregator: group-only per schema-spec §4.3)",
+                    )
+                }
+
                 importModule(name, module.moduleConfigurations)
                 sourceRegistry.setComponentSource(name, "db")
 
@@ -177,7 +198,28 @@ class ImportServiceImpl(
 
         // §6.2 Two-pass component import
         LOG.info("§6.2 Two-pass component import for {} modules", allModules.size)
-        val pendingParentByKey = mutableMapOf<String, String>() // childKey → parentKey
+
+        // Pre-compute parentComponent references from DSL up front, independent of Pass 1's
+        // insert/skip decisions. This keeps Passes 2 and 3 idempotent on re-runs: even when
+        // a component is already in the DB and Pass 1 skips it, its parent FK and aggregator-
+        // group membership are still resolved against the current DSL.
+        val pendingParentByKey: Map<String, String> =
+            allModules.mapNotNull { (componentKey, escrowModule) ->
+                val firstConfig = escrowModule.moduleConfigurations.firstOrNull() ?: return@mapNotNull null
+                firstConfig.parentComponent?.takeIf { it.isNotBlank() }?.let { parentKey ->
+                    componentKey to parentKey
+                }
+            }.toMap()
+
+        // schema-spec §4.3: FAKE aggregators are group-only — no ComponentEntity row. Detect
+        // which keys in `allModules` are referenced as parentComponent AND classify as FAKE,
+        // and skip them in Pass 1. Pass 3 still creates their ComponentGroupEntity.
+        val fakeAggregatorKeys: Set<String> =
+            pendingParentByKey.values.toSet().filter { parentKey ->
+                val firstConfig = allModules[parentKey]?.moduleConfigurations?.firstOrNull()
+                firstConfig != null && isFakeAggregator(firstConfig)
+            }.toSet()
+
         var total = 0
         var migrated = 0
         var failed = 0
@@ -188,6 +230,24 @@ class ImportServiceImpl(
         for ((componentKey, escrowModule) in allModules) {
             total++
             try {
+                if (componentKey in fakeAggregatorKeys) {
+                    // Register FAKE aggregator as "db"-sourced even though it has no
+                    // ComponentEntity row — Pass 3 still owns its ComponentGroupEntity,
+                    // and the source flag keeps `getMigrationStatus` totals balanced
+                    // (total == db) so the orchestrator does not retry this component.
+                    sourceRegistry.setComponentSource(componentKey, "db")
+                    skipped++
+                    results.add(
+                        MigrationResult(
+                            componentName = componentKey,
+                            success = true,
+                            dryRun = false,
+                            message = "Skipped (FAKE aggregator: group-only per schema-spec §4.3)",
+                        ),
+                    )
+                    continue
+                }
+
                 val existing = componentRepository.findByComponentKey(componentKey)
                 if (existing != null) {
                     skipped++
@@ -215,12 +275,6 @@ class ImportServiceImpl(
                         ),
                     )
                     continue
-                }
-
-                // Collect parentComponent reference from first config
-                val firstConfig = configs.first()
-                firstConfig.parentComponent?.takeIf { it.isNotBlank() }?.let { parentKey ->
-                    pendingParentByKey[componentKey] = parentKey
                 }
 
                 importModule(componentKey, configs)

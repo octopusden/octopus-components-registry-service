@@ -455,6 +455,14 @@ class MigrationIntegrationTest {
         assertNotNull(fakeGroup, "ComponentGroupEntity with groupKey='TEST_AGGREGATOR_FAKE' must be created by Pass 3")
         assertTrue(fakeGroup!!.isFake, "TEST_AGGREGATOR_FAKE group must have isFake=true (artifactId contains 'stub')")
 
+        // schema-spec invariant: FAKE aggregators are represented ONLY as a ComponentGroupEntity
+        // row; there must be no corresponding ComponentEntity. Guards against a regression where
+        // a FAKE aggregator slips through Pass 1 and lands as a real component row.
+        assertNull(
+            componentRepository.findByComponentKey("TEST_AGGREGATOR_FAKE"),
+            "TEST_AGGREGATOR_FAKE must NOT have a ComponentEntity row — FAKE aggregators are group-only",
+        )
+
         // The member sub-component must have its component_group_id set
         val member = componentRepository.findByComponentKey("TEST_AGGREGATOR_MEMBER")
         assertNotNull(member, "TEST_AGGREGATOR_MEMBER must be present in the DB after migration")
