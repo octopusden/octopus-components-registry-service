@@ -93,6 +93,10 @@ abstract class CompatibilityTestBase {
      * [queryParams] threads through to every emitted [DiffRecord] so that cases
      * differing only in query parameters (e.g. `?ignore-required=true` vs `false`)
      * produce distinguishable records in `summary.md` and in known-delta matching.
+     *
+     * Implementation lives in [Comparators.compareRaw] so the semantics are
+     * unit-testable without the HTTP/Spring scaffolding this base class needs
+     * at runtime — see `ComparatorLogicTest`.
      */
     protected fun compareRaw(
         endpoint: String,
@@ -101,104 +105,14 @@ abstract class CompatibilityTestBase {
         candidate: RawResponse,
         headerAllowList: Set<String> = setOf("Content-Type"),
         queryParams: Map<String, String> = emptyMap(),
-    ): List<DiffClassifier> {
-        val categories = mutableListOf<DiffClassifier>()
-        val ts = Instant.now().toString()
-
-        // status=0 is reserved by [RawHttpClient] for transport failures (timeout,
-        // connection-refused, DNS, etc.). If both sides degrade to 0 the bare
-        // `baseline.status != candidate.status` check passes silently and the run
-        // looks clean — record a fail-causing diff whenever EITHER side is 0, even
-        // if both are.
-        val baselineTransportFailed = baseline.status == 0
-        val candidateTransportFailed = candidate.status == 0
-        if (baselineTransportFailed || candidateTransportFailed) {
-            categories += DiffClassifier.STATUS_CODE_DIFF
-            DiffCollector.record(
-                DiffRecord(
-                    ts = ts,
-                    endpoint = endpoint,
-                    pathParams = pathParams,
-                    queryParams = queryParams,
-                    category = DiffClassifier.STATUS_CODE_DIFF,
-                    layer = "raw",
-                    baselineValue = baseline.status.toString(),
-                    candidateValue = candidate.status.toString(),
-                    message = "transport failure on " + listOfNotNull(
-                        "baseline".takeIf { baselineTransportFailed },
-                        "candidate".takeIf { candidateTransportFailed },
-                    ).joinToString(" and "),
-                ),
-            )
-        } else if (baseline.status != candidate.status) {
-            categories += DiffClassifier.STATUS_CODE_DIFF
-            DiffCollector.record(
-                DiffRecord(
-                    ts = ts,
-                    endpoint = endpoint,
-                    pathParams = pathParams,
-                    queryParams = queryParams,
-                    category = DiffClassifier.STATUS_CODE_DIFF,
-                    layer = "raw",
-                    baselineValue = baseline.status.toString(),
-                    candidateValue = candidate.status.toString(),
-                ),
-            )
-        }
-
-        val baselineHeaders = baseline.stableHeaders(headerAllowList)
-        val candidateHeaders = candidate.stableHeaders(headerAllowList)
-        for (key in (baselineHeaders.keys + candidateHeaders.keys).distinctBy { it.lowercase() }) {
-            val bv = baselineHeaders[key]
-            val cv = candidateHeaders[key]
-            if (bv != cv) {
-                categories += DiffClassifier.HEADER_DIFF
-                DiffCollector.record(
-                    DiffRecord(
-                        ts = ts,
-                        endpoint = endpoint,
-                        pathParams = pathParams,
-                        queryParams = queryParams,
-                        category = DiffClassifier.HEADER_DIFF,
-                        layer = "raw",
-                        baselineValue = bv,
-                        candidateValue = cv,
-                        message = "header=$key",
-                    ),
-                )
-            }
-        }
-
-        // Skip shape diffing if status codes already diverged or no JSON
-        if (baseline.status == candidate.status && baseline.json != null && candidate.json != null) {
-            // For Set-shape endpoints (`/jira-component-version-ranges`, `/v3/components`)
-            // the wire-order of elements is non-deterministic across stands. Pre-sort
-            // both sides by a stable per-endpoint key so JsonShape.diff doesn't report
-            // positional false-positives. Pass-through for unregistered endpoints
-            // (see RawArraySorters and its unit test for the registered list + contract).
-            val baselineForShape = RawArraySorters.stableSorted(endpoint, baseline.json)
-            val candidateForShape = RawArraySorters.stableSorted(endpoint, candidate.json)
-            val shapeDiffs = JsonShape.diff(baselineForShape, candidateForShape)
-            for (sd in shapeDiffs) {
-                categories += DiffClassifier.STRUCTURAL_DIFF
-                DiffCollector.record(
-                    DiffRecord(
-                        ts = ts,
-                        endpoint = endpoint,
-                        pathParams = pathParams,
-                        queryParams = queryParams,
-                        category = DiffClassifier.STRUCTURAL_DIFF,
-                        layer = "raw",
-                        baselineValue = sd.baseline,
-                        candidateValue = sd.candidate,
-                        message = "${sd.kind} at ${sd.path}",
-                    ),
-                )
-            }
-        }
-
-        return categories
-    }
+    ): List<DiffClassifier> = Comparators.compareRaw(
+        endpoint = endpoint,
+        pathParams = pathParams,
+        baseline = baseline,
+        candidate = candidate,
+        headerAllowList = headerAllowList,
+        queryParams = queryParams,
+    )
 
     /**
      * Run [block] under the parallel-request limiter.
