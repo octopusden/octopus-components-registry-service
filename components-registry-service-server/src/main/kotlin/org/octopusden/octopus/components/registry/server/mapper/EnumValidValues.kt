@@ -17,16 +17,12 @@ internal val BUILD_SYSTEM_NAMES: Set<String> =
         .map { it.name }
         .toSet()
 
-// The resolver reads `escrow.generation` via
-// `org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode.valueOf`
-// (silent-null catch). The set below is computed from the sibling
-// `core.dto.EscrowGenerationMode` whose members are kept in lockstep with the
-// `api.enums` variant — if either enum is ever extended out-of-band, this set
-// would diverge and either reject valid values or accept invalid ones; keep
-// the two enums identical, OR replace this set with a derivation from the
-// `api.enums` variant directly.
+// Derive from the SAME enum the resolver uses (`api.enums.EscrowGenerationMode.valueOf`,
+// silent-null catch — see `EntityMappers.toEscrowApi`). Using the sibling `core.dto`
+// variant would introduce dual-enum drift risk: if either enum gains a member
+// out-of-band, the validator and the resolver would disagree.
 internal val ESCROW_GENERATION_MODE_NAMES: Set<String> =
-    org.octopusden.octopus.components.registry.core.dto.EscrowGenerationMode
+    org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
         .values()
         .map { it.name }
         .toSet()
