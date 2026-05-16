@@ -281,7 +281,15 @@ class DatabaseComponentRegistryResolver(
         // writes one row per CSV token with `sortOrder = index in DSL list`. All rows
         // share the same `groupPattern` (per-component groupId), so `first().groupPattern`
         // is stable by construction — any row picks the same group.
-        val artifactIdRows = componentEntity.artifactIds.sortedBy { it.sortOrder }
+        //
+        // Secondary sort by `artifactPattern` gives a deterministic outcome when
+        // multiple rows share the same `sortOrder` (legacy data written before this
+        // column existed, or a future write path that omits the position). Kotlin's
+        // `sortedWith` is stable; the secondary key takes effect only on ties.
+        val artifactIdRows =
+            componentEntity.artifactIds.sortedWith(
+                compareBy({ it.sortOrder }, { it.artifactPattern }),
+            )
         val componentLevelFallback =
             if (artifactIdRows.isEmpty()) {
                 null
