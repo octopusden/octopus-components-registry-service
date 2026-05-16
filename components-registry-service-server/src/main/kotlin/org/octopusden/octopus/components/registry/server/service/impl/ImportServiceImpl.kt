@@ -1853,19 +1853,29 @@ class ImportServiceImpl(
  * Extracted from `ImportServiceImpl` as a top-level `internal fun` so it can be unit-tested
  * directly without spinning up a Spring context.
  *
- * Key shape preserves the pre-extraction behaviour: `<beanType>:<version>` (plus `:<edition>`
- * for `OracleDatabaseToolBean`). The discriminator-shape audit and any field additions are
- * tracked separately by their own test+fix pairs.
+ * Key shape: `<beanType>:<settingsProperty>:<version>` (plus `:<edition>` for
+ * `OracleDatabaseToolBean`). `settingsProperty` is part of the discriminator because two
+ * beans of the same type/version that differ only in `settingsProperty` are semantically
+ * distinct — without it, `emitMarkerOverrides` silently drops the override and the base
+ * `settingsProperty` bleeds into the override range. `edition` is meaningful only for
+ * Oracle (always null for the others).
  */
 internal fun buildBuildToolKeys(tools: Collection<BuildTool>?): Set<String> =
     tools?.mapNotNull { tool ->
         when (tool) {
-            is OracleDatabaseToolBean -> "oracleDatabase:${tool.version}:${tool.edition?.name}"
-            is PTCProductToolBean -> "cProduct:${tool.version}"
-            is PTKProductToolBean -> "kProduct:${tool.version}"
-            is PTDProductToolBean -> "dProduct:${tool.version}"
-            is PTDDbProductToolBean -> "dDbProduct:${tool.version}"
-            is OdbcToolBean -> "odbc:${tool.version}"
+            is OracleDatabaseToolBean ->
+                "oracleDatabase:${tool.getSettingsProperty()}:${tool.version}:${tool.edition?.name}"
+            is PTCProductToolBean ->
+                "cProduct:${tool.getSettingsProperty()}:${tool.version}"
+            is PTKProductToolBean ->
+                "kProduct:${tool.getSettingsProperty()}:${tool.version}"
+            is PTDProductToolBean ->
+                "dProduct:${tool.getSettingsProperty()}:${tool.version}"
+            is PTDDbProductToolBean ->
+                "dDbProduct:${tool.getSettingsProperty()}:${tool.version}"
+            is OdbcToolBean ->
+                // OdbcToolBean has no settingsProperty — `<version>` is the only distinguishing field.
+                "odbc:${tool.version}"
             else -> null
         }
     }?.toSet() ?: emptySet()
