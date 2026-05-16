@@ -4,6 +4,7 @@ import jakarta.persistence.OptimisticLockException
 import org.octopusden.octopus.components.registry.core.exceptions.ComponentNameConflictException
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.server.dto.v4.BaseConfigurationRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.BuildToolBeanRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentCreateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentDetailResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentFilter
@@ -25,6 +26,7 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentDocLink
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentGroupEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentLabelEntity
+import org.octopusden.octopus.components.registry.server.entity.ComponentBuildToolBeanEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentRequiredToolEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentSystemEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentTeamcityProjectEntity
@@ -39,6 +41,7 @@ import org.octopusden.octopus.components.registry.server.entity.ToolEntity
 import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
 import org.octopusden.octopus.components.registry.server.event.AuditEvent
 import org.octopusden.octopus.components.registry.server.mapper.ALL_VERSIONS
+import org.octopusden.octopus.components.registry.server.mapper.BEAN_TYPE_NAMES
 import org.octopusden.octopus.components.registry.server.mapper.BUILD_SYSTEM_NAMES
 import org.octopusden.octopus.components.registry.server.mapper.ESCROW_GENERATION_MODE_NAMES
 import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
@@ -50,6 +53,7 @@ import org.octopusden.octopus.components.registry.server.mapper.applyScalarValue
 import org.octopusden.octopus.components.registry.server.mapper.toDetailResponse
 import org.octopusden.octopus.components.registry.server.mapper.toFieldOverrideResponse
 import org.octopusden.octopus.components.registry.server.mapper.toSummaryResponse
+import org.octopusden.octopus.components.registry.server.repository.ComponentBuildToolBeanRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentGroupRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentLabelRepository
@@ -91,6 +95,7 @@ class ComponentManagementServiceImpl(
     private val componentLabelRepository: ComponentLabelRepository,
     private val componentSystemRepository: ComponentSystemRepository,
     private val componentRequiredToolRepository: ComponentRequiredToolRepository,
+    private val componentBuildToolBeanRepository: ComponentBuildToolBeanRepository,
     private val labelRepository: LabelRepository,
     private val systemRepository: SystemRepository,
     private val toolRepository: ToolRepository,
@@ -838,6 +843,7 @@ class ComponentManagementServiceImpl(
         request.fileUrlArtifacts?.let { replaceFileUrlArtifacts(config, it) }
         request.dockerImages?.let { replaceDockerImages(config, it) }
         request.packages?.let { replacePackages(config, it) }
+        request.buildToolBeans?.let { validateBuildToolBeans(it); replaceBuildToolBeans(config, it) }
         // requiredTools is a non-cascaded M:N junction — caller syncs via syncRequiredTools
         // after the configuration row's id has been assigned (post parent flush).
     }
@@ -891,6 +897,7 @@ class ComponentManagementServiceImpl(
         patch.fileUrlArtifacts?.let { replaceFileUrlArtifacts(config, it) }
         patch.dockerImages?.let { replaceDockerImages(config, it) }
         patch.packages?.let { replacePackages(config, it) }
+        patch.buildToolBeans?.let { validateBuildToolBeans(it); replaceBuildToolBeans(config, it) }
         // requiredTools: caller syncs via syncRequiredTools after flush — see updateComponent.
     }
 
@@ -992,6 +999,37 @@ class ComponentManagementServiceImpl(
         }
     }
 
+    private fun replaceBuildToolBeans(
+        config: ComponentConfigurationEntity,
+        beans: List<BuildToolBeanRequest>,
+    ) {
+        config.buildToolBeans.clear()
+        beans.forEachIndexed { index, req ->
+            config.buildToolBeans.add(
+                ComponentBuildToolBeanEntity(
+                    componentConfiguration = config,
+                    beanType = req.beanType,
+                    toolType = req.toolType,
+                    settingsProperty = req.settingsProperty,
+                    versionPattern = req.versionPattern,
+                    edition = req.edition,
+                    sortOrder = index,
+                ),
+            )
+        }
+    }
+
+    private fun validateBuildToolBeans(beans: List<BuildToolBeanRequest>) {
+        beans.forEach { bean ->
+            require(bean.beanType in BEAN_TYPE_NAMES) {
+                "Invalid beanType '${bean.beanType}'; must be one of $BEAN_TYPE_NAMES"
+            }
+            require(bean.edition == null || bean.beanType == "oracleDatabase") {
+                "Field 'edition' is only valid for beanType 'oracleDatabase'; got beanType='${bean.beanType}'"
+            }
+        }
+    }
+
     /**
      * Apply a marker children payload to a marker row. Validates that the
      * payload's populated list matches the marker name on the row AND that no
@@ -1042,6 +1080,12 @@ class ComponentManagementServiceImpl(
                 requireNotNull(payload.requiredTools) { "Marker '$markerName' requires requiredTools payload" }
                 payload.requiredTools
             }
+            MarkerAttributes.BUILD_TOOLS -> {
+                val beans = requireNotNull(payload.buildToolBeans) { "Marker '$markerName' requires buildToolBeans payload" }
+                validateBuildToolBeans(beans)
+                replaceBuildToolBeans(row, beans)
+                null
+            }
             else -> error("Unknown marker '$markerName' — caller did not validate")
         }
     }
@@ -1064,6 +1108,7 @@ class ComponentManagementServiceImpl(
                 if (payload.dockerImages != null) add("dockerImages")
                 if (payload.packages != null) add("packages")
                 if (payload.requiredTools != null) add("requiredTools")
+                if (payload.buildToolBeans != null) add("buildToolBeans")
             }
         val expected =
             when (markerName) {
@@ -1073,6 +1118,7 @@ class ComponentManagementServiceImpl(
                 MarkerAttributes.DISTRIBUTION_DOCKER -> "dockerImages"
                 MarkerAttributes.DISTRIBUTION_PACKAGES -> "packages"
                 MarkerAttributes.BUILD_REQUIRED_TOOLS -> "requiredTools"
+                MarkerAttributes.BUILD_TOOLS -> "buildToolBeans"
                 else -> error("Unknown marker '$markerName' — caller did not validate")
             }
         val extras = populated.filter { it != expected }

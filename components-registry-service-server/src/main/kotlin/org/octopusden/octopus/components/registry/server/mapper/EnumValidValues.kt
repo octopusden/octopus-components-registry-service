@@ -47,3 +47,11 @@ internal val PRODUCT_TYPE_NAMES: Set<String> =
  * this set in lockstep.
  */
 internal val PACKAGE_TYPE_NAMES: Set<String> = setOf("DEB", "RPM")
+
+/**
+ * Hand-listed: valid `beanType` values for `component_build_tool_beans`.
+ * Matches the DB CHECK constraint in `V1__schema.sql`. Update both the
+ * constraint and this set whenever a new bean type is introduced.
+ */
+internal val BEAN_TYPE_NAMES: Set<String> =
+    setOf("oracleDatabase", "cProduct", "kProduct", "dProduct", "dDbProduct", "odbc")

@@ -42,6 +42,7 @@ data class ComponentConfigurationResponse(
     val dockerImages: List<DockerImageResponse> = emptyList(),
     val packages: List<PackageResponse> = emptyList(),
     val requiredTools: List<String> = emptyList(),
+    val buildToolBeans: List<BuildToolBeanResponse> = emptyList(),
 )
 
 enum class ConfigurationRowType {
@@ -162,6 +163,7 @@ data class BaseConfigurationRequest(
     val dockerImages: List<DockerImageRequest>? = null,
     val packages: List<PackageRequest>? = null,
     val requiredTools: List<String>? = null,
+    val buildToolBeans: List<BuildToolBeanRequest>? = null,
 )
 
 data class BuildAspectRequest(
@@ -231,6 +233,34 @@ data class DockerImageRequest(
 data class PackageRequest(
     val packageType: String,
     val packageName: String,
+)
+
+/**
+ * Request DTO for one build-tool bean in a `build.buildTools` marker or BASE
+ * row payload. `edition` is valid only for `beanType = "oracleDatabase"`.
+ * Valid `beanType` values: `oracleDatabase`, `cProduct`, `kProduct`, `dProduct`,
+ * `dDbProduct`, `odbc`.
+ */
+data class BuildToolBeanRequest(
+    val beanType: String,
+    val toolType: String? = null,
+    val settingsProperty: String? = null,
+    val versionPattern: String? = null,
+    val edition: String? = null,
+)
+
+/**
+ * Response DTO for one persisted build-tool bean row. Includes `id` and
+ * `sortOrder` for client-side row-level operations (mirrors `MavenArtifactResponse`).
+ */
+data class BuildToolBeanResponse(
+    val id: UUID,
+    val beanType: String,
+    val toolType: String? = null,
+    val settingsProperty: String? = null,
+    val versionPattern: String? = null,
+    val edition: String? = null,
+    val sortOrder: Int,
 )
 
 // ----------------------------------------------------------------------------

@@ -2,7 +2,15 @@
 
 package org.octopusden.octopus.components.registry.server.service.impl
 
+import org.octopusden.octopus.components.registry.api.beans.OdbcToolBean
+import org.octopusden.octopus.components.registry.api.beans.OracleDatabaseToolBean
+import org.octopusden.octopus.components.registry.api.beans.PTCProductToolBean
+import org.octopusden.octopus.components.registry.api.beans.PTDDbProductToolBean
+import org.octopusden.octopus.components.registry.api.beans.PTDProductToolBean
+import org.octopusden.octopus.components.registry.api.beans.PTKProductToolBean
+import org.octopusden.octopus.components.registry.api.build.tools.BuildTool
 import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactIdEntity
+import org.octopusden.octopus.components.registry.server.entity.ComponentBuildToolBeanEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentDocLinkEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
@@ -23,6 +31,7 @@ import org.octopusden.octopus.components.registry.server.entity.ToolEntity
 import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
 import org.octopusden.octopus.components.registry.server.mapper.ALL_VERSIONS
 import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
+import org.octopusden.octopus.components.registry.server.repository.ComponentBuildToolBeanRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentGroupRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentLabelRepository
@@ -91,6 +100,7 @@ class ImportServiceImpl(
     private val componentLabelRepository: ComponentLabelRepository,
     private val componentSystemRepository: ComponentSystemRepository,
     private val componentRequiredToolRepository: ComponentRequiredToolRepository,
+    private val componentBuildToolBeanRepository: ComponentBuildToolBeanRepository,
 ) : ImportService {
 
     // =========================================================================
@@ -802,6 +812,10 @@ class ImportServiceImpl(
         if (baseTools.isNotEmpty()) {
             attachRequiredTools(savedBase, baseTools)
         }
+        val baseBuildTools = baseConfig.buildConfiguration?.buildTools?.toList() ?: emptyList()
+        if (baseBuildTools.isNotEmpty()) {
+            attachBuildToolBeans(savedBase, baseBuildTools)
+        }
 
         // For synthetic-base components, the base row's versionRange is the
         // DSL's first range (e.g. `(,1.0.107)` for TEST_COMPONENT3) and
@@ -1191,6 +1205,17 @@ class ImportServiceImpl(
                 attachRequiredTools(row, override.buildConfiguration?.tools)
             }?.let { saved += it }
         }
+
+        // Build-tool beans override — emit a marker row when the override's buildTools
+        // differ from the base's buildTools (comparing by serialised beanType+version pairs).
+        val baseBuildToolKeys = buildToolKeys(base.buildConfiguration?.buildTools)
+        val overBuildToolKeys = buildToolKeys(override.buildConfiguration?.buildTools)
+        if (overBuildToolKeys.isNotEmpty() && baseBuildToolKeys != overBuildToolKeys) {
+            saveMarkerRowWithChildren(component, versionRange, MarkerAttributes.BUILD_TOOLS) { row ->
+                attachBuildToolBeans(row, override.buildConfiguration?.buildTools?.toList() ?: emptyList())
+            }?.let { saved += it }
+        }
+
         return saved
     }
 
@@ -1403,6 +1428,69 @@ class ImportServiceImpl(
             componentRequiredToolRepository.save(junction)
         }
     }
+
+    /**
+     * Persist `buildTools` as `ComponentBuildToolBeanEntity` rows attached to [row].
+     *
+     * Unknown `BuildTool` subtypes (forward-compat) are skipped with a WARN.
+     * Rows are assigned `sortOrder` from their index in the list so that the
+     * original DSL order is preserved on retrieval.
+     */
+    private fun attachBuildToolBeans(
+        row: ComponentConfigurationEntity,
+        buildTools: List<BuildTool>,
+    ) {
+        buildTools.forEachIndexed { index, tool ->
+            val (beanType, toolType, settingsProperty, versionPattern, edition) = when (tool) {
+                is OracleDatabaseToolBean ->
+                    BeanFields(
+                        "oracleDatabase",
+                        "ORACLE",
+                        tool.settingsProperty,
+                        tool.version,
+                        tool.edition?.name,
+                    )
+                is PTCProductToolBean ->
+                    BeanFields("cProduct", null, tool.settingsProperty, tool.version, null)
+                is PTKProductToolBean ->
+                    BeanFields("kProduct", null, tool.settingsProperty, tool.version, null)
+                is PTDProductToolBean ->
+                    BeanFields("dProduct", null, tool.settingsProperty, tool.version, null)
+                is PTDDbProductToolBean ->
+                    BeanFields("dDbProduct", null, tool.settingsProperty, tool.version, null)
+                is OdbcToolBean ->
+                    BeanFields("odbc", null, null, tool.version, null)
+                else -> {
+                    LOG.warn("attachBuildToolBeans: unknown BuildTool type {}; skipping", tool::class.simpleName)
+                    null
+                }
+            } ?: return@forEachIndexed
+
+            val entity = ComponentBuildToolBeanEntity(
+                componentConfiguration = row,
+                beanType = beanType,
+                toolType = toolType,
+                settingsProperty = settingsProperty,
+                versionPattern = versionPattern,
+                edition = edition,
+                sortOrder = index,
+            )
+            componentBuildToolBeanRepository.save(entity)
+        }
+    }
+
+    /** Stable key set used to diff build-tool lists across base and override configs. */
+    private fun buildToolKeys(tools: Collection<BuildTool>?): Set<String> =
+        buildBuildToolKeys(tools)
+
+    /** Scratch holder for `attachBuildToolBeans` destructuring. */
+    private data class BeanFields(
+        val beanType: String,
+        val toolType: String?,
+        val settingsProperty: String?,
+        val versionPattern: String?,
+        val edition: String?,
+    )
 
     // =========================================================================
     // Diff helpers
@@ -1752,3 +1840,35 @@ class ImportServiceImpl(
         private val FAKE_ARTIFACT_ID_TOKEN: Regex = Regex("(^|-)(fake|dummy|stub)(-|$|,)")
     }
 }
+
+/**
+ * Stable per-bean key set used to diff build-tool lists across base and override configs.
+ * Extracted from `ImportServiceImpl` as a top-level `internal fun` so it can be unit-tested
+ * directly without spinning up a Spring context.
+ *
+ * Key shape: `<beanType>:<settingsProperty>:<version>` (plus `:<edition>` for
+ * `OracleDatabaseToolBean`). `settingsProperty` is part of the discriminator because two
+ * beans of the same type/version that differ only in `settingsProperty` are semantically
+ * distinct — without it, `emitMarkerOverrides` silently drops the override and the base
+ * `settingsProperty` bleeds into the override range. `edition` is meaningful only for
+ * Oracle (always null for the others).
+ */
+internal fun buildBuildToolKeys(tools: Collection<BuildTool>?): Set<String> =
+    tools?.mapNotNull { tool ->
+        when (tool) {
+            is OracleDatabaseToolBean ->
+                "oracleDatabase:${tool.getSettingsProperty()}:${tool.version}:${tool.edition?.name}"
+            is PTCProductToolBean ->
+                "cProduct:${tool.getSettingsProperty()}:${tool.version}"
+            is PTKProductToolBean ->
+                "kProduct:${tool.getSettingsProperty()}:${tool.version}"
+            is PTDProductToolBean ->
+                "dProduct:${tool.getSettingsProperty()}:${tool.version}"
+            is PTDDbProductToolBean ->
+                "dDbProduct:${tool.getSettingsProperty()}:${tool.version}"
+            is OdbcToolBean ->
+                // OdbcToolBean has no settingsProperty — `<version>` is the only distinguishing field.
+                "odbc:${tool.version}"
+            else -> null
+        }
+    }?.toSet() ?: emptySet()

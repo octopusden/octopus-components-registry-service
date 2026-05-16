@@ -72,6 +72,7 @@ data class FieldOverrideResponse(
  *  - `distribution.docker` → `dockerImages`
  *  - `distribution.packages` → `packages`
  *  - `build.requiredTools` → `requiredTools` (list of tool names)
+ *  - `build.buildTools` → `buildToolBeans` (structured DB tool beans)
  */
 data class MarkerChildrenPayload(
     val vcsEntries: List<VcsEntryRequest>? = null,
@@ -80,4 +81,5 @@ data class MarkerChildrenPayload(
     val dockerImages: List<DockerImageRequest>? = null,
     val packages: List<PackageRequest>? = null,
     val requiredTools: List<String>? = null,
+    val buildToolBeans: List<BuildToolBeanRequest>? = null,
 )
