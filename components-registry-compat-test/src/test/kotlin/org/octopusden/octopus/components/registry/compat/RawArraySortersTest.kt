@@ -38,10 +38,17 @@ class RawArraySortersTest {
         return obj
     }
 
-    private fun v3Entry(componentId: String): JsonNode {
+    /**
+     * Mirrors the wire shape of `ComponentV3`:
+     *   { "component": { "id", "name", ... }, "variants": { ... } }
+     * `name` is optional in the wire response — use it as the structural-shape
+     * variable so tests can demonstrate that alignment actually happened.
+     */
+    private fun v3Entry(componentId: String, name: String? = null): JsonNode {
         val obj = factory.objectNode()
         val component = factory.objectNode()
         component.put("id", componentId)
+        if (name != null) component.put("name", name)
         obj.set<JsonNode>("component", component)
         obj.set<JsonNode>("variants", factory.objectNode())
         return obj
@@ -78,24 +85,28 @@ class RawArraySortersTest {
 
     @Test
     @DisplayName(
-        "regression guard: entries sharing versionRange but distinct componentName MUST sort deterministically " +
-            "(would FAIL if the key reached for a non-existent `component.id` field)",
+        "regression guard: heterogeneous-shape entries (one with displayName, one without) " +
+            "produce zero diffs ONLY after key-correct sort — no-op or wrong-key sorter would surface KEY_MISSING",
     )
-    fun jiraComponentVersionRanges_distinctComponentNameSameRange_zeroShapeDiffs() {
+    fun jiraComponentVersionRanges_heterogeneousShape_zeroDiffsOnlyAfterAlignment() {
         val endpoint = "GET /rest/api/2/common/jira-component-version-ranges"
 
-        // Both entries share the same versionRange. The composite key must use `componentName`
-        // (the TOP-LEVEL field on JiraComponentVersionRangeDTO) to differentiate them.
-        // An earlier draft of this PR keyed on `component.id`, which does not exist on the
-        // DTO — the key collapsed to "" + sep + versionRange and identical-range entries
-        // stayed in input order. That would re-introduce positional drift between stands.
-        // This test would FAIL under that buggy key shape; it must stay GREEN.
+        // alpha-fixture carries `component.displayName`; beta-fixture does NOT.
+        // The two stands ship the same set in OPPOSITE wire-order. JsonShape.diff
+        // is positional, so without alignment:
+        //   baseline[0] (alpha, with displayName) vs candidate[0] (beta, no displayName)
+        //   → KEY_MISSING_CANDIDATE on $[0].component.displayName
+        //   → KEY_MISSING_BASELINE  on $[1].component.displayName
+        // After alignment by `componentName`, both arrays land [alpha, beta] and
+        // every position matches. This test would FAIL under a no-op sorter or
+        // under the earlier-buggy `component.id` key (which collapses to "" so
+        // stable sort preserves input order).
         val baseline = factory.arrayNode().apply {
             add(rangeEntry("alpha-fixture", "[1.0,)", displayName = "Alpha A"))
-            add(rangeEntry("beta-fixture", "[1.0,)", displayName = "Beta A"))
+            add(rangeEntry("beta-fixture", "[1.0,)"))
         }
         val candidate = factory.arrayNode().apply {
-            add(rangeEntry("beta-fixture", "[1.0,)", displayName = "Beta A"))
+            add(rangeEntry("beta-fixture", "[1.0,)"))
             add(rangeEntry("alpha-fixture", "[1.0,)", displayName = "Alpha A"))
         }
 
@@ -105,31 +116,63 @@ class RawArraySortersTest {
         val diffs = JsonShape.diff(baselineSorted, candidateSorted)
         assertTrue(
             diffs.isEmpty(),
-            "componentName must differentiate entries sharing the same versionRange; got diffs: $diffs",
+            "expected zero diffs after alignment by componentName; got: $diffs",
         )
     }
 
     @Test
     @DisplayName(
-        "registered v3 components endpoint with reordered entries produces zero structural diffs after sort",
+        "per-project jira-component-version-ranges is normalized through the same composite-key sorter",
     )
-    fun v3Components_sameElementsDifferentOrder_zeroShapeDiffs() {
-        val endpoint = "GET /rest/api/3/components"
+    fun jiraComponentVersionRanges_perProject_heterogeneousShape_zeroDiffsAfterAlignment() {
+        val endpoint = "GET /rest/api/2/projects/{projectKey}/jira-component-version-ranges"
 
         val baseline = factory.arrayNode().apply {
-            add(v3Entry("alpha-fixture"))
-            add(v3Entry("beta-fixture"))
+            add(rangeEntry("alpha-fixture", "[1.0,)", displayName = "Alpha A"))
+            add(rangeEntry("beta-fixture", "[1.0,)"))
         }
         val candidate = factory.arrayNode().apply {
-            add(v3Entry("beta-fixture"))
-            add(v3Entry("alpha-fixture"))
+            add(rangeEntry("beta-fixture", "[1.0,)"))
+            add(rangeEntry("alpha-fixture", "[1.0,)", displayName = "Alpha A"))
         }
 
         val baselineSorted = RawArraySorters.stableSorted(endpoint, baseline)
         val candidateSorted = RawArraySorters.stableSorted(endpoint, candidate)
 
         val diffs = JsonShape.diff(baselineSorted, candidateSorted)
-        assertTrue(diffs.isEmpty(), "expected zero diffs, got: $diffs")
+        assertTrue(
+            diffs.isEmpty(),
+            "per-project endpoint must share the global sort; got: $diffs",
+        )
+    }
+
+    @Test
+    @DisplayName(
+        "registered v3 components endpoint: heterogeneous-shape entries produce zero diffs ONLY after alignment by component.id",
+    )
+    fun v3Components_heterogeneousShape_zeroDiffsOnlyAfterAlignment() {
+        val endpoint = "GET /rest/api/3/components"
+
+        // alpha-fixture carries `component.name`; beta-fixture does NOT.
+        // Without alignment, positional `JsonShape.diff` surfaces
+        // KEY_MISSING_CANDIDATE on $[0].component.name (and the mirror on $[1]).
+        val baseline = factory.arrayNode().apply {
+            add(v3Entry("alpha-fixture", name = "Alpha"))
+            add(v3Entry("beta-fixture"))
+        }
+        val candidate = factory.arrayNode().apply {
+            add(v3Entry("beta-fixture"))
+            add(v3Entry("alpha-fixture", name = "Alpha"))
+        }
+
+        val baselineSorted = RawArraySorters.stableSorted(endpoint, baseline)
+        val candidateSorted = RawArraySorters.stableSorted(endpoint, candidate)
+
+        val diffs = JsonShape.diff(baselineSorted, candidateSorted)
+        assertTrue(
+            diffs.isEmpty(),
+            "expected zero diffs after alignment by component.id; got: $diffs",
+        )
     }
 
     @Test

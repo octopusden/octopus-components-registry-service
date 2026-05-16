@@ -35,26 +35,39 @@ object RawArraySorters {
      * list minimal: only endpoints we have confirmed are Set-shape on the wire
      * and have been observed producing positional false-positives.
      */
+    /**
+     * Composite-key extractor for `Set<JiraComponentVersionRangeDTO>` — shared
+     * between the global and per-project endpoints so the registry stays DRY
+     * if the shape changes.
+     */
+    private val jiraComponentVersionRangeKey: (JsonNode) -> String = { node ->
+        // Wire shape (per JiraComponentVersionRangeDTO):
+        //   { "componentName": "...", "versionRange": "...", "component": { ... }, ... }
+        // `componentName` lives at the TOP LEVEL, NOT under `component` (which is a
+        // JiraComponentDTO with projectKey / displayName / componentInfo — no `id`).
+        val componentName = node.path("componentName").asText("")
+        val versionRange = node.path("versionRange").asText("")
+        componentName + KEY_SEP + versionRange
+    }
+
     private val sorters: Map<String, (JsonNode) -> String> =
         mapOf(
-            // `/jira-component-version-ranges` returns Set<JiraComponentVersionRangeDTO>.
+            // `/jira-component-version-ranges` (global) — Set<JiraComponentVersionRangeDTO>.
             // Stable key = componentName + NUL + versionRange — covers both kinds of
             // duplication (same component, different ranges; same range, different components).
-            // Wire shape (per JiraComponentVersionRangeDTO):
-            //   { "componentName": "...", "versionRange": "...", "component": { ... }, ... }
-            // `componentName` lives at the TOP LEVEL, NOT under `component` (which is a
-            // JiraComponentDTO with projectKey / displayName / componentInfo — no `id`).
-            "GET /rest/api/2/common/jira-component-version-ranges" to { node ->
-                val componentName = node.path("componentName").asText("")
-                val versionRange = node.path("versionRange").asText("")
-                componentName + KEY_SEP + versionRange
-            },
+            "GET /rest/api/2/common/jira-component-version-ranges" to jiraComponentVersionRangeKey,
+            // `/projects/{projectKey}/jira-component-version-ranges` — same DTO type,
+            // same Set semantics, just filtered by projectKey on the server. Used by
+            // ProjectControllerV2CompatTest; without registration the per-project run
+            // would re-introduce the same positional false-positives.
+            "GET /rest/api/2/projects/{projectKey}/jira-component-version-ranges" to jiraComponentVersionRangeKey,
             // `/v3/components` returns a list of `{component, variants}` records — the server
-            // contract is one entry per `component.id`. Sort by that id. If duplicate ids ever
-            // appear, `sortedBy` (stable) preserves their input order, so equal-key elements
-            // stay in the same relative order on both stands provided the underlying Set
-            // iterator order is deterministic given identical Set contents — which the
-            // server-side `Set` guarantee already implies.
+            // contract is one entry per `component.id`. Sort by that id. `Set` guarantees
+            // uniqueness but NOT a deterministic iteration order for equal sort keys; if
+            // duplicate component ids ever reach this sorter, stable sorting would preserve
+            // each stand's potentially-different input order, leaving residual positional
+            // drift. Acceptable today because the server-side contract makes duplicates
+            // a contract violation, not because of any Set-iteration guarantee.
             "GET /rest/api/3/components" to { node ->
                 node.path("component").path("id").asText("")
             },
