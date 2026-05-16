@@ -32,6 +32,14 @@ import org.junit.jupiter.api.Test
  * inspects [DiffCollector.snapshot] after the call. The collector also writes
  * to `build/reports/compat/diff-worker-*.ndjson` as a side effect; that file
  * is recreated on each `:unitTest` run and is harmless test output.
+ *
+ * **Parallel-execution caveat:** the `clear()` + `snapshot()` pair is process-
+ * wide. The `:unitTest` task (build.gradle) does NOT set
+ * `junit.jupiter.execution.parallel.enabled`, so cases here run sequentially
+ * within one JVM and there is no risk of cross-class pollution. If parallel
+ * unit execution is ever enabled and another unit test class also writes to
+ * `DiffCollector`, this assumption breaks — switch to a thread-local snapshot
+ * helper at that point.
  */
 @Tag("unit")
 class ComparatorLogicTest {
@@ -101,6 +109,32 @@ class ComparatorLogicTest {
         val recorded = DiffCollector.snapshot().single()
         assertThat(recorded.message).contains("transport failure", "candidate")
         assertThat(recorded.message).doesNotContain("baseline and")
+    }
+
+    @Test
+    @DisplayName(
+        "transport failure on BASELINE (status=0 on baseline, 200 on candidate) → STATUS_CODE_DIFF identifies baseline",
+    )
+    fun transportFailureBaseline() {
+        // Symmetric counterpart to the candidate-only case. Without this assertion,
+        // a regression that swapped the two `takeIf` predicates in the message
+        // builder would pass every other test in this suite. The 'baseline'
+        // branch must be exercised explicitly.
+        val baseline = response(status = 0, body = null)
+        val candidate = response(status = 200, body = """{"x":1}""")
+
+        val categories = Comparators.compareRaw(
+            endpoint = "GET /rest/api/2/components",
+            pathParams = emptyMap(),
+            baseline = baseline,
+            candidate = candidate,
+        )
+
+        assertThat(categories).containsExactly(DiffClassifier.STATUS_CODE_DIFF)
+        val recorded = DiffCollector.snapshot().single()
+        assertThat(recorded.message).contains("transport failure", "baseline")
+        // The "and candidate" suffix must NOT appear — only baseline failed here.
+        assertThat(recorded.message).doesNotContain("and candidate")
     }
 
     @Test
@@ -179,6 +213,31 @@ class ComparatorLogicTest {
         val recorded = DiffCollector.snapshot().single()
         assertThat(recorded.category).isEqualTo(DiffClassifier.STRUCTURAL_DIFF)
         assertThat(recorded.message).contains("KEY_MISSING_BASELINE", "newField")
+    }
+
+    @Test
+    @DisplayName("array of different sizes at same status → STRUCTURAL_DIFF with ARRAY_SIZE_MISMATCH in message")
+    fun arraySizeMismatchSurfacesViaStructuralDiff() {
+        // Exercises the JsonShape array-walk branch — not covered by the other
+        // shape cases, which all use object roots. Pinning this case is the
+        // regression guard against accidentally short-circuiting array diffs
+        // (e.g. by mis-passing the body through RawArraySorters which would
+        // align same-sized arrays but should NOT mask different-sized arrays).
+        val baseline = response(body = """{"items":[1,2,3]}""")
+        val candidate = response(body = """{"items":[1,2]}""")
+
+        val categories = Comparators.compareRaw(
+            endpoint = "GET /rest/api/2/components",
+            pathParams = emptyMap(),
+            baseline = baseline,
+            candidate = candidate,
+        )
+
+        assertThat(categories).containsExactly(DiffClassifier.STRUCTURAL_DIFF)
+        val recorded = DiffCollector.snapshot().single()
+        assertThat(recorded.message).contains("ARRAY_SIZE_MISMATCH")
+        assertThat(recorded.baselineValue).isEqualTo("3")
+        assertThat(recorded.candidateValue).isEqualTo("2")
     }
 
     @Test
