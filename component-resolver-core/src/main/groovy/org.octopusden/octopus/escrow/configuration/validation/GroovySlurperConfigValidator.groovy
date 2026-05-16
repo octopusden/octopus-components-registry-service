@@ -44,12 +44,12 @@ class GroovySlurperConfigValidator {
     private static final String DOCKER_ENTRY_PATTERN_V2 = "$DOCKER_IMAGE_PATH_PATTERN(:$DOCKER_IMAGE_TAG_SUFFIX_PATTERN_V2)?"
     public static final Pattern DOCKER_PATTERN_V2 = Pattern.compile("^($DOCKER_ENTRY_PATTERN_V2)(,($DOCKER_ENTRY_PATTERN_V2))*\$")
 
-    public static SUPPORTED_ATTRIBUTES = ['buildSystem', VCS_URL, REPOSITORY_TYPE, 'groupId', 'artifactId',
+    public static final List<String> SUPPORTED_ATTRIBUTES = ['buildSystem', VCS_URL, REPOSITORY_TYPE, 'groupId', 'artifactId',
                                           TAG, 'versionRange', 'version', 'module',
                                           'teamcityReleaseConfigId', 'jiraProjectKey', 'jiraMajorVersionFormat', 'jiraReleaseVersionFormat',
                                           'buildFilePath', 'deprecated', BRANCH, HOTFIX_BRANCH,
                                           'componentDisplayName', 'componentOwner', 'releaseManager', 'securityChampion', 'system',
-                                          'clientCode', 'releasesInDefaultBranch', 'solution', 'parentComponent', 'octopusVersion', 'archived', 'copyright']
+                                          'clientCode', 'releasesInDefaultBranch', 'solution', 'parentComponent', 'octopusVersion', 'archived', 'copyright'].asImmutable()
 
     static SUPPORTED_JIRA_ATTRIBUTES = ['projectKey', 'lineVersionFormat', 'majorVersionFormat', 'releaseVersionFormat', 'buildVersionFormat', 'hotfixVersionFormat', "displayName", 'technical']
 
