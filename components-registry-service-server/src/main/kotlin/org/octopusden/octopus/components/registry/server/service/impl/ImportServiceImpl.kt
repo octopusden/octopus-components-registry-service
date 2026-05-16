@@ -159,8 +159,18 @@ class ImportServiceImpl(
                 // across the full DSL; here we only have the one component,
                 // so reverse-map just its parent.
                 val firstConfig = module.moduleConfigurations.firstOrNull()
-                firstConfig?.parentComponent?.takeIf { it.isNotBlank() }?.let { parentKey ->
-                    linkAggregatorGroups(fullConfig.escrowModules, mapOf(name to parentKey))
+                val pass3Failures: List<Pair<String, String>> =
+                    firstConfig?.parentComponent?.takeIf { it.isNotBlank() }?.let { parentKey ->
+                        linkAggregatorGroups(fullConfig.escrowModules, mapOf(name to parentKey))
+                    } ?: emptyList()
+                if (pass3Failures.isNotEmpty()) {
+                    val msg = pass3Failures.joinToString(" | ") { "${it.first}=${it.second}" }
+                    return MigrationResult(
+                        componentName = name,
+                        success = false,
+                        dryRun = false,
+                        message = "§6.3 Pass 3 group-linking failed: ${msg.take(280)}",
+                    )
                 }
             }
             MigrationResult(
@@ -335,7 +345,18 @@ class ImportServiceImpl(
         // §6.3 Pass 3: upsert component_groups rows and link component_group_id FKs.
         // Runs after Pass 2 so all ComponentEntity rows are present and parentComponent FKs are resolved.
         LOG.info("§6.3 Pass 3: linking aggregator groups for {} parent references", pendingParentByKey.size)
-        linkAggregatorGroups(allModules, pendingParentByKey)
+        val pass3Failures = linkAggregatorGroups(allModules, pendingParentByKey)
+        for ((parentKey, errorMessage) in pass3Failures) {
+            failed++
+            results.add(
+                MigrationResult(
+                    componentName = parentKey,
+                    success = false,
+                    dryRun = false,
+                    message = "§6.3 Pass 3 group-linking failed: ${errorMessage.take(280)}",
+                ),
+            )
+        }
 
         LOG.info(
             "Migration complete: total={}, migrated={}, failed={}, skipped={}",
@@ -1524,13 +1545,18 @@ class ImportServiceImpl(
      * for each aggregator parent:
      *  1. Classify REAL vs FAKE via [isFakeAggregator] against the parent's first DSL config.
      *  2. Upsert a [ComponentGroupEntity] (idempotent — re-runs skip existing rows).
-     *  3. Set `componentGroup` on every child component.
-     *  4. For a REAL aggregator: also set `componentGroup` on the parent itself.
+     *  3. Set `componentGroup` on every child component — and update it when the existing
+     *     link points at a *different* group (DSL parent changed since the last migration).
+     *  4. For a REAL aggregator: same self-link update rule.
+     *
+     * @return per-parent failures: list of `(parentKey, errorMessage)`. Empty list on full
+     *         success. Callers should fold these into their own result aggregation so a
+     *         partial Pass 3 failure does not silently look like a fully-successful migration.
      */
     private fun linkAggregatorGroups(
         allModules: Map<String, EscrowModule>,
         pendingParentByKey: Map<String, String>,
-    ) {
+    ): List<Pair<String, String>> {
         // Reverse the child→parent map to parent→[children]
         val childrenByParent = mutableMapOf<String, MutableList<String>>()
         for ((childKey, parentKey) in pendingParentByKey) {
@@ -1567,7 +1593,7 @@ class ImportServiceImpl(
                         LOG.warn("§6.3 Pass 3: child '{}' not found in DB; skipping group link", childKey)
                         continue
                     }
-                    if (child.componentGroup == null) {
+                    if (child.componentGroup?.id != group.id) {
                         child.componentGroup = group
                         componentRepository.save(child)
                         LOG.debug("§6.3 Pass 3: linked child '{}' → group '{}'", childKey, parentKey)
@@ -1577,7 +1603,7 @@ class ImportServiceImpl(
                 // For a REAL aggregator, also link the parent itself to its own group
                 if (!fake) {
                     val parent = componentRepository.findByComponentKey(parentKey)
-                    if (parent != null && parent.componentGroup == null) {
+                    if (parent != null && parent.componentGroup?.id != group.id) {
                         parent.componentGroup = group
                         componentRepository.save(parent)
                         LOG.debug("§6.3 Pass 3: linked REAL aggregator '{}' → its own group", parentKey)
@@ -1602,6 +1628,7 @@ class ImportServiceImpl(
                 failures.joinToString { "${it.first}=${it.second}" },
             )
         }
+        return failures
     }
 
     /** Upsert a [ComponentGroupEntity] by [groupKey]. Idempotent. */
