@@ -1,0 +1,55 @@
+#!/bin/bash
+# Run candidate (feat/schema-v2-sql) on localhost:${CANDIDATE_PORT:-4568} in DB-automigrate mode.
+#
+# Required env:
+#   LOCAL_VCS_ROOT         path to local clone of the registry-DSL repo (DSL→DB source)
+#   SERVICE_CONFIG_DIR     path to local clone of the service-config repo; overlaid on the
+#                          candidate's dev/ profile yamls so production-only keys
+#                          (components-registry.product-type.*, supportedGroupIds, ...)
+#                          are present
+#
+# Requires Postgres running (see postgres-up.sh).
+# Triggers full DSL→DB migration at startup (~30-60 sec on first run).
+# Unlike baseline.sh, this script does NOT explicitly disable Spring Cloud Config — the
+# dev profile suite doesn't request cloud-config, so it's implicitly off.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CANDIDATE_WORKTREE="${CANDIDATE_WORKTREE:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+LOCAL_VCS_ROOT="${LOCAL_VCS_ROOT:-}"
+SERVICE_CONFIG_DIR="${SERVICE_CONFIG_DIR:-}"
+CANDIDATE_PORT="${CANDIDATE_PORT:-4568}"
+
+[ -d "$CANDIDATE_WORKTREE" ] || { echo "ERROR: candidate worktree not found at $CANDIDATE_WORKTREE"; exit 1; }
+[ -n "$LOCAL_VCS_ROOT" ] || { echo "ERROR: LOCAL_VCS_ROOT env var is not set."; echo "  Point it at your local clone of the registry-DSL repo, e.g."; echo "    export LOCAL_VCS_ROOT=\"\$HOME/path/to/your/registry-dsl-clone\""; exit 1; }
+[ -d "$LOCAL_VCS_ROOT" ] || { echo "ERROR: LOCAL_VCS_ROOT=$LOCAL_VCS_ROOT is not a directory."; exit 1; }
+[ -n "$SERVICE_CONFIG_DIR" ] || {
+  echo "ERROR: SERVICE_CONFIG_DIR env var is not set."
+  echo "  Same yaml the baseline uses; it carries production-grade values"
+  echo "  (product-type, supportedGroupIds, ...) that are absent from the candidate's"
+  echo "  bundled dev/ overlays. Point it at your local service-config clone, e.g."
+  echo "    export SERVICE_CONFIG_DIR=\"\$HOME/path/to/your/service-config-clone\""
+  exit 1
+}
+[ -d "$SERVICE_CONFIG_DIR" ] || { echo "ERROR: SERVICE_CONFIG_DIR=$SERVICE_CONFIG_DIR is not a directory."; exit 1; }
+[ -f "$SERVICE_CONFIG_DIR/components-registry-service.yml" ] || {
+  echo "ERROR: $SERVICE_CONFIG_DIR/components-registry-service.yml not found."
+  exit 1
+}
+
+ADDITIONAL_LOCATION="file:$CANDIDATE_WORKTREE/components-registry-service-server/dev/"
+ADDITIONAL_LOCATION="$ADDITIONAL_LOCATION,file:$SERVICE_CONFIG_DIR/components-registry-service.yml"
+
+WORK_DIR="${WORK_DIR:-/tmp/crs-candidate-work}"
+cd "$CANDIDATE_WORKTREE"
+echo ">>> candidate: $CANDIDATE_WORKTREE @ $(git rev-parse --short HEAD)"
+echo ">>> port: $CANDIDATE_PORT,  VCS root: $LOCAL_VCS_ROOT  (work-dir: $WORK_DIR),  DB: localhost:${CRS_DB_PORT:-5432}"
+echo ">>> config: $SERVICE_CONFIG_DIR (overlaid on dev/)"
+exec ./gradlew :components-registry-service-server:bootRun --no-daemon --console=plain \
+  --args="--server.port=$CANDIDATE_PORT \
+          --spring.profiles.active=dev,dev-vcs-local,dev-db-automigrate,local \
+          --spring.config.additional-location=$ADDITIONAL_LOCATION \
+          --components-registry.vcs.root=file://$LOCAL_VCS_ROOT \
+          --components-registry.work-dir=$WORK_DIR \
+          --components-registry.groovy-path=$WORK_DIR/src/main/resources \
+          --auth-server.disabled=true"
