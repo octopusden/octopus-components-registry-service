@@ -209,6 +209,8 @@ If any other test class fails to compile once Phase 5 lands, add it here with th
 
 **Stream B (externalRegistry fix)** patched `EntityMappers.toEscrowModule` to emit `vcsSettings` whenever `component.vcsExternalRegistry != null` (not only when VCS roots are non-empty). Components declared in DSL as `vcsSettings { externalRegistry = "..." }` with no VCS roots now round-trip correctly. Re-enabled `DbBackedComponentsRegistryServiceControllerTest.testGetAllJiraComponentVersionRanges`. VAL-010 stays @Disabled — recount empirically once the remaining FAKE-aggregator residual is addressed.
 
+**PR-C (RES-C maven-artifacts per-range override fix)** rewrote `DatabaseComponentRegistryResolver.getMavenArtifactParameters` to walk the EscrowModule per-range view instead of returning component-level `artifactIds` unchanged for every range. The old implementation ignored `DISTRIBUTION_MAVEN` marker overrides, causing 30 components to return the wrong `groupPattern` for one or more ranges (latest range's group bled into earlier ranges). Fix: use `config.distribution?.GAV()` per `EscrowModuleConfig` (already has per-range markers applied); fall back to component-level `artifactIds` only when GAV is null/blank. Extracted `splitCsv`/`MavenCoords`/`parseMavenGavEntry` from `ImportServiceImpl` into shared `util/GavParsing.kt`. Added 3 new unit tests (`DatabaseComponentRegistryResolverMavenArtifactsRangeTest`: two-range shape, multi-artifact CSV shape, single-range fallback). Extended VAL-006 with `tokenization-service` for regression guard. ✅ Full build PASS.
+
 Two method-level `@Disabled` markers remain for known v2-vs-v1 semantic deltas:
 
 | Test method | Reason | Tracked in todo.md |
