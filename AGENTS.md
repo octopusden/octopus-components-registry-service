@@ -125,6 +125,40 @@ IntelliJ run configurations in `.run/`:
 
 Required env vars: `LDAP_USERNAME`, `LDAP_PASSWORD`, `COMPONENTS_REGISTRY_VCS_ROOT`
 
+## Compatibility Verification (after every read-path / schema change)
+
+**Entry point:** `scripts/local-stands/verify.sh`. This is the single gate any agent working on schema-v2 bug-cluster PRs (B / C / D+E / F+G) MUST run before declaring a fix complete.
+
+What it does, per flag:
+
+| Flag | When | Behaviour |
+|---|---|---|
+| `--restart` | code-only change (import / mapper / resolver) | port-scoped kill of the candidate JVM, respawn from `$CANDIDATE_WORKTREE` via `candidate.sh`, wait `/actuator/health` UP, run `:components-registry-compat-test:test`. DSL→DB automigrate re-runs through the new code on every restart. |
+| `--reset-db` | edit to `V1__schema.sql` | implies `--restart`, plus `docker compose down -v` so Flyway re-applies the schema from scratch before automigrate. |
+| _(no flag)_ | re-read state | runs compat against the existing stands without touching them. |
+
+**Env contract** (verify.sh fails fast with a clear message if any required var is missing when a restart-flag is used):
+
+```bash
+export CANDIDATE_WORKTREE="$(pwd)"            # subagent's own worktree, so the rebuild uses its code
+export LOCAL_VCS_ROOT="<your DSL clone>"      # path on your machine, never committed
+export SERVICE_CONFIG_DIR="<service-config clone>"  # carries production-only keys absent from dev/ overlays
+export COMPAT_SMOKE_COMPONENTS="<csv>"        # comma-separated real component names, from session/user
+export COMPAT_RMS_URL="<RMS URL>"             # optional but recommended for real-version sampling
+```
+
+All four `COMPAT_*` values are confidential per the open-source rule — they live in env (or a local `/tmp/compat-*-env.sh`), never in committed files or commit messages. `scripts/local-stands/README.md` has the full operator-facing detail.
+
+**One-shot bootstrap** (first time on a clean host, or after `stop-all.sh`): `postgres-up.sh` → `baseline.sh` (one-time `bootJar`, ~2 min) → `candidate.sh` → then `verify.sh` for subsequent iterations. Baseline is `origin/main` (or whatever fat JAR is in `_wt/local-baseline/components-registry-service-server/build/libs/`); `baseline.sh` rebuilds the JAR automatically when any `*.kt`/`*.java`/`*.gradle` in the baseline worktree is newer.
+
+**Reading `build/reports/compat/summary.md`:**
+- `Total recorded / Suppressed / Active` counts at the top — exit code is `0` iff active == 0.
+- Diffs are grouped under `### STATUS_CODE_DIFF`, `### STRUCTURAL_DIFF`, `### VALUE_DIFF` headings (plus `### TIMESTAMP_DRIFT` etc. when present).
+- For a typed-layer (`Feign` recursive comparison) diff, the assertion direction is `assertThat(candidate).isEqualTo(baseline)` — `actual` = candidate, `expected` = baseline.
+- An agent owning one cluster (B / C / D+E / F+G) cares only that diffs scoped to their cluster's endpoint+field signature go to zero. Diffs from sibling PRs not yet landed are expected and tracked separately.
+
+The skill `/crs-compat verify` (user-local, not in this repo) wraps `verify.sh` with the same flag semantics; if invoked from the user's session, prefer the skill — it also surfaces `summary.md` cluster digest. If invoked directly (subagent / CI), call `verify.sh`.
+
 ## Design Documentation
 
 **Start with [`DOCS.md`](DOCS.md)** — the wayfinding map showing what lives in this repo vs the Portal repo, with the "owns vs delegates" rules.
