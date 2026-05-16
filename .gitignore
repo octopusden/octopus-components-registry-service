@@ -18,3 +18,4 @@ BOOT-INF/
 *.sh
 # But do track the local-stands tooling — these are shared dev scripts, not ad-hoc.
 !scripts/local-stands/*.sh
+!scripts/local-stands/test/*.sh
