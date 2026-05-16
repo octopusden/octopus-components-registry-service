@@ -22,10 +22,10 @@ import java.nio.file.Paths
 
 /**
  * Closes the open #192 review findings about v4 write-side validation: enum-typed
- * fields (`productType`, `buildSystem`, `repositoryType`, `packageType`) and
- * `versionRange` syntax on PATCH used to be accepted verbatim, with the resolver
- * silently dropping invalid values or, in the case of malformed ranges, breaking
- * the enumeration on the read path.
+ * fields (`productType`, `buildSystem`, `repositoryType`, `packageType`,
+ * `escrow.generation`) and `versionRange` syntax on PATCH used to be accepted
+ * verbatim, with the resolver silently dropping invalid values or, in the case
+ * of malformed ranges, breaking the enumeration on the read path.
  *
  * Each test sends one specific bad value and asserts 400. Pre-fix, all of these
  * either persisted the bad value (and would later surface as a 500 on read) or
@@ -202,6 +202,65 @@ class V4WriteValidationTest {
                     .with(adminJwt())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(payload),
+            ).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    @DisplayName("CREATE rejects unknown baseConfiguration.escrow.generation")
+    fun create_rejects_unknownEscrowGeneration() {
+        val body =
+            """{"name": "validation-test-comp-gen", "baseConfiguration": {"escrow": {"generation": "NOT_A_GENERATION_MODE"}}}"""
+        postCreate(body).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    @DisplayName("POST /field-overrides rejects scalar escrow.generation with unknown enum value")
+    fun fieldOverride_rejects_unknownEscrowGenerationScalar() {
+        val createBody = """{"name": "validation-test-comp-gen-fo", "baseConfiguration": {}}"""
+        val seedResponse =
+            postCreate(createBody)
+                .andExpect(status().is2xxSuccessful)
+                .andReturn()
+                .response.contentAsString
+        val id = objectMapper.readTree(seedResponse)["id"].asText()
+
+        val payload =
+            """
+            {
+              "overriddenAttribute": "escrow.generation",
+              "versionRange": "[99.0.0,)",
+              "value": "NOT_A_GENERATION_MODE"
+            }
+            """.trimIndent()
+        mvc
+            .perform(
+                post("/rest/api/4/components/$id/field-overrides")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(payload),
+            ).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    @DisplayName("PATCH rejects unknown baseConfiguration.escrow.generation")
+    fun patch_rejects_unknownEscrowGeneration() {
+        val createBody = """{"name": "validation-test-comp-gen-patch"}"""
+        val seedResponse =
+            postCreate(createBody)
+                .andExpect(status().is2xxSuccessful)
+                .andReturn()
+                .response.contentAsString
+        val seed = objectMapper.readTree(seedResponse)
+        val id = seed["id"].asText()
+        val versionLock = seed["version"].asLong()
+        val patchBody =
+            """{"version": $versionLock, "baseConfiguration": {"escrow": {"generation": "NOT_A_GENERATION_MODE"}}}"""
+        mvc
+            .perform(
+                patch("/rest/api/4/components/$id")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(patchBody),
             ).andExpect(status().isBadRequest)
     }
 

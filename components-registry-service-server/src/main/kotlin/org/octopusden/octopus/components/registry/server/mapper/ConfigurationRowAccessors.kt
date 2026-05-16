@@ -135,7 +135,7 @@ internal fun ComponentConfigurationEntity.applyScalarValue(
         "build.buildTasks" -> buildTasks = requireString(attributePath, value)
         "escrow.providedDependencies" -> escrowProvidedDependencies = requireString(attributePath, value)
         "escrow.reusable" -> escrowReusable = requireBoolean(attributePath, value)
-        "escrow.generation" -> escrowGeneration = requireString(attributePath, value)
+        "escrow.generation" -> escrowGeneration = requireEscrowGenerationMode(attributePath, value)
         "escrow.diskSpace" -> escrowDiskSpace = requireString(attributePath, value)
         "escrow.additionalSources" -> escrowAdditionalSources = requireString(attributePath, value)
         "escrow.gradleIncludeConfigurations" -> escrowGradleIncludeConfigurations = requireString(attributePath, value)
@@ -212,13 +212,11 @@ private fun requireBoolean(
  * `BuildSystem.valueOf` and silently returns `null` for unknown values. Reject
  * unknown values at the write boundary so the editor surface stays consistent
  * with what the legacy reader can interpret.
+ *
+ * Both [BUILD_SYSTEM_NAMES] and [ESCROW_GENERATION_MODE_NAMES] are declared in
+ * the package-level `EnumValidValues.kt` file — the single source of truth
+ * shared with [ComponentManagementServiceImpl][org.octopusden.octopus.components.registry.server.service.impl.ComponentManagementServiceImpl].
  */
-private val BUILD_SYSTEM_NAMES: Set<String> =
-    org.octopusden.octopus.components.registry.core.dto.BuildSystem
-        .values()
-        .map { it.name }
-        .toSet()
-
 private fun requireBuildSystem(
     path: String,
     value: Any,
@@ -226,6 +224,22 @@ private fun requireBuildSystem(
     val asString = requireString(path, value)
     require(asString in BUILD_SYSTEM_NAMES) {
         "Attribute '$path' expects one of $BUILD_SYSTEM_NAMES; got '$asString'"
+    }
+    return asString
+}
+
+/**
+ * `escrow.generation` is stored as a plain string but the resolver parses it
+ * via `EscrowGenerationMode.valueOf`, silently returning `null` for unknown
+ * values. Reject at the write boundary so round-trip consistency is guaranteed.
+ */
+private fun requireEscrowGenerationMode(
+    path: String,
+    value: Any,
+): String {
+    val asString = requireString(path, value)
+    require(asString in ESCROW_GENERATION_MODE_NAMES) {
+        "Attribute '$path' expects one of $ESCROW_GENERATION_MODE_NAMES; got '$asString'"
     }
     return asString
 }
