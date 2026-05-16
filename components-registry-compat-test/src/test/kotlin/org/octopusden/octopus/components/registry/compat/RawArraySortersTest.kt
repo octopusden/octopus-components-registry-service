@@ -56,6 +56,32 @@ class RawArraySortersTest {
         return obj
     }
 
+    /**
+     * Mirrors the wire shape of a `/rest/api/{1,2}/components` array element —
+     * a `ComponentV1` / `ComponentV2` DTO with `id` at the top level. Used as
+     * a fixture for the nested-array tests: the array is wrapped under
+     * `{ "components": [ ... ] }` on the wire (see `v12Wrap` below).
+     *
+     * `releaseManager` is the structural-shape variable — present on one element,
+     * absent on the other. Without alignment, positional `JsonShape.diff` would
+     * surface KEY_MISSING on `$.components[*].releaseManager`; after alignment,
+     * each row lands at its proper index and the diff disappears.
+     */
+    private fun v12Entry(componentId: String, releaseManager: String? = null): JsonNode {
+        val obj = factory.objectNode()
+        obj.put("id", componentId)
+        if (releaseManager != null) obj.put("releaseManager", releaseManager)
+        return obj
+    }
+
+    private fun v12Wrap(vararg entries: JsonNode): JsonNode {
+        val arr = factory.arrayNode()
+        entries.forEach { arr.add(it) }
+        val root = factory.objectNode()
+        root.set<JsonNode>("components", arr)
+        return root
+    }
+
     @Test
     @DisplayName(
         "registered Set-endpoint with same elements in different wire-order produces zero structural diffs after sort",
@@ -175,6 +201,105 @@ class RawArraySortersTest {
             diffs.isEmpty(),
             "expected zero diffs after alignment by component.id; got: $diffs",
         )
+    }
+
+    @Test
+    @DisplayName(
+        "registered v2 /components endpoint (wrapped under \"components\"): heterogeneous-shape entries " +
+            "produce zero diffs ONLY after alignment by id",
+    )
+    fun v2Components_heterogeneousShape_zeroDiffsOnlyAfterAlignment() {
+        val endpoint = "GET /rest/api/2/components"
+
+        // Mirrors what the live stands return in different wire-order today —
+        // `EscrowConfiguration.escrowModules` is a HashMap (groovy:
+        // `Map<String, EscrowModule> escrowModules = new HashMap<>()`), so the
+        // 948-component list comes out in unpredictable order on each stand.
+        // alpha carries `releaseManager`, beta does not.
+        val baseline = v12Wrap(
+            v12Entry("alpha-fixture", releaseManager = "alice"),
+            v12Entry("beta-fixture"),
+        )
+        val candidate = v12Wrap(
+            v12Entry("beta-fixture"),
+            v12Entry("alpha-fixture", releaseManager = "alice"),
+        )
+
+        val baselineSorted = RawArraySorters.stableSorted(endpoint, baseline)
+        val candidateSorted = RawArraySorters.stableSorted(endpoint, candidate)
+
+        val diffs = JsonShape.diff(baselineSorted, candidateSorted)
+        assertTrue(
+            diffs.isEmpty(),
+            "expected zero diffs after alignment by id under \$.components[]; got: $diffs",
+        )
+    }
+
+    @Test
+    @DisplayName(
+        "registered v1 /components endpoint shares the same nested-array sort path",
+    )
+    fun v1Components_heterogeneousShape_zeroDiffsOnlyAfterAlignment() {
+        val endpoint = "GET /rest/api/1/components"
+
+        val baseline = v12Wrap(
+            v12Entry("alpha-fixture", releaseManager = "alice"),
+            v12Entry("beta-fixture"),
+        )
+        val candidate = v12Wrap(
+            v12Entry("beta-fixture"),
+            v12Entry("alpha-fixture", releaseManager = "alice"),
+        )
+
+        val baselineSorted = RawArraySorters.stableSorted(endpoint, baseline)
+        val candidateSorted = RawArraySorters.stableSorted(endpoint, candidate)
+
+        val diffs = JsonShape.diff(baselineSorted, candidateSorted)
+        assertTrue(
+            diffs.isEmpty(),
+            "v1 nested-array sort must produce zero diffs after alignment; got: $diffs",
+        )
+    }
+
+    @Test
+    @DisplayName(
+        "anti-regression: v2 /components with a real value diff between paired entries still surfaces it after sort",
+    )
+    fun v2Components_realDiffStillReportedAfterSort() {
+        val endpoint = "GET /rest/api/2/components"
+
+        // alpha has releaseManager on baseline but NOT on candidate — a real
+        // backward-compat regression that must NOT be masked by the sorter.
+        val baseline = v12Wrap(
+            v12Entry("alpha-fixture", releaseManager = "alice"),
+            v12Entry("beta-fixture", releaseManager = "bob"),
+        )
+        val candidate = v12Wrap(
+            v12Entry("beta-fixture", releaseManager = "bob"),
+            v12Entry("alpha-fixture"),
+        )
+
+        val baselineSorted = RawArraySorters.stableSorted(endpoint, baseline)
+        val candidateSorted = RawArraySorters.stableSorted(endpoint, candidate)
+
+        val diffs = JsonShape.diff(baselineSorted, candidateSorted)
+        assertTrue(
+            diffs.any { it.kind == JsonShape.ShapeDiff.Kind.KEY_MISSING_CANDIDATE },
+            "expected the real diff (alpha drops releaseManager) to survive sorting; got: $diffs",
+        )
+    }
+
+    @Test
+    @DisplayName(
+        "v2 /components with missing \"components\" field (non-conforming root) is returned unchanged",
+    )
+    fun v2Components_missingNestedField_passthrough() {
+        val endpoint = "GET /rest/api/2/components"
+        // Root is an ObjectNode but lacks the `components` key — the transform
+        // must short-circuit to identity rather than NPE or invent an empty array.
+        val baseline: JsonNode = factory.objectNode().put("foo", "bar")
+        val sorted = RawArraySorters.stableSorted(endpoint, baseline)
+        assertSame(baseline, sorted)
     }
 
     @Test
