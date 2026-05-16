@@ -271,11 +271,18 @@ class DatabaseComponentRegistryResolver(
                 ?: throw NotFoundException("Component '$component' is not found")
 
         // Component-level fallback: the top-level groupId/artifactId rows imported from DSL.
-        // For components whose DSL omits an explicit `artifactId` line, ImportServiceImpl
-        // writes the inherited `Defaults.artifactId = ANY_ARTIFACT (/[\w-\.]+/)` verbatim
-        // (see ImportServiceImpl.kt:893-902). The V1 in-memory resolver returns that
-        // wildcard literal as-is; we must do the same to preserve API parity (RES-C-prime).
-        val artifactIdRows = componentEntity.artifactIds.toList()
+        // For components whose DSL omits an explicit `artifactId` line, the import path
+        // writes the inherited `Defaults.artifactId = ANY_ARTIFACT (/[\w-\.]+/)` verbatim;
+        // the V1 in-memory resolver returns that wildcard literal as-is (RES-C-prime).
+        //
+        // `componentEntity.artifactIds` is a JPA `@OneToMany` without `@OrderBy`, so the
+        // DB load order is not contractual. Sort by `id` (UUID) for a deterministic
+        // CSV across reloads of the same DB state. Note: the import writes one row per
+        // CSV-split entry with a SHARED `groupPattern` (the per-component groupId
+        // from `EscrowModuleConfig.groupIdPattern`), so `first().groupPattern` is stable
+        // by construction — any row picks the same group. Multi-artifact DSL order
+        // preservation is a known follow-up; see TD-008 once filed.
+        val artifactIdRows = componentEntity.artifactIds.sortedBy { it.id?.toString().orEmpty() }
         val componentLevelFallback =
             if (artifactIdRows.isEmpty()) {
                 null
@@ -660,8 +667,8 @@ class DatabaseComponentRegistryResolver(
 
         /**
          * SoT literal for `ComponentConfigurationEntity.rowType`. Matches the
-         * String constants used inside `EntityMappers.kt` (lines 91/148/170/198 etc.).
-         * The entity field is a `String` — there is no shared enum to reference.
+         * String constants used throughout `EntityMappers`. The entity field is
+         * a `String` — there is no shared enum to reference.
          */
         private const val ROW_TYPE_MARKER = "MARKER"
     }

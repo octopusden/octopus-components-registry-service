@@ -277,7 +277,7 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
     // RES-C-prime tests (Contract B): V1 wildcard preservation
     // ========================================================================
     //
-    // Plan ref: `~/.claude/plans/image-6-playful-gizmo.md` TASK-1.
+    // RES-C-prime: V1 wildcard preservation for `/maven-artifacts`.
     //
     // The V1 in-memory resolver returns `EscrowModuleConfig.artifactIdPattern`
     // verbatim. When the DSL has no explicit `artifactId` line, the inherited
