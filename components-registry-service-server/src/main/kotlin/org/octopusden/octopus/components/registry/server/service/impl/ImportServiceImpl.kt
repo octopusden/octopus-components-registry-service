@@ -1474,17 +1474,7 @@ class ImportServiceImpl(
 
     /** Stable key set used to diff build-tool lists across base and override configs. */
     private fun buildToolKeys(tools: Collection<BuildTool>?): Set<String> =
-        tools?.mapNotNull { tool ->
-            when (tool) {
-                is OracleDatabaseToolBean -> "oracleDatabase:${tool.version}:${tool.edition?.name}"
-                is PTCProductToolBean -> "cProduct:${tool.version}"
-                is PTKProductToolBean -> "kProduct:${tool.version}"
-                is PTDProductToolBean -> "dProduct:${tool.version}"
-                is PTDDbProductToolBean -> "dDbProduct:${tool.version}"
-                is OdbcToolBean -> "odbc:${tool.version}"
-                else -> null
-            }
-        }?.toSet() ?: emptySet()
+        buildBuildToolKeys(tools)
 
     /** Scratch holder for `attachBuildToolBeans` destructuring. */
     private data class BeanFields(
@@ -1857,3 +1847,25 @@ class ImportServiceImpl(
         private val FAKE_ARTIFACT_ID_TOKEN: Regex = Regex("(^|-)(fake|dummy|stub)(-|$|,)")
     }
 }
+
+/**
+ * Stable per-bean key set used to diff build-tool lists across base and override configs.
+ * Extracted from `ImportServiceImpl` as a top-level `internal fun` so it can be unit-tested
+ * directly without spinning up a Spring context.
+ *
+ * Key shape preserves the pre-extraction behaviour: `<beanType>:<version>` (plus `:<edition>`
+ * for `OracleDatabaseToolBean`). The discriminator-shape audit and any field additions are
+ * tracked separately by their own test+fix pairs.
+ */
+internal fun buildBuildToolKeys(tools: Collection<BuildTool>?): Set<String> =
+    tools?.mapNotNull { tool ->
+        when (tool) {
+            is OracleDatabaseToolBean -> "oracleDatabase:${tool.version}:${tool.edition?.name}"
+            is PTCProductToolBean -> "cProduct:${tool.version}"
+            is PTKProductToolBean -> "kProduct:${tool.version}"
+            is PTDProductToolBean -> "dProduct:${tool.version}"
+            is PTDDbProductToolBean -> "dDbProduct:${tool.version}"
+            is OdbcToolBean -> "odbc:${tool.version}"
+            else -> null
+        }
+    }?.toSet() ?: emptySet()
