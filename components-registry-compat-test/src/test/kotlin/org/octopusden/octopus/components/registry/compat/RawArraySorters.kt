@@ -20,6 +20,16 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory
  */
 object RawArraySorters {
     /**
+     * U+0000 (NUL) as composite-key field separator. NUL cannot legally appear in
+     * a component id or in a Maven version-range expression, so the resulting
+     * key is unambiguous regardless of how those grammars evolve. Printable
+     * separators each have at least one corner case (e.g. `[1.0, 1.1)` contains
+     * a space; commas appear in artifact-list strings elsewhere) — NUL sidesteps
+     * the question entirely.
+     */
+    private const val KEY_SEP = "\u0000"
+
+    /**
      * Sort-key extractor per registered endpoint key. The endpoint string is the
      * same value the compat tests pass to `compareRaw(endpoint, …)`. Keep this
      * list minimal: only endpoints we have confirmed are Set-shape on the wire
@@ -28,15 +38,19 @@ object RawArraySorters {
     private val sorters: Map<String, (JsonNode) -> String> =
         mapOf(
             // `/jira-component-version-ranges` returns Set<JiraComponentVersionRangeDTO>.
-            // Stable key = component id + version range — covers both kinds of
+            // Stable key = component id + NUL + version range — covers both kinds of
             // duplication (same component, different ranges; same range, different components).
             "GET /rest/api/2/common/jira-component-version-ranges" to { node ->
                 val componentId = node.path("component").path("id").asText("")
                 val versionRange = node.path("versionRange").asText("")
-                "$componentId|$versionRange"
+                componentId + KEY_SEP + versionRange
             },
-            // `/v3/components` returns a list of `{component, variants}` records with one
-            // entry per component. Sort by component id.
+            // `/v3/components` returns a list of `{component, variants}` records — the server
+            // contract is one entry per `component.id`. Sort by that id. If duplicate ids ever
+            // appear, `sortedBy` (stable) preserves their input order, so equal-key elements
+            // stay in the same relative order on both stands provided the underlying Set
+            // iterator order is deterministic given identical Set contents — which the
+            // server-side `Set` guarantee already implies.
             "GET /rest/api/3/components" to { node ->
                 node.path("component").path("id").asText("")
             },
@@ -46,17 +60,25 @@ object RawArraySorters {
      * Return a stable-sorted copy of [root] when [endpoint] is registered AND
      * [root] is an `ArrayNode`. Otherwise return [root] unchanged (identity).
      *
-     * The identity-return guarantee is load-bearing: callers can wrap every
-     * raw-layer compare with this, and unregistered endpoints get exact pass-through
-     * with no allocation. The unit test `unregisteredEndpoint_passthrough` pins
-     * the contract.
+     * **Caller contract:** the returned node must be treated as read-only.
+     * On the identity-pass-through path (unregistered endpoint or non-array
+     * root) the return value aliases the input — mutating it would change the
+     * caller's input as a side effect. On the sorted-copy path the return value
+     * is a fresh `ArrayNode` whose element references are shared with the input,
+     * so mutating elements is similarly visible from outside. `compareRaw` only
+     * reads, so the alias is safe for the current call site; future callers
+     * adding mutation must take a defensive copy themselves.
+     *
+     * The unit test `unregisteredEndpoint_passthrough` pins the identity contract.
      */
     fun stableSorted(endpoint: String, root: JsonNode?): JsonNode? {
         if (root !is ArrayNode) return root
         val keyOf = sorters[endpoint] ?: return root
         val sorted = root.toList().sortedBy(keyOf)
-        // Preserve the original sort order ("stable") within equal keys by using sortedBy,
-        // which delegates to a stable sort on the JDK side.
+        // Preserve the original sort order ("stable") within equal keys: Kotlin's
+        // `sortedBy` delegates to a stable JDK sort. `arrayNode(int)` is an
+        // ArrayList capacity hint, not a fixed-size initialisation — we still
+        // populate via `add`.
         val out = JsonNodeFactory.instance.arrayNode(sorted.size)
         sorted.forEach { out.add(it) }
         return out
