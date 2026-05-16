@@ -7,9 +7,9 @@ Open
 ## Context
 
 Write-side enum validation in `ComponentManagementServiceImpl` and the scalar-column write
-guards in `ConfigurationRowAccessors` are backed by `Set<String>` snapshots in
-`org.octopusden.octopus.components.registry.server.mapper.EnumValidValues` derived from real
-API-layer enums:
+guards in `ConfigurationRowAccessors` are backed by `Set<String>` snapshots defined as
+package-level vals in `EnumValidValues.kt` (under
+`org.octopusden.octopus.components.registry.server.mapper`), derived from real API-layer enums:
 
 - `BUILD_SYSTEM_NAMES` ← `core.dto.BuildSystem`
 - `ESCROW_GENERATION_MODE_NAMES` ← `core.dto.EscrowGenerationMode`
@@ -51,4 +51,4 @@ When the package-type enum is consolidated into the API layer:
 
 - A first-class `PackageType` enum exists in an API module.
 - `PACKAGE_TYPE_NAMES` is derived from the enum, not hand-listed.
-- The four other sets in `EnumValidValues.kt` and this one all use the same derivation pattern.
+- The four other vals in `EnumValidValues.kt` and this one all use the same derivation pattern.
