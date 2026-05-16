@@ -60,11 +60,18 @@ test {
         }
     }
     useJUnitPlatform {
-        // Unit tests (tagged `unit` — JsonShapeTest, RawArraySortersTest,
-        // EnvironmentPreflightEvaluatorTest, …) run via the separate `:unitTest` task
-        // below. The `:test` task here covers ONLY the live-HTTP integration cases,
-        // which are also the ones that need the compat URL gate.
-        excludeTags 'unit'
+        // Include-by-tag polarity: `:test` runs ONLY suites that extend
+        // CompatibilityTestBase (which carries `@Tag("http")` — inherited to
+        // every subclass). Pure-Kotlin unit suites lack the `http` tag and run
+        // via the separate `:unitTest` task below.
+        //
+        // Why include rather than exclude `unit`: a new pure-unit test class
+        // that forgets the `@Tag("unit")` marker would, under exclude-based
+        // polarity, fall into `:test` here and be silently skipped on PR runs
+        // (no URLs configured). With include-by-`http`, an untagged class
+        // automatically lands in `:unitTest` instead — the PR-time gate
+        // catches the new code regardless of whether the author tagged it.
+        includeTags 'http'
     }
     systemProperties = [
         'junit.jupiter.execution.parallel.enabled': true,
@@ -91,10 +98,15 @@ test {
     }
 }
 
-// Fast-lane Test task for the `unit`-tagged classes: pure Kotlin + JUnit5, no live
-// HTTP, no compat URL config required. Runs in seconds and can be wired into CI on
-// every PR without arguing about credentials. Existing `:test` task above excludes
-// the same `unit` tag, so the two tasks partition the suite (no double-execution).
+// Fast-lane Test task for everything that does NOT need a live stand: pure Kotlin +
+// JUnit5, no compat URL config. Runs in seconds and is the PR-time gate for compat
+// framework correctness.
+//
+// The partition is `excludeTags 'http'` here vs. `includeTags 'http'` on `:test`.
+// `@Tag("http")` is inherited from CompatibilityTestBase, so every live-stand suite
+// is auto-routed to `:test` and every pure-Kotlin suite — tagged or not — falls
+// here. That is by design: a future pure-unit test class that forgets `@Tag("unit")`
+// must still execute on PRs, not vanish into the URL-gated bucket.
 //
 // NOTE on `check` integration: this module's `check` is `enabled = false` (line ~25
 // above) — `gradlew build` does NOT auto-call `:unitTest`. Operators invoke it
@@ -104,11 +116,11 @@ test {
 // `./gradlew build`.
 tasks.register('unitTest', Test) {
     group = 'verification'
-    description = 'Pure-Kotlin unit tests (tag=unit) — no live HTTP, no compat URL config.'
+    description = 'Pure-Kotlin unit tests (everything not tagged `http`) — no live HTTP, no compat URL config.'
     testClassesDirs = sourceSets.test.output.classesDirs
     classpath = sourceSets.test.runtimeClasspath
     useJUnitPlatform {
-        includeTags 'unit'
+        excludeTags 'http'
     }
     testLogging {
         events 'passed', 'skipped', 'failed'

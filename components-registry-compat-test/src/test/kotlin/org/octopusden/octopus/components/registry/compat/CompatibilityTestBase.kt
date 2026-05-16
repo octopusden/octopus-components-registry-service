@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import org.assertj.core.api.RecursiveComparisonAssert
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.TestInstance
 import org.octopusden.octopus.components.registry.client.ComponentsRegistryServiceClient
 import org.octopusden.octopus.components.registry.client.impl.ClassicComponentsRegistryServiceClient
@@ -17,8 +18,16 @@ import java.util.concurrent.Semaphore
  *
  * Loads compat config, constructs raw + typed clients for baseline and candidate,
  * and exposes helpers for recording diffs and execution entries.
+ *
+ * The class-level `@Tag("http")` propagates to every subclass via JUnit Jupiter
+ * tag inheritance, and is the polarity anchor for the test-task split in
+ * `build.gradle`: `:test` runs `includeTags 'http'`, `:unitTest` runs
+ * `excludeTags 'http'`. Concretely this means a future pure-unit test class
+ * that forgets to add `@Tag("unit")` still lands in `:unitTest` (the
+ * PR-time gate) instead of silently disappearing into the URL-gated `:test`.
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@Tag("http")
 abstract class CompatibilityTestBase {
     protected val log = LoggerFactory.getLogger(this::class.java)
     protected val config: CompatConfig = CompatConfig.load()
