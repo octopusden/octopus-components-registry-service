@@ -17,6 +17,8 @@ import org.octopusden.octopus.components.registry.server.repository.ComponentRep
 import org.octopusden.octopus.components.registry.server.repository.DependencyMappingRepository
 import org.octopusden.octopus.components.registry.server.service.ComponentRegistryResolver
 import org.octopusden.octopus.components.registry.server.util.formatVersion
+import org.octopusden.octopus.components.registry.server.util.parseMavenGavEntry
+import org.octopusden.octopus.components.registry.server.util.splitCsv
 import org.octopusden.octopus.escrow.MavenArtifactMatcher
 import org.octopusden.octopus.escrow.ModelConfigPostProcessor
 import org.octopusden.octopus.escrow.config.JiraComponentVersionRange
@@ -266,22 +268,58 @@ class DatabaseComponentRegistryResolver(
         val componentEntity =
             componentRepository.findByComponentKey(component)
                 ?: throw NotFoundException("Component '$component' is not found")
-        val artifactIds = componentEntity.artifactIds.toList()
-        if (artifactIds.isEmpty()) return emptyMap()
-        // Reconstruct the original multi-artifact patterns: all rows share the same groupPattern;
-        // artifactPattern values are joined back into a CSV to match Git resolver output.
-        val groupPattern = artifactIds.first().groupPattern
-        val artifactPattern = artifactIds.joinToString(",") { it.artifactPattern }
-        val pair = ComponentArtifactConfiguration(groupPattern, artifactPattern)
 
-        // Enumerate distinct version_ranges (base + override rows) to surface the
-        // same shape the Git resolver returned, keyed by version_range string.
-        val ranges =
-            componentEntity.configurations
-                .map { it.versionRange }
-                .distinct()
-                .ifEmpty { listOf(ALL_VERSIONS) }
-        return ranges.associateWith { pair }
+        // Component-level fallback: the top-level groupId/artifactId rows imported from DSL.
+        val artifactIdRows = componentEntity.artifactIds.toList()
+        val componentLevelFallback =
+            if (artifactIdRows.isEmpty()) {
+                null
+            } else {
+                ComponentArtifactConfiguration(
+                    artifactIdRows.first().groupPattern,
+                    artifactIdRows.joinToString(",") { it.artifactPattern },
+                )
+            }
+
+        // Walk the per-range EscrowModule view so that DISTRIBUTION_MAVEN marker
+        // overrides are respected: each EscrowModuleConfig already has the correct
+        // per-range distribution.GAV() after pickMarkerChildren applied the markers.
+        val module = componentEntity.toEscrowModule(versionRangeFactory, numericVersionFactory)
+
+        if (module.moduleConfigurations.isEmpty()) {
+            // No configurations at all — return empty map (preserves previous contract)
+            return emptyMap()
+        }
+
+        return module.moduleConfigurations
+            .associate { config ->
+                val rangeKey = config.versionRangeString ?: ALL_VERSIONS
+                val gavCsv = config.distribution?.GAV()
+                val artifact =
+                    if (!gavCsv.isNullOrBlank()) {
+                        // Per-range GAV present: parse maven entries (skip URL entries).
+                        val coords =
+                            splitCsv(gavCsv)
+                                .filterNot {
+                                    it.startsWith("file://") ||
+                                        it.startsWith("http://") ||
+                                        it.startsWith("https://")
+                                }
+                                .mapNotNull { parseMavenGavEntry(it) }
+                        if (coords.isNotEmpty()) {
+                            ComponentArtifactConfiguration(
+                                coords.first().groupId,
+                                coords.joinToString(",") { it.artifactId },
+                            )
+                        } else {
+                            componentLevelFallback
+                        }
+                    } else {
+                        componentLevelFallback
+                    }
+                rangeKey to (artifact ?: ComponentArtifactConfiguration("", ""))
+            }
+            .filterValues { it.groupPattern.isNotEmpty() || it.artifactPattern.isNotEmpty() }
     }
 
     override fun getDependencyMapping(): Map<String, String> =
