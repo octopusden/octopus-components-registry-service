@@ -175,18 +175,30 @@ class ComponentRoutingResolver(
 
     @Suppress("TooGenericExceptionCaught", "SwallowedException")
     override fun getComponentsDistributionByJiraProject(projectKey: String): Map<String, Distribution> {
+        var gitNotFound = false
+        var dbNotFound = false
         val gitResults =
             try {
                 gitResolver.getComponentsDistributionByJiraProject(projectKey)
+            } catch (e: NotFoundException) {
+                gitNotFound = true
+                emptyMap()
             } catch (e: Exception) {
                 emptyMap()
             }
         val dbResults =
             try {
                 dbResolver.getComponentsDistributionByJiraProject(projectKey)
+            } catch (e: NotFoundException) {
+                dbNotFound = true
+                emptyMap()
             } catch (e: Exception) {
                 emptyMap()
             }
+        // MIG-049: see getJiraComponentsByProject for the same pattern.
+        if (gitNotFound && dbNotFound) {
+            throw NotFoundException("Project '$projectKey' is not found")
+        }
         val dbNames = sourceRegistry.getDbComponentNames()
         val filteredGit = gitResults.filter { !dbNames.contains(it.key) }
         return filteredGit + dbResults
