@@ -243,7 +243,18 @@ class ComponentRoutingResolver(
     override fun findComponentByArtifact(artifact: ArtifactDependency): VersionedComponent =
         try {
             dbResolver.findComponentByArtifact(artifact)
+        } catch (e: NotFoundException) {
+            // db has no match — try git, but reject stale data for DB-sourced components
+            val gitResult = gitResolver.findComponentByArtifact(artifact)
+            if (sourceRegistry.getDbComponentNames().contains(gitResult.id)) {
+                throw NotFoundException(
+                    "Component '${gitResult.id}' is db-sourced; artifact " +
+                        "'${artifact.group}:${artifact.name}:${artifact.version}' is not in DB",
+                )
+            }
+            gitResult
         } catch (e: Exception) {
+            // transient — fall back to git (fault tolerance preserved)
             gitResolver.findComponentByArtifact(artifact)
         }
 
