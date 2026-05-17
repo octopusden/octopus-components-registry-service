@@ -7,6 +7,7 @@ import org.octopusden.octopus.components.registry.core.dto.BuildSystem
 import org.octopusden.octopus.components.registry.core.dto.ComponentImage
 import org.octopusden.octopus.components.registry.core.dto.Image
 import org.octopusden.octopus.components.registry.core.dto.VersionedComponent
+import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.server.service.ComponentRegistryResolver
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
 import org.octopusden.octopus.escrow.config.JiraComponentVersionRange
@@ -110,18 +111,34 @@ class ComponentRoutingResolver(
 
     @Suppress("TooGenericExceptionCaught", "SwallowedException")
     override fun getJiraComponentsByProject(projectKey: String): Set<String> {
+        var gitNotFound = false
+        var dbNotFound = false
         val gitResults =
             try {
                 gitResolver.getJiraComponentsByProject(projectKey)
+            } catch (e: NotFoundException) {
+                gitNotFound = true
+                emptySet()
             } catch (e: Exception) {
                 emptySet()
             }
         val dbResults =
             try {
                 dbResolver.getJiraComponentsByProject(projectKey)
+            } catch (e: NotFoundException) {
+                dbNotFound = true
+                emptySet()
             } catch (e: Exception) {
                 emptySet()
             }
+        // MIG-049: when BOTH resolvers say the project is unknown, propagate
+        // NotFoundException so the controller exception handler renders 404.
+        // Other exception types from either resolver (e.g. transient DB
+        // failure) are still swallowed so a partial outage doesn't degrade
+        // the union-merge response.
+        if (gitNotFound && dbNotFound) {
+            throw NotFoundException("Project '$projectKey' is not found")
+        }
         return gitResults + dbResults
     }
 
