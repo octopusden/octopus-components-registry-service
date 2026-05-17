@@ -128,6 +128,27 @@ class ComponentRoutingResolverStaleAndNotFoundTest {
 
     @Test
     @DisplayName(
+        "1.1 P1-B guard (Opus): gitResult.componentVersion is null → no NPE in stale-guard; " +
+            "guard cannot evaluate → fall through and return gitResult as-is",
+    )
+    fun pr192_1_1_jiraComponentByProjectAndVersion_gitNullComponentVersion_noNpe() {
+        val projectKey = "epsilon-proj"
+        val version = "1.0.0"
+        val gitResult = mock(JiraComponentVersion::class.java)
+        doReturn(null).`when`(gitResult).componentVersion
+        doThrow(NotFoundException("not in db"))
+            .`when`(dbResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+        doReturn(gitResult)
+            .`when`(gitResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+
+        // Should not throw NPE — stale-guard cannot evaluate without componentName,
+        // so fall through and return gitResult as-is (pre-fix behaviour for this edge).
+        val result = routing.getJiraComponentByProjectAndVersion(projectKey, version)
+        assertEquals(gitResult, result)
+    }
+
+    @Test
+    @DisplayName(
         "1.1 anti-regression: db NotFound + git also NotFound → NotFoundException propagates",
     )
     fun pr192_1_1_jiraComponentByProjectAndVersion_bothNotFound_throws() {
