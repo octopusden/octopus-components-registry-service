@@ -73,6 +73,17 @@ data class FieldOverrideResponse(
  *  - `distribution.packages` → `packages`
  *  - `build.requiredTools` → `requiredTools` (list of tool names)
  *  - `build.buildTools` → `buildToolBeans` (structured DB tool beans)
+ *
+ * Additionally, the V4 `GET /components/{id}/field-overrides` response (and
+ * only that endpoint) may surface a read-only import-managed marker:
+ *
+ *  - `group-artifact-pattern` → `mavenArtifacts` (MIG-047). The import path
+ *    emits this when a DSL component sets `groupId`/`artifactId` per range
+ *    without an explicit `distribution { gav = … }` block. The marker is
+ *    NOT acceptable in `POST` / `PATCH` payloads — `addFieldOverride` rejects
+ *    it at request validation, and `updateFieldOverride` / `deleteFieldOverride`
+ *    refuse import-managed markers. To change the underlying configuration,
+ *    edit the source DSL and re-import.
  */
 data class MarkerChildrenPayload(
     val vcsEntries: List<VcsEntryRequest>? = null,
