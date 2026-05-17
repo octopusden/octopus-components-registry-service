@@ -367,4 +367,154 @@ class ComparatorLogicTest {
         assertThat(r.pathParams).containsEntry("c", "alpha")
         assertThat(r.queryParams).containsEntry("ignore-required", "true")
     }
+
+    // ----- GavCsvComparator: trailing-comma tolerance + anti-regression -----
+
+    @Test
+    @DisplayName("GavCsvComparator: identical CSVs → 0")
+    fun gavCsvComparator_identical_returnsZero() {
+        assertThat(GavCsvComparator.compare("a:b:zip,c:d:zip", "a:b:zip,c:d:zip")).isEqualTo(0)
+    }
+
+    @Test
+    @DisplayName("GavCsvComparator: trailing comma only — treated as equal (cosmetic)")
+    fun gavCsvComparator_trailingCommaIsIgnored() {
+        assertThat(GavCsvComparator.compare("a:b:zip,c:d:zip,", "a:b:zip,c:d:zip")).isEqualTo(0)
+        // Symmetric: candidate without trailing comma, baseline with.
+        assertThat(GavCsvComparator.compare("a:b:zip,c:d:zip", "a:b:zip,c:d:zip,")).isEqualTo(0)
+    }
+
+    @Test
+    @DisplayName("GavCsvComparator: trailing whitespace around the comma is tolerated")
+    fun gavCsvComparator_trailingWhitespaceAroundComma() {
+        assertThat(GavCsvComparator.compare("a:b:zip,c:d:zip,  ", "a:b:zip,c:d:zip")).isEqualTo(0)
+        assertThat(GavCsvComparator.compare("a:b:zip,c:d:zip ,", "a:b:zip,c:d:zip")).isEqualTo(0)
+    }
+
+    @Test
+    @DisplayName("anti-regression: GAV with a DIFFERENT artifactId still produces a non-zero diff")
+    fun gavCsvComparator_differentArtifactIdSurvives() {
+        // The `ssd-static` vs `ssd-interactive` family in the prod residual:
+        // wholly different artifactId. Must NOT be masked.
+        val cmp = GavCsvComparator.compare(
+            "com.example.foo:product-alpha:zip",
+            "com.example.foo:product-beta:zip",
+        )
+        assertThat(cmp).isNotEqualTo(0)
+    }
+
+    @Test
+    @DisplayName("anti-regression: GAV with the same set but DIFFERENT order surfaces a non-zero diff")
+    fun gavCsvComparator_reorderingSurvives() {
+        // The DSL declaration order is part of the V1 contract — this comparator
+        // intentionally does NOT treat the CSV as a Set.
+        val cmp = GavCsvComparator.compare("a:b:zip,c:d:zip", "c:d:zip,a:b:zip")
+        assertThat(cmp).isNotEqualTo(0)
+    }
+
+    @Test
+    @DisplayName("anti-regression: a leading comma is NOT stripped — surface for diagnosis")
+    fun gavCsvComparator_leadingCommaSurvives() {
+        // KDoc explicitly claims `does NOT strip leading commas`. Pin it so a
+        // future widening of `normalize(...)` to `trim(',')` is caught.
+        val cmp = GavCsvComparator.compare(",a:b:zip,c:d:zip", "a:b:zip,c:d:zip")
+        assertThat(cmp).isNotEqualTo(0)
+    }
+
+    @Test
+    @DisplayName("anti-regression: internal whitespace inside the CSV is NOT collapsed")
+    fun gavCsvComparator_internalWhitespaceSurvives() {
+        // KDoc explicitly claims `does NOT strip internal whitespace`. Pin it.
+        val cmp = GavCsvComparator.compare("a:b:zip, c:d:zip", "a:b:zip,c:d:zip")
+        assertThat(cmp).isNotEqualTo(0)
+    }
+
+    @Test
+    @DisplayName("anti-regression: multiple trailing commas (',,') are NOT collapsed — surface for diagnosis")
+    fun gavCsvComparator_doubleTrailingCommaSurvives() {
+        // A single trailing comma is a known schema-v2 cosmetic; two suggest
+        // a different bug shape (empty element in the middle?) and must remain
+        // visible.
+        val cmp = GavCsvComparator.compare("a:b:zip,c:d:zip,,", "a:b:zip,c:d:zip")
+        assertThat(cmp).isNotEqualTo(0)
+    }
+
+    @Test
+    @DisplayName("GavCsvComparator: null handling — null,null is equal; null,X is not")
+    fun gavCsvComparator_nullHandling() {
+        assertThat(GavCsvComparator.compare(null, null)).isEqualTo(0)
+        assertThat(GavCsvComparator.compare(null, "a:b:zip")).isNotEqualTo(0)
+        assertThat(GavCsvComparator.compare("a:b:zip", null)).isNotEqualTo(0)
+    }
+
+    // ----- compareDto integration: GAV normalizer applied to distribution.gav -----
+
+    // Local synthetic DTO mirroring the shape `Component { distribution: Distribution { gav: String } }`.
+    // Avoids depending on the production ComponentV2 type so the test stays focused on the comparator,
+    // and uses `com.example.*` GAVs throughout (no real openwaygroup-style identifiers).
+    data class TestDistribution(val gav: String?)
+    data class TestComponent(val id: String, val distribution: TestDistribution)
+
+    @Test
+    @DisplayName("compareDto: trailing-comma-only diff on distribution.gav → NO VALUE_DIFF recorded")
+    fun compareDto_trailingCommaOnDistributionGav_isSilenced() {
+        Comparators.compareDto(
+            endpoint = "GET /rest/api/2/components",
+            pathParams = mapOf("componentId" to "alpha-fixture"),
+            baseline = TestComponent("alpha-fixture", TestDistribution("com.example.foo:art-a:zip,com.example.foo:art-b:zip")),
+            candidate = TestComponent("alpha-fixture", TestDistribution("com.example.foo:art-a:zip,com.example.foo:art-b:zip,")),
+        )
+        assertThat(DiffCollector.snapshot()).isEmpty()
+    }
+
+    @Test
+    @DisplayName("compareDto: a real GAV-value change on distribution.gav STILL records VALUE_DIFF")
+    fun compareDto_realGavChangeOnDistributionGav_surfaces() {
+        // ssd-static vs ssd-interactive shape from the prod residual — same number of
+        // entries, different artifactId. Must NOT be masked.
+        Comparators.compareDto(
+            endpoint = "GET /rest/api/2/components",
+            pathParams = mapOf("componentId" to "beta-fixture"),
+            baseline = TestComponent("beta-fixture", TestDistribution("com.example.foo:product-alpha:zip")),
+            candidate = TestComponent("beta-fixture", TestDistribution("com.example.foo:product-beta:zip")),
+        )
+        val recorded = DiffCollector.snapshot().single()
+        assertThat(recorded.category).isEqualTo(DiffClassifier.VALUE_DIFF)
+        assertThat(recorded.message).contains("distribution.gav")
+    }
+
+    @Test
+    @DisplayName("compareDto: trailing-comma silenced when root IS the DistributionDTO directly (path == \"gav\")")
+    fun compareDto_trailingCommaOnRootGavField_isSilenced() {
+        // Pins that the regex `^(.+\.)?gav$` matches the bare-root path too,
+        // not just `<something>.gav`. The endpoint
+        // `GET /v2/projects/{p}/versions/{v}/distribution` returns a single
+        // `DistributionDTO` — AssertJ's path for `gav` from that root is just
+        // `gav`, no prefix.
+        Comparators.compareDto(
+            endpoint = "GET /rest/api/2/projects/{p}/versions/{v}/distribution",
+            pathParams = mapOf("p" to "alpha-project", "v" to "1.0"),
+            baseline = TestDistribution("com.example.foo:art-a:zip,com.example.foo:art-b:zip"),
+            candidate = TestDistribution("com.example.foo:art-a:zip,com.example.foo:art-b:zip,"),
+        )
+        assertThat(DiffCollector.snapshot()).isEmpty()
+    }
+
+    @Test
+    @DisplayName("compareDto: a diff on a DIFFERENT String field (not distribution.gav) is NOT routed through the normalizer")
+    fun compareDto_normalizerScopedToGavField() {
+        // Verify the comparator was registered ONLY for the GAV field path.
+        // `id` differs by a trailing comma — must still surface as a VALUE_DIFF
+        // because the comparator must not apply to arbitrary String fields.
+        data class IdHolder(val id: String, val distribution: TestDistribution)
+        Comparators.compareDto(
+            endpoint = "GET /rest/api/2/components",
+            pathParams = emptyMap(),
+            baseline = IdHolder("alpha-fixture", TestDistribution("com.example.foo:art:zip")),
+            candidate = IdHolder("alpha-fixture,", TestDistribution("com.example.foo:art:zip")),
+        )
+        val recorded = DiffCollector.snapshot().single()
+        assertThat(recorded.category).isEqualTo(DiffClassifier.VALUE_DIFF)
+        assertThat(recorded.message).contains("id")
+    }
 }

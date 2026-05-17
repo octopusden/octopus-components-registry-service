@@ -1,7 +1,6 @@
 package org.octopusden.octopus.components.registry.compat
 
 import com.fasterxml.jackson.databind.JsonNode
-import org.assertj.core.api.RecursiveComparisonAssert
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Tag
@@ -10,7 +9,6 @@ import org.octopusden.octopus.components.registry.client.ComponentsRegistryServi
 import org.octopusden.octopus.components.registry.client.impl.ClassicComponentsRegistryServiceClient
 import org.octopusden.octopus.components.registry.client.impl.ClassicComponentsRegistryServiceClientUrlProvider
 import org.slf4j.LoggerFactory
-import java.time.Instant
 import java.util.concurrent.Semaphore
 
 /**
@@ -128,9 +126,11 @@ abstract class CompatibilityTestBase {
 
     /**
      * Convenience for recursive DTO comparison via AssertJ — typed layer.
-     * Wraps `assertThat(...).usingRecursiveComparison().ignoringCollectionOrder().isEqualTo(...)`.
-     * Diffs are still funnelled through DiffCollector instead of a thrown AssertionError so the
-     * run can collect-all before failing.
+     * Wraps `assertThat(...).usingRecursiveComparison().ignoringCollectionOrder().isEqualTo(...)`
+     * with per-field normalizers wired in [Comparators.compareDto] (see
+     * [GavCsvComparator] for the trailing-comma rule). Diffs are funnelled
+     * through DiffCollector instead of a thrown AssertionError so the run
+     * can collect-all before failing.
      */
     protected fun <T : Any> compareDto(
         endpoint: String,
@@ -138,43 +138,13 @@ abstract class CompatibilityTestBase {
         baseline: T?,
         candidate: T?,
         queryParams: Map<String, String> = emptyMap(),
-    ) {
-        if (baseline == null && candidate == null) return
-        if (baseline == null || candidate == null) {
-            DiffCollector.record(
-                DiffRecord(
-                    ts = Instant.now().toString(),
-                    endpoint = endpoint,
-                    pathParams = pathParams,
-                    queryParams = queryParams,
-                    category = DiffClassifier.NULL_VS_EMPTY,
-                    layer = "typed",
-                    baselineValue = baseline?.toString() ?: "null",
-                    candidateValue = candidate?.toString() ?: "null",
-                ),
-            )
-            return
-        }
-        runCatching {
-            val assertion: RecursiveComparisonAssert<*> =
-                org.assertj.core.api.Assertions.assertThat(baseline).usingRecursiveComparison().ignoringCollectionOrder()
-            assertion.isEqualTo(candidate)
-        }.onFailure { ex ->
-            DiffCollector.record(
-                DiffRecord(
-                    ts = Instant.now().toString(),
-                    endpoint = endpoint,
-                    pathParams = pathParams,
-                    queryParams = queryParams,
-                    category = DiffClassifier.VALUE_DIFF,
-                    layer = "typed",
-                    // Keep the full AssertJ description — recursive comparison output points at the exact
-                    // diverging field path; truncating loses the most useful diagnostic.
-                    message = ex.message,
-                ),
-            )
-        }
-    }
+    ) = Comparators.compareDto(
+        endpoint = endpoint,
+        pathParams = pathParams,
+        baseline = baseline,
+        candidate = candidate,
+        queryParams = queryParams,
+    )
 
     /**
      * Helper used by every test method to log execution and report diffs in one place.
