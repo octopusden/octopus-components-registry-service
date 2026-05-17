@@ -266,10 +266,13 @@ class ComponentRoutingResolver(
         return artifacts.associateWith { artifact ->
             val dbResult = dbResults[artifact]
             val gitResult = gitResults[artifact]
-            if (dbResult != null && dbNames.contains(dbResult.id)) {
-                dbResult
-            } else {
-                gitResult ?: dbResult
+            when {
+                // 1. DB found and component is DB-sourced → authoritative
+                dbResult != null && dbNames.contains(dbResult.id) -> dbResult
+                // 2. DB has no match, git stale match for DB-sourced component → reject
+                gitResult != null && dbNames.contains(gitResult.id) -> null
+                // 3. Fallback for non-DB-sourced components
+                else -> gitResult ?: dbResult
             }
         }
     }
