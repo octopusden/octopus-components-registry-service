@@ -115,6 +115,27 @@ class EnvironmentPreflightEvaluatorTest {
     }
 
     @Test
+    fun `allowNonDbCandidate=true suppresses CANDIDATE_NOT_DB_MODE but not SNAPSHOT_MISMATCH`() {
+        // Same misconfiguration as the test above (candidate defaultSource=git), PLUS a
+        // revision drift. The documented escape hatch must suppress the DB-mode warning
+        // (operator is intentionally running parity-debug) but the unrelated
+        // SNAPSHOT_MISMATCH must still surface — different invariant.
+        val out = evaluateEnvironmentPreflight(
+            EnvironmentPreflightInputs(
+                baselineStatus = 200,
+                baselineSnapshot = ok("rev-A"),
+                candidateStatus = 200,
+                candidateSnapshot = ok("rev-B", defaultSource = "git", dbComponentCount = 948L),
+                baselineComponentCount = 948L,
+                allowNonDbCandidate = true,
+            ),
+            ts = ts,
+        )
+        assertThat(out.map { it.category })
+            .containsExactly(DiffClassifier.SNAPSHOT_MISMATCH)
+    }
+
+    @Test
     fun `candidate dbComponentCount below 0_9x threshold — CANDIDATE_NOT_DB_MODE fires`() {
         // baseline=948 → threshold=ceil(0.9*948)=854; candidate=853 falls just below
         val out = evaluateEnvironmentPreflight(

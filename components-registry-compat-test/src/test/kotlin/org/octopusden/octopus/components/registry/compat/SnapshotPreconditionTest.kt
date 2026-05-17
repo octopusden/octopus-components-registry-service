@@ -68,6 +68,11 @@ class SnapshotPreconditionTest : CompatibilityTestBase() {
             }
         }.getOrDefault(-1L)
 
+        val allowNonDbCandidate = (
+            System.getProperty("compat.allow-non-db-candidate")
+                ?: System.getenv("COMPAT_ALLOW_NON_DB_CANDIDATE")
+        )?.equals("true", ignoreCase = true) == true
+
         val records = evaluateEnvironmentPreflight(
             EnvironmentPreflightInputs(
                 baselineStatus = baselineResp.status,
@@ -75,6 +80,7 @@ class SnapshotPreconditionTest : CompatibilityTestBase() {
                 candidateStatus = candidateResp.status,
                 candidateSnapshot = candidate,
                 baselineComponentCount = baselineComponentCount,
+                allowNonDbCandidate = allowNonDbCandidate,
             ),
             ts = Instant.now().toString(),
             endpoint = endpoint,
