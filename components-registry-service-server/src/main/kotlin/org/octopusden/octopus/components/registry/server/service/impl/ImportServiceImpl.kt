@@ -310,11 +310,13 @@ class ImportServiceImpl(
         // claiming dictionary codes were inserted; the rollback rolled back
         // the inserts but the in-memory cache outlives the transaction. A
         // subsequent `migrateComponent` call would then skip a needed insert
-        // and the next junction save would trip the FK.
-        knownSystemCodes = systemRepository.findAll().mapTo(HashSet()) { it.code }
-        knownLabelCodes = labelRepository.findAll().mapTo(HashSet()) { it.code }
-        knownToolNames = toolRepository.findAll().mapTo(HashSet()) { it.name }
+        // and the next junction save would trip the FK. Assignments happen
+        // *inside* the try so a partial assignment (one field set, the next
+        // `findAll` throws) is still cleaned up by the same finally.
         try {
+            knownSystemCodes = systemRepository.findAll().mapTo(HashSet()) { it.code }
+            knownLabelCodes = labelRepository.findAll().mapTo(HashSet()) { it.code }
+            knownToolNames = toolRepository.findAll().mapTo(HashSet()) { it.name }
 
         // §6.2 Two-pass component import
         LOG.info("§6.2 Two-pass component import for {} modules", allModules.size)
@@ -581,26 +583,28 @@ class ImportServiceImpl(
 
     @Transactional
     override fun migrate(progress: MigrationProgressListener): FullMigrationResult {
-        // @Transactional on the facade is load-bearing for two reasons:
+        // @Transactional here exists for the self-call transaction context,
+        // NOT atomicity. `migrate()` calls `migrateDefaults()` and
+        // `migrateAllComponents()` directly on `this`; both inner methods
+        // carry their own @Transactional, but Spring's proxy advice does
+        // not fire on intra-class calls. Without an outer @Transactional
+        // the chain runs with no active transaction and
+        // `entityManager.flush()` inside Pass 1 throws
+        // `TransactionRequiredException` (Spring Data's per-save auto-tx
+        // covered every plain `save()` before but does not cover a bare
+        // `flush()` call).
         //
-        // 1. Self-call transaction context. `migrate()` calls
-        //    `migrateDefaults()` and `migrateAllComponents()` directly on
-        //    `this`; both inner methods are `@Transactional`, but Spring's
-        //    proxy advice does not fire on intra-class calls, so without an
-        //    outer @Transactional the chain runs with no active transaction.
-        //    `entityManager.flush()` inside Pass 1 then throws
-        //    `TransactionRequiredException`. Spring Data's per-save auto-tx
-        //    covered every write before; bare flush calls do not get the
-        //    same treatment.
-        //
-        // 2. Atomicity (deliberate semantic change). Pre-PR #236
-        //    `migrateDefaults()` and `migrateAllComponents()` each committed
-        //    independently: a Pass-1 failure left the `component-defaults`
-        //    registry row already committed and pointing at a half-migrated
-        //    component set. With the outer @Transactional both phases share
-        //    one transaction — a Pass-1/2/3 failure rolls back the defaults
-        //    write too. That is the safer default for a migration that is
-        //    meant to be all-or-nothing per run.
+        // Atomicity disclaimer: per-component failures in
+        // `migrateAllComponents` are caught, counted into
+        // `BatchMigrationResult.failed`, and returned normally. The outer
+        // transaction therefore COMMITS even when some components failed.
+        // The `requireMigrationSucceeded` check in `cloneVcsData` raises
+        // after the commit, which fails pod startup but does NOT roll back
+        // the partial DB state — by design: keep what migrated so the next
+        // pod restart only retries the gaps. If a future requirement is
+        // true atomicity, this method needs to call
+        // `TransactionAspectSupport.currentTransactionStatus().setRollbackOnly()`
+        // when `components.failed > 0`.
         LOG.info("Starting full migration (defaults + all components)")
         val defaults = migrateDefaults()
         val components = migrateAllComponents(progress)
