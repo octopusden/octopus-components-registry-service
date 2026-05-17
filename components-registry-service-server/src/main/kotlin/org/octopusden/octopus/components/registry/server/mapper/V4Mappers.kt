@@ -302,7 +302,14 @@ private fun ComponentConfigurationEntity.toMarkerChildrenPayload(): MarkerChildr
                     },
             )
 
-        MarkerAttributes.DISTRIBUTION_MAVEN ->
+        MarkerAttributes.DISTRIBUTION_MAVEN,
+        MarkerAttributes.GROUP_ARTIFACT_PATTERN,
+        ->
+            // GROUP_ARTIFACT_PATTERN (MIG-047) is import-internal and stays out of
+            // MarkerAttributes.ALL — so it cannot be created/edited via the V4 POST
+            // endpoint — but it shares the same `mavenArtifacts` child-collection
+            // shape as DISTRIBUTION_MAVEN. listFieldOverrides projects it identically
+            // so the V4 admin UI never throws on components that contain it.
             MarkerChildrenPayload(
                 mavenArtifacts =
                     mavenArtifacts.sortedBy { it.sortOrder }.map { e ->
