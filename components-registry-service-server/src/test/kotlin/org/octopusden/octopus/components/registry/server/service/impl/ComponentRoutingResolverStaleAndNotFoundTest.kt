@@ -128,6 +128,26 @@ class ComponentRoutingResolverStaleAndNotFoundTest {
 
     @Test
     @DisplayName(
+        "1.1 fault tolerance: db transient + git stale (db-sourced) → still returns gitResult " +
+            "(fault tolerance preserved on non-NotFound db failures)",
+    )
+    fun pr192_1_1_jiraComponentByProjectAndVersion_dbTransient_gitStaleDbSourced_stillReturnsGit() {
+        val projectKey = "lambda-proj"
+        val version = "1.0.0"
+        val migratedComponent = "migrated-widget"
+        val gitResult = mockJiraComponentVersion(migratedComponent)
+        doReturn(setOf(migratedComponent)).`when`(sourceRegistry).getDbComponentNames()
+        doThrow(RuntimeException("transient db error"))
+            .`when`(dbResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+        doReturn(gitResult)
+            .`when`(gitResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+
+        val result = routing.getJiraComponentByProjectAndVersion(projectKey, version)
+        assertEquals(gitResult, result, "transient db failure falls back to git without stale-guard")
+    }
+
+    @Test
+    @DisplayName(
         "1.1 P1-B guard (Opus): gitResult.componentVersion is null → no NPE in stale-guard; " +
             "guard cannot evaluate → fall through and return gitResult as-is",
     )
@@ -191,6 +211,40 @@ class ComponentRoutingResolverStaleAndNotFoundTest {
         assertThrows(NotFoundException::class.java) {
             routing.findComponentByArtifact(artifact)
         }
+    }
+
+    @Test
+    @DisplayName(
+        "1.4 anti-regression: db NotFound + git also NotFound → NotFoundException propagates",
+    )
+    fun pr192_1_4_findComponentByArtifact_bothNotFound_throws() {
+        val artifact = ArtifactDependency("org.test", "missing", "1.0.0")
+        doThrow(NotFoundException("not in db"))
+            .`when`(dbResolver).findComponentByArtifact(artifact)
+        doThrow(NotFoundException("not in git"))
+            .`when`(gitResolver).findComponentByArtifact(artifact)
+
+        assertThrows(NotFoundException::class.java) {
+            routing.findComponentByArtifact(artifact)
+        }
+    }
+
+    @Test
+    @DisplayName(
+        "1.4 fault tolerance: db transient + git stale (db-sourced) → still returns gitResult " +
+            "(fault tolerance preserved on non-NotFound db failures)",
+    )
+    fun pr192_1_4_findComponentByArtifact_dbTransient_gitStaleDbSourced_stillReturnsGit() {
+        val artifact = ArtifactDependency("org.test", "widget", "1.0.0")
+        val migratedComponent = "migrated-widget"
+        val gitResult = mockVersionedComponent(migratedComponent)
+        doReturn(setOf(migratedComponent)).`when`(sourceRegistry).getDbComponentNames()
+        doThrow(RuntimeException("transient db error"))
+            .`when`(dbResolver).findComponentByArtifact(artifact)
+        doReturn(gitResult).`when`(gitResolver).findComponentByArtifact(artifact)
+
+        val result = routing.findComponentByArtifact(artifact)
+        assertEquals(gitResult, result, "transient db failure falls back to git without stale-guard")
     }
 
     @Test
