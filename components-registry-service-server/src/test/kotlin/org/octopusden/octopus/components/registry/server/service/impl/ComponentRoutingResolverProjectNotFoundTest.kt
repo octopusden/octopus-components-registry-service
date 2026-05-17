@@ -12,6 +12,7 @@ import org.mockito.Mockito.doThrow
 import org.mockito.Mockito.mock
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
+import org.octopusden.octopus.escrow.config.JiraComponentVersionRange
 
 /**
  * MIG-049: V2 project endpoints return 200 instead of 404 for unknown projects.
@@ -115,5 +116,64 @@ class ComponentRoutingResolverProjectNotFoundTest {
 
         val result = routing.getJiraComponentsByProject(projectKey)
         assertEquals(setOf("git-only-a", "shared-b", "db-only-c"), result)
+    }
+
+    // =========================================================================
+    // MIG-049-002: getJiraComponentVersionRangesByProject
+    // =========================================================================
+
+    @Test
+    @DisplayName(
+        "MIG-049-002: getJiraComponentVersionRangesByProject re-throws NotFoundException " +
+            "when both resolvers raise it (project genuinely unknown)",
+    )
+    fun mig049_002_jiraVersionRangesByProject_bothNotFound_reThrows() {
+        val projectKey = "epsilon-project"
+        doThrow(NotFoundException("Project '$projectKey' is not found"))
+            .`when`(gitResolver).getJiraComponentVersionRangesByProject(projectKey)
+        doThrow(NotFoundException("Project '$projectKey' is not found"))
+            .`when`(dbResolver).getJiraComponentVersionRangesByProject(projectKey)
+
+        val ex =
+            assertThrows(NotFoundException::class.java) {
+                routing.getJiraComponentVersionRangesByProject(projectKey)
+            }
+        assertEquals(
+            "Project '$projectKey' is not found",
+            ex.message,
+        )
+    }
+
+    @Test
+    @DisplayName(
+        "MIG-049-002 anti-regression: gitResolver throws, dbResolver returns rows → routing returns the V2 rows " +
+            "(de-duped via sourceRegistry — git rows for db-routed components are dropped)",
+    )
+    fun mig049_002_jiraVersionRangesByProject_gitNotFound_dbHasRows_returnsDb() {
+        val projectKey = "zeta-project"
+        val dbRange = mock(JiraComponentVersionRange::class.java)
+        doReturn("db-routed-comp").`when`(dbRange).componentName
+        doThrow(NotFoundException("not in git"))
+            .`when`(gitResolver).getJiraComponentVersionRangesByProject(projectKey)
+        doReturn(setOf(dbRange)).`when`(dbResolver).getJiraComponentVersionRangesByProject(projectKey)
+
+        val result = routing.getJiraComponentVersionRangesByProject(projectKey)
+        assertEquals(setOf(dbRange), result)
+    }
+
+    @Test
+    @DisplayName(
+        "MIG-049-002 anti-regression: gitResolver returns rows, dbResolver throws → routing returns the V1 rows",
+    )
+    fun mig049_002_jiraVersionRangesByProject_gitHasRows_dbNotFound_returnsGit() {
+        val projectKey = "eta-project"
+        val gitRange = mock(JiraComponentVersionRange::class.java)
+        doReturn("legacy-comp").`when`(gitRange).componentName
+        doReturn(setOf(gitRange)).`when`(gitResolver).getJiraComponentVersionRangesByProject(projectKey)
+        doThrow(NotFoundException("not in db"))
+            .`when`(dbResolver).getJiraComponentVersionRangesByProject(projectKey)
+
+        val result = routing.getJiraComponentVersionRangesByProject(projectKey)
+        assertEquals(setOf(gitRange), result)
     }
 }
