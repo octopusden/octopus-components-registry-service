@@ -99,6 +99,13 @@ Subagent workflow: a PR agent in a sibling worktree exports
 from that worktree's code on restart. Port-scoped kill leaves parallel
 worktrees on other ports untouched.
 
+## TeamCity (end-to-end on the agent)
+
+For a single-step TC job that boots **both** sides from pre-built JARs (released
+baseline + current-chain candidate) and runs the compat-test against them,
+see [`TEAMCITY.md`](TEAMCITY.md). The wrapper [`teamcity-run.sh`](teamcity-run.sh)
+chains postgres → baseline JAR → candidate JAR → compat → teardown.
+
 ## Tear-down
 
 ```bash
