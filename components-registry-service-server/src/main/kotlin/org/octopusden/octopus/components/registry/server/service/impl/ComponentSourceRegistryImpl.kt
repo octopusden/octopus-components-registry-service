@@ -32,7 +32,17 @@ class ComponentSourceRegistryImpl(
         // silently exclude it from getDbComponentNames() → 404 blackhole.
         val normalized = source.trim().lowercase()
         require(normalized in ALLOWED_SOURCES) {
-            "Invalid component source '$source'; allowed values: ${ALLOWED_SOURCES.joinToString(", ")}"
+            // Sanitize THEN truncate the echoed value to avoid log-injection +
+            // oversized payload landing verbatim in ControllerExceptionHandler's
+            // HTTP response body and the WARN log line. Sanitization replaces any
+            // CR/LF/TAB/other ISO C0/C1 control character with an escaped \xNN
+            // form (so `bad\nWARN forged` cannot inject a fake log line),
+            // truncation caps the result at MAX_ERROR_ECHO_CHARS.
+            // (PR #248 follow-up to PR #247 Opus review P2-A.)
+            val sanitized = sanitizeForEcho(source)
+            val echo = sanitized.take(MAX_ERROR_ECHO_CHARS)
+            val ellipsis = if (sanitized.length > MAX_ERROR_ECHO_CHARS) "…" else ""
+            "Invalid component source '$echo$ellipsis'; allowed values: ${ALLOWED_SOURCES.joinToString(", ")}"
         }
         val entity =
             componentSourceRepository.findById(name).orElse(
@@ -54,7 +64,27 @@ class ComponentSourceRegistryImpl(
 
     override fun getGitComponentNames(): Set<String> = componentSourceRepository.findBySource("git").map { it.componentKey }.toSet()
 
-    private companion object {
+    companion object {
         private val ALLOWED_SOURCES = setOf("git", "db")
+        private const val MAX_ERROR_ECHO_CHARS = 80
+
+        /**
+         * Replaces every ISO C0/C1 control character (0x00..0x1F and 0x7F..0x9F)
+         * with an escaped `\xNN` literal so a value like `bad\nWARN forged` can
+         * never inject a fake log line nor break the JSON-rendered HTTP body.
+         * Printable characters are preserved verbatim; the result is then safely
+         * truncated by the caller without re-introducing partial escapes.
+         */
+        internal fun sanitizeForEcho(value: String): String =
+            buildString(value.length) {
+                for (ch in value) {
+                    val code = ch.code
+                    if (code in 0x00..0x1F || code in 0x7F..0x9F) {
+                        append("\\x").append(code.toString(16).uppercase().padStart(2, '0'))
+                    } else {
+                        append(ch)
+                    }
+                }
+            }
     }
 }
