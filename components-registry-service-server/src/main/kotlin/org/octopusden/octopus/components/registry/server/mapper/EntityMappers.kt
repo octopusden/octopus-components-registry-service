@@ -234,11 +234,9 @@ private fun ComponentEntity.resolveForRange(
  * but it does mean a broader override on a real component is silently
  * dropped during enumeration.
  *
- * FIXME (tracked in `docs/db-migration/todo.md` alongside the partial-overlap
- * rejection item): implement a sample-points heuristic over `containsVersion`
- * to approximate `child ⊆ parent`. Needs `NumericVersionFactory` threaded
- * through `resolveForRange` → `toEscrowModule` so the sampling can parse the
- * range endpoints.
+ * See TD-010 (`docs/db-migration/tech-debt/010-range-applies-containment.md`)
+ * for the matrix-tests acceptance + sample-points heuristic spec. Same
+ * blocker as the partial-overlap write-side rejection item.
  */
 private fun rangeApplies(
     parentRange: String,
