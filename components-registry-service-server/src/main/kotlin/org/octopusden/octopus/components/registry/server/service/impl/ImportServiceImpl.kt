@@ -1487,6 +1487,14 @@ class ImportServiceImpl(
                 // persist the marker row first (to get the ID), then attach tools.
                 // saveMarkerRowWithChildren detects that row.id is non-null after this
                 // save and skips the redundant second save in its own body.
+                //
+                // Safe because ComponentConfigurationEntity uses GenerationType.UUID:
+                // Hibernate assigns row.id BEFORE the persist() call (in-memory UUID),
+                // so the mutation is visible on the same `row` reference. Switching to
+                // IDENTITY/SEQUENCE in the future would require capturing
+                // `val saved = configurationRepository.save(row)` and passing `saved`
+                // to attachRequiredTools — track as Group 6-J if such a change ever
+                // lands.
                 configurationRepository.save(row)
                 attachRequiredTools(row, override.buildConfiguration?.tools)
             }?.let { saved += it }
