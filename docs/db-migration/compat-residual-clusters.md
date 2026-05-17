@@ -285,45 +285,22 @@ Option A is more invasive but aligns with the existing migration policy
 AssertJ recursive comparison with `ignoringCollectionOrder` fails — meaning
 the two SETS of `JiraComponentVersionRangeDTO` are NOT element-wise equal.
 
-**State: needs diagnosis.** Unlike the other three clusters, the specific
-divergence is not fully isolated yet. The compat-test output suggests at
-least one element differs in shape (the AssertJ recursive walk descends into
-nested DTOs — `JiraComponentDTO`, `VCSSettingsDTO`, `DistributionDTO` — and
-fails on any leaf). Probable candidates from the diagnosis dump:
+**Diagnosis (2026-05-17).** The single `VALUE_DIFF` that originally prompted this cluster came from the 01:22 compat run logged in `_wt/schema-v2-sql` — a run that fired the `CANDIDATE_NOT_DB_MODE` pre-flight warning (candidate was running `defaultSource=git`, not `defaultSource=db`). Inspecting `diff-worker-40123-…ndjson`, AssertJ reported "The following expected elements were not matched in the actual ArrayList" for exactly one element: a `JiraComponentVersionRangeDTO` whose `componentName` is a multi-artifact distribution component and whose `distribution.gav` on the **candidate** (V1 QA-stand) ended with a trailing comma. Because `ignoringCollectionOrder` compares by field equality, the candidate's trailing-comma element could not be matched against the baseline's clean element, producing the 1-record VALUE_DIFF. The candidate side was a stale V1 build on the QA stand — the same trailing-comma regression that MIG-041/MIG-045 tracks — not a schema-v2 code defect.
 
-- A range with `versionRange=[1.0,2.0)` style (version-range-only component
-  — possibly the same shape MIG-040 / RANGE_PRESENCE was supposed to fix).
-- A range whose `JiraComponentDTO.displayName` is `null` on one side and
-  populated on the other.
+**Outcome: not a schema-v2 regression.** The authoritative DB-mode compat run (executed 2026-05-17 08:26 from `feat/schema-v2-sql` tip `1ac4bc6`) shows `diffCount=0` for `GET /rest/api/2/common/jira-component-version-ranges`. The schema-v2 path for this endpoint (`DatabaseComponentRegistryResolver.buildJiraVersionRangesForComponent` → `ComponentEntity.toEscrowModule` → `EntityMappers.composeGavCsv`) uses `joinToString(",")` and never produces a trailing comma. The 01:22 diff was V1-vs-V1 drift between prod and the (then-undeployed) QA stand; once the QA stand is redeployed off the current `feat/schema-v2-sql` tip, this record will remain at 0.
 
-**Pre-work before writing the test:**
-
-1. Re-run compat with `--tests "*ProjectControllerV2CompatTest*"` AND
-   `--tests "*CommonControllerV2CompatTest*"` to get the diff alone.
-2. Save the offending baseline + candidate response pair (env-only,
-   not committed) and `diff` them with a focused tool (e.g.
-   `jq 'sort_by(.componentName, .versionRange)' | diff`).
-3. Identify the **single field** that differs (most likely one of: a
-   missing element, an extra element, a non-null vs null on a nested
-   DTO, or a version-range string normalisation).
-
-**Once diagnosed**, MIG-044 follows the same pattern: synthetic component
-fixture, RED test on the specific field, GREEN after fix.
-
-**Possible link to MIG-040.** If the divergence is a missing/extra
-RANGE_PRESENCE row, MIG-044's fix may be a single line in `EntityMappers`
-or in the RANGE_PRESENCE emission code (`ImportServiceImpl`). Re-check the
-@Disabled VAL-010 ledger entry — it lists "1× `vcsSettings.externalRegistry:
-null` vs `NOT_AVAILABLE` (default-emit divergence)" which fits this shape.
+**State: ✅ Closed-as-non-issue (2026-05-17).** Not reproducible against current
+`feat/schema-v2-sql` tip with proper local-vs-local compat (v2.0.86 baseline +
+DB-mode candidate, smoke-list active). The cluster's original VALUE_DIFF was
+V1-vs-V1 drift from the 00:52 QA-stand run where the preflight
+`CANDIDATE_NOT_DB_MODE` warning fired. No code change required. If a new diff
+surfaces for this endpoint after the QA-stand redeploy, it should be filed as
+a fresh cluster with a proper DB-mode diff report.
 
 **Acceptance.**
 
-- Diagnosis writeup (1-2 paragraphs) added to this section before the test
-  is written.
-- RED: `MIG-044-001` fails on a synthetic fixture mirroring the diagnosed
-  shape.
-- GREEN: after fix, `MIG-044-001` passes.
-- Compat residual: 1 record on `/jira-component-version-ranges` → 0.
+- Compat residual: 0 records on `/jira-component-version-ranges` in DB-mode
+  run (confirmed 2026-05-17 08:26, tip `1ac4bc6`).
 
 ---
 
