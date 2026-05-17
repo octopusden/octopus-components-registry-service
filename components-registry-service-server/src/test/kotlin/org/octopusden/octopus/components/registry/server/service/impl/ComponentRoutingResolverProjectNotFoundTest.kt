@@ -13,6 +13,7 @@ import org.mockito.Mockito.mock
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
 import org.octopusden.octopus.escrow.config.JiraComponentVersionRange
+import org.octopusden.octopus.escrow.model.Distribution
 
 /**
  * MIG-049: V2 project endpoints return 200 instead of 404 for unknown projects.
@@ -175,5 +176,63 @@ class ComponentRoutingResolverProjectNotFoundTest {
 
         val result = routing.getJiraComponentVersionRangesByProject(projectKey)
         assertEquals(setOf(gitRange), result)
+    }
+
+    // =========================================================================
+    // MIG-049-003: getComponentsDistributionByJiraProject
+    // =========================================================================
+
+    @Test
+    @DisplayName(
+        "MIG-049-003: getComponentsDistributionByJiraProject re-throws NotFoundException " +
+            "when both resolvers raise it (project genuinely unknown)",
+    )
+    fun mig049_003_componentsDistributionByJiraProject_bothNotFound_reThrows() {
+        val projectKey = "theta-project"
+        doThrow(NotFoundException("Project '$projectKey' is not found"))
+            .`when`(gitResolver).getComponentsDistributionByJiraProject(projectKey)
+        doThrow(NotFoundException("Project '$projectKey' is not found"))
+            .`when`(dbResolver).getComponentsDistributionByJiraProject(projectKey)
+
+        val ex =
+            assertThrows(NotFoundException::class.java) {
+                routing.getComponentsDistributionByJiraProject(projectKey)
+            }
+        assertEquals(
+            "Project '$projectKey' is not found",
+            ex.message,
+        )
+    }
+
+    @Test
+    @DisplayName(
+        "MIG-049-003 anti-regression: gitResolver throws, dbResolver returns map → routing returns the V2 map",
+    )
+    fun mig049_003_componentsDistributionByJiraProject_gitNotFound_dbHasMap_returnsDb() {
+        val projectKey = "iota-project"
+        val dbDistribution = mock(Distribution::class.java)
+        doThrow(NotFoundException("not in git"))
+            .`when`(gitResolver).getComponentsDistributionByJiraProject(projectKey)
+        doReturn(mapOf("db-routed-comp" to dbDistribution))
+            .`when`(dbResolver).getComponentsDistributionByJiraProject(projectKey)
+
+        val result = routing.getComponentsDistributionByJiraProject(projectKey)
+        assertEquals(mapOf("db-routed-comp" to dbDistribution), result)
+    }
+
+    @Test
+    @DisplayName(
+        "MIG-049-003 anti-regression: gitResolver returns map, dbResolver throws → routing returns the V1 map",
+    )
+    fun mig049_003_componentsDistributionByJiraProject_gitHasMap_dbNotFound_returnsGit() {
+        val projectKey = "kappa-project"
+        val gitDistribution = mock(Distribution::class.java)
+        doReturn(mapOf("legacy-comp" to gitDistribution))
+            .`when`(gitResolver).getComponentsDistributionByJiraProject(projectKey)
+        doThrow(NotFoundException("not in db"))
+            .`when`(dbResolver).getComponentsDistributionByJiraProject(projectKey)
+
+        val result = routing.getComponentsDistributionByJiraProject(projectKey)
+        assertEquals(mapOf("legacy-comp" to gitDistribution), result)
     }
 }
