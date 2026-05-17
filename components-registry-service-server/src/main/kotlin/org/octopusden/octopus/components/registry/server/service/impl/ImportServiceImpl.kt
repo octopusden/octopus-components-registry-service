@@ -67,6 +67,8 @@ import org.springframework.transaction.annotation.Transactional
 import jakarta.persistence.EntityManager
 import jakarta.persistence.PersistenceContext
 import java.time.Instant
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 
 /**
  * Schema-v2 DSL → DB import pipeline (MIG-039, §6).
@@ -125,12 +127,28 @@ class ImportServiceImpl(
     private var knownLabelCodes: MutableSet<String>? = null
     private var knownToolNames: MutableSet<String>? = null
 
+    /**
+     * Serialises `migrateAllComponents` and `migrateComponent` so the mutable
+     * in-migration dictionary caches above never see concurrent read/write.
+     * The operational invariant — single pod, one migration at a time — is now
+     * enforced rather than assumed. Reentrant so a `migrateAllComponents`
+     * implementation calling helpers that themselves take the lock would not
+     * deadlock; in practice only the top-level entry points acquire it.
+     */
+    private val migrationLock = ReentrantLock()
+
     // =========================================================================
     // Public API
     // =========================================================================
 
     @Transactional
     override fun migrateComponent(
+        name: String,
+        dryRun: Boolean,
+    ): MigrationResult = migrationLock.withLock { migrateComponentLocked(name, dryRun) }
+
+    @Suppress("CyclomaticComplexMethod", "LongMethod")
+    private fun migrateComponentLocked(
         name: String,
         dryRun: Boolean,
     ): MigrationResult {
@@ -239,6 +257,19 @@ class ImportServiceImpl(
     @Transactional
     @Suppress("LongMethod")
     override fun migrateAllComponents(progress: MigrationProgressListener): BatchMigrationResult {
+        // Serialise concurrent entry: `migrateAllComponents` and `migrateComponent`
+        // both mutate the in-migration dictionary cache fields below. Pre-PR #236
+        // these calls were stateless; with the new caches a parallel call would
+        // produce stale reads (best case) or `ConcurrentModificationException` on
+        // `HashSet` mutation (worst case). One pod, one in-flight migration is
+        // the operational invariant; the lock makes it enforced rather than
+        // assumed. `migrateComponent` takes the same lock for the duration of
+        // its body — see its `migrationLock.withLock { ... }` wrapper.
+        return migrationLock.withLock { migrateAllComponentsLocked(progress) }
+    }
+
+    @Suppress("LongMethod")
+    private fun migrateAllComponentsLocked(progress: MigrationProgressListener): BatchMigrationResult {
         val totalStart = System.nanoTime()
         LOG.info("Starting full DSL → DB component migration (schema v2 §6 pipeline)")
         // Use lenient loader so migration tolerates DSL entries that have semantic
@@ -273,9 +304,17 @@ class ImportServiceImpl(
         // normally absorb. Combined with the `flush() + clear()` below, the
         // L1 cache is evicted every 50 components; without these explicit
         // Sets the find calls re-hit the DB on every flush boundary.
+        //
+        // The try/finally below resets these fields even when the migration
+        // throws midway. Without the reset a failed run would leave the Sets
+        // claiming dictionary codes were inserted; the rollback rolled back
+        // the inserts but the in-memory cache outlives the transaction. A
+        // subsequent `migrateComponent` call would then skip a needed insert
+        // and the next junction save would trip the FK.
         knownSystemCodes = systemRepository.findAll().mapTo(HashSet()) { it.code }
         knownLabelCodes = labelRepository.findAll().mapTo(HashSet()) { it.code }
         knownToolNames = toolRepository.findAll().mapTo(HashSet()) { it.name }
+        try {
 
         // §6.2 Two-pass component import
         LOG.info("§6.2 Two-pass component import for {} modules", allModules.size)
@@ -314,25 +353,22 @@ class ImportServiceImpl(
 
         // Pass 1: create all components (parentComponent = null)
         val pass1Start = System.nanoTime()
-        // Batch-load existing component keys + source flags so the per-iteration
-        // findByComponentKey / componentSourceRepository.findById round-trips drop out.
-        // For a 1000-component prod DSL on a remote DB, the saved per-query latency
-        // dominates the local sub-millisecond cost. Targeted queries (`IN (...)` on the
-        // DSL key set) rather than `findAll()` so the cost stays bounded by DSL size,
-        // not total DB size (ghost rows from removed-from-DSL components don't matter).
+        // Batch-load existing component keys so the per-iteration
+        // findByComponentKey round-trip drops out. Targeted query (`IN (...)`
+        // on the DSL key set) rather than `findAll()` so the cost stays
+        // bounded by DSL size, not total DB size.
         val moduleKeys = allModules.keys
         val existingComponentKeys: Set<String> =
             componentRepository.findByComponentKeyIn(moduleKeys).mapTo(HashSet()) { it.componentKey }
-        val existingSources: MutableMap<String, ComponentSourceEntity> =
-            componentSourceRepository.findAllById(moduleKeys).associateByTo(HashMap()) { it.componentKey }
-        val sourcesToUpsert = mutableListOf<ComponentSourceEntity>()
+
+        // Source-flag staging is plain data (key → migratedAt timestamp) so
+        // that the `entityManager.clear()` below cannot detach managed
+        // entities we still need to write. Materialise fresh entities at
+        // end-of-Pass-1; that avoids the `merge`-induced SELECT-before-INSERT
+        // per row that would otherwise eat back the JDBC batch savings.
+        val stagedSourceUpdates = LinkedHashMap<String, Instant>()
         fun stageSource(name: String) {
-            val entity =
-                existingSources[name]
-                    ?: ComponentSourceEntity(componentKey = name).also { existingSources[name] = it }
-            entity.source = "db"
-            entity.migratedAt = Instant.now()
-            sourcesToUpsert += entity
+            stagedSourceUpdates[name] = Instant.now()
         }
         // After importing this many components, flush pending INSERTs and
         // clear the JPA persistence context. Without this the session grows
@@ -428,8 +464,19 @@ class ImportServiceImpl(
             }
         }
 
-        if (sourcesToUpsert.isNotEmpty()) {
-            componentSourceRepository.saveAll(sourcesToUpsert.distinct())
+        if (stagedSourceUpdates.isNotEmpty()) {
+            // Materialise fresh / re-fetched entities now so saveAll sees
+            // either managed (from this fetch) or genuinely new entities —
+            // no detached merges, no SELECT-before-INSERT round-trips.
+            val existingSources =
+                componentSourceRepository.findAllById(stagedSourceUpdates.keys).associateBy { it.componentKey }
+            val toSave = stagedSourceUpdates.map { (key, ts) ->
+                val entity = existingSources[key] ?: ComponentSourceEntity(componentKey = key)
+                entity.source = "db"
+                entity.migratedAt = ts
+                entity
+            }
+            componentSourceRepository.saveAll(toSave)
         }
 
         val pass1Ms = (System.nanoTime() - pass1Start) / 1_000_000
@@ -491,14 +538,6 @@ class ImportServiceImpl(
             failed,
             skipped,
         )
-        // Reset the in-migration dictionary caches so a subsequent migration
-        // (or a single-component path on the same bean) reads fresh state
-        // from the DB. Mid-migration exceptions skip this reset; the next
-        // entrant overwrites the fields wholesale at the top of Pass 1, so
-        // a leaked cache cannot poison subsequent runs.
-        knownSystemCodes = null
-        knownLabelCodes = null
-        knownToolNames = null
         return BatchMigrationResult(
             total = total,
             migrated = migrated,
@@ -506,6 +545,14 @@ class ImportServiceImpl(
             skipped = skipped,
             results = results,
         )
+        } finally {
+            // Reset the in-migration dictionary caches unconditionally. The
+            // try around the body ensures this runs even if Pass 1/2/3
+            // throws; the next entrant primes the fields fresh from the DB.
+            knownSystemCodes = null
+            knownLabelCodes = null
+            knownToolNames = null
+        }
     }
 
     override fun getMigrationStatus(): MigrationStatus {
@@ -534,14 +581,26 @@ class ImportServiceImpl(
 
     @Transactional
     override fun migrate(progress: MigrationProgressListener): FullMigrationResult {
-        // @Transactional on the facade ensures the self-calls to
-        // `migrateDefaults()` and `migrateAllComponents(progress)` run inside
-        // an active transaction. Without it those self-calls bypass the
-        // Spring proxy (`this.migrateDefaults()` does not trigger
-        // @Transactional advice on the same class) and the explicit
-        // `entityManager.flush()` inside Pass 1 fails with
-        // `TransactionRequiredException` because Spring Data's per-save
-        // auto-tx no longer covers the bare flush call.
+        // @Transactional on the facade is load-bearing for two reasons:
+        //
+        // 1. Self-call transaction context. `migrate()` calls
+        //    `migrateDefaults()` and `migrateAllComponents()` directly on
+        //    `this`; both inner methods are `@Transactional`, but Spring's
+        //    proxy advice does not fire on intra-class calls, so without an
+        //    outer @Transactional the chain runs with no active transaction.
+        //    `entityManager.flush()` inside Pass 1 then throws
+        //    `TransactionRequiredException`. Spring Data's per-save auto-tx
+        //    covered every write before; bare flush calls do not get the
+        //    same treatment.
+        //
+        // 2. Atomicity (deliberate semantic change). Pre-PR #236
+        //    `migrateDefaults()` and `migrateAllComponents()` each committed
+        //    independently: a Pass-1 failure left the `component-defaults`
+        //    registry row already committed and pointing at a half-migrated
+        //    component set. With the outer @Transactional both phases share
+        //    one transaction — a Pass-1/2/3 failure rolls back the defaults
+        //    write too. That is the safer default for a migration that is
+        //    meant to be all-or-nothing per run.
         LOG.info("Starting full migration (defaults + all components)")
         val defaults = migrateDefaults()
         val components = migrateAllComponents(progress)
@@ -749,11 +808,29 @@ class ImportServiceImpl(
     }
 
     /**
+     * Shared cache of `loadCommonDefaults(emptyMap())`. The call evaluates the
+     * Groovy `Defaults.groovy` script and is heavy: measured ~25 s in QA on a
+     * CPU-throttled pod. Without sharing it fires twice per migration — once
+     * for the tools fallback ([commonDefaultsToolsCache]) and once inside
+     * [preupsertLabelsFromLoader] for label discovery. `by lazy` so resolution
+     * is deferred to the first read inside a migration call (the bean is
+     * constructed before the loader's git clone is ready).
+     */
+    private val commonDefaultsCache: org.octopusden.octopus.escrow.configuration.model.DefaultConfigParameters by lazy {
+        configurationLoader.loadCommonDefaults(emptyMap())
+    }
+
+    /**
      * Common-defaults tools (`Defaults.groovy` → `build { requiredTools = "..." }`),
-     * lazy-loaded once per `ImportServiceImpl` instance and reused as a fallback
-     * when a component's own merged `buildConfiguration.tools` came back empty
-     * (the Groovy loader drops Defaults-inherited tools whenever the component
-     * declares its own `build { ... }` block — see `importModule` for context).
+     * derived on each read from the shared lazy [commonDefaultsCache]. Used as
+     * a fallback when a component's own merged `buildConfiguration.tools` came
+     * back empty — the Groovy loader drops Defaults-inherited tools whenever
+     * the component declares its own `build { ... }` block (see [importModule]).
+     *
+     * Each access allocates a fresh `toList()` copy from the cached defaults;
+     * the underlying `loadCommonDefaults` Groovy eval is paid once via the
+     * lazy. The list re-copy is cheap relative to the eval and isolates
+     * callers from accidental mutation.
      *
      * Limitation: this fallback cannot distinguish "loader merge dropped tools"
      * from "component explicitly cleared tools" — both surface as an empty list
@@ -761,19 +838,6 @@ class ImportServiceImpl(
      * components that want NO tools would require loader changes (preserve the
      * null-vs-empty distinction). No current DSL component exercises that case.
      */
-    /**
-     * Shared cache of `loadCommonDefaults(emptyMap())`. The call evaluates the
-     * Groovy `Defaults.groovy` script and is heavy: measured ~25 s in QA on a
-     * CPU-throttled pod. Without sharing it fires twice per migration — once
-     * here for the tools fallback and once again inside
-     * `preupsertLabelsFromLoader` for label discovery. Lazy because the
-     * service is constructed before the loader's git clone is ready;
-     * resolution is deferred until the first read inside a migration call.
-     */
-    private val commonDefaultsCache: org.octopusden.octopus.escrow.configuration.model.DefaultConfigParameters by lazy {
-        configurationLoader.loadCommonDefaults(emptyMap())
-    }
-
     private val commonDefaultsToolsCache: List<org.octopusden.octopus.escrow.model.Tool>
         get() = commonDefaultsCache.buildParameters?.tools?.toList() ?: emptyList()
 
