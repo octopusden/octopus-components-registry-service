@@ -285,22 +285,46 @@ Option A is more invasive but aligns with the existing migration policy
 AssertJ recursive comparison with `ignoringCollectionOrder` fails — meaning
 the two SETS of `JiraComponentVersionRangeDTO` are NOT element-wise equal.
 
-**Diagnosis (2026-05-17).** The single `VALUE_DIFF` that originally prompted this cluster came from the 01:22 compat run logged in `_wt/schema-v2-sql` — a run that fired the `CANDIDATE_NOT_DB_MODE` pre-flight warning (candidate was running `defaultSource=git`, not `defaultSource=db`). Inspecting `diff-worker-40123-…ndjson`, AssertJ reported "The following expected elements were not matched in the actual ArrayList" for exactly one element: a `JiraComponentVersionRangeDTO` whose `componentName` is a multi-artifact distribution component and whose `distribution.gav` on the **candidate** (V1 QA-stand) ended with a trailing comma. Because `ignoringCollectionOrder` compares by field equality, the candidate's trailing-comma element could not be matched against the baseline's clean element, producing the 1-record VALUE_DIFF. The candidate side was a stale V1 build on the QA stand — the same trailing-comma regression that MIG-041/MIG-045 tracks — not a schema-v2 code defect.
+**Diagnosis (2026-05-17, revised).** The earlier closure of this cluster leaned on the
+`CANDIDATE_NOT_DB_MODE` preflight env-warning as evidence that the original
+VALUE_DIFF was V1-vs-V1 drift. That framing is **incorrect**: the routing logic in
+`ComponentRoutingResolver.resolverFor(name)` consults `ComponentSourceRegistry`
+**per component**, so any component whose `component_sources.source = "db"` routes
+through the schema-v2 DB resolver irrespective of `defaultSource`. The preflight
+warning is a coarse environmental signal (the *default* fallback is `git`) — not
+proof that a given diff came from V1. With `dbComponentCount = 948` on the QA
+stand, all 948 imported components were in fact DB-routed at the time of the
+01:22 / 00:52 runs.
 
-**Outcome: not a schema-v2 regression.** The authoritative DB-mode compat run (executed 2026-05-17 08:26 from `feat/schema-v2-sql` tip `1ac4bc6`) shows `diffCount=0` for `GET /rest/api/2/common/jira-component-version-ranges`. The schema-v2 path for this endpoint (`DatabaseComponentRegistryResolver.buildJiraVersionRangesForComponent` → `ComponentEntity.toEscrowModule` → `EntityMappers.composeGavCsv`) uses `joinToString(",")` and never produces a trailing comma. The 01:22 diff was V1-vs-V1 drift between prod and the (then-undeployed) QA stand; once the QA stand is redeployed off the current `feat/schema-v2-sql` tip, this record will remain at 0.
+What we can say with evidence:
 
-**State: ✅ Closed-as-non-issue (2026-05-17).** Not reproducible against current
-`feat/schema-v2-sql` tip with proper local-vs-local compat (v2.0.86 baseline +
-DB-mode candidate, smoke-list active). The cluster's original VALUE_DIFF was
-V1-vs-V1 drift from the 00:52 QA-stand run where the preflight
-`CANDIDATE_NOT_DB_MODE` warning fired. No code change required. If a new diff
-surfaces for this endpoint after the QA-stand redeploy, it should be filed as
-a fresh cluster with a proper DB-mode diff report.
+- The local-vs-local compat at 2026-05-17 08:26 (against `feat/schema-v2-sql`
+  tip `1ac4bc6`, with `_wt/local-baseline` at `v2.0.86` and the candidate in
+  DB-mode with `COMPAT_SMOKE_COMPONENTS` sourced from `/tmp/compat-aug-env.sh`)
+  recorded **0 active diffs on `GET /rest/api/2/common/jira-component-version-ranges`**
+  out of 41 active VALUE_DIFFs total. The diff-worker NDJSON does not contain
+  this endpoint.
+- The schema-v2 emission path for this endpoint
+  (`DatabaseComponentRegistryResolver.buildJiraVersionRangesForComponent` →
+  `ComponentEntity.toEscrowModule` → `EntityMappers.composeGavCsv`) uses
+  `joinToString(",")` and cannot synthesize a trailing-comma artefact.
 
-**Acceptance.**
+**Outcome: known-risk, not closed.** The endpoint is **not reproducing a diff on
+the current `feat/schema-v2-sql` tip**, so there is no in-flight regression to
+fix. Two reasons remaining open instead of closed-as-non-issue:
 
-- Compat residual: 0 records on `/jira-component-version-ranges` in DB-mode
-  run (confirmed 2026-05-17 08:26, tip `1ac4bc6`).
+1. The decisive 08:26 evidence is a local artifact (`build/reports/compat/`
+   ndjson) not committed to the repository — no CI-replayable proof.
+2. The original 01:22 VALUE_DIFF root cause is unverified at field level (we
+   don't have the bytes the QA candidate emitted vs prod baseline emitted for
+   the offending range record, and we can't reconstruct it without re-running
+   compat against a candidate frozen at the same commit).
+
+**Re-verify when:** the QA stand is redeployed off the current
+`feat/schema-v2-sql` tip with `default-source=db` set, OR after a CI-committed
+compat run produces a `diffCount=0` artifact for this endpoint. If a fresh
+VALUE_DIFF appears on `/jira-component-version-ranges`, file a new cluster with
+the field-level diff captured.
 
 ---
 
