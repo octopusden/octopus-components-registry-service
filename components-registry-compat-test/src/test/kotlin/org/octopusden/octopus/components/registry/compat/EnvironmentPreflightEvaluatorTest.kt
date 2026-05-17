@@ -115,6 +115,26 @@ class EnvironmentPreflightEvaluatorTest {
     }
 
     @Test
+    fun `allowNonDbCandidate=true on already-healthy candidate is a no-op — still zero records`() {
+        // The 4th path through the CANDIDATE_NOT_DB_MODE guard: (db-ok, allow=true).
+        // Same inputs as the happy-path test above, plus the escape hatch on.
+        // Locks in that the hatch does NOT spuriously emit a record on a healthy
+        // candidate — guards against a future refactor that inverts the `&&`.
+        val out = evaluateEnvironmentPreflight(
+            EnvironmentPreflightInputs(
+                baselineStatus = 200,
+                baselineSnapshot = ok("rev-A"),
+                candidateStatus = 200,
+                candidateSnapshot = ok("rev-A", defaultSource = "db", dbComponentCount = 948L),
+                baselineComponentCount = 948L,
+                allowNonDbCandidate = true,
+            ),
+            ts = ts,
+        )
+        assertThat(out).isEmpty()
+    }
+
+    @Test
     fun `allowNonDbCandidate=true suppresses CANDIDATE_NOT_DB_MODE but not SNAPSHOT_MISMATCH`() {
         // Same misconfiguration as the test above (candidate defaultSource=git), PLUS a
         // revision drift. The documented escape hatch must suppress the DB-mode warning

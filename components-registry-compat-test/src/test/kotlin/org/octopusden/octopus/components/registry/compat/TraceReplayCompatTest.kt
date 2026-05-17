@@ -59,7 +59,11 @@ class TraceReplayCompatTest : CompatibilityTestBase() {
      * The filter is path-prefix exact-match against the path BEFORE the `?` query
      * string. Future diagnostic additions go here.
      */
-    private val excludedPathPrefixes =
+    // Exact-match (NOT prefix-match) — paths like `/.../service/status/sub` are NOT
+    // excluded. Renamed from `excludedPathPrefixes` after Stage-2 review flagged the
+    // name/impl mismatch. If prefix-matching is ever wanted, switch to `startsWith`
+    // explicitly so the contract is visible at the call site.
+    private val excludedPaths =
         listOf(
             "/rest/api/2/components-registry/service/status",
             "/rest/api/2/components-registry/service/ping",
@@ -68,7 +72,7 @@ class TraceReplayCompatTest : CompatibilityTestBase() {
 
     private fun isDiagnostic(path: String): Boolean {
         val pathOnly = path.substringBefore('?')
-        return excludedPathPrefixes.any { pathOnly == it }
+        return excludedPaths.any { pathOnly == it }
     }
 
     /**
@@ -247,6 +251,23 @@ class TraceReplayCompatTest : CompatibilityTestBase() {
             )
         }
 
+        // Vacuous-pass guard: if `loadBodyFixtures` could not pull at least 3 real
+        // GAV triples from baseline's /v2/components, every POST against
+        // /find-by-artifact{s} falls back to the `("x","x","x")` dummy. Both stands
+        // then return a symmetric 404 / empty payload and the trace replay reports
+        // 0 diffs *for the wrong reason* — the comparison never reached the lookup
+        // path. Skip via `assumeTrue` so the run is reported as SKIPPED (not GREEN)
+        // and the operator investigates the baseline /v2/components response.
+        // Threshold of 3 mirrors `BodyFixtures.batchArtifacts` target size of 5 —
+        // we tolerate a small shortfall but not a wholesale empty-discovery.
+        assumeTrue(
+            fixtures.singleArtifact != null && fixtures.batchArtifacts.size >= 3,
+            "body fixtures unavailable (singleArtifact=${fixtures.singleArtifact != null}, " +
+                "batchArtifactsSize=${fixtures.batchArtifacts.size}). trace replay would be " +
+                "vacuous for /find-by-artifact{s} — verify baseline /v2/components returns " +
+                "components with non-empty distribution.GAV before re-running.",
+        )
+
         // Parallel execution via a dedicated thread pool. CompatibilityTestBase's
         // limiter would also work, but using a separate pool here keeps the trace-
         // replay sized independently from the per-stand HTTP cap (CompatibilityTestBase
@@ -261,6 +282,18 @@ class TraceReplayCompatTest : CompatibilityTestBase() {
         // align with the existing summary.md grouping.
         val weightByBucket = ConcurrentHashMap<Pair<String, DiffClassifier>, Long>()
 
+        // FOLLOW-UP (Stage-2 review flagged): symmetric-failure blind spot. When both
+        // stands return identical 4xx/5xx with identical error bodies, Comparators.compareRaw
+        // records no STATUS_CODE_DIFF (statuses match) and no STRUCTURAL_DIFF (bodies match) —
+        // the tuple silently registers as "no diff". A common-mode regression (both stands
+        // wedged on the same downstream) would therefore look clean. Mitigations to consider:
+        //   (a) classify (>=400, >=400) pairs above a threshold as a new BOTH_STANDS_ERRORED
+        //       category, surfaced in summary.md as an env-warning.
+        //   (b) require a minimum 2xx rate per (endpoint, day) — fail the run if it drops.
+        // Out of scope for this PR (would also need a known-deltas extension for legitimate
+        // pre-existing 4xx like the `/projects/{p}/jira-components` family for unknown
+        // projects).
+
         // Capture which entries hung (HTTP didn't return within the per-future cap).
         // Written to a file at the end so operators can inspect server-side slowness.
         val hungEntries = java.util.concurrent.ConcurrentLinkedQueue<TraceEntry>()
@@ -271,6 +304,11 @@ class TraceReplayCompatTest : CompatibilityTestBase() {
         // Useful for debug-batch runs (~30 tuples) where we want full visibility into
         // which call hangs / errors. Interleaved across worker threads but includes the
         // thread name so the operator can demultiplex if needed. Keep OFF for 20k runs.
+        //
+        // SECURITY NOTE: with verbose=on, POST body previews include real group/artifact/
+        // version triples discovered from the baseline /v2/components response. Run output
+        // is therefore NOT safe to paste verbatim into the public repo or Slack — treat the
+        // gradle stdout as operator-confidential.
         val verbose =
             (System.getProperty("compat.verbose") ?: System.getenv("COMPAT_VERBOSE"))
                 ?.equals("true", ignoreCase = true) == true
@@ -347,6 +385,14 @@ class TraceReplayCompatTest : CompatibilityTestBase() {
             // (observed 2026-05-17). The 90 s budget here is the belt-and-braces
             // ceiling that lets the replay finish even if individual sockets are
             // wedged on the server side.
+            //
+            // FOLLOW-UP (Stage-2 review flagged): the loop walks futures in submission
+            // order, so a slow future at index N delays inspection of N+1..end. The 90 s
+            // "budget" is therefore wall-clock from `get`, not from submission. For 20k
+            // tuples × parallelism 10 this hasn't mattered (all completed in 13m), but a
+            // pathological all-hung run can balloon. Future fix: ExecutorCompletionService
+            // with a single deadline per submission, or a separate watchdog thread that
+            // walks `(future, submittedAt)` pairs.
             futures.forEach { f ->
                 val entry = futureToEntry[f]
                 try {
