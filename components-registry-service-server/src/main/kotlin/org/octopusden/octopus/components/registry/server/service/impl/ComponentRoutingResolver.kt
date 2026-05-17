@@ -303,8 +303,12 @@ class ComponentRoutingResolver(
     }
 
     override fun findComponentsByDockerImages(images: Set<Image>): Set<ComponentImage> {
-        val gitResults = gitResolver.findComponentsByDockerImages(images)
         val dbResults = dbResolver.findComponentsByDockerImages(images)
-        return gitResults + dbResults
+        val gitResults = gitResolver.findComponentsByDockerImages(images)
+        val dbNames = sourceRegistry.getDbComponentNames()
+        // Drop git results whose component is DB-sourced: for migrated components the DB
+        // is authoritative, and a git stale match would mask a true absence with legacy data.
+        val gitFiltered = gitResults.filterNot { dbNames.contains(it.component) }.toSet()
+        return gitFiltered + dbResults
     }
 }
