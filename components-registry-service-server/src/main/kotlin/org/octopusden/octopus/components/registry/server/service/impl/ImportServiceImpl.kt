@@ -1281,6 +1281,17 @@ class ImportServiceImpl(
             saveMarkerRowWithChildren(component, versionRange, MarkerAttributes.DISTRIBUTION_MAVEN) { row ->
                 attachMavenArtifacts(row, overDist)
             }?.let { saved += it }
+        } else if (groupArtifactPatternsDiffer(base, override)) {
+            // MIG-047: DSL sets groupId/artifactId per range without distribution.GAV().
+            // Both distribution.GAV() are null so mavenArtifactsDiffer returns false, but
+            // the effective groupIdPattern/artifactIdPattern differ across ranges.
+            // Emit a GROUP_ARTIFACT_PATTERN marker (NOT distribution.maven) so that
+            // getMavenArtifactParameters can read the per-range values while
+            // getAllJiraComponentVersionRanges / buildEscrowModuleConfig remain unaffected
+            // (they only look at DISTRIBUTION_MAVEN markers for the distribution field).
+            saveMarkerRowWithChildren(component, versionRange, MarkerAttributes.GROUP_ARTIFACT_PATTERN) { row ->
+                attachMavenArtifactsFromGroupArtifact(row, override.groupIdPattern, override.artifactIdPattern)
+            }?.let { saved += it }
         }
         if (fileUrlArtifactsDiffer(baseDist, overDist)) {
             saveMarkerRowWithChildren(component, versionRange, MarkerAttributes.DISTRIBUTION_FILE_URL) { row ->
@@ -1406,6 +1417,37 @@ class ImportServiceImpl(
                     artifactPattern = coords.artifactId,
                     extension = coords.extension,
                     classifier = coords.classifier,
+                    sortOrder = sortOrder++,
+                ),
+            )
+        }
+    }
+
+    /**
+     * MIG-047: synthetic DISTRIBUTION_MAVEN entries built from DSL-level
+     * `groupId`/`artifactId` fields when neither range carries an explicit
+     * `distribution { gav = … }` block.
+     *
+     * [artifactIdCsv] is treated as a comma-separated list (each token becomes
+     * one [DistributionMavenArtifactEntity] row), matching the V1 behaviour in
+     * `JiraParametersResolver.getMavenArtifactParameters` which uses
+     * `artifactIdPattern` directly.
+     */
+    private fun attachMavenArtifactsFromGroupArtifact(
+        row: ComponentConfigurationEntity,
+        groupId: String?,
+        artifactIdCsv: String?,
+    ) {
+        val group = groupId ?: return
+        var sortOrder = 0
+        for (artifactToken in splitCsv(artifactIdCsv ?: return)) {
+            row.mavenArtifacts.add(
+                DistributionMavenArtifactEntity(
+                    componentConfiguration = row,
+                    groupPattern = group,
+                    artifactPattern = artifactToken,
+                    extension = null,
+                    classifier = null,
                     sortOrder = sortOrder++,
                 ),
             )
@@ -1729,6 +1771,23 @@ class ImportServiceImpl(
         base: Distribution?,
         override: Distribution?,
     ): Boolean = extractMavenGavs(base?.GAV()) != extractMavenGavs(override?.GAV())
+
+    /**
+     * MIG-047: returns true when the override range's DSL-level `groupId`/`artifactId`
+     * differ from the base range — independently of `distribution.GAV()`.
+     *
+     * This supplements [mavenArtifactsDiffer] for the common DSL pattern where
+     * component ranges declare `groupId`/`artifactId` directly (not via a
+     * `distribution { gav = … }` block).  In that pattern both
+     * `distribution.GAV()` values are null so [mavenArtifactsDiffer] returns
+     * false, yet the effective maven co-ordinates differ per range.
+     */
+    private fun groupArtifactPatternsDiffer(
+        base: EscrowModuleConfig,
+        override: EscrowModuleConfig,
+    ): Boolean =
+        base.groupIdPattern != override.groupIdPattern ||
+            splitCsv(base.artifactIdPattern ?: "") != splitCsv(override.artifactIdPattern ?: "")
 
     private fun fileUrlArtifactsDiffer(
         base: Distribution?,

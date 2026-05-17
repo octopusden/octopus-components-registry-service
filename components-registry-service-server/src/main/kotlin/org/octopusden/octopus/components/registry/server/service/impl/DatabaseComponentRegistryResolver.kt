@@ -10,6 +10,7 @@ import org.octopusden.octopus.components.registry.core.dto.Image
 import org.octopusden.octopus.components.registry.core.dto.VersionedComponent
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactIdEntity
+import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
 import org.octopusden.octopus.components.registry.server.mapper.toEscrowModule
@@ -300,24 +301,34 @@ class DatabaseComponentRegistryResolver(
                 )
             }
 
-        // Per-range MARKER `distribution.maven` rows: only these ranges have a real
-        // per-range override of the maven coordinate. For ranges without such a marker,
-        // the BASE row's per-config maven-artifacts are merely the inherited GAV used
-        // by other read paths (packaging resolution etc.); they MUST NOT be re-synthesized
-        // into the `/maven-artifacts` response, because the V1 contract returns the
-        // component-level `artifactIdPattern` verbatim (RES-C-prime).
-        val markerRanges: Set<String> =
+        // Per-range MARKER rows that carry an explicit per-range maven coordinate.
+        //
+        // Two marker types may carry per-range maven artifact rows:
+        //
+        //   DISTRIBUTION_MAVEN: the DSL component uses an explicit `distribution { gav = … }`
+        //     block per range.  The marker's `mavenArtifacts` collection is populated from
+        //     the GAV.  `getMavenArtifactParameters` reads it the same way as below.
+        //
+        //   GROUP_ARTIFACT_PATTERN (MIG-047): the DSL component sets `groupId`/`artifactId`
+        //     per range WITHOUT an explicit `distribution { gav = … }` block.  A synthetic
+        //     marker was emitted at import time with `mavenArtifacts` built from the per-range
+        //     groupId/artifactId.  This marker is intentionally NOT registered in
+        //     MarkerAttributes.ALL so `buildEscrowModuleConfig` ignores it and
+        //     `getAllJiraComponentVersionRanges` is not affected.
+        //
+        // For both types, we extract the artifact configuration directly from the marker
+        // entity's `mavenArtifacts` child collection (sorted by `sortOrder`), bypassing
+        // `config.distribution.GAV()` to avoid the side-effect described above.
+        val perRangeMarkerRows: Map<String, ComponentConfigurationEntity> =
             componentEntity.configurations
                 .asSequence()
                 .filter {
-                    it.rowType == ROW_TYPE_MARKER && it.overriddenAttribute == MarkerAttributes.DISTRIBUTION_MAVEN
+                    it.rowType == ROW_TYPE_MARKER &&
+                        (it.overriddenAttribute == MarkerAttributes.DISTRIBUTION_MAVEN ||
+                            it.overriddenAttribute == MarkerAttributes.GROUP_ARTIFACT_PATTERN)
                 }
-                .map { it.versionRange }
-                .toSet()
+                .associateBy { it.versionRange }
 
-        // Walk the per-range EscrowModule view so that DISTRIBUTION_MAVEN marker
-        // overrides are respected: each EscrowModuleConfig already has the correct
-        // per-range distribution.GAV() after pickMarkerChildren applied the markers.
         val module = componentEntity.toEscrowModule(versionRangeFactory, numericVersionFactory)
 
         if (module.moduleConfigurations.isEmpty()) {
@@ -329,26 +340,15 @@ class DatabaseComponentRegistryResolver(
             .associate { config ->
                 val rangeKey = config.versionRangeString ?: ALL_VERSIONS
                 val artifact =
-                    if (rangeKey in markerRanges) {
-                        // Real per-range override → GAV-extraction branch (RES-C bug fix from PR #209).
-                        val gavCsv = config.distribution?.GAV()
-                        if (!gavCsv.isNullOrBlank()) {
-                            val coords =
-                                splitCsv(gavCsv)
-                                    .filterNot {
-                                        it.startsWith("file://") ||
-                                            it.startsWith("http://") ||
-                                            it.startsWith("https://")
-                                    }
-                                    .mapNotNull { parseMavenGavEntry(it) }
-                            if (coords.isNotEmpty()) {
-                                ComponentArtifactConfiguration(
-                                    coords.first().groupId,
-                                    coords.joinToString(",") { it.artifactId },
-                                )
-                            } else {
-                                componentLevelFallback
-                            }
+                    if (rangeKey in perRangeMarkerRows) {
+                        // Per-range override: extract directly from the marker entity's child rows.
+                        val markerRow = perRangeMarkerRows[rangeKey]!!
+                        val coords = markerRow.mavenArtifacts.sortedBy { it.sortOrder }
+                        if (coords.isNotEmpty()) {
+                            ComponentArtifactConfiguration(
+                                coords.first().groupPattern,
+                                coords.joinToString(",") { it.artifactPattern },
+                            )
                         } else {
                             componentLevelFallback
                         }

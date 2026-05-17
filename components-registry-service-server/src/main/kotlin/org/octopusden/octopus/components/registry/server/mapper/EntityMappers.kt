@@ -51,6 +51,19 @@ internal object MarkerAttributes {
     const val BUILD_REQUIRED_TOOLS: String = "build.requiredTools"
     const val BUILD_TOOLS: String = "build.buildTools"
 
+    /**
+     * MIG-047: synthetic per-range `groupId`/`artifactId` marker.
+     *
+     * Used when the DSL sets `groupId`/`artifactId` per range WITHOUT an
+     * explicit `distribution { gav = … }` block.  Unlike [DISTRIBUTION_MAVEN]
+     * (which feeds into `config.distribution.GAV()` and therefore affects ALL
+     * callers of the `EscrowModuleConfig` distribution field including
+     * `getAllJiraComponentVersionRanges`), this marker is intentionally NOT
+     * registered in [ALL] and is NOT picked by [pickMarkerChildren] inside
+     * `buildEscrowModuleConfig`.  Only `getMavenArtifactParameters` reads it.
+     */
+    const val GROUP_ARTIFACT_PATTERN: String = "group-artifact-pattern"
+
     val ALL: Set<String> =
         setOf(
             VCS_SETTINGS,
