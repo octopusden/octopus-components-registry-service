@@ -1339,9 +1339,10 @@ class ImportServiceImpl(
             }
             jira.componentInfo?.let { info ->
                 // Do NOT collapse empty string to null for versionPrefix/versionFormat:
-                // bug-G-component DSL sets versionPrefix="" (override range clears "wallet") and baseline
-                // preserves "". Collapsing "" → null would prevent the null-clear diff from being
-                // emitted and the value would bleed from the base range (bug G).
+                // bug-G-component DSL sets versionPrefix="" (override range clears a non-empty
+                // base value) and baseline preserves "". Collapsing "" → null would prevent the
+                // null-clear diff from being emitted and the value would bleed from the base
+                // range (bug G).
                 row.jiraVersionPrefix = info.versionPrefix
                 row.jiraVersionFormat = info.versionFormat
             }

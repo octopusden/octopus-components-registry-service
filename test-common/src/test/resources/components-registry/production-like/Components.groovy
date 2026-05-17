@@ -712,12 +712,12 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     }
 }
 
-"customer-gamma-wallet" {
-    componentDisplayName = "Customer Gamma Wallet"
+"customer-gamma-vault" {
+    componentDisplayName = "Customer Gamma Vault"
     clientCode = "GAMMA"
     componentOwner = "owner-f"
     groupId = "org.octopusden.octopus.customers.GAMMA"
-    artifactId = "customer-gamma-wallet"
+    artifactId = "customer-gamma-vault"
 
     jira {
         projectKey = "PROJ_G"
@@ -752,9 +752,9 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     distribution {
         explicit = true
         external = true
-        GAV = "org.octopusden.octopus.customers.GAMMA:customer-gamma-wallet:wim"
+        GAV = "org.octopusden.octopus.customers.GAMMA:customer-gamma-vault:wim"
         securityGroups {
-            read = "team-f#wallet-rd"
+            read = "team-f#vault-rd"
         }
     }
 }
