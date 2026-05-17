@@ -11,6 +11,11 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 import java.time.Instant
 
+/**
+ * `registry_config.value` is a `Map<String, Any?>` column serialized to TEXT
+ * via `@JdbcTypeCode(SqlTypes.JSON)`. Hibernate handles JSON marshalling on
+ * read and write — the controller just passes the map through.
+ */
 @RestController
 @RequestMapping("rest/api/4")
 class ConfigControllerV4(
@@ -18,50 +23,35 @@ class ConfigControllerV4(
 ) {
     @GetMapping("/config/field-config")
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
-    fun getFieldConfig(): ResponseEntity<Map<String, Any?>> {
-        val config = registryConfigRepository.findById("field-config")
-        return if (config.isPresent) {
-            ResponseEntity.ok(config.get().value)
-        } else {
-            ResponseEntity.ok(emptyMap())
-        }
-    }
+    fun getFieldConfig(): ResponseEntity<Map<String, Any?>> = readConfig("field-config")
 
     @GetMapping("/config/component-defaults")
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
-    fun getComponentDefaults(): ResponseEntity<Map<String, Any?>> {
-        val config = registryConfigRepository.findById("component-defaults")
-        return if (config.isPresent) {
-            ResponseEntity.ok(config.get().value)
-        } else {
-            ResponseEntity.ok(emptyMap())
-        }
-    }
+    fun getComponentDefaults(): ResponseEntity<Map<String, Any?>> = readConfig("component-defaults")
 
     @PutMapping("/admin/config/field-config")
     @PreAuthorize("@permissionEvaluator.canImport()")
     fun updateFieldConfig(
         @RequestBody value: Map<String, Any?>,
-    ): ResponseEntity<Map<String, Any?>> {
-        val entity =
-            registryConfigRepository.findById("field-config").orElse(
-                RegistryConfigEntity(key = "field-config"),
-            )
-        entity.value = value
-        entity.updatedAt = Instant.now()
-        registryConfigRepository.save(entity)
-        return ResponseEntity.ok(value)
-    }
+    ): ResponseEntity<Map<String, Any?>> = writeConfig("field-config", value)
 
     @PutMapping("/admin/config/component-defaults")
     @PreAuthorize("@permissionEvaluator.canImport()")
     fun updateComponentDefaults(
         @RequestBody value: Map<String, Any?>,
+    ): ResponseEntity<Map<String, Any?>> = writeConfig("component-defaults", value)
+
+    private fun readConfig(key: String): ResponseEntity<Map<String, Any?>> =
+        registryConfigRepository.findById(key)
+            .map { ResponseEntity.ok(it.value) }
+            .orElse(ResponseEntity.ok(emptyMap()))
+
+    private fun writeConfig(
+        key: String,
+        value: Map<String, Any?>,
     ): ResponseEntity<Map<String, Any?>> {
         val entity =
-            registryConfigRepository.findById("component-defaults").orElse(
-                RegistryConfigEntity(key = "component-defaults"),
-            )
+            registryConfigRepository.findById(key).orElse(RegistryConfigEntity(key = key))
         entity.value = value
         entity.updatedAt = Instant.now()
         registryConfigRepository.save(entity)

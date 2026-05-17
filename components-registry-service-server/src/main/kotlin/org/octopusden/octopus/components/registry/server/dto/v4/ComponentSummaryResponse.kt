@@ -3,24 +3,26 @@ package org.octopusden.octopus.components.registry.server.dto.v4
 import java.time.Instant
 import java.util.UUID
 
+/**
+ * Compact projection used by `GET /api/4/components` list view. Surfaces only
+ * the fields the Portal renders per row (badge + link).
+ *
+ * SYS-040 fields (`buildSystem`, `jiraProjectKey`, `vcsPath`, `teamcityProjectId`,
+ * `teamcityProjectUrl`) are derived from the base configuration row + first
+ * child (sort_order = 0) so multi-VCS / multi-TC components render their primary
+ * link the same way single-target components do. Blank/empty strings are
+ * normalized to null so callers can treat "absent" and "empty" alike.
+ */
 data class ComponentSummaryResponse(
     val id: UUID,
     val name: String,
     val displayName: String?,
     val componentOwner: String?,
-    val system: Set<String>,
+    val systems: Set<String>,
     val productType: String?,
     val archived: Boolean,
     val updatedAt: Instant?,
-    // SYS-039: mirror of ComponentDetailResponse.labels — non-null default empty
-    // list so Portal can always iterate without null-check.
     val labels: List<String> = emptyList(),
-    // SYS-040: list-view extras. Derived from nested entities (first row only —
-    // list view shows one badge / one link per component, not the full set).
-    // null in three cases: (1) the parent nested entity is absent, (2) the
-    // leaf field is null, (3) the leaf field is a blank/empty string —
-    // normalized to null by the v4 mapper so the Portal can treat
-    // absence and empty alike (no link rendered).
     val buildSystem: String? = null,
     val jiraProjectKey: String? = null,
     val vcsPath: String? = null,

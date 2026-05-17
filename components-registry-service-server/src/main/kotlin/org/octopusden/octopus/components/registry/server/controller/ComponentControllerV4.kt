@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.controller
 
+import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentCreateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentDetailResponse
@@ -11,6 +12,8 @@ import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideRes
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideUpdateRequest
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
+import org.octopusden.octopus.escrow.BuildSystem
+import org.octopusden.octopus.escrow.RepositoryType
 import org.slf4j.LoggerFactory
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
@@ -48,6 +51,37 @@ class ComponentControllerV4(
     @GetMapping("/meta/owners")
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
     fun getDistinctOwners(): List<String> = componentRepository.findDistinctOwners()
+
+    // Domain-named option lists for the three free-form aspect string fields
+    // (buildSystem, repositoryType, generation). The portal's EnumSelect uses
+    // these to populate dropdowns when the admin field-config registry has no
+    // explicit options[] seeded. Endpoint names are domain-named, not
+    // implementation-named (no `/meta/enums`), so the wire surface survives
+    // a future move of the option source from a Kotlin enum to a config
+    // table or admin-editable registry.
+    //
+    // For buildSystem and repositoryType the *persistence-layer* enums
+    // (`org.octopusden.octopus.escrow.BuildSystem` / `RepositoryType`) are
+    // sourced rather than the `core.dto.*` mirrors. The DTO variant of
+    // `BuildSystem` carries `NOT_SUPPORTED` while
+    // `EntityMappers.safeParseBuildSystem` calls `BuildSystem.valueOf` on
+    // the escrow variant (which has `ESCROW_NOT_SUPPORTED`); advertising
+    // the DTO token would silently drop that value on save. For generation
+    // there is only one canonical source in `components-registry-api`'s
+    // `EscrowGenerationMode` (the `core.dto.EscrowGenerationMode` mirror
+    // has the same token set; we use the API enum because `Mappers.toDTO`
+    // reads it directly off the escrow model).
+    @GetMapping("/meta/build-systems")
+    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
+    fun getBuildSystems(): List<String> = BuildSystem.values().map { it.name }
+
+    @GetMapping("/meta/repository-types")
+    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
+    fun getRepositoryTypes(): List<String> = RepositoryType.values().map { it.name }
+
+    @GetMapping("/meta/escrow-generations")
+    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
+    fun getEscrowGenerations(): List<String> = EscrowGenerationMode.values().map { it.name }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)

@@ -344,7 +344,7 @@ class GitHistoryImportServiceImpl(
         val changedAt = author.`when`.toInstant()
 
         return (prev.keys + cur.keys).mapNotNull { name ->
-            val componentId = componentRepository.findByName(name)?.id
+            val componentId = componentRepository.findByComponentKey(name)?.id
             if (componentId == null) {
                 unknownNames += name
                 return@mapNotNull null

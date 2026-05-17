@@ -82,6 +82,7 @@ Backend tasks (B2, B3) live in this repo. Frontend tasks (U4, U5) moved to Porta
 | V5 schema | ✅ Done | `V5__audit_source_and_history_state.sql` — `audit_log.source` (api / git-history) + `git_history_import_state` table. |
 | `ft-db` profile | ✅ Done | H2 + auto-migrate for downstream FT testing. PR #148 (commit `7733f83`). Contracts: SYS-026, SYS-027. |
 | UI extracted to Portal | ✅ Done | `components-registry-ui/` module + `SpaWebConfig.kt` removed; UI now lives in `octopus-components-management-portal`. PR #147 (commit `26278f2`). Decision recorded in [ADR-012](adr/012-portal-architecture.md), supersedes ADR-009. |
+| Meta option-list endpoints | ✅ Done | `ComponentControllerV4.getBuildSystems()` / `getRepositoryTypes()` / `getEscrowGenerations()` — domain-named meta endpoints sourced from persistence (`escrow.BuildSystem` / `escrow.RepositoryType`) and API (`api.enums.EscrowGenerationMode`) enums. Portal's `useFieldOptions` consumes these as the fallback when admin field-config has no `options[]` seeded. PR #202. Contract: SYS-038. |
 
 ## Known Bugs Fixed During Development
 
@@ -150,18 +151,76 @@ Driven by MIG-029 investigation + cross-installation DSL audit. See [ADR-014](ad
 
 | Phase | Task | Status | Notes |
 |---|---|---|---|
-| 1a | Design artifacts: ADR-014, `schema-spec.md`, MIG-030..MIG-038, supersede ADR-010 | ✅ Done | This PR (docs-only). Canonical reference for v2 schema. |
-| 1b | Land `V1__schema.sql` baseline (replaces V1..V6) in Flyway path | 🚧 Pending | 23 tables; Model A'. Held back from docs-only PR; ships alongside Phase 2 to avoid Hibernate `validate` startup crash. |
-| 2 | Refactor entities & repositories (delete `ComponentVersionEntity` + polymorphic FK pairs; introduce `ComponentGroupEntity`, distribution-split entities, etc.) | 🚧 Pending | ≈16 → ≈22 entity classes. Bundled with Phase 1b so DB and JPA align in one merge. |
-| 3 | Rewrite `EntityMappers` + `DatabaseComponentRegistryResolver` (base + override merge; marker rows; synthetic-base handling; doc-links resolution; unified VCS mapping) | 🚧 Pending | |
-| 4 | Update v4 DTOs + `ComponentControllerV4` (replace `metadata: Map` with explicit fields; surface group membership; doc links as `docs[]`) | 🚧 Pending | |
-| 5 | Rewrite `ImportServiceImpl` + `MigrationServiceImpl` (pre-pass dictionary discovery; aggregator detection; two-pass `parentComponent`; per-attribute override emission; distribution family split) | 🚧 Pending | |
-| 6 | Test suite (Layer 1 synthetic fixtures; Layer 2 env-gated integration; Layer 3 internal-CI baselines) | 🚧 Pending | MIG-029..MIG-038 coverage |
+| 1a | Design artifacts: ADR-014, `schema-spec.md`, MIG-030..MIG-038, supersede ADR-010 | ✅ Done | PR #191 (docs-only). Canonical reference for v2 schema. |
+| 1b | Land `V1__schema.sql` baseline (replaces V1..V6) in Flyway path | ✅ Done | Commit `94b52d4` (held back from docs-only PR). 23 tables; Model A'. |
+| 2 | Refactor entities & repositories (delete `ComponentVersionEntity` + polymorphic FK pairs; introduce `ComponentGroupEntity`, distribution-split entities, etc.) | ✅ Done | Commits `f552a39` → `47e4849` (Phase 2.0–2.5). 23 entity classes + 22 repos. |
+| 3 | Rewrite `EntityMappers` + `DatabaseComponentRegistryResolver` (base + override merge; marker rows; synthetic-base handling; doc-links resolution; unified VCS mapping) | ✅ Done | Commits `1934dab` (bidi collections), `2b13521` (EntityMappers), `7196099` (resolver). Phase 3b.1 (`c31869a`) adapted `AuditEventListener`, `ConfigControllerV4`, `ComponentSourceRegistryImpl`, `GitHistoryCommitWriter`, `AuditEvent` to v2 entities. |
+| 4 | Update v4 DTOs + `ComponentControllerV4` (replace `metadata: Map` with explicit fields; surface group membership; doc links as `docs[]`) | ✅ Done | Commits `72d0c76` (rename `.v2` package suffix → drop) + `89e8792` (Phase 4: rewrite v4 layer). New DTOs (`ComponentConfigurationDtos`), V4Mappers, `ComponentManagementServiceImpl`, field-override CRUD against `component_configurations`. `OverrideApplicator` retired. |
+| 5a | Adapt `TeamcitySyncService` to `component_teamcity_projects`; restore `GitHistoryImportServiceImpl` / `HistoryMigrationJobServiceImpl`; stub `ImportServiceImpl` so the app boots; @Disabled the auto-migrate-dependent tests | ✅ Done | Commits `1b8aea8` (TC sync rewrite), `849a7a9` (history services + ImportServiceImpl stub), `f47eaf1` (12 schema-v2 broken test stubs), `f226aa5` (triage fixup: empty migrate result, @Disabled 7 ft-db tests, Bucket b/f fixes). `AUTH_SERVER_URL=… AUTH_SERVER_REALM=octopus ./gradlew build -x dockerBuildImage -x dockerPushImage -x ocCreate -x ocProcess -x :components-registry-automation:test` exits 0. |
+| 5b (MIG-039) | Port `ImportServiceImpl` to schema v2 per §6 (pre-pass dictionary discovery; aggregator detection; two-pass `parentComponent`; per-attribute override emission; distribution family split; synthetic-base flag) | 🚧 Pending | The §6 pipeline replaces the deleted `EscrowModule.toComponentEntity()` shortcut. Until it lands, `migrate{Component,AllComponents}` throw and operator-driven `POST /admin/migrate` is unavailable; the startup auto-migrate path (`migrate()`) is a no-op. See `todo.md` MIG-039. |
+| 6 | Test suite (Layer 1 synthetic fixtures; Layer 2 env-gated integration; Layer 3 internal-CI baselines) | 🚧 Pending | MIG-029..MIG-038 coverage. **Includes the schema-v2 @Disabled test-suite cleanup** — see the disabled list below; Phase 6 is INCOMPLETE until every entry is either removed, rewritten, or re-enabled. |
 | 7 | QA DB recreate + full `gradlew build` | 🚧 Pending | Requires `AUTH_SERVER` env + standard excludes |
 | 8 | Supersede ADR-010 | ✅ Done | ADR-010 marked superseded; ADR-014 active |
 | 9 | Final docs cleanup (mandatory before merging the refactor into `main`) | 🚧 Pending | See "Final docs cleanup scope" below. |
 
 Requirements traceability: MIG-029..MIG-038 in [`requirements-migration.md`](requirements-migration.md). Each phase ends with an independent subagent review (Sonnet default).
+
+### Phase 6 — schema-v2 disabled-test inventory
+
+Once Phase 5 lands the rewritten import / TC services and the `compileKotlin` step is green again, every entry below must be either **removed**, **rewritten**, or **re-enabled** before Phase 6 can be marked done. Each file carries class-level `@Disabled("schema-v2: temporarily disabled until Phase 6 test-suite rewrite")`. The original assertion bodies are preserved **in git history** (parent of the stub commit `f47eaf1`); the stubs themselves are minimal placeholder classes that point future maintainers back to the git log for the pre-stub revision. Phase 6 recovers each test by reading the original from git history and re-implementing against the v2 entity graph.
+
+| Test class | Why disabled | Phase 6 action |
+|---|---|---|
+| `mapper/ComponentDetailMapperTest` | Constructs legacy `ComponentEntity` via `name` / `metadata` fields; asserts on dropped DTO fields. | Rewrite against v2 entity graph + new `ComponentDetailResponse`. |
+| `mapper/ComponentSummaryMapperTest` | Same legacy field set + `BuildConfigurationEntity` references. | Rewrite against v2 + new `ComponentSummaryResponse`. |
+| `mapper/DistributionEntityMapperTest` | Asserts on retired `DistributionEntity` / `DistributionArtifactEntity` shapes. | Rewrite against `distribution_*` family entities (maven / fileUrl / docker / packages). |
+| `service/impl/DatabaseComponentRegistryResolverTest` | Constructs legacy entities with `.name` + `.metadata`; covers resolve algorithm. | Rewrite against v2 entities (base + override rows). MIG-029 coverage. |
+| `teamcity/TeamcitySyncServiceTest` | Depends on broken `TeamcitySyncService` + uses `component.name` / `teamcityProjectId` columns. | Rewrite alongside the service in Phase 5 (carries over to Phase 6 for assertions). |
+| `migration/TeamcityProjectIdPersistenceRoundtripTest` | Asserts on the deleted `teamcityProjectId` column; replaced by `component_teamcity_projects` rows. | Rewrite to assert on the child table. |
+| `migration/FtDbProfileWriteTest` | Uses legacy `entity.name` + `.metadata`. | Update to `componentKey` and the new flat scalar fields. |
+| `migration/MigrationIntegrationTest` | Heavy DSL→DB cross-cut; uses legacy entity field set. | Rewrite alongside `ImportServiceImpl` in Phase 5. |
+| `migration/MigrateHistoryAsyncEndpointTest` | Depends on broken `GitHistoryImportServiceImpl` / `HistoryMigrationJobService`. | Re-enable after Phase 5. |
+| `service/impl/MigrateHistoryIntegrationTest` | Same. | Re-enable after Phase 5. |
+| `service/impl/HistoryMigrationJobServiceImplTest` | Same. | Re-enable after Phase 5. |
+
+If any other test class fails to compile once Phase 5 lands, add it here with the same `@Disabled` reason string and a Phase 6 action.
+
+**Phase 5 also disabled 7 more classes** that depend on auto-migrate actually seeding the DB. Listed for Phase 6:
+
+| Test class | Why disabled | Phase 6 action |
+|---|---|---|
+| `DbBackedComponentsRegistryServiceControllerTest` | `@BeforeAll` calls `POST /admin/migrate-components`; `ImportServiceImpl.migrateAllComponents` throws. | Re-enable once MIG-039 lands the §6 import pipeline. |
+| `migration/GitVsDbValidationTest` | Same — `@BeforeAll` calls the migrate endpoint. | Re-enable with MIG-039. |
+| `migration/AutoMigrateOnStartupTest` | Asserts components are in DB after startup auto-migrate. | Re-enable with MIG-039, or rewrite to seed via v4 CRUD API. |
+| `migration/FtDbProfileTest` | Same auto-migrate assumption. | Same. |
+| `migration/GhostComponentAfterRenameTest` | Uses `ft-db` profile + `firstComponent()` helper that expects a seeded DB. | Rewrite to seed the renamed component via v4 CRUD API in `@BeforeAll`. |
+| `migration/Sys039PersistenceRoundtripTest` | Uses `ft-db` profile + `firstComponent()`. | Rewrite to seed via v4 CRUD API. |
+| `service/impl/FieldConfigEnforcementIntegrationTest` | Uses `ft-db` profile + `firstComponent()`. | Rewrite to seed via v4 CRUD API. |
+
+**Plus one test class explicitly disabled because `POST /admin/migrate` cannot succeed until MIG-039 lands:**
+
+| Test class | Why disabled | Phase 6 action |
+|---|---|---|
+| `migration/MigrateEndpointTest` | `POST /admin/migrate` async job calls `migrateAllComponents`, still throws `UnsupportedOperationException`. | Re-enable with MIG-039. |
+
+**Phase 5b MIG-039 fixup #3** wired synthetic-base suppression through `toEscrowModule` (skip base range when `isSyntheticBase=true` AND overrides exist). Re-enabled `DatabaseComponentRegistryResolverTest.(5 MIG-029)`.
+
+**Stream A (RES-001 enumeration-coverage fix)** added `row_type` as the source-of-truth row classifier and a new `RANGE_PRESENCE` row shape emitted at import time for DSL ranges with no real override. Enumeration parity restored (47/53 → 53/53). Re-enabled `GitVsDbValidationTest.VAL-006 maven-artifacts`. Added MIG-040 (RANGE_PRESENCE emission).
+
+**Stream B (externalRegistry fix)** patched `EntityMappers.toEscrowModule` to emit `vcsSettings` whenever `component.vcsExternalRegistry != null` (not only when VCS roots are non-empty). Components declared in DSL as `vcsSettings { externalRegistry = "..." }` with no VCS roots now round-trip correctly. Re-enabled `DbBackedComponentsRegistryServiceControllerTest.testGetAllJiraComponentVersionRanges`. VAL-010 stays @Disabled — recount empirically once the remaining FAKE-aggregator residual is addressed.
+
+**PR-C (RES-C maven-artifacts per-range override fix)** rewrote `DatabaseComponentRegistryResolver.getMavenArtifactParameters` to walk the EscrowModule per-range view instead of returning component-level `artifactIds` unchanged for every range. The old implementation ignored `DISTRIBUTION_MAVEN` marker overrides, causing 30 components to return the wrong `groupPattern` for one or more ranges (latest range's group bled into earlier ranges). Fix: use `config.distribution?.GAV()` per `EscrowModuleConfig` (already has per-range markers applied); fall back to component-level `artifactIds` only when GAV is null/blank. Extracted `splitCsv`/`MavenCoords`/`parseMavenGavEntry` from `ImportServiceImpl` into shared `util/GavParsing.kt`. Added 3 new unit tests (`DatabaseComponentRegistryResolverMavenArtifactsRangeTest`: two-range shape, multi-artifact CSV shape, single-range fallback). Extended VAL-006 with `tokenization-service` for regression guard. ✅ Full build PASS.
+
+One method-level `@Disabled` marker remains for a known v2-vs-v1 semantic delta:
+
+| Test method | Reason | Tracked in todo.md |
+|---|---|---|
+| `GitVsDbValidationTest.VAL-010 bulk canary` | RES-014 closed by PR #208 (`component_build_tool_beans` schema extension); the only remaining residual is 1× FAKE-aggregator distribution inheritance on `core-lib`. Concrete count must be regenerated empirically from a VAL-010 run before re-enable. | Schema v2 known limitations §FAKE-aggregator |
+
+Compile-only checklist (Phase 6 cannot ship until all are ✅):
+- [ ] No source file carries `@Disabled("schema-v2: …")`.
+- [ ] No source file imports a deleted v1/v2-transition entity (e.g., `FieldOverrideEntity`).
+- [ ] `./gradlew :components-registry-service-server:compileTestKotlin` is green.
 
 ### Final docs cleanup scope (Phase 9)
 

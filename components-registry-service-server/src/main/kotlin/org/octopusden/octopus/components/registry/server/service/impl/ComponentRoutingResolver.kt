@@ -7,6 +7,7 @@ import org.octopusden.octopus.components.registry.core.dto.BuildSystem
 import org.octopusden.octopus.components.registry.core.dto.ComponentImage
 import org.octopusden.octopus.components.registry.core.dto.Image
 import org.octopusden.octopus.components.registry.core.dto.VersionedComponent
+import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.server.service.ComponentRegistryResolver
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
 import org.octopusden.octopus.escrow.config.JiraComponentVersionRange
@@ -104,41 +105,85 @@ class ComponentRoutingResolver(
     ): JiraComponentVersion =
         try {
             dbResolver.getJiraComponentByProjectAndVersion(projectKey, version)
+        } catch (e: NotFoundException) {
+            // db has no match — try git, but reject stale data for DB-sourced components
+            val gitResult = gitResolver.getJiraComponentByProjectAndVersion(projectKey, version)
+            // Null-safe stale-guard: JiraComponentVersion's @JsonCreator ctor does not
+            // require non-null componentVersion, so a malformed/cached JCV can carry a null
+            // inner. Skip the guard in that case (gracefully degrades to pre-fix behaviour
+            // for this edge) rather than NPE.
+            val componentName = gitResult.componentVersion?.componentName
+            if (componentName != null && sourceRegistry.getDbComponentNames().contains(componentName)) {
+                throw NotFoundException(
+                    "Component '$componentName' is db-sourced; " +
+                        "version '$version' for project '$projectKey' is not in DB",
+                )
+            }
+            gitResult
         } catch (e: Exception) {
+            // transient — fall back to git (fault tolerance preserved)
             gitResolver.getJiraComponentByProjectAndVersion(projectKey, version)
         }
 
     @Suppress("TooGenericExceptionCaught", "SwallowedException")
     override fun getJiraComponentsByProject(projectKey: String): Set<String> {
+        var gitNotFound = false
+        var dbNotFound = false
         val gitResults =
             try {
                 gitResolver.getJiraComponentsByProject(projectKey)
+            } catch (e: NotFoundException) {
+                gitNotFound = true
+                emptySet()
             } catch (e: Exception) {
                 emptySet()
             }
         val dbResults =
             try {
                 dbResolver.getJiraComponentsByProject(projectKey)
+            } catch (e: NotFoundException) {
+                dbNotFound = true
+                emptySet()
             } catch (e: Exception) {
                 emptySet()
             }
+        // MIG-049: when BOTH resolvers say the project is unknown, propagate
+        // NotFoundException so the controller exception handler renders 404.
+        // Other exception types from either resolver (e.g. transient DB
+        // failure) are still swallowed so a partial outage doesn't degrade
+        // the union-merge response.
+        if (gitNotFound && dbNotFound) {
+            throw NotFoundException("Project '$projectKey' is not found")
+        }
         return gitResults + dbResults
     }
 
     @Suppress("TooGenericExceptionCaught", "SwallowedException")
     override fun getJiraComponentVersionRangesByProject(projectKey: String): Set<JiraComponentVersionRange> {
+        var gitNotFound = false
+        var dbNotFound = false
         val gitResults =
             try {
                 gitResolver.getJiraComponentVersionRangesByProject(projectKey)
+            } catch (e: NotFoundException) {
+                gitNotFound = true
+                emptySet()
             } catch (e: Exception) {
                 emptySet()
             }
         val dbResults =
             try {
                 dbResolver.getJiraComponentVersionRangesByProject(projectKey)
+            } catch (e: NotFoundException) {
+                dbNotFound = true
+                emptySet()
             } catch (e: Exception) {
                 emptySet()
             }
+        // MIG-049: see getJiraComponentsByProject for the same pattern.
+        if (gitNotFound && dbNotFound) {
+            throw NotFoundException("Project '$projectKey' is not found")
+        }
         val dbNames = sourceRegistry.getDbComponentNames()
         val filteredGit = gitResults.filter { !dbNames.contains(it.componentName) }
         return filteredGit.toSet() + dbResults
@@ -146,18 +191,30 @@ class ComponentRoutingResolver(
 
     @Suppress("TooGenericExceptionCaught", "SwallowedException")
     override fun getComponentsDistributionByJiraProject(projectKey: String): Map<String, Distribution> {
+        var gitNotFound = false
+        var dbNotFound = false
         val gitResults =
             try {
                 gitResolver.getComponentsDistributionByJiraProject(projectKey)
+            } catch (e: NotFoundException) {
+                gitNotFound = true
+                emptyMap()
             } catch (e: Exception) {
                 emptyMap()
             }
         val dbResults =
             try {
                 dbResolver.getComponentsDistributionByJiraProject(projectKey)
+            } catch (e: NotFoundException) {
+                dbNotFound = true
+                emptyMap()
             } catch (e: Exception) {
                 emptyMap()
             }
+        // MIG-049: see getJiraComponentsByProject for the same pattern.
+        if (gitNotFound && dbNotFound) {
+            throw NotFoundException("Project '$projectKey' is not found")
+        }
         val dbNames = sourceRegistry.getDbComponentNames()
         val filteredGit = gitResults.filter { !dbNames.contains(it.key) }
         return filteredGit + dbResults
@@ -191,7 +248,18 @@ class ComponentRoutingResolver(
     override fun findComponentByArtifact(artifact: ArtifactDependency): VersionedComponent =
         try {
             dbResolver.findComponentByArtifact(artifact)
+        } catch (e: NotFoundException) {
+            // db has no match — try git, but reject stale data for DB-sourced components
+            val gitResult = gitResolver.findComponentByArtifact(artifact)
+            if (sourceRegistry.getDbComponentNames().contains(gitResult.id)) {
+                throw NotFoundException(
+                    "Component '${gitResult.id}' is db-sourced; artifact " +
+                        "'${artifact.group}:${artifact.name}:${artifact.version}' is not in DB",
+                )
+            }
+            gitResult
         } catch (e: Exception) {
+            // transient — fall back to git (fault tolerance preserved)
             gitResolver.findComponentByArtifact(artifact)
         }
 
@@ -203,10 +271,16 @@ class ComponentRoutingResolver(
         return artifacts.associateWith { artifact ->
             val dbResult = dbResults[artifact]
             val gitResult = gitResults[artifact]
-            if (dbResult != null && dbNames.contains(dbResult.id)) {
-                dbResult
-            } else {
-                gitResult ?: dbResult
+            when {
+                // 1. DB has a match → authoritative (regardless of whether the component is yet
+                //    registered in dbNames — partial migrations / pre-source-row inserts must not
+                //    drop a legitimate DB hit because git stale-matched a DIFFERENT db-sourced
+                //    component for the same artifact)
+                dbResult != null -> dbResult
+                // 2. DB has no match, git stale-matches a db-sourced component → reject
+                gitResult != null && dbNames.contains(gitResult.id) -> null
+                // 3. Legitimate git-only fallback
+                else -> gitResult
             }
         }
     }
@@ -237,8 +311,12 @@ class ComponentRoutingResolver(
     }
 
     override fun findComponentsByDockerImages(images: Set<Image>): Set<ComponentImage> {
-        val gitResults = gitResolver.findComponentsByDockerImages(images)
         val dbResults = dbResolver.findComponentsByDockerImages(images)
-        return gitResults + dbResults
+        val gitResults = gitResolver.findComponentsByDockerImages(images)
+        val dbNames = sourceRegistry.getDbComponentNames()
+        // Drop git results whose component is DB-sourced: for migrated components the DB
+        // is authoritative, and a git stale match would mask a true absence with legacy data.
+        val gitFiltered = gitResults.filterNot { dbNames.contains(it.component) }.toSet()
+        return gitFiltered + dbResults
     }
 }

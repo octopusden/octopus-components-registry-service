@@ -9,29 +9,29 @@ import org.octopusden.octopus.components.registry.core.dto.ComponentImage
 import org.octopusden.octopus.components.registry.core.dto.Image
 import org.octopusden.octopus.components.registry.core.dto.VersionedComponent
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
+import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactIdEntity
+import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
-import org.octopusden.octopus.components.registry.server.entity.ComponentVersionEntity
-import org.octopusden.octopus.components.registry.server.mapper.toDistribution
+import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
 import org.octopusden.octopus.components.registry.server.mapper.toEscrowModule
-import org.octopusden.octopus.components.registry.server.mapper.toEscrowModuleConfig
-import org.octopusden.octopus.components.registry.server.mapper.toJiraComponent
-import org.octopusden.octopus.components.registry.server.mapper.toVCSSettings
-import org.octopusden.octopus.components.registry.server.repository.ComponentArtifactIdRepository
+import org.octopusden.octopus.components.registry.server.mapper.toResolvedEscrowModuleConfig
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.DependencyMappingRepository
-import org.octopusden.octopus.components.registry.server.repository.FieldOverrideRepository
-import org.octopusden.octopus.components.registry.server.repository.JiraComponentConfigRepository
 import org.octopusden.octopus.components.registry.server.service.ComponentRegistryResolver
 import org.octopusden.octopus.components.registry.server.util.formatVersion
+import org.octopusden.octopus.components.registry.server.util.parseMavenGavEntry
+import org.octopusden.octopus.components.registry.server.util.splitCsv
 import org.octopusden.octopus.escrow.MavenArtifactMatcher
 import org.octopusden.octopus.escrow.ModelConfigPostProcessor
 import org.octopusden.octopus.escrow.config.JiraComponentVersionRange
 import org.octopusden.octopus.escrow.config.JiraComponentVersionRangeFactory
+import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
 import org.octopusden.octopus.escrow.configuration.model.EscrowModule
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
 import org.octopusden.octopus.escrow.dto.ComponentArtifactConfiguration
 import org.octopusden.octopus.escrow.model.Distribution
 import org.octopusden.octopus.escrow.model.SecurityGroups
+import org.octopusden.octopus.components.registry.api.escrow.Escrow
 import org.octopusden.octopus.escrow.model.VCSSettings
 import org.octopusden.octopus.escrow.resolvers.ComponentHotfixSupportResolver
 import org.octopusden.octopus.releng.JiraComponentVersionFormatter
@@ -45,15 +45,23 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.EnumMap
 
+/**
+ * Read-side resolver for the v1-v3 API surface, backed by the schema v2
+ * `components` + `component_configurations` tables. All resolve calls go through
+ * the new `EntityMappers` merge algorithm (schema-spec.md §3.4): base row +
+ * matching override rows are combined per request into a single
+ * `EscrowModuleConfig` (single-version path) or one config per distinct version
+ * range (enumeration path).
+ *
+ * Synthetic-base handling lives in the mapper (MIG-029 fix); the resolver does
+ * not special-case it here.
+ */
 @Suppress("TooManyFunctions")
 @Service("databaseComponentRegistryResolver")
 @Transactional(readOnly = true)
 class DatabaseComponentRegistryResolver(
     private val componentRepository: ComponentRepository,
-    private val jiraComponentConfigRepository: JiraComponentConfigRepository,
-    private val componentArtifactIdRepository: ComponentArtifactIdRepository,
     private val dependencyMappingRepository: DependencyMappingRepository,
-    private val fieldOverrideRepository: FieldOverrideRepository,
     private val numericVersionFactory: NumericVersionFactory,
     private val versionRangeFactory: VersionRangeFactory,
     private val versionNames: VersionNames,
@@ -63,30 +71,40 @@ class DatabaseComponentRegistryResolver(
     private val componentHotfixSupportResolver = ComponentHotfixSupportResolver()
 
     override fun updateCache() {
-        // No-op: DB resolver always reads fresh data from the database
         log.debug("updateCache() called on DatabaseComponentRegistryResolver — no-op")
     }
 
     override fun getComponents(): MutableCollection<EscrowModule> =
-        componentRepository.findAll().map { it.toEscrowModule() }.toMutableList()
+        componentRepository
+            .findAll()
+            .map { it.toEscrowModule(versionRangeFactory, numericVersionFactory).nullifyEmptyEscrow() }
+            .toMutableList()
 
-    override fun getComponentById(id: String): EscrowModule? = componentRepository.findByName(id)?.toEscrowModule()
+    override fun getComponentById(id: String): EscrowModule? =
+        componentRepository
+            .findByComponentKey(id)
+            ?.toEscrowModule(versionRangeFactory, numericVersionFactory)
+            ?.nullifyEmptyEscrow()
 
     override fun getResolvedComponentDefinition(
         id: String,
         version: String,
     ): EscrowModuleConfig? {
-        val component = componentRepository.findByName(id) ?: return null
-        val matchedVersion = findMatchingVersionConfig(component, version)
+        val component = componentRepository.findByComponentKey(id) ?: return null
+        val config =
+            component.toResolvedEscrowModuleConfig(
+                version = version,
+                versionRangeFactory = versionRangeFactory,
+                numericVersionFactory = numericVersionFactory,
+            ) ?: return null
 
-        // Version-specific-only component (no ALL_VERSIONS default): return null when no range matches
-        // Identified by: has version entities AND no component-level jira configs
-        if (matchedVersion == null && component.versions.isNotEmpty() && component.jiraComponentConfigs.isEmpty()) {
-            return null
-        }
+        // Null out escrow that has no meaningful data (matches Git-path behaviour
+        // for sub-components without an explicit escrow block).
+        config.nullifyEmptyEscrow()
 
-        val config = component.toEscrowModuleConfig(matchedVersion)
-        // Normalize version before calculateDistribution (mirrors Git resolver: uses jiraComponentVersion.version)
+        // Mirror the Git resolver: when distribution is present, calculate
+        // dist-time substitutions against the jira-normalised version, falling
+        // back to the raw version string if normalisation fails.
         if (config.distribution != null) {
             val normalizedVersion =
                 try {
@@ -94,14 +112,12 @@ class DatabaseComponentRegistryResolver(
                 } catch (_: Exception) {
                     version
                 }
-            val resolved =
-                org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
-                    .calculateDistribution(config.distribution, normalizedVersion)
+            val resolved = EscrowConfigurationLoader.calculateDistribution(config.distribution, normalizedVersion)
             val field = EscrowModuleConfig::class.java.getDeclaredField("distribution")
             field.isAccessible = true
             field.set(config, resolved)
         }
-        return applyOverrides(id, config, version)
+        return config
     }
 
     override fun getJiraComponentVersion(
@@ -113,10 +129,7 @@ class DatabaseComponentRegistryResolver(
         return when (results.size) {
             1 -> results.first().first
             0 -> throw NotFoundException("Version '$version' for component '$component' is not found")
-            else ->
-                error(
-                    "Found ${results.size} configurations for version '$version' of component '$component'",
-                )
+            else -> error("Found ${results.size} configurations for version '$version' of component '$component'")
         }
     }
 
@@ -168,7 +181,9 @@ class DatabaseComponentRegistryResolver(
         version: String,
         ignoreRequired: Boolean?,
     ): List<BuildTool> {
-        val buildConfiguration = getResolvedComponentDefinition(component, version)?.buildConfiguration ?: return emptyList()
+        val buildConfiguration =
+            getResolvedComponentDefinition(component, version)?.buildConfiguration
+                ?: return emptyList()
         val resolvedBuildTools = mutableListOf<BuildTool>()
 
         if (ignoreRequired != true && buildConfiguration.requiredProject) {
@@ -189,38 +204,15 @@ class DatabaseComponentRegistryResolver(
 
     override fun getJiraComponentsByProject(projectKey: String): Set<String> =
         getJiraComponentVersionRangesByProject(projectKey)
-            .map {
-                it.componentName
-            }.toSet()
+            .map { it.componentName }
+            .toSet()
 
     override fun getJiraComponentVersionRangesByProject(projectKey: String): Set<JiraComponentVersionRange> {
-        val configs = jiraComponentConfigRepository.findByProjectKey(projectKey)
-        if (configs.isEmpty()) {
+        val byProject = getAllJiraComponentVersionRanges().filter { it.component.projectKey == projectKey }
+        if (byProject.isEmpty()) {
             throw NotFoundException("Project '$projectKey' is not found")
         }
-        return configs
-            .mapNotNull { config ->
-                val componentName = config.component?.name ?: config.componentVersion?.component?.name ?: return@mapNotNull null
-                val versionRange = config.componentVersion?.versionRange ?: ALL_VERSIONS
-                val jiraComponent = config.toJiraComponent()
-                val vcsSettingsEntity =
-                    if (config.componentVersion != null) {
-                        config.componentVersion!!.vcsSettings.firstOrNull()
-                            ?: config.component?.vcsSettings?.firstOrNull()
-                    } else {
-                        config.component?.vcsSettings?.firstOrNull()
-                    }
-                val vcsSettings = vcsSettingsEntity?.toVCSSettings() ?: VCSSettings.create(null, emptyList())
-                val distributionEntity =
-                    if (config.componentVersion != null) {
-                        config.componentVersion!!.distributions.firstOrNull()
-                            ?: config.component?.distributions?.firstOrNull()
-                    } else {
-                        config.component?.distributions?.firstOrNull()
-                    }
-                val distribution = distributionEntity?.toDistribution()
-                buildJiraComponentVersionRange(componentName, versionRange, jiraComponent, distribution, vcsSettings)
-            }.toSet()
+        return byProject.toSet()
     }
 
     override fun getComponentsDistributionByJiraProject(projectKey: String): Map<String, Distribution> =
@@ -234,8 +226,7 @@ class DatabaseComponentRegistryResolver(
                     versionRanges.find { it.distribution != null }?.distribution?.DEB(),
                     versionRanges.find { it.distribution != null }?.distribution?.RPM(),
                     versionRanges.find { it.distribution != null }?.distribution?.docker(),
-                    versionRanges.find { it.distribution != null }?.distribution?.securityGroups
-                        ?: SecurityGroups(null),
+                    versionRanges.find { it.distribution != null }?.distribution?.securityGroups ?: SecurityGroups(null),
                 )
             }
 
@@ -257,16 +248,14 @@ class DatabaseComponentRegistryResolver(
     ): Distribution {
         log.info("Get distribution for project: {} version: {}", projectKey, version)
         val found = getJiraComponentVersionToRangeByProjectAndVersion(projectKey, version)
-        return org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
-            .calculateDistribution(found.second.distribution, found.first.version)
+        return EscrowConfigurationLoader.calculateDistribution(found.second.distribution, found.first.version)
     }
 
     override fun getAllJiraComponentVersionRanges(): Set<JiraComponentVersionRange> =
         componentRepository
             .findAll()
-            .flatMap { component ->
-                buildJiraVersionRangesForComponent(component)
-            }.toSet()
+            .flatMap { component -> buildJiraVersionRangesForComponent(component) }
+            .toSet()
 
     override fun findComponentByArtifact(artifact: ArtifactDependency): VersionedComponent =
         findComponentByArtifactOrNull(artifact)
@@ -279,33 +268,118 @@ class DatabaseComponentRegistryResolver(
 
     override fun getMavenArtifactParameters(component: String): Map<String, ComponentArtifactConfiguration> {
         val componentEntity =
-            componentRepository.findByName(component)
+            componentRepository.findByComponentKey(component)
                 ?: throw NotFoundException("Component '$component' is not found")
 
-        // Git resolver keys by versionRangeString; component-level artifacts use ALL_VERSIONS
-        val result = mutableMapOf<String, ComponentArtifactConfiguration>()
-        for (artifactId in componentEntity.artifactIds) {
-            result[ALL_VERSIONS] = ComponentArtifactConfiguration(artifactId.groupPattern, artifactId.artifactPattern)
-        }
-
-        // Version-specific artifact IDs (fall back to component-level if version has none)
-        for (version in componentEntity.versions) {
-            val versionArtifactId = version.artifactIds.firstOrNull()
-            val effectiveArtifactId = versionArtifactId ?: componentEntity.artifactIds.firstOrNull()
-            if (effectiveArtifactId != null) {
-                result[version.versionRange] =
-                    ComponentArtifactConfiguration(
-                        effectiveArtifactId.groupPattern,
-                        effectiveArtifactId.artifactPattern,
-                    )
+        // Component-level fallback: the top-level groupId/artifactId rows imported from DSL.
+        // For components whose DSL omits an explicit `artifactId` line, the import path
+        // writes the inherited `Defaults.artifactId = ANY_ARTIFACT (/[\w-\.]+/)` verbatim;
+        // the V1 in-memory resolver returns that wildcard literal as-is (RES-C-prime).
+        //
+        // Sort by `sortOrder` ASC so multi-artifact CSV strings round-trip in their
+        // original DSL declaration order — V1 reads the raw DSL string verbatim, V2 must
+        // re-join in the same order or `GitVsDbValidationTest.VAL-006` fails. The import
+        // writes one row per CSV token with `sortOrder = index in DSL list`. All rows
+        // share the same `groupPattern` (per-component groupId), so `first().groupPattern`
+        // is stable by construction — any row picks the same group.
+        //
+        // Secondary sort by `artifactPattern` gives a deterministic outcome when
+        // multiple rows share the same `sortOrder` (legacy data written before this
+        // column existed, or a future write path that omits the position). Kotlin's
+        // `sortedWith` is stable; the secondary key takes effect only on ties.
+        val artifactIdRows =
+            componentEntity.artifactIds.sortedWith(
+                compareBy({ it.sortOrder }, { it.artifactPattern }),
+            )
+        val componentLevelFallback =
+            if (artifactIdRows.isEmpty()) {
+                null
+            } else {
+                ComponentArtifactConfiguration(
+                    artifactIdRows.first().groupPattern,
+                    artifactIdRows.joinToString(",") { it.artifactPattern },
+                )
             }
+
+        // Per-range MARKER rows that carry an explicit per-range maven coordinate.
+        //
+        // Two marker types may carry per-range maven artifact rows:
+        //
+        //   DISTRIBUTION_MAVEN: the DSL component uses an explicit `distribution { gav = … }`
+        //     block per range.  The marker's `mavenArtifacts` collection is populated from
+        //     the GAV.  `getMavenArtifactParameters` reads it the same way as below.
+        //
+        //   GROUP_ARTIFACT_PATTERN (MIG-047): the DSL component sets `groupId`/`artifactId`
+        //     per range WITHOUT an explicit `distribution { gav = … }` block.  A synthetic
+        //     marker was emitted at import time with `mavenArtifacts` built from the per-range
+        //     groupId/artifactId.  This marker is intentionally NOT registered in
+        //     MarkerAttributes.ALL so `buildEscrowModuleConfig` ignores it and
+        //     `getAllJiraComponentVersionRanges` is not affected.
+        //
+        // For both types, we extract the artifact configuration directly from the marker
+        // entity's `mavenArtifacts` child collection (sorted by `sortOrder`), bypassing
+        // `config.distribution.GAV()` to avoid the side-effect described above.
+        // Same-range conflict resolution: a V4 user may add a DISTRIBUTION_MAVEN
+        // override on a range that already carries an import-managed
+        // GROUP_ARTIFACT_PATTERN row (V4 createFieldOverride only de-dupes by
+        // overriddenAttribute). `componentEntity.configurations` is a @OneToMany
+        // collection with no specified iteration order, so a naive `associateBy`
+        // makes selection non-deterministic. Resolve deterministically: the
+        // explicit DISTRIBUTION_MAVEN user override always wins; GROUP_ARTIFACT_PATTERN
+        // is the fallback (used only when no DISTRIBUTION_MAVEN exists on the range).
+        val perRangeMarkerRows: Map<String, ComponentConfigurationEntity> =
+            componentEntity.configurations
+                .asSequence()
+                .filter {
+                    it.rowType == ROW_TYPE_MARKER &&
+                        (it.overriddenAttribute == MarkerAttributes.DISTRIBUTION_MAVEN ||
+                            it.overriddenAttribute == MarkerAttributes.GROUP_ARTIFACT_PATTERN)
+                }
+                .groupBy { it.versionRange }
+                .mapValues { (_, rows) ->
+                    rows.firstOrNull { it.overriddenAttribute == MarkerAttributes.DISTRIBUTION_MAVEN }
+                        ?: rows.first()
+                }
+
+        val module = componentEntity.toEscrowModule(versionRangeFactory, numericVersionFactory)
+
+        if (module.moduleConfigurations.isEmpty()) {
+            // No configurations at all — return empty map (preserves previous contract)
+            return emptyMap()
         }
 
-        return result
+        return module.moduleConfigurations
+            .associate { config ->
+                val rangeKey = config.versionRangeString ?: ALL_VERSIONS
+                val artifact =
+                    if (rangeKey in perRangeMarkerRows) {
+                        // Per-range override: extract directly from the marker entity's child rows.
+                        val markerRow = perRangeMarkerRows[rangeKey]!!
+                        val coords = markerRow.mavenArtifacts.sortedBy { it.sortOrder }
+                        if (coords.isNotEmpty()) {
+                            ComponentArtifactConfiguration(
+                                coords.first().groupPattern,
+                                coords.joinToString(",") { it.artifactPattern },
+                            )
+                        } else {
+                            componentLevelFallback
+                        }
+                    } else {
+                        // No per-range marker: V1 parity — return component-level fallback
+                        // verbatim (wildcard literal when DSL omitted `artifactId`).
+                        componentLevelFallback
+                    }
+                // Empty pair is the "no data" sentinel when both the marker-gated GAV
+                // branch and the component-level fallback returned nothing. The
+                // `filterValues` below drops these so the empty ranges aren't reported
+                // — matches the legacy contract for components with no maven artifacts.
+                rangeKey to (artifact ?: ComponentArtifactConfiguration("", ""))
+            }
+            .filterValues { it.groupPattern.isNotEmpty() || it.artifactPattern.isNotEmpty() }
     }
 
     override fun getDependencyMapping(): Map<String, String> =
-        dependencyMappingRepository.findAll().associate { it.alias to it.componentName }
+        dependencyMappingRepository.findAll().associate { it.alias to it.componentKey }
 
     override fun getComponentsCountByBuildSystem(): EnumMap<BuildSystem, Int> {
         log.debug("Get components count by build system")
@@ -332,120 +406,65 @@ class DatabaseComponentRegistryResolver(
                     } catch (_: IllegalArgumentException) {
                         null
                     }
-                productType?.let { component.name to it }
+                productType?.let { component.componentKey to it }
             }.toMap()
 
     override fun findComponentsByDockerImages(images: Set<Image>): Set<ComponentImage> {
         val imageNames = images.map { it.name }.toSet()
         return buildImageToComponentMap()
             .filterKeys(imageNames::contains)
-            .mapNotNull { (imgName, compId) ->
+            .mapNotNull { (imgName, compKey) ->
                 images.find { it.name == imgName }?.let { requiredImage ->
-                    findConfigurationByDockerImage(imgName, requiredImage.tag, compId)
+                    findConfigurationByDockerImage(imgName, requiredImage.tag, compKey)
                 }
             }.toSet()
     }
 
     // ============================================================
-    // Private helper methods
+    // Private helpers
     // ============================================================
-
-    private fun findMatchingVersionConfig(
-        component: ComponentEntity,
-        version: String,
-    ): ComponentVersionEntity? {
-        val numericVersion = numericVersionFactory.create(version)
-        return component.versions.find { versionEntity ->
-            try {
-                val range = versionRangeFactory.create(versionEntity.versionRange)
-                range.containsVersion(numericVersion)
-            } catch (_: Exception) {
-                false
-            }
-        }
-    }
 
     private fun getJiraComponentVersionRangesByComponent(component: String): Set<JiraComponentVersionRange> {
         val componentEntity =
-            componentRepository.findByName(component)
+            componentRepository.findByComponentKey(component)
                 ?: throw NotFoundException("Component '$component' is not found")
         return buildJiraVersionRangesForComponent(componentEntity)
     }
 
+    /**
+     * Enumerate `JiraComponentVersionRange` entries for one component by walking
+     * the EscrowModule view: each `EscrowModuleConfig` with a populated jira
+     * project key becomes one range.
+     */
     private fun buildJiraVersionRangesForComponent(component: ComponentEntity): Set<JiraComponentVersionRange> {
+        val module = component.toEscrowModule(versionRangeFactory, numericVersionFactory)
         val ranges = mutableSetOf<JiraComponentVersionRange>()
+        for (config in module.moduleConfigurations) {
+            val jiraComponent = config.jiraConfiguration ?: continue
+            if (jiraComponent.projectKey.isNullOrBlank()) continue
 
-        // Component-level jira config (no version range — covers all versions)
-        val componentJiraConfigs = component.jiraComponentConfigs
-        val componentVcsSettings =
-            component.vcsSettings.firstOrNull()?.toVCSSettings()
-                ?: VCSSettings.create(null, emptyList())
-        val componentHotfixEnabled = componentHotfixSupportResolver.isHotFixEnabled(componentVcsSettings)
-        val componentDistribution = component.distributions.firstOrNull()?.toDistribution()
-
-        for (jiraConfig in componentJiraConfigs) {
-            if (jiraConfig.projectKey.isNullOrBlank()) {
-                continue
-            }
-            val jiraComponent = jiraConfig.toJiraComponent(componentHotfixEnabled)
+            val hotfixEnabled = componentHotfixSupportResolver.isHotFixEnabled(config.vcsSettings)
+            val jiraWithHotfix =
+                org.octopusden.octopus.releng.dto.JiraComponent(
+                    jiraComponent.projectKey,
+                    jiraComponent.displayName,
+                    jiraComponent.componentVersionFormat,
+                    jiraComponent.componentInfo,
+                    jiraComponent.isTechnical,
+                    hotfixEnabled,
+                )
             ranges.add(
-                buildJiraComponentVersionRange(
-                    component.name,
-                    ALL_VERSIONS,
-                    jiraComponent,
-                    componentDistribution,
-                    componentVcsSettings,
+                jiraComponentVersionRangeFactory.create(
+                    component.componentKey,
+                    config.versionRangeString ?: ALL_VERSIONS,
+                    jiraWithHotfix,
+                    config.distribution,
+                    config.vcsSettings ?: VCSSettings.create(null, emptyList()),
                 ),
             )
         }
-
-        // Version-specific jira configs
-        for (versionEntity in component.versions) {
-            val versionJiraConfigs = versionEntity.jiraComponentConfigs
-            if (versionJiraConfigs.isEmpty()) continue
-
-            val versionVcsSettings =
-                versionEntity.vcsSettings.firstOrNull()?.toVCSSettings()
-                    ?: componentVcsSettings
-            val versionHotfixEnabled = componentHotfixSupportResolver.isHotFixEnabled(versionVcsSettings)
-            val versionDistribution =
-                versionEntity.distributions.firstOrNull()?.toDistribution()
-                    ?: componentDistribution
-
-            for (jiraConfig in versionJiraConfigs) {
-                if (jiraConfig.projectKey.isNullOrBlank()) {
-                    continue
-                }
-                val jiraComponent = jiraConfig.toJiraComponent(versionHotfixEnabled)
-                ranges.add(
-                    buildJiraComponentVersionRange(
-                        component.name,
-                        versionEntity.versionRange,
-                        jiraComponent,
-                        versionDistribution,
-                        versionVcsSettings,
-                    ),
-                )
-            }
-        }
-
         return ranges
     }
-
-    private fun buildJiraComponentVersionRange(
-        componentName: String,
-        versionRange: String,
-        jiraComponent: org.octopusden.octopus.releng.dto.JiraComponent,
-        distribution: Distribution?,
-        vcsSettings: VCSSettings,
-    ): JiraComponentVersionRange =
-        jiraComponentVersionRangeFactory.create(
-            componentName,
-            versionRange,
-            jiraComponent,
-            distribution,
-            vcsSettings,
-        )
 
     private fun getJiraComponentVersionsToRanges(
         version: String,
@@ -483,10 +502,7 @@ class DatabaseComponentRegistryResolver(
         return when (results.size) {
             1 -> results.first()
             0 -> throw NotFoundException("Version '$version' for component '$component' is not found")
-            else ->
-                error(
-                    "Found ${results.size} configurations for version '$version' of component '$component'",
-                )
+            else -> error("Found ${results.size} configurations for version '$version' of component '$component'")
         }
     }
 
@@ -499,28 +515,27 @@ class DatabaseComponentRegistryResolver(
         return when (results.size) {
             1 -> results.first()
             0 -> throw NotFoundException("Version '$version' for project '$projectKey' is not found")
-            else ->
-                error(
-                    "Found ${results.size} configurations for version '$version' of project '$projectKey'",
-                )
+            else -> error("Found ${results.size} configurations for version '$version' of project '$projectKey'")
         }
     }
 
     private fun findComponentByArtifactOrNull(artifact: ArtifactDependency): VersionedComponent? {
         val matches =
-            componentArtifactIdRepository
+            componentRepository
                 .findAll()
-                .mapNotNull { artifactIdEntity ->
-                    toArtifactMatchOrNull(artifactIdEntity, artifact)
+                .flatMap { component ->
+                    component.artifactIds.mapNotNull { artifactIdEntity ->
+                        toArtifactMatchOrNull(artifactIdEntity, artifact)
+                    }
                 }
+        if (matches.isEmpty()) return null
 
-        if (matches.isEmpty()) {
-            return null
-        }
-
-        val preferredMatches = matches.filter { it.versionSpecific }.ifEmpty { matches }
+        // Per-version specificity is not modelled at the component_artifact_ids
+        // level under Model A' — those rows belong to the component, not the
+        // configuration. Match by pattern specificity alone (mirrors v3 contract
+        // since the version-specific tier is empty in production today).
         val resolvedMatch =
-            preferredMatches.maxWithOrNull(
+            matches.maxWithOrNull(
                 compareBy<ArtifactMatch>(
                     { artifactSpecificity(it.artifactPattern, artifact.name) },
                     { it.artifactPattern.length },
@@ -531,7 +546,7 @@ class DatabaseComponentRegistryResolver(
     }
 
     private fun toArtifactMatchOrNull(
-        artifactIdEntity: org.octopusden.octopus.components.registry.server.entity.ComponentArtifactIdEntity,
+        artifactIdEntity: ComponentArtifactIdEntity,
         artifact: ArtifactDependency,
     ): ArtifactMatch? {
         val groupPattern = artifactIdEntity.groupPattern
@@ -541,25 +556,7 @@ class DatabaseComponentRegistryResolver(
         ) {
             return null
         }
-
-        val componentVersion = artifactIdEntity.componentVersion
-        return if (componentVersion != null) {
-            val numericVersion = numericVersionFactory.create(artifact.version)
-            val range =
-                try {
-                    versionRangeFactory.create(componentVersion.versionRange)
-                } catch (_: Exception) {
-                    return null
-                }
-            if (!range.containsVersion(numericVersion)) {
-                return null
-            }
-            val componentName = componentVersion.component?.name ?: return null
-            ArtifactMatch(componentName, artifactPattern, true)
-        } else {
-            val componentName = artifactIdEntity.component?.name ?: return null
-            ArtifactMatch(componentName, artifactPattern, false)
-        }
+        return ArtifactMatch(artifactIdEntity.component.componentKey, artifactPattern, false)
     }
 
     private fun artifactSpecificity(
@@ -582,16 +579,9 @@ class DatabaseComponentRegistryResolver(
     private fun buildImageToComponentMap(): Map<String, String> {
         val result = mutableMapOf<String, String>()
         for (component in componentRepository.findAll()) {
-            val allDistributions =
-                buildList {
-                    addAll(component.distributions)
-                    component.versions.forEach { v -> addAll(v.distributions) }
-                }
-            for (distribution in allDistributions) {
-                for (artifact in distribution.artifacts) {
-                    if (artifact.artifactType == "DOCKER" && artifact.name != null) {
-                        result[artifact.name!!] = component.name
-                    }
+            for (configuration in component.configurations) {
+                for (image in configuration.dockerImages) {
+                    result[image.imageName] = component.componentKey
                 }
             }
         }
@@ -601,20 +591,24 @@ class DatabaseComponentRegistryResolver(
     private fun findConfigurationByDockerImage(
         imageName: String,
         imageTag: String,
-        componentId: String,
+        componentKey: String,
     ): ComponentImage? {
         val versionString =
             try {
-                getJiraComponentVersion(componentId, imageTag).version
+                getJiraComponentVersion(componentKey, imageTag).version
             } catch (_: NotFoundException) {
                 return null
             }
-        val component = componentRepository.findByName(componentId) ?: return null
-        val matchedVersion = findMatchingVersionConfig(component, versionString)
-        val config = applyOverrides(componentId, component.toEscrowModuleConfig(matchedVersion), versionString)
+        val component = componentRepository.findByComponentKey(componentKey) ?: return null
+        val config =
+            component.toResolvedEscrowModuleConfig(
+                version = versionString,
+                versionRangeFactory = versionRangeFactory,
+                numericVersionFactory = numericVersionFactory,
+            ) ?: return null
         return config.distribution?.let { dist ->
             if (dist.docker()?.split(',')?.contains("$imageName:$imageTag") == true) {
-                ComponentImage(componentId, versionString, Image(imageName, imageTag))
+                ComponentImage(componentKey, versionString, Image(imageName, imageTag))
             } else {
                 null
             }
@@ -622,16 +616,12 @@ class DatabaseComponentRegistryResolver(
     }
 
     private fun EscrowModule.getBuildSystem(): BuildSystem =
-        moduleConfigurations.firstOrNull()?.buildSystem?.toDTO()
-            ?: BuildSystem.NOT_SUPPORTED
+        moduleConfigurations.firstOrNull()?.buildSystem?.toDTO() ?: BuildSystem.NOT_SUPPORTED
 
     private fun EscrowModule.isArchived(): Boolean {
         val moduleConfig = moduleConfigurations.firstOrNull() ?: return false
         return moduleConfig.archived ||
-            (
-                moduleConfig.componentDisplayName
-                    ?.endsWith("ARCHIVED", ignoreCase = true) ?: false
-            )
+            (moduleConfig.componentDisplayName?.endsWith("ARCHIVED", ignoreCase = true) ?: false)
     }
 
     private fun org.octopusden.octopus.escrow.BuildSystem.toDTO(): BuildSystem =
@@ -648,14 +638,43 @@ class DatabaseComponentRegistryResolver(
             org.octopusden.octopus.escrow.BuildSystem.IN_CONTAINER -> BuildSystem.IN_CONTAINER
         }
 
-    private fun applyOverrides(
-        componentName: String,
-        config: EscrowModuleConfig,
-        version: String?,
-    ): EscrowModuleConfig {
-        val overrides = fieldOverrideRepository.findByComponentName(componentName)
-        if (overrides.isEmpty()) return config
-        return OverrideApplicator.applyToConfig(config, overrides, version, numericVersionFactory, versionRangeFactory)
+    /**
+     * Null out `config.escrow` when ALL meaningful escrow fields are absent.
+     *
+     * `EntityMappers.buildEscrowModuleConfig` always sets `config.escrow` to a
+     * non-null anonymous `Escrow` object (because `toEscrowApi()` is
+     * unconditional). For components that have no escrow data in the DB
+     * (all escrow columns are null), this produces an empty EscrowDTO that
+     * the controller serializes as `escrow=EscrowDTO(buildTask=null, ...)`.
+     *
+     * The Git-path resolver returns `null` for such components, so we match
+     * that behaviour here: if none of the meaningful fields carry a real value
+     * the escrow object is treated as absent.
+     *
+     * NOTE: `isReusable()` is intentionally excluded from the emptiness check
+     * because the DB column is nullable (null means "not specified") but the
+     * `Escrow` interface method returns a primitive `boolean` (defaults to
+     * `false`), making `false` indistinguishable from "not specified" at the
+     * model level.  All other fields can be checked for meaningful content.
+     */
+    private fun EscrowModuleConfig.nullifyEmptyEscrow(): EscrowModuleConfig {
+        val e: Escrow = escrow ?: return this
+        val meaningfulEscrow =
+            e.buildTask != null ||
+                e.providedDependencies.isNotEmpty() ||
+                e.diskSpaceRequirement.isPresent ||
+                e.additionalSources.isNotEmpty() ||
+                e.generation.isPresent
+        if (!meaningfulEscrow) {
+            escrow = null
+        }
+        return this
+    }
+
+    /** Apply [nullifyEmptyEscrow] to every config in the module. */
+    private fun EscrowModule.nullifyEmptyEscrow(): EscrowModule {
+        moduleConfigurations.forEach { it.nullifyEmptyEscrow() }
+        return this
     }
 
     companion object {
@@ -664,5 +683,12 @@ class DatabaseComponentRegistryResolver(
         /** Must match EscrowConfigurationLoader.ALL_VERSIONS = "(,0),[0,)" */
         @Suppress("VariableNaming")
         private const val ALL_VERSIONS = "(,0),[0,)"
+
+        /**
+         * SoT literal for `ComponentConfigurationEntity.rowType`. Matches the
+         * String constants used throughout `EntityMappers`. The entity field is
+         * a `String` — there is no shared enum to reference.
+         */
+        private const val ROW_TYPE_MARKER = "MARKER"
     }
 }

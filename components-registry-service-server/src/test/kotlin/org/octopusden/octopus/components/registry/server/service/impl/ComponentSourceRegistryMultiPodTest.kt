@@ -95,7 +95,8 @@ class ComponentSourceRegistryMultiPodTest {
         assertEquals("git", registry.getSource(name), "no row yet, default-source=git")
 
         // Pod B: insert the row directly.
-        repository.save(ComponentSourceEntity(componentName = name, source = "db"))
+        // v2: ComponentSourceEntity uses componentKey (not componentName)
+        repository.save(ComponentSourceEntity(componentKey = name, source = "db"))
         repository.flush()
 
         // Pod A's next read must see the insert.
@@ -122,9 +123,10 @@ class ComponentSourceRegistryMultiPodTest {
         val existing = repository.findById(oldName).orElseThrow()
         repository.delete(existing)
         repository.flush()
+        // v2: ComponentSourceEntity uses componentKey (not componentName)
         repository.save(
             ComponentSourceEntity(
-                componentName = newName,
+                componentKey = newName,
                 source = existing.source,
                 migratedAt = existing.migratedAt,
                 migratedBy = existing.migratedBy,
