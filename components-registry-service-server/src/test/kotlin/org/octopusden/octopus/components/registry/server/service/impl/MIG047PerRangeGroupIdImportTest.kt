@@ -31,9 +31,9 @@ import org.octopusden.octopus.escrow.configuration.model.DefaultConfigParameters
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
 
 /**
- * MIG-047 RED test: `emitMarkerOverrides` must create a DISTRIBUTION_MAVEN MARKER
- * row when the override config has a different `groupIdPattern` than the base — even
- * when neither base nor override carries an explicit `distribution.GAV()`.
+ * MIG-047 RED test: `emitMarkerOverrides` must create a GROUP_ARTIFACT_PATTERN MARKER
+ * row when the override config has a different `groupIdPattern` or `artifactIdPattern`
+ * than the base — even when neither base nor override carries an explicit `distribution.GAV()`.
  *
  * Bug shape (prod-vs-schema-v2 compat regression):
  *   Component DSL has two version ranges:
@@ -44,15 +44,17 @@ import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
  * Pre-fix behaviour:
  *   `emitMarkerOverrides(base=[1.0,1.1), override=[1.1,))` compares
  *   `distribution.GAV()` on both sides.  Both are null → `mavenArtifactsDiffer`
- *   returns false → no DISTRIBUTION_MAVEN MARKER is emitted for `[1.1,)`.
+ *   returns false → no MARKER is emitted for `[1.1,)`.
  *   Consequence: `getMavenArtifactParameters` falls back to `componentLevelFallback`
  *   (from base config) for ALL ranges, so `[1.1,)` wrongly returns
  *   `com.example` instead of `com.example.ic`.
  *
  * Post-fix behaviour:
  *   `emitMarkerOverrides` additionally detects `groupIdPattern` / `artifactIdPattern`
- *   divergence and emits a DISTRIBUTION_MAVEN MARKER whose `mavenArtifacts` rows
+ *   divergence and emits a GROUP_ARTIFACT_PATTERN MARKER whose `mavenArtifacts` rows
  *   are synthetic entries built from `override.groupIdPattern` / `override.artifactIdPattern`.
+ *   Unlike DISTRIBUTION_MAVEN, GROUP_ARTIFACT_PATTERN is excluded from MarkerAttributes.ALL
+ *   so it does not affect `getAllJiraComponentVersionRanges`.
  */
 @Timeout(30, unit = TimeUnit.SECONDS)
 class MIG047PerRangeGroupIdImportTest {
@@ -147,10 +149,10 @@ class MIG047PerRangeGroupIdImportTest {
 
     @Test
     @DisplayName(
-        "MIG-047-001: emitMarkerOverrides creates DISTRIBUTION_MAVEN MARKER " +
+        "MIG-047-001: emitMarkerOverrides creates GROUP_ARTIFACT_PATTERN MARKER " +
             "when groupIdPattern differs across ranges (no distribution.GAV on either side)",
     )
-    fun `MIG-047-001 DISTRIBUTION_MAVEN MARKER created when groupId differs per range without distribution gav`() {
+    fun `MIG-047-001 GROUP_ARTIFACT_PATTERN MARKER created when groupId differs per range without distribution gav`() {
         // synthetic component entity with a stable UUID so saveMarkerRowWithChildren
         // can invoke component.id!!
         val component = ComponentEntity(id = UUID.randomUUID(), componentKey = "alpha-fixture")
@@ -171,11 +173,11 @@ class MIG047PerRangeGroupIdImportTest {
 
         val result = callEmitMarkerOverrides(component, savedBase, baseConfig, overrideConfig)
 
-        // MIG-047 assertion: a DISTRIBUTION_MAVEN MARKER must be emitted for [1.1,)
+        // MIG-047 assertion: a GROUP_ARTIFACT_PATTERN MARKER must be emitted for [1.1,)
         // even though distribution.GAV() is null on both sides.
         //
         // Pre-fix: result is empty (mavenArtifactsDiffer(null, null) = false → no MARKER).
-        // Post-fix: result contains the DISTRIBUTION_MAVEN MARKER with com.example.ic.
+        // Post-fix: result contains one GROUP_ARTIFACT_PATTERN MARKER with com.example.ic.
         assertEquals(1, result.size, "Expected exactly one MARKER row for the [1.1,) override range")
 
         val marker = result[0]
@@ -208,10 +210,10 @@ class MIG047PerRangeGroupIdImportTest {
 
     @Test
     @DisplayName(
-        "MIG-047-002: emitMarkerOverrides creates DISTRIBUTION_MAVEN MARKER " +
+        "MIG-047-002: emitMarkerOverrides creates GROUP_ARTIFACT_PATTERN MARKER " +
             "when artifactIdPattern differs across ranges (no distribution.GAV on either side)",
     )
-    fun `MIG-047-002 DISTRIBUTION_MAVEN MARKER created when artifactId CSV differs per range without distribution gav`() {
+    fun `MIG-047-002 GROUP_ARTIFACT_PATTERN MARKER created when artifactId CSV differs per range without distribution gav`() {
         // bug-shape: artifactId adds a new token in newer range (same group)
         // base [1.0,): group=com.example.mcloud, artifact=core-a,core-b,core-c
         // override [2.0,): group=com.example.mcloud, artifact=core-a,core-b,core-c,core-tcp-client
@@ -229,7 +231,7 @@ class MIG047PerRangeGroupIdImportTest {
 
         val result = callEmitMarkerOverrides(component, savedBase, baseConfig, overrideConfig)
 
-        assertEquals(1, result.size, "Expected one DISTRIBUTION_MAVEN MARKER for [2.0,)")
+        assertEquals(1, result.size, "Expected one GROUP_ARTIFACT_PATTERN MARKER for [2.0,)")
         val marker = result[0]
         assertEquals(MarkerAttributes.GROUP_ARTIFACT_PATTERN, marker.overriddenAttribute)
         assertEquals("[2.0,)", marker.versionRange)

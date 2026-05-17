@@ -1424,9 +1424,9 @@ class ImportServiceImpl(
     }
 
     /**
-     * MIG-047: synthetic DISTRIBUTION_MAVEN entries built from DSL-level
-     * `groupId`/`artifactId` fields when neither range carries an explicit
-     * `distribution { gav = … }` block.
+     * MIG-047: populate a GROUP_ARTIFACT_PATTERN MARKER row with synthetic
+     * [DistributionMavenArtifactEntity] rows built from DSL-level `groupId`/`artifactId`
+     * fields when neither range carries an explicit `distribution { gav = … }` block.
      *
      * [artifactIdCsv] is treated as a comma-separated list (each token becomes
      * one [DistributionMavenArtifactEntity] row), matching the V1 behaviour in
