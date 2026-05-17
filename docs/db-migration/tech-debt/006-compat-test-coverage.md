@@ -101,7 +101,8 @@ If the PSI approach proves fragile, fall back to runtime introspection via
 ### Traffic-classified reporting (1a / 1b)
 
 Optional preflight reads an env-provided trace file (default
-`COMPAT_TRAFFIC_TRACE=/tmp/crs-top1000-augmented.txt`). For each baseline
+`COMPAT_TRACE_FILE=/tmp/crs-top1000-augmented.txt`, same env var as TD-008
+and TD-009 — they all consume the same trace source). For each baseline
 endpoint, classify:
 
 - **1a** — appears in the trace window. High operational priority.
