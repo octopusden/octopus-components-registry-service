@@ -48,9 +48,12 @@ Example:
   already concrete, not templated).
 
 Source: `COMPAT_TRACE_FILE` env var. Default path documented in `README.md`
-of `components-registry-compat-test/`; no default in code (so a misconfigured
-TC job fails-fast at `@BeforeAll` rather than silently replaying an empty
-trace).
+of `components-registry-compat-test/`; no default in code. When the var is
+unset, `TraceReplayCompatTest` calls `Assumptions.assumeTrue(...)` at
+`@BeforeAll` with a clear message — so an unconfigured CI lane is reported
+as a skip (visible in the test log, not a silent empty replay) and the rest
+of the compat run still passes (not a hard abort that would mask unrelated
+results). See the Acceptance section below for the symmetric statement.
 
 The trace file itself is **not** committed to the repo — it contains
 production component identifiers and request bodies. Operators supply it via
