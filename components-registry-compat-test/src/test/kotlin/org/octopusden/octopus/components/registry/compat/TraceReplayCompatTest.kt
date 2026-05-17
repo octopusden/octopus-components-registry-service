@@ -186,7 +186,12 @@ class TraceReplayCompatTest : CompatibilityTestBase() {
                 val versions = componentId?.let { fixtures.versionsFor(it) } ?: emptyList()
                 mapOf("versions" to versions)
             }
-            else -> "{}"
+            // Empty map → Jackson serialises to `{}`. Returning the String literal `"{}"`
+            // would be double-encoded (Jackson would write `"\"{}\""`) and most stands
+            // reject that with 400/415 symmetrically — same outcome but for the wrong
+            // reason. emptyMap keeps the fallback well-formed for any future unknown
+            // POST endpoint we haven't covered yet.
+            else -> emptyMap<String, Any>()
         }
     }
 
@@ -274,7 +279,11 @@ class TraceReplayCompatTest : CompatibilityTestBase() {
             val futures =
                 entries.map { entry ->
                     pool.submit {
-                        val diffsBefore = DiffCollector.snapshot().size
+                        // ThreadLocal count — `snapshot().size` is the global queue and
+                        // races with other workers between read points. count() is
+                        // per-worker-thread, so the delta is "diffs this tuple recorded"
+                        // even under fan-out parallelism.
+                        val diffsBefore = DiffCollector.count()
                         val t0 = System.nanoTime()
                         if (verbose) log.info("→ ${entry.method} ${entry.path}")
                         val (baseline, candidate) =
@@ -314,7 +323,7 @@ class TraceReplayCompatTest : CompatibilityTestBase() {
                         cats.distinct().forEach { cat ->
                             weightByBucket.merge(endpoint to cat, entry.count) { a, b -> a + b }
                         }
-                        val newDiffs = DiffCollector.snapshot().size - diffsBefore
+                        val newDiffs = DiffCollector.count() - diffsBefore
                         if (verbose) {
                             log.info(
                                 "← ${entry.method} ${entry.path} " +
