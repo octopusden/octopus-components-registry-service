@@ -235,6 +235,32 @@ class ComponentRoutingResolverStaleAndNotFoundTest {
 
     @Test
     @DisplayName(
+        "1.4b P1-A guard (Opus): dbResult present for a component NOT in dbNames " +
+            "(partial-migration: component_source row missing) + git stale matches a DIFFERENT " +
+            "db-sourced component → routing must return dbResult, not null (no false-drop)",
+    )
+    fun pr192_1_4b_findComponentsByArtifact_dbHit_componentNotInDbNames_gitStaleOtherDb_returnsDb() {
+        val artifact = ArtifactDependency("org.test", "widget", "1.0.0")
+        val artifacts = setOf(artifact)
+        // partially-migrated: dbResult component is in `component` table but not in
+        // `component_source` table yet (failed migration / race)
+        val dbComponent = "partial-widget"
+        // a DIFFERENT db-sourced component that git stale-matches the same artifact
+        val otherDbComponent = "other-db-widget"
+        val dbResult = mockVersionedComponent(dbComponent)
+        val gitStaleOther = mockVersionedComponent(otherDbComponent)
+        doReturn(setOf(otherDbComponent)).`when`(sourceRegistry).getDbComponentNames()
+        doReturn(mapOf(artifact to gitStaleOther))
+            .`when`(gitResolver).findComponentsByArtifact(artifacts)
+        doReturn(mapOf(artifact to dbResult))
+            .`when`(dbResolver).findComponentsByArtifact(artifacts)
+
+        val result = routing.findComponentsByArtifact(artifacts)
+        assertEquals(dbResult, result[artifact], "dbResult must win even when its id is not in dbNames")
+    }
+
+    @Test
+    @DisplayName(
         "1.4b anti-regression: git-sourced component only matched in git → returns gitResult",
     )
     fun pr192_1_4b_findComponentsByArtifact_gitOnly_returnsGit() {
