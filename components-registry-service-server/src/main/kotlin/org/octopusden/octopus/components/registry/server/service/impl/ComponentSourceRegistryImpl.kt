@@ -26,11 +26,19 @@ class ComponentSourceRegistryImpl(
         name: String,
         source: String,
     ) {
+        // Normalize THEN whitelist: `findBySource("db")` is case-sensitive and
+        // `ComponentRoutingResolver.resolverFor` checks `== "db"` exactly, so any
+        // casing/whitespace variant would route the component to gitResolver and
+        // silently exclude it from getDbComponentNames() → 404 blackhole.
+        val normalized = source.trim().lowercase()
+        require(normalized in ALLOWED_SOURCES) {
+            "Invalid component source '$source'; allowed values: ${ALLOWED_SOURCES.joinToString(", ")}"
+        }
         val entity =
             componentSourceRepository.findById(name).orElse(
                 ComponentSourceEntity(componentKey = name),
             )
-        entity.source = source
+        entity.source = normalized
         entity.migratedAt = Instant.now()
         componentSourceRepository.save(entity)
     }
@@ -45,4 +53,8 @@ class ComponentSourceRegistryImpl(
     override fun getDbComponentNames(): Set<String> = componentSourceRepository.findBySource("db").map { it.componentKey }.toSet()
 
     override fun getGitComponentNames(): Set<String> = componentSourceRepository.findBySource("git").map { it.componentKey }.toSet()
+
+    private companion object {
+        private val ALLOWED_SOURCES = setOf("git", "db")
+    }
 }
