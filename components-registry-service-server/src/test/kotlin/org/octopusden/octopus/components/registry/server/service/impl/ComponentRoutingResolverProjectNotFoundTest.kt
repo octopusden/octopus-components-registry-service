@@ -178,6 +178,31 @@ class ComponentRoutingResolverProjectNotFoundTest {
         assertEquals(setOf(gitRange), result)
     }
 
+    @Test
+    @DisplayName(
+        "MIG-049-002 anti-regression: both resolvers return non-empty → routing returns the union " +
+            "(git rows for db-routed components are de-duped via sourceRegistry)",
+    )
+    fun mig049_002_jiraVersionRangesByProject_bothHaveRows_returnsUnion() {
+        val projectKey = "lambda-project"
+        val gitGitOnly = mock(JiraComponentVersionRange::class.java)
+        doReturn("git-only-comp").`when`(gitGitOnly).componentName
+        val gitShared = mock(JiraComponentVersionRange::class.java)
+        doReturn("shared-db-comp").`when`(gitShared).componentName
+        val dbRange = mock(JiraComponentVersionRange::class.java)
+        doReturn("shared-db-comp").`when`(dbRange).componentName
+        // shared-db-comp is db-routed → git copy must be filtered out by the existing
+        // sourceRegistry.getDbComponentNames() de-dup in the union-merge code path.
+        doReturn(setOf("shared-db-comp")).`when`(sourceRegistry).getDbComponentNames()
+        doReturn(setOf(gitGitOnly, gitShared))
+            .`when`(gitResolver).getJiraComponentVersionRangesByProject(projectKey)
+        doReturn(setOf(dbRange))
+            .`when`(dbResolver).getJiraComponentVersionRangesByProject(projectKey)
+
+        val result = routing.getJiraComponentVersionRangesByProject(projectKey)
+        assertEquals(setOf(gitGitOnly, dbRange), result)
+    }
+
     // =========================================================================
     // MIG-049-003: getComponentsDistributionByJiraProject
     // =========================================================================
@@ -234,5 +259,30 @@ class ComponentRoutingResolverProjectNotFoundTest {
 
         val result = routing.getComponentsDistributionByJiraProject(projectKey)
         assertEquals(mapOf("legacy-comp" to gitDistribution), result)
+    }
+
+    @Test
+    @DisplayName(
+        "MIG-049-003 anti-regression: both resolvers return non-empty → routing returns the union " +
+            "(git entries for db-routed components are de-duped via sourceRegistry)",
+    )
+    fun mig049_003_componentsDistributionByJiraProject_bothHaveMaps_returnsUnion() {
+        val projectKey = "mu-project"
+        val gitOnlyDistribution = mock(Distribution::class.java)
+        val gitStaleDistribution = mock(Distribution::class.java)
+        val dbDistribution = mock(Distribution::class.java)
+        // "shared-db-comp" is db-routed → its git entry must be filtered out by the
+        // existing dbComponentNames de-dup in the union-merge code path.
+        doReturn(setOf("shared-db-comp")).`when`(sourceRegistry).getDbComponentNames()
+        doReturn(mapOf("git-only-comp" to gitOnlyDistribution, "shared-db-comp" to gitStaleDistribution))
+            .`when`(gitResolver).getComponentsDistributionByJiraProject(projectKey)
+        doReturn(mapOf("shared-db-comp" to dbDistribution))
+            .`when`(dbResolver).getComponentsDistributionByJiraProject(projectKey)
+
+        val result = routing.getComponentsDistributionByJiraProject(projectKey)
+        assertEquals(
+            mapOf("git-only-comp" to gitOnlyDistribution, "shared-db-comp" to dbDistribution),
+            result,
+        )
     }
 }
