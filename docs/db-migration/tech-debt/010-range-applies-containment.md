@@ -35,20 +35,22 @@ A follow-up PR must satisfy ALL of the following before the FIXME-equivalent com
 
 For each case, the test asserts the expected `rangeApplies(parent, child)` outcome.
 
-| # | parent | child | expected | rationale |
-|---|--------|-------|----------|-----------|
-| 1 | `[1.0,2.0)` | `[1.0,2.0)` | true | exact equality (preserved) |
-| 2 | `[1.0,3.0)` | `[1.0,2.0)` | true | strict left-aligned containment |
-| 3 | `[1.0,3.0)` | `[2.0,3.0)` | true | strict right-aligned containment |
-| 4 | `[1.0,3.0)` | `[1.5,2.5)` | true | strict interior containment |
-| 5 | `[1.0,2.0)` | `[1.5,2.5)` | false | partial overlap, child extends past parent |
-| 6 | `[1.0,2.0]` | `[2.0,3.0)` | false | single-point intersection at closed boundary — NOT containment |
-| 7 | `[1.0,2.0)` | `[2.0,3.0)` | false | adjacent disjoint, no overlap |
-| 8 | `(,0),[1.0,)` | `[2.0,3.0)` | true | union-parent contains right-segment-only child |
-| 9 | `(,0),[1.0,)` | `[-1.0,0.5)` | false | child straddles a gap in the union-parent |
-| 10 | `(,)` | `[1.0,2.0)` | true | unbounded parent contains any child |
+| # | parent | child | expected | rationale | category |
+|---|--------|-------|----------|-----------|----------|
+| 1 | `[1.0,2.0)` | `[1.0,2.0)` | true | exact equality (preserved) | bounded |
+| 2 | `[1.0,3.0)` | `[1.0,2.0)` | true | strict left-aligned containment | bounded |
+| 3 | `[1.0,3.0)` | `[2.0,3.0)` | true | strict right-aligned containment | bounded |
+| 4 | `[1.0,3.0)` | `[1.5,2.5)` | true | strict interior containment | bounded |
+| 5 | `[1.0,2.0)` | `[1.5,2.5)` | false | partial overlap, child extends past parent | bounded |
+| 6 | `[1.0,2.0]` | `[2.0,3.0)` | false | single-point intersection at closed boundary — NOT containment | bounded |
+| 7 | `[1.0,2.0)` | `[2.0,3.0)` | false | adjacent disjoint, no overlap | bounded |
+| 8 | `(1.0,3.0)` | `[1.5,2.5]` | true | strict interior, mixed bound styles (parent open, child closed) | bounded |
+| 9 | `[1.0,2.0)` | `[1.0,2.0]` | false | child's closed upper exceeds parent's open upper by ε | bounded |
+| 10 | `(,0),[1.0,)` | `[2.0,3.0)` | true | union-parent contains right-segment-only child | union |
+| 11 | `(,0),[1.0,)` | `[-1.0,0.5)` | false | child straddles a gap in the union-parent | union |
+| 12 | `(,)` | `[1.0,2.0)` | true | unbounded parent contains any child | unbounded |
 
-(Cases 8–10 may be deferred to a TD-010-b second PR if the underlying `VersionRangeFactory` API doesn't yet support union/unbounded; track explicitly.)
+**Acceptance bar:** all 9 **bounded** cases (1–9) must ship in the TD-010 PR. The 3 **union/unbounded** cases (10–12) may be deferred to a `TD-010-b` follow-up if the underlying `VersionRangeFactory` API doesn't yet support union/unbounded ranges — track explicitly. The "minimum 8" headline above is satisfied by the bounded subset alone.
 
 ### 2. Implementation approach
 
