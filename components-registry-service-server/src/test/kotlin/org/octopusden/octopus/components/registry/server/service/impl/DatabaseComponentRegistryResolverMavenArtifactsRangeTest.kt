@@ -14,6 +14,7 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentArtifac
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionMavenArtifactEntity
+import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.DependencyMappingRepository
 import org.octopusden.releng.versions.NumericVersionFactory
@@ -453,6 +454,96 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
             "real-artifact-id",
             rangeWithMarker.artifactPattern,
             "[1.0,) artifactPattern must come from the marker's GAV (override is active)",
+        )
+    }
+
+    // ========================================================================
+    // MIG-047 read-path coverage (PR #240 P2 follow-up)
+    // ========================================================================
+    //
+    // Symmetric coverage for the GROUP_ARTIFACT_PATTERN marker emitted by
+    // `ImportServiceImpl.attachMavenArtifactsFromGroupArtifact` (RES-C tests
+    // above cover the same read-path for DISTRIBUTION_MAVEN). The resolver
+    // accepts either marker name when looking up per-range maven coordinates;
+    // these tests guard that branch so it cannot regress independently of the
+    // import-side unit tests.
+
+    @Test
+    @DisplayName(
+        "MIG-047-RES-001: per-range GROUP_ARTIFACT_PATTERN marker overrides groupPattern " +
+            "even when neither side carries an explicit distribution.GAV",
+    )
+    fun `MIG-047-RES-001 getMavenArtifactParameters returns per-range groupPattern from GROUP_ARTIFACT_PATTERN marker`() {
+        // MIG-047 import-path shape:
+        //   BASE at [1.0,1.1) with maven artifact (com.example, alpha-fixture)
+        //   GROUP_ARTIFACT_PATTERN MARKER at [1.1,) with maven artifact (com.example.ic, alpha-fixture)
+        // Neither config had an explicit distribution { gav = … } block — the maven-artifact
+        // rows were synthesized from per-range groupId/artifactId by the import path.
+        val comp = makeComponent("alpha-fixture-mig047-resolver")
+        comp.distributionExplicit = true
+
+        addComponentLevelArtifact(comp, "com.example", "alpha-fixture")
+
+        val base = makeBase(comp, "[1.0,1.1)")
+        addMavenArtifact(base, "com.example", "alpha-fixture")
+
+        val marker = makeMarkerRow(comp, "[1.1,)", MarkerAttributes.GROUP_ARTIFACT_PATTERN)
+        addMavenArtifact(marker, "com.example.ic", "alpha-fixture")
+
+        comp.configurations.addAll(listOf(base, marker))
+        stubComponent(comp)
+
+        val result = resolver.getMavenArtifactParameters("alpha-fixture-mig047-resolver")
+
+        assertEquals(2, result.size, "Expected two range entries (base + GROUP_ARTIFACT_PATTERN override)")
+
+        val rangeBase = result["[1.0,1.1)"]
+        assertNotNull(rangeBase, "[1.0,1.1) entry must be present")
+        assertEquals("com.example", rangeBase!!.groupPattern)
+        assertEquals("alpha-fixture", rangeBase.artifactPattern)
+
+        val rangeOverride = result["[1.1,)"]
+        assertNotNull(rangeOverride, "[1.1,) entry must be present")
+        assertEquals(
+            "com.example.ic",
+            rangeOverride!!.groupPattern,
+            "[1.1,) groupPattern must come from GROUP_ARTIFACT_PATTERN marker",
+        )
+        assertEquals("alpha-fixture", rangeOverride.artifactPattern)
+    }
+
+    @Test
+    @DisplayName(
+        "MIG-047-RES-002: per-range GROUP_ARTIFACT_PATTERN marker with multi-artifact CSV " +
+            "(artifactId list grows across ranges, same groupId)",
+    )
+    fun `MIG-047-RES-002 getMavenArtifactParameters handles GROUP_ARTIFACT_PATTERN with multi-artifact CSV`() {
+        val comp = makeComponent("beta-fixture-mig047-csv")
+        comp.distributionExplicit = true
+
+        addComponentLevelArtifact(comp, "com.example.mcloud", "core-a")
+
+        val base = makeBase(comp, "[1.0,)")
+        addMavenArtifact(base, "com.example.mcloud", "core-a")
+
+        val marker = makeMarkerRow(comp, "[2.0,)", MarkerAttributes.GROUP_ARTIFACT_PATTERN)
+        addMavenArtifact(marker, "com.example.mcloud", "core-a", sortOrder = 0)
+        addMavenArtifact(marker, "com.example.mcloud", "core-b", sortOrder = 1)
+        addMavenArtifact(marker, "com.example.mcloud", "core-c", sortOrder = 2)
+
+        comp.configurations.addAll(listOf(base, marker))
+        stubComponent(comp)
+
+        val result = resolver.getMavenArtifactParameters("beta-fixture-mig047-csv")
+
+        assertEquals(2, result.size, "Expected two range entries")
+        val rangeOverride = result["[2.0,)"]
+        assertNotNull(rangeOverride, "[2.0,) entry must be present")
+        assertEquals("com.example.mcloud", rangeOverride!!.groupPattern)
+        assertEquals(
+            "core-a,core-b,core-c",
+            rangeOverride.artifactPattern,
+            "[2.0,) artifactPattern must be CSV of all three GROUP_ARTIFACT_PATTERN children in sort order",
         )
     }
 
