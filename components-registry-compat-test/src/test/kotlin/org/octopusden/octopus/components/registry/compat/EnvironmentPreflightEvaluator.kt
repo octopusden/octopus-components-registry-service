@@ -16,6 +16,15 @@ internal data class EnvironmentPreflightInputs(
      *  JSON array — see ArrayNode guard at the caller); evaluator treats `-1L` as
      *  "no useful threshold available, fall back to >0". */
     val baselineComponentCount: Long,
+    /** Documented escape hatch (README §CANDIDATE_NOT_DB_MODE, originally specified
+     *  in plan TASK-D layer 3). When `true`, the evaluator suppresses the
+     *  [DiffClassifier.CANDIDATE_NOT_DB_MODE] record even if the candidate is in
+     *  VCS mode — for parity-debug runs where the operator is intentionally
+     *  comparing prod V1 against a V1-routed candidate. SNAPSHOT_MISMATCH is
+     *  unaffected (it's a different invariant). Wired via `compat.allow-non-db-
+     *  candidate` system property / `COMPAT_ALLOW_NON_DB_CANDIDATE` env in
+     *  [SnapshotPreconditionTest]. */
+    val allowNonDbCandidate: Boolean = false,
 )
 
 /**
@@ -112,7 +121,7 @@ internal fun evaluateEnvironmentPreflight(
     }
     val candidateInDbMode =
         c.defaultSource == "db" && (c.dbComponentCount ?: 0L) >= threshold
-    if (!candidateInDbMode) {
+    if (!candidateInDbMode && !inputs.allowNonDbCandidate) {
         records += DiffRecord(
             ts = ts,
             endpoint = endpoint,
