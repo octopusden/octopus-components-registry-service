@@ -933,8 +933,10 @@ class ImportServiceImpl(
             // from the same lazy field; whichever fires first pays the cost,
             // the other gets the cached result.
             //
-            // FIXME(MIG-039 review): expose ValidationConfig via EscrowConfigurationLoader or
-            // inject IConfigLoader to access loadAndParseValidationConfigFile() for label seeding.
+            // See `docs/db-migration/todo.md` Tech Debt §MIG-039: expose ValidationConfig via
+            // EscrowConfigurationLoader (or inject IConfigLoader to access
+            // loadAndParseValidationConfigFile()) for label seeding. Current direct
+            // commonDefaultsCache.labels access works but couples seeding to the lazy field.
             val labels = commonDefaultsCache.labels?.toSet() ?: return
             if (labels.isEmpty()) return
             // Batch upsert: one findAll() + one saveAll(). The prod DSL has hundreds of
