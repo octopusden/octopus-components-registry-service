@@ -146,11 +146,19 @@ object Comparators {
      *    [DiffRecord.message] for diagnosis.
      *
      * Per-field normalizers installed here:
-     *  - `distribution.gav` and `component.distribution.gav` (v3) route through
+     *  - Any field whose root-relative path ends in `gav` routes through
      *    [GavCsvComparator] — see its KDoc for the rationale. Net effect:
      *    a single trailing-comma artefact in the CSV (otherwise identical
      *    content) does NOT surface as a VALUE_DIFF, but any change to the GAV
-     *    set / ordering still does.
+     *    set / ordering still does. The regex (rather than a literal field
+     *    list) is intentional: `compareDto` is called with multiple root types
+     *    across the suite — `Component` (path `distribution.gav`),
+     *    `ComponentV3` (`component.distribution.gav`), `DistributionDTO` alone
+     *    (`gav`), and `Map<String, DistributionDTO>` (`<projectKey>.gav`).
+     *    All four paths share the `…gav` tail; a literal-list registration
+     *    silently misses two of them (Opus Stage-2 finding on this PR).
+     *    `gav` is the only field in the DTO graph that ends with this token,
+     *    so the regex does not over-match.
      */
     fun <T : Any> compareDto(
         endpoint: String,
@@ -181,7 +189,13 @@ object Comparators {
                     .assertThat(baseline)
                     .usingRecursiveComparison()
                     .ignoringCollectionOrder()
-                    .withComparatorForFields(GavCsvComparator, "distribution.gav", "component.distribution.gav")
+                    .withEqualsForFieldsMatchingRegexes(
+                        // AssertJ 3.25.3 exposes a regex variant only for the
+                        // BiPredicate form; wrap the shared Comparator so the
+                        // normalization logic stays in one place.
+                        java.util.function.BiPredicate<Any?, Any?> { a, b -> GavCsvComparator.compare(a, b) == 0 },
+                        "^(.+\\.)?gav$",
+                    )
             assertion.isEqualTo(candidate)
         }.onFailure { ex ->
             DiffCollector.record(

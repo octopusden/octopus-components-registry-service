@@ -413,6 +413,23 @@ class ComparatorLogicTest {
     }
 
     @Test
+    @DisplayName("anti-regression: a leading comma is NOT stripped — surface for diagnosis")
+    fun gavCsvComparator_leadingCommaSurvives() {
+        // KDoc explicitly claims `does NOT strip leading commas`. Pin it so a
+        // future widening of `normalize(...)` to `trim(',')` is caught.
+        val cmp = GavCsvComparator.compare(",a:b:zip,c:d:zip", "a:b:zip,c:d:zip")
+        assertThat(cmp).isNotEqualTo(0)
+    }
+
+    @Test
+    @DisplayName("anti-regression: internal whitespace inside the CSV is NOT collapsed")
+    fun gavCsvComparator_internalWhitespaceSurvives() {
+        // KDoc explicitly claims `does NOT strip internal whitespace`. Pin it.
+        val cmp = GavCsvComparator.compare("a:b:zip, c:d:zip", "a:b:zip,c:d:zip")
+        assertThat(cmp).isNotEqualTo(0)
+    }
+
+    @Test
     @DisplayName("anti-regression: multiple trailing commas (',,') are NOT collapsed — surface for diagnosis")
     fun gavCsvComparator_doubleTrailingCommaSurvives() {
         // A single trailing comma is a known schema-v2 cosmetic; two suggest
@@ -464,6 +481,23 @@ class ComparatorLogicTest {
         val recorded = DiffCollector.snapshot().single()
         assertThat(recorded.category).isEqualTo(DiffClassifier.VALUE_DIFF)
         assertThat(recorded.message).contains("distribution.gav")
+    }
+
+    @Test
+    @DisplayName("compareDto: trailing-comma silenced when root IS the DistributionDTO directly (path == \"gav\")")
+    fun compareDto_trailingCommaOnRootGavField_isSilenced() {
+        // Pins that the regex `^(.+\.)?gav$` matches the bare-root path too,
+        // not just `<something>.gav`. The endpoint
+        // `GET /v2/projects/{p}/versions/{v}/distribution` returns a single
+        // `DistributionDTO` — AssertJ's path for `gav` from that root is just
+        // `gav`, no prefix.
+        Comparators.compareDto(
+            endpoint = "GET /rest/api/2/projects/{p}/versions/{v}/distribution",
+            pathParams = mapOf("p" to "alpha-project", "v" to "1.0"),
+            baseline = TestDistribution("com.example.foo:art-a:zip,com.example.foo:art-b:zip"),
+            candidate = TestDistribution("com.example.foo:art-a:zip,com.example.foo:art-b:zip,"),
+        )
+        assertThat(DiffCollector.snapshot()).isEmpty()
     }
 
     @Test
