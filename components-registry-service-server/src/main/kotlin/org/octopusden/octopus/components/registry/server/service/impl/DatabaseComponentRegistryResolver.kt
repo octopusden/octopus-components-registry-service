@@ -319,6 +319,14 @@ class DatabaseComponentRegistryResolver(
         // For both types, we extract the artifact configuration directly from the marker
         // entity's `mavenArtifacts` child collection (sorted by `sortOrder`), bypassing
         // `config.distribution.GAV()` to avoid the side-effect described above.
+        // Same-range conflict resolution: a V4 user may add a DISTRIBUTION_MAVEN
+        // override on a range that already carries an import-managed
+        // GROUP_ARTIFACT_PATTERN row (V4 createFieldOverride only de-dupes by
+        // overriddenAttribute). `componentEntity.configurations` is a @OneToMany
+        // collection with no specified iteration order, so a naive `associateBy`
+        // makes selection non-deterministic. Resolve deterministically: the
+        // explicit DISTRIBUTION_MAVEN user override always wins; GROUP_ARTIFACT_PATTERN
+        // is the fallback (used only when no DISTRIBUTION_MAVEN exists on the range).
         val perRangeMarkerRows: Map<String, ComponentConfigurationEntity> =
             componentEntity.configurations
                 .asSequence()
@@ -327,7 +335,11 @@ class DatabaseComponentRegistryResolver(
                         (it.overriddenAttribute == MarkerAttributes.DISTRIBUTION_MAVEN ||
                             it.overriddenAttribute == MarkerAttributes.GROUP_ARTIFACT_PATTERN)
                 }
-                .associateBy { it.versionRange }
+                .groupBy { it.versionRange }
+                .mapValues { (_, rows) ->
+                    rows.firstOrNull { it.overriddenAttribute == MarkerAttributes.DISTRIBUTION_MAVEN }
+                        ?: rows.first()
+                }
 
         val module = componentEntity.toEscrowModule(versionRangeFactory, numericVersionFactory)
 
