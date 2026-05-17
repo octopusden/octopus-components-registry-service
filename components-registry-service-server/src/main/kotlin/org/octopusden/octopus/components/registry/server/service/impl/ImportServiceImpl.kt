@@ -2,6 +2,8 @@
 
 package org.octopusden.octopus.components.registry.server.service.impl
 
+import jakarta.persistence.EntityManager
+import jakarta.persistence.PersistenceContext
 import org.octopusden.octopus.components.registry.api.beans.OdbcToolBean
 import org.octopusden.octopus.components.registry.api.beans.OracleDatabaseToolBean
 import org.octopusden.octopus.components.registry.api.beans.PTCProductToolBean
@@ -64,10 +66,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import jakarta.persistence.EntityManager
-import jakarta.persistence.PersistenceContext
 import java.time.Instant
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Schema-v2 DSL → DB import pipeline (MIG-039, §6).
@@ -110,41 +109,32 @@ class ImportServiceImpl(
     private lateinit var entityManager: EntityManager
 
     /**
-     * In-migration dictionary caches. Populated at the top of
-     * `migrateAllComponents` after §6.1 batch preupsert, reset to null at the
-     * end. While set, `upsertSystem/Label/Tool` short-circuit the per-call
+     * In-migration dictionary caches, scoped via [ThreadLocal] to the
+     * migration thread. Populated at the top of Pass 1 from a full
+     * `findAll()` of the dictionary tables; reset in the matching `finally`
+     * block. While set, `upsertSystem/Label/Tool` short-circuit the per-call
      * `findByCode`/`findByName` lookup via Set membership — important once
-     * `flush() + clear()` (below) starts evicting the JPA L1 cache mid-pass.
+     * `flush() + clear()` starts evicting the JPA L1 cache mid-pass.
      *
-     * Nullability is the path discriminator: the single-component path
-     * (`migrateComponent`) does not populate these (its preupsert path is
-     * narrower), so the helpers fall back to the per-call DB lookup. The
-     * mutable Set lets a component declare a brand-new dictionary entry mid-
-     * iteration without falling through to per-call mode.
-     */
-    /**
-     * In-migration dictionary caches. Populated at the top of Pass 1 from a
-     * full `findAll()` of the dictionary tables; reset in the matching
-     * `finally` block. `@Volatile` so the reset of one entrant is visible to
-     * a concurrent reader; the underlying Set is a `ConcurrentHashMap.newKeySet`
-     * so concurrent `add()` calls are race-free without a service-level lock.
+     * Thread-confinement is load-bearing for correctness across transactions.
+     * A previous design held these on the singleton service with `@Volatile`
+     * and a [java.util.concurrent.ConcurrentHashMap]-backed Set; that made
+     * the Set itself race-free but did not solve the cross-transaction
+     * visibility issue: a parallel `migrateComponent` (its own transaction)
+     * would see a code as "in cache" — claiming the row exists — when the
+     * `migrateAllComponents` transaction that inserted it has not yet
+     * committed. The subsequent junction insert in the single-component
+     * transaction then trips an FK constraint. With [ThreadLocal] the
+     * single-component thread sees `null`, falls back to the per-call
+     * `findBy*` against its own transaction's snapshot, and stays
+     * consistent.
      *
-     * The single-component path (`migrateComponent`) reads these fields
-     * opportunistically — if a `migrateAllComponents` happens to be in flight
-     * the single-component path benefits from the same cache; otherwise the
-     * field is null and the per-call `findBy*` fallback kicks in. Concurrent
-     * `migrateAllComponents` calls are not a supported operational mode and
-     * race on the cache priming/reset; the orchestrator (one admin endpoint,
-     * one pod) is expected to serialise them externally.
+     * A nested call on the same thread (e.g. `migrate()` →
+     * `migrateAllComponents()`) shares the cache as intended.
      */
-    @Volatile
-    private var knownSystemCodes: MutableSet<String>? = null
-
-    @Volatile
-    private var knownLabelCodes: MutableSet<String>? = null
-
-    @Volatile
-    private var knownToolNames: MutableSet<String>? = null
+    private val knownSystemCodes: ThreadLocal<MutableSet<String>?> = ThreadLocal.withInitial { null }
+    private val knownLabelCodes: ThreadLocal<MutableSet<String>?> = ThreadLocal.withInitial { null }
+    private val knownToolNames: ThreadLocal<MutableSet<String>?> = ThreadLocal.withInitial { null }
 
     // =========================================================================
     // Public API
@@ -304,13 +294,13 @@ class ImportServiceImpl(
         // *inside* the try so a partial assignment (one field set, the next
         // `findAll` throws) is still cleaned up by the same finally.
         try {
-            knownSystemCodes = systemRepository.findAll().mapTo(ConcurrentHashMap.newKeySet()) { it.code }
-            knownLabelCodes = labelRepository.findAll().mapTo(ConcurrentHashMap.newKeySet()) { it.code }
-            knownToolNames = toolRepository.findAll().mapTo(ConcurrentHashMap.newKeySet()) { it.name }
+            knownSystemCodes.set(systemRepository.findAll().mapTo(HashSet()) { it.code })
+            knownLabelCodes.set(labelRepository.findAll().mapTo(HashSet()) { it.code })
+            knownToolNames.set(toolRepository.findAll().mapTo(HashSet()) { it.name })
 
             // §6.2 Two-pass component import
             LOG.info("§6.2 Two-pass component import for {} modules", allModules.size)
-    
+
             // Pre-compute parentComponent references from DSL up front, independent of Pass 1's
             // insert/skip decisions. This keeps Passes 2 and 3 idempotent on re-runs: even when
             // a component is already in the DB and Pass 1 skips it, its parent FK and aggregator-
@@ -323,7 +313,7 @@ class ImportServiceImpl(
                         componentKey to parentKey
                     }
                 }.toMap()
-    
+
             // schema-spec §4.3: FAKE aggregators are group-only — no ComponentEntity row. Detect
             // which keys in `allModules` are referenced as parentComponent AND classify as FAKE,
             // and skip them in Pass 1. Pass 3 still creates their ComponentGroupEntity.
@@ -336,13 +326,13 @@ class ImportServiceImpl(
                 "§6 DSL derivation: {} ms ({} parent refs, {} FAKE aggregators)",
                 (System.nanoTime() - deriveStart) / 1_000_000, pendingParentByKey.size, fakeAggregatorKeys.size,
             )
-    
+
             var total = 0
             var migrated = 0
             var failed = 0
             var skipped = 0
             val results = mutableListOf<MigrationResult>()
-    
+
             // Pass 1: create all components (parentComponent = null)
             val pass1Start = System.nanoTime()
             // Batch-load existing component keys so the per-iteration
@@ -352,7 +342,7 @@ class ImportServiceImpl(
             val moduleKeys = allModules.keys
             val existingComponentKeys: Set<String> =
                 componentRepository.findByComponentKeyIn(moduleKeys).mapTo(HashSet()) { it.componentKey }
-    
+
             // Source-flag staging is plain data (key → migratedAt timestamp) so
             // that the `entityManager.clear()` below cannot detach managed
             // entities we still need to write. Materialise fresh entities at
@@ -400,7 +390,7 @@ class ImportServiceImpl(
                         )
                         continue
                     }
-    
+
                     if (componentKey in existingComponentKeys) {
                         skipped++
                         results.add(
@@ -413,7 +403,7 @@ class ImportServiceImpl(
                         )
                         continue
                     }
-    
+
                     val configs = escrowModule.moduleConfigurations
                     if (configs.isEmpty()) {
                         LOG.warn("Component '{}' has no configurations in DSL; skipping", componentKey)
@@ -428,7 +418,7 @@ class ImportServiceImpl(
                         )
                         continue
                     }
-    
+
                     importModule(componentKey, configs)
                     stageSource(componentKey)
                     migrated++
@@ -462,7 +452,7 @@ class ImportServiceImpl(
                     )
                 }
             }
-    
+
             if (stagedSourceUpdates.isNotEmpty()) {
                 // Materialise fresh / re-fetched entities now so saveAll sees
                 // either managed (from this fetch) or genuinely new entities —
@@ -477,13 +467,13 @@ class ImportServiceImpl(
                 }
                 componentSourceRepository.saveAll(toSave)
             }
-    
+
             val pass1Ms = (System.nanoTime() - pass1Start) / 1_000_000
             LOG.info(
                 "§6.2 Pass 1 complete: {} ms ({} migrated, {} skipped, {} failed of {} total)",
                 pass1Ms, migrated, skipped, failed, total,
             )
-    
+
             // Pass 2: resolve parentComponent FK references
             LOG.info("§6.2 Pass 2: resolving {} parentComponent references", pendingParentByKey.size)
             val pass2Start = System.nanoTime()
@@ -505,9 +495,9 @@ class ImportServiceImpl(
                     LOG.warn("Failed to link parentComponent '{}' → '{}': {}", childKey, parentKey, e.message)
                 }
             }
-    
+
             LOG.info("§6.2 Pass 2 complete: {} ms ({} parent refs)", (System.nanoTime() - pass2Start) / 1_000_000, pendingParentByKey.size)
-    
+
             // §6.3 Pass 3: upsert component_groups rows and link component_group_id FKs.
             // Runs after Pass 2 so all ComponentEntity rows are present and parentComponent FKs are resolved.
             LOG.info("§6.3 Pass 3: linking aggregator groups for {} parent references", pendingParentByKey.size)
@@ -528,7 +518,7 @@ class ImportServiceImpl(
                     ),
                 )
             }
-    
+
             LOG.info(
                 "Migration complete in {} ms: total={}, migrated={}, failed={}, skipped={}",
                 (System.nanoTime() - totalStart) / 1_000_000,
@@ -548,9 +538,9 @@ class ImportServiceImpl(
             // Reset the in-migration dictionary caches unconditionally. The
             // try around the body ensures this runs even if Pass 1/2/3
             // throws; the next entrant primes the fields fresh from the DB.
-            knownSystemCodes = null
-            knownLabelCodes = null
-            knownToolNames = null
+            knownSystemCodes.remove()
+            knownLabelCodes.remove()
+            knownToolNames.remove()
         }
     }
 
@@ -794,7 +784,7 @@ class ImportServiceImpl(
     }
 
     private fun upsertSystem(code: String) {
-        val cache = knownSystemCodes
+        val cache = knownSystemCodes.get()
         if (cache != null) {
             if (cache.add(code)) {
                 // First time we see this code in this migration; system isn't in
@@ -812,7 +802,7 @@ class ImportServiceImpl(
      * Shared cache of `loadCommonDefaults(emptyMap())`. The call evaluates the
      * Groovy `Defaults.groovy` script and is heavy: measured ~25 s in QA on a
      * CPU-throttled pod. Without sharing it fires twice per migration — once
-     * for the tools fallback ([commonDefaultsToolsCache]) and once inside
+     * for the tools fallback ([commonDefaultsTools]) and once inside
      * [preupsertLabelsFromLoader] for label discovery. `by lazy` so resolution
      * is deferred to the first read inside a migration call (the bean is
      * constructed before the loader's git clone is ready).
@@ -822,7 +812,7 @@ class ImportServiceImpl(
      * is updated via a `git pull` between migrations on a long-running pod,
      * the second migration silently observes the stale snapshot — a newly
      * added label will not be preupserted. Pre-PR #236 the equivalent
-     * `commonDefaultsToolsCache` lazy had the same JVM-lifetime caching for
+     * `commonDefaultsTools` lazy had the same JVM-lifetime caching for
      * tools; this extends that pattern to labels. If the DSL is expected to
      * change at runtime, invalidate at the top of `migrateAllComponents`.
      */
@@ -848,7 +838,7 @@ class ImportServiceImpl(
      * components that want NO tools would require loader changes (preserve the
      * null-vs-empty distinction). No current DSL component exercises that case.
      */
-    private val commonDefaultsToolsCache: List<org.octopusden.octopus.escrow.model.Tool>
+    private val commonDefaultsTools: List<org.octopusden.octopus.escrow.model.Tool>
         get() = commonDefaultsCache.buildParameters?.tools?.toList() ?: emptyList()
 
     private fun preupsertToolsFromLoader(
@@ -906,7 +896,7 @@ class ImportServiceImpl(
         targetLocation: String?,
         installScript: String?,
     ) {
-        val cache = knownToolNames
+        val cache = knownToolNames.get()
         if (cache != null) {
             if (cache.add(name)) {
                 toolRepository.save(
@@ -959,7 +949,7 @@ class ImportServiceImpl(
     }
 
     private fun upsertLabel(code: String) {
-        val cache = knownLabelCodes
+        val cache = knownLabelCodes.get()
         if (cache != null) {
             if (cache.add(code)) {
                 labelRepository.save(LabelEntity(code = code))
@@ -1071,7 +1061,7 @@ class ImportServiceImpl(
         val tToolsStart = System.nanoTime()
         val baseTools =
             baseConfig.buildConfiguration?.tools.takeUnless { it.isNullOrEmpty() }
-                ?: commonDefaultsToolsCache
+                ?: commonDefaultsTools
         if (baseTools.isNotEmpty()) {
             attachRequiredTools(savedBase, baseTools)
         }
@@ -1474,7 +1464,7 @@ class ImportServiceImpl(
         // override range whose tools match the effective base does NOT produce a
         // redundant marker row.
         val effectiveBaseToolNames =
-            (base.buildConfiguration?.tools.takeUnless { it.isNullOrEmpty() } ?: commonDefaultsToolsCache)
+            (base.buildConfiguration?.tools.takeUnless { it.isNullOrEmpty() } ?: commonDefaultsTools)
                 .mapNotNull { it.name }
                 .toSet()
         val overTools = override.buildConfiguration?.tools?.map { it.name }?.toSet() ?: emptySet()
@@ -1710,7 +1700,7 @@ class ImportServiceImpl(
             // cache path the check is unnecessary (the cache is
             // authoritative for the in-flight migration).
             upsertTool(toolName, tool.escrowEnvironmentVariable, tool.sourceLocation, tool.targetLocation, tool.installScript)
-            if (knownToolNames == null && toolRepository.findByName(toolName) == null) {
+            if (knownToolNames.get() == null && toolRepository.findByName(toolName) == null) {
                 LOG.warn("Required tool '{}' not found in tools registry; skipping junction", toolName)
                 continue
             }
