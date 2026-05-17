@@ -105,7 +105,18 @@ class ComponentRoutingResolver(
     ): JiraComponentVersion =
         try {
             dbResolver.getJiraComponentByProjectAndVersion(projectKey, version)
+        } catch (e: NotFoundException) {
+            // db has no match — try git, but reject stale data for DB-sourced components
+            val gitResult = gitResolver.getJiraComponentByProjectAndVersion(projectKey, version)
+            if (sourceRegistry.getDbComponentNames().contains(gitResult.componentVersion.componentName)) {
+                throw NotFoundException(
+                    "Component '${gitResult.componentVersion.componentName}' is db-sourced; " +
+                        "version '$version' for project '$projectKey' is not in DB",
+                )
+            }
+            gitResult
         } catch (e: Exception) {
+            // transient — fall back to git (fault tolerance preserved)
             gitResolver.getJiraComponentByProjectAndVersion(projectKey, version)
         }
 
