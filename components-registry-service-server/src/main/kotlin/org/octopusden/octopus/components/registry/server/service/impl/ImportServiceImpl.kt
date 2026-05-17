@@ -64,6 +64,8 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import jakarta.persistence.EntityManager
+import jakarta.persistence.PersistenceContext
 import java.time.Instant
 
 /**
@@ -102,6 +104,26 @@ class ImportServiceImpl(
     private val componentRequiredToolRepository: ComponentRequiredToolRepository,
     private val componentBuildToolBeanRepository: ComponentBuildToolBeanRepository,
 ) : ImportService {
+
+    @PersistenceContext
+    private lateinit var entityManager: EntityManager
+
+    /**
+     * In-migration dictionary caches. Populated at the top of
+     * `migrateAllComponents` after §6.1 batch preupsert, reset to null at the
+     * end. While set, `upsertSystem/Label/Tool` short-circuit the per-call
+     * `findByCode`/`findByName` lookup via Set membership — important once
+     * `flush() + clear()` (below) starts evicting the JPA L1 cache mid-pass.
+     *
+     * Nullability is the path discriminator: the single-component path
+     * (`migrateComponent`) does not populate these (its preupsert path is
+     * narrower), so the helpers fall back to the per-call DB lookup. The
+     * mutable Set lets a component declare a brand-new dictionary entry mid-
+     * iteration without falling through to per-call mode.
+     */
+    private var knownSystemCodes: MutableSet<String>? = null
+    private var knownLabelCodes: MutableSet<String>? = null
+    private var knownToolNames: MutableSet<String>? = null
 
     // =========================================================================
     // Public API
@@ -245,6 +267,16 @@ class ImportServiceImpl(
             (System.nanoTime() - dictStart) / 1_000_000, sysMs, toolMs, labelMs,
         )
 
+        // Prime in-migration dictionary caches so per-component upserts
+        // (linkSystems / linkLabels / attachRequiredTools) skip the redundant
+        // `findByCode` / `findByName` round-trips that JPA's L1 cache would
+        // normally absorb. Combined with the `flush() + clear()` below, the
+        // L1 cache is evicted every 50 components; without these explicit
+        // Sets the find calls re-hit the DB on every flush boundary.
+        knownSystemCodes = systemRepository.findAll().mapTo(HashSet()) { it.code }
+        knownLabelCodes = labelRepository.findAll().mapTo(HashSet()) { it.code }
+        knownToolNames = toolRepository.findAll().mapTo(HashSet()) { it.name }
+
         // §6.2 Two-pass component import
         LOG.info("§6.2 Two-pass component import for {} modules", allModules.size)
 
@@ -302,7 +334,18 @@ class ImportServiceImpl(
             entity.migratedAt = Instant.now()
             sourcesToUpsert += entity
         }
+        // After importing this many components, flush pending INSERTs and
+        // clear the JPA persistence context. Without this the session grows
+        // to thousands of managed entities (ComponentEntity + base config +
+        // junctions + override rows) and dirty-checking cost grows
+        // super-linearly. 50 matches `hibernate.jdbc.batch_size` so each
+        // flush boundary aligns with one full JDBC batch.
+        val flushEvery = 50
         for ((componentKey, escrowModule) in allModules) {
+            if (total > 0 && total % flushEvery == 0) {
+                entityManager.flush()
+                entityManager.clear()
+            }
             total++
             try {
                 if (componentKey in fakeAggregatorKeys) {
@@ -448,6 +491,14 @@ class ImportServiceImpl(
             failed,
             skipped,
         )
+        // Reset the in-migration dictionary caches so a subsequent migration
+        // (or a single-component path on the same bean) reads fresh state
+        // from the DB. Mid-migration exceptions skip this reset; the next
+        // entrant overwrites the fields wholesale at the top of Pass 1, so
+        // a leaked cache cannot poison subsequent runs.
+        knownSystemCodes = null
+        knownLabelCodes = null
+        knownToolNames = null
         return BatchMigrationResult(
             total = total,
             migrated = migrated,
@@ -481,7 +532,16 @@ class ImportServiceImpl(
         )
     }
 
+    @Transactional
     override fun migrate(progress: MigrationProgressListener): FullMigrationResult {
+        // @Transactional on the facade ensures the self-calls to
+        // `migrateDefaults()` and `migrateAllComponents(progress)` run inside
+        // an active transaction. Without it those self-calls bypass the
+        // Spring proxy (`this.migrateDefaults()` does not trigger
+        // @Transactional advice on the same class) and the explicit
+        // `entityManager.flush()` inside Pass 1 fails with
+        // `TransactionRequiredException` because Spring Data's per-save
+        // auto-tx no longer covers the bare flush call.
         LOG.info("Starting full migration (defaults + all components)")
         val defaults = migrateDefaults()
         val components = migrateAllComponents(progress)
@@ -674,6 +734,15 @@ class ImportServiceImpl(
     }
 
     private fun upsertSystem(code: String) {
+        val cache = knownSystemCodes
+        if (cache != null) {
+            if (cache.add(code)) {
+                // First time we see this code in this migration; system isn't in
+                // the DB yet (cache was primed from a complete findAll).
+                systemRepository.save(SystemEntity(code = code))
+            }
+            return
+        }
         if (systemRepository.findByCode(code) == null) {
             systemRepository.save(SystemEntity(code = code))
         }
@@ -692,14 +761,21 @@ class ImportServiceImpl(
      * components that want NO tools would require loader changes (preserve the
      * null-vs-empty distinction). No current DSL component exercises that case.
      */
-    private val commonDefaultsToolsCache: List<org.octopusden.octopus.escrow.model.Tool> by lazy {
-        configurationLoader
-            .loadCommonDefaults(emptyMap())
-            .buildParameters
-            ?.tools
-            ?.toList()
-            ?: emptyList()
+    /**
+     * Shared cache of `loadCommonDefaults(emptyMap())`. The call evaluates the
+     * Groovy `Defaults.groovy` script and is heavy: measured ~25 s in QA on a
+     * CPU-throttled pod. Without sharing it fires twice per migration — once
+     * here for the tools fallback and once again inside
+     * `preupsertLabelsFromLoader` for label discovery. Lazy because the
+     * service is constructed before the loader's git clone is ready;
+     * resolution is deferred until the first read inside a migration call.
+     */
+    private val commonDefaultsCache: org.octopusden.octopus.escrow.configuration.model.DefaultConfigParameters by lazy {
+        configurationLoader.loadCommonDefaults(emptyMap())
     }
+
+    private val commonDefaultsToolsCache: List<org.octopusden.octopus.escrow.model.Tool>
+        get() = commonDefaultsCache.buildParameters?.tools?.toList() ?: emptyList()
 
     private fun preupsertToolsFromLoader(
         fullConfig: org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration,
@@ -756,6 +832,21 @@ class ImportServiceImpl(
         targetLocation: String?,
         installScript: String?,
     ) {
+        val cache = knownToolNames
+        if (cache != null) {
+            if (cache.add(name)) {
+                toolRepository.save(
+                    ToolEntity(
+                        name = name,
+                        escrowEnvVariable = escrowEnvVariable,
+                        sourceLocation = sourceLocation,
+                        targetLocation = targetLocation,
+                        installScript = installScript,
+                    ),
+                )
+            }
+            return
+        }
         val existing = toolRepository.findByName(name)
         if (existing == null) {
             toolRepository.save(
@@ -772,17 +863,15 @@ class ImportServiceImpl(
 
     private fun preupsertLabelsFromLoader() {
         try {
-            val validationConfig = configurationLoader.loadCommonDefaults(emptyMap())
-            // ValidationConfig is accessed via configLoader.loadAndParseValidationConfigFile()
-            // but we only have the EscrowConfigurationLoader facade here.
-            // We collect labels from the loaded DSL default config's labels field.
-            // The actual validation-config.yaml labels would need direct access to the loader's
-            // internal configLoader. As a pragmatic approach, we skip seeding labels from
-            // validation-config.yaml here since we can't access it through the facade.
-            // Labels seen in DSL components are the real source of truth.
+            // Share the lazy [commonDefaultsCache] instead of calling
+            // `loadCommonDefaults` a second time (Groovy script eval — ~25 s
+            // in QA per call). The tools-fallback in `importModule` reads
+            // from the same lazy field; whichever fires first pays the cost,
+            // the other gets the cached result.
+            //
             // FIXME(MIG-039 review): expose ValidationConfig via EscrowConfigurationLoader or
-            // inject IConfigLoader to access loadAndParseValidationConfigFile() for label seeding
-            val labels = validationConfig.labels?.toSet() ?: return
+            // inject IConfigLoader to access loadAndParseValidationConfigFile() for label seeding.
+            val labels = commonDefaultsCache.labels?.toSet() ?: return
             if (labels.isEmpty()) return
             // Batch upsert: one findAll() + one saveAll(). The prod DSL has hundreds of
             // labels — the per-label `findByCode + save` pattern was the single biggest
@@ -796,6 +885,13 @@ class ImportServiceImpl(
     }
 
     private fun upsertLabel(code: String) {
+        val cache = knownLabelCodes
+        if (cache != null) {
+            if (cache.add(code)) {
+                labelRepository.save(LabelEntity(code = code))
+            }
+            return
+        }
         if (labelRepository.findByCode(code) == null) {
             labelRepository.save(LabelEntity(code = code))
         }
@@ -1526,13 +1622,12 @@ class ImportServiceImpl(
         val configId = row.id ?: return
         for (tool in tools) {
             val toolName = tool.name ?: continue
-            // Ensure tool exists in dictionary
+            // Ensure tool exists in dictionary. After `upsertTool` returns,
+            // the tool is either already in the DB (cache hit) or just got
+            // saved (cache miss path), so we know the FK is satisfied
+            // without a follow-up `findByName` round-trip — that read was
+            // the per-component hotspot we are explicitly removing.
             upsertTool(toolName, tool.escrowEnvironmentVariable, tool.sourceLocation, tool.targetLocation, tool.installScript)
-            val toolExists = toolRepository.findByName(toolName) != null
-            if (!toolExists) {
-                LOG.warn("Required tool '{}' not found in tools registry; skipping junction", toolName)
-                continue
-            }
             val junction =
                 ComponentRequiredToolEntity(
                     componentConfigurationId = configId,
