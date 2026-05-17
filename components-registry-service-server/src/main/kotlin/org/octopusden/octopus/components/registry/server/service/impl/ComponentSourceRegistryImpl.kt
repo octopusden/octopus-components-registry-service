@@ -32,7 +32,12 @@ class ComponentSourceRegistryImpl(
         // silently exclude it from getDbComponentNames() → 404 blackhole.
         val normalized = source.trim().lowercase()
         require(normalized in ALLOWED_SOURCES) {
-            "Invalid component source '$source'; allowed values: ${ALLOWED_SOURCES.joinToString(", ")}"
+            // Truncate echoed value to avoid log-injection / oversized payload landing
+            // verbatim in ControllerExceptionHandler's HTTP response body and the WARN
+            // log line (PR #247 Opus review P2-A). Hard ceiling of MAX_ERROR_ECHO_CHARS.
+            val echo = source.take(MAX_ERROR_ECHO_CHARS)
+            val ellipsis = if (source.length > MAX_ERROR_ECHO_CHARS) "…" else ""
+            "Invalid component source '$echo$ellipsis'; allowed values: ${ALLOWED_SOURCES.joinToString(", ")}"
         }
         val entity =
             componentSourceRepository.findById(name).orElse(
@@ -54,7 +59,8 @@ class ComponentSourceRegistryImpl(
 
     override fun getGitComponentNames(): Set<String> = componentSourceRepository.findBySource("git").map { it.componentKey }.toSet()
 
-    private companion object {
+    companion object {
         private val ALLOWED_SOURCES = setOf("git", "db")
+        private const val MAX_ERROR_ECHO_CHARS = 80
     }
 }

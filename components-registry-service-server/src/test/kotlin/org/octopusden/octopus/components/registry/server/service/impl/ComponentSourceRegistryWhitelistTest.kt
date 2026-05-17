@@ -111,4 +111,27 @@ class ComponentSourceRegistryWhitelistTest {
             registry.setComponentSource("widget", "DATABASE")
         }
     }
+
+    @Test
+    @DisplayName(
+        "setComponentSource — error message truncates an oversized rejected source (PR #247 P2-A guard)",
+    )
+    fun setComponentSource_oversizedRejected_messageTruncated() {
+        val huge = "x".repeat(500) + "INJECT"
+        val ex =
+            assertThrows(IllegalArgumentException::class.java) {
+                registry.setComponentSource("widget", huge)
+            }
+        val msg = ex.message ?: ""
+        assertEquals(
+            false,
+            msg.contains("INJECT"),
+            "Error message must NOT echo the full payload; got first 200 chars: '${msg.take(200)}'",
+        )
+        assertEquals(
+            true,
+            msg.contains("…"),
+            "Error message must include ellipsis marker for truncated payloads; got: '${msg.take(200)}'",
+        )
+    }
 }

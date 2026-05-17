@@ -1488,13 +1488,18 @@ class ImportServiceImpl(
                 // saveMarkerRowWithChildren detects that row.id is non-null after this
                 // save and skips the redundant second save in its own body.
                 //
-                // Safe because ComponentConfigurationEntity uses GenerationType.UUID:
-                // Hibernate assigns row.id BEFORE the persist() call (in-memory UUID),
-                // so the mutation is visible on the same `row` reference. Switching to
-                // IDENTITY/SEQUENCE in the future would require capturing
-                // `val saved = configurationRepository.save(row)` and passing `saved`
-                // to attachRequiredTools — track as Group 6-J if such a change ever
-                // lands.
+                // Safe because Spring Data's SimpleJpaRepository.save(...) returns the
+                // same in-memory reference for new entities (calls em.persist on the
+                // arg), so `row.id` is observable on the same `row` after the call.
+                // With UUID-strategy the id is assigned during persist; with IDENTITY/
+                // SEQUENCE strategies the id is also written back to the same instance.
+                // The latent regression is anything that breaks reference identity (an
+                // entity-listener returning a fresh DTO-mapped instance, a custom
+                // BeforeExecutionGenerator returning a new entity, a @Version-merge
+                // path on the audit-aware repository). `attachRequiredTools` then does
+                // `row.id ?: return` and the override's required tools are silently
+                // dropped. Tracked as Group 6-J: capture `val saved = save(row)` and
+                // pass `saved` if/when the repository contract ever changes.
                 configurationRepository.save(row)
                 attachRequiredTools(row, override.buildConfiguration?.tools)
             }?.let { saved += it }
