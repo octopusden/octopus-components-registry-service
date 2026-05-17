@@ -134,4 +134,48 @@ class ComponentSourceRegistryWhitelistTest {
             "Error message must include ellipsis marker for truncated payloads; got: '${msg.take(200)}'",
         )
     }
+
+    @Test
+    @DisplayName(
+        "setComponentSource — short newline-injected source is sanitized in error (no raw \\n, escaped as \\x0A)",
+    )
+    fun setComponentSource_newlineInjected_sanitized() {
+        val ex =
+            assertThrows(IllegalArgumentException::class.java) {
+                registry.setComponentSource("widget", "bad\nWARN forged")
+            }
+        val msg = ex.message ?: ""
+        assertEquals(
+            false,
+            msg.contains("\n"),
+            "Error message must NOT contain a raw newline (log-injection guard); got: '${msg.take(200)}'",
+        )
+        assertEquals(
+            true,
+            msg.contains("\\x0A"),
+            "Error message must escape the newline as '\\\\x0A'; got: '${msg.take(200)}'",
+        )
+    }
+
+    @Test
+    @DisplayName(
+        "setComponentSource — CR / TAB / DEL / C1-control chars all escaped, never echoed raw",
+    )
+    fun setComponentSource_assortedControls_sanitized() {
+        // CR (0x0D), TAB (0x09), DEL (0x7F), C1 control NEL (0x85) — none should land verbatim.
+        val payload = "v" + 0x0D.toChar() + "A" + 0x09.toChar() + "B" + 0x7F.toChar() + "C" + 0x85.toChar() + "D"
+        val ex =
+            assertThrows(IllegalArgumentException::class.java) {
+                registry.setComponentSource("widget", payload)
+            }
+        val msg = ex.message ?: ""
+        assertEquals(false, msg.contains(0x0D.toChar()), "no raw CR; msg='${msg.take(200)}'")
+        assertEquals(false, msg.contains(0x09.toChar()), "no raw TAB; msg='${msg.take(200)}'")
+        assertEquals(false, msg.contains(0x7F.toChar()), "no raw DEL; msg='${msg.take(200)}'")
+        assertEquals(false, msg.contains(0x85.toChar()), "no raw NEL; msg='${msg.take(200)}'")
+        assertEquals(true, msg.contains("\\x0D"), "CR escaped; msg='${msg.take(200)}'")
+        assertEquals(true, msg.contains("\\x09"), "TAB escaped; msg='${msg.take(200)}'")
+        assertEquals(true, msg.contains("\\x7F"), "DEL escaped; msg='${msg.take(200)}'")
+        assertEquals(true, msg.contains("\\x85"), "NEL escaped; msg='${msg.take(200)}'")
+    }
 }
