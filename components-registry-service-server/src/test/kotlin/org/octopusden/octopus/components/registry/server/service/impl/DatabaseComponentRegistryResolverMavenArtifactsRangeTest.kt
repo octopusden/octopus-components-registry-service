@@ -547,6 +547,54 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
         )
     }
 
+    @Test
+    @DisplayName(
+        "MIG-047-RES-003: when both DISTRIBUTION_MAVEN and GROUP_ARTIFACT_PATTERN markers " +
+            "exist on the same versionRange, DISTRIBUTION_MAVEN wins deterministically",
+    )
+    fun `MIG-047-RES-003 same-range conflict — DISTRIBUTION_MAVEN takes precedence over GROUP_ARTIFACT_PATTERN`() {
+        // Conflict shape: a V4 user added a distribution.maven override on a range that
+        // already had an import-managed GROUP_ARTIFACT_PATTERN row (V4 createFieldOverride
+        // only de-dupes by `overriddenAttribute`, so this pair is reachable). With the
+        // pre-fix `associateBy { it.versionRange }`, whichever row sits last in
+        // `componentEntity.configurations` wins — non-deterministic because @OneToMany
+        // does not specify iteration order. Post-fix, the explicit DISTRIBUTION_MAVEN
+        // override wins regardless of row-order (mirrors the V4 user's stated intent;
+        // GROUP_ARTIFACT_PATTERN is import-internal and supplanted).
+        val comp = makeComponent("gamma-fixture-mig047-conflict")
+        comp.distributionExplicit = true
+
+        addComponentLevelArtifact(comp, "com.example", "gamma-fixture")
+
+        val base = makeBase(comp, "[1.0,1.1)")
+        addMavenArtifact(base, "com.example", "gamma-fixture")
+
+        // Build a deliberately adversarial ordering: GROUP_ARTIFACT_PATTERN appears AFTER
+        // DISTRIBUTION_MAVEN in the configurations list. The pre-fix `associateBy` keeps
+        // the LAST entry with the same key — so GROUP_ARTIFACT_PATTERN wins under the bug.
+        val distributionMaven = makeMarkerRow(comp, "[1.1,)", MarkerAttributes.DISTRIBUTION_MAVEN)
+        addMavenArtifact(distributionMaven, "com.example.user-explicit", "gamma-fixture")
+
+        val groupArtifactPattern = makeMarkerRow(comp, "[1.1,)", MarkerAttributes.GROUP_ARTIFACT_PATTERN)
+        addMavenArtifact(groupArtifactPattern, "com.example.import-internal", "gamma-fixture")
+
+        comp.configurations.addAll(listOf(base, distributionMaven, groupArtifactPattern))
+        stubComponent(comp)
+
+        val result = resolver.getMavenArtifactParameters("gamma-fixture-mig047-conflict")
+
+        assertEquals(2, result.size, "Expected two range entries")
+
+        val rangeOverride = result["[1.1,)"]
+        assertNotNull(rangeOverride, "[1.1,) entry must be present")
+        assertEquals(
+            "com.example.user-explicit",
+            rangeOverride!!.groupPattern,
+            "DISTRIBUTION_MAVEN must take precedence over GROUP_ARTIFACT_PATTERN on the same range",
+        )
+        assertEquals("gamma-fixture", rangeOverride.artifactPattern)
+    }
+
     // ========================================================================
     // Coverage gaps (out of scope for this PR, tracked for follow-up)
     // ========================================================================
