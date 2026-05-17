@@ -23,9 +23,9 @@ import org.octopusden.octopus.releng.dto.ComponentVersion
 import org.octopusden.octopus.releng.dto.JiraComponentVersion
 
 /**
- * Post-#192 review fixups (Group 1): stale-git-fallback guards + double-count
- * elimination on `ComponentRoutingResolver` methods that are NOT covered by the
- * MIG-049 union-merge fix in [ComponentRoutingResolverProjectNotFoundTest].
+ * Post-#192 review fixups (Group 1): stale-git-fallback guards on
+ * `ComponentRoutingResolver` methods that are NOT covered by the MIG-049
+ * union-merge fix in [ComponentRoutingResolverProjectNotFoundTest].
  *
  * The shared bug shape: db-first method's `catch (e: Exception)` falls back to
  * gitResolver. For a component routed to `db` in [ComponentSourceRegistry],
@@ -33,10 +33,14 @@ import org.octopusden.octopus.releng.dto.JiraComponentVersion
  * causes silent data corruption visible to v1/v2 callers as "200 with stale
  * payload" instead of "404 / empty".
  *
- * Items covered here: 1.1, 1.4, 1.4b, 1.5, 1.6 (see
- * ~/.claude/plans/pr-192-review-fixup-plan.md). Items 1.2/1.3 are demoted to
- * Group 6-H since their return types do not expose `componentName` for a
- * stale-guard check.
+ * Items covered here: 1.1, 1.4, 1.4b, 1.6 (see
+ * ~/.claude/plans/pr-192-review-fixup-plan.md). Items deferred:
+ *   - 1.2/1.3 (Group 6-H): return types lack a `componentName` accessor for
+ *     stale-guard, needs source-precedence-by-project-key design.
+ *   - 1.5 (Group 6-I): `getComponentsCountByBuildSystem` double-count of
+ *     migrated components — fix requires refactoring private
+ *     `EscrowModule.getBuildSystem()` / `isArchived()` extensions to a shared
+ *     util; affects monitoring metrics only, not user-facing API contract.
  *
  * Pure in-memory tests: mocked resolvers, no Spring context, no global
  * fixtures (per `feedback_regression_guards_avoid_global_fixtures`).
