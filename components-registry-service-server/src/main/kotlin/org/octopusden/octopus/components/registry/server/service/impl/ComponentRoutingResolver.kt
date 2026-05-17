@@ -108,9 +108,14 @@ class ComponentRoutingResolver(
         } catch (e: NotFoundException) {
             // db has no match — try git, but reject stale data for DB-sourced components
             val gitResult = gitResolver.getJiraComponentByProjectAndVersion(projectKey, version)
-            if (sourceRegistry.getDbComponentNames().contains(gitResult.componentVersion.componentName)) {
+            // Null-safe stale-guard: JiraComponentVersion's @JsonCreator ctor does not
+            // require non-null componentVersion, so a malformed/cached JCV can carry a null
+            // inner. Skip the guard in that case (gracefully degrades to pre-fix behaviour
+            // for this edge) rather than NPE.
+            val componentName = gitResult.componentVersion?.componentName
+            if (componentName != null && sourceRegistry.getDbComponentNames().contains(componentName)) {
                 throw NotFoundException(
-                    "Component '${gitResult.componentVersion.componentName}' is db-sourced; " +
+                    "Component '$componentName' is db-sourced; " +
                         "version '$version' for project '$projectKey' is not in DB",
                 )
             }
