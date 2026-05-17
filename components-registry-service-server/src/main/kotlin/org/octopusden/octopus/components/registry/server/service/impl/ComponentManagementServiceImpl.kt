@@ -521,6 +521,7 @@ class ComponentManagementServiceImpl(
         require(row.rowType != "BASE" && row.rowType != "RANGE_PRESENCE") {
             "Cannot update id $overrideId via field-override endpoint (row_type=${row.rowType})"
         }
+        requireNotImportManagedMarker(row, "update")
 
         request.versionRange?.let {
             validateRangeSyntax(it)
@@ -564,9 +565,32 @@ class ComponentManagementServiceImpl(
         require(row.rowType != "BASE" && row.rowType != "RANGE_PRESENCE") {
             "Cannot delete id $overrideId via field-override endpoint (row_type=${row.rowType})"
         }
+        requireNotImportManagedMarker(row, "delete")
         val owningComponent = row.component
         configurationRepository.delete(row)
         bumpParentVersion(owningComponent)
+    }
+
+    /**
+     * MIG-047: refuse V4 write paths for MARKER rows whose `overriddenAttribute`
+     * is NOT in [MarkerAttributes.ALL] — those are import-internal markers
+     * (currently only [MarkerAttributes.GROUP_ARTIFACT_PATTERN]) created by
+     * `ImportServiceImpl` and recovered on re-import. The V4 admin API surfaces
+     * them read-only via `listFieldOverrides` so users can see the configuration;
+     * editing or deleting them would diverge the DB from the DSL source of
+     * truth until the next import overwrote the change.
+     */
+    private fun requireNotImportManagedMarker(
+        row: ComponentConfigurationEntity,
+        operation: String,
+    ) {
+        if (row.rowType == "MARKER" && row.overriddenAttribute !in MarkerAttributes.ALL) {
+            throw IllegalArgumentException(
+                "Cannot $operation id ${row.id} via field-override endpoint: " +
+                    "marker '${row.overriddenAttribute}' is import-managed and read-only via V4. " +
+                    "Edit the source DSL and re-import to change this override.",
+            )
+        }
     }
 
     @Transactional(readOnly = true)

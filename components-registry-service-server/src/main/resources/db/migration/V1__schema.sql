@@ -149,6 +149,10 @@ CREATE TABLE component_configurations (
     --   - The SCALAR_OVERRIDE branch likewise pins non-NULL before evaluating
     --     `NOT IN (...)`, and forbids reusing a marker name as a scalar
     --     attribute path.
+    -- MIG-047 added `group-artifact-pattern` as a synthetic import-internal MARKER
+    -- name (NOT in MarkerAttributes.ALL — see EntityMappers.kt:65 kdoc). The
+    -- allowlist below is the union of MarkerAttributes.ALL and that synthetic
+    -- name; the SCALAR_OVERRIDE NOT-IN list is its symmetric exclusion.
     CHECK (
         (row_type IN ('BASE', 'RANGE_PRESENCE') AND overridden_attribute IS NULL)
         OR (row_type = 'MARKER'
@@ -156,14 +160,14 @@ CREATE TABLE component_configurations (
             AND overridden_attribute IN (
                 'vcs.settings', 'distribution.maven', 'distribution.fileUrl',
                 'distribution.docker', 'distribution.packages', 'build.requiredTools',
-                'build.buildTools'
+                'build.buildTools', 'group-artifact-pattern'
             ))
         OR (row_type = 'SCALAR_OVERRIDE'
             AND overridden_attribute IS NOT NULL
             AND overridden_attribute NOT IN (
                 'vcs.settings', 'distribution.maven', 'distribution.fileUrl',
                 'distribution.docker', 'distribution.packages', 'build.requiredTools',
-                'build.buildTools'
+                'build.buildTools', 'group-artifact-pattern'
             ))
     ),
 
