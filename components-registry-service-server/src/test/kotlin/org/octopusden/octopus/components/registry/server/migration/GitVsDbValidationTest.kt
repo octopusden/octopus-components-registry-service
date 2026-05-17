@@ -382,12 +382,11 @@ class GitVsDbValidationTest {
     @DisplayName("VAL-010: Bulk validation — all components, all endpoints, full divergence report")
     @org.junit.jupiter.api.Disabled(
         "schema-v2 known limitations — RES-014 KTS build-tool beans closed by PR #208 " +
-            "(`component_build_tool_beans` schema extension); expected residual is now " +
-            "1× distribution-on-core-lib (FAKE-aggregator routing edge) plus possibly " +
-            "1× `vcsSettings.externalRegistry: null` vs `NOT_AVAILABLE` (default-emit " +
-            "divergence) — both pre-existing. Concrete count must be regenerated empirically " +
-            "from a single VAL-010 run before re-enabling — do not hand-arithmetic. " +
-            "Tracked in docs/db-migration/todo.md §FAKE-aggregator and in " +
+            "(`component_build_tool_beans` schema extension); the only expected residual " +
+            "is 1× distribution-on-core-lib (FAKE-aggregator routing edge). Concrete count " +
+            "must be regenerated empirically from a single VAL-010 run before re-enabling " +
+            "— do not hand-arithmetic. Tracked in docs/db-migration/todo.md " +
+            "(\"Schema v2 known limitations\" section, FAKE-aggregator bullet) and in " +
             "docs/db-migration/implementation-progress.md Phase 6 ledger.",
     )
     fun `VAL-010 bulk canary`() {
