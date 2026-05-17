@@ -30,8 +30,8 @@ import org.octopusden.releng.versions.VersionRangeFactory
  * bleed into all ranges.
  *
  * Three scalar families covered:
- *   (A) String column — `build.buildFilePath`   (bug-F-component bug: "PlSqlPa" bleeding)
- *   (B) String column — `jira.versionPrefix`    (bug-G-component bug: "wallet" bleeding)
+ *   (A) String column — `build.buildFilePath`   (bug-F-component bug: "BuildPath" bleeding)
+ *   (B) String column — `jira.versionPrefix`    (bug-G-component bug: "vps" bleeding)
  *   (C) String column — `escrow.buildTask`      (general escrow scalar)
  *
  * Also verifies that the four inline-boolean scalar paths (`build.deprecated`,
@@ -104,7 +104,7 @@ class ScalarNullOverrideRoundTripTest {
     fun `MIG-040-A null buildFilePath override - override range returns null, base range returns original`() {
         val comp = makeComponent("NULL_OVERRIDE_A")
         val base = makeBase(comp)
-        base.buildFilePath = "PlSqlPa"
+        base.buildFilePath = "BuildPath"
 
         // Override row with null buildFilePath — represents "clear for this range"
         val nullOverrideRow = makeNullScalarOverrideRow(comp, "[3.54.99-12.65,)", "build.buildFilePath")
@@ -113,10 +113,10 @@ class ScalarNullOverrideRoundTripTest {
         comp.configurations.addAll(listOf(base, nullOverrideRow))
         stubComponent(comp)
 
-        // Base range: should still have "PlSqlPa"
+        // Base range: should still have "BuildPath"
         val baseCfg = resolver.getResolvedComponentDefinition("NULL_OVERRIDE_A", "1.0.0")
         assertNotNull(baseCfg)
-        assertEquals("PlSqlPa", baseCfg!!.buildFilePath)
+        assertEquals("BuildPath", baseCfg!!.buildFilePath)
 
         // Override range: null override row should clear the value → null
         val overrideCfg = resolver.getResolvedComponentDefinition("NULL_OVERRIDE_A", "3.54.99-12.65")
@@ -138,8 +138,8 @@ class ScalarNullOverrideRoundTripTest {
         val comp = makeComponent("NULL_OVERRIDE_B")
         val base = makeBase(comp)
         // jiraProjectKey is required for JiraComponent to be emitted
-        base.jiraProjectKey = "WALLET"
-        base.jiraVersionPrefix = "wallet"
+        base.jiraProjectKey = "VPS"
+        base.jiraVersionPrefix = "vps"
 
         // Override row: explicitly clears jiraVersionPrefix for the newer range
         val nullOverrideRow = makeNullScalarOverrideRow(comp, "[5.1.1475,)", "jira.versionPrefix")
@@ -148,10 +148,10 @@ class ScalarNullOverrideRoundTripTest {
         comp.configurations.addAll(listOf(base, nullOverrideRow))
         stubComponent(comp)
 
-        // Base range: legacy range keeps "wallet"
+        // Base range: legacy range keeps "vps"
         val baseCfg = resolver.getResolvedComponentDefinition("NULL_OVERRIDE_B", "3.0.0")
         assertNotNull(baseCfg)
-        assertEquals("wallet", baseCfg!!.jiraConfiguration?.componentInfo?.versionPrefix)
+        assertEquals("vps", baseCfg!!.jiraConfiguration?.componentInfo?.versionPrefix)
 
         // Override range: null override should clear jiraVersionPrefix.
         // After the fix, ComponentInfo is not created at all if both prefix and format are null
