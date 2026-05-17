@@ -67,8 +67,7 @@ import org.springframework.transaction.annotation.Transactional
 import jakarta.persistence.EntityManager
 import jakarta.persistence.PersistenceContext
 import java.time.Instant
-import java.util.concurrent.locks.ReentrantLock
-import kotlin.concurrent.withLock
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Schema-v2 DSL → DB import pipeline (MIG-039, §6).
@@ -123,19 +122,29 @@ class ImportServiceImpl(
      * mutable Set lets a component declare a brand-new dictionary entry mid-
      * iteration without falling through to per-call mode.
      */
-    private var knownSystemCodes: MutableSet<String>? = null
-    private var knownLabelCodes: MutableSet<String>? = null
-    private var knownToolNames: MutableSet<String>? = null
-
     /**
-     * Serialises `migrateAllComponents` and `migrateComponent` so the mutable
-     * in-migration dictionary caches above never see concurrent read/write.
-     * The operational invariant — single pod, one migration at a time — is now
-     * enforced rather than assumed. Reentrant so a `migrateAllComponents`
-     * implementation calling helpers that themselves take the lock would not
-     * deadlock; in practice only the top-level entry points acquire it.
+     * In-migration dictionary caches. Populated at the top of Pass 1 from a
+     * full `findAll()` of the dictionary tables; reset in the matching
+     * `finally` block. `@Volatile` so the reset of one entrant is visible to
+     * a concurrent reader; the underlying Set is a `ConcurrentHashMap.newKeySet`
+     * so concurrent `add()` calls are race-free without a service-level lock.
+     *
+     * The single-component path (`migrateComponent`) reads these fields
+     * opportunistically — if a `migrateAllComponents` happens to be in flight
+     * the single-component path benefits from the same cache; otherwise the
+     * field is null and the per-call `findBy*` fallback kicks in. Concurrent
+     * `migrateAllComponents` calls are not a supported operational mode and
+     * race on the cache priming/reset; the orchestrator (one admin endpoint,
+     * one pod) is expected to serialise them externally.
      */
-    private val migrationLock = ReentrantLock()
+    @Volatile
+    private var knownSystemCodes: MutableSet<String>? = null
+
+    @Volatile
+    private var knownLabelCodes: MutableSet<String>? = null
+
+    @Volatile
+    private var knownToolNames: MutableSet<String>? = null
 
     // =========================================================================
     // Public API
@@ -143,12 +152,6 @@ class ImportServiceImpl(
 
     @Transactional
     override fun migrateComponent(
-        name: String,
-        dryRun: Boolean,
-    ): MigrationResult = migrationLock.withLock { migrateComponentLocked(name, dryRun) }
-
-    @Suppress("CyclomaticComplexMethod", "LongMethod")
-    private fun migrateComponentLocked(
         name: String,
         dryRun: Boolean,
     ): MigrationResult {
@@ -257,19 +260,6 @@ class ImportServiceImpl(
     @Transactional
     @Suppress("LongMethod")
     override fun migrateAllComponents(progress: MigrationProgressListener): BatchMigrationResult {
-        // Serialise concurrent entry: `migrateAllComponents` and `migrateComponent`
-        // both mutate the in-migration dictionary cache fields below. Pre-PR #236
-        // these calls were stateless; with the new caches a parallel call would
-        // produce stale reads (best case) or `ConcurrentModificationException` on
-        // `HashSet` mutation (worst case). One pod, one in-flight migration is
-        // the operational invariant; the lock makes it enforced rather than
-        // assumed. `migrateComponent` takes the same lock for the duration of
-        // its body — see its `migrationLock.withLock { ... }` wrapper.
-        return migrationLock.withLock { migrateAllComponentsLocked(progress) }
-    }
-
-    @Suppress("LongMethod")
-    private fun migrateAllComponentsLocked(progress: MigrationProgressListener): BatchMigrationResult {
         val totalStart = System.nanoTime()
         LOG.info("Starting full DSL → DB component migration (schema v2 §6 pipeline)")
         // Use lenient loader so migration tolerates DSL entries that have semantic
@@ -314,239 +304,246 @@ class ImportServiceImpl(
         // *inside* the try so a partial assignment (one field set, the next
         // `findAll` throws) is still cleaned up by the same finally.
         try {
-            knownSystemCodes = systemRepository.findAll().mapTo(HashSet()) { it.code }
-            knownLabelCodes = labelRepository.findAll().mapTo(HashSet()) { it.code }
-            knownToolNames = toolRepository.findAll().mapTo(HashSet()) { it.name }
+            knownSystemCodes = systemRepository.findAll().mapTo(ConcurrentHashMap.newKeySet()) { it.code }
+            knownLabelCodes = labelRepository.findAll().mapTo(ConcurrentHashMap.newKeySet()) { it.code }
+            knownToolNames = toolRepository.findAll().mapTo(ConcurrentHashMap.newKeySet()) { it.name }
 
-        // §6.2 Two-pass component import
-        LOG.info("§6.2 Two-pass component import for {} modules", allModules.size)
-
-        // Pre-compute parentComponent references from DSL up front, independent of Pass 1's
-        // insert/skip decisions. This keeps Passes 2 and 3 idempotent on re-runs: even when
-        // a component is already in the DB and Pass 1 skips it, its parent FK and aggregator-
-        // group membership are still resolved against the current DSL.
-        val deriveStart = System.nanoTime()
-        val pendingParentByKey: Map<String, String> =
-            allModules.mapNotNull { (componentKey, escrowModule) ->
-                val firstConfig = escrowModule.moduleConfigurations.firstOrNull() ?: return@mapNotNull null
-                firstConfig.parentComponent?.takeIf { it.isNotBlank() }?.let { parentKey ->
-                    componentKey to parentKey
-                }
-            }.toMap()
-
-        // schema-spec §4.3: FAKE aggregators are group-only — no ComponentEntity row. Detect
-        // which keys in `allModules` are referenced as parentComponent AND classify as FAKE,
-        // and skip them in Pass 1. Pass 3 still creates their ComponentGroupEntity.
-        val fakeAggregatorKeys: Set<String> =
-            pendingParentByKey.values.toSet().filter { parentKey ->
-                val firstConfig = allModules[parentKey]?.moduleConfigurations?.firstOrNull()
-                firstConfig != null && isFakeAggregator(firstConfig)
-            }.toSet()
-        LOG.info(
-            "§6 DSL derivation: {} ms ({} parent refs, {} FAKE aggregators)",
-            (System.nanoTime() - deriveStart) / 1_000_000, pendingParentByKey.size, fakeAggregatorKeys.size,
-        )
-
-        var total = 0
-        var migrated = 0
-        var failed = 0
-        var skipped = 0
-        val results = mutableListOf<MigrationResult>()
-
-        // Pass 1: create all components (parentComponent = null)
-        val pass1Start = System.nanoTime()
-        // Batch-load existing component keys so the per-iteration
-        // findByComponentKey round-trip drops out. Targeted query (`IN (...)`
-        // on the DSL key set) rather than `findAll()` so the cost stays
-        // bounded by DSL size, not total DB size.
-        val moduleKeys = allModules.keys
-        val existingComponentKeys: Set<String> =
-            componentRepository.findByComponentKeyIn(moduleKeys).mapTo(HashSet()) { it.componentKey }
-
-        // Source-flag staging is plain data (key → migratedAt timestamp) so
-        // that the `entityManager.clear()` below cannot detach managed
-        // entities we still need to write. Materialise fresh entities at
-        // end-of-Pass-1; that avoids the `merge`-induced SELECT-before-INSERT
-        // per row that would otherwise eat back the JDBC batch savings.
-        val stagedSourceUpdates = LinkedHashMap<String, Instant>()
-        fun stageSource(name: String) {
-            stagedSourceUpdates[name] = Instant.now()
-        }
-        // After importing this many components, flush pending INSERTs and
-        // clear the JPA persistence context. Without this the session grows
-        // to thousands of managed entities (ComponentEntity + base config +
-        // junctions + override rows) and dirty-checking cost grows
-        // super-linearly. 50 matches `hibernate.jdbc.batch_size` so each
-        // flush boundary aligns with one full JDBC batch.
-        val flushEvery = 50
-        for ((componentKey, escrowModule) in allModules) {
-            if (total > 0 && total % flushEvery == 0) {
-                entityManager.flush()
-                entityManager.clear()
+            // §6.2 Two-pass component import
+            LOG.info("§6.2 Two-pass component import for {} modules", allModules.size)
+    
+            // Pre-compute parentComponent references from DSL up front, independent of Pass 1's
+            // insert/skip decisions. This keeps Passes 2 and 3 idempotent on re-runs: even when
+            // a component is already in the DB and Pass 1 skips it, its parent FK and aggregator-
+            // group membership are still resolved against the current DSL.
+            val deriveStart = System.nanoTime()
+            val pendingParentByKey: Map<String, String> =
+                allModules.mapNotNull { (componentKey, escrowModule) ->
+                    val firstConfig = escrowModule.moduleConfigurations.firstOrNull() ?: return@mapNotNull null
+                    firstConfig.parentComponent?.takeIf { it.isNotBlank() }?.let { parentKey ->
+                        componentKey to parentKey
+                    }
+                }.toMap()
+    
+            // schema-spec §4.3: FAKE aggregators are group-only — no ComponentEntity row. Detect
+            // which keys in `allModules` are referenced as parentComponent AND classify as FAKE,
+            // and skip them in Pass 1. Pass 3 still creates their ComponentGroupEntity.
+            val fakeAggregatorKeys: Set<String> =
+                pendingParentByKey.values.toSet().filter { parentKey ->
+                    val firstConfig = allModules[parentKey]?.moduleConfigurations?.firstOrNull()
+                    firstConfig != null && isFakeAggregator(firstConfig)
+                }.toSet()
+            LOG.info(
+                "§6 DSL derivation: {} ms ({} parent refs, {} FAKE aggregators)",
+                (System.nanoTime() - deriveStart) / 1_000_000, pendingParentByKey.size, fakeAggregatorKeys.size,
+            )
+    
+            var total = 0
+            var migrated = 0
+            var failed = 0
+            var skipped = 0
+            val results = mutableListOf<MigrationResult>()
+    
+            // Pass 1: create all components (parentComponent = null)
+            val pass1Start = System.nanoTime()
+            // Batch-load existing component keys so the per-iteration
+            // findByComponentKey round-trip drops out. Targeted query (`IN (...)`
+            // on the DSL key set) rather than `findAll()` so the cost stays
+            // bounded by DSL size, not total DB size.
+            val moduleKeys = allModules.keys
+            val existingComponentKeys: Set<String> =
+                componentRepository.findByComponentKeyIn(moduleKeys).mapTo(HashSet()) { it.componentKey }
+    
+            // Source-flag staging is plain data (key → migratedAt timestamp) so
+            // that the `entityManager.clear()` below cannot detach managed
+            // entities we still need to write. Materialise fresh entities at
+            // end-of-Pass-1; that avoids the `merge`-induced SELECT-before-INSERT
+            // per row that would otherwise eat back the JDBC batch savings.
+            val stagedSourceUpdates = LinkedHashMap<String, Instant>()
+            fun stageSource(name: String) {
+                stagedSourceUpdates[name] = Instant.now()
             }
-            total++
-            try {
-                if (componentKey in fakeAggregatorKeys) {
-                    // Register FAKE aggregator as "db"-sourced even though it has no
-                    // ComponentEntity row — Pass 3 still owns its ComponentGroupEntity,
-                    // and the source flag keeps `getMigrationStatus` totals balanced
-                    // (total == db) so the orchestrator does not retry this component.
+            // After importing this many components, flush pending INSERTs and
+            // clear the JPA persistence context. Without this the session grows
+            // to thousands of managed entities (ComponentEntity + base config +
+            // junctions + override rows) and dirty-checking cost grows
+            // super-linearly. 50 matches `hibernate.jdbc.batch_size` so each
+            // flush boundary aligns with one full JDBC batch.
+            //
+            // The modulus below is on `total`, which is incremented
+            // unconditionally for every iteration — including skipped (FAKE
+            // aggregator, already-in-DB, no-configurations) and failed
+            // entries. This is by design: the session may have grown via
+            // partial cascades even on the skip paths, so the eviction
+            // cadence is driven by iteration count, not persisted-row count.
+            val flushEvery = 50
+            for ((componentKey, escrowModule) in allModules) {
+                if (total > 0 && total % flushEvery == 0) {
+                    entityManager.flush()
+                    entityManager.clear()
+                }
+                total++
+                try {
+                    if (componentKey in fakeAggregatorKeys) {
+                        // Register FAKE aggregator as "db"-sourced even though it has no
+                        // ComponentEntity row — Pass 3 still owns its ComponentGroupEntity,
+                        // and the source flag keeps `getMigrationStatus` totals balanced
+                        // (total == db) so the orchestrator does not retry this component.
+                        stageSource(componentKey)
+                        skipped++
+                        results.add(
+                            MigrationResult(
+                                componentName = componentKey,
+                                success = true,
+                                dryRun = false,
+                                message = "Skipped (FAKE aggregator: group-only per schema-spec §4.3)",
+                            ),
+                        )
+                        continue
+                    }
+    
+                    if (componentKey in existingComponentKeys) {
+                        skipped++
+                        results.add(
+                            MigrationResult(
+                                componentName = componentKey,
+                                success = true,
+                                dryRun = false,
+                                message = "Skipped (already in DB)",
+                            ),
+                        )
+                        continue
+                    }
+    
+                    val configs = escrowModule.moduleConfigurations
+                    if (configs.isEmpty()) {
+                        LOG.warn("Component '{}' has no configurations in DSL; skipping", componentKey)
+                        skipped++
+                        results.add(
+                            MigrationResult(
+                                componentName = componentKey,
+                                success = true,
+                                dryRun = false,
+                                message = "Skipped (no configurations)",
+                            ),
+                        )
+                        continue
+                    }
+    
+                    importModule(componentKey, configs)
                     stageSource(componentKey)
-                    skipped++
+                    migrated++
                     results.add(
                         MigrationResult(
                             componentName = componentKey,
                             success = true,
                             dryRun = false,
-                            message = "Skipped (FAKE aggregator: group-only per schema-spec §4.3)",
+                            message = "Migrated",
                         ),
                     )
-                    continue
-                }
-
-                if (componentKey in existingComponentKeys) {
-                    skipped++
+                    progress.onProgress(
+                        MigrationProgressEvent(
+                            componentName = componentKey,
+                            migrated = migrated,
+                            failed = failed,
+                            skipped = skipped,
+                            total = allModules.size,
+                        ),
+                    )
+                } catch (e: Exception) {
+                    LOG.error("Failed to migrate component '{}'", componentKey, e)
+                    failed++
                     results.add(
                         MigrationResult(
                             componentName = componentKey,
-                            success = true,
+                            success = false,
                             dryRun = false,
-                            message = "Skipped (already in DB)",
+                            message = "Error: ${e.message?.take(300)}",
                         ),
                     )
-                    continue
                 }
-
-                val configs = escrowModule.moduleConfigurations
-                if (configs.isEmpty()) {
-                    LOG.warn("Component '{}' has no configurations in DSL; skipping", componentKey)
-                    skipped++
-                    results.add(
-                        MigrationResult(
-                            componentName = componentKey,
-                            success = true,
-                            dryRun = false,
-                            message = "Skipped (no configurations)",
-                        ),
-                    )
-                    continue
+            }
+    
+            if (stagedSourceUpdates.isNotEmpty()) {
+                // Materialise fresh / re-fetched entities now so saveAll sees
+                // either managed (from this fetch) or genuinely new entities —
+                // no detached merges, no SELECT-before-INSERT round-trips.
+                val existingSources =
+                    componentSourceRepository.findAllById(stagedSourceUpdates.keys).associateBy { it.componentKey }
+                val toSave = stagedSourceUpdates.map { (key, ts) ->
+                    val entity = existingSources[key] ?: ComponentSourceEntity(componentKey = key)
+                    entity.source = "db"
+                    entity.migratedAt = ts
+                    entity
                 }
-
-                importModule(componentKey, configs)
-                stageSource(componentKey)
-                migrated++
-                results.add(
-                    MigrationResult(
-                        componentName = componentKey,
-                        success = true,
-                        dryRun = false,
-                        message = "Migrated",
-                    ),
-                )
-                progress.onProgress(
-                    MigrationProgressEvent(
-                        componentName = componentKey,
-                        migrated = migrated,
-                        failed = failed,
-                        skipped = skipped,
-                        total = allModules.size,
-                    ),
-                )
-            } catch (e: Exception) {
-                LOG.error("Failed to migrate component '{}'", componentKey, e)
+                componentSourceRepository.saveAll(toSave)
+            }
+    
+            val pass1Ms = (System.nanoTime() - pass1Start) / 1_000_000
+            LOG.info(
+                "§6.2 Pass 1 complete: {} ms ({} migrated, {} skipped, {} failed of {} total)",
+                pass1Ms, migrated, skipped, failed, total,
+            )
+    
+            // Pass 2: resolve parentComponent FK references
+            LOG.info("§6.2 Pass 2: resolving {} parentComponent references", pendingParentByKey.size)
+            val pass2Start = System.nanoTime()
+            for ((childKey, parentKey) in pendingParentByKey) {
+                try {
+                    val parent = componentRepository.findByComponentKey(parentKey)
+                    if (parent == null) {
+                        LOG.warn(
+                            "parentComponent='{}' referenced by '{}' not found in DB; leaving null",
+                            parentKey,
+                            childKey,
+                        )
+                        continue
+                    }
+                    val child = componentRepository.findByComponentKey(childKey) ?: continue
+                    child.parentComponent = parent
+                    componentRepository.save(child)
+                } catch (e: Exception) {
+                    LOG.warn("Failed to link parentComponent '{}' → '{}': {}", childKey, parentKey, e.message)
+                }
+            }
+    
+            LOG.info("§6.2 Pass 2 complete: {} ms ({} parent refs)", (System.nanoTime() - pass2Start) / 1_000_000, pendingParentByKey.size)
+    
+            // §6.3 Pass 3: upsert component_groups rows and link component_group_id FKs.
+            // Runs after Pass 2 so all ComponentEntity rows are present and parentComponent FKs are resolved.
+            LOG.info("§6.3 Pass 3: linking aggregator groups for {} parent references", pendingParentByKey.size)
+            val pass3Start = System.nanoTime()
+            val pass3Failures = linkAggregatorGroups(allModules, pendingParentByKey)
+            LOG.info(
+                "§6.3 Pass 3 complete: {} ms ({} failures)",
+                (System.nanoTime() - pass3Start) / 1_000_000, pass3Failures.size,
+            )
+            for ((parentKey, errorMessage) in pass3Failures) {
                 failed++
                 results.add(
                     MigrationResult(
-                        componentName = componentKey,
+                        componentName = parentKey,
                         success = false,
                         dryRun = false,
-                        message = "Error: ${e.message?.take(300)}",
+                        message = "§6.3 Pass 3 group-linking failed: ${errorMessage.take(280)}",
                     ),
                 )
             }
-        }
-
-        if (stagedSourceUpdates.isNotEmpty()) {
-            // Materialise fresh / re-fetched entities now so saveAll sees
-            // either managed (from this fetch) or genuinely new entities —
-            // no detached merges, no SELECT-before-INSERT round-trips.
-            val existingSources =
-                componentSourceRepository.findAllById(stagedSourceUpdates.keys).associateBy { it.componentKey }
-            val toSave = stagedSourceUpdates.map { (key, ts) ->
-                val entity = existingSources[key] ?: ComponentSourceEntity(componentKey = key)
-                entity.source = "db"
-                entity.migratedAt = ts
-                entity
-            }
-            componentSourceRepository.saveAll(toSave)
-        }
-
-        val pass1Ms = (System.nanoTime() - pass1Start) / 1_000_000
-        LOG.info(
-            "§6.2 Pass 1 complete: {} ms ({} migrated, {} skipped, {} failed of {} total)",
-            pass1Ms, migrated, skipped, failed, total,
-        )
-
-        // Pass 2: resolve parentComponent FK references
-        LOG.info("§6.2 Pass 2: resolving {} parentComponent references", pendingParentByKey.size)
-        val pass2Start = System.nanoTime()
-        for ((childKey, parentKey) in pendingParentByKey) {
-            try {
-                val parent = componentRepository.findByComponentKey(parentKey)
-                if (parent == null) {
-                    LOG.warn(
-                        "parentComponent='{}' referenced by '{}' not found in DB; leaving null",
-                        parentKey,
-                        childKey,
-                    )
-                    continue
-                }
-                val child = componentRepository.findByComponentKey(childKey) ?: continue
-                child.parentComponent = parent
-                componentRepository.save(child)
-            } catch (e: Exception) {
-                LOG.warn("Failed to link parentComponent '{}' → '{}': {}", childKey, parentKey, e.message)
-            }
-        }
-
-        LOG.info("§6.2 Pass 2 complete: {} ms ({} parent refs)", (System.nanoTime() - pass2Start) / 1_000_000, pendingParentByKey.size)
-
-        // §6.3 Pass 3: upsert component_groups rows and link component_group_id FKs.
-        // Runs after Pass 2 so all ComponentEntity rows are present and parentComponent FKs are resolved.
-        LOG.info("§6.3 Pass 3: linking aggregator groups for {} parent references", pendingParentByKey.size)
-        val pass3Start = System.nanoTime()
-        val pass3Failures = linkAggregatorGroups(allModules, pendingParentByKey)
-        LOG.info(
-            "§6.3 Pass 3 complete: {} ms ({} failures)",
-            (System.nanoTime() - pass3Start) / 1_000_000, pass3Failures.size,
-        )
-        for ((parentKey, errorMessage) in pass3Failures) {
-            failed++
-            results.add(
-                MigrationResult(
-                    componentName = parentKey,
-                    success = false,
-                    dryRun = false,
-                    message = "§6.3 Pass 3 group-linking failed: ${errorMessage.take(280)}",
-                ),
+    
+            LOG.info(
+                "Migration complete in {} ms: total={}, migrated={}, failed={}, skipped={}",
+                (System.nanoTime() - totalStart) / 1_000_000,
+                total,
+                migrated,
+                failed,
+                skipped,
             )
-        }
-
-        LOG.info(
-            "Migration complete in {} ms: total={}, migrated={}, failed={}, skipped={}",
-            (System.nanoTime() - totalStart) / 1_000_000,
-            total,
-            migrated,
-            failed,
-            skipped,
-        )
-        return BatchMigrationResult(
-            total = total,
-            migrated = migrated,
-            failed = failed,
-            skipped = skipped,
-            results = results,
-        )
+            return BatchMigrationResult(
+                total = total,
+                migrated = migrated,
+                failed = failed,
+                skipped = skipped,
+                results = results,
+            )
         } finally {
             // Reset the in-migration dictionary caches unconditionally. The
             // try around the body ensures this runs even if Pass 1/2/3
@@ -819,6 +816,15 @@ class ImportServiceImpl(
      * [preupsertLabelsFromLoader] for label discovery. `by lazy` so resolution
      * is deferred to the first read inside a migration call (the bean is
      * constructed before the loader's git clone is ready).
+     *
+     * Staleness note: the lazy is JVM-lifetime (the service is a Spring
+     * singleton). If `Defaults.groovy` or the validation-config labels file
+     * is updated via a `git pull` between migrations on a long-running pod,
+     * the second migration silently observes the stale snapshot — a newly
+     * added label will not be preupserted. Pre-PR #236 the equivalent
+     * `commonDefaultsToolsCache` lazy had the same JVM-lifetime caching for
+     * tools; this extends that pattern to labels. If the DSL is expected to
+     * change at runtime, invalidate at the top of `migrateAllComponents`.
      */
     private val commonDefaultsCache: org.octopusden.octopus.escrow.configuration.model.DefaultConfigParameters by lazy {
         configurationLoader.loadCommonDefaults(emptyMap())
@@ -1690,12 +1696,24 @@ class ImportServiceImpl(
         val configId = row.id ?: return
         for (tool in tools) {
             val toolName = tool.name ?: continue
-            // Ensure tool exists in dictionary. After `upsertTool` returns,
-            // the tool is either already in the DB (cache hit) or just got
-            // saved (cache miss path), so we know the FK is satisfied
-            // without a follow-up `findByName` round-trip — that read was
-            // the per-component hotspot we are explicitly removing.
+            // Ensure tool exists in dictionary. After `upsertTool` returns
+            // the tool is either already in the DB (cache hit), in the
+            // in-migration dictionary cache (cache add returned true →
+            // save was issued), or was inserted by the cache-null fallback.
+            // For the cache-null path a niche edge case remains: if a row
+            // with a slightly different name normalisation (case/whitespace)
+            // already exists, `upsertTool.findByName(toolName)` misses it
+            // and `save()` then trips a unique-constraint exception. The
+            // explicit follow-up `findByName` only on the cache-null path
+            // restores the graceful "log + skip junction" behaviour that
+            // existed before the dictionary cache was introduced. On the
+            // cache path the check is unnecessary (the cache is
+            // authoritative for the in-flight migration).
             upsertTool(toolName, tool.escrowEnvironmentVariable, tool.sourceLocation, tool.targetLocation, tool.installScript)
+            if (knownToolNames == null && toolRepository.findByName(toolName) == null) {
+                LOG.warn("Required tool '{}' not found in tools registry; skipping junction", toolName)
+                continue
+            }
             val junction =
                 ComponentRequiredToolEntity(
                     componentConfigurationId = configId,
