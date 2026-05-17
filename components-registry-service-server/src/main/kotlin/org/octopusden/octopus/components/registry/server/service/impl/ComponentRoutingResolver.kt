@@ -105,7 +105,23 @@ class ComponentRoutingResolver(
     ): JiraComponentVersion =
         try {
             dbResolver.getJiraComponentByProjectAndVersion(projectKey, version)
+        } catch (e: NotFoundException) {
+            // db has no match — try git, but reject stale data for DB-sourced components
+            val gitResult = gitResolver.getJiraComponentByProjectAndVersion(projectKey, version)
+            // Null-safe stale-guard: JiraComponentVersion's @JsonCreator ctor does not
+            // require non-null componentVersion, so a malformed/cached JCV can carry a null
+            // inner. Skip the guard in that case (gracefully degrades to pre-fix behaviour
+            // for this edge) rather than NPE.
+            val componentName = gitResult.componentVersion?.componentName
+            if (componentName != null && sourceRegistry.getDbComponentNames().contains(componentName)) {
+                throw NotFoundException(
+                    "Component '$componentName' is db-sourced; " +
+                        "version '$version' for project '$projectKey' is not in DB",
+                )
+            }
+            gitResult
         } catch (e: Exception) {
+            // transient — fall back to git (fault tolerance preserved)
             gitResolver.getJiraComponentByProjectAndVersion(projectKey, version)
         }
 
@@ -232,7 +248,18 @@ class ComponentRoutingResolver(
     override fun findComponentByArtifact(artifact: ArtifactDependency): VersionedComponent =
         try {
             dbResolver.findComponentByArtifact(artifact)
+        } catch (e: NotFoundException) {
+            // db has no match — try git, but reject stale data for DB-sourced components
+            val gitResult = gitResolver.findComponentByArtifact(artifact)
+            if (sourceRegistry.getDbComponentNames().contains(gitResult.id)) {
+                throw NotFoundException(
+                    "Component '${gitResult.id}' is db-sourced; artifact " +
+                        "'${artifact.group}:${artifact.name}:${artifact.version}' is not in DB",
+                )
+            }
+            gitResult
         } catch (e: Exception) {
+            // transient — fall back to git (fault tolerance preserved)
             gitResolver.findComponentByArtifact(artifact)
         }
 
@@ -244,10 +271,16 @@ class ComponentRoutingResolver(
         return artifacts.associateWith { artifact ->
             val dbResult = dbResults[artifact]
             val gitResult = gitResults[artifact]
-            if (dbResult != null && dbNames.contains(dbResult.id)) {
-                dbResult
-            } else {
-                gitResult ?: dbResult
+            when {
+                // 1. DB has a match → authoritative (regardless of whether the component is yet
+                //    registered in dbNames — partial migrations / pre-source-row inserts must not
+                //    drop a legitimate DB hit because git stale-matched a DIFFERENT db-sourced
+                //    component for the same artifact)
+                dbResult != null -> dbResult
+                // 2. DB has no match, git stale-matches a db-sourced component → reject
+                gitResult != null && dbNames.contains(gitResult.id) -> null
+                // 3. Legitimate git-only fallback
+                else -> gitResult
             }
         }
     }
@@ -278,8 +311,12 @@ class ComponentRoutingResolver(
     }
 
     override fun findComponentsByDockerImages(images: Set<Image>): Set<ComponentImage> {
-        val gitResults = gitResolver.findComponentsByDockerImages(images)
         val dbResults = dbResolver.findComponentsByDockerImages(images)
-        return gitResults + dbResults
+        val gitResults = gitResolver.findComponentsByDockerImages(images)
+        val dbNames = sourceRegistry.getDbComponentNames()
+        // Drop git results whose component is DB-sourced: for migrated components the DB
+        // is authoritative, and a git stale match would mask a true absence with legacy data.
+        val gitFiltered = gitResults.filterNot { dbNames.contains(it.component) }.toSet()
+        return gitFiltered + dbResults
     }
 }
