@@ -47,7 +47,13 @@ _(будет пополняться по мере реализации)_
 - [ ] **TD-007: Compat-test framework self-tests + serious review protocol.** Layers L1–L4 landed (`ComparatorLogicTest`, shell self-tests, preflight assertions, `:unitTest` task split). The doc captures the surviving gaps + the two-stage review protocol now in force for any change touching `components-registry-compat-test/` or `scripts/local-stands/`. See [TD-007](tech-debt/007-compat-test-self-tests-and-review.md).
 - [ ] **TD-008: Compat-test trace replay (TASK-E).** Frequency-weighted production-trace replay against both stands so diffs are ranked by operational impact, not just by lexical order. Consumes the same trace file as TD-009. See [TD-008](tech-debt/008-compat-test-trace-replay.md).
 - [ ] **TD-009: Compat-test k6 load profile (TASK-F, doc only).** k6 scenario reading the same trace file as TD-008, ramping 0→100 RPS over 12–15 min, emitting per-endpoint p50/p95/p99 + error-rate comparison. Implementation deferred (different toolchain, separate workflow). See [TD-009](tech-debt/009-compat-test-load.md).
-- [ ] **MIG-041..MIG-044: Compat residual clusters — real backward-compat regressions surfaced after the sort-fix (PR #232).** Four bug clusters identified by the prod-vs-test compat run: trailing comma in `distribution.gav` CSV (MIG-041), `escrow.generation` not inheriting from `Defaults` (MIG-042), DSL declaration order lost on multi-distribution components (MIG-043), and one residual on `/common/jira-component-version-ranges` (MIG-044, needs diagnosis). Each fix is mandatorily test-first on synthetic in-memory fixtures (no global `TestComponents` mutation). See [compat-residual-clusters.md](compat-residual-clusters.md) for the per-cluster spec + TDD acceptance criteria.
+- [ ] **MIG-041..MIG-044: Compat residual clusters — real backward-compat regressions surfaced after the sort-fix (PR #232).** Status:
+  - **MIG-041** trailing-comma in `distribution.gav` CSV — **comparator-side tolerance landed in PR #238** so compat-test passes; root-cause mapper fix (clean CSV emission in `EntityMappers`) is still open as a small follow-up.
+  - **MIG-042** `escrow.generation` not inheriting from `Defaults` — fixed (commit on `feat/schema-v2-sql`).
+  - **MIG-043** DSL declaration order lost on multi-distribution components — fixed via PR #240.
+  - **MIG-044** residual on `/common/jira-component-version-ranges` — closed as known-risk (#237, #239).
+
+  Each fix is mandatorily test-first on synthetic in-memory fixtures (no global `TestComponents` mutation). See [compat-residual-clusters.md](compat-residual-clusters.md) for the per-cluster spec + TDD acceptance criteria.
 
 ## Schema v2 known limitations (Phase 5b/6 follow-ups)
 

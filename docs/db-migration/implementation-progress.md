@@ -211,12 +211,11 @@ If any other test class fails to compile once Phase 5 lands, add it here with th
 
 **PR-C (RES-C maven-artifacts per-range override fix)** rewrote `DatabaseComponentRegistryResolver.getMavenArtifactParameters` to walk the EscrowModule per-range view instead of returning component-level `artifactIds` unchanged for every range. The old implementation ignored `DISTRIBUTION_MAVEN` marker overrides, causing 30 components to return the wrong `groupPattern` for one or more ranges (latest range's group bled into earlier ranges). Fix: use `config.distribution?.GAV()` per `EscrowModuleConfig` (already has per-range markers applied); fall back to component-level `artifactIds` only when GAV is null/blank. Extracted `splitCsv`/`MavenCoords`/`parseMavenGavEntry` from `ImportServiceImpl` into shared `util/GavParsing.kt`. Added 3 new unit tests (`DatabaseComponentRegistryResolverMavenArtifactsRangeTest`: two-range shape, multi-artifact CSV shape, single-range fallback). Extended VAL-006 with `tokenization-service` for regression guard. ✅ Full build PASS.
 
-Two method-level `@Disabled` markers remain for known v2-vs-v1 semantic deltas:
+One method-level `@Disabled` marker remains for a known v2-vs-v1 semantic delta:
 
 | Test method | Reason | Tracked in todo.md |
 |---|---|---|
-| `BaseComponentsRegistryServiceTest.testGetBuildTools` (overridden in `DbBackedComponentsRegistryServiceControllerTest`) | RES-014 — complex KTS build-tool beans (`OracleDatabaseToolBean`, `PTKProductToolBean`) cannot round-trip the v2 `tools` dictionary. | Schema v2 known limitations §RES-014 |
-| `GitVsDbValidationTest.VAL-010 bulk canary` | Residual divergences after Stream A + Stream B externalRegistry fix: 8× RES-014 family + 1× FAKE-aggregator distribution inheritance on `core-lib`. Concrete count must be regenerated from a VAL-010 run before re-enable. | Schema v2 known limitations §RES-014 + §FAKE-aggregator |
+| `GitVsDbValidationTest.VAL-010 bulk canary` | RES-014 closed by PR #208 (`component_build_tool_beans` schema extension); the only remaining residual is 1× FAKE-aggregator distribution inheritance on `core-lib`. Concrete count must be regenerated empirically from a VAL-010 run before re-enable. | Schema v2 known limitations §FAKE-aggregator |
 
 Compile-only checklist (Phase 6 cannot ship until all are ✅):
 - [ ] No source file carries `@Disabled("schema-v2: …")`.
