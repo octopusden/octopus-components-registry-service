@@ -144,18 +144,30 @@ class ComponentRoutingResolver(
 
     @Suppress("TooGenericExceptionCaught", "SwallowedException")
     override fun getJiraComponentVersionRangesByProject(projectKey: String): Set<JiraComponentVersionRange> {
+        var gitNotFound = false
+        var dbNotFound = false
         val gitResults =
             try {
                 gitResolver.getJiraComponentVersionRangesByProject(projectKey)
+            } catch (e: NotFoundException) {
+                gitNotFound = true
+                emptySet()
             } catch (e: Exception) {
                 emptySet()
             }
         val dbResults =
             try {
                 dbResolver.getJiraComponentVersionRangesByProject(projectKey)
+            } catch (e: NotFoundException) {
+                dbNotFound = true
+                emptySet()
             } catch (e: Exception) {
                 emptySet()
             }
+        // MIG-049: see getJiraComponentsByProject for the same pattern.
+        if (gitNotFound && dbNotFound) {
+            throw NotFoundException("Project '$projectKey' is not found")
+        }
         val dbNames = sourceRegistry.getDbComponentNames()
         val filteredGit = gitResults.filter { !dbNames.contains(it.componentName) }
         return filteredGit.toSet() + dbResults
