@@ -54,23 +54,33 @@ Diagnostic endpoints (`/service/status`, `/service/ping`, `/service/updateCache`
 `diagnostic-endpoints.json` (or are filtered by path-prefix in the coverage
 test).
 
-### `EndpointCoverageTest` — the gate
+### Coverage gate — two test classes
 
-A new `@Tag("unit")` test class with three assertions:
+Per the TD-007 L4 split (`:unitTest` is URL-config-free; `:test` is
+HTTP-gated), the coverage gate is implemented as **two** classes — the
+static-analysis assertions and the live-HTTP probe must not share a JUnit
+tag, otherwise either PR CI starts requiring a deployed candidate stand or
+the liveness gate gets silently skipped on URL-less runs.
 
-1. **Baseline coverage** — for each `endpoints-baseline.json` entry, at least
-   one method in any `*CompatTest` class is annotated
-   `@CompatEndpoint("METHOD path")` matching that entry. Today the annotation
-   is informational; this test elevates it to a contract.
-2. **Candidate liveness (preservation probe)** — at `@BeforeAll`, HTTP-probe
+**`EndpointCoverageTest` (`@Tag("unit")`, pure static — runs in `:unitTest`):**
+
+1. **Baseline coverage** — for each `endpoints-baseline.json` entry, at
+   least one method in any `*CompatTest` class is annotated
+   `@CompatEndpoint("METHOD path")` matching that entry. Today the
+   annotation is informational; this test elevates it to a contract.
+2. **Candidate additions (warn-only)** — statically scan the v3-branch
+   controller AST, diff against the baseline, surface any *new* endpoints
+   in the summary as `candidate adds: METHOD path`. Not blocking — new
+   endpoints are allowed; this just makes them visible for review.
+
+**`EndpointLivenessProbeTest` (`@Tag("http")`, URL-gated — runs in `:test`):**
+
+3. **Candidate liveness (preservation probe)** — at `@BeforeAll`, HTTP-probe
    each baseline entry against the candidate stand. Expected
    `actualStatus == probe.expectedStatus` and, if `expectedBodyShape` is
-   declared, the actual body must contain those keys. Probe failure means the
-   candidate has dropped an endpoint or changed its terminal-status behavior.
-3. **Candidate additions (warn-only)** — statically scan the v3-branch
-   controller AST, diff against the baseline, surface any *new* endpoints in
-   the summary as `candidate adds: METHOD path`. Not blocking — new endpoints
-   are allowed; this just makes them visible for review.
+   declared, the actual body must contain those keys. Probe failure means
+   the candidate has dropped an endpoint or changed its terminal-status
+   behavior.
 
 ### Generation
 
@@ -91,7 +101,8 @@ If the PSI approach proves fragile, fall back to runtime introspection via
 ### Traffic-classified reporting (1a / 1b)
 
 Optional preflight reads an env-provided trace file (default
-`COMPAT_TRAFFIC_TRACE=/tmp/crs-top1000-augmented.txt`). For each baseline
+`COMPAT_TRACE_FILE=/tmp/crs-top1000-augmented.txt`, same env var as TD-008
+and TD-009 — they all consume the same trace source). For each baseline
 endpoint, classify:
 
 - **1a** — appears in the trace window. High operational priority.
