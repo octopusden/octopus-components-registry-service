@@ -178,4 +178,80 @@ class ComponentSourceRegistryWhitelistTest {
         assertEquals(true, msg.contains("\\x7F"), "DEL escaped; msg='${msg.take(200)}'")
         assertEquals(true, msg.contains("\\x85"), "NEL escaped; msg='${msg.take(200)}'")
     }
+
+    @Test
+    @DisplayName(
+        "setComponentSource — truncation at cap boundary never splits a \\xNN escape mid-sequence " +
+            "(final-review Opus P1-2 boundary guard)",
+    )
+    fun setComponentSource_truncationAtBoundary_neverSplitsEscape() {
+        // 100 SOH (0x01) controls followed by an INJECT marker. With the previous
+        // sanitize-then-truncate order, sanitized output was 100×4+6 = 406 chars and
+        // take(80) cut INSIDE the 20th `\x01`. After truncate-then-sanitize, take is
+        // applied to the raw 100×SOH+INJECT (=106 chars) capped at 80 (still 80×SOH),
+        // then sanitized → exactly 80 `\x01` escapes, no INJECT, no dangling escape.
+        val payload = 0x01.toChar().toString().repeat(100) + "INJECT"
+        val ex =
+            assertThrows(IllegalArgumentException::class.java) {
+                registry.setComponentSource("widget", payload)
+            }
+        val msg = ex.message ?: ""
+        // No INJECT (truncated out of scope).
+        assertEquals(false, msg.contains("INJECT"), "INJECT must not survive truncation; msg='${msg.take(200)}'")
+        // Ellipsis marker for truncated payload.
+        assertEquals(true, msg.contains("…"), "ellipsis must mark truncation; msg='${msg.take(200)}'")
+        // Guard against dangling `\x` or `\x0` — every `\x` must be followed by exactly
+        // 2 hex digits. Walk forward through the message collecting actual `\x` positions.
+        val backslashXIndices = mutableListOf<Int>()
+        var searchFrom = 0
+        while (true) {
+            val idx = msg.indexOf("\\x", searchFrom)
+            if (idx < 0) break
+            backslashXIndices += idx
+            searchFrom = idx + 2
+        }
+        // At least one `\x01` escape must be present (sanity check the payload reached the message).
+        assertEquals(true, backslashXIndices.isNotEmpty(), "no \\x escape in message; msg='${msg.take(200)}'")
+        for (idx in backslashXIndices) {
+            val tail = msg.substring(idx)
+            assertEquals(
+                true,
+                tail.length >= 4 && tail[2].isHexDigit() && tail[3].isHexDigit(),
+                "dangling \\x escape at idx $idx; tail='${tail.take(10)}'",
+            )
+        }
+    }
+
+    @Test
+    @DisplayName(
+        "setComponentSource — UTF-16 surrogate pair at the cap boundary is dropped cleanly " +
+            "(no lone high surrogate in echoed message)",
+    )
+    fun setComponentSource_surrogateAtBoundary_droppedCleanly() {
+        // Build a payload where a surrogate pair lands exactly at position 79..80.
+        // Astral-plane code point U+1F600 (😀) is one such pair (high=0xD83D, low=0xDE00).
+        // 79 printable ASCII chars + the emoji (2 UTF-16 code units) = position 79 high, 80 low.
+        val payload = "a".repeat(79) + "😀" + "TAIL"
+        val ex =
+            assertThrows(IllegalArgumentException::class.java) {
+                registry.setComponentSource("widget", payload)
+            }
+        val msg = ex.message ?: ""
+        // No lone high surrogate in the message.
+        for (i in msg.indices) {
+            val c = msg[i]
+            if (c.isHighSurrogate()) {
+                val next = msg.getOrNull(i + 1)
+                assertEquals(
+                    true,
+                    next != null && next.isLowSurrogate(),
+                    "lone high surrogate at index $i; msg='${msg.take(200)}'",
+                )
+            }
+        }
+        // TAIL was past the cap, so it must not survive.
+        assertEquals(false, msg.contains("TAIL"), "TAIL must not survive truncation; msg='${msg.take(200)}'")
+    }
+
+    private fun Char.isHexDigit(): Boolean = this in '0'..'9' || this in 'A'..'F' || this in 'a'..'f'
 }
