@@ -253,5 +253,37 @@ class ComponentSourceRegistryWhitelistTest {
         assertEquals(false, msg.contains("TAIL"), "TAIL must not survive truncation; msg='${msg.take(200)}'")
     }
 
+    @Test
+    @DisplayName(
+        "setComponentSource — lone low surrogate at cut boundary (malformed UTF-16) is dropped " +
+            "(Sonnet review P2 follow-up)",
+    )
+    fun setComponentSource_loneLowSurrogateAtBoundary_droppedCleanly() {
+        // Build a deliberately-malformed input where a lone LOW surrogate
+        // (no preceding high partner) lands at position 79 — the last char of
+        // the truncated result. Without the low-surrogate guard, the message
+        // would echo the lone low surrogate and Jackson would emit invalid JSON.
+        val payload = "a".repeat(79) + 0xDC00.toChar() + "TAIL"
+        val ex =
+            assertThrows(IllegalArgumentException::class.java) {
+                registry.setComponentSource("widget", payload)
+            }
+        val msg = ex.message ?: ""
+        // No lone low surrogate must appear in the message.
+        for (i in msg.indices) {
+            val c = msg[i]
+            if (c.isLowSurrogate()) {
+                val prev = msg.getOrNull(i - 1)
+                assertEquals(
+                    true,
+                    prev != null && prev.isHighSurrogate(),
+                    "lone low surrogate at index $i; msg='${msg.take(200)}'",
+                )
+            }
+        }
+        // TAIL was past the cap, so it must not survive.
+        assertEquals(false, msg.contains("TAIL"), "TAIL must not survive truncation; msg='${msg.take(200)}'")
+    }
+
     private fun Char.isHexDigit(): Boolean = this in '0'..'9' || this in 'A'..'F' || this in 'a'..'f'
 }

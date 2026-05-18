@@ -92,18 +92,28 @@ class ComponentSourceRegistryImpl(
             }
 
         /**
-         * Caps `value` at `maxChars` UTF-16 code units. If the cut point falls
-         * between the high and low halves of a UTF-16 surrogate pair, drops the
-         * lone high surrogate so Jackson (or any UTF-8 serializer) never sees
-         * malformed input.
+         * Caps `value` at `maxChars` UTF-16 code units, then sanitizes the
+         * boundary against malformed UTF-16:
+         *
+         *  - If the cut split a well-formed surrogate pair (last char is a high
+         *    surrogate but its low partner was at `maxChars`, beyond the cut),
+         *    drop the lone high surrogate.
+         *  - If the input itself was malformed and the cut landed on a lone
+         *    low surrogate (no high partner at `maxChars - 2`), drop the lone
+         *    low surrogate.
+         *
+         * Either way, Jackson (or any UTF-8 serializer) never sees a half-pair.
          */
         internal fun truncateRaw(value: String, maxChars: Int): String {
             if (value.length <= maxChars) return value
             val raw = value.substring(0, maxChars)
-            return if (raw.isNotEmpty() && raw.last().isHighSurrogate()) {
-                raw.dropLast(1)
-            } else {
-                raw
+            if (raw.isEmpty()) return raw
+            val last = raw.last()
+            return when {
+                last.isHighSurrogate() -> raw.dropLast(1)
+                last.isLowSurrogate() && (raw.length < 2 || !raw[raw.length - 2].isHighSurrogate()) ->
+                    raw.dropLast(1)
+                else -> raw
             }
         }
     }
