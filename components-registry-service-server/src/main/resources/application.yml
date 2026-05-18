@@ -52,6 +52,24 @@ spring:
       # single IN(...) per collection per page → 5 SELECTs total. Page size
       # in the v4 controller is capped at 100, so 50 is comfortable.
       hibernate.default_batch_fetch_size: 50
+      # Write-side batching for the migration pipeline. `importModule`
+      # persists ~10–20 rows per component (ComponentEntity + base config +
+      # system/label/tool junctions + per-range overrides). Without batching,
+      # each row is its own INSERT round-trip; on a CPU-throttled OKD pod
+      # against a remote DB this dominates Pass 1 (measured 250 s for 948
+      # components in QA). With batch_size=50 Hibernate batches sequential
+      # INSERTs of the same entity type into a single JDBC statement. Most
+      # PKs are `@GeneratedValue(strategy = UUID)` so batching applies;
+      # AuditLogEntity uses IDENTITY (not batched) but is not written during
+      # migration.
+      #
+      # `hibernate.order_inserts` is intentionally NOT enabled: it groups
+      # inserts across the entire transaction by entity type, which can
+      # reorder a `component_systems` junction insert ahead of its
+      # `components` parent insert and trip the FK constraint. Sequential
+      # batching alone gives us the bulk of the speed-up without that
+      # ordering risk.
+      hibernate.jdbc.batch_size: 50
   flyway:
     enabled: false
 

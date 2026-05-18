@@ -147,6 +147,7 @@ class OracleDatabaseToolBean: DatabaseToolBean(DatabaseTypes.ORACLE, "db"),
     OracleDatabaseTool {
     private var edition: OracleDatabaseEditions? = null
     override fun getEdition(): OracleDatabaseEditions? = edition
+    fun setEdition(edition: OracleDatabaseEditions?) { this.edition = edition }
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other !is OracleDatabaseToolBean) return false

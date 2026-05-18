@@ -19,21 +19,29 @@ import java.nio.file.Paths
 import java.util.UUID
 
 /**
- * Review finding #2 — `ComponentSourceRegistryImpl.sourceCache` is a per-JVM
- * Caffeine cache with a 5-minute write-expiry. CRS is deployed behind a
- * horizontally-scaled pod set sharing one database: a `component_source`
- * write on pod A is invisible to pod B's routing decision (via `getSource`)
- * until the cached entry expires. This re-introduces the ghost that SYS-029
- * eliminated on a single-JVM setup, for up to five minutes per rename.
+ * **Regression guard against re-introducing per-JVM caching of `getSource`.**
+ *
+ * History: an earlier `ComponentSourceRegistryImpl` carried a `sourceCache`
+ * (Caffeine, 5-minute write-expiry). With CRS deployed behind a horizontally-
+ * scaled pod set sharing one database, a `component_source` write on pod A
+ * was invisible to pod B's routing decision via `getSource` until the cached
+ * entry expired. SYS-029 removed that cache; the current `getSource`
+ * (`ComponentSourceRegistryImpl.kt:19-23`) goes directly to the repository on
+ * every call. This test class exists **to keep it that way** — any future
+ * "let's cache for perf" change (cf. Group 6-A) must also keep this test
+ * green, which it cannot unless reads are pod-coherent (per-request cache,
+ * coordinated invalidation, etc.).
  *
  * `ComponentRoutingResolver.resolverFor` calls `getSource`, so this is the
  * hot read path the tests exercise. (`isDbComponent` goes straight to the
- * repository since the SYS-029 fix and is not affected.)
+ * repository as well and is therefore unaffected by the historical cache.)
  *
- * The test writes directly through the `ComponentSourceRepository`
- * (simulating another pod) after the in-process registry has populated its
- * cache, then asserts the registry reflects the new state on the very next
- * `getSource` read.
+ * Each test writes directly through the `ComponentSourceRepository`
+ * (simulating another pod) AFTER the in-process registry has observed an
+ * initial state via `getSource`, then asserts the registry reflects the new
+ * state on the very next read. Today the assertion passes trivially because
+ * `getSource` is a direct DB read; if caching is ever re-introduced without
+ * cross-pod invalidation, the SAME assertion will fail loudly.
  *
  * Under `ft-db` the default source is `db`, which collapses the before/after
  * outcomes for a missing row; the test therefore forces `default-source=git`
@@ -95,7 +103,8 @@ class ComponentSourceRegistryMultiPodTest {
         assertEquals("git", registry.getSource(name), "no row yet, default-source=git")
 
         // Pod B: insert the row directly.
-        repository.save(ComponentSourceEntity(componentName = name, source = "db"))
+        // v2: ComponentSourceEntity uses componentKey (not componentName)
+        repository.save(ComponentSourceEntity(componentKey = name, source = "db"))
         repository.flush()
 
         // Pod A's next read must see the insert.
@@ -122,9 +131,10 @@ class ComponentSourceRegistryMultiPodTest {
         val existing = repository.findById(oldName).orElseThrow()
         repository.delete(existing)
         repository.flush()
+        // v2: ComponentSourceEntity uses componentKey (not componentName)
         repository.save(
             ComponentSourceEntity(
-                componentName = newName,
+                componentKey = newName,
                 source = existing.source,
                 migratedAt = existing.migratedAt,
                 migratedBy = existing.migratedBy,

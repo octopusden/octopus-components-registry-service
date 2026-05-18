@@ -1,0 +1,13 @@
+{
+  "_comment": "Documented compat deltas. Each entry suppresses a matching DiffRecord from the active section of summary.md and surfaces it under '## Suppressed (known deltas)' with its reason + regressionTest. See docs/db-migration/api-compat-deltas.md.",
+  "deltas": [
+    {
+      "endpoint": "PUT /rest/api/2/components-registry/service/updateCache",
+      "category": "STATUS_CODE_DIFF",
+      "baselineValue": "200",
+      "candidateValue": "410",
+      "reason": "v3 deprecates the legacy cache-update endpoint with 410 Gone + ErrorResponse body. Cache is rebuilt on service startup via @PostConstruct in ComponentsRegistryServiceImpl.cloneVcsData(); explicit re-cache via PUT is no longer supported. Confirmed intentional 2026-05-15.",
+      "regressionTest": "ComponentsRegistryServiceControllerTest.testUpdateCacheReturnsGone"
+    }
+  ]
+}

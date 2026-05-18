@@ -24,7 +24,7 @@ plugins {
 }
 
 octopusQuality {
-    excludeProjects('components-registry-automation', 'test-common')
+    excludeProjects('components-registry-automation', 'components-registry-compat-test', 'test-common')
     java { failOnViolation = true }
     kotlin { failOnViolation = true }
     coverage {
@@ -176,12 +176,18 @@ configure(subprojects) {
     }
 
     afterEvaluate {
-        // SpotBugs is newly introduced by the convention plugin; suppress gate failures
-        // until violations in this repo are reviewed and addressed.
+        // SpotBugs disabled for this project. The octopus-quality convention plugin enables it,
+        // but bytecode-flow analysis produced a 95% false-positive rate on Kotlin lateinit / DSL
+        // getter / test code in build 2.0.84-3436 (1 real bug out of 21 HIGH-priority findings,
+        // resolved in PR #218). The remaining toolchain — Checkstyle + PMD (Java, blocking),
+        // detekt + ktlint (Kotlin, blocking), CodeNarc (Groovy, report-only) — already covers
+        // each language with native rule sets. Keeping SpotBugs would require ongoing exclude-filter
+        // maintenance for marginal signal. See AGENTS.md Quality Gates section.
+        //
+        // We disable the *tasks* rather than apply-false the plugin: the SpotBugs plugin is owned
+        // by octopus-quality (shared convention), so opting out happens at the consumer side here.
         if (pluginManager.hasPlugin('com.github.spotbugs')) {
-            spotbugs {
-                ignoreFailures = true
-            }
+            tasks.matching { it.name.startsWith('spotbugs') }.configureEach { enabled = false }
         }
     }
 
@@ -268,8 +274,7 @@ def writeQualityReportsIndex = {
                     [pattern: '**/build/reports/pmd/*.html', artifactPrefix: 'pmd'],
                     [pattern: '**/build/reports/codenarc/*.html', artifactPrefix: 'codenarc'],
                     [pattern: '**/build/reports/detekt/*.html', artifactPrefix: 'detekt'],
-                    [pattern: '**/build/reports/ktlint/*.html', artifactPrefix: 'ktlint'],
-                    [pattern: '**/build/reports/spotbugs/*.html', artifactPrefix: 'spotbugs']
+                    [pattern: '**/build/reports/ktlint/*.html', artifactPrefix: 'ktlint']
             ],
             'Coverage': [
                     [pattern: '**/build/reports/jacoco/*/html/index.html', artifactPrefix: 'jacoco'],
@@ -357,7 +362,7 @@ ${sectionsHtml}
 // task so the shared workflow default command (./gradlew qualityCoverage) remains correct.
 gradle.projectsEvaluated {
     def coverageProjects = subprojects.findAll {
-        !(it.name in ['components-registry-automation', 'test-common'])
+        !(it.name in ['components-registry-automation', 'components-registry-compat-test', 'test-common'])
     }
     def testTargets = coverageProjects.findAll { it.tasks.findByName('test') != null }
 

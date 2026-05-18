@@ -2,236 +2,203 @@
 
 package org.octopusden.octopus.components.registry.server.mapper
 
+import org.octopusden.octopus.components.registry.server.dto.v4.ArtifactIdResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.AuditLogResponse
-import org.octopusden.octopus.components.registry.server.dto.v4.BuildConfigurationResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.BuildAspectResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.BuildToolBeanRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.BuildToolBeanResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.ComponentConfigurationResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentDetailResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.ComponentGroupResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.ComponentGroupRole
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentSummaryResponse
-import org.octopusden.octopus.components.registry.server.dto.v4.ComponentVersionResponse
-import org.octopusden.octopus.components.registry.server.dto.v4.DistributionArtifactResponse
-import org.octopusden.octopus.components.registry.server.dto.v4.DistributionResponse
-import org.octopusden.octopus.components.registry.server.dto.v4.DistributionSecurityGroupResponse
-import org.octopusden.octopus.components.registry.server.dto.v4.EscrowConfigurationResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.ConfigurationRowType
+import org.octopusden.octopus.components.registry.server.dto.v4.DockerImageResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.DocLinkResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.EscrowAspectResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideResponse
-import org.octopusden.octopus.components.registry.server.dto.v4.JiraComponentConfigResponse
-import org.octopusden.octopus.components.registry.server.dto.v4.VcsSettingsEntryResponse
-import org.octopusden.octopus.components.registry.server.dto.v4.VcsSettingsResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.FileUrlArtifactResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.JiraAspectResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.MarkerChildrenPayload
+import org.octopusden.octopus.components.registry.server.dto.v4.MavenArtifactRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.MavenArtifactResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.PackageRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.PackageResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.SecurityGroupResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.TeamcityProjectResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.VcsEntryRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.VcsEntryResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.DockerImageRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.FileUrlArtifactRequest
 import org.octopusden.octopus.components.registry.server.entity.AuditLogEntity
-import org.octopusden.octopus.components.registry.server.entity.BuildConfigurationEntity
+import org.octopusden.octopus.components.registry.server.entity.ComponentBuildToolBeanEntity
+import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
-import org.octopusden.octopus.components.registry.server.entity.ComponentVersionEntity
-import org.octopusden.octopus.components.registry.server.entity.DistributionArtifactEntity
-import org.octopusden.octopus.components.registry.server.entity.DistributionEntity
-import org.octopusden.octopus.components.registry.server.entity.DistributionSecurityGroupEntity
-import org.octopusden.octopus.components.registry.server.entity.EscrowConfigurationEntity
-import org.octopusden.octopus.components.registry.server.entity.FieldOverrideEntity
-import org.octopusden.octopus.components.registry.server.entity.JiraComponentConfigEntity
-import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntity
-import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
 
-fun ComponentEntity.toDetailResponse(): ComponentDetailResponse =
+/**
+ * Maps a fully-loaded `ComponentEntity` (with `configurations` + per-component
+ * children accessible in the Hibernate session) to the v4 detail view.
+ *
+ * `teamcityBaseUrl` is the `teamcity.base-url` service-config value; when
+ * blank, `teamcityProjects[].projectUrl` is left null so callers can detect a
+ * deliberately unconfigured TC.
+ */
+fun ComponentEntity.toDetailResponse(teamcityBaseUrl: String? = null): ComponentDetailResponse =
     ComponentDetailResponse(
         id = this.id!!,
-        name = this.name,
+        name = this.componentKey,
         displayName = this.displayName,
         componentOwner = this.componentOwner,
         productType = this.productType,
-        system = this.system.toSet(),
+        systems = this.systemJunctions.map { it.systemCode }.toSet(),
         clientCode = this.clientCode,
         archived = this.archived,
         solution = this.solution,
-        parentComponentName = this.parentComponent?.name,
-        metadata = this.metadata.toMap(),
+        parentComponentName = this.parentComponent?.componentKey,
         version = this.version,
         createdAt = this.createdAt,
         updatedAt = this.updatedAt,
-        teamcityProjectId = this.teamcityProjectId,
-        teamcityProjectUrl = this.teamcityProjectUrl,
-        // SYS-039: §7.0 Wave 2 PR-G fields, surfaced verbatim. labels is
-        // converted from Array<String> to Set<String> matching the
-        // existing `system` projection convention.
-        groupId = this.groupId,
         releaseManager = this.releaseManager,
         securityChampion = this.securityChampion,
         copyright = this.copyright,
         releasesInDefaultBranch = this.releasesInDefaultBranch,
-        labels = this.labels.toSet(),
-        buildConfigurations = this.buildConfigurations.map { it.toResponse() },
-        vcsSettings = this.vcsSettings.map { it.toResponse() },
-        distributions = this.distributions.map { it.toResponse() },
-        // Version-range-only components have no component-level jira; the projectKey lives
-        // on each version entity. JiraComponentConfigResponse carries no versionRange, so
-        // flattening N range-scoped configs at the top level would expose duplicates the
-        // consumer can't associate with a specific range. Only surface a top-level summary
-        // when every range shares the same identity (projectKey, displayName, technical) —
-        // version-format overrides between ranges are allowed (the override is the whole
-        // reason multiple ranges exist) and the first range's format is used as the
-        // summary's componentVersionFormat. When ranges genuinely disagree on identity,
-        // return an empty list rather than picking one arbitrarily; consumers must read
-        // versions[].jiraComponentConfigs (which carries the matching versionRange) for
-        // the per-range picture.
-        jiraComponentConfigs =
-            this.jiraComponentConfigs
-                .takeIf { it.isNotEmpty() }
-                ?.map { it.toResponse() }
-                ?: run {
-                    val versionConfigs = this.versions.flatMap { it.jiraComponentConfigs }
-                    val identities =
-                        versionConfigs
-                            .map { Triple(it.projectKey, it.displayName, it.technical) }
-                            .toSet()
-                    if (identities.size == 1) {
-                        listOfNotNull(versionConfigs.firstOrNull()?.toResponse())
-                    } else {
-                        emptyList()
-                    }
+        labels = this.labelJunctions.map { it.labelCode }.toSet(),
+        jiraDisplayName = this.jiraDisplayName,
+        jiraHotfixVersionFormat = this.jiraHotfixVersionFormat,
+        vcsExternalRegistry = this.vcsExternalRegistry,
+        distributionExplicit = this.distributionExplicit,
+        distributionExternal = this.distributionExternal,
+        group = this.componentGroup?.let { group -> group.toResponse(thisComponentKey = this.componentKey) },
+        docs = this.docLinks.sortedBy { it.sortOrder }.map { it.toResponse() },
+        artifactIds = this.artifactIds.map { it.toResponse() },
+        securityGroups = this.securityGroups.map { it.toResponse() },
+        teamcityProjects =
+            this.teamcityProjects
+                .sortedBy { it.sortOrder }
+                .map { tc ->
+                    TeamcityProjectResponse(
+                        id = tc.id!!,
+                        projectId = tc.projectId,
+                        projectUrl = composeTeamcityProjectUrl(teamcityBaseUrl, tc.projectId),
+                        sortOrder = tc.sortOrder,
+                    )
                 },
-        escrowConfigurations = this.escrowConfigurations.map { it.toResponse() },
-        versions = this.versions.map { it.toResponse() },
+        configurations =
+            this.configurations
+                .filter { it.rowType != "RANGE_PRESENCE" }
+                .map { it.toConfigurationResponse() },
     )
 
-fun ComponentEntity.toSummaryResponse(): ComponentSummaryResponse =
-    ComponentSummaryResponse(
+/**
+ * Compact list-view projection. SYS-040 fields (`buildSystem`, `jiraProjectKey`,
+ * `vcsPath`, `teamcityProjectId`, `teamcityProjectUrl`) are derived from the
+ * BASE configuration row (`row_type = 'BASE'`) and the first child
+ * (`sort_order = 0`) so multi-VCS / multi-TC components render their primary
+ * link the same way single-target components do. Blank strings → null.
+ */
+fun ComponentEntity.toSummaryResponse(teamcityBaseUrl: String? = null): ComponentSummaryResponse {
+    val base = this.configurations.firstOrNull { it.rowType == "BASE" }
+    val firstTcProject = this.teamcityProjects.minByOrNull { it.sortOrder }
+    val firstVcsEntry = base?.vcsEntries?.minByOrNull { it.sortOrder }
+    return ComponentSummaryResponse(
         id = this.id!!,
-        name = this.name,
+        name = this.componentKey,
         displayName = this.displayName,
         componentOwner = this.componentOwner,
-        system = this.system.toSet(),
+        systems = this.systemJunctions.map { it.systemCode }.toSet(),
         productType = this.productType,
         archived = this.archived,
         updatedAt = this.updatedAt,
-        labels = this.labels.toList(),
-        // SYS-040: list-view extras. firstOrNull mirrors V4Mappers convention
-        // for nested-collection access; in practice the same row is
-        // returned across queries (heap order on H2; physical-storage order
-        // on Postgres until VACUUM FULL reshuffles), and the V2/V3 code
-        // path already relies on this implicit first-pick. We considered
-        // @OrderBy("id ASC") for explicit determinism but reverted: it
-        // changed which row was "first" and broke V2/V3 expected-data
-        // fixtures (RES-001 in BaseComponentsRegistryServiceTest). The
-        // long-term fix is a created_at column on the child tables.
-        // Blank strings are normalized to null so the Portal can treat
-        // absence and empty as the same case.
-        buildSystem =
-            this.buildConfigurations
-                .firstOrNull()
-                ?.buildSystem
-                ?.takeIf { it.isNotBlank() },
-        // Version-range-only components have no component-level jira; the project key
-        // lives on each version entity. Falling through to versions[].jiraComponentConfigs
-        // here would trigger an N+1 lazy-load on the paginated list endpoint
-        // (findAll(spec, pageable) doesn't fetch versions) and could pick an arbitrary
-        // key when ranges have different projects. Return null in that case — the full
-        // picture is available via the detail endpoint.
-        jiraProjectKey =
-            this.jiraComponentConfigs
-                .firstOrNull()
-                ?.projectKey
-                ?.takeIf { it.isNotBlank() },
-        vcsPath =
-            this.vcsSettings
-                .firstOrNull()
-                ?.entries
-                ?.firstOrNull()
-                ?.vcsPath
-                ?.takeIf { it.isNotBlank() }
-                ?.sshUrlToProjectRepo(),
-        teamcityProjectId = this.teamcityProjectId,
-        teamcityProjectUrl = this.teamcityProjectUrl,
+        labels = this.labelJunctions.map { it.labelCode },
+        buildSystem = base?.buildSystem?.takeIf { it.isNotBlank() },
+        jiraProjectKey = base?.jiraProjectKey?.takeIf { it.isNotBlank() },
+        vcsPath = firstVcsEntry?.vcsPath?.takeIf { it.isNotBlank() }?.sshUrlToProjectRepo(),
+        teamcityProjectId = firstTcProject?.projectId,
+        teamcityProjectUrl = firstTcProject?.let { composeTeamcityProjectUrl(teamcityBaseUrl, it.projectId) },
     )
+}
 
-fun BuildConfigurationEntity.toResponse(): BuildConfigurationResponse =
-    BuildConfigurationResponse(
-        id = this.id,
-        buildSystem = this.buildSystem,
-        buildFilePath = this.buildFilePath,
-        javaVersion = this.javaVersion,
-        deprecated = this.deprecated,
-        metadata = this.metadata.toMap(),
-    )
+/**
+ * One row of `component_configurations` → v4 wire representation. The row's
+ * shape is read from the stored `row_type` column (source of truth):
+ *
+ *  - BASE → all aspects + all child collections populated from this row
+ *  - MARKER → no aspects; one child family populated (per `overriddenAttribute`)
+ *  - SCALAR_OVERRIDE → one aspect with one field; no child collections
+ *  - RANGE_PRESENCE → storage-only; never serialised (`toDetailResponse`
+ *    filters these out before calling this function).
+ *
+ * For SCALAR_OVERRIDE rows the aspect prefix on `overriddenAttribute` selects
+ * which aspect carries the single overridden field; the other two aspects are
+ * null on the wire even though their corresponding entity columns are also
+ * NULL (the invariant — only one column non-NULL per scalar override).
+ */
+fun ComponentConfigurationEntity.toConfigurationResponse(): ComponentConfigurationResponse {
+    val rowType = classifyRowType()
+    val build = if (shouldEmitBuildAspect(rowType)) buildAspectResponse() else null
+    val escrow = if (shouldEmitEscrowAspect(rowType)) escrowAspectResponse() else null
+    val jira = if (shouldEmitJiraAspect(rowType)) jiraAspectResponse() else null
 
-fun VcsSettingsEntity.toResponse(): VcsSettingsResponse =
-    VcsSettingsResponse(
-        id = this.id,
-        vcsType = this.vcsType,
-        externalRegistry = this.externalRegistry,
-        entries = this.entries.map { it.toResponse() },
-    )
+    val vcs = pickChildRows(rowType, MarkerAttributes.VCS_SETTINGS) { vcsEntries.sortedBy { it.sortOrder }.map { it.toResponse() } }
+    val maven = pickChildRows(rowType, MarkerAttributes.DISTRIBUTION_MAVEN) {
+        mavenArtifacts.sortedBy { it.sortOrder }.map { it.toResponse() }
+    }
+    val fileUrl = pickChildRows(rowType, MarkerAttributes.DISTRIBUTION_FILE_URL) {
+        fileUrlArtifacts.sortedBy { it.sortOrder }.map { it.toResponse() }
+    }
+    val docker = pickChildRows(rowType, MarkerAttributes.DISTRIBUTION_DOCKER) {
+        dockerImages.sortedBy { it.sortOrder }.map { it.toResponse() }
+    }
+    val packages = pickChildRows(rowType, MarkerAttributes.DISTRIBUTION_PACKAGES) {
+        this.packages.sortedBy { it.sortOrder }.map { it.toResponse() }
+    }
+    val tools = pickChildRows(rowType, MarkerAttributes.BUILD_REQUIRED_TOOLS) { requiredToolJunctions.map { it.toolName } }
+    val buildBeans = pickChildRows(rowType, MarkerAttributes.BUILD_TOOLS) {
+        buildToolBeans.sortedBy { it.sortOrder }.map { it.toBuildToolBeanResponse() }
+    }
 
-fun VcsSettingsEntryEntity.toResponse(): VcsSettingsEntryResponse =
-    VcsSettingsEntryResponse(
-        id = this.id,
-        name = this.name,
-        vcsPath = this.vcsPath,
-        repositoryType = this.repositoryType,
-        tag = this.tag,
-        branch = this.branch,
-    )
-
-fun DistributionEntity.toResponse(): DistributionResponse =
-    DistributionResponse(
-        id = this.id,
-        explicit = this.explicit,
-        external = this.external,
-        artifacts = this.artifacts.map { it.toResponse() },
-        securityGroups = this.securityGroups.map { it.toResponse() },
-    )
-
-fun DistributionArtifactEntity.toResponse(): DistributionArtifactResponse =
-    DistributionArtifactResponse(
-        id = this.id,
-        artifactType = this.artifactType,
-        groupPattern = this.groupPattern,
-        artifactPattern = this.artifactPattern,
-        name = this.name,
-        tag = this.tag,
-    )
-
-fun DistributionSecurityGroupEntity.toResponse(): DistributionSecurityGroupResponse =
-    DistributionSecurityGroupResponse(
-        id = this.id,
-        groupType = this.groupType,
-        groupName = this.groupName,
-    )
-
-fun JiraComponentConfigEntity.toResponse(): JiraComponentConfigResponse =
-    JiraComponentConfigResponse(
-        id = this.id,
-        projectKey = this.projectKey,
-        displayName = this.displayName,
-        componentVersionFormat = this.componentVersionFormat,
-        technical = this.technical,
-        metadata = this.metadata.toMap(),
-    )
-
-fun EscrowConfigurationEntity.toResponse(): EscrowConfigurationResponse =
-    EscrowConfigurationResponse(
-        id = this.id,
-        buildTask = this.buildTask,
-        providedDependencies = this.providedDependencies,
-        reusable = this.reusable,
-        generation = this.generation,
-        diskSpace = this.diskSpace,
-    )
-
-fun ComponentVersionEntity.toResponse(): ComponentVersionResponse =
-    ComponentVersionResponse(
-        id = this.id,
-        versionRange = this.versionRange,
-        // Range-scoped jira lives on the version entity for version-range-only components
-        // (no ALL_VERSIONS wrapper); exposing it here lets consumers associate a config
-        // with its versionRange — JiraComponentConfigResponse itself carries no range.
-        jiraComponentConfigs = this.jiraComponentConfigs.map { it.toResponse() },
-    )
-
-fun FieldOverrideEntity.toResponse(): FieldOverrideResponse =
-    FieldOverrideResponse(
+    return ComponentConfigurationResponse(
         id = this.id!!,
-        fieldPath = this.fieldPath,
         versionRange = this.versionRange,
-        value = this.value,
+        rowType = rowType,
+        overriddenAttribute = this.overriddenAttribute,
+        isSyntheticBase = this.isSyntheticBase,
+        build = build,
+        escrow = escrow,
+        jira = jira,
+        vcsEntries = vcs,
+        mavenArtifacts = maven,
+        fileUrlArtifacts = fileUrl,
+        dockerImages = docker,
+        packages = packages,
+        requiredTools = tools,
+        buildToolBeans = buildBeans,
+    )
+}
+
+/**
+ * One `component_configurations` row → field-override view. The wire shape is
+ * the union form used by `POST /field-overrides`: scalar rows carry `value`,
+ * marker rows carry `markerChildren` (with the one matching child list).
+ */
+fun ComponentConfigurationEntity.toFieldOverrideResponse(): FieldOverrideResponse {
+    val rowType = classifyRowType()
+    require(rowType != ConfigurationRowType.BASE && rowType != ConfigurationRowType.RANGE_PRESENCE) {
+        "Only SCALAR_OVERRIDE / MARKER rows can be projected as field overrides (got $rowType)"
+    }
+    val markerChildren =
+        if (rowType == ConfigurationRowType.MARKER) toMarkerChildrenPayload() else null
+    return FieldOverrideResponse(
+        id = this.id!!,
+        overriddenAttribute = this.overriddenAttribute!!,
+        versionRange = this.versionRange,
+        rowType = rowType,
+        value = if (rowType == ConfigurationRowType.SCALAR_OVERRIDE) extractScalarValue() else null,
+        markerChildren = markerChildren,
         createdAt = this.createdAt,
         updatedAt = this.updatedAt,
     )
+}
 
 fun AuditLogEntity.toResponse(): AuditLogResponse =
     AuditLogResponse(
@@ -247,6 +214,287 @@ fun AuditLogEntity.toResponse(): AuditLogResponse =
         correlationId = this.correlationId,
         source = this.source,
     )
+
+// ============================================================
+// Internal: row classification and per-aspect/per-child helpers
+// ============================================================
+
+private fun ComponentConfigurationEntity.classifyRowType(): ConfigurationRowType =
+    ConfigurationRowType.valueOf(this.rowType)
+
+private fun ComponentConfigurationEntity.shouldEmitBuildAspect(rowType: ConfigurationRowType): Boolean =
+    rowType == ConfigurationRowType.BASE ||
+        (rowType == ConfigurationRowType.SCALAR_OVERRIDE && overriddenAttribute!!.startsWith("build."))
+
+private fun ComponentConfigurationEntity.shouldEmitEscrowAspect(rowType: ConfigurationRowType): Boolean =
+    rowType == ConfigurationRowType.BASE ||
+        (rowType == ConfigurationRowType.SCALAR_OVERRIDE && overriddenAttribute!!.startsWith("escrow."))
+
+private fun ComponentConfigurationEntity.shouldEmitJiraAspect(rowType: ConfigurationRowType): Boolean =
+    rowType == ConfigurationRowType.BASE ||
+        (rowType == ConfigurationRowType.SCALAR_OVERRIDE && overriddenAttribute!!.startsWith("jira."))
+
+private fun <T> ComponentConfigurationEntity.pickChildRows(
+    rowType: ConfigurationRowType,
+    markerName: String,
+    extractor: ComponentConfigurationEntity.() -> List<T>,
+): List<T> =
+    when {
+        rowType == ConfigurationRowType.BASE -> this.extractor()
+        rowType == ConfigurationRowType.MARKER && overriddenAttribute == markerName -> this.extractor()
+        else -> emptyList()
+    }
+
+private fun ComponentConfigurationEntity.buildAspectResponse(): BuildAspectResponse =
+    BuildAspectResponse(
+        buildSystem = buildSystem,
+        buildSystemVersion = buildSystemVersion,
+        javaVersion = javaVersion,
+        mavenVersion = mavenVersion,
+        gradleVersion = gradleVersion,
+        buildFilePath = buildFilePath,
+        deprecated = deprecated,
+        requiredProject = requiredProject,
+        projectVersion = projectVersion,
+        systemProperties = systemProperties,
+        buildTasks = buildTasks,
+    )
+
+private fun ComponentConfigurationEntity.escrowAspectResponse(): EscrowAspectResponse =
+    EscrowAspectResponse(
+        providedDependencies = escrowProvidedDependencies,
+        reusable = escrowReusable,
+        generation = escrowGeneration,
+        diskSpace = escrowDiskSpace,
+        additionalSources = escrowAdditionalSources,
+        gradleIncludeConfigurations = escrowGradleIncludeConfigurations,
+        gradleExcludeConfigurations = escrowGradleExcludeConfigurations,
+        gradleIncludeTestConfigurations = escrowGradleIncludeTestConfigurations,
+        buildTask = escrowBuildTask,
+    )
+
+private fun ComponentConfigurationEntity.jiraAspectResponse(): JiraAspectResponse =
+    JiraAspectResponse(
+        projectKey = jiraProjectKey,
+        technical = jiraTechnical,
+        majorVersionFormat = jiraMajorVersionFormat,
+        releaseVersionFormat = jiraReleaseVersionFormat,
+        buildVersionFormat = jiraBuildVersionFormat,
+        lineVersionFormat = jiraLineVersionFormat,
+        versionPrefix = jiraVersionPrefix,
+        versionFormat = jiraVersionFormat,
+    )
+
+private fun ComponentConfigurationEntity.toMarkerChildrenPayload(): MarkerChildrenPayload =
+    when (overriddenAttribute) {
+        MarkerAttributes.VCS_SETTINGS ->
+            MarkerChildrenPayload(
+                vcsEntries =
+                    vcsEntries.sortedBy { it.sortOrder }.map { e ->
+                        VcsEntryRequest(
+                            name = e.name,
+                            vcsPath = e.vcsPath,
+                            branch = e.branch,
+                            tag = e.tag,
+                            hotfixBranch = e.hotfixBranch,
+                            repositoryType = e.repositoryType,
+                        )
+                    },
+            )
+
+        MarkerAttributes.DISTRIBUTION_MAVEN,
+        MarkerAttributes.GROUP_ARTIFACT_PATTERN,
+        ->
+            // GROUP_ARTIFACT_PATTERN (MIG-047) is import-internal and stays out of
+            // MarkerAttributes.ALL — so it cannot be created/edited via the V4 POST
+            // endpoint — but it shares the same `mavenArtifacts` child-collection
+            // shape as DISTRIBUTION_MAVEN. listFieldOverrides projects it identically
+            // so the V4 admin UI never throws on components that contain it.
+            MarkerChildrenPayload(
+                mavenArtifacts =
+                    mavenArtifacts.sortedBy { it.sortOrder }.map { e ->
+                        MavenArtifactRequest(
+                            groupPattern = e.groupPattern,
+                            artifactPattern = e.artifactPattern,
+                            extension = e.extension,
+                            classifier = e.classifier,
+                        )
+                    },
+            )
+
+        MarkerAttributes.DISTRIBUTION_FILE_URL ->
+            MarkerChildrenPayload(
+                fileUrlArtifacts =
+                    fileUrlArtifacts.sortedBy { it.sortOrder }.map { e ->
+                        FileUrlArtifactRequest(
+                            url = e.url,
+                            artifactId = e.artifactId,
+                            classifier = e.classifier,
+                        )
+                    },
+            )
+
+        MarkerAttributes.DISTRIBUTION_DOCKER ->
+            MarkerChildrenPayload(
+                dockerImages =
+                    dockerImages.sortedBy { it.sortOrder }.map { e ->
+                        DockerImageRequest(
+                            imageName = e.imageName,
+                            flavor = e.flavor,
+                        )
+                    },
+            )
+
+        MarkerAttributes.DISTRIBUTION_PACKAGES ->
+            MarkerChildrenPayload(
+                packages =
+                    packages.sortedBy { it.sortOrder }.map { e ->
+                        PackageRequest(
+                            packageType = e.packageType,
+                            packageName = e.packageName,
+                        )
+                    },
+            )
+
+        MarkerAttributes.BUILD_REQUIRED_TOOLS ->
+            MarkerChildrenPayload(requiredTools = requiredToolJunctions.map { it.toolName })
+
+        MarkerAttributes.BUILD_TOOLS ->
+            MarkerChildrenPayload(
+                buildToolBeans =
+                    buildToolBeans.sortedBy { it.sortOrder }.map { it.toBuildToolBeanRequest() },
+            )
+
+        else -> error("Marker row has unknown overriddenAttribute '$overriddenAttribute'")
+    }
+
+// ============================================================
+// Internal: child-row → DTO converters
+// ============================================================
+
+private fun org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity.toResponse(): VcsEntryResponse =
+    VcsEntryResponse(
+        id = this.id!!,
+        name = this.name,
+        vcsPath = this.vcsPath,
+        branch = this.branch,
+        tag = this.tag,
+        hotfixBranch = this.hotfixBranch,
+        repositoryType = this.repositoryType,
+        sortOrder = this.sortOrder,
+    )
+
+private fun org.octopusden.octopus.components.registry.server.entity.DistributionMavenArtifactEntity.toResponse(): MavenArtifactResponse =
+    MavenArtifactResponse(
+        id = this.id!!,
+        groupPattern = this.groupPattern,
+        artifactPattern = this.artifactPattern,
+        extension = this.extension,
+        classifier = this.classifier,
+        sortOrder = this.sortOrder,
+    )
+
+private fun org.octopusden.octopus.components.registry.server.entity.DistributionFileUrlArtifactEntity.toResponse(): FileUrlArtifactResponse =
+    FileUrlArtifactResponse(
+        id = this.id!!,
+        url = this.url,
+        artifactId = this.artifactId,
+        classifier = this.classifier,
+        sortOrder = this.sortOrder,
+    )
+
+private fun org.octopusden.octopus.components.registry.server.entity.DistributionDockerImageEntity.toResponse(): DockerImageResponse =
+    DockerImageResponse(
+        id = this.id!!,
+        imageName = this.imageName,
+        flavor = this.flavor,
+        sortOrder = this.sortOrder,
+    )
+
+private fun org.octopusden.octopus.components.registry.server.entity.DistributionPackageEntity.toResponse(): PackageResponse =
+    PackageResponse(
+        id = this.id!!,
+        packageType = this.packageType,
+        packageName = this.packageName,
+        sortOrder = this.sortOrder,
+    )
+
+private fun org.octopusden.octopus.components.registry.server.entity.ComponentDocLinkEntity.toResponse(): DocLinkResponse =
+    DocLinkResponse(
+        id = this.id!!,
+        docComponentKey = this.docComponentKey,
+        majorVersion = this.majorVersion,
+        sortOrder = this.sortOrder,
+    )
+
+private fun org.octopusden.octopus.components.registry.server.entity.ComponentArtifactIdEntity.toResponse(): ArtifactIdResponse =
+    ArtifactIdResponse(
+        id = this.id!!,
+        groupPattern = this.groupPattern,
+        artifactPattern = this.artifactPattern,
+    )
+
+private fun org.octopusden.octopus.components.registry.server.entity.DistributionSecurityGroupEntity.toResponse(): SecurityGroupResponse =
+    SecurityGroupResponse(
+        id = this.id!!,
+        groupType = this.groupType,
+        groupName = this.groupName,
+    )
+
+private fun ComponentBuildToolBeanEntity.toBuildToolBeanResponse(): BuildToolBeanResponse =
+    BuildToolBeanResponse(
+        id = this.id!!,
+        beanType = this.beanType,
+        toolType = this.toolType,
+        settingsProperty = this.settingsProperty,
+        versionPattern = this.versionPattern,
+        edition = this.edition,
+        sortOrder = this.sortOrder,
+    )
+
+private fun ComponentBuildToolBeanEntity.toBuildToolBeanRequest(): BuildToolBeanRequest =
+    BuildToolBeanRequest(
+        beanType = this.beanType,
+        toolType = this.toolType,
+        settingsProperty = this.settingsProperty,
+        versionPattern = this.versionPattern,
+        edition = this.edition,
+    )
+
+private fun org.octopusden.octopus.components.registry.server.entity.ComponentGroupEntity.toResponse(
+    thisComponentKey: String,
+): ComponentGroupResponse =
+    ComponentGroupResponse(
+        groupKey = this.groupKey,
+        isFake = this.isFake,
+        // The aggregator's own components row carries componentKey == groupKey
+        // (schema-spec.md §3.2). Members share the group but have a different key.
+        role = if (this.groupKey == thisComponentKey) ComponentGroupRole.AGGREGATOR else ComponentGroupRole.MEMBER,
+    )
+
+// ============================================================
+// Internal: TeamCity URL composition
+// ============================================================
+
+/**
+ * Compose `<teamcity-base>/project/<project_id>` for a component's TC project
+ * pointer. Returns null when the base URL is blank (deliberately unconfigured
+ * env) so the caller can render "TC not configured" rather than a broken link.
+ *
+ * Tolerates a trailing slash on `base` (TC's UI does the same).
+ */
+internal fun composeTeamcityProjectUrl(
+    base: String?,
+    projectId: String,
+): String? {
+    if (base.isNullOrBlank()) return null
+    val trimmed = base.trimEnd('/')
+    return "$trimmed/project/$projectId"
+}
+
+// ============================================================
+// Internal: SSH URL → "project/repo" normalisation (kept from prior version)
+// ============================================================
 
 /**
  * Normalises a raw VCS path to the `project/repo` format expected by the
@@ -271,25 +519,18 @@ internal fun String.sshUrlToProjectRepo(): String {
                 if (colonIdx >= 0) {
                     val portOrOrg = afterAt.substring(colonIdx + 1).substringBefore("/")
                     if (portOrOrg.isNotEmpty() && portOrOrg.all { it.isDigit() }) {
-                        // Numeric port: ssh://git@host:7999/project/repo.git
                         afterAt.substringAfter("/")
                     } else {
-                        // SCP-over-SSH org: ssh://git@host:org/repo.git
                         afterAt.substringAfter(":")
                     }
                 } else {
-                    // No port: ssh://git@host/project/repo.git
                     afterAt.substringAfter("/")
                 }
             }
-            startsWith("git@") -> {
-                // git@host:project/repo.git → strip everything before the colon
-                substringAfter(":")
-            }
+            startsWith("git@") -> substringAfter(":")
             else -> return this
         }
     val cleaned = pathPart.trimEnd('/').removeSuffix(".git")
-    // Bitbucket sometimes inserts "scm/" between the host and the project key
     val normalized = if (cleaned.startsWith("scm/")) cleaned.removePrefix("scm/") else cleaned
     val parts = normalized.split("/").filter { it.isNotEmpty() }
     return if (parts.size >= 2) "${parts[parts.size - 2]}/${parts.last()}" else this

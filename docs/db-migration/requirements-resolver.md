@@ -17,7 +17,7 @@
 | RES-005 | Dependency alias mapping | Medium | integration-test | ⏳ Git-only |
 | RES-006 | Full component tree (V1 API) | High | integration-test | ⏳ Git-only |
 | RES-007 | Sub-component with parent reference (V1) | High | integration-test | ⏳ Git-only |
-| RES-008 | Detailed component with build/VCS/Jira | High | integration-test | ⏳ Git-only |
+| RES-008 | Detailed component with build/VCS/Jira | High | integration-test | ✅ Git + DB |
 | RES-009 | Versioned component across 11 version formats | High | integration-test | ⏳ Git-only |
 | RES-010 | Batch version query | Medium | integration-test | ⏳ Git-only |
 | RES-011 | VCS settings across 10 version formats | High | integration-test | ⏳ Git-only |
@@ -200,7 +200,11 @@ parentComponent reference.
 
 **Priority:** High
 **Test layer:** integration-test
-**Status:** ⏳ Git-only
+**Status:** ✅ Git + DB — runs green on both backends; the split-field behaviour for
+`escrow.buildTask` (separate `escrow_build_task` column in v2 schema, distinct
+from `build.buildTasks`) is correctly reflected in both the resolver and the
+expected-data fixture. See `docs/db-migration/todo.md` Schema v2 known
+limitations ticked entry for the prior history.
 
 **Description:**
 GET `/rest/api/2/components/{name}/versions/{ver}` returns a DetailedComponent

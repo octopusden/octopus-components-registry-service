@@ -104,10 +104,11 @@ class Sys039PersistenceRoundtripTest {
         val detail = getComponent(id)
         val version = detail["version"].asLong()
 
+        // Six new scalar/array fields: releaseManager, securityChampion, copyright,
+        // releasesInDefaultBranch, labels. (groupId is not part of ComponentDetailResponse.)
         val payload =
             mapOf(
                 "version" to version,
-                "groupId" to "org.example.alpha",
                 "releaseManager" to "rm-user",
                 "securityChampion" to "sc-user",
                 "copyright" to "(c) 2026 Acme Inc.",
@@ -124,7 +125,6 @@ class Sys039PersistenceRoundtripTest {
             ).andExpect(status().is2xxSuccessful)
 
         val updated = getComponent(id)
-        assertEquals("org.example.alpha", updated["groupId"].asText())
         assertEquals("rm-user", updated["releaseManager"].asText())
         assertEquals("sc-user", updated["securityChampion"].asText())
         assertEquals("(c) 2026 Acme Inc.", updated["copyright"].asText())

@@ -21,7 +21,7 @@ Project is not yet in production; QA/dev databases are wiped and recreated on ea
 
 ## Decision
 
-Replace V1..V6 with a single consolidated `V1__schema.sql` baseline implementing **Model A'** — a wide typed `component_configurations` table with three row shapes (base, scalar override, marker override), plus dictionary tables, child relationships, and an aggregator grouping concept.
+Replace V1..V6 with a single consolidated `V1__schema.sql` baseline implementing **Model A'** — a wide typed `component_configurations` table with four row shapes (base, scalar override, marker override, range presence) classified by the source-of-truth `row_type` column, plus dictionary tables, child relationships, and an aggregator grouping concept.
 
 Highlights:
 

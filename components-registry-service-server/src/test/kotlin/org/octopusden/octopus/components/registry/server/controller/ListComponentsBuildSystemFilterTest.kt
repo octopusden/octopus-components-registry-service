@@ -63,7 +63,7 @@ class ListComponentsBuildSystemFilterTest {
                     .with(adminJwt())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(
-                        """{"version":$version,"buildConfiguration":{"buildSystem":"$buildSystem"}}""",
+                        """{"version":$version,"baseConfiguration":{"build":{"buildSystem":"$buildSystem"}}}""",
                     ),
             ).andExpect(status().isOk)
     }
