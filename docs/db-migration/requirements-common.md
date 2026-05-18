@@ -47,6 +47,7 @@
 | SYS-035 | GET /components?owner=&lt;username&gt; filters by componentOwner exact match | High | integration-test | ✅ Tested |
 | SYS-036 | GET /audit/recent accepts entityType/entityId/changedBy/source/action/from/to filter params | High | integration-test | ✅ Tested |
 | SYS-037 | v4 CRUD API for dependency mappings (alias → componentName) | Medium | integration-test | ❌ Not implemented |
+| SYS-038 | Domain-named meta endpoints for free-form aspect option lists (buildSystem / repositoryType / generation) | Medium | integration-test | ✅ Tested |
 
 ---
 
@@ -1136,3 +1137,44 @@ The existing v2 read endpoint (`GET /rest/api/2/common/dependency-aliases`) rema
 - Bulk import/replace-all (single-entry operations are sufficient; bulk is handled by `/admin/migrate-history`).
 - Portal UI — not planned; the v2 read endpoint and direct API calls cover the use cases.
 - Pagination — the mapping set is small enough for a flat list response.
+
+---
+
+### SYS-038: Domain-named meta endpoints for free-form aspect option lists
+
+**Priority:** Medium
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+Schema-v2 (PR #192) reshaped the v4 contract such that `BuildAspect.buildSystem`, `VcsEntry.repositoryType`, and `Escrow.generation` are now free-form `string` fields rather than enum-typed. The canonical valid-token sets still live as Kotlin enums (used by `EntityMappers` on write parsing and read mapping) but are no longer reachable from the v4 typed contract. On a fresh CRS install the Portal's `EnumSelect` dropdown for these fields collapses to "None + current value" because no field-config seed is shipped, leaving users unable to change Build System / Repository Type / Escrow Generation after a value has been set.
+
+**Description:**
+Add three GET endpoints under `/rest/api/4/components/meta/*` that return the canonical option lists as `string[]`. Names are domain-named — NOT implementation-named (no `/meta/enums`) — so the wire surface survives a future move of the option source from a Kotlin enum to a config table or admin-editable registry without breaking the contract.
+
+| Endpoint | Source enum |
+|---|---|
+| `GET /rest/api/4/components/meta/build-systems` | `org.octopusden.octopus.escrow.BuildSystem` |
+| `GET /rest/api/4/components/meta/repository-types` | `org.octopusden.octopus.escrow.RepositoryType` |
+| `GET /rest/api/4/components/meta/escrow-generations` | `org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode` |
+
+For `buildSystem` and `repositoryType` the **persistence-layer** enums (NOT the `core.dto.*` mirrors) are the source. The DTO variant of `BuildSystem` carries `NOT_SUPPORTED` while persistence carries `ESCROW_NOT_SUPPORTED`; advertising the DTO token would silently drop user input on save because `EntityMappers.safeParseBuildSystem` calls `BuildSystem.valueOf` against the escrow variant. For `generation` the source is `components-registry-api`'s `EscrowGenerationMode` (the `core.dto.EscrowGenerationMode` mirror has the same token set; the API enum is the one `Mappers.toDTO()` reads off the escrow model).
+
+Auth: `@PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")` — same gate as `/meta/owners`. `ACCESS_COMPONENTS` is granted to `ROLE_ANONYMOUS` in the current security config, matching the rest of the v4 component-read surface, so anonymous callers can read the option lists.
+
+**Preconditions:**
+- Caller has `ACCESS_COMPONENTS` (granted to `ROLE_ANONYMOUS` by default — no JWT required).
+- No DB state required — endpoint reads from compile-time enum metadata.
+
+**Acceptance criteria:**
+1. `GET /meta/build-systems` returns HTTP 200 with a JSON array equal to `escrow.BuildSystem.values().map { it.name }` in declaration order.
+2. The returned array MUST contain `ESCROW_NOT_SUPPORTED` and MUST NOT contain `NOT_SUPPORTED` — guards against accidental reversion to the DTO-mirror enum.
+3. `GET /meta/repository-types` returns HTTP 200 with a JSON array equal to `escrow.RepositoryType.values().map { it.name }` in declaration order (CVS, MERCURIAL, GIT).
+4. `GET /meta/escrow-generations` returns HTTP 200 with a JSON array equal to `api.enums.EscrowGenerationMode.values().map { it.name }` in declaration order (AUTO, MANUAL, UNSUPPORTED).
+
+**Test method:** `MetaOptionsEndpointsTest` — four cases covering criteria 1–4 against the live controller on the `ft-db` profile.
+
+**Out of scope:**
+- Admin write API for the option lists (the field-config registry `options[]` already exists; SYS-038 only addresses the canonical-set advertisement when admin has not seeded explicit options).
+- Portal UI for editing the option lists (admin field-config write surface is unchanged).
+- A 4th endpoint for `productType` — the existing flat-flat `field-config.options[]` channel is sufficient there.

@@ -1,5 +1,4 @@
 package org.octopusden.octopus.components.registry.server.entity
-
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.FetchType
@@ -11,25 +10,43 @@ import jakarta.persistence.ManyToOne
 import jakarta.persistence.Table
 import java.util.UUID
 
+/**
+ * Unified VCS model: all VCS entries carry a non-null `name`.
+ * Inline DSL form (`vcsUrl=` / `branch=` at module level) yields `name = "main"`;
+ * named-block form (`vcsSettings { key { ... } }`) yields `name = "<key>"`.
+ * MULTI-VCS is N rows with distinct `name` values. No discriminator column.
+ * `repository_type` carries the VCS engine (`GIT` / `MERCURIAL` / `CVS`);
+ * typically `GIT`.
+ */
 @Entity
 @Table(name = "vcs_settings_entries")
 class VcsSettingsEntryEntity(
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     var id: UUID? = null,
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "vcs_settings_id", nullable = false)
-    var vcsSettings: VcsSettingsEntity? = null,
-    var name: String? = null,
-    // see TD-002
-    @Column(name = "vcs_path", nullable = false, columnDefinition = "TEXT")
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "component_configuration_id", nullable = false)
+    var componentConfiguration: ComponentConfigurationEntity,
+
+    @Column(name = "name", nullable = false)
+    var name: String,
+
+    @Column(name = "vcs_path", columnDefinition = "TEXT", nullable = false)
     var vcsPath: String = "",
-    @Column(name = "repository_type", nullable = false)
-    var repositoryType: String = "GIT",
-    @Column(columnDefinition = "TEXT")
-    var tag: String? = null,
-    @Column(columnDefinition = "TEXT")
+
+    @Column(name = "branch", columnDefinition = "TEXT")
     var branch: String? = null,
+
+    @Column(name = "tag", columnDefinition = "TEXT")
+    var tag: String? = null,
+
     @Column(name = "hotfix_branch", columnDefinition = "TEXT")
     var hotfixBranch: String? = null,
+
+    @Column(name = "repository_type", length = 20)
+    var repositoryType: String? = null,
+
+    @Column(name = "sort_order", nullable = false)
+    var sortOrder: Int = 0,
 )

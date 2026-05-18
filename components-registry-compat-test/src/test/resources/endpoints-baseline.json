@@ -1,0 +1,5 @@
+{
+  "_comment": "Backward-compatibility contract. Each entry = a v1/v2/v3 endpoint preserved by the v3 migration. Generated from main-branch source; updated by reviewed PR. See plan §Endpoint coverage scope.",
+  "endpoints": [
+  ]
+}

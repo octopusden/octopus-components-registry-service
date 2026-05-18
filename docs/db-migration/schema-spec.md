@@ -16,7 +16,7 @@ This document is the canonical reference for the v2 schema. ADR-014 records the 
 | Dictionaries | `labels`, `systems`, `tools` | 3 |
 | M:N junctions | `component_labels`, `component_systems`, `component_required_tools` | 3 |
 | Children of `components` | `component_artifact_ids`, `distribution_security_groups`, `component_teamcity_projects`, `component_doc_links` | 4 |
-| Children of `component_configurations` | `vcs_settings_entries`, `distribution_maven_artifacts`, `distribution_file_url_artifacts`, `distribution_docker_images`, `distribution_packages` | 5 |
+| Children of `component_configurations` | `vcs_settings_entries`, `distribution_maven_artifacts`, `distribution_file_url_artifacts`, `distribution_docker_images`, `distribution_packages`, `component_build_tool_beans` | 6 |
 | Cross-cutting | `audit_log`, `registry_config`, `component_source`, `dependency_mappings`, `git_history_import_state` | 5 |
 
 ## 2. ER overview
@@ -54,21 +54,22 @@ This document is the canonical reference for the v2 schema. ADR-014 records the 
 
 ## 3. Core model: Model A' override taxonomy
 
-`component_configurations` holds three row shapes per component. Each row is keyed by `(component_id, version_range, overridden_attribute)` with a UNIQUE constraint and a partial unique index ensuring at most one base per component.
+`component_configurations` holds four row shapes per component. `row_type` is the source-of-truth classifier (DB CHECK `IN ('BASE','SCALAR_OVERRIDE','MARKER','RANGE_PRESENCE')`); `overridden_attribute` is the payload discriminator for SCALAR_OVERRIDE / MARKER and MUST be NULL for BASE / RANGE_PRESENCE. Each row is keyed by `(component_id, version_range, overridden_attribute)` with a UNIQUE constraint. Two partial unique indexes complete the picture: one base row per component, and one RANGE_PRESENCE row per (component, version_range).
 
 ### 3.1 Base row
-- `overridden_attribute IS NULL`
+- `row_type = 'BASE'`, `overridden_attribute IS NULL`
 - All typed columns may carry values (defaults for that component)
 - `is_synthetic_base = true` when populated from `Defaults.groovy` only (DSL has no top-level fields); otherwise `false`
 
 ### 3.2 Scalar override row
-- `overridden_attribute = '<aspect.field>'` (e.g., `build.javaVersion`, `escrow.generation`, `jira.projectKey`)
+- `row_type = 'SCALAR_OVERRIDE'`, `overridden_attribute = '<aspect.field>'` (e.g., `build.javaVersion`, `escrow.generation`, `jira.projectKey`)
+- The DB CHECK also forbids reusing a marker name as a SCALAR_OVERRIDE attribute path
 - **Exactly one typed column non-NULL** — the column matching the attribute path
 - No attached child rows
-- Service-layer validation enforces single non-NULL; DB CHECK not used here (verbose with 30+ columns)
+- Service-layer validation enforces single non-NULL; DB CHECK not used for that rule (verbose with 28 columns)
 
 ### 3.3 Marker (child-collection replacement) row
-- `overridden_attribute` is one of the marker names:
+- `row_type = 'MARKER'`, `overridden_attribute` is one of the marker names:
 
 | Marker | Replaces |
 |---|---|
@@ -78,16 +79,24 @@ This document is the canonical reference for the v2 schema. ADR-014 records the 
 | `distribution.docker` | `distribution_docker_images` |
 | `distribution.packages` | `distribution_packages` |
 | `build.requiredTools` | `component_required_tools` |
+| `build.buildTools` | `component_build_tool_beans` |
 
-- **All typed scalar columns must be NULL** — enforced by DB CHECK (one per marker)
+- **All typed scalar columns must be NULL** — enforced by a consolidated DB CHECK that covers both MARKER and RANGE_PRESENCE rows
 - Child rows attached via FK to this marker row's `id`
 - Semantics: full replacement of the corresponding collection for matching version range
 
-### 3.4 Resolve algorithm
+### 3.4 Range-presence row
+- `row_type = 'RANGE_PRESENCE'`, `overridden_attribute IS NULL`, **all typed scalar columns NULL** (same DB CHECK as MARKER)
+- Storage-only enumeration anchor: the DSL declared a `componentVersion("R")` block whose scalars/markers all match base, so neither `emitScalarOverrides` nor `emitMarkerOverrides` produced any row. Without this presence row the range would be invisible to the resolver and disappear from `/jira-component-version-ranges` and `/{component}/maven-artifacts` (RES-001 family symptom).
+- Hidden from V4 editor APIs: filtered out in `V4Mappers.toDetailResponse`'s `configurations[]`, never appears in `GET /components/{id}/field-overrides`, and `createFieldOverride` / `updateFieldOverride` / `deleteFieldOverride` reject these rows.
+- Resolver enumerates them via the `.distinct()` over `versionRange` so the range surfaces in v1-v3 endpoints; `EntityMappers.resolveForRange` filters them out before applying scalar/marker overrides so no all-NULL row overlays base scalars.
+- Partial unique index `uq_component_configurations_one_range_presence` ensures at most one per `(component, version_range)`.
+
+### 3.5 Resolve algorithm
 
 For request `(component, version V)`:
 
-1. Load base row + all matching override rows: `WHERE component_id = X AND (overridden_attribute IS NULL OR range_contains(version_range, V))`.
+1. Load base row + all matching override rows: `WHERE component_id = X AND (row_type = 'BASE' OR range_contains(version_range, V))`. RANGE_PRESENCE rows are loaded but discarded before scalar/marker overlay.
 2. Start with base row scalar values; for each scalar override row matching V, set its single non-NULL column on the merged result.
 3. For child collections, pick the most-specific marker override row whose `version_range` contains V; if found, its children REPLACE base children (full replacement). If no marker matches, use base children.
 4. Transitional constraint: version_range of override rows within one component MUST NOT partially overlap (equal ranges are blocked by UNIQUE; strict containment and disjoint allowed; partial overlap rejected at write-time). Under this constraint, at most one override per attribute matches V — no runtime tiebreaker needed.
@@ -135,7 +144,8 @@ Per-(component, version_range) typed rows; the spine of Model A'.
 | `id` | UUID | PK | |
 | `component_id` | UUID | NOT NULL, FK → components(id) ON DELETE CASCADE | |
 | `version_range` | VARCHAR(255) | NOT NULL | DSL range string, e.g., `(,0),[0,)`, `[1.0,2.0)` |
-| `overridden_attribute` | VARCHAR(50) | nullable | NULL = base; non-NULL = scalar or marker override |
+| `overridden_attribute` | VARCHAR(50) | nullable | NULL for BASE/RANGE_PRESENCE; non-NULL for SCALAR_OVERRIDE/MARKER |
+| `row_type` | VARCHAR(32) | NOT NULL | `BASE` / `SCALAR_OVERRIDE` / `MARKER` / `RANGE_PRESENCE` — source-of-truth row classifier |
 | `is_synthetic_base` | BOOLEAN | NOT NULL DEFAULT false | true only on base rows synthesised from Defaults.groovy |
 | Build aspect | | | |
 | `build_system` | VARCHAR(50) | | MAVEN/GRADLE/ESCROW_PROVIDED_MANUALLY/PROVIDED/etc. |
@@ -148,7 +158,8 @@ Per-(component, version_range) typed rows; the spine of Model A'.
 | `required_project` | BOOLEAN | | |
 | `project_version` | VARCHAR(255) | | |
 | `system_properties` | TEXT | | |
-| `build_tasks` | TEXT | | Used for both build and escrow process; legacy `escrow.buildTask` consolidated here |
+| `build_tasks` | TEXT | | Used for build only |
+| `escrow_build_task` | TEXT | | escrow.buildTask — separate from `build_tasks` |
 | Escrow aspect | | | |
 | `escrow_provided_dependencies` | TEXT | | Comma-separated |
 | `escrow_reusable` | BOOLEAN | | |
@@ -172,9 +183,11 @@ Per-(component, version_range) typed rows; the spine of Model A'.
 | `updated_at` | TIMESTAMP WITH TIME ZONE | NOT NULL DEFAULT now() | |
 
 Constraints:
-- `UNIQUE (component_id, version_range, overridden_attribute)`
-- Partial `UNIQUE INDEX uq_component_configurations_one_base ON component_configurations(component_id) WHERE overridden_attribute IS NULL`
-- Six DB CHECK constraints (one per marker) enforcing "all typed scalars NULL when overridden_attribute = '<marker>'"
+- `UNIQUE (component_id, version_range, overridden_attribute)` (does NOT enforce single RANGE_PRESENCE per (component, range) — NULLs are distinct under Postgres `NULLS DISTINCT`; the partial index below covers that)
+- Partial `UNIQUE INDEX uq_component_configurations_one_base ON component_configurations(component_id) WHERE row_type = 'BASE'`
+- Partial `UNIQUE INDEX uq_component_configurations_one_range_presence ON component_configurations(component_id, version_range) WHERE row_type = 'RANGE_PRESENCE'`
+- Positive taxonomy CHECK pairing `row_type` with `overridden_attribute` (NULL-safe — written as `A OR B OR C` rather than `NOT X OR y IN (...)` to avoid SQL UNKNOWN-passes-CHECK semantics)
+- Consolidated DB CHECK enforcing "all 28 typed scalar cols NULL when `row_type IN ('MARKER','RANGE_PRESENCE')`"
 
 Indexes: `(component_id, version_range)`, `jira_project_key WHERE NOT NULL`, `updated_at`.
 
@@ -282,6 +295,23 @@ DSL `distribution { GAV = "...", docker = "...", DEB = "...", RPM = "..." }` dec
 | `distribution_packages` | `package_type ∈ {DEB, RPM}, package_name` |
 
 API mapper recomposes the v1-v3 `GAV` CSV by reading Maven entries (sort_order), then file-URL entries (sort_order), concatenating canonically. `docker`, `DEB`, `RPM` are separate DSL fields; each family's order is preserved by its own `sort_order`.
+
+#### Build-tool beans — `component_build_tool_beans`
+
+DSL `build { tools { database { oracle { version = "11.2" } } ... } }` decomposes into typed rows. `sort_order` is per `component_configuration_id`.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | UUID PK | |
+| `component_configuration_id` | UUID FK | References `component_configurations(id)` |
+| `bean_type` | VARCHAR(30) NOT NULL | Discriminator: `oracleDatabase`, `cProduct`, `kProduct`, `dProduct`, `dDbProduct`, `odbc` |
+| `tool_type` | VARCHAR(50), nullable | Optional sub-type hint (e.g., `PT_K`) |
+| `settings_property` | TEXT, nullable | |
+| `version_pattern` | TEXT, nullable | |
+| `edition` | VARCHAR(50), nullable | `oracleDatabase` only; CHECK `edition IS NULL OR bean_type = 'oracleDatabase'` |
+| `sort_order` | INT NOT NULL DEFAULT 0 | |
+
+Resolver path: `EntityMappers.toBuildToolBean()` reconstructs the typed `BuildTool` subclass from a row; `toBuildParameters()` applies a `build.buildTools` marker override via `pickMarkerChildren`.
 
 ### 4.8 Cross-cutting
 

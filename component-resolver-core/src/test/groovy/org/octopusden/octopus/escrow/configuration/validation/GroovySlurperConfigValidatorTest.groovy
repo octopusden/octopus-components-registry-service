@@ -1,11 +1,13 @@
 package org.octopusden.octopus.escrow.configuration.validation
 
+import java.lang.reflect.Modifier
 import org.octopusden.releng.versions.VersionNames
 
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.DEB_PATTERN
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.DOCKER_PATTERN_V2
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.GAV_PATTERN
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.RPM_PATTERN
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.SUPPORTED_ATTRIBUTES
 
 class GroovySlurperConfigValidatorTest extends GroovyTestCase {
 
@@ -85,6 +87,28 @@ class GroovySlurperConfigValidatorTest extends GroovyTestCase {
             }
         }
         assert errorCount == incorrectDockerStrings.size()
+    }
+
+    void testSupportedAttributesIsStaticFinal() {
+        def field = GroovySlurperConfigValidator.class.getDeclaredField('SUPPORTED_ATTRIBUTES')
+        assert Modifier.isStatic(field.modifiers)
+        assert Modifier.isFinal(field.modifiers)
+        assert Modifier.isPublic(field.modifiers)
+    }
+
+    void testSupportedAttributesIsUnmodifiable() {
+        shouldFail(UnsupportedOperationException) {
+            SUPPORTED_ATTRIBUTES.add('extraAttribute')
+        }
+        shouldFail(UnsupportedOperationException) {
+            SUPPORTED_ATTRIBUTES.clear()
+        }
+    }
+
+    void testSupportedAttributesContainsExpectedEntries() {
+        assert SUPPORTED_ATTRIBUTES.contains('buildSystem')
+        assert SUPPORTED_ATTRIBUTES.contains('groupId')
+        assert SUPPORTED_ATTRIBUTES.contains('artifactId')
     }
 
 }

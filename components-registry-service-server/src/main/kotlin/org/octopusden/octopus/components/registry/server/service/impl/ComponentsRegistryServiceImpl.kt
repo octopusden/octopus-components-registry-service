@@ -4,6 +4,7 @@ import jakarta.annotation.PostConstruct
 import org.octopusden.octopus.components.registry.core.dto.ServiceStatusDTO
 import org.octopusden.octopus.components.registry.server.config.ComponentsRegistryProperties
 import org.octopusden.octopus.components.registry.server.model.ServiceStatus
+import org.octopusden.octopus.components.registry.server.repository.ComponentSourceRepository
 import org.octopusden.octopus.components.registry.server.service.ComponentRegistryResolver
 import org.octopusden.octopus.components.registry.server.service.ComponentsRegistryService
 import org.octopusden.octopus.components.registry.server.service.ImportService
@@ -20,6 +21,7 @@ class ComponentsRegistryServiceImpl(
     private val serviceStatus: ServiceStatus,
     private val properties: ComponentsRegistryProperties,
     private val importService: ImportService,
+    private val componentSourceRepository: ComponentSourceRepository,
 ) : ComponentsRegistryService {
     override fun updateConfigCache(): Long {
         log.info("Start update of Component Registry")
@@ -35,9 +37,11 @@ class ComponentsRegistryServiceImpl(
 
     override fun getComponentsRegistryStatus(): ServiceStatusDTO =
         ServiceStatusDTO(
-            serviceStatus.cacheUpdatedAt,
-            serviceStatus.serviceMode,
-            serviceStatus.versionControlRevision,
+            cacheUpdatedAt = serviceStatus.cacheUpdatedAt,
+            serviceMode = serviceStatus.serviceMode,
+            versionControlRevision = serviceStatus.versionControlRevision,
+            defaultSource = properties.defaultSource,
+            dbComponentCount = componentSourceRepository.countBySource("db"),
         )
 
     @PostConstruct

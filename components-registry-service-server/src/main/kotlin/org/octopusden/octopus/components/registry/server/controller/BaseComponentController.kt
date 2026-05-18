@@ -40,11 +40,16 @@ abstract class BaseComponentController<T : Component> {
                 .filter { module ->
                     module.moduleConfigurations.any { config ->
 
+                        // `config.vcsSettings` is a Java/Groovy platform type and can be
+                        // null for components that declare no VCS roots and no externalRegistry
+                        // (e.g. some library components in the DB-backed resolver). A non-null
+                        // `vcs-path` query parameter must filter such components out, not 500.
                         val vcsPathEquals =
                             vcsPath?.let { vcsPathValue ->
                                 config.vcsSettings
-                                    .versionControlSystemRoots
-                                    .any { vcsPathValue.equals(it.vcsPath, true) }
+                                    ?.versionControlSystemRoots
+                                    ?.any { vcsPathValue.equals(it.vcsPath, true) }
+                                    ?: false
                             } ?: true
 
                         val buildSystemEquals =

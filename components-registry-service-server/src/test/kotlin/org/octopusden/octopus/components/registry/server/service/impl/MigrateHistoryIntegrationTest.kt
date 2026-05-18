@@ -85,7 +85,8 @@ class MigrateHistoryIntegrationTest {
     @Test
     @Suppress("LongMethod")
     fun `migrate-history end-to-end covers write, terminal-row reset gate, parse-error, DELETE, default toRef`() {
-        componentRepository.save(ComponentEntity(name = "ARCHIVED_TEST_COMPONENT"))
+        // v2: ComponentEntity uses componentKey (not name)
+        componentRepository.save(ComponentEntity(componentKey = "ARCHIVED_TEST_COMPONENT"))
 
         // Phase 1: explicit toRef to 1.1 (only c1..c3 in scope). With the
         // SyncTaskExecutor swap, the inline runnable finishes before the POST
