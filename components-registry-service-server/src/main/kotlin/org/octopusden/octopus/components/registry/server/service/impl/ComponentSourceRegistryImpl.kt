@@ -32,17 +32,17 @@ class ComponentSourceRegistryImpl(
         // silently exclude it from getDbComponentNames() → 404 blackhole.
         val normalized = source.trim().lowercase()
         require(normalized in ALLOWED_SOURCES) {
-            // Sanitize THEN truncate the echoed value to avoid log-injection +
-            // oversized payload landing verbatim in ControllerExceptionHandler's
-            // HTTP response body and the WARN log line. Sanitization replaces any
-            // CR/LF/TAB/other ISO C0/C1 control character with an escaped \xNN
-            // form (so `bad\nWARN forged` cannot inject a fake log line),
-            // truncation caps the result at MAX_ERROR_ECHO_CHARS.
-            // (PR #248 follow-up to PR #247 Opus review P2-A.)
-            val sanitized = sanitizeForEcho(source)
-            val echo = sanitized.take(MAX_ERROR_ECHO_CHARS)
-            val ellipsis = if (sanitized.length > MAX_ERROR_ECHO_CHARS) "…" else ""
-            "Invalid component source '$echo$ellipsis'; allowed values: ${ALLOWED_SOURCES.joinToString(", ")}"
+            // Truncate the RAW value first, then sanitize. Order matters: if we
+            // sanitize first and then `take(N)`, a `\xNN` escape can be split
+            // mid-sequence at the cap boundary, leaving a dangling `\x` or
+            // `\x0` in the output. Also drop a lone high surrogate at the
+            // boundary if `take` split a UTF-16 surrogate pair.
+            //
+            // (PR #248 → final-review Opus P1-2: truncate-before-sanitize.)
+            val truncatedRaw = truncateRaw(source, MAX_ERROR_ECHO_CHARS)
+            val sanitized = sanitizeForEcho(truncatedRaw)
+            val ellipsis = if (source.length > truncatedRaw.length) "…" else ""
+            "Invalid component source '$sanitized$ellipsis'; allowed values: ${ALLOWED_SOURCES.joinToString(", ")}"
         }
         val entity =
             componentSourceRepository.findById(name).orElse(
@@ -72,8 +72,12 @@ class ComponentSourceRegistryImpl(
          * Replaces every ISO C0/C1 control character (0x00..0x1F and 0x7F..0x9F)
          * with an escaped `\xNN` literal so a value like `bad\nWARN forged` can
          * never inject a fake log line nor break the JSON-rendered HTTP body.
-         * Printable characters are preserved verbatim; the result is then safely
-         * truncated by the caller without re-introducing partial escapes.
+         * Printable characters (including Latin-1 0xA0..0xFF and astral-plane
+         * code points represented as well-formed UTF-16 surrogate pairs) are
+         * preserved verbatim.
+         *
+         * Callers MUST truncate before calling this (see [truncateRaw]); doing
+         * the opposite would let `.take(N)` split a `\xNN` escape mid-sequence.
          */
         internal fun sanitizeForEcho(value: String): String =
             buildString(value.length) {
@@ -86,5 +90,31 @@ class ComponentSourceRegistryImpl(
                     }
                 }
             }
+
+        /**
+         * Caps `value` at `maxChars` UTF-16 code units, then sanitizes the
+         * boundary against malformed UTF-16:
+         *
+         *  - If the cut split a well-formed surrogate pair (last char is a high
+         *    surrogate but its low partner was at `maxChars`, beyond the cut),
+         *    drop the lone high surrogate.
+         *  - If the input itself was malformed and the cut landed on a lone
+         *    low surrogate (no high partner at `maxChars - 2`), drop the lone
+         *    low surrogate.
+         *
+         * Either way, Jackson (or any UTF-8 serializer) never sees a half-pair.
+         */
+        internal fun truncateRaw(value: String, maxChars: Int): String {
+            if (value.length <= maxChars) return value
+            val raw = value.substring(0, maxChars)
+            if (raw.isEmpty()) return raw
+            val last = raw.last()
+            return when {
+                last.isHighSurrogate() -> raw.dropLast(1)
+                last.isLowSurrogate() && (raw.length < 2 || !raw[raw.length - 2].isHighSurrogate()) ->
+                    raw.dropLast(1)
+                else -> raw
+            }
+        }
     }
 }
