@@ -1,11 +1,17 @@
 package org.octopusden.octopus.components.registry.server.controller
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
+import org.octopusden.octopus.components.registry.server.entity.ComponentLabelEntity
+import org.octopusden.octopus.components.registry.server.entity.LabelEntity
+import org.octopusden.octopus.components.registry.server.repository.ComponentLabelRepository
+import org.octopusden.octopus.components.registry.server.repository.LabelRepository
+import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.octopusden.octopus.components.registry.server.support.viewerJwt
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.RepositoryType
@@ -13,13 +19,16 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.mock.mockito.MockBean
+import org.springframework.http.MediaType
 import org.springframework.test.annotation.DirtiesContext
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.nio.file.Paths
+import java.util.UUID
 
 /**
  * Domain-named meta endpoints that expose the canonical option lists for the
@@ -73,6 +82,15 @@ class MetaOptionsEndpointsTest {
 
     @Autowired
     private lateinit var mvc: MockMvc
+
+    @Autowired
+    private lateinit var objectMapper: ObjectMapper
+
+    @Autowired
+    private lateinit var componentLabelRepository: ComponentLabelRepository
+
+    @Autowired
+    private lateinit var labelRepository: LabelRepository
 
     init {
         val testResourcesPath =
@@ -139,4 +157,212 @@ class MetaOptionsEndpointsTest {
         }
     }
 
+    // /meta/labels is sourced from the `component_labels` junction (NOT the
+    // master `labels` table) so the picker advertises only label codes that
+    // are actually in use on at least one component — parity with
+    // /meta/owners, which sources from components.componentOwner. A master
+    // LabelEntity exists in the schema but may contain orphan codes that no
+    // component carries; advertising those would create dead options in the
+    // Portal picker.
+
+    private fun uniqueLabel(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(8)}"
+
+    private fun createComponentWithLabels(
+        name: String,
+        labels: Set<String>,
+    ) {
+        val labelsJson = labels.joinToString(",") { "\"$it\"" }
+        mvc
+            .perform(
+                post("/rest/api/4/components")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"name":"$name","displayName":"$name","labels":[$labelsJson]}"""),
+            ).andExpect(status().isCreated)
+    }
+
+    @Test
+    @DisplayName("SYS-040: GET /meta/labels returns sorted distinct label codes from the junction")
+    fun `SYS-040 GET meta labels returns sorted distinct codes from junction`() {
+        // Seed three components with overlapping labels. Distinct, sorted
+        // ascending must be `alpha, beta, gamma` regardless of insertion
+        // order. Using random suffixes keeps the assertion independent of
+        // other tests in the same Spring context.
+        val a = uniqueLabel("alpha")
+        val b = uniqueLabel("beta")
+        val g = uniqueLabel("gamma")
+
+        createComponentWithLabels("meta_labels_one_${UUID.randomUUID().toString().take(6)}", setOf(b, a))
+        createComponentWithLabels("meta_labels_two_${UUID.randomUUID().toString().take(6)}", setOf(g, a))
+        createComponentWithLabels("meta_labels_three_${UUID.randomUUID().toString().take(6)}", setOf(b))
+
+        val body =
+            mvc
+                .perform(get("/rest/api/4/components/meta/labels").with(viewerJwt()))
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$").isArray)
+                .andReturn()
+                .response.contentAsString
+        val all = objectMapper.readTree(body).map { it.asText() }
+        val seeded = all.filter { it == a || it == b || it == g }
+        assert(seeded == listOf(a, b, g).sorted()) {
+            "expected seeded labels sorted ascending; got $seeded"
+        }
+        // No duplicates across the entire response (covers both seeded and
+        // any pre-existing entries from earlier tests).
+        assert(all.size == all.toSet().size) { "expected no duplicates; got $all" }
+    }
+
+    @Test
+    @DisplayName("SYS-040: GET /meta/labels always returns 200 + JSON array (response shape)")
+    fun `SYS-040 GET meta labels returns 200 array regardless of DB state`() {
+        // Shape contract: always 200 + array, never 404. This case asserts
+        // the shape against the seeded context inside this test class; the
+        // dedicated empty-DB case (Portal's "no labels exist yet" deploy
+        // window contract) lives in MetaLabelsEmptyDbContractTest, which
+        // spins up a fresh context with zero component_labels rows to
+        // verify the empty-array path specifically.
+        mvc
+            .perform(get("/rest/api/4/components/meta/labels").with(viewerJwt()))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$").isArray)
+    }
+
+    @Test
+    @DisplayName("SYS-040: /meta/labels filters out null/blank labelCodes")
+    fun `SYS-040 meta labels filters blank labelCodes`() {
+        // The SYS-040 write-side fix in c20fd360 (validateLabels +
+        // canonicalizeLabels in ComponentManagementServiceImpl) is the
+        // primary preventive mechanism — new writes can no longer land a
+        // blank labelCode through the controller. This test guards the
+        // SECONDARY defence at the read layer: the repository's
+        // `findDistinctLabelCodes` WHERE-clause filter. The scenario is
+        // legacy / corrupt junction rows: schema-migration drift, a
+        // direct DB write, a pre-fix upgrade leaving "   " rows behind,
+        // or a future code regression. The read endpoint must still hide
+        // those from the Portal picker so users never see an
+        // unselectable blank chip. Mirrors the IS NOT NULL + non-empty
+        // guard on /meta/owners (ComponentRepository.findDistinctOwners).
+        //
+        // To simulate legacy/corrupt data we bypass the controller path
+        // (which would now reject the blank): save a LabelEntity with a
+        // whitespace code first (to satisfy the component_labels.label_code
+        // FK to labels.code), then save a ComponentLabelEntity junction
+        // row pointing at a real component.
+
+        val realLabel = uniqueLabel("realfblbl")
+        val blankCode = "   "
+        val realComponentName = "meta_labels_blank_real_${UUID.randomUUID().toString().take(6)}"
+        val anchorComponentName = "meta_labels_blank_anchor_${UUID.randomUUID().toString().take(6)}"
+
+        // Real labelled component (controller path — write validation OK).
+        createComponentWithLabels(realComponentName, setOf(realLabel))
+
+        // Anchor component carrying no labels via the controller; its id is
+        // used to attach the blank junction row directly via the repos.
+        val anchorBody =
+            mvc
+                .perform(
+                    post("/rest/api/4/components")
+                        .with(adminJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""{"name":"$anchorComponentName","displayName":"$anchorComponentName"}"""),
+                ).andExpect(status().isCreated)
+                .andReturn()
+                .response.contentAsString
+        val anchorId = UUID.fromString(objectMapper.readTree(anchorBody)["id"].asText())
+
+        // Seed the blank label master + junction row via the repos to
+        // bypass write-side normalisation. Idempotent on the master row in
+        // case a prior run already inserted it in this Spring context.
+        if (labelRepository.findByCode(blankCode) == null) {
+            labelRepository.save(LabelEntity(code = blankCode))
+        }
+        componentLabelRepository.save(
+            ComponentLabelEntity(componentId = anchorId, labelCode = blankCode),
+        )
+
+        val body =
+            mvc
+                .perform(get("/rest/api/4/components/meta/labels").with(viewerJwt()))
+                .andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString
+        val codes = objectMapper.readTree(body).map { it.asText() }
+        assert(codes.contains(realLabel)) {
+            "expected real label '$realLabel' in $codes (sanity check on seeding)"
+        }
+        assert(blankCode !in codes) {
+            "expected blank labelCode '$blankCode' to be filtered out of $codes"
+        }
+        // Belt-and-braces: nothing in the response should be whitespace-only.
+        assert(codes.none { it.isBlank() }) {
+            "expected no blank-or-whitespace entries in $codes"
+        }
+    }
+
+    // /meta/systems mirrors /meta/labels in shape and intent — sourced from
+    // the component_systems junction (NOT the master systems table) so the
+    // picker advertises only codes actually attached to a component.
+
+    private fun uniqueSystemCode(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(8)}"
+
+    private fun createComponentWithSystems(
+        name: String,
+        systems: Set<String>,
+    ) {
+        val systemsJson = systems.joinToString(",") { "\"$it\"" }
+        mvc
+            .perform(
+                post("/rest/api/4/components")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"name":"$name","displayName":"$name","systems":[$systemsJson]}"""),
+            ).andExpect(status().isCreated)
+    }
+
+    @Test
+    @DisplayName("SYS-042: GET /meta/systems returns sorted distinct system codes from the junction")
+    fun `SYS-042 GET meta systems returns sorted distinct codes from junction`() {
+        // Seed three components with overlapping system codes; distinct
+        // ascending order must be alpha, beta, gamma regardless of
+        // insertion order. Random suffixes keep this assertion independent
+        // of other tests in the same Spring context.
+        val a = uniqueSystemCode("alphasys")
+        val b = uniqueSystemCode("betasys")
+        val g = uniqueSystemCode("gammasys")
+
+        createComponentWithSystems("meta_systems_one_${UUID.randomUUID().toString().take(6)}", setOf(b, a))
+        createComponentWithSystems("meta_systems_two_${UUID.randomUUID().toString().take(6)}", setOf(g, a))
+        createComponentWithSystems("meta_systems_three_${UUID.randomUUID().toString().take(6)}", setOf(b))
+
+        val body =
+            mvc
+                .perform(get("/rest/api/4/components/meta/systems").with(viewerJwt()))
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$").isArray)
+                .andReturn()
+                .response.contentAsString
+        val all = objectMapper.readTree(body).map { it.asText() }
+        val seeded = all.filter { it == a || it == b || it == g }
+        assert(seeded == listOf(a, b, g).sorted()) {
+            "expected seeded systems sorted ascending; got $seeded"
+        }
+        // No duplicates across the entire response.
+        assert(all.size == all.toSet().size) { "expected no duplicates; got $all" }
+    }
+
+    @Test
+    @DisplayName("SYS-042: GET /meta/systems always returns 200 + JSON array (response shape)")
+    fun `SYS-042 GET meta systems returns 200 array regardless of DB state`() {
+        // Shape contract against the seeded context. The empty-DB case for
+        // /meta/systems would be a dedicated test class (parallel to
+        // MetaLabelsEmptyDbContractTest) — out of scope here; this case
+        // asserts the always-200-array shape regardless of how many rows
+        // happen to be in the junction.
+        mvc
+            .perform(get("/rest/api/4/components/meta/systems").with(viewerJwt()))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$").isArray)
+    }
 }

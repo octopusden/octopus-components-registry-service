@@ -123,6 +123,13 @@ class ComponentManagementServiceImpl(
         // vcsEntries[].repositoryType / packages[].packageType are validated
         // inside `replaceVcsEntries` / `replacePackages` (covers both base-config
         // and field-override marker paths).
+        validateLabels(request.labels)
+        // Canonicalise once and reuse so the synced junction, the
+        // in-memory refresh, and the audit snapshot all see the same
+        // trimmed/deduped set — the originally requested set may still
+        // contain "A " entries that the storage layer would otherwise
+        // reject on read-side filtering.
+        val canonicalizedLabels = canonicalizeLabels(request.labels)
 
         val parent =
             request.parentComponentName?.let { parentKey ->
@@ -169,14 +176,14 @@ class ComponentManagementServiceImpl(
 
         // M:N junctions (no cascade — see ComponentEntity kdoc convention) must be
         // persisted via their own repositories AFTER the parent has an assigned id.
-        syncLabels(saved.id!!, request.labels)
+        syncLabels(saved.id!!, canonicalizedLabels)
         syncSystems(saved.id!!, request.systems)
         val baseRequiredTools = request.baseConfiguration?.requiredTools
         if (baseRequiredTools != null) syncRequiredTools(baseConfig.id!!, baseRequiredTools)
 
         // Refresh in-memory junction collections so the response DTO reflects the
         // synced DB state — repo-direct writes bypass the entity's collections.
-        refreshComponentLabelsInMemory(saved, request.labels)
+        refreshComponentLabelsInMemory(saved, canonicalizedLabels)
         refreshComponentSystemsInMemory(saved, request.systems)
         if (baseRequiredTools != null) refreshConfigRequiredToolsInMemory(baseConfig, baseRequiredTools)
 
@@ -190,7 +197,7 @@ class ComponentManagementServiceImpl(
             newValue =
                 scalarAuditMap(
                     saved,
-                    overrideLabels = request.labels,
+                    overrideLabels = canonicalizedLabels,
                     overrideSystems = request.systems,
                 ),
         )
@@ -248,6 +255,12 @@ class ComponentManagementServiceImpl(
         request.baseConfiguration?.escrow?.generation?.let { validateEscrowGenerationMode(it) }
         // vcsEntries[].repositoryType / packages[].packageType are validated
         // inside `replaceVcsEntries` / `replacePackages` (see service helpers).
+        request.labels?.let { validateLabels(it) }
+        // Canonicalise once so the synced junction, in-memory refresh, and
+        // audit snapshot all see the same trimmed/deduped set. Null means
+        // "don't touch" — the canonical form is computed only when the
+        // patch carries a labels payload.
+        val canonicalizedLabels = request.labels?.let { canonicalizeLabels(it) }
 
         // Capture the pre-update label / system membership so the post-sync audit
         // `newValue` (which is computed after `syncLabels` / `syncSystems` have
@@ -340,7 +353,7 @@ class ComponentManagementServiceImpl(
         // Junctions — synced via their repositories after the parent flush so the
         // assigned ids (for newly-created rows) are visible.
         request.systems?.let { syncSystems(saved.id!!, it) }
-        request.labels?.let { syncLabels(saved.id!!, it) }
+        canonicalizedLabels?.let { syncLabels(saved.id!!, it) }
         val patchedRequiredTools = request.baseConfiguration?.requiredTools
         if (baseConfigForToolsSync != null && patchedRequiredTools != null) {
             syncRequiredTools(baseConfigForToolsSync.id!!, patchedRequiredTools)
@@ -348,7 +361,7 @@ class ComponentManagementServiceImpl(
 
         // Refresh in-memory junction collections so the response DTO reflects the
         // synced DB state — repo-direct writes bypass the entity's collections.
-        request.labels?.let { refreshComponentLabelsInMemory(saved, it) }
+        canonicalizedLabels?.let { refreshComponentLabelsInMemory(saved, it) }
         request.systems?.let { refreshComponentSystemsInMemory(saved, it) }
         if (baseConfigForToolsSync != null && patchedRequiredTools != null) {
             refreshConfigRequiredToolsInMemory(baseConfigForToolsSync, patchedRequiredTools)
@@ -363,7 +376,7 @@ class ComponentManagementServiceImpl(
             newValue =
                 scalarAuditMap(
                     saved,
-                    overrideLabels = request.labels ?: originalLabels,
+                    overrideLabels = canonicalizedLabels ?: originalLabels,
                     overrideSystems = request.systems ?: originalSystems,
                 ),
         )
@@ -671,6 +684,35 @@ class ComponentManagementServiceImpl(
     }
 
     /**
+     * Canonicalise a raw incoming label set: trim whitespace, drop entries
+     * that are empty or whitespace-only, and dedupe. Mirrors the controller
+     * read-side normalisation pipeline for `?labels=…` (split → trim →
+     * filter empty → distinct → takeIf) so a label code is stored,
+     * retrieved, and filtered with the same canonical form regardless of
+     * the path that produced it. Without this the controller would trim
+     * `?labels=A ` to `A` on read but a write of `labels=["A "]` would
+     * persist `"A "` and never be filterable as `A` again — see SYS-040
+     * write-side canonicalisation rationale.
+     */
+    private fun canonicalizeLabels(raw: Set<String>): Set<String> =
+        raw.map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+
+    /**
+     * Reject a write that consists entirely of blank/whitespace label
+     * codes. Throws IllegalArgumentException → 400 via the controller
+     * exception handler. An entirely-empty desired set is allowed
+     * (clearing labels is a legitimate operation); the rejection is for
+     * the case where the caller sent non-empty input that canonicalises
+     * to nothing — almost certainly a UI bug or a caller mistake.
+     */
+    private fun validateLabels(raw: Set<String>) {
+        if (raw.isEmpty()) return
+        require(canonicalizeLabels(raw).isNotEmpty()) {
+            "labels: cannot consist entirely of blank entries"
+        }
+    }
+
+    /**
      * Replace the `component_labels` rows for [componentId] with exactly the
      * labels in [desired]. Junctions have no JPA cascade — they must be written
      * through their own repository (see `ComponentEntity` kdoc convention).
@@ -681,9 +723,16 @@ class ComponentManagementServiceImpl(
         componentId: UUID,
         desired: Set<String>,
     ) {
+        // Defense-in-depth canonicalisation: every caller is expected to
+        // run validateLabels + canonicalizeLabels first, but a stray blank
+        // or duplicate getting this far would otherwise land in the
+        // junction and surface as an unselectable blank chip / redundant
+        // row. Canonicalise here too so the persistence layer is the
+        // single source of truth for the canonical form.
+        val canonical = canonicalizeLabels(desired)
         val existing = componentLabelRepository.findByComponentId(componentId)
         if (existing.isNotEmpty()) componentLabelRepository.deleteAllInBatch(existing)
-        desired.forEach { code ->
+        canonical.forEach { code ->
             ensureLabelExists(code)
             componentLabelRepository.save(
                 ComponentLabelEntity(componentId = componentId, labelCode = code),
@@ -1230,8 +1279,20 @@ class ComponentManagementServiceImpl(
         filter.archived?.let { archived ->
             spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<Boolean>("archived"), archived) })
         }
-        filter.owner?.let { owner ->
-            spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<String>("componentOwner"), owner) })
+        // OR across selected owners — a component matches when its scalar
+        // componentOwner column equals any of the listed values. No JOIN
+        // (componentOwner is a column on ComponentEntity itself, not a
+        // junction), so no query.distinct(true) is needed; the IN-predicate
+        // alone is enough. The controller's normalisation guarantees the
+        // list, if present, is non-empty, has no blanks, and has no
+        // duplicates.
+        if (!filter.owner.isNullOrEmpty()) {
+            spec =
+                spec.and(
+                    Specification { root, _, _ ->
+                        root.get<String>("componentOwner").`in`(filter.owner)
+                    },
+                )
         }
         filter.search?.let { search ->
             val pattern = "%${search.lowercase()}%"
@@ -1245,7 +1306,16 @@ class ComponentManagementServiceImpl(
                     },
                 )
         }
-        filter.buildSystem?.let { bs ->
+        // OR across selected buildSystems — a component has exactly one BASE
+        // buildSystem at a time, so multi-select semantics is "any of these"
+        // (NOT AND, which would only ever return zero or one match). One
+        // JOIN through configurations with rowType=BASE + IN(...) is the
+        // correct shape; mirrors the per-value AND pattern used for labels
+        // and system but consolidates into a single predicate because the
+        // column is scalar on the joined row, not a collection. The
+        // controller's normalisation guarantees the list, if present, is
+        // non-empty, has no blanks, and has no duplicates.
+        if (!filter.buildSystem.isNullOrEmpty()) {
             spec =
                 spec.and(
                     Specification { root, query, cb ->
@@ -1253,20 +1323,52 @@ class ComponentManagementServiceImpl(
                         query?.distinct(true)
                         cb.and(
                             cb.equal(join.get<String>("rowType"), "BASE"),
-                            cb.equal(join.get<String>("buildSystem"), bs),
+                            join.get<String>("buildSystem").`in`(filter.buildSystem),
                         )
                     },
                 )
         }
-        filter.system?.let { systemCode ->
+        // OR across selected system codes — a component matches when ANY of
+        // its system junctions has a code in the list. Unlike labels (also
+        // junction-backed but AND across selections), the picker semantics
+        // here is "components belonging to any of these systems". One JOIN
+        // through systemJunctions + IN(...) keeps the predicate count
+        // bounded regardless of selection size. The controller's
+        // normalisation guarantees the list, if present, is non-empty, has
+        // no blanks, and has no duplicates.
+        if (!filter.system.isNullOrEmpty()) {
             spec =
                 spec.and(
                     Specification { root, query, cb ->
                         val join = root.join<ComponentEntity, ComponentSystemEntity>("systemJunctions")
                         query?.distinct(true)
-                        cb.equal(join.get<String>("systemCode"), systemCode)
+                        join.get<String>("systemCode").`in`(filter.system)
                     },
                 )
+        }
+        // AND across selected labels = one join + one predicate per label.
+        // A single join + IN(...) would relax to OR (any row whose label is
+        // in the set), which is not the semantics the multi-select picker
+        // promises ("show me components carrying ALL of these labels").
+        // The controller's normalisation guarantees the list, if present,
+        // is non-empty, has no blanks, and has no duplicates, so the
+        // forEach body is always meaningful and never redundant.
+        //
+        // One join per selected label, matching the system/buildSystem
+        // filter pattern above. Number of labels in a filter is bounded by
+        // the picker UI; if it ever grows large enough to be a problem,
+        // revisit via EXISTS subqueries or GROUP BY HAVING COUNT(DISTINCT).
+        if (!filter.labels.isNullOrEmpty()) {
+            filter.labels.forEach { lbl ->
+                spec =
+                    spec.and(
+                        Specification { root, query, cb ->
+                            val join = root.join<ComponentEntity, ComponentLabelEntity>("labelJunctions")
+                            query?.distinct(true)
+                            cb.equal(join.get<String>("labelCode"), lbl)
+                        },
+                    )
+            }
         }
         return spec
     }

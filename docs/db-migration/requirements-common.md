@@ -48,6 +48,10 @@
 | SYS-036 | GET /audit/recent accepts entityType/entityId/changedBy/source/action/from/to filter params | High | integration-test | ✅ Tested |
 | SYS-037 | v4 CRUD API for dependency mappings (alias → componentName) | Medium | integration-test | ❌ Not implemented |
 | SYS-038 | Domain-named meta endpoints for free-form aspect option lists (buildSystem / repositoryType / generation) | Medium | integration-test | ✅ Tested |
+| SYS-040 | GET /components?labels=A,B filters by component_labels junction (AND across selected labels); GET /components/meta/labels returns sorted distinct codes in use | High | integration-test | ✅ Tested |
+| SYS-041 | GET /components?buildSystem=GRADLE,MAVEN accepts CSV multi-value with OR semantics across the BASE buildSystem column | High | integration-test | ✅ Tested |
+| SYS-042 | GET /components?system=A,B accepts CSV multi-value with OR semantics across component_systems; GET /components/meta/systems returns sorted distinct codes in use | High | integration-test | ✅ Tested |
+| SYS-043 | GET /components?owner=alice,bob accepts CSV multi-value with OR semantics over the scalar componentOwner column | High | integration-test | ✅ Tested |
 
 ---
 
@@ -1178,3 +1182,183 @@ Auth: `@PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")`
 - Admin write API for the option lists (the field-config registry `options[]` already exists; SYS-038 only addresses the canonical-set advertisement when admin has not seeded explicit options).
 - Portal UI for editing the option lists (admin field-config write surface is unchanged).
 - A 4th endpoint for `productType` — the existing flat-flat `field-config.options[]` channel is sufficient there.
+
+---
+
+### SYS-040: GET /components?labels=A,B + GET /components/meta/labels
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+The Portal `ComponentListPage` filter bar already supports system, productType, buildSystem, owner, archived and search, but cannot narrow by **labels** even though every `ComponentSummary` carries `labels: string[]` and the table renders them. Users either eyeball-scan or fall back to `?search` (which matches `name`, not labels). To populate a multi-select picker the Portal also needs a `/meta/labels` source list — sourced from the `component_labels` junction so the picker advertises labels actually in use, parity with `/meta/owners`.
+
+**Description:**
+Two additions to the v4 component surface.
+
+1. **`GET /rest/api/4/components?labels=A,B`** — multi-value AND filter. A returned component must carry every selected label. CSV is the primary wire format (Portal always sends CSV); Spring's binder also accepts repeatable params (`?labels=A&labels=B`). The controller normalises both shapes before populating the filter DTO:
+   ```kotlin
+   labels
+       ?.flatMap { it.split(",") }
+       ?.map { it.trim() }
+       ?.filter { it.isNotEmpty() }
+       ?.distinct()
+       ?.takeIf { it.isNotEmpty() }
+   ```
+   `?labels=`, `?labels=,,`, and `?labels=,A,,B,` all canonicalise to the same shape as `?labels=A,B` (or "no filter" when the result is empty); `?labels=A,A` dedupes to a single-element list. AND semantics in the JPA Specification is implemented as one join + one predicate per label code — a single join + `IN(...)` would silently relax to OR.
+
+2. **`GET /rest/api/4/components/meta/labels`** — returns sorted distinct label codes currently attached to at least one component, sourced from the `component_labels` junction via a new repository method `ComponentLabelRepository.findDistinctLabelCodes()`. NOT sourced from the master `LabelEntity` table, which may contain orphan codes that no component carries — advertising those would create dead options in the Portal picker. Mirrors `/meta/owners` in shape and intent.
+
+Auth: both gated by `ACCESS_COMPONENTS` (granted to `ROLE_ANONYMOUS` by default), matching the rest of the v4 read surface and parity with `/meta/owners`.
+
+**Preconditions:**
+- Caller has `ACCESS_COMPONENTS`.
+- Database accessible (junction table `component_labels` populated by component creation / PATCH flows).
+
+**Acceptance criteria:**
+1. `GET /components?labels=A` returns a page whose every entry carries label A; components without A are excluded.
+2. `GET /components?labels=A,B` returns a page whose every entry carries BOTH A and B (AND across selections); components carrying only one of the two are excluded.
+3. `GET /components?labels=<unknown>` returns 200 + empty page (NOT 500, NOT an unfiltered list).
+4. Blank normalisation: `?labels=`, `?labels=,,`, and any input that normalises to zero non-blank tokens behaves as "no labels filter".
+5. Interleaved-blanks: `?labels=,A,,B,` behaves as `?labels=A,B`.
+6. Whitespace trim: `?labels=A%20` and `?labels=%20A` both match label A.
+7. Pagination and sort still apply when `?labels` is set (regression).
+8. `GET /components/meta/labels` returns 200 + sorted distinct label codes; no duplicates even when multiple components carry the same code.
+9. `GET /components/meta/labels` returns 200 + JSON array (NOT 404) when no labels exist — the Portal's `useLabels` 404/501 fallback is for the transitional pre-deploy window only; steady state must hit the happy path.
+10. Write-side canonicalisation: labels are trimmed + deduped on `POST /components` and `PATCH /components/{id}`. Persisting `labels=["A "]` stores `"A"` (canonical) so the read-side filter contract holds; `labels=["A","A"," A "]` stores `["A"]`. Non-empty input that canonicalises to zero entries (e.g. `labels=[" "]`) is rejected with 400 — an empty `labels: []` is still a legitimate "clear labels" operation.
+
+**Test method:** `ListComponentsLabelsFilterTest` covers criteria 1–7; `MetaOptionsEndpointsTest` (extended) covers criteria 8–9; `V4WriteValidationTest` (extended) covers criterion 10.
+
+**Out of scope:**
+- Sort-by-label or group-by-label.
+- Saving filter state to URL (no existing filter does this; keep parity).
+- Labels mutation UX (creating / renaming labels) — not requested.
+
+---
+
+### SYS-041: GET /components?buildSystem=GRADLE,MAVEN multi-value with OR semantics
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+The Portal `ComponentListPage` previously supported only a single-value `?buildSystem=` selector. Users frequently need to scope to "any of a small set" (e.g., GRADLE OR MAVEN — both JVM build systems) and currently have to either pick one and miss the rest, or clear the filter entirely. Extending the existing query parameter to accept a CSV list with OR semantics turns the picker into a true multi-select.
+
+**Description:**
+Extend the v4 component listing surface so `?buildSystem=A,B,…` returns the union of components whose BASE configuration row's `buildSystem` column equals any of the listed values. Semantics is OR — a component has exactly one BASE `buildSystem` at a time, so AND across two distinct values would always yield zero matches and is not the intended behaviour.
+
+Wire format primary is CSV (`?buildSystem=GRADLE,MAVEN`); Spring's binder also accepts repeatable params (`?buildSystem=GRADLE&buildSystem=MAVEN`). The controller normalises both shapes through the same pipeline used for labels:
+```kotlin
+buildSystem
+    ?.flatMap { it.split(",") }
+    ?.map { it.trim() }
+    ?.filter { it.isNotEmpty() }
+    ?.distinct()
+    ?.takeIf { it.isNotEmpty() }
+```
+The Specification uses one JOIN through `configurations` with `rowType=BASE` and a single `IN (?,?,…)` predicate — mirrors the pre-multi-value shape (same JOIN, same rowType guard) but swaps the scalar `equal` for a collection IN. Single-value input still works as a degenerate IN.
+
+The change is wire-compatible: a single value `?buildSystem=GRADLE` round-trips through the new pipeline unchanged. The DTO field type changed from `String?` to `List<String>?` but ComponentFilter is server-internal and not part of any external API surface.
+
+**Preconditions:**
+- Caller has `ACCESS_COMPONENTS`.
+
+**Acceptance criteria:**
+1. `?buildSystem=GRADLE` (single value, backward compat) returns GRADLE components only.
+2. `?buildSystem=GRADLE,MAVEN` (CSV) returns components whose BASE buildSystem is GRADLE OR MAVEN; a component on a third buildSystem (e.g., WHISKEY) is excluded.
+3. `?buildSystem=GRADLE&buildSystem=MAVEN` (repeatable params) returns the same set as the CSV form.
+4. `?buildSystem=<unknown>` returns 200 + empty page.
+5. Blank normalisation: `?buildSystem=`, `?buildSystem=,,`, any input normalising to zero non-blank tokens behaves as "no buildSystem filter".
+6. Interleaved-blanks: `?buildSystem=,GRADLE,,MAVEN,` behaves as `?buildSystem=GRADLE,MAVEN`.
+7. Whitespace trim: `?buildSystem=GRADLE%20` and `?buildSystem=%20GRADLE` both match GRADLE.
+8. Dedupe: `?buildSystem=GRADLE,GRADLE` behaves identically to `?buildSystem=GRADLE`.
+9. Pagination and sort still apply when `?buildSystem=` is multi-valued (regression). Returned `content[].name` is sorted ascending when `sort=componentKey,asc` is set.
+
+**Test method:** `ListComponentsBuildSystemFilterTest` — extended with nine SYS-041 cases covering criteria 1–9 alongside the existing single-value tests.
+
+**Out of scope:**
+- Sort-by-buildSystem, group-by-buildSystem.
+- AND across buildSystems (vacuously empty given the schema, so not useful).
+- Validation of unknown values at the controller (write-side already validates via `BUILD_SYSTEM_NAMES`; read-side just returns empty for unknowns, mirroring the pre-multi-value behaviour).
+
+---
+
+### SYS-042: GET /components?system=A,B multi-value with OR semantics + GET /components/meta/systems
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+The Portal `ComponentListPage` previously supported only a single-value `?system=` selector. Like buildSystem, users often want to scope to "any of a small set" of systems (e.g., CLASSIC OR a sibling code). Extending the existing query parameter to accept CSV multi-value turns the picker into a true multi-select. The companion `/meta/systems` endpoint populates the picker from labels in use (parity with `/meta/owners` and `/meta/labels`).
+
+**Description:**
+Two additions to the v4 component surface, mirroring SYS-040 (labels) and SYS-041 (buildSystem).
+
+1. **`GET /rest/api/4/components?system=A,B`** — multi-value OR filter. A component matches when ANY of its `component_systems` junctions has a code in the list. Unlike labels (also junction-backed but AND across selections), the picker semantics for systems is "components belonging to any of these systems" — a component can carry several systems and selecting two should union those sets. CSV is the primary wire format; Spring also accepts repeatable params. The controller normalises both shapes through the same pipeline already used for labels and buildSystem (split → trim → filter empty → distinct → null-if-empty). The JPA Specification uses one JOIN through `systemJunctions` and a single `IN (?, ?, …)` predicate — naturally union-semantic, no separate predicate per code needed.
+
+2. **`GET /rest/api/4/components/meta/systems`** — returns sorted distinct system codes currently attached to at least one component, sourced from the `component_systems` junction via a new repository method `ComponentSystemRepository.findDistinctSystemCodes()`. Same blank/null defence as `findDistinctLabelCodes` and `findDistinctOwners`. Mirrors `/meta/owners` and `/meta/labels` in shape and intent.
+
+Auth: both gated by `ACCESS_COMPONENTS`, matching the rest of the v4 read surface.
+
+The change is wire-compatible: a single value `?system=CLASSIC` round-trips through the new pipeline unchanged. The DTO field type changed from `String?` to `List<String>?` but `ComponentFilter` is server-internal and not part of any external API surface.
+
+**Preconditions:**
+- Caller has `ACCESS_COMPONENTS`.
+
+**Acceptance criteria:**
+1. `?system=A` (single value, backward compat) returns components carrying system A.
+2. `?system=A,B` (CSV) returns components carrying A OR B; components carrying only a third code are excluded.
+3. `?system=A&system=B` (repeatable params) returns the same set as the CSV form.
+4. `?system=<unknown>` returns 200 + empty page (existing behaviour, regression-checked).
+5. Blank normalisation: `?system=`, `?system=,,` and any input normalising to zero non-blank tokens behaves as "no system filter".
+6. Interleaved-blanks: `?system=,A,,B,` behaves as `?system=A,B`.
+7. Whitespace trim: `?system=A%20` and `?system=%20A` both match A.
+8. Dedupe: `?system=A,A` behaves identically to `?system=A`.
+9. Pagination and sort still apply when `?system=` is multi-valued. Returned `content[].name` is sorted ascending when `sort=componentKey,asc` is set.
+10. `GET /meta/systems` returns 200 + sorted distinct system codes; no duplicates even when multiple components carry the same code.
+11. `GET /meta/systems` always returns 200 + a JSON array (NOT 404), regardless of DB state.
+
+**Test method:** `ListComponentsSystemFilterTest` (extended with SYS-042 cases) covers criteria 1–9 alongside the existing single-value tests; `MetaOptionsEndpointsTest` (extended) covers criteria 10–11.
+
+**Out of scope:**
+- Sort-by-system, group-by-system.
+- AND across systems (could be useful but not requested — picker UX is OR).
+- A dedicated empty-DB contract test class for `/meta/systems` (parallel to `MetaLabelsEmptyDbContractTest`) — can be added later if needed; current `/meta/systems` shape test asserts always-200-array against the seeded context.
+
+---
+
+### SYS-043: GET /components?owner=alice,bob multi-value with OR semantics
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+SYS-035 introduced the single-value `?owner=` filter. The Portal `ComponentListPage` owner picker is now a multi-select (parity with the labels, system, and buildSystem multi-selects), so the wire contract needs to accept a CSV list with OR semantics — "components owned by any of these people".
+
+**Description:**
+Extend `?owner=` to accept CSV multi-value (and repeatable params). The controller normalisation pipeline is identical to the other multi-value filters (split → trim → filter empty → distinct → null-if-empty). `componentOwner` is a scalar column on `ComponentEntity` (NOT a junction), so the Specification needs no JOIN and no `query.distinct(true)` — a single `root.get<String>("componentOwner").in(filter.owner)` predicate is the entire branch. This is the simplest of the multi-value filter shapes by construction.
+
+The change is wire-compatible: a single value `?owner=alice` round-trips through the new pipeline unchanged. DTO field type `String?` → `List<String>?` is server-internal.
+
+**Preconditions:**
+- Caller has `ACCESS_COMPONENTS`.
+
+**Acceptance criteria:**
+1. `?owner=alice` (single value, backward compat) returns components owned by alice only.
+2. `?owner=alice,bob` (CSV) returns components owned by alice OR bob; components owned by a third user are excluded.
+3. `?owner=alice&owner=bob` (repeatable params) returns the same set as the CSV form.
+4. Blank normalisation: `?owner=`, `?owner=,,` and any input normalising to zero non-blank tokens behaves as "no owner filter".
+5. Interleaved-blanks: `?owner=,alice,,bob,` behaves as `?owner=alice,bob`.
+6. Whitespace trim: `?owner=alice%20` and `?owner=%20alice` both match alice.
+7. Dedupe: `?owner=alice,alice` behaves identically to `?owner=alice`.
+8. Pagination and sort still apply when `?owner=` is multi-valued. Returned `content[].name` is sorted ascending when `sort=componentKey,asc` is set.
+
+**Test method:** `ListComponentsOwnerFilterTest` — extended with nine SYS-043 cases covering criteria 1–8 alongside the existing single-value SYS-035 tests.
+
+**Out of scope:**
+- Group-by-owner.
+- AND across owners (would always yield zero matches given the scalar column; not useful).

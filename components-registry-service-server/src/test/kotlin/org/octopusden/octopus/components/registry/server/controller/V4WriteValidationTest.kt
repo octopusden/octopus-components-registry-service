@@ -15,10 +15,13 @@ import org.springframework.http.MediaType
 import org.springframework.test.annotation.DirtiesContext
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import org.octopusden.octopus.components.registry.server.support.viewerJwt
 import java.nio.file.Paths
+import java.util.UUID
 
 /**
  * Closes the open #192 review findings about v4 write-side validation: enum-typed
@@ -279,6 +282,132 @@ class V4WriteValidationTest {
         val versionLock = seed["version"].asLong()
         val patchBody =
             """{"version": $versionLock, "baseConfiguration": {"versionRange": "this-is-not-a-version-range"}}"""
+        mvc
+            .perform(
+                patch("/rest/api/4/components/$id")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(patchBody),
+            ).andExpect(status().isBadRequest)
+    }
+
+    // -------------------------------------------------------------------
+    // SYS-040 write-side labels canonicalisation
+    //
+    // The read path trims and dedupes `?labels=…` (see SYS-040 controller
+    // normalisation). Without symmetric write-side canonicalisation, a
+    // component created with labels=["A "] would persist "A " in
+    // component_labels and become unreachable from `?labels=A` filtering
+    // (the JPA cb.equal compares raw column values). Canonicalising at
+    // write time (trim + drop blank + dedupe) keeps the contract
+    // consistent across both paths.
+    //
+    // The 400 case is for "non-empty input that canonicalises to nothing"
+    // — an empty `labels: []` is still a legitimate "clear labels"
+    // operation and stays a 2xx.
+    // -------------------------------------------------------------------
+
+    private fun uniqueSuffix() = UUID.randomUUID().toString().take(6)
+
+    @Test
+    @DisplayName("SYS-040: CREATE with labels=[\"A \"] persists trimmed \"A\" (write-side trim)")
+    fun `SYS-040 create with trailing-space label persists trimmed`() {
+        val suffix = uniqueSuffix()
+        val name = "labels_trim_create_$suffix"
+        val labelRaw = "lblcreate_$suffix" // canonical
+        val labelWithSpace = "$labelRaw " // sent by caller
+        val body = """{"name":"$name","labels":["$labelWithSpace"]}"""
+        postCreate(body).andExpect(status().isCreated)
+
+        // After write, GET /meta/labels must include the canonical form and NOT the raw one.
+        val metaBody =
+            mvc
+                .perform(get("/rest/api/4/components/meta/labels").with(viewerJwt()))
+                .andExpect(status().isOk)
+                .andReturn().response.contentAsString
+        val codes = objectMapper.readTree(metaBody).map { it.asText() }
+        assert(codes.contains(labelRaw)) {
+            "expected canonical '$labelRaw' in $codes (trim should have applied)"
+        }
+        assert(!codes.contains(labelWithSpace)) {
+            "expected raw '$labelWithSpace' NOT in $codes (trim should have stripped trailing space)"
+        }
+    }
+
+    @Test
+    @DisplayName("SYS-040: CREATE with labels=[\" \"] (single blank) returns 400")
+    fun `SYS-040 create with single blank label returns 400`() {
+        val name = "labels_blankonly_create_${uniqueSuffix()}"
+        val body = """{"name":"$name","labels":[" "]}"""
+        postCreate(body).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    @DisplayName("SYS-040: CREATE with labels=[\"A\",\"A\",\" A \"] persists single \"A\" (dedupe after trim)")
+    fun `SYS-040 create dedupes labels after trim`() {
+        val suffix = uniqueSuffix()
+        val name = "labels_dedupe_create_$suffix"
+        val label = "lbldedupe_$suffix"
+        val body = """{"name":"$name","labels":["$label","$label"," $label "]}"""
+        val created =
+            postCreate(body)
+                .andExpect(status().isCreated)
+                .andReturn().response.contentAsString
+        // ComponentDetailResponse.labels is a Set<String>; the response
+        // should carry exactly one entry for this component after dedupe.
+        val labels = objectMapper.readTree(created)["labels"].map { it.asText() }
+        assert(labels == listOf(label)) {
+            "expected exactly [$label] after dedupe; got $labels"
+        }
+    }
+
+    @Test
+    @DisplayName("SYS-040: PATCH with labels=[\"A \"] persists trimmed \"A\" (write-side trim on update)")
+    fun `SYS-040 patch with trailing-space label persists trimmed`() {
+        val suffix = uniqueSuffix()
+        val name = "labels_trim_patch_$suffix"
+        val labelRaw = "lblpatch_$suffix"
+        val labelWithSpace = "$labelRaw "
+
+        // Seed a minimal component, then PATCH labels.
+        val seedBody = """{"name":"$name"}"""
+        val seedResponse =
+            postCreate(seedBody)
+                .andExpect(status().isCreated)
+                .andReturn().response.contentAsString
+        val seed = objectMapper.readTree(seedResponse)
+        val id = seed["id"].asText()
+        val versionLock = seed["version"].asLong()
+
+        val patchBody = """{"version":$versionLock,"labels":["$labelWithSpace"]}"""
+        val patched =
+            mvc
+                .perform(
+                    patch("/rest/api/4/components/$id")
+                        .with(adminJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(patchBody),
+                ).andExpect(status().isOk)
+                .andReturn().response.contentAsString
+        val labels = objectMapper.readTree(patched)["labels"].map { it.asText() }
+        assert(labels == listOf(labelRaw)) {
+            "expected canonical [$labelRaw] after patch; got $labels"
+        }
+    }
+
+    @Test
+    @DisplayName("SYS-040: PATCH with labels=[\" \"] (single blank) returns 400")
+    fun `SYS-040 patch with single blank label returns 400`() {
+        val suffix = uniqueSuffix()
+        val seedBody = """{"name":"labels_blankonly_patch_$suffix"}"""
+        val seedResponse =
+            postCreate(seedBody)
+                .andExpect(status().isCreated)
+                .andReturn().response.contentAsString
+        val seed = objectMapper.readTree(seedResponse)
+        val id = seed["id"].asText()
+        val versionLock = seed["version"].asLong()
+        val patchBody = """{"version":$versionLock,"labels":[" "]}"""
         mvc
             .perform(
                 patch("/rest/api/4/components/$id")
