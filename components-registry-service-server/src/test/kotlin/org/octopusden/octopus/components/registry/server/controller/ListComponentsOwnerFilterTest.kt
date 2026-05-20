@@ -197,4 +197,241 @@ class ListComponentsOwnerFilterTest {
                     .content("""{"version":$version,"archived":true}"""),
             ).andExpect(status().isOk)
     }
+
+    // -------------------------------------------------------------------
+    // SYS-043 — multi-value owner filter with OR semantics
+    //
+    // Wire format primary is CSV (?owner=alice,bob); Spring also accepts
+    // repeatable params (?owner=alice&owner=bob). Controller normalises
+    // both via split-by-comma → trim → drop-empty → distinct → null-if-empty.
+    // Multi-select semantics is OR — "components owned by any of these
+    // people". componentOwner is a scalar column on ComponentEntity, so
+    // the Specification needs no JOIN and no query.distinct(true); a
+    // single root.get(componentOwner).in(...) predicate suffices.
+    // -------------------------------------------------------------------
+
+    private fun fetchNames(vararg params: Pair<String, String>): Set<String> {
+        var request =
+            get("/rest/api/4/components")
+                .with(viewerJwt())
+                .param("size", "200")
+        for ((key, value) in params) {
+            request = request.param(key, value)
+        }
+        val body =
+            mvc
+                .perform(request)
+                .andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString
+        return objectMapper.readTree(body)["content"].map { it["name"].asText() }.toSet()
+    }
+
+    @Test
+    @DisplayName("SYS-043: ?owner=alice (single value, backward compat) returns components owned by alice")
+    fun `SYS-043 owner single value backward compatible`() {
+        val alice = uniqueName("sys043_alice")
+        val bob = uniqueName("sys043_bob")
+        val aliceComp = uniqueName("sys043bc_a")
+        val bobComp = uniqueName("sys043bc_b")
+        createComponent(aliceComp, alice)
+        createComponent(bobComp, bob)
+
+        val names = fetchNames("owner" to alice)
+        assert(names.contains(aliceComp)) { "expected $aliceComp in $names" }
+        assert(!names.contains(bobComp)) { "did not expect $bobComp in $names" }
+    }
+
+    @Test
+    @DisplayName("SYS-043: ?owner=alice,bob (CSV) returns components owned by EITHER alice OR bob")
+    fun `SYS-043 owner CSV OR semantics`() {
+        val alice = uniqueName("sys043or_alice")
+        val bob = uniqueName("sys043or_bob")
+        val carol = uniqueName("sys043or_carol")
+        val compA = uniqueName("sys043or_a")
+        val compB = uniqueName("sys043or_b")
+        val compC = uniqueName("sys043or_c")
+        createComponent(compA, alice)
+        createComponent(compB, bob)
+        createComponent(compC, carol)
+
+        val names = fetchNames("owner" to "$alice,$bob")
+        assert(names.contains(compA)) { "expected $compA in $names" }
+        assert(names.contains(compB)) { "expected $compB in $names" }
+        assert(!names.contains(compC)) { "did not expect $compC in $names (carol not selected)" }
+    }
+
+    @Test
+    @DisplayName("SYS-043: ?owner=alice&owner=bob (repeatable) equivalent to CSV")
+    fun `SYS-043 owner repeatable params equivalent to CSV`() {
+        val alice = uniqueName("sys043rep_alice")
+        val bob = uniqueName("sys043rep_bob")
+        val carol = uniqueName("sys043rep_carol")
+        val compA = uniqueName("sys043rep_a")
+        val compB = uniqueName("sys043rep_b")
+        val compC = uniqueName("sys043rep_c")
+        createComponent(compA, alice)
+        createComponent(compB, bob)
+        createComponent(compC, carol)
+
+        val body =
+            mvc
+                .perform(
+                    get("/rest/api/4/components")
+                        .with(viewerJwt())
+                        .param("owner", alice)
+                        .param("owner", bob)
+                        .param("size", "200"),
+                ).andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString
+        val names = objectMapper.readTree(body)["content"].map { it["name"].asText() }.toSet()
+        assert(names.contains(compA)) { "expected $compA in $names" }
+        assert(names.contains(compB)) { "expected $compB in $names" }
+        assert(!names.contains(compC)) { "did not expect $compC in $names" }
+    }
+
+    @Test
+    @DisplayName("SYS-043: ?owner= (blank) is equivalent to no owner filter")
+    fun `SYS-043 owner blank value is no filter`() {
+        val seedOwner = uniqueName("sys043blank_seed_owner")
+        val seedComp = uniqueName("sys043blank_seed_comp")
+        createComponent(seedComp, seedOwner)
+
+        val withoutParam = fetchNames()
+        val withBlank = fetchNames("owner" to "")
+        assert(withoutParam == withBlank) {
+            "expected ?owner= to match no filter; without=$withoutParam blank=$withBlank"
+        }
+    }
+
+    @Test
+    @DisplayName("SYS-043: ?owner=,, (only blanks) is equivalent to no owner filter")
+    fun `SYS-043 owner only blanks is no filter`() {
+        val seedOwner = uniqueName("sys043commas_seed_owner")
+        val seedComp = uniqueName("sys043commas_seed_comp")
+        createComponent(seedComp, seedOwner)
+
+        val withoutParam = fetchNames()
+        val withCommas = fetchNames("owner" to ",,")
+        assert(withoutParam == withCommas) {
+            "expected ?owner=,, to match no filter; without=$withoutParam commas=$withCommas"
+        }
+    }
+
+    @Test
+    @DisplayName("SYS-043: ?owner=,alice,,bob, behaves as ?owner=alice,bob")
+    fun `SYS-043 owner interleaved blanks normalised`() {
+        val alice = uniqueName("sys043ilv_alice")
+        val bob = uniqueName("sys043ilv_bob")
+        val carol = uniqueName("sys043ilv_carol")
+        val compA = uniqueName("sys043ilv_a")
+        val compB = uniqueName("sys043ilv_b")
+        val compC = uniqueName("sys043ilv_c")
+        createComponent(compA, alice)
+        createComponent(compB, bob)
+        createComponent(compC, carol)
+
+        val canonical = fetchNames("owner" to "$alice,$bob")
+        val interleaved = fetchNames("owner" to ",$alice,,$bob,")
+        assert(canonical == interleaved) {
+            "expected interleaved-blanks input to canonicalise; canonical=$canonical interleaved=$interleaved"
+        }
+        assert(interleaved.contains(compA)) { "expected $compA in $interleaved" }
+        assert(interleaved.contains(compB)) { "expected $compB in $interleaved" }
+        assert(!interleaved.contains(compC)) { "did not expect $compC in $interleaved" }
+    }
+
+    @Test
+    @DisplayName("SYS-043: ?owner=alice%20 (trailing whitespace) matches alice after trim")
+    fun `SYS-043 owner trailing whitespace trimmed`() {
+        val alice = uniqueName("sys043trim_alice")
+        val tagged = uniqueName("sys043trim_tagged")
+        createComponent(tagged, alice)
+
+        val names = fetchNames("owner" to "$alice ")
+        assert(names.contains(tagged)) { "expected $tagged in $names (trailing space should trim)" }
+    }
+
+    @Test
+    @DisplayName("SYS-043: ?owner=%20alice (leading whitespace) matches alice after trim")
+    fun `SYS-043 owner leading whitespace trimmed`() {
+        val alice = uniqueName("sys043ltrim_alice")
+        val tagged = uniqueName("sys043ltrim_tagged")
+        createComponent(tagged, alice)
+
+        val names = fetchNames("owner" to " $alice")
+        assert(names.contains(tagged)) { "expected $tagged in $names (leading space should trim)" }
+    }
+
+    @Test
+    @DisplayName("SYS-043: ?owner=alice,alice is equivalent to ?owner=alice (dedupe)")
+    fun `SYS-043 owner duplicate value collapsed`() {
+        val alice = uniqueName("sys043dup_alice")
+        val bob = uniqueName("sys043dup_bob")
+        val aliceComp = uniqueName("sys043dup_a")
+        val bobComp = uniqueName("sys043dup_b")
+        createComponent(aliceComp, alice)
+        createComponent(bobComp, bob)
+
+        val single = fetchNames("owner" to alice)
+        val duplicated = fetchNames("owner" to "$alice,$alice")
+        assert(single == duplicated) {
+            "expected ?owner=alice,alice to match ?owner=alice; single=$single duplicated=$duplicated"
+        }
+        assert(duplicated.contains(aliceComp)) { "expected $aliceComp in $duplicated" }
+        assert(!duplicated.contains(bobComp)) { "did not expect $bobComp in $duplicated" }
+    }
+
+    @Test
+    @DisplayName("SYS-043: ?owner=alice,bob combined with size + sort still paginates+sorts")
+    fun `SYS-043 owner with pagination and sort still applied`() {
+        // Predictable lexicographic prefixes (aaa < bbb < ccc) and unique
+        // owner names so totalElements over the OR set is independent of
+        // other tests' fixtures.
+        val alice = uniqueName("sys043pg_alice")
+        val bob = uniqueName("sys043pg_bob")
+        val suffix = UUID.randomUUID().toString().take(6)
+        val first = "ownpg_aaa_$suffix"
+        val second = "ownpg_bbb_$suffix"
+        val third = "ownpg_ccc_$suffix"
+        // Reverse insertion order so a sort regression is visibly wrong.
+        createComponent(third, bob)
+        createComponent(second, alice)
+        createComponent(first, alice)
+
+        val pageBody =
+            mvc
+                .perform(
+                    get("/rest/api/4/components")
+                        .with(viewerJwt())
+                        .param("owner", "$alice,$bob")
+                        .param("size", "1")
+                        .param("sort", "componentKey,asc"),
+                ).andExpect(status().isOk)
+                .andReturn().response.contentAsString
+        val pageJson = objectMapper.readTree(pageBody)
+        assert(pageJson["content"].size() == 1) {
+            "expected page size 1; got ${pageJson["content"].size()}: ${pageBody.take(400)}"
+        }
+        assert(pageJson["totalElements"].asLong() == 3L) {
+            "expected totalElements=3 (three seeded alice/bob components); got ${pageJson["totalElements"]}"
+        }
+
+        val fullBody =
+            mvc
+                .perform(
+                    get("/rest/api/4/components")
+                        .with(viewerJwt())
+                        .param("owner", "$alice,$bob")
+                        .param("size", "10")
+                        .param("sort", "componentKey,asc"),
+                ).andExpect(status().isOk)
+                .andReturn().response.contentAsString
+        val returnedNames = objectMapper.readTree(fullBody)["content"].map { it["name"].asText() }
+        val seededNames = returnedNames.filter { it.endsWith("_$suffix") }
+        assert(seededNames == listOf(first, second, third)) {
+            "expected components returned sorted by componentKey ASC ($first, $second, $third); got $seededNames"
+        }
+    }
 }

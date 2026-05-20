@@ -121,7 +121,7 @@ class ComponentControllerV4(
         @RequestParam(required = false) productType: String?,
         @RequestParam(required = false) archived: Boolean?,
         @RequestParam(required = false) search: String?,
-        @RequestParam(required = false) owner: String?,
+        @RequestParam(required = false) owner: List<String>?,
         @RequestParam(required = false) buildSystem: List<String>?,
         @RequestParam(required = false) labels: List<String>?,
         pageable: Pageable,
@@ -168,13 +168,20 @@ class ComponentControllerV4(
                 ?.filter { it.isNotEmpty() }
                 ?.distinct()
                 ?.takeIf { it.isNotEmpty() }
+        val normalizedOwner =
+            owner
+                ?.flatMap { it.split(",") }
+                ?.map { it.trim() }
+                ?.filter { it.isNotEmpty() }
+                ?.distinct()
+                ?.takeIf { it.isNotEmpty() }
         val filter =
             ComponentFilter(
                 system = normalizedSystem,
                 productType = productType,
                 archived = archived,
                 search = search,
-                owner = owner,
+                owner = normalizedOwner,
                 buildSystem = normalizedBuildSystem,
                 labels = normalizedLabels,
             )

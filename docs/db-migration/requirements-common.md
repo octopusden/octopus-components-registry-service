@@ -51,6 +51,7 @@
 | SYS-040 | GET /components?labels=A,B filters by component_labels junction (AND across selected labels); GET /components/meta/labels returns sorted distinct codes in use | High | integration-test | ✅ Tested |
 | SYS-041 | GET /components?buildSystem=GRADLE,MAVEN accepts CSV multi-value with OR semantics across the BASE buildSystem column | High | integration-test | ✅ Tested |
 | SYS-042 | GET /components?system=A,B accepts CSV multi-value with OR semantics across component_systems; GET /components/meta/systems returns sorted distinct codes in use | High | integration-test | ✅ Tested |
+| SYS-043 | GET /components?owner=alice,bob accepts CSV multi-value with OR semantics over the scalar componentOwner column | High | integration-test | ✅ Tested |
 
 ---
 
@@ -1324,3 +1325,38 @@ The change is wire-compatible: a single value `?system=CLASSIC` round-trips thro
 - Sort-by-system, group-by-system.
 - AND across systems (could be useful but not requested — picker UX is OR).
 - A dedicated empty-DB contract test class for `/meta/systems` (parallel to `MetaLabelsEmptyDbContractTest`) — can be added later if needed; current `/meta/systems` shape test asserts always-200-array against the seeded context.
+
+---
+
+### SYS-043: GET /components?owner=alice,bob multi-value with OR semantics
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+SYS-035 introduced the single-value `?owner=` filter. The Portal `ComponentListPage` owner picker is now a multi-select (parity with the labels, system, and buildSystem multi-selects), so the wire contract needs to accept a CSV list with OR semantics — "components owned by any of these people".
+
+**Description:**
+Extend `?owner=` to accept CSV multi-value (and repeatable params). The controller normalisation pipeline is identical to the other multi-value filters (split → trim → filter empty → distinct → null-if-empty). `componentOwner` is a scalar column on `ComponentEntity` (NOT a junction), so the Specification needs no JOIN and no `query.distinct(true)` — a single `root.get<String>("componentOwner").in(filter.owner)` predicate is the entire branch. This is the simplest of the multi-value filter shapes by construction.
+
+The change is wire-compatible: a single value `?owner=alice` round-trips through the new pipeline unchanged. DTO field type `String?` → `List<String>?` is server-internal.
+
+**Preconditions:**
+- Caller has `ACCESS_COMPONENTS`.
+
+**Acceptance criteria:**
+1. `?owner=alice` (single value, backward compat) returns components owned by alice only.
+2. `?owner=alice,bob` (CSV) returns components owned by alice OR bob; components owned by a third user are excluded.
+3. `?owner=alice&owner=bob` (repeatable params) returns the same set as the CSV form.
+4. Blank normalisation: `?owner=`, `?owner=,,` and any input normalising to zero non-blank tokens behaves as "no owner filter".
+5. Interleaved-blanks: `?owner=,alice,,bob,` behaves as `?owner=alice,bob`.
+6. Whitespace trim: `?owner=alice%20` and `?owner=%20alice` both match alice.
+7. Dedupe: `?owner=alice,alice` behaves identically to `?owner=alice`.
+8. Pagination and sort still apply when `?owner=` is multi-valued. Returned `content[].name` is sorted ascending when `sort=componentKey,asc` is set.
+
+**Test method:** `ListComponentsOwnerFilterTest` — extended with nine SYS-043 cases covering criteria 1–8 alongside the existing single-value SYS-035 tests.
+
+**Out of scope:**
+- Group-by-owner.
+- AND across owners (would always yield zero matches given the scalar column; not useful).

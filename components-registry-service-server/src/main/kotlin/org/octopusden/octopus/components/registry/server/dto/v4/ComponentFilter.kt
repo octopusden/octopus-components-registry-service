@@ -15,7 +15,15 @@ data class ComponentFilter(
     val productType: String? = null,
     val archived: Boolean? = null,
     val search: String? = null,
-    val owner: String? = null,
+    /**
+     * Multi-value OR filter over the scalar `components.componentOwner`
+     * column. A component matches when its componentOwner equals any of
+     * the listed values. Picker semantics is "components owned by any of
+     * these people". Scalar column on ComponentEntity, so no JOIN and no
+     * `query.distinct(true)` needed — the IN-predicate alone is enough.
+     * Same controller normalisation as the other multi-value filters.
+     */
+    val owner: List<String>? = null,
     /**
      * Multi-value OR filter over the BASE configuration row's buildSystem
      * column. A component matches when its BASE buildSystem equals any of

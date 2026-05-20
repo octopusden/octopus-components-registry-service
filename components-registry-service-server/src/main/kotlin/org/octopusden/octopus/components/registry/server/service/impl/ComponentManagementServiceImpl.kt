@@ -1230,8 +1230,20 @@ class ComponentManagementServiceImpl(
         filter.archived?.let { archived ->
             spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<Boolean>("archived"), archived) })
         }
-        filter.owner?.let { owner ->
-            spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<String>("componentOwner"), owner) })
+        // OR across selected owners — a component matches when its scalar
+        // componentOwner column equals any of the listed values. No JOIN
+        // (componentOwner is a column on ComponentEntity itself, not a
+        // junction), so no query.distinct(true) is needed; the IN-predicate
+        // alone is enough. The controller's normalisation guarantees the
+        // list, if present, is non-empty, has no blanks, and has no
+        // duplicates.
+        if (!filter.owner.isNullOrEmpty()) {
+            spec =
+                spec.and(
+                    Specification { root, _, _ ->
+                        root.get<String>("componentOwner").`in`(filter.owner)
+                    },
+                )
         }
         filter.search?.let { search ->
             val pattern = "%${search.lowercase()}%"
