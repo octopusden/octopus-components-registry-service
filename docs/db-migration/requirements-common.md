@@ -50,6 +50,7 @@
 | SYS-038 | Domain-named meta endpoints for free-form aspect option lists (buildSystem / repositoryType / generation) | Medium | integration-test | ✅ Tested |
 | SYS-040 | GET /components?labels=A,B filters by component_labels junction (AND across selected labels); GET /components/meta/labels returns sorted distinct codes in use | High | integration-test | ✅ Tested |
 | SYS-041 | GET /components?buildSystem=GRADLE,MAVEN accepts CSV multi-value with OR semantics across the BASE buildSystem column | High | integration-test | ✅ Tested |
+| SYS-042 | GET /components?system=A,B accepts CSV multi-value with OR semantics across component_systems; GET /components/meta/systems returns sorted distinct codes in use | High | integration-test | ✅ Tested |
 
 ---
 
@@ -1278,3 +1279,48 @@ The change is wire-compatible: a single value `?buildSystem=GRADLE` round-trips 
 - Sort-by-buildSystem, group-by-buildSystem.
 - AND across buildSystems (vacuously empty given the schema, so not useful).
 - Validation of unknown values at the controller (write-side already validates via `BUILD_SYSTEM_NAMES`; read-side just returns empty for unknowns, mirroring the pre-multi-value behaviour).
+
+---
+
+### SYS-042: GET /components?system=A,B multi-value with OR semantics + GET /components/meta/systems
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+The Portal `ComponentListPage` previously supported only a single-value `?system=` selector. Like buildSystem, users often want to scope to "any of a small set" of systems (e.g., CLASSIC OR a sibling code). Extending the existing query parameter to accept CSV multi-value turns the picker into a true multi-select. The companion `/meta/systems` endpoint populates the picker from labels in use (parity with `/meta/owners` and `/meta/labels`).
+
+**Description:**
+Two additions to the v4 component surface, mirroring SYS-040 (labels) and SYS-041 (buildSystem).
+
+1. **`GET /rest/api/4/components?system=A,B`** — multi-value OR filter. A component matches when ANY of its `component_systems` junctions has a code in the list. Unlike labels (also junction-backed but AND across selections), the picker semantics for systems is "components belonging to any of these systems" — a component can carry several systems and selecting two should union those sets. CSV is the primary wire format; Spring also accepts repeatable params. The controller normalises both shapes through the same pipeline already used for labels and buildSystem (split → trim → filter empty → distinct → null-if-empty). The JPA Specification uses one JOIN through `systemJunctions` and a single `IN (?, ?, …)` predicate — naturally union-semantic, no separate predicate per code needed.
+
+2. **`GET /rest/api/4/components/meta/systems`** — returns sorted distinct system codes currently attached to at least one component, sourced from the `component_systems` junction via a new repository method `ComponentSystemRepository.findDistinctSystemCodes()`. Same blank/null defence as `findDistinctLabelCodes` and `findDistinctOwners`. Mirrors `/meta/owners` and `/meta/labels` in shape and intent.
+
+Auth: both gated by `ACCESS_COMPONENTS`, matching the rest of the v4 read surface.
+
+The change is wire-compatible: a single value `?system=CLASSIC` round-trips through the new pipeline unchanged. The DTO field type changed from `String?` to `List<String>?` but `ComponentFilter` is server-internal and not part of any external API surface.
+
+**Preconditions:**
+- Caller has `ACCESS_COMPONENTS`.
+
+**Acceptance criteria:**
+1. `?system=A` (single value, backward compat) returns components carrying system A.
+2. `?system=A,B` (CSV) returns components carrying A OR B; components carrying only a third code are excluded.
+3. `?system=A&system=B` (repeatable params) returns the same set as the CSV form.
+4. `?system=<unknown>` returns 200 + empty page (existing behaviour, regression-checked).
+5. Blank normalisation: `?system=`, `?system=,,` and any input normalising to zero non-blank tokens behaves as "no system filter".
+6. Interleaved-blanks: `?system=,A,,B,` behaves as `?system=A,B`.
+7. Whitespace trim: `?system=A%20` and `?system=%20A` both match A.
+8. Dedupe: `?system=A,A` behaves identically to `?system=A`.
+9. Pagination and sort still apply when `?system=` is multi-valued. Returned `content[].name` is sorted ascending when `sort=componentKey,asc` is set.
+10. `GET /meta/systems` returns 200 + sorted distinct system codes; no duplicates even when multiple components carry the same code.
+11. `GET /meta/systems` always returns 200 + a JSON array (NOT 404), regardless of DB state.
+
+**Test method:** `ListComponentsSystemFilterTest` (extended with SYS-042 cases) covers criteria 1–9 alongside the existing single-value tests; `MetaOptionsEndpointsTest` (extended) covers criteria 10–11.
+
+**Out of scope:**
+- Sort-by-system, group-by-system.
+- AND across systems (could be useful but not requested — picker UX is OR).
+- A dedicated empty-DB contract test class for `/meta/systems` (parallel to `MetaLabelsEmptyDbContractTest`) — can be added later if needed; current `/meta/systems` shape test asserts always-200-array against the seeded context.

@@ -1,7 +1,17 @@
 package org.octopusden.octopus.components.registry.server.dto.v4
 
 data class ComponentFilter(
-    val system: String? = null,
+    /**
+     * Multi-value OR filter over the component_systems junction. A component
+     * matches when ANY of its system junctions has a systemCode in this
+     * list. Unlike labels (also junction-backed but AND across selections),
+     * system is OR because the picker semantics is "components belonging to
+     * any of these systems". The controller normalises raw query input
+     * (split-by-comma, trim, drop-empty, distinct, null-if-empty) before
+     * populating this field, so the Specification can rely on the list
+     * being non-empty and free of blank/whitespace/duplicate entries.
+     */
+    val system: List<String>? = null,
     val productType: String? = null,
     val archived: Boolean? = null,
     val search: String? = null,

@@ -12,6 +12,7 @@ import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideRes
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideUpdateRequest
 import org.octopusden.octopus.components.registry.server.repository.ComponentLabelRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
+import org.octopusden.octopus.components.registry.server.repository.ComponentSystemRepository
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.RepositoryType
@@ -47,6 +48,7 @@ class ComponentControllerV4(
     private val componentManagementService: ComponentManagementService,
     private val componentRepository: ComponentRepository,
     private val componentLabelRepository: ComponentLabelRepository,
+    private val componentSystemRepository: ComponentSystemRepository,
 ) {
     private val log = LoggerFactory.getLogger(ComponentControllerV4::class.java)
 
@@ -61,6 +63,15 @@ class ComponentControllerV4(
     @GetMapping("/meta/labels")
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
     fun getDistinctLabels(): List<String> = componentLabelRepository.findDistinctLabelCodes()
+
+    // Distinct system codes currently in use on at least one component, sorted
+    // ascending. Sourced from the component_systems junction, NOT from the
+    // master SystemEntity table — same rationale as /meta/labels: the picker
+    // should advertise only codes actually attached to a component. Mirrors
+    // /meta/owners and /meta/labels in shape and intent.
+    @GetMapping("/meta/systems")
+    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
+    fun getDistinctSystems(): List<String> = componentSystemRepository.findDistinctSystemCodes()
 
     // Domain-named option lists for the three free-form aspect string fields
     // (buildSystem, repositoryType, generation). The portal's EnumSelect uses
@@ -106,7 +117,7 @@ class ComponentControllerV4(
     @GetMapping
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
     fun listComponents(
-        @RequestParam(required = false) system: String?,
+        @RequestParam(required = false) system: List<String>?,
         @RequestParam(required = false) productType: String?,
         @RequestParam(required = false) archived: Boolean?,
         @RequestParam(required = false) search: String?,
@@ -115,10 +126,10 @@ class ComponentControllerV4(
         @RequestParam(required = false) labels: List<String>?,
         pageable: Pageable,
     ): Page<ComponentSummaryResponse> {
-        // Normalise the raw multi-value query inputs (labels, buildSystem)
-        // here, before constructing the filter, so each Specification branch
-        // can rely on a non-null list whose entries are all non-blank and
-        // free of duplicates.
+        // Normalise the raw multi-value query inputs (system, labels,
+        // buildSystem) here, before constructing the filter, so each
+        // Specification branch can rely on a non-null list whose entries
+        // are all non-blank and free of duplicates.
         //
         // Spring's @RequestParam List<String> binder accepts both repeatable
         // params (?labels=A&labels=B) and CSV inside a single value
@@ -150,9 +161,16 @@ class ComponentControllerV4(
                 ?.filter { it.isNotEmpty() }
                 ?.distinct()
                 ?.takeIf { it.isNotEmpty() }
+        val normalizedSystem =
+            system
+                ?.flatMap { it.split(",") }
+                ?.map { it.trim() }
+                ?.filter { it.isNotEmpty() }
+                ?.distinct()
+                ?.takeIf { it.isNotEmpty() }
         val filter =
             ComponentFilter(
-                system = system,
+                system = normalizedSystem,
                 productType = productType,
                 archived = archived,
                 search = search,

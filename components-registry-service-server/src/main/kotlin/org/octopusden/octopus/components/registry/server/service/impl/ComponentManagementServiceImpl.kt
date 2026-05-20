@@ -1267,13 +1267,21 @@ class ComponentManagementServiceImpl(
                     },
                 )
         }
-        filter.system?.let { systemCode ->
+        // OR across selected system codes — a component matches when ANY of
+        // its system junctions has a code in the list. Unlike labels (also
+        // junction-backed but AND across selections), the picker semantics
+        // here is "components belonging to any of these systems". One JOIN
+        // through systemJunctions + IN(...) keeps the predicate count
+        // bounded regardless of selection size. The controller's
+        // normalisation guarantees the list, if present, is non-empty, has
+        // no blanks, and has no duplicates.
+        if (!filter.system.isNullOrEmpty()) {
             spec =
                 spec.and(
                     Specification { root, query, cb ->
                         val join = root.join<ComponentEntity, ComponentSystemEntity>("systemJunctions")
                         query?.distinct(true)
-                        cb.equal(join.get<String>("systemCode"), systemCode)
+                        join.get<String>("systemCode").`in`(filter.system)
                     },
                 )
         }

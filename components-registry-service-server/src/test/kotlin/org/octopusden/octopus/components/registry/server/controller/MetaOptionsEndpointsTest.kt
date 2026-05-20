@@ -294,4 +294,69 @@ class MetaOptionsEndpointsTest {
             "expected no blank-or-whitespace entries in $codes"
         }
     }
+
+    // /meta/systems mirrors /meta/labels in shape and intent — sourced from
+    // the component_systems junction (NOT the master systems table) so the
+    // picker advertises only codes actually attached to a component.
+
+    private fun uniqueSystemCode(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(8)}"
+
+    private fun createComponentWithSystems(
+        name: String,
+        systems: Set<String>,
+    ) {
+        val systemsJson = systems.joinToString(",") { "\"$it\"" }
+        mvc
+            .perform(
+                post("/rest/api/4/components")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"name":"$name","displayName":"$name","systems":[$systemsJson]}"""),
+            ).andExpect(status().isCreated)
+    }
+
+    @Test
+    @DisplayName("SYS-042: GET /meta/systems returns sorted distinct system codes from the junction")
+    fun `SYS-042 GET meta systems returns sorted distinct codes from junction`() {
+        // Seed three components with overlapping system codes; distinct
+        // ascending order must be alpha, beta, gamma regardless of
+        // insertion order. Random suffixes keep this assertion independent
+        // of other tests in the same Spring context.
+        val a = uniqueSystemCode("alphasys")
+        val b = uniqueSystemCode("betasys")
+        val g = uniqueSystemCode("gammasys")
+
+        createComponentWithSystems("meta_systems_one_${UUID.randomUUID().toString().take(6)}", setOf(b, a))
+        createComponentWithSystems("meta_systems_two_${UUID.randomUUID().toString().take(6)}", setOf(g, a))
+        createComponentWithSystems("meta_systems_three_${UUID.randomUUID().toString().take(6)}", setOf(b))
+
+        val body =
+            mvc
+                .perform(get("/rest/api/4/components/meta/systems").with(viewerJwt()))
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$").isArray)
+                .andReturn()
+                .response.contentAsString
+        val all = objectMapper.readTree(body).map { it.asText() }
+        val seeded = all.filter { it == a || it == b || it == g }
+        assert(seeded == listOf(a, b, g).sorted()) {
+            "expected seeded systems sorted ascending; got $seeded"
+        }
+        // No duplicates across the entire response.
+        assert(all.size == all.toSet().size) { "expected no duplicates; got $all" }
+    }
+
+    @Test
+    @DisplayName("SYS-042: GET /meta/systems always returns 200 + JSON array (response shape)")
+    fun `SYS-042 GET meta systems returns 200 array regardless of DB state`() {
+        // Shape contract against the seeded context. The empty-DB case for
+        // /meta/systems would be a dedicated test class (parallel to
+        // MetaLabelsEmptyDbContractTest) — out of scope here; this case
+        // asserts the always-200-array shape regardless of how many rows
+        // happen to be in the junction.
+        mvc
+            .perform(get("/rest/api/4/components/meta/systems").with(viewerJwt()))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$").isArray)
+    }
 }
