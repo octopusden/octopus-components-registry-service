@@ -97,8 +97,8 @@ class ListComponentsLabelsFilterTest {
     }
 
     @Test
-    @DisplayName("?labels=A returns only components carrying label A")
-    fun labelsFilter_singleLabel_returnsMatching() {
+    @DisplayName("SYS-040: ?labels=A returns only components carrying label A")
+    fun `SYS-040 labels A returns components carrying label A`() {
         val labelA = uniqueName("lbla")
         val labelB = uniqueName("lblb")
         val onlyA = uniqueName("lbl_only_a")
@@ -116,8 +116,8 @@ class ListComponentsLabelsFilterTest {
     }
 
     @Test
-    @DisplayName("?labels=A,B (CSV) returns only components carrying BOTH A and B (AND semantics)")
-    fun labelsFilter_csvAndSemantics() {
+    @DisplayName("SYS-040: ?labels=A,B applies AND semantics across selected labels")
+    fun `SYS-040 labels A,B AND semantics`() {
         val labelA = uniqueName("andlbla")
         val labelB = uniqueName("andlblb")
         val onlyA = uniqueName("and_only_a")
@@ -145,8 +145,35 @@ class ListComponentsLabelsFilterTest {
     }
 
     @Test
-    @DisplayName("?labels=<unknown> returns empty page (not 500)")
-    fun labelsFilter_unknownLabel_returnsEmpty() {
+    @DisplayName("SYS-040: ?labels=A,A is equivalent to ?labels=A (duplicates collapsed)")
+    fun `SYS-040 labels A,A is equivalent to labels A`() {
+        // Behavioural check on the controller's `distinct()` normalisation
+        // step: a duplicated code in the query string must produce the same
+        // result set as a single occurrence. Without dedupe the
+        // Specification would still match the same components (AND of
+        // identical predicates is a no-op set-theoretically), but it would
+        // issue a redundant extra JOIN. We assert behaviour parity, which
+        // is the externally observable guarantee; the JOIN-count delta is
+        // an internal optimisation.
+        val labelA = uniqueName("duplbla")
+        val labelB = uniqueName("duplblb")
+        val onlyA = uniqueName("dup_only_a")
+        val onlyB = uniqueName("dup_only_b")
+        createComponentWithLabels(onlyA, setOf(labelA))
+        createComponentWithLabels(onlyB, setOf(labelB))
+
+        val singleNames = fetchNames("labels" to labelA)
+        val duplicatedNames = fetchNames("labels" to "$labelA,$labelA")
+        assert(singleNames == duplicatedNames) {
+            "expected ?labels=A,A to match ?labels=A; single=$singleNames duplicated=$duplicatedNames"
+        }
+        assert(duplicatedNames.contains(onlyA)) { "expected $onlyA in $duplicatedNames" }
+        assert(!duplicatedNames.contains(onlyB)) { "did not expect $onlyB in $duplicatedNames" }
+    }
+
+    @Test
+    @DisplayName("SYS-040: ?labels=<unknown> returns empty page (not 500)")
+    fun `SYS-040 labels unknown returns empty page`() {
         val unknown = uniqueName("unknown_label")
         mvc
             .perform(
@@ -159,8 +186,8 @@ class ListComponentsLabelsFilterTest {
     }
 
     @Test
-    @DisplayName("?labels= (blank) is equivalent to no labels filter")
-    fun labelsFilter_blankValue_noFilter() {
+    @DisplayName("SYS-040: ?labels= (blank) is equivalent to no labels filter")
+    fun `SYS-040 labels blank value is no filter`() {
         // Seed a component to ensure the unfiltered page has content (so the
         // assertion "blank == no filter" is meaningful even on a fresh DB).
         val seed = uniqueName("blank_seed")
@@ -174,8 +201,8 @@ class ListComponentsLabelsFilterTest {
     }
 
     @Test
-    @DisplayName("?labels=,, (only blanks) is equivalent to no labels filter")
-    fun labelsFilter_onlyBlanks_noFilter() {
+    @DisplayName("SYS-040: ?labels=,, (only blanks) is equivalent to no labels filter")
+    fun `SYS-040 labels only blanks is no filter`() {
         val seed = uniqueName("commas_seed")
         createComponentWithLabels(seed, setOf(uniqueName("seedlbl2")))
 
@@ -187,8 +214,8 @@ class ListComponentsLabelsFilterTest {
     }
 
     @Test
-    @DisplayName("?labels=,A,,B, behaves as ?labels=A,B (interleaved blanks dropped)")
-    fun labelsFilter_interleavedBlanks_normalised() {
+    @DisplayName("SYS-040: ?labels=,A,,B, behaves as ?labels=A,B (interleaved blanks dropped)")
+    fun `SYS-040 labels interleaved blanks normalised`() {
         val labelA = uniqueName("ilvlbla")
         val labelB = uniqueName("ilvlblb")
         val onlyA = uniqueName("ilv_only_a")
@@ -207,8 +234,8 @@ class ListComponentsLabelsFilterTest {
     }
 
     @Test
-    @DisplayName("?labels=A%20 (trailing whitespace) matches label A after trim")
-    fun labelsFilter_trailingWhitespaceTrimmed() {
+    @DisplayName("SYS-040: ?labels=A%20 (trailing whitespace) matches label A after trim")
+    fun `SYS-040 labels trailing whitespace trimmed`() {
         val labelA = uniqueName("trimlbla")
         val tagged = uniqueName("trim_tagged")
         createComponentWithLabels(tagged, setOf(labelA))
@@ -218,8 +245,8 @@ class ListComponentsLabelsFilterTest {
     }
 
     @Test
-    @DisplayName("?labels=%20A (leading whitespace) matches label A after trim")
-    fun labelsFilter_leadingWhitespaceTrimmed() {
+    @DisplayName("SYS-040: ?labels=%20A (leading whitespace) matches label A after trim")
+    fun `SYS-040 labels leading whitespace trimmed`() {
         val labelA = uniqueName("ltrimlbla")
         val tagged = uniqueName("ltrim_tagged")
         createComponentWithLabels(tagged, setOf(labelA))
@@ -229,8 +256,8 @@ class ListComponentsLabelsFilterTest {
     }
 
     @Test
-    @DisplayName("?labels=A combined with size=1 + sort=componentKey,asc still paginates+sorts")
-    fun labelsFilter_paginationAndSortStillApplied() {
+    @DisplayName("SYS-040: ?labels=A combined with size=1 + sort=componentKey,asc still paginates+sorts")
+    fun `SYS-040 labels with pagination and sort still applied`() {
         val labelA = uniqueName("pgnlbla")
         // Names crafted so that componentKey ordering is deterministic:
         // componentKey is derived from name; we use a fixed prefix + suffix.

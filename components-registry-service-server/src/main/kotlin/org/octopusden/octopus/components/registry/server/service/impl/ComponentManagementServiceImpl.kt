@@ -1273,8 +1273,13 @@ class ComponentManagementServiceImpl(
         // in the set), which is not the semantics the multi-select picker
         // promises ("show me components carrying ALL of these labels").
         // The controller's normalisation guarantees the list, if present,
-        // is non-empty and contains no blank entries, so the forEach body
-        // is always meaningful.
+        // is non-empty, has no blanks, and has no duplicates, so the
+        // forEach body is always meaningful and never redundant.
+        //
+        // One join per selected label, matching the system/buildSystem
+        // filter pattern above. Number of labels in a filter is bounded by
+        // the picker UI; if it ever grows large enough to be a problem,
+        // revisit via EXISTS subqueries or GROUP BY HAVING COUNT(DISTINCT).
         if (!filter.labels.isNullOrEmpty()) {
             filter.labels.forEach { lbl ->
                 spec =

@@ -117,21 +117,24 @@ class ComponentControllerV4(
     ): Page<ComponentSummaryResponse> {
         // Normalise the raw `labels` input here, before constructing the
         // filter, so the Specification can rely on a non-null list whose
-        // entries are all non-blank.
+        // entries are all non-blank and free of duplicates.
         //
         // Spring's @RequestParam List<String> binder accepts both repeatable
         // params (?labels=A&labels=B) and CSV inside a single value
         // (?labels=A,B). flatMap split-by-comma normalises both into one
         // shape; trim then drop-empty defends against blank entries
         // (?labels=, ?labels=,,, ?labels=,A,,B,) that would otherwise yield
-        // an empty-string predicate which silently matches nothing. The
-        // final takeIf collapses an all-blank input back to null so the
+        // an empty-string predicate which silently matches nothing. distinct
+        // collapses repeated codes (?labels=A,A → ?labels=A) so the
+        // Specification doesn't issue a redundant extra JOIN per duplicate.
+        // The final takeIf collapses an all-blank input back to null so the
         // Specification's isNullOrEmpty branch skips the join entirely.
         val normalizedLabels =
             labels
                 ?.flatMap { it.split(",") }
                 ?.map { it.trim() }
                 ?.filter { it.isNotEmpty() }
+                ?.distinct()
                 ?.takeIf { it.isNotEmpty() }
         val filter =
             ComponentFilter(

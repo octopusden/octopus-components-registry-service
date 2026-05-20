@@ -172,8 +172,8 @@ class MetaOptionsEndpointsTest {
     }
 
     @Test
-    @DisplayName("GET /meta/labels returns sorted distinct label codes from the junction")
-    fun `meta labels returns sorted distinct codes`() {
+    @DisplayName("SYS-040: GET /meta/labels returns sorted distinct label codes from the junction")
+    fun `SYS-040 GET meta labels returns sorted distinct codes from junction`() {
         // Seed three components with overlapping labels. Distinct, sorted
         // ascending must be `alpha, beta, gamma` regardless of insertion
         // order. Using random suffixes keeps the assertion independent of
@@ -204,15 +204,14 @@ class MetaOptionsEndpointsTest {
     }
 
     @Test
-    @DisplayName("GET /meta/labels returns 200 + JSON array even when no labels exist (NOT 404)")
-    fun `meta labels returns 200 array contract`() {
-        // Contract guarantee: empty-labels-DB returns 200 + array, not 404.
-        // Portal's `useLabels` has a 404/501 fallback for the transitional
-        // pre-deploy window, but in steady state the happy path must be a
-        // plain 200 + array so that no fallback ever fires.
-        // We don't truncate the DB here (other test classes may have seeded
-        // labels); the assertion is that the endpoint shape is always
-        // 200 + array, never 404.
+    @DisplayName("SYS-040: GET /meta/labels always returns 200 + JSON array (response shape)")
+    fun `SYS-040 GET meta labels returns 200 array regardless of DB state`() {
+        // Shape contract: always 200 + array, never 404. This case asserts
+        // the shape against the seeded context inside this test class; the
+        // dedicated empty-DB case (Portal's "no labels exist yet" deploy
+        // window contract) lives in MetaLabelsEmptyDbContractTest, which
+        // spins up a fresh context with zero component_labels rows to
+        // verify the empty-array path specifically.
         mvc
             .perform(get("/rest/api/4/components/meta/labels").with(viewerJwt()))
             .andExpect(status().isOk)
