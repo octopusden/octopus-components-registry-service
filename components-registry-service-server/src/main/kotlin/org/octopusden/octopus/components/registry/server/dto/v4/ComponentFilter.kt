@@ -41,9 +41,9 @@ data class ComponentFilter(
      * must carry every code in this list to match. Null or empty means "no
      * extra filter applied" (NOT "match components with no labels"). The
      * controller normalises raw query input (split-by-comma, trim,
-     * drop-empty, null-if-empty) before populating this field, so the
-     * Specification can rely on the list being non-empty and free of
-     * blank/whitespace entries.
+     * drop-empty, distinct, null-if-empty) before populating this field,
+     * so the Specification can rely on the list being non-empty and free
+     * of blank/whitespace/duplicate entries.
      */
     val labels: List<String>? = null,
 )

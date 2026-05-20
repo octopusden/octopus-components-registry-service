@@ -1203,9 +1203,10 @@ Two additions to the v4 component surface.
        ?.flatMap { it.split(",") }
        ?.map { it.trim() }
        ?.filter { it.isNotEmpty() }
+       ?.distinct()
        ?.takeIf { it.isNotEmpty() }
    ```
-   `?labels=`, `?labels=,,`, and `?labels=,A,,B,` all canonicalise to the same shape as `?labels=A,B` (or "no filter" when the result is empty). AND semantics in the JPA Specification is implemented as one join + one predicate per label code — a single join + `IN(...)` would silently relax to OR.
+   `?labels=`, `?labels=,,`, and `?labels=,A,,B,` all canonicalise to the same shape as `?labels=A,B` (or "no filter" when the result is empty); `?labels=A,A` dedupes to a single-element list. AND semantics in the JPA Specification is implemented as one join + one predicate per label code — a single join + `IN(...)` would silently relax to OR.
 
 2. **`GET /rest/api/4/components/meta/labels`** — returns sorted distinct label codes currently attached to at least one component, sourced from the `component_labels` junction via a new repository method `ComponentLabelRepository.findDistinctLabelCodes()`. NOT sourced from the master `LabelEntity` table, which may contain orphan codes that no component carries — advertising those would create dead options in the Portal picker. Mirrors `/meta/owners` in shape and intent.
 
@@ -1225,8 +1226,9 @@ Auth: both gated by `ACCESS_COMPONENTS` (granted to `ROLE_ANONYMOUS` by default)
 7. Pagination and sort still apply when `?labels` is set (regression).
 8. `GET /components/meta/labels` returns 200 + sorted distinct label codes; no duplicates even when multiple components carry the same code.
 9. `GET /components/meta/labels` returns 200 + JSON array (NOT 404) when no labels exist — the Portal's `useLabels` 404/501 fallback is for the transitional pre-deploy window only; steady state must hit the happy path.
+10. Write-side canonicalisation: labels are trimmed + deduped on `POST /components` and `PATCH /components/{id}`. Persisting `labels=["A "]` stores `"A"` (canonical) so the read-side filter contract holds; `labels=["A","A"," A "]` stores `["A"]`. Non-empty input that canonicalises to zero entries (e.g. `labels=[" "]`) is rejected with 400 — an empty `labels: []` is still a legitimate "clear labels" operation.
 
-**Test method:** `ListComponentsLabelsFilterTest` covers criteria 1–7; `MetaOptionsEndpointsTest` (extended) covers criteria 8–9.
+**Test method:** `ListComponentsLabelsFilterTest` covers criteria 1–7; `MetaOptionsEndpointsTest` (extended) covers criteria 8–9; `V4WriteValidationTest` (extended) covers criterion 10.
 
 **Out of scope:**
 - Sort-by-label or group-by-label.
