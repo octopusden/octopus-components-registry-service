@@ -684,13 +684,6 @@ class ComponentManagementServiceImpl(
     }
 
     /**
-     * Replace the `component_labels` rows for [componentId] with exactly the
-     * labels in [desired]. Junctions have no JPA cascade — they must be written
-     * through their own repository (see `ComponentEntity` kdoc convention).
-     * Caller must invoke this AFTER `componentRepository.save(...)` has
-     * assigned an id; passing a transient component leads to an FK violation.
-     */
-    /**
      * Canonicalise a raw incoming label set: trim whitespace, drop entries
      * that are empty or whitespace-only, and dedupe. Mirrors the controller
      * read-side normalisation pipeline for `?labels=…` (split → trim →
@@ -719,6 +712,13 @@ class ComponentManagementServiceImpl(
         }
     }
 
+    /**
+     * Replace the `component_labels` rows for [componentId] with exactly the
+     * labels in [desired]. Junctions have no JPA cascade — they must be written
+     * through their own repository (see `ComponentEntity` kdoc convention).
+     * Caller must invoke this AFTER `componentRepository.save(...)` has
+     * assigned an id; passing a transient component leads to an FK violation.
+     */
     private fun syncLabels(
         componentId: UUID,
         desired: Set<String>,

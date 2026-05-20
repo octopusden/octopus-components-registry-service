@@ -126,67 +126,52 @@ class ComponentControllerV4(
         @RequestParam(required = false) labels: List<String>?,
         pageable: Pageable,
     ): Page<ComponentSummaryResponse> {
-        // Normalise the raw multi-value query inputs (system, labels,
-        // buildSystem) here, before constructing the filter, so each
-        // Specification branch can rely on a non-null list whose entries
-        // are all non-blank and free of duplicates.
-        //
-        // Spring's @RequestParam List<String> binder accepts both repeatable
-        // params (?labels=A&labels=B) and CSV inside a single value
-        // (?labels=A,B). flatMap split-by-comma normalises both into one
-        // shape; trim then drop-empty defends against blank entries
-        // (?labels=, ?labels=,,, ?labels=,A,,B,) that would otherwise yield
-        // an empty-string predicate which silently matches nothing. distinct
-        // collapses repeated codes (?labels=A,A → ?labels=A) so the
-        // Specification doesn't issue a redundant extra JOIN per duplicate.
-        // The final takeIf collapses an all-blank input back to null so the
-        // Specification's isNullOrEmpty branch skips the join entirely.
-        //
-        // buildSystem follows the identical pipeline — same wire shape (CSV
-        // primary, repeatable accepted), same blank/whitespace/duplicate
-        // hazards. The only semantic difference is downstream: buildSystem
-        // is OR (single column IN list) while labels is AND (one join per
-        // code). Both Specifications consume a normalised non-empty list.
-        val normalizedLabels =
-            labels
-                ?.flatMap { it.split(",") }
-                ?.map { it.trim() }
-                ?.filter { it.isNotEmpty() }
-                ?.distinct()
-                ?.takeIf { it.isNotEmpty() }
-        val normalizedBuildSystem =
-            buildSystem
-                ?.flatMap { it.split(",") }
-                ?.map { it.trim() }
-                ?.filter { it.isNotEmpty() }
-                ?.distinct()
-                ?.takeIf { it.isNotEmpty() }
-        val normalizedSystem =
-            system
-                ?.flatMap { it.split(",") }
-                ?.map { it.trim() }
-                ?.filter { it.isNotEmpty() }
-                ?.distinct()
-                ?.takeIf { it.isNotEmpty() }
-        val normalizedOwner =
-            owner
-                ?.flatMap { it.split(",") }
-                ?.map { it.trim() }
-                ?.filter { it.isNotEmpty() }
-                ?.distinct()
-                ?.takeIf { it.isNotEmpty() }
+        // Each multi-value list filter parameter (system, owner, buildSystem,
+        // labels) is normalised through `normalizeCsvParam` — see that
+        // helper for the wire-shape contract. The four downstream
+        // Specifications can rely on receiving a non-null, non-blank,
+        // duplicate-free list (or null = "no filter").
         val filter =
             ComponentFilter(
-                system = normalizedSystem,
+                system = normalizeCsvParam(system),
                 productType = productType,
                 archived = archived,
                 search = search,
-                owner = normalizedOwner,
-                buildSystem = normalizedBuildSystem,
-                labels = normalizedLabels,
+                owner = normalizeCsvParam(owner),
+                buildSystem = normalizeCsvParam(buildSystem),
+                labels = normalizeCsvParam(labels),
             )
         return componentManagementService.listComponents(filter, pageable)
     }
+
+    /**
+     * Normalise a multi-value `@RequestParam List<String>?` into the
+     * canonical shape consumed by `ComponentFilter` / the Specification
+     * branches.
+     *
+     * Spring's binder accepts both repeatable params (`?x=A&x=B`) and CSV
+     * inside a single value (`?x=A,B`). `flatMap { it.split(",") }`
+     * normalises both into one shape; trim then drop-empty defends against
+     * blank entries (`?x=`, `?x=,,`, `?x=,A,,B,`) that would otherwise
+     * yield empty-string predicates that silently match nothing or break
+     * equality checks downstream. `distinct()` collapses repeated codes
+     * (`?x=A,A → ?x=A`) so the Specification doesn't issue a redundant
+     * extra JOIN per duplicate. The final `takeIf { it.isNotEmpty() }`
+     * collapses an all-blank input back to null so the Specification's
+     * `isNullOrEmpty` branch skips the filter entirely.
+     *
+     * Downstream semantics differ per filter — buildSystem is OR (single
+     * column IN list), system is OR (junction + IN), owner is OR (scalar
+     * IN), labels is AND (one join per code) — but they all consume the
+     * same normalised non-empty list shape.
+     */
+    private fun normalizeCsvParam(raw: List<String>?): List<String>? =
+        raw
+            ?.flatMap { it.split(",") }
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() }
+            ?.distinct()
+            ?.takeIf { it.isNotEmpty() }
 
     @GetMapping("/{idOrName}")
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")

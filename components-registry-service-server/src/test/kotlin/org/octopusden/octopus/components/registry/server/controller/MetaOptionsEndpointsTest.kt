@@ -231,18 +231,24 @@ class MetaOptionsEndpointsTest {
     @Test
     @DisplayName("SYS-040: /meta/labels filters out null/blank labelCodes")
     fun `SYS-040 meta labels filters blank labelCodes`() {
-        // The write path (controller + service) does not currently validate
-        // label codes for blankness. Schema-migration drift, a direct DB
-        // write, or a future code regression could land a "" / "   " row in
-        // the component_labels junction; the read endpoint must defend
-        // against it so the Portal picker never advertises an unselectable
-        // blank chip. Mirrors the IS NOT NULL + non-empty guard on
-        // /meta/owners (ComponentRepository.findDistinctOwners).
+        // The SYS-040 write-side fix in c20fd360 (validateLabels +
+        // canonicalizeLabels in ComponentManagementServiceImpl) is the
+        // primary preventive mechanism — new writes can no longer land a
+        // blank labelCode through the controller. This test guards the
+        // SECONDARY defence at the read layer: the repository's
+        // `findDistinctLabelCodes` WHERE-clause filter. The scenario is
+        // legacy / corrupt junction rows: schema-migration drift, a
+        // direct DB write, a pre-fix upgrade leaving "   " rows behind,
+        // or a future code regression. The read endpoint must still hide
+        // those from the Portal picker so users never see an
+        // unselectable blank chip. Mirrors the IS NOT NULL + non-empty
+        // guard on /meta/owners (ComponentRepository.findDistinctOwners).
         //
-        // The controller path won't insert a blank label, so we go below
-        // it: save a LabelEntity with a whitespace code first (to satisfy
-        // the component_labels.label_code FK to labels.code), then save a
-        // ComponentLabelEntity junction row pointing at a real component.
+        // To simulate legacy/corrupt data we bypass the controller path
+        // (which would now reject the blank): save a LabelEntity with a
+        // whitespace code first (to satisfy the component_labels.label_code
+        // FK to labels.code), then save a ComponentLabelEntity junction
+        // row pointing at a real component.
 
         val realLabel = uniqueLabel("realfblbl")
         val blankCode = "   "

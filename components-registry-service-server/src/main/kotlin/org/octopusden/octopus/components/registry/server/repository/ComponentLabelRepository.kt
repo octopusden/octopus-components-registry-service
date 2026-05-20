@@ -21,10 +21,13 @@ interface ComponentLabelRepository : JpaRepository<ComponentLabelEntity, Compone
      *
      * Defensively filters null and blank/whitespace-only labelCodes —
      * mirrors the IS NOT NULL + non-empty guard on findDistinctOwners.
-     * The write path (controller + service) does not currently validate
-     * label codes for blankness, and a stray "" or " " in the junction
-     * (from schema-migration drift or a direct DB write) would otherwise
-     * surface as an unselectable blank chip in the picker.
+     * The write path (controller + service) DOES canonicalise label codes
+     * (trim + drop blank + dedupe) as of the SYS-040 write-side fix, so
+     * blank rows should not appear from new writes. This clause remains
+     * as defence-in-depth against schema-migration drift, direct DB
+     * writes, or pre-fix legacy rows already in the junction at upgrade
+     * time — without it, a stray "" or "   " row would surface as an
+     * unselectable blank chip in the picker.
      */
     @Query(
         "SELECT DISTINCT cl.labelCode FROM ComponentLabelEntity cl " +
