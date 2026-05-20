@@ -10,7 +10,9 @@ import org.octopusden.octopus.components.registry.server.dto.v4.ComponentUpdateR
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideCreateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideUpdateRequest
+import org.octopusden.octopus.components.registry.server.repository.ComponentLabelRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
+import org.octopusden.octopus.components.registry.server.repository.ComponentSystemRepository
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.RepositoryType
@@ -45,12 +47,31 @@ import java.util.UUID
 class ComponentControllerV4(
     private val componentManagementService: ComponentManagementService,
     private val componentRepository: ComponentRepository,
+    private val componentLabelRepository: ComponentLabelRepository,
+    private val componentSystemRepository: ComponentSystemRepository,
 ) {
     private val log = LoggerFactory.getLogger(ComponentControllerV4::class.java)
 
     @GetMapping("/meta/owners")
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
     fun getDistinctOwners(): List<String> = componentRepository.findDistinctOwners()
+
+    // Distinct label codes currently in use on at least one component, sorted
+    // ascending. Sourced from the component_labels junction, NOT from the
+    // master LabelEntity table — see ComponentLabelRepository.findDistinctLabelCodes
+    // for rationale. Mirrors /meta/owners in shape and intent.
+    @GetMapping("/meta/labels")
+    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
+    fun getDistinctLabels(): List<String> = componentLabelRepository.findDistinctLabelCodes()
+
+    // Distinct system codes currently in use on at least one component, sorted
+    // ascending. Sourced from the component_systems junction, NOT from the
+    // master SystemEntity table — same rationale as /meta/labels: the picker
+    // should advertise only codes actually attached to a component. Mirrors
+    // /meta/owners and /meta/labels in shape and intent.
+    @GetMapping("/meta/systems")
+    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
+    fun getDistinctSystems(): List<String> = componentSystemRepository.findDistinctSystemCodes()
 
     // Domain-named option lists for the three free-form aspect string fields
     // (buildSystem, repositoryType, generation). The portal's EnumSelect uses
@@ -96,25 +117,61 @@ class ComponentControllerV4(
     @GetMapping
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
     fun listComponents(
-        @RequestParam(required = false) system: String?,
+        @RequestParam(required = false) system: List<String>?,
         @RequestParam(required = false) productType: String?,
         @RequestParam(required = false) archived: Boolean?,
         @RequestParam(required = false) search: String?,
-        @RequestParam(required = false) owner: String?,
-        @RequestParam(required = false) buildSystem: String?,
+        @RequestParam(required = false) owner: List<String>?,
+        @RequestParam(required = false) buildSystem: List<String>?,
+        @RequestParam(required = false) labels: List<String>?,
         pageable: Pageable,
     ): Page<ComponentSummaryResponse> {
+        // Each multi-value list filter parameter (system, owner, buildSystem,
+        // labels) is normalised through `normalizeCsvParam` — see that
+        // helper for the wire-shape contract. The four downstream
+        // Specifications can rely on receiving a non-null, non-blank,
+        // duplicate-free list (or null = "no filter").
         val filter =
             ComponentFilter(
-                system = system,
+                system = normalizeCsvParam(system),
                 productType = productType,
                 archived = archived,
                 search = search,
-                owner = owner,
-                buildSystem = buildSystem,
+                owner = normalizeCsvParam(owner),
+                buildSystem = normalizeCsvParam(buildSystem),
+                labels = normalizeCsvParam(labels),
             )
         return componentManagementService.listComponents(filter, pageable)
     }
+
+    /**
+     * Normalise a multi-value `@RequestParam List<String>?` into the
+     * canonical shape consumed by `ComponentFilter` / the Specification
+     * branches.
+     *
+     * Spring's binder accepts both repeatable params (`?x=A&x=B`) and CSV
+     * inside a single value (`?x=A,B`). `flatMap { it.split(",") }`
+     * normalises both into one shape; trim then drop-empty defends against
+     * blank entries (`?x=`, `?x=,,`, `?x=,A,,B,`) that would otherwise
+     * yield empty-string predicates that silently match nothing or break
+     * equality checks downstream. `distinct()` collapses repeated codes
+     * (`?x=A,A → ?x=A`) so the Specification doesn't issue a redundant
+     * extra JOIN per duplicate. The final `takeIf { it.isNotEmpty() }`
+     * collapses an all-blank input back to null so the Specification's
+     * `isNullOrEmpty` branch skips the filter entirely.
+     *
+     * Downstream semantics differ per filter — buildSystem is OR (single
+     * column IN list), system is OR (junction + IN), owner is OR (scalar
+     * IN), labels is AND (one join per code) — but they all consume the
+     * same normalised non-empty list shape.
+     */
+    private fun normalizeCsvParam(raw: List<String>?): List<String>? =
+        raw
+            ?.flatMap { it.split(",") }
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() }
+            ?.distinct()
+            ?.takeIf { it.isNotEmpty() }
 
     @GetMapping("/{idOrName}")
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
