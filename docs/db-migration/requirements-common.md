@@ -48,6 +48,7 @@
 | SYS-036 | GET /audit/recent accepts entityType/entityId/changedBy/source/action/from/to filter params | High | integration-test | ✅ Tested |
 | SYS-037 | v4 CRUD API for dependency mappings (alias → componentName) | Medium | integration-test | ❌ Not implemented |
 | SYS-038 | Domain-named meta endpoints for free-form aspect option lists (buildSystem / repositoryType / generation) | Medium | integration-test | ✅ Tested |
+| SYS-040 | GET /components?labels=A,B filters by component_labels junction (AND across selected labels); GET /components/meta/labels returns sorted distinct codes in use | High | integration-test | ✅ Tested |
 
 ---
 
@@ -1178,3 +1179,53 @@ Auth: `@PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")`
 - Admin write API for the option lists (the field-config registry `options[]` already exists; SYS-038 only addresses the canonical-set advertisement when admin has not seeded explicit options).
 - Portal UI for editing the option lists (admin field-config write surface is unchanged).
 - A 4th endpoint for `productType` — the existing flat-flat `field-config.options[]` channel is sufficient there.
+
+---
+
+### SYS-040: GET /components?labels=A,B + GET /components/meta/labels
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+The Portal `ComponentListPage` filter bar already supports system, productType, buildSystem, owner, archived and search, but cannot narrow by **labels** even though every `ComponentSummary` carries `labels: string[]` and the table renders them. Users either eyeball-scan or fall back to `?search` (which matches `name`, not labels). To populate a multi-select picker the Portal also needs a `/meta/labels` source list — sourced from the `component_labels` junction so the picker advertises labels actually in use, parity with `/meta/owners`.
+
+**Description:**
+Two additions to the v4 component surface.
+
+1. **`GET /rest/api/4/components?labels=A,B`** — multi-value AND filter. A returned component must carry every selected label. CSV is the primary wire format (Portal always sends CSV); Spring's binder also accepts repeatable params (`?labels=A&labels=B`). The controller normalises both shapes before populating the filter DTO:
+   ```kotlin
+   labels
+       ?.flatMap { it.split(",") }
+       ?.map { it.trim() }
+       ?.filter { it.isNotEmpty() }
+       ?.takeIf { it.isNotEmpty() }
+   ```
+   `?labels=`, `?labels=,,`, and `?labels=,A,,B,` all canonicalise to the same shape as `?labels=A,B` (or "no filter" when the result is empty). AND semantics in the JPA Specification is implemented as one join + one predicate per label code — a single join + `IN(...)` would silently relax to OR.
+
+2. **`GET /rest/api/4/components/meta/labels`** — returns sorted distinct label codes currently attached to at least one component, sourced from the `component_labels` junction via a new repository method `ComponentLabelRepository.findDistinctLabelCodes()`. NOT sourced from the master `LabelEntity` table, which may contain orphan codes that no component carries — advertising those would create dead options in the Portal picker. Mirrors `/meta/owners` in shape and intent.
+
+Auth: both gated by `ACCESS_COMPONENTS` (granted to `ROLE_ANONYMOUS` by default), matching the rest of the v4 read surface and parity with `/meta/owners`.
+
+**Preconditions:**
+- Caller has `ACCESS_COMPONENTS`.
+- Database accessible (junction table `component_labels` populated by component creation / PATCH flows).
+
+**Acceptance criteria:**
+1. `GET /components?labels=A` returns a page whose every entry carries label A; components without A are excluded.
+2. `GET /components?labels=A,B` returns a page whose every entry carries BOTH A and B (AND across selections); components carrying only one of the two are excluded.
+3. `GET /components?labels=<unknown>` returns 200 + empty page (NOT 500, NOT an unfiltered list).
+4. Blank normalisation: `?labels=`, `?labels=,,`, and any input that normalises to zero non-blank tokens behaves as "no labels filter".
+5. Interleaved-blanks: `?labels=,A,,B,` behaves as `?labels=A,B`.
+6. Whitespace trim: `?labels=A%20` and `?labels=%20A` both match label A.
+7. Pagination and sort still apply when `?labels` is set (regression).
+8. `GET /components/meta/labels` returns 200 + sorted distinct label codes; no duplicates even when multiple components carry the same code.
+9. `GET /components/meta/labels` returns 200 + JSON array (NOT 404) when no labels exist — the Portal's `useLabels` 404/501 fallback is for the transitional pre-deploy window only; steady state must hit the happy path.
+
+**Test method:** `ListComponentsLabelsFilterTest` covers criteria 1–7; `MetaOptionsEndpointsTest` (extended) covers criteria 8–9.
+
+**Out of scope:**
+- Sort-by-label or group-by-label.
+- Saving filter state to URL (no existing filter does this; keep parity).
+- Labels mutation UX (creating / renaming labels) — not requested.

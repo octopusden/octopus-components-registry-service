@@ -10,6 +10,7 @@ import org.octopusden.octopus.components.registry.server.dto.v4.ComponentUpdateR
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideCreateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideUpdateRequest
+import org.octopusden.octopus.components.registry.server.repository.ComponentLabelRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
 import org.octopusden.octopus.escrow.BuildSystem
@@ -45,12 +46,21 @@ import java.util.UUID
 class ComponentControllerV4(
     private val componentManagementService: ComponentManagementService,
     private val componentRepository: ComponentRepository,
+    private val componentLabelRepository: ComponentLabelRepository,
 ) {
     private val log = LoggerFactory.getLogger(ComponentControllerV4::class.java)
 
     @GetMapping("/meta/owners")
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
     fun getDistinctOwners(): List<String> = componentRepository.findDistinctOwners()
+
+    // Distinct label codes currently in use on at least one component, sorted
+    // ascending. Sourced from the component_labels junction, NOT from the
+    // master LabelEntity table — see ComponentLabelRepository.findDistinctLabelCodes
+    // for rationale. Mirrors /meta/owners in shape and intent.
+    @GetMapping("/meta/labels")
+    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
+    fun getDistinctLabels(): List<String> = componentLabelRepository.findDistinctLabelCodes()
 
     // Domain-named option lists for the three free-form aspect string fields
     // (buildSystem, repositoryType, generation). The portal's EnumSelect uses
@@ -102,8 +112,27 @@ class ComponentControllerV4(
         @RequestParam(required = false) search: String?,
         @RequestParam(required = false) owner: String?,
         @RequestParam(required = false) buildSystem: String?,
+        @RequestParam(required = false) labels: List<String>?,
         pageable: Pageable,
     ): Page<ComponentSummaryResponse> {
+        // Normalise the raw `labels` input here, before constructing the
+        // filter, so the Specification can rely on a non-null list whose
+        // entries are all non-blank.
+        //
+        // Spring's @RequestParam List<String> binder accepts both repeatable
+        // params (?labels=A&labels=B) and CSV inside a single value
+        // (?labels=A,B). flatMap split-by-comma normalises both into one
+        // shape; trim then drop-empty defends against blank entries
+        // (?labels=, ?labels=,,, ?labels=,A,,B,) that would otherwise yield
+        // an empty-string predicate which silently matches nothing. The
+        // final takeIf collapses an all-blank input back to null so the
+        // Specification's isNullOrEmpty branch skips the join entirely.
+        val normalizedLabels =
+            labels
+                ?.flatMap { it.split(",") }
+                ?.map { it.trim() }
+                ?.filter { it.isNotEmpty() }
+                ?.takeIf { it.isNotEmpty() }
         val filter =
             ComponentFilter(
                 system = system,
@@ -112,6 +141,7 @@ class ComponentControllerV4(
                 search = search,
                 owner = owner,
                 buildSystem = buildSystem,
+                labels = normalizedLabels,
             )
         return componentManagementService.listComponents(filter, pageable)
     }

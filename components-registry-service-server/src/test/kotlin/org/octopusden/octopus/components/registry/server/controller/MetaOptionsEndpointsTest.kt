@@ -1,11 +1,13 @@
 package org.octopusden.octopus.components.registry.server.controller
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
+import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.octopusden.octopus.components.registry.server.support.viewerJwt
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.RepositoryType
@@ -13,13 +15,16 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.mock.mockito.MockBean
+import org.springframework.http.MediaType
 import org.springframework.test.annotation.DirtiesContext
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.nio.file.Paths
+import java.util.UUID
 
 /**
  * Domain-named meta endpoints that expose the canonical option lists for the
@@ -73,6 +78,9 @@ class MetaOptionsEndpointsTest {
 
     @Autowired
     private lateinit var mvc: MockMvc
+
+    @Autowired
+    private lateinit var objectMapper: ObjectMapper
 
     init {
         val testResourcesPath =
@@ -139,4 +147,75 @@ class MetaOptionsEndpointsTest {
         }
     }
 
+    // /meta/labels is sourced from the `component_labels` junction (NOT the
+    // master `labels` table) so the picker advertises only label codes that
+    // are actually in use on at least one component — parity with
+    // /meta/owners, which sources from components.componentOwner. A master
+    // LabelEntity exists in the schema but may contain orphan codes that no
+    // component carries; advertising those would create dead options in the
+    // Portal picker.
+
+    private fun uniqueLabel(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(8)}"
+
+    private fun createComponentWithLabels(
+        name: String,
+        labels: Set<String>,
+    ) {
+        val labelsJson = labels.joinToString(",") { "\"$it\"" }
+        mvc
+            .perform(
+                post("/rest/api/4/components")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"name":"$name","displayName":"$name","labels":[$labelsJson]}"""),
+            ).andExpect(status().isCreated)
+    }
+
+    @Test
+    @DisplayName("GET /meta/labels returns sorted distinct label codes from the junction")
+    fun `meta labels returns sorted distinct codes`() {
+        // Seed three components with overlapping labels. Distinct, sorted
+        // ascending must be `alpha, beta, gamma` regardless of insertion
+        // order. Using random suffixes keeps the assertion independent of
+        // other tests in the same Spring context.
+        val a = uniqueLabel("alpha")
+        val b = uniqueLabel("beta")
+        val g = uniqueLabel("gamma")
+
+        createComponentWithLabels("meta_labels_one_${UUID.randomUUID().toString().take(6)}", setOf(b, a))
+        createComponentWithLabels("meta_labels_two_${UUID.randomUUID().toString().take(6)}", setOf(g, a))
+        createComponentWithLabels("meta_labels_three_${UUID.randomUUID().toString().take(6)}", setOf(b))
+
+        val body =
+            mvc
+                .perform(get("/rest/api/4/components/meta/labels").with(viewerJwt()))
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$").isArray)
+                .andReturn()
+                .response.contentAsString
+        val all = objectMapper.readTree(body).map { it.asText() }
+        val seeded = all.filter { it == a || it == b || it == g }
+        assert(seeded == listOf(a, b, g).sorted()) {
+            "expected seeded labels sorted ascending; got $seeded"
+        }
+        // No duplicates across the entire response (covers both seeded and
+        // any pre-existing entries from earlier tests).
+        assert(all.size == all.toSet().size) { "expected no duplicates; got $all" }
+    }
+
+    @Test
+    @DisplayName("GET /meta/labels returns 200 + JSON array even when no labels exist (NOT 404)")
+    fun `meta labels returns 200 array contract`() {
+        // Contract guarantee: empty-labels-DB returns 200 + array, not 404.
+        // Portal's `useLabels` has a 404/501 fallback for the transitional
+        // pre-deploy window, but in steady state the happy path must be a
+        // plain 200 + array so that no fallback ever fires.
+        // We don't truncate the DB here (other test classes may have seeded
+        // labels); the assertion is that the endpoint shape is always
+        // 200 + array, never 404.
+        mvc
+            .perform(get("/rest/api/4/components/meta/labels").with(viewerJwt()))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$").isArray)
+    }
 }

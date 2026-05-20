@@ -1268,6 +1268,25 @@ class ComponentManagementServiceImpl(
                     },
                 )
         }
+        // AND across selected labels = one join + one predicate per label.
+        // A single join + IN(...) would relax to OR (any row whose label is
+        // in the set), which is not the semantics the multi-select picker
+        // promises ("show me components carrying ALL of these labels").
+        // The controller's normalisation guarantees the list, if present,
+        // is non-empty and contains no blank entries, so the forEach body
+        // is always meaningful.
+        if (!filter.labels.isNullOrEmpty()) {
+            filter.labels.forEach { lbl ->
+                spec =
+                    spec.and(
+                        Specification { root, query, cb ->
+                            val join = root.join<ComponentEntity, ComponentLabelEntity>("labelJunctions")
+                            query?.distinct(true)
+                            cb.equal(join.get<String>("labelCode"), lbl)
+                        },
+                    )
+            }
+        }
         return spec
     }
 
