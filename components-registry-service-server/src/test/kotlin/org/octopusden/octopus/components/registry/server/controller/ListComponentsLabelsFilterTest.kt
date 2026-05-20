@@ -24,19 +24,19 @@ import java.nio.file.Paths
 import java.util.UUID
 
 /**
- * `GET /rest/api/4/components?labels=A,B` filters the list by the
+ * GET /rest/api/4/components?labels=A,B filters the list by the
  * component_labels junction. Multi-value semantics is AND across the
  * selections: a component must carry every selected label to be returned.
  *
- * Wire format primary is CSV (`?labels=A,B`); Spring's binder also accepts
- * repeatable params (`?labels=A&labels=B`). The controller normalises both
+ * Wire format primary is CSV (?labels=A,B); Spring's binder also accepts
+ * repeatable params (?labels=A&labels=B). The controller normalises both
  * via split-by-comma → trim → drop-empty → null-if-empty, so blank or
  * whitespace-only entries collapse to "no filter" instead of producing an
  * empty-string predicate that silently empties the page.
  *
  * Closest existing analogue is [ListComponentsSystemFilterTest] — system is
  * also a junction-backed multi-value filter, but with single-value
- * `?system=…` semantics; labels extends that template with CSV + AND.
+ * ?system=... semantics; labels extends that template with CSV + AND.
  */
 @AutoConfigureMockMvc
 @SpringBootTest(
@@ -123,13 +123,23 @@ class ListComponentsLabelsFilterTest {
         val onlyA = uniqueName("and_only_a")
         val onlyB = uniqueName("and_only_b")
         val both = uniqueName("and_both")
+        // Superset case: a component carrying {A, B, C} must also match
+        // ?labels=A,B. The per-join + distinct Specification is correct by
+        // construction, but without this assertion a future regression to a
+        // single-join + IN(...)-of-the-list (which would silently relax to
+        // OR) wouldn't be caught by the {A}/{B}/{A,B} cases alone.
+        val superComponentName = uniqueName("and_super")
 
         createComponentWithLabels(onlyA, setOf(labelA))
         createComponentWithLabels(onlyB, setOf(labelB))
         createComponentWithLabels(both, setOf(labelA, labelB))
+        createComponentWithLabels(superComponentName, setOf(labelA, labelB, uniqueName("extra")))
 
         val names = fetchNames("labels" to "$labelA,$labelB")
         assert(names.contains(both)) { "expected $both in $names (carries both labels)" }
+        assert(names.contains(superComponentName)) {
+            "expected $superComponentName in $names (carries A, B, and an extra label)"
+        }
         assert(!names.contains(onlyA)) { "did not expect $onlyA in $names (only carries A)" }
         assert(!names.contains(onlyB)) { "did not expect $onlyB in $names (only carries B)" }
     }
