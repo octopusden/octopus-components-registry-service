@@ -1245,7 +1245,16 @@ class ComponentManagementServiceImpl(
                     },
                 )
         }
-        filter.buildSystem?.let { bs ->
+        // OR across selected buildSystems — a component has exactly one BASE
+        // buildSystem at a time, so multi-select semantics is "any of these"
+        // (NOT AND, which would only ever return zero or one match). One
+        // JOIN through configurations with rowType=BASE + IN(...) is the
+        // correct shape; mirrors the per-value AND pattern used for labels
+        // and system but consolidates into a single predicate because the
+        // column is scalar on the joined row, not a collection. The
+        // controller's normalisation guarantees the list, if present, is
+        // non-empty, has no blanks, and has no duplicates.
+        if (!filter.buildSystem.isNullOrEmpty()) {
             spec =
                 spec.and(
                     Specification { root, query, cb ->
@@ -1253,7 +1262,7 @@ class ComponentManagementServiceImpl(
                         query?.distinct(true)
                         cb.and(
                             cb.equal(join.get<String>("rowType"), "BASE"),
-                            cb.equal(join.get<String>("buildSystem"), bs),
+                            join.get<String>("buildSystem").`in`(filter.buildSystem),
                         )
                     },
                 )

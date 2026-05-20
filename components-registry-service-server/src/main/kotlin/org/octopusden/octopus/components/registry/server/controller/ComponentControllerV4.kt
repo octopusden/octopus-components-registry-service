@@ -111,13 +111,14 @@ class ComponentControllerV4(
         @RequestParam(required = false) archived: Boolean?,
         @RequestParam(required = false) search: String?,
         @RequestParam(required = false) owner: String?,
-        @RequestParam(required = false) buildSystem: String?,
+        @RequestParam(required = false) buildSystem: List<String>?,
         @RequestParam(required = false) labels: List<String>?,
         pageable: Pageable,
     ): Page<ComponentSummaryResponse> {
-        // Normalise the raw `labels` input here, before constructing the
-        // filter, so the Specification can rely on a non-null list whose
-        // entries are all non-blank and free of duplicates.
+        // Normalise the raw multi-value query inputs (labels, buildSystem)
+        // here, before constructing the filter, so each Specification branch
+        // can rely on a non-null list whose entries are all non-blank and
+        // free of duplicates.
         //
         // Spring's @RequestParam List<String> binder accepts both repeatable
         // params (?labels=A&labels=B) and CSV inside a single value
@@ -129,8 +130,21 @@ class ComponentControllerV4(
         // Specification doesn't issue a redundant extra JOIN per duplicate.
         // The final takeIf collapses an all-blank input back to null so the
         // Specification's isNullOrEmpty branch skips the join entirely.
+        //
+        // buildSystem follows the identical pipeline — same wire shape (CSV
+        // primary, repeatable accepted), same blank/whitespace/duplicate
+        // hazards. The only semantic difference is downstream: buildSystem
+        // is OR (single column IN list) while labels is AND (one join per
+        // code). Both Specifications consume a normalised non-empty list.
         val normalizedLabels =
             labels
+                ?.flatMap { it.split(",") }
+                ?.map { it.trim() }
+                ?.filter { it.isNotEmpty() }
+                ?.distinct()
+                ?.takeIf { it.isNotEmpty() }
+        val normalizedBuildSystem =
+            buildSystem
                 ?.flatMap { it.split(",") }
                 ?.map { it.trim() }
                 ?.filter { it.isNotEmpty() }
@@ -143,7 +157,7 @@ class ComponentControllerV4(
                 archived = archived,
                 search = search,
                 owner = owner,
-                buildSystem = buildSystem,
+                buildSystem = normalizedBuildSystem,
                 labels = normalizedLabels,
             )
         return componentManagementService.listComponents(filter, pageable)

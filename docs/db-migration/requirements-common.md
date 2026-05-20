@@ -49,6 +49,7 @@
 | SYS-037 | v4 CRUD API for dependency mappings (alias → componentName) | Medium | integration-test | ❌ Not implemented |
 | SYS-038 | Domain-named meta endpoints for free-form aspect option lists (buildSystem / repositoryType / generation) | Medium | integration-test | ✅ Tested |
 | SYS-040 | GET /components?labels=A,B filters by component_labels junction (AND across selected labels); GET /components/meta/labels returns sorted distinct codes in use | High | integration-test | ✅ Tested |
+| SYS-041 | GET /components?buildSystem=GRADLE,MAVEN accepts CSV multi-value with OR semantics across the BASE buildSystem column | High | integration-test | ✅ Tested |
 
 ---
 
@@ -1229,3 +1230,51 @@ Auth: both gated by `ACCESS_COMPONENTS` (granted to `ROLE_ANONYMOUS` by default)
 - Sort-by-label or group-by-label.
 - Saving filter state to URL (no existing filter does this; keep parity).
 - Labels mutation UX (creating / renaming labels) — not requested.
+
+---
+
+### SYS-041: GET /components?buildSystem=GRADLE,MAVEN multi-value with OR semantics
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+The Portal `ComponentListPage` previously supported only a single-value `?buildSystem=` selector. Users frequently need to scope to "any of a small set" (e.g., GRADLE OR MAVEN — both JVM build systems) and currently have to either pick one and miss the rest, or clear the filter entirely. Extending the existing query parameter to accept a CSV list with OR semantics turns the picker into a true multi-select.
+
+**Description:**
+Extend the v4 component listing surface so `?buildSystem=A,B,…` returns the union of components whose BASE configuration row's `buildSystem` column equals any of the listed values. Semantics is OR — a component has exactly one BASE `buildSystem` at a time, so AND across two distinct values would always yield zero matches and is not the intended behaviour.
+
+Wire format primary is CSV (`?buildSystem=GRADLE,MAVEN`); Spring's binder also accepts repeatable params (`?buildSystem=GRADLE&buildSystem=MAVEN`). The controller normalises both shapes through the same pipeline used for labels:
+```kotlin
+buildSystem
+    ?.flatMap { it.split(",") }
+    ?.map { it.trim() }
+    ?.filter { it.isNotEmpty() }
+    ?.distinct()
+    ?.takeIf { it.isNotEmpty() }
+```
+The Specification uses one JOIN through `configurations` with `rowType=BASE` and a single `IN (?,?,…)` predicate — mirrors the pre-multi-value shape (same JOIN, same rowType guard) but swaps the scalar `equal` for a collection IN. Single-value input still works as a degenerate IN.
+
+The change is wire-compatible: a single value `?buildSystem=GRADLE` round-trips through the new pipeline unchanged. The DTO field type changed from `String?` to `List<String>?` but ComponentFilter is server-internal and not part of any external API surface.
+
+**Preconditions:**
+- Caller has `ACCESS_COMPONENTS`.
+
+**Acceptance criteria:**
+1. `?buildSystem=GRADLE` (single value, backward compat) returns GRADLE components only.
+2. `?buildSystem=GRADLE,MAVEN` (CSV) returns components whose BASE buildSystem is GRADLE OR MAVEN; a component on a third buildSystem (e.g., WHISKEY) is excluded.
+3. `?buildSystem=GRADLE&buildSystem=MAVEN` (repeatable params) returns the same set as the CSV form.
+4. `?buildSystem=<unknown>` returns 200 + empty page.
+5. Blank normalisation: `?buildSystem=`, `?buildSystem=,,`, any input normalising to zero non-blank tokens behaves as "no buildSystem filter".
+6. Interleaved-blanks: `?buildSystem=,GRADLE,,MAVEN,` behaves as `?buildSystem=GRADLE,MAVEN`.
+7. Whitespace trim: `?buildSystem=GRADLE%20` and `?buildSystem=%20GRADLE` both match GRADLE.
+8. Dedupe: `?buildSystem=GRADLE,GRADLE` behaves identically to `?buildSystem=GRADLE`.
+9. Pagination and sort still apply when `?buildSystem=` is multi-valued (regression). Returned `content[].name` is sorted ascending when `sort=componentKey,asc` is set.
+
+**Test method:** `ListComponentsBuildSystemFilterTest` — extended with nine SYS-041 cases covering criteria 1–9 alongside the existing single-value tests.
+
+**Out of scope:**
+- Sort-by-buildSystem, group-by-buildSystem.
+- AND across buildSystems (vacuously empty given the schema, so not useful).
+- Validation of unknown values at the controller (write-side already validates via `BUILD_SYSTEM_NAMES`; read-side just returns empty for unknowns, mirroring the pre-multi-value behaviour).
