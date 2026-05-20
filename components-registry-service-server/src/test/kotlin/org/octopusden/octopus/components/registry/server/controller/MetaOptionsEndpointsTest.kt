@@ -7,6 +7,10 @@ import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
+import org.octopusden.octopus.components.registry.server.entity.ComponentLabelEntity
+import org.octopusden.octopus.components.registry.server.entity.LabelEntity
+import org.octopusden.octopus.components.registry.server.repository.ComponentLabelRepository
+import org.octopusden.octopus.components.registry.server.repository.LabelRepository
 import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.octopusden.octopus.components.registry.server.support.viewerJwt
 import org.octopusden.octopus.escrow.BuildSystem
@@ -81,6 +85,12 @@ class MetaOptionsEndpointsTest {
 
     @Autowired
     private lateinit var objectMapper: ObjectMapper
+
+    @Autowired
+    private lateinit var componentLabelRepository: ComponentLabelRepository
+
+    @Autowired
+    private lateinit var labelRepository: LabelRepository
 
     init {
         val testResourcesPath =
@@ -216,5 +226,72 @@ class MetaOptionsEndpointsTest {
             .perform(get("/rest/api/4/components/meta/labels").with(viewerJwt()))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$").isArray)
+    }
+
+    @Test
+    @DisplayName("SYS-040: /meta/labels filters out null/blank labelCodes")
+    fun `SYS-040 meta labels filters blank labelCodes`() {
+        // The write path (controller + service) does not currently validate
+        // label codes for blankness. Schema-migration drift, a direct DB
+        // write, or a future code regression could land a "" / "   " row in
+        // the component_labels junction; the read endpoint must defend
+        // against it so the Portal picker never advertises an unselectable
+        // blank chip. Mirrors the IS NOT NULL + non-empty guard on
+        // /meta/owners (ComponentRepository.findDistinctOwners).
+        //
+        // The controller path won't insert a blank label, so we go below
+        // it: save a LabelEntity with a whitespace code first (to satisfy
+        // the component_labels.label_code FK to labels.code), then save a
+        // ComponentLabelEntity junction row pointing at a real component.
+
+        val realLabel = uniqueLabel("realfblbl")
+        val blankCode = "   "
+        val realComponentName = "meta_labels_blank_real_${UUID.randomUUID().toString().take(6)}"
+        val anchorComponentName = "meta_labels_blank_anchor_${UUID.randomUUID().toString().take(6)}"
+
+        // Real labelled component (controller path — write validation OK).
+        createComponentWithLabels(realComponentName, setOf(realLabel))
+
+        // Anchor component carrying no labels via the controller; its id is
+        // used to attach the blank junction row directly via the repos.
+        val anchorBody =
+            mvc
+                .perform(
+                    post("/rest/api/4/components")
+                        .with(adminJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""{"name":"$anchorComponentName","displayName":"$anchorComponentName"}"""),
+                ).andExpect(status().isCreated)
+                .andReturn()
+                .response.contentAsString
+        val anchorId = UUID.fromString(objectMapper.readTree(anchorBody)["id"].asText())
+
+        // Seed the blank label master + junction row via the repos to
+        // bypass write-side normalisation. Idempotent on the master row in
+        // case a prior run already inserted it in this Spring context.
+        if (labelRepository.findByCode(blankCode) == null) {
+            labelRepository.save(LabelEntity(code = blankCode))
+        }
+        componentLabelRepository.save(
+            ComponentLabelEntity(componentId = anchorId, labelCode = blankCode),
+        )
+
+        val body =
+            mvc
+                .perform(get("/rest/api/4/components/meta/labels").with(viewerJwt()))
+                .andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString
+        val codes = objectMapper.readTree(body).map { it.asText() }
+        assert(codes.contains(realLabel)) {
+            "expected real label '$realLabel' in $codes (sanity check on seeding)"
+        }
+        assert(blankCode !in codes) {
+            "expected blank labelCode '$blankCode' to be filtered out of $codes"
+        }
+        // Belt-and-braces: nothing in the response should be whitespace-only.
+        assert(codes.none { it.isBlank() }) {
+            "expected no blank-or-whitespace entries in $codes"
+        }
     }
 }

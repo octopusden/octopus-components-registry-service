@@ -256,17 +256,28 @@ class ListComponentsLabelsFilterTest {
     }
 
     @Test
-    @DisplayName("SYS-040: ?labels=A combined with size=1 + sort=componentKey,asc still paginates+sorts")
+    @DisplayName("SYS-040: ?labels=A combined with size=N + sort=componentKey,asc still paginates+sorts")
     fun `SYS-040 labels with pagination and sort still applied`() {
+        // Predictable lexicographic prefixes (aaa < bbb < ccc) so the
+        // sort-order assertion below is unambiguous. The UUID suffix
+        // disambiguates parallel test runs in the same Spring context but
+        // does not influence the leading aaa/bbb/ccc ordering.
         val labelA = uniqueName("pgnlbla")
-        // Names crafted so that componentKey ordering is deterministic:
-        // componentKey is derived from name; we use a fixed prefix + suffix.
-        val first = "pgn_aaa_${UUID.randomUUID().toString().take(6)}"
-        val second = "pgn_bbb_${UUID.randomUUID().toString().take(6)}"
-        createComponentWithLabels(first, setOf(labelA))
+        val suffix = UUID.randomUUID().toString().take(6)
+        val first = "pgn_aaa_$suffix"
+        val second = "pgn_bbb_$suffix"
+        val third = "pgn_ccc_$suffix"
+        // Seed in reverse lexicographic order so a regression where sort
+        // silently fails (e.g., returning insertion order) is visibly wrong
+        // in the asserted content[].name array.
+        createComponentWithLabels(third, setOf(labelA))
         createComponentWithLabels(second, setOf(labelA))
+        createComponentWithLabels(first, setOf(labelA))
 
-        val body =
+        // First: assert page=0, size=1 returns exactly one entry and
+        // totalElements=3. This is the original pagination regression
+        // signal — the labels filter must not break the page metadata.
+        val pageBody =
             mvc
                 .perform(
                     get("/rest/api/4/components")
@@ -277,13 +288,36 @@ class ListComponentsLabelsFilterTest {
                 ).andExpect(status().isOk)
                 .andReturn()
                 .response.contentAsString
-        val json = objectMapper.readTree(body)
-        val content = json["content"]
-        // Page size 1 → at most one entry. With the AND-by-label filter restricted
-        // to two seeded components, totalElements should be exactly 2.
-        assert(content.size() == 1) { "expected page size 1; got ${content.size()}: ${body.take(400)}" }
-        assert(json["totalElements"].asLong() == 2L) {
-            "expected totalElements=2 (two seeded labelled components); got ${json["totalElements"]}"
+        val pageJson = objectMapper.readTree(pageBody)
+        val pageContent = pageJson["content"]
+        assert(pageContent.size() == 1) {
+            "expected page size 1; got ${pageContent.size()}: ${pageBody.take(400)}"
+        }
+        assert(pageJson["totalElements"].asLong() == 3L) {
+            "expected totalElements=3 (three seeded labelled components); got ${pageJson["totalElements"]}"
+        }
+
+        // Second: fetch all three on a single page and assert the returned
+        // content[].name array is sorted ascending. A regression where the
+        // sort silently no-ops (e.g., the labels join clobbered the order
+        // by) would surface as out-of-order names; the size+totalElements
+        // assertions above wouldn't catch that.
+        val fullBody =
+            mvc
+                .perform(
+                    get("/rest/api/4/components")
+                        .with(viewerJwt())
+                        .param("labels", labelA)
+                        .param("size", "10")
+                        .param("sort", "componentKey,asc"),
+                ).andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString
+        val fullJson = objectMapper.readTree(fullBody)
+        val returnedNames = fullJson["content"].map { it["name"].asText() }
+        val seededNames = returnedNames.filter { it.endsWith("_$suffix") }
+        assert(seededNames == listOf(first, second, third)) {
+            "expected components returned sorted by componentKey ASC ($first, $second, $third); got $seededNames"
         }
     }
 }

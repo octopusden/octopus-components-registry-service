@@ -18,7 +18,18 @@ interface ComponentLabelRepository : JpaRepository<ComponentLabelEntity, Compone
      * with ComponentRepository.findDistinctOwners which sources from
      * components.componentOwner. A master label that no component carries
      * would create a dead option in the picker.
+     *
+     * Defensively filters null and blank/whitespace-only labelCodes —
+     * mirrors the IS NOT NULL + non-empty guard on findDistinctOwners.
+     * The write path (controller + service) does not currently validate
+     * label codes for blankness, and a stray "" or " " in the junction
+     * (from schema-migration drift or a direct DB write) would otherwise
+     * surface as an unselectable blank chip in the picker.
      */
-    @Query("SELECT DISTINCT cl.labelCode FROM ComponentLabelEntity cl ORDER BY cl.labelCode")
+    @Query(
+        "SELECT DISTINCT cl.labelCode FROM ComponentLabelEntity cl " +
+            "WHERE cl.labelCode IS NOT NULL AND TRIM(cl.labelCode) <> '' " +
+            "ORDER BY cl.labelCode",
+    )
     fun findDistinctLabelCodes(): List<String>
 }
