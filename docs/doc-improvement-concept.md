@@ -57,7 +57,7 @@ The improvement is split into two parts:
     artifactId = "mycomponent-docs"
     
     distribution {
-        explicit = false
+        explicit = false // can be also true
         external = true 
         GAV = "org.company.docs:mycomponent-docs:zip"
     }
