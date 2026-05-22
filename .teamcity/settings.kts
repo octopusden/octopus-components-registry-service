@@ -376,12 +376,15 @@ object id16CompatTraceReplayManual : BuildType({
     // replay runs against two already-deployed URLs the operator supplies.
 })
 
-// Compatibility Local-Stand — manual, in the chain after id10. Spins TWO
-// CRS instances side-by-side on the agent: baseline (released
-// `%LAST_RELEASE_VERSION%`, docker image from corp registry) and candidate
-// (current chain's image pushed by id10), both pointed at the production
-// Components-Registry DSL + service-config. Then runs the compat-test
-// module's full endpoint matrix against both stands via the existing
+// Compatibility Local-Stand — manual-only with a snapshot dep on id10
+// (snapshot only, NOT a `finishBuildTrigger` — operator clicks Run and
+// id10 is pulled in transitively if needed; the build does not
+// auto-fire when id10 finishes). Spins TWO CRS instances side-by-side
+// on the agent: baseline (released `%LAST_RELEASE_VERSION%`, docker
+// image from corp registry) and candidate (current chain's image
+// pushed by id10), both pointed at the production Components-Registry
+// DSL + service-config. Then runs the compat-test module's full
+// endpoint matrix against both stands via the existing
 // `scripts/local-stands/teamcity-run.sh` wrapper.
 //
 // Why docker-image extraction (not Artifactory pull) for the baseline:
@@ -448,24 +451,35 @@ object id17CompatLocalStandManual : BuildType({
             name = "Extract JARs from docker images"
             id = "extract_jars"
             // Pull both images, `docker create` an ephemeral container per side,
-            // `docker cp` the fat JAR out to /tmp, then `docker rm`. Both
-            // commands are idempotent across re-runs on the same agent.
+            // `docker cp` the fat JAR into a build-namespaced /tmp dir, then
+            // `docker rm`. The `trap` cleans up the create-container even if
+            // `docker cp` fails (e.g. FS full, image lacks /app/app.jar), so
+            // we don't leak orphan containers across failed re-runs (Opus
+            // Stage-2 review). The work dir includes %BUILD_NUMBER% so two
+            // builds on the same shared agent never clobber each other's JAR.
             scriptContent = """
                 set -euo pipefail
                 BASELINE_IMAGE="%DOCKER_REGISTRY_INTERNAL%/octopusden/components-registry-service:%COMPAT_BASELINE_VERSION%"
                 CANDIDATE_IMAGE="%DOCKER_REGISTRY_INTERNAL%/octopusden/components-registry-service:%COMPAT_CANDIDATE_VERSION%"
+                WORK_DIR="/tmp/crs-id17-%teamcity.build.id%"
+                BCID=""
+                CCID=""
+                cleanup() {
+                    [ -n "${'$'}BCID" ] && docker rm -f "${'$'}BCID" >/dev/null 2>&1 || true
+                    [ -n "${'$'}CCID" ] && docker rm -f "${'$'}CCID" >/dev/null 2>&1 || true
+                }
+                trap cleanup EXIT
+                rm -rf "${'$'}WORK_DIR"
+                mkdir -p "${'$'}WORK_DIR"
                 echo "Pulling baseline:  ${'$'}BASELINE_IMAGE"
                 docker pull "${'$'}BASELINE_IMAGE"
                 echo "Pulling candidate: ${'$'}CANDIDATE_IMAGE"
                 docker pull "${'$'}CANDIDATE_IMAGE"
-                rm -f /tmp/baseline.jar /tmp/candidate.jar
                 BCID=${'$'}(docker create "${'$'}BASELINE_IMAGE")
-                docker cp "${'$'}BCID:/app/app.jar" /tmp/baseline.jar
-                docker rm "${'$'}BCID"
+                docker cp "${'$'}BCID:/app/app.jar" "${'$'}WORK_DIR/baseline.jar"
                 CCID=${'$'}(docker create "${'$'}CANDIDATE_IMAGE")
-                docker cp "${'$'}CCID:/app/app.jar" /tmp/candidate.jar
-                docker rm "${'$'}CCID"
-                ls -lh /tmp/baseline.jar /tmp/candidate.jar
+                docker cp "${'$'}CCID:/app/app.jar" "${'$'}WORK_DIR/candidate.jar"
+                ls -lh "${'$'}WORK_DIR/baseline.jar" "${'$'}WORK_DIR/candidate.jar"
             """.trimIndent()
         }
         script {
@@ -473,8 +487,9 @@ object id17CompatLocalStandManual : BuildType({
             id = "run_compat"
             scriptContent = """
                 set -euo pipefail
-                export BASELINE_JAR=/tmp/baseline.jar
-                export CANDIDATE_JAR=/tmp/candidate.jar
+                WORK_DIR="/tmp/crs-id17-%teamcity.build.id%"
+                export BASELINE_JAR="${'$'}WORK_DIR/baseline.jar"
+                export CANDIDATE_JAR="${'$'}WORK_DIR/candidate.jar"
                 export LOCAL_VCS_ROOT="%teamcity.build.checkoutDir%/%COMPONENTS_REGISTRY_CHECKOUT_DIR%"
                 export SERVICE_CONFIG_DIR="%teamcity.build.checkoutDir%/service-config"
                 export COMPAT_SMOKE_COMPONENTS="%COMPAT_SMOKE_COMPONENTS%"
