@@ -1,4 +1,6 @@
-# Components Registry: Git → DB Migration — Architecture Documentation
+# Components Registry — System Documentation
+
+Authoritative documentation for the CRS v3 system: data model, REST API surface, security, audit, and the per-component routing that bridges the legacy Git/DSL store with the PostgreSQL backend. The folder is named `docs/registry/` because it covers the registry as it is today, not migration history — historical context is preserved inside individual ADRs (notably ADR-007, ADR-009, ADR-014) and in the audit report under `.github/audit/`.
 
 ## Glossary
 
@@ -113,16 +115,20 @@ When a decision changes, don't delete the old ADR — mark it as `Superseded` an
 
 ```
 docs/registry/
-├── README.md                ← this file
-├── prd.md                   ← Product Requirements
-├── functional-spec.md       ← Functional Specification
-├── non-functional-spec.md   ← Non-Functional Specification
-├── technical-design.md      ← Technical Design Document
-├── deployment/              ← OKD deployment research workspace
-├── adr/                     ← Architecture Decision Records
-│   ├── 001-storage-postgresql.md
-│   ├── 002-backend-language.md
-│   ├── ...
-│   └── 008-component-level-routing.md
-└── diagrams/                ← Architecture diagrams (planned)
+├── README.md                  ← this file
+├── prd.md                     ← Product Requirements
+├── functional-spec.md         ← Functional Specification
+├── non-functional-spec.md     ← Non-Functional Specification
+├── technical-design.md        ← Technical Design Document
+├── schema-spec.md             ← Canonical v2 schema reference (Model A')
+├── api-compat-deltas.md       ← v1/v2/v3 endpoint compat surface + kill-list
+├── compat-residual-clusters.md ← Open compat residuals tracked by MIG-NNN
+├── requirements-common.md     ← SYS-NNN registry (system / API behaviour)
+├── requirements-migration.md  ← MIG-NNN registry (Git → DB contracts)
+├── requirements-resolver.md   ← RES-NNN registry (DB vs Git resolver parity)
+├── ft-db-testing-plan.md      ← FT-DB profile test plan
+├── adr/                       ← Architecture Decision Records (000–014)
+├── tech-debt/                 ← Numbered TD-NNN entries
+├── deployment/                ← OKD + local Postgres deployment workspace
+└── prototypes/                ← Static HTML mock-ups consumed by the Portal SPA
 ```
