@@ -183,10 +183,10 @@ object id15CompatManual : BuildType({
     """.trimIndent()
 
     params {
-        text("COMPAT_BASELINE_URL", "", allowEmpty = false)
-        text("COMPAT_CANDIDATE_URL", "", allowEmpty = false)
-        text("COMPAT_RMS_URL", "", allowEmpty = false)
-        text("COMPAT_SMOKE_COMPONENTS", "", allowEmpty = false)
+        text("COMPAT_BASELINE_URL", "", allowEmpty = false, display = ParameterDisplay.PROMPT)
+        text("COMPAT_CANDIDATE_URL", "", allowEmpty = false, display = ParameterDisplay.PROMPT)
+        text("COMPAT_RMS_URL", "", allowEmpty = false, display = ParameterDisplay.PROMPT)
+        text("COMPAT_SMOKE_COMPONENTS", "", allowEmpty = false, display = ParameterDisplay.PROMPT)
         param("ARTIFACT_PATH", """
             components-registry-compat-test/build/reports/compat/** => reports/compat
             components-registry-compat-test/build/test-results/**/*.xml => test-results/compat
