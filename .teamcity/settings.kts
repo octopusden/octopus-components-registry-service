@@ -15,6 +15,7 @@ project {
 
     vcsRoot(ComponentsRegistry)
     vcsRoot(CrsCompatTrace)
+    vcsRoot(ServiceConfig)
 
     params {
         param("JDK_VERSION", "11")
@@ -32,6 +33,7 @@ project {
     buildType(id10CompileUtAuto)
     buildType(id15CompatManual)
     buildType(id16CompatTraceReplayManual)
+    buildType(id17CompatLocalStandManual)
     buildType(id20ValidateComponentsRegistryProductionDataAuto)
     buildType(id30DeployToOkdQaDevAuto)
     buildType(id40ReleaseManual)
@@ -44,6 +46,7 @@ project {
         id10CompileUtAuto,
         id15CompatManual,
         id16CompatTraceReplayManual,
+        id17CompatLocalStandManual,
         id20ValidateComponentsRegistryProductionDataAuto,
         id30DeployToOkdQaDevAuto,
         id40ReleaseManual,
@@ -79,6 +82,22 @@ object ComponentsRegistry : GitVcsRoot({
 object CrsCompatTrace : GitVcsRoot({
     name = "Crs_Compat_Trace"
     url = "%CRS_COMPAT_TRACE_REPO_URL%"
+    branch = "refs/heads/master"
+    branchSpec = "+:refs/heads/master"
+    checkoutSubmodules = GitVcsRoot.CheckoutSubmodules.IGNORE
+    authMethod = defaultPrivateKey {
+        userName = "git"
+    }
+})
+
+// VCS root used by id17CompatLocalStandManual to check out the internal
+// service-config repository (per-environment YAML overlays consumed by
+// the CRS server). URL kept in the TC server / parent-project param
+// `SERVICE_CONFIG_REPO_URL` so the open-source DSL stays free of internal
+// identifiers, same pattern as `ComponentsRegistry`.
+object ServiceConfig : GitVcsRoot({
+    name = "Service_Config"
+    url = "%SERVICE_CONFIG_REPO_URL%"
     branch = "refs/heads/master"
     branchSpec = "+:refs/heads/master"
     checkoutSubmodules = GitVcsRoot.CheckoutSubmodules.IGNORE
@@ -261,11 +280,9 @@ object id15CompatManual : BuildType({
         doesNotContain("env.OS_TYPE", "WIN", "RQ_2875")
     }
 
-    dependencies {
-        snapshot(id10CompileUtAuto) {
-            onDependencyFailure = FailureAction.CANCEL
-        }
-    }
+    // id15 is standalone-manual: ad-hoc prod-vs-QA via URLs, no auto-trigger,
+    // not part of the release chain. Operator runs it on demand when they
+    // want to spot-check two pre-deployed stands by URL.
 })
 
 // Compatibility Trace Replay — manual, on-demand. Replays the deduplicated
@@ -352,6 +369,139 @@ object id16CompatTraceReplayManual : BuildType({
     }
 
     requirements {
+        doesNotContain("env.OS_TYPE", "WIN", "RQ_2875")
+    }
+
+    // id16 is standalone-manual like id15 — no chain dependency. The trace
+    // replay runs against two already-deployed URLs the operator supplies.
+})
+
+// Compatibility Local-Stand — manual, in the chain after id10. Spins TWO
+// CRS instances side-by-side on the agent: baseline (released
+// `%LAST_RELEASE_VERSION%`, docker image from corp registry) and candidate
+// (current chain's image pushed by id10), both pointed at the production
+// Components-Registry DSL + service-config. Then runs the compat-test
+// module's full endpoint matrix against both stands via the existing
+// `scripts/local-stands/teamcity-run.sh` wrapper.
+//
+// Why docker-image extraction (not Artifactory pull) for the baseline:
+// `components-registry-service-server` Maven publication ships the
+// non-bootJar (integration-tests classifier, no embedded deps), which is
+// not runnable. The bootJar — the runnable Spring-Boot fat JAR — lives only
+// inside the docker image at `/app/app.jar` per the module's Dockerfile.
+// Docker pull + `docker cp` is therefore the lowest-friction way to get
+// a runnable baseline JAR onto the agent.
+//
+// VCS roots attached (additive to the template's GitHub root):
+//   - ComponentsRegistry — prod DSL (master branch) under
+//     `%COMPONENTS_REGISTRY_CHECKOUT_DIR%`, exactly like id20.
+//   - ServiceConfig — internal service-config repo under `service-config/`.
+//
+// The wrapper handles postgres-up, both JVM boots, health-poll, compat
+// invocation, and teardown. Its env contract is documented in
+// `scripts/local-stands/TEAMCITY.md`.
+object id17CompatLocalStandManual : BuildType({
+    id("17CompatLocalStandManual")
+    name = "[1.7] Compatibility Local-Stand [MANUAL]"
+
+    artifactRules = """
+        components-registry-compat-test/build/reports/compat/** => reports/compat
+        components-registry-compat-test/build/test-results/**/*.xml => test-results/compat
+        /tmp/crs-baseline-tc.log => logs/baseline.log
+        /tmp/crs-candidate-tc.log => logs/candidate.log
+    """.trimIndent()
+
+    vcs {
+        // Template's GitHub root inherited; explicitly attach the two
+        // internal-data roots with stable checkout paths the wrapper expects.
+        root(ComponentsRegistry, "+:. => %COMPONENTS_REGISTRY_CHECKOUT_DIR%")
+        root(ServiceConfig, "+:. => service-config")
+    }
+
+    params {
+        // Required smoke list — same shape as id15 (CSV of real component
+        // names), but feeds the LOCAL stands, not URLs. Secret per the
+        // `feedback_redacted_identifiers` policy (real names).
+        text("COMPAT_SMOKE_COMPONENTS", "", allowEmpty = false, display = ParameterDisplay.PROMPT)
+        text("COMPAT_RMS_URL", "", allowEmpty = false, display = ParameterDisplay.PROMPT)
+        text("COMPAT_FULL", "false", allowEmpty = false, display = ParameterDisplay.PROMPT)
+        // Baseline version is the project-level `LAST_RELEASE_VERSION` (e.g.
+        // `2.0.87`); pinned, not prompted — operator updates the project
+        // param when a new release lands.
+        param("COMPAT_BASELINE_VERSION", "%LAST_RELEASE_VERSION%")
+        // Candidate image tag = the build number of the upstream id10 chain
+        // step that just pushed it via `dockerPushImage`.
+        param("COMPAT_CANDIDATE_VERSION", "${id10CompileUtAuto.depParamRefs.buildNumber}")
+        // Corp docker registry hosting both image tags. Held in the TC
+        // server / parent-project param `DOCKER_REGISTRY` (same value the
+        // gradle Dockerfile arg consumes).
+        param("DOCKER_REGISTRY_INTERNAL", "%DOCKER_REGISTRY%")
+    }
+
+    steps {
+        script {
+            name = "Extract JARs from docker images"
+            id = "extract_jars"
+            // Pull both images, `docker create` an ephemeral container per side,
+            // `docker cp` the fat JAR out to /tmp, then `docker rm`. Both
+            // commands are idempotent across re-runs on the same agent.
+            scriptContent = """
+                set -euo pipefail
+                BASELINE_IMAGE="%DOCKER_REGISTRY_INTERNAL%/octopusden/components-registry-service:%COMPAT_BASELINE_VERSION%"
+                CANDIDATE_IMAGE="%DOCKER_REGISTRY_INTERNAL%/octopusden/components-registry-service:%COMPAT_CANDIDATE_VERSION%"
+                echo "Pulling baseline:  ${'$'}BASELINE_IMAGE"
+                docker pull "${'$'}BASELINE_IMAGE"
+                echo "Pulling candidate: ${'$'}CANDIDATE_IMAGE"
+                docker pull "${'$'}CANDIDATE_IMAGE"
+                rm -f /tmp/baseline.jar /tmp/candidate.jar
+                BCID=${'$'}(docker create "${'$'}BASELINE_IMAGE")
+                docker cp "${'$'}BCID:/app/app.jar" /tmp/baseline.jar
+                docker rm "${'$'}BCID"
+                CCID=${'$'}(docker create "${'$'}CANDIDATE_IMAGE")
+                docker cp "${'$'}CCID:/app/app.jar" /tmp/candidate.jar
+                docker rm "${'$'}CCID"
+                ls -lh /tmp/baseline.jar /tmp/candidate.jar
+            """.trimIndent()
+        }
+        script {
+            name = "Run local-stand compat"
+            id = "run_compat"
+            scriptContent = """
+                set -euo pipefail
+                export BASELINE_JAR=/tmp/baseline.jar
+                export CANDIDATE_JAR=/tmp/candidate.jar
+                export LOCAL_VCS_ROOT="%teamcity.build.checkoutDir%/%COMPONENTS_REGISTRY_CHECKOUT_DIR%"
+                export SERVICE_CONFIG_DIR="%teamcity.build.checkoutDir%/service-config"
+                export COMPAT_SMOKE_COMPONENTS="%COMPAT_SMOKE_COMPONENTS%"
+                export COMPAT_RMS_URL="%COMPAT_RMS_URL%"
+                export COMPAT_FULL="%COMPAT_FULL%"
+                export COMPAT_PARALLELISM=8
+                export RESET_DB=1
+                export COMPONENTS_REGISTRY_SERVICE_VERSION="%COMPAT_BASELINE_VERSION%"
+                export BUILD_VERSION="%COMPAT_CANDIDATE_VERSION%"
+                bash scripts/local-stands/teamcity-run.sh
+            """.trimIndent()
+        }
+    }
+
+    failureConditions {
+        // Full sweep budget. The 5-component smoke completes in ~5-10 min;
+        // a full ~475-component matrix needs ~15-30 min. Padded to 60 min
+        // for cold-image-pull + first-time postgres volume init.
+        executionTimeoutMin = 60
+    }
+
+    features {
+        xmlReport {
+            reportType = XmlReport.XmlReportType.JUNIT
+            rules = "+:components-registry-compat-test/build/test-results/test/*.xml"
+        }
+    }
+
+    requirements {
+        // The wrapper relies on docker-compose, lsof, bash, and a local
+        // postgres on a Linux/macOS host. Same Windows exclusion as the
+        // sibling compat configs.
         doesNotContain("env.OS_TYPE", "WIN", "RQ_2875")
     }
 
