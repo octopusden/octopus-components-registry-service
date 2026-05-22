@@ -300,7 +300,14 @@ object id16CompatTraceReplayManual : BuildType({
         text("COMPAT_BASELINE_URL", "", allowEmpty = false, display = ParameterDisplay.PROMPT)
         text("COMPAT_CANDIDATE_URL", "", allowEmpty = false, display = ParameterDisplay.PROMPT)
         text("COMPAT_RMS_URL", "", allowEmpty = false, display = ParameterDisplay.PROMPT)
-        text("COMPAT_ALLOW_NON_DB_CANDIDATE", "false", allowEmpty = false, display = ParameterDisplay.PROMPT)
+        // Default `true` for this build type, unlike id15. The trace was
+        // captured from a prod V1 stand and replaying it against today's
+        // candidate (still serving V1 per the merge state) is by definition
+        // a V1-vs-V1 measurement — the CANDIDATE_NOT_DB_MODE env-warning
+        // would fire on every run and fail the build before the trace ever
+        // executes. Operator flips to `false` once the candidate is in real
+        // DB mode (`default-source=db`).
+        text("COMPAT_ALLOW_NON_DB_CANDIDATE", "true", allowEmpty = false, display = ParameterDisplay.PROMPT)
         // `latest-top.txt` is a symlink (in the trace repo) to the most recent
         // dated subdir. Operator can override at run time (e.g. to a specific
         // snapshot for reproducibility).
@@ -325,6 +332,9 @@ object id16CompatTraceReplayManual : BuildType({
     failureConditions {
         // 20 000 tuples × parallelism 10 took ~13 min in the 2026-05-17 run;
         // pad to 45 min for cold-cache agents + slower DB-mode candidate.
+        // TODO(post-first-runs): revisit after 2-3 real TC runs establish
+        //   an empirical ceiling on a DB-mode candidate under load. id15 uses
+        //   60 min — bump here if 45 turns out to be marginal.
         executionTimeoutMin = 45
     }
 
