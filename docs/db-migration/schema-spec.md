@@ -1,6 +1,6 @@
 # CRS Schema v2 — Specification
 
-**Status:** Proposed (see [ADR-014](adr/014-schema-v2.md))
+**Status:** Accepted (see [ADR-014](adr/014-schema-v2.md))
 **Implementation status:** the Flyway baseline `V1__schema.sql` is the canonical schema; the entity layer matches it. See ADR-014 for the landing PRs.
 
 This document is the canonical reference for the v2 schema. ADR-014 records the decision and alternatives; this file specifies the exact shape, semantics, and intended usage of every table.

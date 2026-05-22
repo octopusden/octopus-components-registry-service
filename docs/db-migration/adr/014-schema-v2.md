@@ -1,6 +1,6 @@
 # ADR-014: CRS Schema v2 Redesign
 
-**Status:** Proposed
+**Status:** Accepted — landed on `v3` via PR #191 (design artifacts, commit `1eaa3dde`) and PR #192 (end-to-end refactor, commit `65ccaca3`).
 **Supersedes:** ADR-010 (Schema Extensibility — JSONB-based metadata)
 **Related:** ADR-001 (Storage: PostgreSQL), ADR-007 (Dual-read migration)
 **Detailed reference:** `docs/db-migration/schema-spec.md`
