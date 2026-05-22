@@ -410,8 +410,8 @@ object id17CompatLocalStandManual : BuildType({
     artifactRules = """
         components-registry-compat-test/build/reports/compat/** => reports/compat
         components-registry-compat-test/build/test-results/**/*.xml => test-results/compat
-        /tmp/crs-baseline-tc.log => logs/baseline.log
-        /tmp/crs-candidate-tc.log => logs/candidate.log
+        /tmp/crs-id17-%teamcity.build.id%/baseline.log => logs/baseline.log
+        /tmp/crs-id17-%teamcity.build.id%/candidate.log => logs/candidate.log
     """.trimIndent()
 
     vcs {
@@ -428,8 +428,13 @@ object id17CompatLocalStandManual : BuildType({
 
     params {
         // Required smoke list — same shape as id15 (CSV of real component
-        // names), but feeds the LOCAL stands, not URLs. Secret per the
-        // `feedback_redacted_identifiers` policy (real names).
+        // names), but feeds the LOCAL stands, not URLs. The value contains
+        // identifiers that are forbidden in repo files / commit messages
+        // (`feedback_redacted_identifiers`), but the TC `text(...)` param
+        // itself is fine because the value never lands in version control —
+        // it lives only in the TC build config form. (Not a `password(...)`
+        // type because the value isn't a credential and operators paste it
+        // visibly when triggering the run.)
         text("COMPAT_SMOKE_COMPONENTS", "", allowEmpty = false, display = ParameterDisplay.PROMPT)
         text("COMPAT_RMS_URL", "", allowEmpty = false, display = ParameterDisplay.PROMPT)
         text("COMPAT_FULL", "false", allowEmpty = false, display = ParameterDisplay.PROMPT)
@@ -455,8 +460,10 @@ object id17CompatLocalStandManual : BuildType({
             // `docker rm`. The `trap` cleans up the create-container even if
             // `docker cp` fails (e.g. FS full, image lacks /app/app.jar), so
             // we don't leak orphan containers across failed re-runs (Opus
-            // Stage-2 review). The work dir includes %BUILD_NUMBER% so two
-            // builds on the same shared agent never clobber each other's JAR.
+            // Stage-2 review). The work dir includes `%teamcity.build.id%`
+            // (the numeric internal build ID, stable for a run's lifetime)
+            // so two builds on a shared agent host never clobber each
+            // other's JAR or log files.
             scriptContent = """
                 set -euo pipefail
                 BASELINE_IMAGE="%DOCKER_REGISTRY_INTERNAL%/octopusden/components-registry-service:%COMPAT_BASELINE_VERSION%"
@@ -485,11 +492,23 @@ object id17CompatLocalStandManual : BuildType({
         script {
             name = "Run local-stand compat"
             id = "run_compat"
+            // BASELINE_LOG / CANDIDATE_LOG are namespaced under WORK_DIR
+            // (same `%teamcity.build.id%` namespace as the extracted JARs)
+            // so two concurrent id17 builds on a shared agent host don't
+            // overwrite each other's wrapper logs. The artifact rules at
+            // the top of this BuildType pick these paths up via the same
+            // `%teamcity.build.id%` substitution. Ports stay at the
+            // wrapper defaults (4567/4568) — TC's per-config serialization
+            // is sufficient guard against the same id17 running twice in
+            // parallel on one agent, and we don't expect multiple
+            // local-stand configs to coexist.
             scriptContent = """
                 set -euo pipefail
                 WORK_DIR="/tmp/crs-id17-%teamcity.build.id%"
                 export BASELINE_JAR="${'$'}WORK_DIR/baseline.jar"
                 export CANDIDATE_JAR="${'$'}WORK_DIR/candidate.jar"
+                export BASELINE_LOG="${'$'}WORK_DIR/baseline.log"
+                export CANDIDATE_LOG="${'$'}WORK_DIR/candidate.log"
                 export LOCAL_VCS_ROOT="%teamcity.build.checkoutDir%/%COMPONENTS_REGISTRY_CHECKOUT_DIR%"
                 export SERVICE_CONFIG_DIR="%teamcity.build.checkoutDir%/service-config"
                 export COMPAT_SMOKE_COMPONENTS="%COMPAT_SMOKE_COMPONENTS%"
