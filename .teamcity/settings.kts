@@ -412,8 +412,13 @@ object id17CompatLocalStandManual : BuildType({
     """.trimIndent()
 
     vcs {
-        // Template's GitHub root inherited; explicitly attach the two
-        // internal-data roots with stable checkout paths the wrapper expects.
+        // id17 does NOT use Octopus_OctopusGradleBuild template (this is a
+        // pure shell-script build, not a gradle one — the wrapper invokes
+        // Gradle from inside) so the GitHub root is not inherited. Attach
+        // it explicitly, same pattern as id20. Default `+:.` rule places
+        // the CRS source (with scripts/local-stands/teamcity-run.sh) at
+        // the checkout root.
+        root(AbsoluteId("Octopus_OctopusComponents_OctopusGithubVcsRoot"))
         root(ComponentsRegistry, "+:. => %COMPONENTS_REGISTRY_CHECKOUT_DIR%")
         root(ServiceConfig, "+:. => service-config")
     }
