@@ -222,7 +222,7 @@ object id15CompatManual : BuildType({
 
     dependencies {
         snapshot(id10CompileUtAuto) {
-            onDependencyFailure = FailureAction.FAIL_TO_START
+            onDependencyFailure = FailureAction.CANCEL
         }
     }
 })
