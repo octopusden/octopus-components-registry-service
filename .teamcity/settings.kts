@@ -219,6 +219,12 @@ object id15CompatManual : BuildType({
     requirements {
         doesNotContain("env.OS_TYPE", "WIN", "RQ_2875")
     }
+
+    dependencies {
+        snapshot(id10CompileUtAuto) {
+            onDependencyFailure = FailureAction.FAIL_TO_START
+        }
+    }
 })
 
 object id20ValidateComponentsRegistryProductionDataAuto : BuildType({
