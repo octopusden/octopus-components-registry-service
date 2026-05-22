@@ -57,8 +57,8 @@ The improvement is split into two parts:
     artifactId = "mycomponent-docs"
     
     distribution {
-        explicit = true
-        external = false //can be also true
+        explicit = false // can be also true
+        external = true 
         GAV = "org.company.docs:mycomponent-docs:zip"
     }
 }
@@ -148,9 +148,9 @@ DOC_DEPENDENCIES = doc_mycomponent:3.2.18  (latest released version overall)
 **Parameters:**
 - `ARTIFACT_TYPE=documentation`
 - `ARTIFACTS_COORDINATES=%DOC_ARTIFACTS_COORDINATES%`
-- `ARTIFACTS_COORDINATES_VERSION=%DOC_ARTIFACTS_COORDINATES_VERSION%`
+- `ARTIFACTS_COORDINATES_VERSION=%DOC_ARTIFACTS_VERSION%`
 
-**Note:** The `DOC_ARTIFACTS_COORDINATES` and `DOC_ARTIFACTS_COORDINATES_VERSION` variables are populated from the documentation component's distribution configuration retrieved via Components Registry Service API (see section 1.3).
+**Note:** The `DOC_ARTIFACTS_COORDINATES` and `DOC_ARTIFACTS_VERSION` variables are populated from the documentation component's distribution configuration retrieved via Components Registry Service API (see section 1.3).
 
 **Placement:** Execute after main artifact upload
 
