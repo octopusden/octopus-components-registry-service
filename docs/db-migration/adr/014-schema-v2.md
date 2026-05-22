@@ -102,18 +102,6 @@ Wide typed `component_configurations` with base + sparse single-attribute overri
 
 **Why selected.** Keeps everything typed (defaults AND overrides). Per-attribute independent ranges first-class. One table — simple JPA mapping. Single resolve query returns base + matching overrides; merge per field. Adding new fields is a typed `ALTER TABLE`, acceptable for the historical batch cadence of schema evolution. Marker rows cover child collections cleanly with full-replacement semantics matching DSL grammar.
 
-## Implementation notes
+## Implementation
 
-Phases tracked in `implementation-progress.md` under "Schema v2 refactor":
-
-1a. Design artifacts (this ADR, `schema-spec.md`) — **done**.
-1b. `V1__schema.sql` baseline (replaces V1..V6) — **pending**, bundled with Phase 2 entity refactor to keep DB and JPA aligned in one merge.
-2. Entity refactor (≈16 → ≈22 classes due to dictionaries + distribution split).
-3. Mapper / resolver rewrite.
-4. v4 DTO update.
-5. Migration service rewrite.
-6. Test suite (synthetic DSL fixtures + integration tests; real-data baselines kept in internal CI only).
-7. QA recreate + full `gradlew build`.
-8. ADR updates (this file, supersede 010).
-
-Each phase ends with subagent review (Sonnet by default) per team convention.
+Schema v2 (Model A') is the canonical schema on `v3`. The design landed in PR #191 (`1eaa3dde`) and the end-to-end refactor — `V1__schema.sql` baseline, entity layer (~22 JPA classes including dictionaries + distribution split), mapper/resolver rewrite, v4 DTO update, migration service rewrite, and synthetic-fixture test suite — landed together in PR #192 (`65ccaca3`).

@@ -21,8 +21,6 @@ The Components Registry domain is split across two repositories. This file is th
 | **Technical design** | [`docs/db-migration/technical-design.md`](docs/db-migration/technical-design.md) | Architecture, DB schema, JPA entities, API contracts, security. |
 | **Architecture decisions** | [`docs/db-migration/adr/`](docs/db-migration/adr/) | All ADRs — backend, data, security, including [ADR-012 Portal architecture](docs/db-migration/adr/012-portal-architecture.md) (canonical for the boundary). |
 | **Numbered requirements** | [`requirements-common.md`](docs/db-migration/requirements-common.md) (`SYS-NNN`), [`requirements-migration.md`](docs/db-migration/requirements-migration.md) (`MIG-NNN`), [`requirements-resolver.md`](docs/db-migration/requirements-resolver.md) (`RES-NNN`) | Acceptance criteria + test pointers. SYS = system/API behaviour, MIG = Git→DB migration, RES = resolver parity (DB resolver vs Git resolver). |
-| **Implementation status** | [`docs/db-migration/implementation-progress.md`](docs/db-migration/implementation-progress.md) | What's shipped, by phase. |
-| **Backlog index** | [`docs/db-migration/todo.md`](docs/db-migration/todo.md) | Recently shipped, deferred items, tech-debt index, future ideas. |
 | **Tech-debt entries** | [`docs/db-migration/tech-debt/`](docs/db-migration/tech-debt/) (`TD-NNN`) | Backend tech-debt: Flyway rollout, OpenAPI spec generation, etc. |
 | **Local dev / deployment** | [`docs/db-migration/deployment/`](docs/db-migration/deployment/) | Dev runbooks, OKD deploy patterns, local Postgres. |
 | **Agent / build commands** | [`AGENTS.md`](AGENTS.md) | Build, test, quality gates. Read before touching code. |

@@ -2,7 +2,7 @@
 
 ## Status
 
-Open · P2 · correctness gap, not contract drift · sister to MIG-049-bis follow-ups · referenced from `EntityMappers.kt:243` and `docs/db-migration/todo.md` Tech Debt list.
+Open · P2 · correctness gap, not contract drift · sister to MIG-049-bis follow-ups · referenced from `EntityMappers.kt:243`.
 
 ## Problem
 
@@ -73,7 +73,7 @@ Per `project_crs_schema_v2_migration_policy`: schema-v2 is not in prod yet. The 
 
 ## Out of scope
 
-- Partial-overlap rejection on the **write** side (validation in `ComponentManagementServiceImpl.validateRangeSyntax`). Tracked separately in `docs/db-migration/todo.md` Tech Debt section ("Field-override partial-range-overlap rejection") — same blocker (no `containsRange` API in the version-range library).
+- Partial-overlap rejection on the **write** side (validation in `ComponentManagementServiceImpl.validateRangeSyntax`) — same blocker (no `containsRange` API in the version-range library); separate follow-up.
 
 ## Why this isn't a merge blocker for PR #192
 
@@ -83,5 +83,4 @@ Trace-replay against the candidate stand surfaces this if it bites; if no diff a
 
 ## Related
 
-- `docs/db-migration/todo.md` Tech Debt: "EntityMappers.rangeApplies strict-containment heuristic" and "Field-override partial-range-overlap rejection" (the same blocker on the write side).
 - `EntityMappers.kt:243` — the FIXME callsite, now replaced with `// see TD-010` in PR fix/pr-192-docs-test-strengthening.

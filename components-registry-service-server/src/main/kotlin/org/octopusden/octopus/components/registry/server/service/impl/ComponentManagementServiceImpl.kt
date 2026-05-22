@@ -1217,8 +1217,8 @@ class ComponentManagementServiceImpl(
      * detection across other override rows is intentionally NOT enforced here —
      * the DB UNIQUE on (component_id, version_range, overridden_attribute)
      * blocks equal ranges; strict containment and disjoint ranges are allowed
-     * per schema-spec.md §7 (transitional). See [`todo.md`](../../../../../../../docs/db-migration/todo.md)
-     * entry "field-override partial-range-overlap rejection" for the follow-up.
+     * per schema-spec.md §7 (transitional). See TD-010 for the follow-up
+     * (blocked on a `containsRange` API in the version-range library).
      */
     private fun validateRangeSyntax(range: String) {
         try {
