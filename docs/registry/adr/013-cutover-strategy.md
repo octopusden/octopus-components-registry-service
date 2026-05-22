@@ -98,4 +98,3 @@ Phase 5 is split into three sub-stages, each independently revertible:
 - PRD [§6 Phase 5](../prd.md#phase-5-cutover).
 - [ADR-007](007-dual-read-migration.md) — Component-Source Routing — current architecture being unwound.
 - [MIG-026](../requirements-migration.md) — `/admin/migrate-history` contract.
-- [Implementation progress](../implementation-progress.md) — Phase 9 covers the operational hardening that preceded this cutover.

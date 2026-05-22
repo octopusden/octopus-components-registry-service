@@ -159,7 +159,7 @@ tasks.register('compatibilityReporter') {
         // Load known-deltas.json. Each entry suppresses matching diffs from the
         // "Endpoint divergences" section into a separate "Suppressed (known deltas)"
         // section, with the entry's reason + regressionTest fields surfaced for review.
-        // Spec: docs/db-migration/api-compat-deltas.md
+        // Spec: docs/registry/api-compat-deltas.md
         def knownDeltasFile = file('src/test/resources/known-deltas.json')
         def knownDeltas = []
         if (knownDeltasFile.exists()) {

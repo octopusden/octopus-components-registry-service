@@ -1,10 +1,6 @@
 # Migration Requirements (Git → DB)
 
-## Status
-
-**Draft** | Date: 2026-03-16
-
----
+Numbered MIG-NNN contracts registry, peer of `requirements-common.md` (SYS-NNN) and `requirements-resolver.md` (RES-NNN). Each entry is a contract referenced by tests, ADRs, and the Portal feature docs; the status column reflects test coverage, not workflow state. New requirements get a new MIG-NNN row; satisfied requirements stay in the table as a permanent record of what the migration guarantees.
 
 ## Summary Table
 

@@ -203,8 +203,7 @@ parentComponent reference.
 **Status:** ✅ Git + DB — runs green on both backends; the split-field behaviour for
 `escrow.buildTask` (separate `escrow_build_task` column in v2 schema, distinct
 from `build.buildTasks`) is correctly reflected in both the resolver and the
-expected-data fixture. See `docs/db-migration/todo.md` Schema v2 known
-limitations ticked entry for the prior history.
+expected-data fixture.
 
 **Description:**
 GET `/rest/api/2/components/{name}/versions/{ver}` returns a DetailedComponent

@@ -18,7 +18,7 @@ import org.springframework.stereotype.Component
  * first (Keycloak's canonical username claim), then `sub` as a fallback. If there is no
  * authenticated user (background jobs, async tasks running outside an HTTP context),
  * returns `"system"` so `changed_by` is never null in practice. Matches the contract
- * promised in `docs/db-migration/technical-design.md` §6.4 (Audit changedBy wiring).
+ * promised in `docs/registry/technical-design.md` §6.4 (Audit changedBy wiring).
  */
 @Component
 class CurrentUserResolver {

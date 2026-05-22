@@ -61,8 +61,6 @@ Threshold for ⚠ flagging (configurable per env):
 
 **k6** (default):
 
-- Already mentioned in `docs/db-migration/todo.md` ("Performance tests
-  (k6/Gatling)") as the planned tool.
 - JavaScript scenarios are readable; thresholds are first-class.
 - Native Prometheus exporter for run-over-run graphs.
 
@@ -117,7 +115,5 @@ This is **deferred** — the doc spec is the deliverable here, not the code.
 ## Related
 
 - `~/.claude/plans/async-stirring-koala.md` — TASK-F details.
-- `docs/db-migration/tech-debt/008-compat-test-trace-replay.md` — TD-008,
+- `docs/registry/tech-debt/008-compat-test-trace-replay.md` — TD-008,
   shares the trace file input.
-- `docs/db-migration/todo.md` — the existing "Performance tests (k6/Gatling)"
-  TODO bullet that this doc concretises.

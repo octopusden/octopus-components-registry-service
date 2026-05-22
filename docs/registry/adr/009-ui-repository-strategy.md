@@ -7,6 +7,11 @@
 
 The recommendation in this ADR was **Option B-2 (monorepo with embedded JAR, single Pod)**. That recommendation **was not implemented**. The team chose **Option A (separate repository)** instead, with a Spring Cloud Gateway frontend that proxies `/rest/**` and `/auth/**` to this service. Rationale and consequences are captured in ADR-012.
 
+The reversal between this ADR and ADR-012 was driven by two concerns that surfaced once we started building the UI:
+
+1. **OAuth2 BFF separation.** An embedded UI inside the resource server mixes session/login concerns with the bearer-token API surface. A separate Gateway/BFF keeps the session-cookie + login flow on one process and lets CRS remain a clean OAuth2 resource server (Keycloak `@PreAuthorize` everywhere, no servlet-session state).
+2. **Vite + Gradle integration friction.** Embedding the React/Vite build into the Gradle multi-module setup required either a custom `node-gradle` orchestration or a copy-into-resources step at build time. Neither was clean, and both broke per-side iteration speed (npm dev server vs gradle bootRun). Splitting the repos let each side use its native tooling.
+
 This ADR is preserved for historical context (analysis of A/B/C trade-offs) but the decision section is no longer authoritative.
 
 ## Context
@@ -237,7 +242,7 @@ octopus-components-registry-service/        ← existing repo
 │   ├── src/
 │   │   └── main/resources/static/          ← built UI copied here by Gradle
 │   └── Dockerfile                          ← single JVM image serves API + UI
-├── docs/db-migration/                      ← architecture docs
+├── docs/registry/                      ← architecture docs
 ├── settings.gradle                         ← include 'components-registry-ui'
 └── build.gradle
 ```

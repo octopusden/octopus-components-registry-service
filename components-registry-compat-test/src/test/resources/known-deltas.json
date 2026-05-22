@@ -1,5 +1,5 @@
 {
-  "_comment": "Documented compat deltas. Each entry suppresses a matching DiffRecord from the active section of summary.md and surfaces it under '## Suppressed (known deltas)' with its reason + regressionTest. See docs/db-migration/api-compat-deltas.md.",
+  "_comment": "Documented compat deltas. Each entry suppresses a matching DiffRecord from the active section of summary.md and surfaces it under '## Suppressed (known deltas)' with its reason + regressionTest. See docs/registry/api-compat-deltas.md.",
   "deltas": [
     {
       "endpoint": "PUT /rest/api/2/components-registry/service/updateCache",

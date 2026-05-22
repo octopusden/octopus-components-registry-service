@@ -149,9 +149,9 @@ warn entry). The full set closes the gap.
 
 - `~/.claude/plans/async-stirring-koala.md` — TASK-C, including the
   per-endpoint preservation probe schema.
-- `docs/db-migration/tech-debt/007-compat-test-self-tests-and-review.md` — the
+- `docs/registry/tech-debt/007-compat-test-self-tests-and-review.md` — the
   framework self-tests (TD-007) that this depends on for the comparator
   unit-test substrate (`Comparators.compareRaw` is extracted).
-- `docs/db-migration/tech-debt/008-compat-test-trace-replay.md` — TD-008, the
+- `docs/registry/tech-debt/008-compat-test-trace-replay.md` — TD-008, the
   frequency-weighted production-trace replay that consumes the same baseline
   list.

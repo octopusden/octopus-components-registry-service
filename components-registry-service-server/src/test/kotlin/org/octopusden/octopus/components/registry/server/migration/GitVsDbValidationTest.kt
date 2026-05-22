@@ -385,9 +385,10 @@ class GitVsDbValidationTest {
             "(`component_build_tool_beans` schema extension); the only expected residual " +
             "is 1× distribution-on-core-lib (FAKE-aggregator routing edge). Concrete count " +
             "must be regenerated empirically from a single VAL-010 run before re-enabling " +
-            "— do not hand-arithmetic. Tracked in docs/db-migration/todo.md " +
-            "(\"Schema v2 known limitations\" section, FAKE-aggregator bullet) and in " +
-            "docs/db-migration/implementation-progress.md Phase 6 ledger.",
+            "— do not hand-arithmetic. FAKE-aggregator detection itself is defined in " +
+            "ADR-014 §Decision item 8; the distribution-on-core-lib edge is an open " +
+            "residual without a dedicated tracker yet (file a new MIG-NNN if it widens). " +
+            "PR #192 carries the schema-v2 refactor that this test guards.",
     )
     fun `VAL-010 bulk canary`() {
         data class Divergence(

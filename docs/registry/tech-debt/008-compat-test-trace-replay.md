@@ -142,7 +142,7 @@ to fix or waiver via `known-deltas.json`).
 ## Related
 
 - `~/.claude/plans/async-stirring-koala.md` — TASK-E details.
-- `docs/db-migration/tech-debt/006-compat-test-coverage.md` — TD-006, the
+- `docs/registry/tech-debt/006-compat-test-coverage.md` — TD-006, the
   endpoint-coverage gate that this builds on.
-- `docs/db-migration/tech-debt/009-compat-test-load.md` — TD-009, the k6
+- `docs/registry/tech-debt/009-compat-test-load.md` — TD-009, the k6
   load test that consumes the same trace but in a different shape.

@@ -94,7 +94,7 @@ Single consolidated baseline `V1__schema.sql` replaces V1..V6 (project not yet i
 
 ## 4. JPA Entities
 
-The JPA entity layout for schema v2 is specified in [`schema-spec.md`](schema-spec.md) (column-by-column inventory of every table) and lands in Phase 2 (entity refactor). See [`implementation-progress.md`](implementation-progress.md) for current phase status.
+The JPA entity layout for schema v2 is specified in [`schema-spec.md`](schema-spec.md) (column-by-column inventory of every table). The entity refactor landed alongside the schema baseline (see [ADR-014](adr/014-schema-v2.md) for the landing PRs).
 
 ## 5. API Design
 

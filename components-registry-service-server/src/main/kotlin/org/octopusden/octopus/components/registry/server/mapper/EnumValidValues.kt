@@ -42,7 +42,7 @@ internal val PRODUCT_TYPE_NAMES: Set<String> =
 /**
  * Hand-listed: no `PackageType` enum exists in the API layer. Replace with
  * `PackageType.values().map { it.name }.toSet()` once the enum is extracted —
- * see TD-004 (`docs/db-migration/tech-debt/004-extract-package-type-enum.md`).
+ * see TD-004 (`docs/registry/tech-debt/004-extract-package-type-enum.md`).
  * Until then any DSL change that introduces a new package type must update
  * this set in lockstep.
  */

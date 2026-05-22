@@ -57,7 +57,7 @@ No `./gradlew dockerBuildImage` is needed — the image is already built and pub
   config file is `okd/components-registry.yaml`, and its downstream profile is `dev`, not
   `ft`. The generic "layer ft-db on top of existing profile" principle still applies.
 
-**Plan doc this task belongs to:** `docs/db-migration/ft-db-testing-plan.md`
+**Plan doc this task belongs to:** `docs/registry/ft-db-testing-plan.md`
 
 ## Guardrails
 
@@ -70,7 +70,7 @@ No `./gradlew dockerBuildImage` is needed — the image is already built and pub
 3. **Do NOT change application logic** in the downstream — the only scope is CRS wiring.
 4. **Do NOT skip failing downstream FT** — if something breaks, diagnose. If the root
    cause is in CRS, stop and report; create a requirement in
-   `octopus-components-registry-service/docs/db-migration/requirements-*.md` and a failing
+   `octopus-components-registry-service/docs/registry/requirements-*.md` and a failing
    test in that repo (see "TDD rule on problems" below). Do not patch around it in the
    downstream.
 5. **Do NOT delete** the existing `application-ft.yaml` / custom YAML overrides reflexively.

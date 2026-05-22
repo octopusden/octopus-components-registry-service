@@ -30,6 +30,12 @@ Migrating from Git-based storage to PostgreSQL is a high-risk change. The `Compo
 - No global mode flag — routing is always active once deployed
 - Validation is a step in the import flow, not a system-wide mode
 
+### Subsequently rejected refinement: per-JVM cache for `component_source`
+
+After Option C landed, a per-JVM `Caffeine` cache was added inside `ComponentSourceRegistry` to avoid a DB round-trip on every resolve call (5-minute write-expiry, populated lazily). It was **removed in SYS-032** because multi-pod deployments served stale routing for the cache TTL: a `migrate`/rename on pod A flipped `component_source` in the DB but pod B continued to route by the cached `git` value until expiry, causing 5-minute windows of mixed answers across the cluster.
+
+The replacement is the unchanged Postgres lookup on every resolve — the table is small, the index is hot, and the cost was below noise in the resolve-path latency budget.
+
 ## Decision
 
 **Option C: Per-component source routing via `component_source` table.**
