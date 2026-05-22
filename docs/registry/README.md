@@ -67,13 +67,19 @@ PRD (why?) ──→ FS (what?) ──→ TDD (how?)
 | AI-2 | **Simplify storage modes**: replace 4 modes (`git\|db\|routing\|dual`) with single `component_source`-based routing | **Done** | Implemented in ADR-007. No global mode flag, single `ComponentRoutingResolver` always active. |
 | AI-3 | **Rollback semantics**: reframe rollback as one-way cutover after first DB write per component | **Done** | Implemented in ADR-007 §Rollback Semantics. Updated NFS §5.6, §5.9. |
 
+### Level 5 — Visual aids
+
+| Document | Description | Audience |
+|----------|-------------|----------|
+| [diagrams/architecture.md](diagrams/architecture.md) | High-level Mermaid diagram — browser → Portal BFF → CRS routing → PostgreSQL/Git, plus direct Feign consumers and Keycloak. | Anyone landing cold |
+| [diagrams/erd.md](diagrams/erd.md) | Entity-relationship diagram of schema v2 — components + per-version configurations, dictionaries, distribution family split, cross-cutting tables. | Developers, DBAs |
+
 ### Planned (create as needed)
 
 | Document | When to create |
 |----------|----------------|
 | `migration-runbook.md` | Before production migration — step-by-step ops playbook |
 | `api-changelog.md` | On API v4 release — changelog for consumers |
-| `deployment/` | During UI onboarding — OKD deployment research inputs, platform references, and rollout briefs |
 
 ## How to Read
 
@@ -130,5 +136,6 @@ docs/registry/
 ├── adr/                       ← Architecture Decision Records (000–014)
 ├── tech-debt/                 ← Numbered TD-NNN entries
 ├── deployment/                ← OKD + local Postgres deployment workspace
+├── diagrams/                  ← Mermaid architecture + ERD diagrams
 └── prototypes/                ← Static HTML mock-ups consumed by the Portal SPA
 ```
