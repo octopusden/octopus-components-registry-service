@@ -86,7 +86,8 @@ class TraceReplayCompatTest : CompatibilityTestBase() {
      *  - `batchArtifacts`: same approach, 5 distinct components in one list.
      *    Used for `POST /v3/components/find-by-artifacts` (and the v2
      *    `findByArtifacts` alias).
-     *  - `versionsFor(componentId)`: lazy per-component lookup via RMS.
+     *  - `versionsFor(componentId)`: lazy per-component lookup — file map
+     *    when `compat.versions.file` is set, else RMS (see VersionSampler).
      *    Used for `POST /v2/components/{c}/detailed-versions`.
      *
      * Without these fixtures the trace replayer falls back to `{}` empty body,

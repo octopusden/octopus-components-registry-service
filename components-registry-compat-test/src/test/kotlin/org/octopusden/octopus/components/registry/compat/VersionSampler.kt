@@ -10,38 +10,29 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
 /**
- * Per-component version discovery — two sources, priority in this order:
- *
- *   1. A pre-computed `{componentId: [v1, v2, ...]}` JSON snapshot when
- *      `compat.versions.file` is configured (set by TC builds via the
- *      `crs-compat-trace` VCS root). Read once, cached for the run. No HTTP
- *      hits — repeatable across days and isolated from RMS availability.
- *   2. Live `GET {rms.url}/rest/api/1/builds/component/{c}?statuses=RELEASE&descending=true&limit=N`
- *      when no file is configured (kept for local dev so an operator with an
- *      RMS URL can still drive the sampler).
- *
- * Per-component cache (`ConcurrentHashMap`) is shared between the two paths.
- *
- * Fail mode (per plan §RMS coverage guard): if neither source is reachable
- * for a component, [versionsFor] returns `emptyList()` and downstream tests
- * treat the component as "no real versions". The smoke-mode `each component
- * must have ≥1 real version` rule is enforced by the calling test's coverage
- * check, not here.
- */
-/**
  * Pure loader for the versions JSON. Extracted from [VersionSampler] so unit
  * tests can exercise it without the by-lazy singleton state of the object.
  *
  * Contract:
  * - `path = null` → returns `null` (caller should fall back to RMS).
  * - path doesn't exist / not readable → returns empty map (operator opted into
- *   file mode and put the wrong path; do not silently fall back to RMS, that
- *   would defeat reproducibility — empty map makes downstream tests see
- *   "0 real versions" so the coverage-floor check fires).
+ *   file mode and put the wrong path; the loader does NOT silently fall back
+ *   to RMS in this case — that would defeat the reproducibility-vs-RMS
+ *   priority the file mode promises).
  * - File present but not a JSON object (e.g. `[]`, `"foo"`) → empty map.
  * - File present, valid JSON object → `{componentId: [v1, ...]}`. Entries
  *   whose value is not a JSON array are skipped. Array elements that are
  *   not non-blank strings are filtered out.
+ *
+ * KNOWN GAP: the "operator opted into file mode and put the wrong path → 0
+ * real versions for every component" outcome does NOT fire any enforcement
+ * check today. The plan §RMS coverage guard speaks of a smoke-floor
+ * (`each component must have ≥1 real version`), but no such gate is
+ * implemented in any consumer of [versionsFor] — they all `log.warn` +
+ * skip per-component tests via `assumeTrue` / `pairArgsOrSentinel`. A
+ * vacuous-green run is therefore possible if the file is empty / wrong-
+ * path. Follow-up: lift the floor into `SnapshotPreconditionTest` so a
+ * misconfigured file fails fast instead of silently skipping.
  */
 internal fun loadVersionsFile(
     path: String?,
@@ -73,6 +64,35 @@ internal fun loadVersionsFile(
     }.getOrDefault(emptyMap())
 }
 
+/**
+ * Per-component version discovery — two sources, priority in this order:
+ *
+ *   1. A pre-computed `{componentId: [v1, v2, ...]}` JSON snapshot when
+ *      `compat.versions.file` is configured (set by TC builds via the
+ *      `crs-compat-trace` VCS root). Read once, cached for the run. No HTTP
+ *      hits — repeatable across days and isolated from RMS availability.
+ *   2. Live `GET {rms.url}/rest/api/1/builds/component/{c}?statuses=RELEASE&descending=true&limit=N`
+ *      when no file is configured (kept for local dev so an operator with an
+ *      RMS URL can still drive the sampler).
+ *
+ * Per-component cache (`ConcurrentHashMap`) is shared between the two paths.
+ *
+ * Lifecycle / scoping:
+ *   - The file-mode map is read ONCE at first [versionsFor] call via
+ *     `by lazy`. `compat.versions.file` MUST be set before that first call;
+ *     subsequent property changes are silently ignored. Always true in
+ *     production (TC sets the env before the JVM starts), but a unit test
+ *     that flips the property between cases will not observe the new value.
+ *   - The version cache (`ConcurrentHashMap`) is per-JVM. If gradle reuses
+ *     a worker JVM across `:test` and `:unitTest` invocations with
+ *     different `compat.versions.file` values, the second invocation sees
+ *     the first's cached map. Pre-existing behaviour for the RMS path;
+ *     unchanged here.
+ *
+ * Fail mode: if neither source has a component, [versionsFor] returns
+ * `emptyList()` — see [loadVersionsFile] KDoc for the documented "vacuous-
+ * green path on wrong file-mode config" gap and follow-up.
+ */
 object VersionSampler {
     private val log = LoggerFactory.getLogger(VersionSampler::class.java)
     private val mapper = jacksonObjectMapper()
