@@ -108,7 +108,7 @@ For schema-touching PRs, also `--reset-db`.
 
 - `~/.claude/plans/async-stirring-koala.md` — TASK-D details, including
   the 5 sub-bug analysis.
-- `docs/db-migration/tech-debt/006-compat-test-coverage.md` — TD-006, the
+- `docs/registry/tech-debt/006-compat-test-coverage.md` — TD-006, the
   endpoint-coverage gate; depends on the `Comparators` extraction from L1.
-- `docs/db-migration/tech-debt/008-compat-test-trace-replay.md` — TD-008.
-- `docs/db-migration/tech-debt/009-compat-test-load.md` — TD-009.
+- `docs/registry/tech-debt/008-compat-test-trace-replay.md` — TD-008.
+- `docs/registry/tech-debt/009-compat-test-load.md` — TD-009.

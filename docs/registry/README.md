@@ -1,4 +1,6 @@
-# Components Registry: Git → DB Migration — Architecture Documentation
+# Components Registry — System Documentation
+
+Authoritative documentation for the CRS v3 system: data model, REST API surface, security, audit, and the per-component routing that bridges the legacy Git/DSL store with the PostgreSQL backend. The folder is named `docs/registry/` because it covers the registry as it is today, not migration history — historical context is preserved inside individual ADRs (notably ADR-007, ADR-009, ADR-014) and in the audit report under `.github/audit/`.
 
 ## Glossary
 
@@ -51,10 +53,11 @@ PRD (why?) ──→ FS (what?) ──→ TDD (how?)
 | [ADR-007](adr/007-dual-read-migration.md) | Component-Source Routing — per-component migration strategy |
 | [ADR-008](adr/008-component-level-routing.md) | ~~Component-level routing~~ — Superseded by ADR-007 |
 | [ADR-009](adr/009-ui-repository-strategy.md) | ~~UI repository strategy — monorepo vs separate repo~~ — Superseded by ADR-012 |
-| [ADR-010](adr/010-schema-extensibility.md) | Hybrid schema extensibility — Columns + JSONB (Proposed) |
+| [ADR-010](adr/010-schema-extensibility.md) | ~~Hybrid schema extensibility — Columns + JSONB~~ — Superseded by ADR-014 |
 | [ADR-011](adr/011-field-configuration.md) | Configurable field visibility, defaults, multi-org support (Proposed) |
 | [ADR-012](adr/012-portal-architecture.md) | UI extracted to `octopus-components-management-portal` as a Spring Cloud Gateway BFF (Accepted 2026‑04‑14, PR #147) |
 | [ADR-013](adr/013-cutover-strategy.md) | Cutover strategy — staged removal of Git resolver, `component_source` table, and JGit (Proposed) |
+| [ADR-014](adr/014-schema-v2.md) | Schema v2 (Model A') — wide typed `component_configurations` + sparse overrides, replaces JSONB metadata (Accepted, PRs #191/#192) |
 
 ### Action Items
 
@@ -64,15 +67,19 @@ PRD (why?) ──→ FS (what?) ──→ TDD (how?)
 | AI-2 | **Simplify storage modes**: replace 4 modes (`git\|db\|routing\|dual`) with single `component_source`-based routing | **Done** | Implemented in ADR-007. No global mode flag, single `ComponentRoutingResolver` always active. |
 | AI-3 | **Rollback semantics**: reframe rollback as one-way cutover after first DB write per component | **Done** | Implemented in ADR-007 §Rollback Semantics. Updated NFS §5.6, §5.9. |
 
+### Level 5 — Visual aids
+
+| Document | Description | Audience |
+|----------|-------------|----------|
+| [diagrams/architecture.md](diagrams/architecture.md) | High-level Mermaid diagram — browser → Portal BFF → CRS routing → PostgreSQL/Git, plus direct Feign consumers and Keycloak. | Anyone landing cold |
+| [diagrams/erd.md](diagrams/erd.md) | Entity-relationship diagram of schema v2 — components + per-version configurations, dictionaries, distribution family split, cross-cutting tables. | Developers, DBAs |
+
 ### Planned (create as needed)
 
 | Document | When to create |
 |----------|----------------|
 | `migration-runbook.md` | Before production migration — step-by-step ops playbook |
 | `api-changelog.md` | On API v4 release — changelog for consumers |
-| `diagrams/erd.md` | At implementation start — Mermaid ERD |
-| `diagrams/architecture.md` | At implementation start — C4 / deployment diagram |
-| `deployment/` | During UI onboarding — OKD deployment research inputs, platform references, and rollout briefs |
 
 ## How to Read
 
@@ -113,17 +120,22 @@ When a decision changes, don't delete the old ADR — mark it as `Superseded` an
 ## Directory Structure
 
 ```
-docs/db-migration/
-├── README.md                ← this file
-├── prd.md                   ← Product Requirements
-├── functional-spec.md       ← Functional Specification
-├── non-functional-spec.md   ← Non-Functional Specification
-├── technical-design.md      ← Technical Design Document
-├── deployment/              ← OKD deployment research workspace
-├── adr/                     ← Architecture Decision Records
-│   ├── 001-storage-postgresql.md
-│   ├── 002-backend-language.md
-│   ├── ...
-│   └── 008-component-level-routing.md
-└── diagrams/                ← Architecture diagrams (planned)
+docs/registry/
+├── README.md                  ← this file
+├── prd.md                     ← Product Requirements
+├── functional-spec.md         ← Functional Specification
+├── non-functional-spec.md     ← Non-Functional Specification
+├── technical-design.md        ← Technical Design Document
+├── schema-spec.md             ← Canonical v2 schema reference (Model A')
+├── api-compat-deltas.md       ← v1/v2/v3 endpoint compat surface + kill-list
+├── compat-residual-clusters.md ← Open compat residuals tracked by MIG-NNN
+├── requirements-common.md     ← SYS-NNN registry (system / API behaviour)
+├── requirements-migration.md  ← MIG-NNN registry (Git → DB contracts)
+├── requirements-resolver.md   ← RES-NNN registry (DB vs Git resolver parity)
+├── ft-db-testing-plan.md      ← FT-DB profile test plan
+├── adr/                       ← Architecture Decision Records (000–014)
+├── tech-debt/                 ← Numbered TD-NNN entries
+├── deployment/                ← OKD + local Postgres deployment workspace
+├── diagrams/                  ← Mermaid architecture + ERD diagrams
+└── prototypes/                ← Static HTML mock-ups consumed by the Portal SPA
 ```

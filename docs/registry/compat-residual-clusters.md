@@ -58,7 +58,7 @@ memory `feedback_tdd_mandatory` + `feedback_regression_guards_avoid_global_fixtu
    compat and confirm the cluster's records drop to 0. Update this doc
    with a ✅ Closed marker.
 
-5. **Add the MIG-NNN row** to `docs/db-migration/requirements-migration.md`
+5. **Add the MIG-NNN row** to `docs/registry/requirements-migration.md`
    (Summary Table + body section with acceptance criteria) as the
    conventional registry of completed requirements.
 
@@ -365,9 +365,9 @@ After all four MIG-NNN PRs merge:
 
 - `~/.claude/plans/async-stirring-koala.md` §Diff classification — original
   TDD policy for MIG-NNN bugs.
-- `docs/db-migration/requirements-migration.md` — registry of completed
+- `docs/registry/requirements-migration.md` — registry of completed
   MIG-NNN requirements; MIG-041..MIG-044 land here as each PR closes.
-- `docs/db-migration/tech-debt/006-compat-test-coverage.md` — endpoint
+- `docs/registry/tech-debt/006-compat-test-coverage.md` — endpoint
   coverage gate that this compat run depends on.
 - PR #232 (`feat/raw-sorters-v1-v2-components`) — the prerequisite
   positional-noise fix; without it the residual clusters were buried in 5138

@@ -6,7 +6,7 @@ This file provides guidance to AI coding agents (Claude Code, Cursor, Copilot, e
 
 Components Registry Service — a Spring Boot microservice that manages component metadata (versions, build configs, VCS settings, escrow configs). Currently reads from Git-based Groovy/Kotlin DSL files; actively migrating to PostgreSQL with a new CRUD API (v4) and React UI.
 
-**Key architectural concept:** Component-source routing — each component is individually sourced from either Git or DB via the `component_source` table. No global mode flag. See `docs/db-migration/adr/007-dual-read-migration.md`.
+**Key architectural concept:** Component-source routing — each component is individually sourced from either Git or DB via the `component_source` table. No global mode flag. See `docs/registry/adr/007-dual-read-migration.md`.
 
 ## Build & Test Commands
 
@@ -179,47 +179,18 @@ The skill `/crs-compat verify` (user-local, not in this repo) wraps `verify.sh` 
 
 **Start with [`DOCS.md`](DOCS.md)** — the wayfinding map showing what lives in this repo vs the Portal repo, with the "owns vs delegates" rules.
 
-Architecture Decision Records and design docs in this repo live in `docs/db-migration/`:
+Architecture Decision Records and design docs in this repo live in `docs/registry/`:
 - `technical-design.md` — primary working document
 - `prd.md` — product requirements
 - `functional-spec.md` — functional specification
 - `non-functional-spec.md` — performance, availability, async-job SLAs
-- `implementation-progress.md` — **living document tracking all completed tasks, bugs fixed, and current status**
-- `todo.md` — backlog index (recently shipped, deferred, tech-debt, future ideas)
 - `requirements-{common,migration,resolver}.md` — numbered requirements (`SYS-NNN`, `MIG-NNN`, `RES-NNN` for resolver parity)
-- `adr/` — 14 ADRs (000–013), including ADR-012 (Portal architecture, canonical) and ADR-013 (Cutover strategy, Proposed)
+- `adr/` — 15 ADRs (000–014), including ADR-012 (Portal architecture, canonical), ADR-013 (Cutover strategy, Proposed), ADR-014 (Schema v2)
 - `tech-debt/` — numbered tech-debt entries (`TD-NNN`)
-
-## Implementation Progress Tracking
-
-**Rule: `docs/db-migration/implementation-progress.md` MUST be updated after every completed task.**
-
-This is a mandatory step in the workflow. After finishing any implementation task:
-
-1. Add the task to the appropriate phase/iteration section in `implementation-progress.md`
-2. Mark status (✅ Done, 🚧 In Progress, ❌ Blocked)
-3. Include brief notes: what was done, key files changed, bugs found/fixed
-4. If a new bug was discovered and fixed, add it to the "Known Bugs Fixed" section
-
-### System Verifier Agent
-
-When using the `system-verifier` agent after implementation work, its prompt **MUST** include:
-- Instruction to read `docs/db-migration/implementation-progress.md`
-- Instruction to verify that all claimed completed tasks actually work
-- Instruction to update the document if verification reveals issues or if tasks are missing from the log
-
-### Workflow
-
-```
-Implement task → Verify (compile/test/runtime) → Update implementation-progress.md → Next task
-```
-
-Do NOT batch progress updates. Update the document **per task**, not at the end of a session. This ensures the document always reflects the true state even if a session is interrupted.
 
 ## Tech Debt Tracking
 
-Tech debt is tracked as numbered entries in `docs/db-migration/tech-debt/` with an index in
-`docs/db-migration/todo.md`. Format: `TD-NNN`.
+Tech debt is tracked as numbered entries in `docs/registry/tech-debt/`; the directory listing is the index. Format: `TD-NNN`.
 
 Rules:
 - No `TODO` comments in code. Use `// see TD-NNN` to reference the backlog entry.
@@ -230,8 +201,8 @@ Rules:
 ## Technical Requirements Tracking
 
 Два файла с нумерованными требованиями:
-- `docs/db-migration/requirements-migration.md` — требования к миграции (MIG-xxx)
-- `docs/db-migration/requirements-common.md` — общие требования (SYS-xxx)
+- `docs/registry/requirements-migration.md` — требования к миграции (MIG-xxx)
+- `docs/registry/requirements-common.md` — общие требования (SYS-xxx)
 
 Rules:
 1. Every bug → new requirement with acceptance criteria

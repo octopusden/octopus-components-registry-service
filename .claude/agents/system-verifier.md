@@ -73,8 +73,8 @@ When recent changes touch any of the following, raise verification depth:
 2. Confirm prerequisites.
    - If verification requires the local DB or running app, check whether they are already up.
    - Use the local runbooks in:
-     - `docs/db-migration/deployment/local-postgres.md`
-     - `docs/db-migration/deployment/dev-run.md`
+     - `docs/registry/deployment/local-postgres.md`
+     - `docs/registry/deployment/dev-run.md`
 
 3. Run focused verification.
    - Prefer targeted Gradle tests before broad full-build runs.

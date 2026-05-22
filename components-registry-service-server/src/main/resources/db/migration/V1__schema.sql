@@ -5,7 +5,7 @@
 -- arrays). Project not yet in production: QA/dev databases are wiped and
 -- recreated against this baseline.
 --
--- Design: ADR-014. Detailed reference: docs/db-migration/schema-spec.md.
+-- Design: ADR-014. Detailed reference: docs/registry/schema-spec.md.
 --
 -- Key model elements:
 --   - Model A': wide typed `component_configurations` with four row shapes
