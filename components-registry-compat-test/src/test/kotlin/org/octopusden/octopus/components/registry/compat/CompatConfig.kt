@@ -13,6 +13,14 @@ data class CompatConfig(
     val versionsFallback: Boolean,
     /** Hard cap on the number of components iterated per test class. Null = no cap. */
     val maxComponents: Int?,
+    /**
+     * Absolute path to a `{componentId: [v1, v2, v3]}` JSON snapshot produced by
+     * `crs-compat-trace/scripts/dump-versions.py`. When set, [VersionSampler]
+     * reads from this file instead of querying [rmsUrl] on every call — TC runs
+     * stay reproducible across days and don't burn RMS round-trips. `null`
+     * (default) keeps the RMS fallback for local dev.
+     */
+    val versionsFile: String?,
 ) {
     /** Either both URLs are set (active run), or neither (skipped). */
     val active: Boolean get() = !baselineUrl.isNullOrBlank() && !candidateUrl.isNullOrBlank()
@@ -51,6 +59,7 @@ data class CompatConfig(
                 malformed = read("compat.malformed")?.toBooleanStrictOrNull() ?: false,
                 versionsFallback = read("compat.versions-fallback")?.toBooleanStrictOrNull() ?: false,
                 maxComponents = maxComponents,
+                versionsFile = read("compat.versions.file"),
             )
         }
 

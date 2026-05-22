@@ -5,20 +5,74 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.slf4j.LoggerFactory
+import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
 /**
- * Per-component version discovery via Release Management Service.
+ * Per-component version discovery — two sources, priority in this order:
  *
- * Hits `GET {rms.url}/rest/api/1/builds/component/{c}?statuses=RELEASE&descending=true&limit=N`
- * and returns up to N release versions, newest first. Cached per component for the whole test run.
+ *   1. A pre-computed `{componentId: [v1, v2, ...]}` JSON snapshot when
+ *      `compat.versions.file` is configured (set by TC builds via the
+ *      `crs-compat-trace` VCS root). Read once, cached for the run. No HTTP
+ *      hits — repeatable across days and isolated from RMS availability.
+ *   2. Live `GET {rms.url}/rest/api/1/builds/component/{c}?statuses=RELEASE&descending=true&limit=N`
+ *      when no file is configured (kept for local dev so an operator with an
+ *      RMS URL can still drive the sampler).
  *
- * Fail mode (per plan §RMS coverage guard): if [config.rmsUrl] is unset, all calls return
- * `emptyList()` and downstream tests should treat the component as "no real versions". The
- * smoke-mode `each component must have ≥1 real version` rule is enforced by [coverage] check
- * called from the test that uses VersionSampler.
+ * Per-component cache (`ConcurrentHashMap`) is shared between the two paths.
+ *
+ * Fail mode (per plan §RMS coverage guard): if neither source is reachable
+ * for a component, [versionsFor] returns `emptyList()` and downstream tests
+ * treat the component as "no real versions". The smoke-mode `each component
+ * must have ≥1 real version` rule is enforced by the calling test's coverage
+ * check, not here.
  */
+/**
+ * Pure loader for the versions JSON. Extracted from [VersionSampler] so unit
+ * tests can exercise it without the by-lazy singleton state of the object.
+ *
+ * Contract:
+ * - `path = null` → returns `null` (caller should fall back to RMS).
+ * - path doesn't exist / not readable → returns empty map (operator opted into
+ *   file mode and put the wrong path; do not silently fall back to RMS, that
+ *   would defeat reproducibility — empty map makes downstream tests see
+ *   "0 real versions" so the coverage-floor check fires).
+ * - File present but not a JSON object (e.g. `[]`, `"foo"`) → empty map.
+ * - File present, valid JSON object → `{componentId: [v1, ...]}`. Entries
+ *   whose value is not a JSON array are skipped. Array elements that are
+ *   not non-blank strings are filtered out.
+ */
+internal fun loadVersionsFile(
+    path: String?,
+    mapper: com.fasterxml.jackson.databind.ObjectMapper,
+    warn: (String) -> Unit = {},
+    info: (String) -> Unit = {},
+): Map<String, List<String>>? {
+    if (path == null) return null
+    val f = File(path)
+    if (!f.isFile || !f.canRead()) {
+        warn("compat.versions.file=$path is not a readable file; version-file path is empty for ALL components")
+        return emptyMap()
+    }
+    return runCatching {
+        val node = mapper.readTree(f)
+        if (!node.isObject) {
+            warn("compat.versions.file=$path is not a JSON object; treating as empty")
+            return@runCatching emptyMap<String, List<String>>()
+        }
+        buildMap<String, List<String>> {
+            node.fields().forEach { (k, v) ->
+                if (v.isArray) {
+                    put(k, v.mapNotNull { it.takeIf(JsonNode::isTextual)?.asText()?.takeIf(String::isNotBlank) })
+                }
+            }
+        }.also { info("compat.versions.file: loaded ${it.size} components from $path") }
+    }.onFailure {
+        warn("compat.versions.file=$path failed to parse: ${it.message}; treating as empty")
+    }.getOrDefault(emptyMap())
+}
+
 object VersionSampler {
     private val log = LoggerFactory.getLogger(VersionSampler::class.java)
     private val mapper = jacksonObjectMapper()
@@ -31,13 +85,36 @@ object VersionSampler {
         .build()
 
     /**
+     * Lazily-loaded `{componentId: [version, ...]}` map, populated on first
+     * lookup when `compat.versions.file` is configured. `null` once-and-for-all
+     * when no file is configured. The lazy initialiser also handles file-not-
+     * found / unparseable JSON by logging a warning and returning an empty map
+     * (the RMS path is not used as a fallback in that case — the operator
+     * explicitly asked for the file mode, so a missing file is operator
+     * error, not a reason to silently fall back).
+     */
+    private val fileMap: Map<String, List<String>>? by lazy {
+        // Wrap log methods in lambdas because slf4j's Logger has overloads
+        // that make `log::warn` / `log::info` references ambiguous.
+        loadVersionsFile(
+            CompatConfig.load().versionsFile,
+            mapper,
+            warn = { msg -> log.warn(msg) },
+            info = { msg -> log.info(msg) },
+        )
+    }
+
+    /**
      * Fetch up to [limit] real release versions for [componentName]. Cached per call regardless
-     * of [limit] (first caller wins). Returns empty list when RMS is unreachable / unset / has
-     * no releases for the component.
+     * of [limit] (first caller wins). Returns empty list when neither source has the component.
      */
     fun versionsFor(componentName: String, limit: Int = 5, rmsUrl: String? = CompatConfig.load().rmsUrl): List<String> {
-        if (rmsUrl.isNullOrBlank()) return emptyList()
         return cache.computeIfAbsent(componentName) {
+            // File path wins when configured: operator explicitly opted into
+            // the snapshot, so we don't sneak past it to RMS even if RMS is
+            // available (would defeat reproducibility).
+            fileMap?.let { return@computeIfAbsent (it[componentName] ?: emptyList()).take(limit) }
+            if (rmsUrl.isNullOrBlank()) return@computeIfAbsent emptyList()
             fetchFromRms(componentName, limit, rmsUrl)
         }
     }
