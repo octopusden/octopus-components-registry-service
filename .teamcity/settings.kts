@@ -11,15 +11,21 @@ import jetbrains.buildServer.configs.kotlin.vcs.GitVcsRoot
 version = "2025.03"
 
 project {
-    vcsRoot(OctopusComponentsRegistryServiceVcs)
+    description = "https://github.com/octopusden/octopus-components-registry-service"
+
     vcsRoot(ComponentsRegistry)
 
     params {
-        param("COMPONENT_NAME", "components-registry-service")
+        param("JDK_VERSION", "11")
+        param("LAST_RELEASE_VERSION", "2.0.87")
+        param("PROJECT_VERSION", "")
+        param("COMPONENTS_REGISTRY_BRANCH", "master")
         param("OCTOPUS_MODULE_NAME", "octopus-components-registry-service")
+        param("RELENG_SKIP", "true")
         param("OKD_IMAGE_NAME", "components-registry-service")
-        param("LAST_RELEASE_VERSION", "0.0.1")
-        param("PROJECT_VERSION", "0.0.1")
+        param("env.JAVA_HOME", "%env.JDK_21_0_x64%")
+        param("COMPONENTS_REGISTRY_CHECKOUT_DIR", "Components-Registry")
+        param("COMPONENT_NAME", "components-registry-service")
     }
 
     buildType(id10CompileUtAuto)
@@ -45,38 +51,19 @@ project {
     )
 }
 
-// Primary VCS root for the v3 branch line.
-// The id below must match the existing TC-side VCS root id so import
-// re-attaches to the same root with its history and credentials intact.
-// If the live TC export shows a different id, replace this string with
-// the export value before merging.
-object OctopusComponentsRegistryServiceVcs : GitVcsRoot({
-    id("OctopusComponentsRegistryServiceVcs")
-    name = "octopus-components-registry-service"
-    url = "https://github.com/octopusden/octopus-components-registry-service.git"
-    branch = "refs/heads/v3"
-    branchSpec = "+:refs/heads/*"
-    authMethod = password {
-        userName = "%github.user%"
-        password = "%github.token%"
-    }
-})
-
-// Secondary VCS root used by id20ValidateComponentsRegistryProductionDataAuto
-// to check out the downstream Components-Registry config under
-// %COMPONENTS_REGISTRY_CHECKOUT_DIR%. The original definition lives in the
-// live TC project's _Self/vcsRoots/ subtree; this stub keeps the DSL
-// compilable. Replace url/branch/auth with the live values from the TC
-// export before merge so import re-attaches to the same root.
+// VCS root used by id20ValidateComponentsRegistryProductionDataAuto to check
+// out the downstream Components-Registry config under
+// %COMPONENTS_REGISTRY_CHECKOUT_DIR%. URL is held in %COMPONENTS_REGISTRY_REPO_URL%
+// (TC server / parent-project param) — the actual bitbucket SSH URL is
+// kept off-repo because it carries internal identifiers.
 object ComponentsRegistry : GitVcsRoot({
-    id("ComponentsRegistry")
-    name = "ComponentsRegistry"
+    name = "Components_Registry"
     url = "%COMPONENTS_REGISTRY_REPO_URL%"
-    branch = "refs/heads/master"
-    branchSpec = "+:refs/heads/*"
-    authMethod = password {
-        userName = "%bitbucket.user%"
-        password = "%bitbucket.password%"
+    branch = "%COMPONENTS_REGISTRY_BRANCH%"
+    branchSpec = "+:%COMPONENTS_REGISTRY_BRANCH%"
+    checkoutSubmodules = GitVcsRoot.CheckoutSubmodules.IGNORE
+    authMethod = defaultPrivateKey {
+        userName = "git"
     }
 })
 
@@ -102,6 +89,7 @@ object id10CompileUtAuto : BuildType({
             -Pokd.project=%OKD_F1_TEST_PROJECT%
         """.trimIndent())
         param("GRADLE_TASK", "clean build publish dockerPushImage")
+        param("COMPONENTS_REGISTRY_BRANCH", "master")
     }
 
     steps {
@@ -117,8 +105,8 @@ object id10CompileUtAuto : BuildType({
             param("org.jfrog.artifactory.selectedDeployableServer.downloadSpecSource", "Job configuration")
         }
         gradle {
-            name = "Gradle Build & UT (1)"
-            id = "RUNNER_1319"
+            name = "Gradle Build & UT"
+            id = "RUNNER_1768"
             tasks = "%GRADLE_TASK%"
             workingDir = "%WORK_DIR%"
             gradleParams = """
@@ -132,7 +120,7 @@ object id10CompileUtAuto : BuildType({
             dockerRunParameters = "--userns=keep-id -e JAVA_HOME=/opt/java/openjdk -v %env.BUILD_ENV%:/opt/BUILD_ENV -v %teamcity.build.checkoutDir%:/home/tcagent/work -v %teamcity.agent.jvm.user.home%:/home/tcagent -w /home/tcagent/work -e TZ=Europe/Brussels"
             param("org.jfrog.artifactory.selectedDeployableServer.defaultModuleVersionConfiguration", "GLOBAL")
         }
-        stepsOrder = arrayListOf("Login_to_the_OKD_cluster", "RUNNER_1720", "RUNNER_1768", "RUNNER_1319")
+        stepsOrder = arrayListOf("Login_to_the_OKD_cluster", "RUNNER_1720", "RUNNER_1768")
     }
 
     failureConditions {
@@ -299,9 +287,10 @@ object id30DeployToOkdQaDevAuto : BuildType({
     name = "[3.0] Deploy to OKD QA DEV [AUTO]"
 
     params {
-        text("OKD_SERVER_URL", "%OKD_SERVER_DEV_URL%", allowEmpty = false)
-        param("TEAMS_NOTIFICATION_CHANNEL", "")
+        param("OKD_SERVER_URL", "%OKD_SERVER_DEV_URL%")
         param("BUILD_NUMBER", "${id10CompileUtAuto.depParamRefs.buildNumber}")
+        param("TEAMS_NOTIFICATION_CHANNEL", "")
+        param("OKD_SA_TOKEN", "%OKD_SA_QA_TOKEN%")
     }
 
     triggers {
@@ -336,8 +325,8 @@ object id40ReleaseManual : BuildType({
 
     steps {
         kotlinFile {
-            name = "Call GitHub Release (Kotlin) (1)"
-            id = "RUNNER_1326"
+            name = "Call GitHub Release (Kotlin)"
+            id = "RUNNER_155"
             path = "octopus-base/teamcity/scripts/CallGitHubRelease.main.kts"
             compiler = "%teamcity.tool.kotlin.compiler.1.5.32%"
             arguments = "%OCTOPUS_MODULE_NAME% %OCTOPUS_GITHUB_TOKEN% %CURRENT_COMMIT% %PROJECT_VERSION% %OCTOPUS_RELEASE_TIMEOUT% %OCTOPUS_RELEASE_EVENT_TYPE%"
@@ -369,9 +358,10 @@ object id60DeployToOkdQaGhAuto : BuildType({
     name = "[6.0] Deploy to OKD QA GH [AUTO]"
 
     params {
-        text("OKD_SERVER_URL", "%OKD_SERVER_DEV_URL%", allowEmpty = false)
-        param("TEAMS_NOTIFICATION_CHANNEL", "")
+        param("OKD_SERVER_URL", "%OKD_SERVER_DEV_URL%")
         param("BUILD_NUMBER", "${id50ReleasePostProcessingAuto.depParamRefs.buildNumber}")
+        param("TEAMS_NOTIFICATION_CHANNEL", "")
+        param("OKD_SA_TOKEN", "%OKD_SA_QA_TOKEN%")
     }
 
     triggers {
@@ -397,24 +387,24 @@ object id70DeployToOkdProdManual_2 : BuildType({
     params {
         param("TEAMCITY_UPDATE_PROJECT_IDS", "%RELEASE_DOWNSTREAM_TC_PROJECT_IDS%")
         param("TEAMCITY_UPDATE_BUILD_CONFIGURATION_IDS", "")
-        text("OKD_SERVER_URL", "%OKD_SERVER_PROD_URL%", allowEmpty = false)
+        param("OKD_SERVER_URL", "%OKD_SERVER_PROD_URL%")
         param("BUILD_VERSION", "%BUILD_NUMBER%")
         param("ESCROW_AUTOMATION_TOOL_LINK", "%ESCROW_AUTOMATION_TOOL_URL%")
         param("TEAMCITY_UPDATE_PARAMETER_NAME", "COMPONENTS_REGISTRY_SERVICE_VERSION")
-        param("WIKI_USER", "%COMPONENTS_REGISTRY_WIKI_USER%")
+        param("WIKI_USER", "%WIKI_RELENG_USER%")
         param("WIKI_PAGE_HEADER", "%COMPONENTS_REGISTRY_WIKI_PAGE_HEADER%")
         param("WIKI_SPACE_KEY", "%COMPONENTS_REGISTRY_WIKI_SPACE_KEY%")
         param("WIKI_PAGE_ID", "%COMPONENTS_REGISTRY_WIKI_PAGE_ID%")
         param("DEPLOYMENT_ENVIRONMENT", "production")
         param("COMPONENTS_REGISTRY_VALIDATION_LINK", "%COMPONENTS_REGISTRY_VALIDATION_URL%")
         param("TEAMCITY_UPDATE_PARAMETER_VALUE", "%BUILD_NUMBER%")
-        text("OKD_SA_TOKEN", "%OKD_SA_PROD_TOKEN%", display = ParameterDisplay.HIDDEN, allowEmpty = true)
+        param("OKD_SA_TOKEN", "%OKD_SA_PROD_TOKEN%")
         param("COMPONENTS_REGISTRY_LINK", "%COMPONENTS_REGISTRY_BROWSE_URL%")
         param("BUILD_NUMBER", "${id60DeployToOkdQaGhAuto.depParamRefs["BUILD_NUMBER"]}")
         param("RELEASE_MANAGEMENT_AUTOMATION_LINK", "%RELEASE_MANAGEMENT_AUTOMATION_URL%")
         param("GLOSSARY_COMPONENT_LINK", "%GLOSSARY_COMPONENT_URL%")
         param("SERVICE_DESK_LINK", "%SERVICE_DESK_URL%/secure/Dashboard.jspa")
-        password("WIKI_PASSWORD", "******")
+        password("WIKI_PASSWORD", "%WIKI_RELENG_PASSWORD%")
     }
 
     steps {
@@ -465,4 +455,8 @@ object id70DeployToOkdProdManual_2 : BuildType({
 object WL_Validation_id : BuildType({
     templates(AbsoluteId("OctopusWlValidator"))
     name = "WL Validation"
+
+    params {
+        param("OCTOPUS_MODULE_NAME", "octopus-components-registry-service")
+    }
 })
