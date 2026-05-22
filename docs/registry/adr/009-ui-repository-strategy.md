@@ -242,7 +242,7 @@ octopus-components-registry-service/        ← existing repo
 │   ├── src/
 │   │   └── main/resources/static/          ← built UI copied here by Gradle
 │   └── Dockerfile                          ← single JVM image serves API + UI
-├── docs/db-migration/                      ← architecture docs
+├── docs/registry/                      ← architecture docs
 ├── settings.gradle                         ← include 'components-registry-ui'
 └── build.gradle
 ```

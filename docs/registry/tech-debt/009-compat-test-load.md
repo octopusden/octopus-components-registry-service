@@ -115,5 +115,5 @@ This is **deferred** — the doc spec is the deliverable here, not the code.
 ## Related
 
 - `~/.claude/plans/async-stirring-koala.md` — TASK-F details.
-- `docs/db-migration/tech-debt/008-compat-test-trace-replay.md` — TD-008,
+- `docs/registry/tech-debt/008-compat-test-trace-replay.md` — TD-008,
   shares the trace file input.

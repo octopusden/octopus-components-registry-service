@@ -15,7 +15,7 @@ import org.junit.jupiter.api.TestInstance
  * /service/status is intentionally NOT a compat-surface endpoint: it is operational
  * metadata (transient cacheUpdatedAt timestamp) read only by [SnapshotPreconditionTest]
  * for environment preconditions (versionControlRevision + serviceMode).
- * See docs/db-migration/api-compat-deltas.md §"Compat surface scope".
+ * See docs/registry/api-compat-deltas.md §"Compat surface scope".
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class ServiceStatusV2CompatTest : CompatibilityTestBase() {

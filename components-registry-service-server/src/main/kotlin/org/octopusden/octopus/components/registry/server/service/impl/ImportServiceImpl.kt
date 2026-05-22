@@ -933,7 +933,7 @@ class ImportServiceImpl(
             // from the same lazy field; whichever fires first pays the cost,
             // the other gets the cached result.
             //
-            // Follow-up MIG-039 (see `docs/db-migration/requirements-migration.md`): expose
+            // Follow-up MIG-039 (see `docs/registry/requirements-migration.md`): expose
             // ValidationConfig via EscrowConfigurationLoader (or inject IConfigLoader to access
             // loadAndParseValidationConfigFile()) for label seeding. Current direct
             // commonDefaultsCache.labels access works but couples seeding to the lazy field.

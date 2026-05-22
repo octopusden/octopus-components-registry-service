@@ -69,5 +69,5 @@ No data corruption beyond the missing entries. Operators get the `groupPattern` 
 
 ## Related
 
-- `docs/db-migration/requirements-common.md` SYS-030 row.
+- `docs/registry/requirements-common.md` SYS-030 row.
 - `util/GavParsing.kt` — current implementation that needs amending.

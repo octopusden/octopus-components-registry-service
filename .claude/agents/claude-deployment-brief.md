@@ -26,18 +26,18 @@ machine, not only an OKD deployment story.
 
 Read first:
 
-- `docs/db-migration/prd.md`
-- `docs/db-migration/non-functional-spec.md`
-- `docs/db-migration/technical-design.md`
-- `docs/db-migration/adr/003-ui-stack-react19.md`
-- `docs/db-migration/adr/004-auth-keycloak.md`
-- `docs/db-migration/adr/009-ui-repository-strategy.md`
+- `docs/registry/prd.md`
+- `docs/registry/non-functional-spec.md`
+- `docs/registry/technical-design.md`
+- `docs/registry/adr/003-ui-stack-react19.md`
+- `docs/registry/adr/004-auth-keycloak.md`
+- `docs/registry/adr/009-ui-repository-strategy.md`
 
 ### Deployment and platform references saved in this repository
 
-- `docs/db-migration/deployment/references/teamcity/50-deploy-to-okd-qa-auto.kt`
-- `docs/db-migration/deployment/references/teamcity/idp-component-okd-deploy-template.kt`
-- `docs/db-migration/deployment/references/platform/okd-platform-patterns.md`
+- `docs/registry/deployment/references/teamcity/50-deploy-to-okd-qa-auto.kt`
+- `docs/registry/deployment/references/teamcity/idp-component-okd-deploy-template.kt`
+- `docs/registry/deployment/references/platform/okd-platform-patterns.md`
 
 ### External/local repositories that must be studied
 
@@ -210,7 +210,7 @@ A concrete path to automated deployment in TeamCity:
 
 Define the intended contents for these files:
 
-- `docs/db-migration/deployment-ui-okd.md`
+- `docs/registry/deployment-ui-okd.md`
 - `AGENTS.md` updates related to deployment/security work
 - `CLAUDE.md` deployment memory
 - optional reusable skill for onboarding a service to OKD
@@ -236,7 +236,7 @@ The result is acceptable only if it is:
 
 Use this order unless blocked:
 
-1. architecture docs in `docs/db-migration`
+1. architecture docs in `docs/registry`
 2. local developer experience constraints for DB + UI + backend
 3. TeamCity deploy template and its assumptions
 4. `service-deployment` chart and environment values

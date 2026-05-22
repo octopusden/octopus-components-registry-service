@@ -28,7 +28,7 @@ import java.nio.file.Paths
  * Mirrors [ComponentsRegistryServiceControllerTest] which runs the same tests
  * against the Git backend.
  *
- * @see docs/db-migration/requirements-resolver.md
+ * @see docs/registry/requirements-resolver.md
  */
 @AutoConfigureMockMvc
 @SpringBootTest(

@@ -111,7 +111,7 @@ When a decision changes, don't delete the old ADR — mark it as `Superseded` an
 ## Directory Structure
 
 ```
-docs/db-migration/
+docs/registry/
 ├── README.md                ← this file
 ├── prd.md                   ← Product Requirements
 ├── functional-spec.md       ← Functional Specification
