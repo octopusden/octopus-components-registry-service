@@ -20,11 +20,7 @@ component's release — no manual steps or changes to the component's `build.gra
 ### Result
 
 Once the link is configured, documentation artifacts appear automatically under the component's
-release in the DMS Portal alongside the regular binaries:
-
-![DMS portal showing auto-published doc artifacts](images/SCR-20260522-ldbe.png)
-
-*Report Service 1.0.320 — Russian and English doc ZIPs published automatically*
+release in the DMS Portal alongside the regular binaries.
 
 ## Prerequisites
 
