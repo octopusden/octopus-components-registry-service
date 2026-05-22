@@ -201,9 +201,15 @@ object id10CompileUtAuto : BuildType({
 //     CANDIDATE_NOT_DB_MODE env-warning that would otherwise fail the build
 //     even though all endpoint diffs are clean.
 //
-// All four COMPAT_* required params are prompted on every run; without them
-// the task either skips silently (smoke list empty) or reports only env
-// preconditions, producing misleading green builds.
+// Prompted on every run:
+//   - 4 required (no defaults — `allowEmpty = false` rejects blanks):
+//     COMPAT_BASELINE_URL, COMPAT_CANDIDATE_URL, COMPAT_RMS_URL,
+//     COMPAT_SMOKE_COMPONENTS. Without them the task either skips silently
+//     (smoke list empty) or reports only env preconditions, producing
+//     misleading green builds.
+//   - 2 boolean flags with `"false"` defaults (COMPAT_FULL,
+//     COMPAT_ALLOW_NON_DB_CANDIDATE) — the operator only flips them when
+//     they want the corresponding mode (full sweep / parity-debug).
 object id15CompatManual : BuildType({
     templates(AbsoluteId("Octopus_OctopusGradleBuild"))
     id("15CompatManual")
