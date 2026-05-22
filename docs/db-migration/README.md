@@ -70,8 +70,6 @@ PRD (why?) ──→ FS (what?) ──→ TDD (how?)
 |----------|----------------|
 | `migration-runbook.md` | Before production migration — step-by-step ops playbook |
 | `api-changelog.md` | On API v4 release — changelog for consumers |
-| `diagrams/erd.md` | At implementation start — Mermaid ERD |
-| `diagrams/architecture.md` | At implementation start — C4 / deployment diagram |
 | `deployment/` | During UI onboarding — OKD deployment research inputs, platform references, and rollout briefs |
 
 ## How to Read
