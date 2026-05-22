@@ -111,6 +111,18 @@ class TraceReplayCompatTest : CompatibilityTestBase() {
     private fun loadBodyFixtures(): BodyFixtures {
         log.info("body-fixtures: fetching /v2/components for GAV discovery…")
         val resp = baselineRaw.get("rest/api/2/components")
+        // Distinguish transport failure (`status == 0` — see `RawHttp.kt`: catches
+        // `IOException` and returns synthetic 0) from a legitimate empty/error
+        // response. With a typo in `COMPAT_BASELINE_URL`, both `loadBodyFixtures`
+        // AND the trace replay itself would symmetrically miss the same wrong
+        // host and produce a vacuously-green run. Fail-hard so the operator
+        // gets a red build with a clear cause, not a SKIPPED test downstream.
+        check(resp.status != 0) {
+            "body-fixtures: GET ${baselineRaw.baseUrl}/rest/api/2/components returned " +
+                "status=0 (transport failure). Check COMPAT_BASELINE_URL is reachable from this " +
+                "agent — a vacuous-green replay would otherwise look identical to a clean one. " +
+                "Underlying error: ${resp.headers["X-Compat-Transport-Error"] ?: "<not captured>"}"
+        }
         // Wire shape on V1: { "components": [ {id, distribution: {GAV: "g:a:p,..."}, ...}, ... ] }
         // The field is `GAV` (UPPERCASE) on the wire — V1's @JsonProperty annotation.
         // `/v3/components` is unsuitable: V1 returns `distribution: null` at the wrapper level.

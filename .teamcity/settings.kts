@@ -14,6 +14,7 @@ project {
     description = "https://github.com/octopusden/octopus-components-registry-service"
 
     vcsRoot(ComponentsRegistry)
+    vcsRoot(CrsCompatTrace)
 
     params {
         param("JDK_VERSION", "11")
@@ -30,6 +31,7 @@ project {
 
     buildType(id10CompileUtAuto)
     buildType(id15CompatManual)
+    buildType(id16CompatTraceReplayManual)
     buildType(id20ValidateComponentsRegistryProductionDataAuto)
     buildType(id30DeployToOkdQaDevAuto)
     buildType(id40ReleaseManual)
@@ -41,6 +43,7 @@ project {
     buildTypesOrder = arrayListOf(
         id10CompileUtAuto,
         id15CompatManual,
+        id16CompatTraceReplayManual,
         id20ValidateComponentsRegistryProductionDataAuto,
         id30DeployToOkdQaDevAuto,
         id40ReleaseManual,
@@ -61,6 +64,23 @@ object ComponentsRegistry : GitVcsRoot({
     url = "%COMPONENTS_REGISTRY_REPO_URL%"
     branch = "%COMPONENTS_REGISTRY_BRANCH%"
     branchSpec = "+:%COMPONENTS_REGISTRY_BRANCH%"
+    checkoutSubmodules = GitVcsRoot.CheckoutSubmodules.IGNORE
+    authMethod = defaultPrivateKey {
+        userName = "git"
+    }
+})
+
+// VCS root used by id16CompatTraceReplayManual to check out the internal
+// trace-data repo (deduplicated `<count>\t<METHOD>\t<path>` tables, refreshed
+// from prod access-log captures). Held off-repo as a separate Bitbucket repo
+// because the trace files contain real component names; the URL is kept in
+// the TC server / parent-project param `CRS_COMPAT_TRACE_REPO_URL` so the
+// open-source DSL stays free of internal identifiers.
+object CrsCompatTrace : GitVcsRoot({
+    name = "Crs_Compat_Trace"
+    url = "%CRS_COMPAT_TRACE_REPO_URL%"
+    branch = "refs/heads/master"
+    branchSpec = "+:refs/heads/master"
     checkoutSubmodules = GitVcsRoot.CheckoutSubmodules.IGNORE
     authMethod = defaultPrivateKey {
         userName = "git"
@@ -169,10 +189,27 @@ object id10CompileUtAuto : BuildType({
 })
 
 // Compatibility Test — manual, on-demand. Runs the compat-test module against
-// a baseline (production / main) and candidate (v3 stand) deployment pair.
-// All four COMPAT_* params are prompted on every run; without them the
-// task either skips silently (smoke list empty) or reports only env
-// preconditions, producing misleading green builds.
+// a baseline (production / main) and candidate (v3 stand) deployment pair via
+// HTTP URLs (no JAR launch on the agent).
+//
+// Modes (all opt-in via prompt params, default smoke):
+//   - default: smoke list (COMPAT_SMOKE_COMPONENTS, ~5 components) → ~1-3 min.
+//   - COMPAT_FULL=true: full endpoint matrix (every component × every
+//     compat-test class) → ~10-30 min.
+//   - COMPAT_ALLOW_NON_DB_CANDIDATE=true: documented escape hatch when the
+//     candidate intentionally serves V1 (parity-debug runs). Suppresses the
+//     CANDIDATE_NOT_DB_MODE env-warning that would otherwise fail the build
+//     even though all endpoint diffs are clean.
+//
+// Prompted on every run:
+//   - 4 required (no defaults — `allowEmpty = false` rejects blanks):
+//     COMPAT_BASELINE_URL, COMPAT_CANDIDATE_URL, COMPAT_RMS_URL,
+//     COMPAT_SMOKE_COMPONENTS. Without them the task either skips silently
+//     (smoke list empty) or reports only env preconditions, producing
+//     misleading green builds.
+//   - 2 boolean flags with `"false"` defaults (COMPAT_FULL,
+//     COMPAT_ALLOW_NON_DB_CANDIDATE) — the operator only flips them when
+//     they want the corresponding mode (full sweep / parity-debug).
 object id15CompatManual : BuildType({
     templates(AbsoluteId("Octopus_OctopusGradleBuild"))
     id("15CompatManual")
@@ -187,6 +224,8 @@ object id15CompatManual : BuildType({
         text("COMPAT_CANDIDATE_URL", "", allowEmpty = false, display = ParameterDisplay.PROMPT)
         text("COMPAT_RMS_URL", "", allowEmpty = false, display = ParameterDisplay.PROMPT)
         text("COMPAT_SMOKE_COMPONENTS", "", allowEmpty = false, display = ParameterDisplay.PROMPT)
+        text("COMPAT_FULL", "false", allowEmpty = false, display = ParameterDisplay.PROMPT)
+        text("COMPAT_ALLOW_NON_DB_CANDIDATE", "false", allowEmpty = false, display = ParameterDisplay.PROMPT)
         param("ARTIFACT_PATH", """
             components-registry-compat-test/build/reports/compat/** => reports/compat
             components-registry-compat-test/build/test-results/**/*.xml => test-results/compat
@@ -202,11 +241,107 @@ object id15CompatManual : BuildType({
             -Pcompat.candidate.url=%COMPAT_CANDIDATE_URL%
             -Pcompat.rms.url=%COMPAT_RMS_URL%
             -Pcompat.smoke-components=%COMPAT_SMOKE_COMPONENTS%
+            -Pcompat.full=%COMPAT_FULL%
+            -Pcompat.allow-non-db-candidate=%COMPAT_ALLOW_NON_DB_CANDIDATE%
         """.trimIndent())
     }
 
     failureConditions {
         executionTimeoutMin = 60
+    }
+
+    features {
+        xmlReport {
+            reportType = XmlReport.XmlReportType.JUNIT
+            rules = "+:components-registry-compat-test/build/test-results/test/*.xml"
+        }
+    }
+
+    requirements {
+        doesNotContain("env.OS_TYPE", "WIN", "RQ_2875")
+    }
+
+    dependencies {
+        snapshot(id10CompileUtAuto) {
+            onDependencyFailure = FailureAction.CANCEL
+        }
+    }
+})
+
+// Compatibility Trace Replay — manual, on-demand. Replays the deduplicated
+// production HTTP-traffic dump from the internal `crs-compat-trace` repo
+// against a baseline (prod) and candidate (v3 stand) URL pair, recording
+// diffs per tuple weighted by frequency.
+//
+// Two VCS roots:
+//   1. ComponentsRegistry / GitHub root (inherited from the template) —
+//      compat-test source code.
+//   2. CrsCompatTrace (Bitbucket, internal) — the (count, METHOD, path) table
+//      under `latest-top.txt`. Symlink to the most recent dated subdir.
+//
+// The TraceReplayCompatTest skips via Assumptions.assumeTrue when
+// `COMPAT_TRACE_FILE` is unset, so the build always sets it explicitly.
+//
+// Distinct from id15CompatManual: weights diffs by real production traffic
+// frequency (vs. uniform per-component matrix coverage). Both tests are
+// complementary — keep one build type per concern so artifacts and timeouts
+// don't collide.
+object id16CompatTraceReplayManual : BuildType({
+    templates(AbsoluteId("Octopus_OctopusGradleBuild"))
+    id("16CompatTraceReplayManual")
+    name = "[1.6] Compatibility Trace Replay [MANUAL]"
+
+    artifactRules = """
+        %ARTIFACT_PATH%
+    """.trimIndent()
+
+    vcs {
+        // ComponentsRegistry / template's GitHub root is inherited; explicitly
+        // attach the trace-data root with a checkout rule so the tuples land
+        // under a predictable path relative to the build's checkout dir.
+        root(CrsCompatTrace, "+:. => trace-data/")
+    }
+
+    params {
+        text("COMPAT_BASELINE_URL", "", allowEmpty = false, display = ParameterDisplay.PROMPT)
+        text("COMPAT_CANDIDATE_URL", "", allowEmpty = false, display = ParameterDisplay.PROMPT)
+        text("COMPAT_RMS_URL", "", allowEmpty = false, display = ParameterDisplay.PROMPT)
+        // Default `true` for this build type, unlike id15. The trace was
+        // captured from a prod V1 stand and replaying it against today's
+        // candidate (still serving V1 per the merge state) is by definition
+        // a V1-vs-V1 measurement — the CANDIDATE_NOT_DB_MODE env-warning
+        // would fire on every run and fail the build before the trace ever
+        // executes. Operator flips to `false` once the candidate is in real
+        // DB mode (`default-source=db`).
+        text("COMPAT_ALLOW_NON_DB_CANDIDATE", "true", allowEmpty = false, display = ParameterDisplay.PROMPT)
+        // `latest-top.txt` is a symlink (in the trace repo) to the most recent
+        // dated subdir. Operator can override at run time (e.g. to a specific
+        // snapshot for reproducibility).
+        text("COMPAT_TRACE_FILE_RELATIVE", "latest-top.txt", allowEmpty = false, display = ParameterDisplay.PROMPT)
+        param("ARTIFACT_PATH", """
+            components-registry-compat-test/build/reports/compat/** => reports/compat
+            components-registry-compat-test/build/test-results/**/*.xml => test-results/compat
+        """.trimIndent())
+        param("GRADLE_TASK", ":components-registry-compat-test:test :components-registry-compat-test:compatibilityReporter")
+        param("GRADLE_TEST_FILTER", "--tests *TraceReplayCompatTest*")
+        param("GRADLE_EXTRA_PARAMETERS", """
+            %GRADLE_TEST_FILTER%
+            -Pcompat.baseline.url=%COMPAT_BASELINE_URL%
+            -Pcompat.candidate.url=%COMPAT_CANDIDATE_URL%
+            -Pcompat.rms.url=%COMPAT_RMS_URL%
+            -Pcompat.allow-non-db-candidate=%COMPAT_ALLOW_NON_DB_CANDIDATE%
+            -Pcompat.trace.file=%teamcity.build.checkoutDir%/trace-data/%COMPAT_TRACE_FILE_RELATIVE%
+            -Pcompat.parallelism=10
+        """.trimIndent())
+    }
+
+    failureConditions {
+        // 20 000 tuples × parallelism 10 took ~13 min in the 2026-05-17 run;
+        // pad to 45 min for cold-cache agents + slower DB-mode candidate.
+        // TODO(post-first-runs): revisit after 2-3 real TC runs establish
+        //   an empirical ceiling on a DB-mode candidate under load. id15 uses
+        //   60 min — bump here if 45 turns out to be marginal.
+        executionTimeoutMin = 45
     }
 
     features {
