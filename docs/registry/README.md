@@ -51,10 +51,11 @@ PRD (why?) ──→ FS (what?) ──→ TDD (how?)
 | [ADR-007](adr/007-dual-read-migration.md) | Component-Source Routing — per-component migration strategy |
 | [ADR-008](adr/008-component-level-routing.md) | ~~Component-level routing~~ — Superseded by ADR-007 |
 | [ADR-009](adr/009-ui-repository-strategy.md) | ~~UI repository strategy — monorepo vs separate repo~~ — Superseded by ADR-012 |
-| [ADR-010](adr/010-schema-extensibility.md) | Hybrid schema extensibility — Columns + JSONB (Proposed) |
+| [ADR-010](adr/010-schema-extensibility.md) | ~~Hybrid schema extensibility — Columns + JSONB~~ — Superseded by ADR-014 |
 | [ADR-011](adr/011-field-configuration.md) | Configurable field visibility, defaults, multi-org support (Proposed) |
 | [ADR-012](adr/012-portal-architecture.md) | UI extracted to `octopus-components-management-portal` as a Spring Cloud Gateway BFF (Accepted 2026‑04‑14, PR #147) |
 | [ADR-013](adr/013-cutover-strategy.md) | Cutover strategy — staged removal of Git resolver, `component_source` table, and JGit (Proposed) |
+| [ADR-014](adr/014-schema-v2.md) | Schema v2 (Model A') — wide typed `component_configurations` + sparse overrides, replaces JSONB metadata (Accepted, PRs #191/#192) |
 
 ### Action Items
 
