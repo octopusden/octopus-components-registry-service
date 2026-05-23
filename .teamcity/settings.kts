@@ -428,7 +428,7 @@ object id17CompatLocalStandManual : BuildType({
         // sets and the `versions/component-versions.json` snapshot so id17
         // doesn't need an RMS URL prompt or a CSV-paste of component names
         // from the operator every run.
-        root(CrsCompatTrace, "+:. => trace-data")
+        root(CrsCompatTrace, "+:. => trace-data/")
     }
 
     params {
@@ -509,15 +509,39 @@ object id17CompatLocalStandManual : BuildType({
                 TRACE_DATA_DIR="%teamcity.build.checkoutDir%/trace-data"
                 COMPONENTS_FILE_PATH="${'$'}TRACE_DATA_DIR/%COMPAT_COMPONENTS_FILE%"
                 VERSIONS_FILE_PATH="${'$'}TRACE_DATA_DIR/versions/component-versions.json"
-                # Read the components file: strip comment-only and blank lines,
-                # join the rest with commas. The wrapper hands this CSV to
-                # gradle as `-Pcompat.smoke-components=...`.
-                COMPONENTS_CSV=${'$'}(grep -vE '^[[:space:]]*(#|${'$'})' "${'$'}COMPONENTS_FILE_PATH" | tr '\n' ',' | sed 's/,${'$'}//')
-                if [ -z "${'$'}COMPONENTS_CSV" ]; then
+
+                # Fail-fast on missing files (Opus Stage-2 review). Without these
+                # guards a checkout failure on the CrsCompatTrace VCS root would
+                # silently produce zero components AND zero versions → every
+                # per-component test would skip via assumeTrue → vacuous green.
+                if [ ! -f "${'$'}COMPONENTS_FILE_PATH" ]; then
+                    echo "ERROR: COMPAT_COMPONENTS_FILE=${'$'}COMPONENTS_FILE_PATH does not exist (CrsCompatTrace checkout failed or file renamed)" >&2
+                    exit 2
+                fi
+                if [ ! -f "${'$'}VERSIONS_FILE_PATH" ]; then
+                    echo "ERROR: versions snapshot ${'$'}VERSIONS_FILE_PATH does not exist (CrsCompatTrace checkout failed or path renamed)" >&2
+                    exit 2
+                fi
+
+                # Read the components file: strip CRs (Windows-saved files),
+                # trim per-line whitespace, drop blank and comment-only lines.
+                # awk is one pass and won't trip set-e's pipefail on no-match.
+                TMP_LIST=${'$'}(awk '
+                    { sub(/\r${'$'}/, ""); gsub(/^[[:space:]]+|[[:space:]]+${'$'}/, "") }
+                    ${'$'}0 == "" || /^#/ { next }
+                    { print }
+                ' "${'$'}COMPONENTS_FILE_PATH")
+                if [ -z "${'$'}TMP_LIST" ]; then
                     echo "ERROR: COMPAT_COMPONENTS_FILE=${'$'}COMPONENTS_FILE_PATH produced zero IDs after filtering blanks/comments" >&2
                     exit 2
                 fi
-                echo "Component set:   %COMPAT_COMPONENTS_FILE% (${'$'}(echo "${'$'}COMPONENTS_CSV" | tr ',' '\n' | wc -l) IDs)"
+                COMPONENTS_CSV=${'$'}(printf '%s' "${'$'}TMP_LIST" | tr '\n' ',')
+                # Strip the trailing comma that `tr` adds when the input has a
+                # final newline (which `awk` always emits unless the input was
+                # empty — guarded above).
+                COMPONENTS_CSV="${'$'}{COMPONENTS_CSV%,}"
+                COMPONENTS_COUNT=${'$'}(printf '%s\n' "${'$'}TMP_LIST" | wc -l | tr -d ' ')
+                echo "Component set:   %COMPAT_COMPONENTS_FILE% (${'$'}COMPONENTS_COUNT IDs)"
                 echo "Versions file:   ${'$'}VERSIONS_FILE_PATH"
                 export BASELINE_JAR="${'$'}WORK_DIR/baseline.jar"
                 export CANDIDATE_JAR="${'$'}WORK_DIR/candidate.jar"
