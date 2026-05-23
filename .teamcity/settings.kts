@@ -666,6 +666,24 @@ object id17CompatLocalStandManual : BuildType({
         doesNotContain("env.OS_TYPE", "WIN", "RQ_2875")
     }
 
+    triggers {
+        // Auto-fire id17 whenever id10 finishes successfully on a branch
+        // OTHER than main. v3 is the schema-v2 trunk where local-stand
+        // compat actually has signal; on main the legacy V1 candidate vs
+        // V1 baseline is a tautological pass and would just burn agent
+        // minutes (cold pulls, postgres init, two stand boots). Manual
+        // Run from any branch — including main — still works because
+        // the snapshot dep is the only hard requirement.
+        finishBuildTrigger {
+            buildType = "${id10CompileUtAuto.id}"
+            successfulOnly = true
+            branchFilter = """
+                +:*
+                -:main
+            """.trimIndent()
+        }
+    }
+
     dependencies {
         snapshot(id10CompileUtAuto) {
             onDependencyFailure = FailureAction.CANCEL
