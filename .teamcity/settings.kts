@@ -507,6 +507,21 @@ object id17CompatLocalStandManual : BuildType({
                 set -euo pipefail
                 WORK_DIR="/tmp/crs-id17-%teamcity.build.id%"
                 TRACE_DATA_DIR="%teamcity.build.checkoutDir%/trace-data"
+
+                # Path-traversal guard on the prompted COMPAT_COMPONENTS_FILE
+                # value. Manual TC builds are operated by trusted release
+                # engineers, but a cheap defensive check beats a confusing
+                # "no such file" trail when a typo or stray paste resolves to
+                # something outside the CrsCompatTrace checkout. Reject any
+                # value containing `..` (which would let the resolved path
+                # escape trace-data/) or starting with `/` (absolute path).
+                case "%COMPAT_COMPONENTS_FILE%" in
+                    *..*|/*)
+                        echo "ERROR: COMPAT_COMPONENTS_FILE=%COMPAT_COMPONENTS_FILE% must be a relative path inside trace-data/ (no '..' segments, no leading '/')" >&2
+                        exit 2
+                        ;;
+                esac
+
                 COMPONENTS_FILE_PATH="${'$'}TRACE_DATA_DIR/%COMPAT_COMPONENTS_FILE%"
                 VERSIONS_FILE_PATH="${'$'}TRACE_DATA_DIR/versions/component-versions.json"
 
