@@ -377,9 +377,14 @@ Raw per-line records: `execution-log.ndjson`
         if (activeTotal > 0) {
             // buildProblem surfaces in the build's Problems tab and tags the
             // build as having a real failure category, separate from the
-            // gradle-task-failed default classification.
-            // statusBody already starts with "compat:" — don't double-prefix.
-            println "##teamcity[buildProblem description='${escape(statusBody)} — see summary.md']"
+            // gradle-task-failed default classification. The "Compat:"
+            // prefix is kept (re-added in this PR after #293 dropped it):
+            // user reported the red status info disappeared on the next
+            // build after that drop — TC may classify or dedupe problems
+            // by description-hash and need a stable identifying prefix.
+            // Cosmetic doubling ("compat: compat:" in the displayed line)
+            // is the lesser cost vs losing the typed problem entirely.
+            println "##teamcity[buildProblem description='Compat: ${escape(statusBody)} — see summary.md']"
         }
 
         // Proof-of-execution guard: a green build with zero exec records means
