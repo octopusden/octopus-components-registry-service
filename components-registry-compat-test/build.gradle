@@ -46,6 +46,14 @@ test {
     // back-to-back invocations identical and skips the second one — leaving the previous
     // ndjson on disk for compatibilityReporter to re-aggregate. Always re-run.
     outputs.upToDateWhen { false }
+    // Pin the test JVM's CWD to this subproject's root so the relative-path
+    // fallback inside ExecutionLogger/DiffCollector (`Path.of("build/reports/compat")`)
+    // always resolves to the SAME absolute directory the compatibilityReporter
+    // task aggregates from. Without this, id17 build #13 showed JVM CWD as
+    // something deeper than projectDir on the TC agent, the .ndjson files
+    // landed in a doubled `components-registry-compat-test/components-registry-compat-test/...`
+    // path, and reporter saw zero files.
+    workingDir = projectDir
     // Each run starts with a fresh report dir so per-worker ndjson files don't accumulate
     // across re-runs (the file names contain a UUID — old files would otherwise be merged
     // into summary.md again, double-counting diffs).
@@ -81,12 +89,11 @@ test {
         // Absolute path to the same dir compatibilityReporter aggregates from.
         // DiffCollector / ExecutionLogger pick this up so the per-worker ndjson
         // files land where the reporter looks, regardless of the test JVM's
-        // forked CWD. Use `file()` (resolves against this subproject) rather
-        // than `layout.buildDirectory.dir(...).get().asFile.absolutePath` —
-        // observed in id17 build #10 that the latter ended up as a path that
-        // Path.toAbsolutePath() didn't normalise to a leading-slash absolute
-        // form, so the reporter still saw zero files.
-        'compat.report-dir': file('build/reports/compat').absolutePath,
+        // forked CWD. Use `"${projectDir}/..."` (GString interpolation forces
+        // File.toString → absolute) rather than `file(...).absolutePath` —
+        // observed in id17 builds #10 and #13 that the latter still produced
+        // a relative-looking value on this TC agent's gradle/JVM combination.
+        'compat.report-dir': "${projectDir}/build/reports/compat".toString(),
     ]
     // Surface compat config as system properties for the test code.
     ['compat.baseline.url', 'compat.candidate.url', 'compat.rms.url',

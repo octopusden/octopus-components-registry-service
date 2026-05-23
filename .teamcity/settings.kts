@@ -421,6 +421,13 @@ object id17CompatLocalStandManual : BuildType({
     id("17CompatLocalStandManual")
     name = "[1.7] Compatibility Local-Stand [MANUAL]"
 
+    // Mirror id20's pattern: surface the upstream id10 build number as id17's
+    // own build number so the TC dashboard / build chain UI shows the SAME
+    // version tag across the whole chain (id10 = id17 = id20 = … = id70).
+    // Without this id17 builds increment a separate counter and an operator
+    // looking at the chain view sees disconnected numbers.
+    buildNumberPattern = "%BUILD_NUMBER%"
+
     artifactRules = """
         **/build/reports/** => reports
         **/build/test-results/**/*.xml => test-results
@@ -465,8 +472,11 @@ object id17CompatLocalStandManual : BuildType({
         // param when a new release lands.
         param("COMPAT_BASELINE_VERSION", "%LAST_RELEASE_VERSION%")
         // Candidate image tag = the build number of the upstream id10 chain
-        // step that just pushed it via `dockerPushImage`.
-        param("COMPAT_CANDIDATE_VERSION", "${id10CompileUtAuto.depParamRefs.buildNumber}")
+        // step that just pushed it via `dockerPushImage`. Also reused as
+        // %BUILD_NUMBER% so id17's own build number (set above via
+        // `buildNumberPattern`) matches id10's.
+        param("BUILD_NUMBER", "${id10CompileUtAuto.depParamRefs.buildNumber}")
+        param("COMPAT_CANDIDATE_VERSION", "%BUILD_NUMBER%")
         // Corp docker registry hosting both image tags. Held in the TC
         // server / parent-project param `DOCKER_REGISTRY` (same value the
         // gradle Dockerfile arg consumes).
