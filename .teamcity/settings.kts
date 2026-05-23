@@ -28,6 +28,13 @@ project {
         param("env.JAVA_HOME", "%env.JDK_21_0_x64%")
         param("COMPONENTS_REGISTRY_CHECKOUT_DIR", "Components-Registry")
         param("COMPONENT_NAME", "components-registry-service")
+        // Bitbucket repo URLs are CRS-specific (only used by this project's
+        // VCS roots), so they live in the DSL. The bitbucket hostname itself
+        // is shared across many TC projects and stays on the TC server as
+        // %GIT_SERVER_HOSTNAME%; substitution at runtime keeps the host
+        // out of the open-source repo while letting the slugs be readable.
+        param("COMPONENTS_REGISTRY_REPO_URL", "ssh://git@%GIT_SERVER_HOSTNAME%/CREG/components-registry.git")
+        param("CRS_COMPAT_TRACE_REPO_URL", "ssh://git@%GIT_SERVER_HOSTNAME%/CREG/crs-compat-trace.git")
     }
 
     buildType(id10CompileUtAuto)
