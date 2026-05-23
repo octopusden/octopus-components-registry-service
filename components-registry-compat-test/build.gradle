@@ -338,6 +338,26 @@ Generated: ${new Date().format("yyyy-MM-dd HH:mm:ss Z")}
 Raw per-line records: `execution-log.ndjson`
 """
         logger.lifecycle("[compat] ${suppressedTotal} suppressed via known-deltas, ${activeTotal} active diffs (${envTotal} env-warnings)")
+        logger.lifecycle("[compat] ${total} execution-log entries (${withDiffs} with diffs, ${total - withDiffs} clean)")
+
+        // Proof-of-execution guard: a green build with zero exec records means
+        // the wrapper booted both stands but no compareResponses → ExecutionLogger
+        // path ever ran (smoke component set didn't intersect, all tests
+        // skipped via assumeTrue, or compat URLs weren't passed through to the
+        // base class). Without this guard, "Tests passed: 93" with all-skip
+        // looks identical to a real clean sweep. Fail loudly so the operator
+        // KNOWS the old-vs-new comparison was actually exercised.
+        if (total == 0) {
+            throw new GradleException(
+                "Compatibility run logged ZERO execution cases — both stands came up but " +
+                "no per-endpoint comparison ran. Likely causes: smoke list didn't intersect " +
+                "with components baseline V1 resolves; -Pcompat.baseline.url / -Pcompat.candidate.url " +
+                "not threaded through to CompatibilityTestBase; or every test class skipped via " +
+                "assumeTrue. Verify build/reports/compat/exec-worker-*.ndjson exists and is non-empty " +
+                "before trusting the 'Tests passed: N' line."
+            )
+        }
+
         if (activeTotal > 0) {
             throw new GradleException(
                 "Compatibility run produced ${activeTotal} active divergence(s) " +

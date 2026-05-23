@@ -448,11 +448,18 @@ object id17CompatLocalStandManual : BuildType({
     params {
         // Path (relative to the CrsCompatTrace checkout) to the file listing
         // component IDs to exercise. One ID per line; blank lines and lines
-        // starting with `#` are ignored. Pick `components/smoke.txt` for a
-        // ~5-component fast run, `components/extended.txt` for ~50, or
-        // `components/all.txt` for the full sweep.
-        text("COMPAT_COMPONENTS_FILE", "components/smoke.txt", allowEmpty = false, display = ParameterDisplay.PROMPT)
-        text("COMPAT_FULL", "false", allowEmpty = false, display = ParameterDisplay.PROMPT)
+        // starting with `#` are ignored. `components/smoke.txt` is ~5 IDs and
+        // `components/extended.txt` is ~50; default to `components/all.txt`
+        // — the full sweep is what gives id17 actual signal (smoke produced
+        // 0 ExecutionLogger entries because the 5 picks didn't intersect with
+        // anything baseline V1 could resolve cleanly). Operator can still
+        // narrow at run time via the prompt.
+        text("COMPAT_COMPONENTS_FILE", "components/all.txt", allowEmpty = false, display = ParameterDisplay.PROMPT)
+        // Default to the full endpoint matrix per business request: every
+        // component × every compat-test class, no per-test skipping under
+        // assumeTrue. Same prompt as before for operator overrides; flip to
+        // `false` to bypass parameterised endpoints for a quick env check.
+        text("COMPAT_FULL", "true", allowEmpty = false, display = ParameterDisplay.PROMPT)
         // Baseline version is the project-level `LAST_RELEASE_VERSION` (e.g.
         // `2.0.87`); pinned, not prompted — operator updates the project
         // param when a new release lands.
@@ -619,10 +626,11 @@ object id17CompatLocalStandManual : BuildType({
     }
 
     failureConditions {
-        // Full sweep budget. The 5-component smoke completes in ~5-10 min;
-        // a full ~475-component matrix needs ~15-30 min. Padded to 60 min
-        // for cold-image-pull + first-time postgres volume init.
-        executionTimeoutMin = 60
+        // Full sweep budget. With `components/all.txt` (~475 IDs) and
+        // COMPAT_FULL=true the per-test-class matrix is ~30-50 min after
+        // cold-pull + postgres + auto-migrate (~5-7 min upfront). Headroom
+        // for slow agents or congested registry → cap at 120 min.
+        executionTimeoutMin = 120
     }
 
     features {
