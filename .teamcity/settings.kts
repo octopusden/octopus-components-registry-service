@@ -347,10 +347,16 @@ object id16CompatTraceReplayManual : BuildType({
             components-registry-compat-test/build/reports/compat/** => reports/compat
             components-registry-compat-test/build/test-results/**/*.xml => test-results/compat
         """.trimIndent())
-        param("GRADLE_TASK", ":components-registry-compat-test:test :components-registry-compat-test:compatibilityReporter")
-        param("GRADLE_TEST_FILTER", "--tests *TraceReplayCompatTest*")
+        // `--tests <pattern>` is a TASK-level Gradle option — it must appear
+        // AFTER the `:test` task on the command line. TC's gradle runner
+        // composes the line as `gradlew <gradleParams> <tasks>`, so anything
+        // in GRADLE_EXTRA_PARAMETERS lands BEFORE the tasks and Gradle treats
+        // `--tests` as an unknown global option (observed in build 2.0.84-4:
+        // "Unknown command-line option '--tests'"). Inline the filter into
+        // GRADLE_TASK between the test and reporter task refs so the option
+        // attaches to the correct task; do NOT move it back into the extras.
+        param("GRADLE_TASK", ":components-registry-compat-test:test --tests *TraceReplayCompatTest* :components-registry-compat-test:compatibilityReporter")
         param("GRADLE_EXTRA_PARAMETERS", """
-            %GRADLE_TEST_FILTER%
             -Pcompat.baseline.url=%COMPAT_BASELINE_URL%
             -Pcompat.candidate.url=%COMPAT_CANDIDATE_URL%
             -Pcompat.rms.url=%COMPAT_RMS_URL%
