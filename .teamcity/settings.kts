@@ -416,8 +416,8 @@ object id17CompatLocalStandManual : BuildType({
     name = "[1.7] Compatibility Local-Stand [MANUAL]"
 
     artifactRules = """
-        components-registry-compat-test/build/reports/compat/** => reports/compat
-        components-registry-compat-test/build/test-results/**/*.xml => test-results/compat
+        **/build/reports/** => reports
+        **/build/test-results/**/*.xml => test-results
         /tmp/crs-id17-%teamcity.build.id%/baseline.log => logs/baseline.log
         /tmp/crs-id17-%teamcity.build.id%/candidate.log => logs/candidate.log
     """.trimIndent()
