@@ -78,6 +78,11 @@ test {
         'junit.jupiter.execution.parallel.mode.default': 'concurrent',
         'junit.jupiter.execution.parallel.config.strategy': 'fixed',
         'junit.jupiter.execution.parallel.config.fixed.parallelism': (project.findProperty('compat.parallelism') ?: '8') as String,
+        // Absolute path to the same dir compatibilityReporter aggregates from.
+        // DiffCollector / ExecutionLogger pick this up so the per-worker ndjson
+        // files land where the reporter looks, regardless of the test JVM's
+        // forked CWD.
+        'compat.report-dir': layout.buildDirectory.dir('reports/compat').get().asFile.absolutePath,
     ]
     // Surface compat config as system properties for the test code.
     ['compat.baseline.url', 'compat.candidate.url', 'compat.rms.url',
