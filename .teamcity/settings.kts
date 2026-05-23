@@ -516,6 +516,28 @@ object id17CompatLocalStandManual : BuildType({
                 WORK_DIR="/tmp/crs-id17-%teamcity.build.id%"
                 TRACE_DATA_DIR="%teamcity.build.checkoutDir%/trace-data"
 
+                # ---- VCS root diagnostics (temporary) ---------------------
+                # Print what TC actually checked out into each secondary VCS
+                # root dir. Catches misconfigured %XXX_REPO_URL% server params
+                # (e.g. service-deployment vs service-config) and stale git
+                # mirror caches that don't re-clone after a param value change.
+                echo "===== id17 VCS checkout diagnostics ====="
+                for d in "%teamcity.build.checkoutDir%/%COMPONENTS_REGISTRY_CHECKOUT_DIR%" \
+                         "%teamcity.build.checkoutDir%/service-config" \
+                         "${'$'}TRACE_DATA_DIR"; do
+                    echo "--- ${'$'}d ---"
+                    if [ -d "${'$'}d" ]; then
+                        ls -la "${'$'}d" | head -25
+                        if [ -d "${'$'}d/.git" ]; then
+                            (cd "${'$'}d" && git remote -v && git log -1 --oneline 2>/dev/null) || true
+                        fi
+                    else
+                        echo "(directory does not exist)"
+                    fi
+                done
+                echo "===== /diagnostics ====="
+                # ---- end VCS root diagnostics -----------------------------
+
                 # Path-traversal guard on the prompted COMPAT_COMPONENTS_FILE
                 # value. Manual TC builds are operated by trusted release
                 # engineers, but a cheap defensive check beats a confusing
