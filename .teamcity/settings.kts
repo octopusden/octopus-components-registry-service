@@ -424,19 +424,20 @@ object id17CompatLocalStandManual : BuildType({
         root(AbsoluteId("Octopus_OctopusComponents_OctopusGithubVcsRoot"))
         root(ComponentsRegistry, "+:. => %COMPONENTS_REGISTRY_CHECKOUT_DIR%")
         root(ServiceConfig, "+:. => service-config")
+        // CrsCompatTrace ships the curated `components/{smoke,extended,all}.txt`
+        // sets and the `versions/component-versions.json` snapshot so id17
+        // doesn't need an RMS URL prompt or a CSV-paste of component names
+        // from the operator every run.
+        root(CrsCompatTrace, "+:. => trace-data/")
     }
 
     params {
-        // Required smoke list — same shape as id15 (CSV of real component
-        // names), but feeds the LOCAL stands, not URLs. The value contains
-        // identifiers that are forbidden in repo files / commit messages
-        // (`feedback_redacted_identifiers`), but the TC `text(...)` param
-        // itself is fine because the value never lands in version control —
-        // it lives only in the TC build config form. (Not a `password(...)`
-        // type because the value isn't a credential and operators paste it
-        // visibly when triggering the run.)
-        text("COMPAT_SMOKE_COMPONENTS", "", allowEmpty = false, display = ParameterDisplay.PROMPT)
-        text("COMPAT_RMS_URL", "", allowEmpty = false, display = ParameterDisplay.PROMPT)
+        // Path (relative to the CrsCompatTrace checkout) to the file listing
+        // component IDs to exercise. One ID per line; blank lines and lines
+        // starting with `#` are ignored. Pick `components/smoke.txt` for a
+        // ~5-component fast run, `components/extended.txt` for ~50, or
+        // `components/all.txt` for the full sweep.
+        text("COMPAT_COMPONENTS_FILE", "components/smoke.txt", allowEmpty = false, display = ParameterDisplay.PROMPT)
         text("COMPAT_FULL", "false", allowEmpty = false, display = ParameterDisplay.PROMPT)
         // Baseline version is the project-level `LAST_RELEASE_VERSION` (e.g.
         // `2.0.87`); pinned, not prompted — operator updates the project
@@ -505,14 +506,69 @@ object id17CompatLocalStandManual : BuildType({
             scriptContent = """
                 set -euo pipefail
                 WORK_DIR="/tmp/crs-id17-%teamcity.build.id%"
+                TRACE_DATA_DIR="%teamcity.build.checkoutDir%/trace-data"
+
+                # Path-traversal guard on the prompted COMPAT_COMPONENTS_FILE
+                # value. Manual TC builds are operated by trusted release
+                # engineers, but a cheap defensive check beats a confusing
+                # "no such file" trail when a typo or stray paste resolves to
+                # something outside the CrsCompatTrace checkout. Reject any
+                # value containing `..` (which would let the resolved path
+                # escape trace-data/) or starting with `/` (absolute path).
+                case "%COMPAT_COMPONENTS_FILE%" in
+                    *..*|/*)
+                        echo "ERROR: COMPAT_COMPONENTS_FILE=%COMPAT_COMPONENTS_FILE% must be a relative path inside trace-data/ (no '..' segments, no leading '/')" >&2
+                        exit 2
+                        ;;
+                esac
+
+                COMPONENTS_FILE_PATH="${'$'}TRACE_DATA_DIR/%COMPAT_COMPONENTS_FILE%"
+                VERSIONS_FILE_PATH="${'$'}TRACE_DATA_DIR/versions/component-versions.json"
+
+                # Fail-fast on missing files (Opus Stage-2 review). Without these
+                # guards a checkout failure on the CrsCompatTrace VCS root would
+                # silently produce zero components AND zero versions → every
+                # per-component test would skip via assumeTrue → vacuous green.
+                if [ ! -f "${'$'}COMPONENTS_FILE_PATH" ]; then
+                    echo "ERROR: COMPAT_COMPONENTS_FILE=${'$'}COMPONENTS_FILE_PATH does not exist (CrsCompatTrace checkout failed or file renamed)" >&2
+                    exit 2
+                fi
+                if [ ! -f "${'$'}VERSIONS_FILE_PATH" ]; then
+                    echo "ERROR: versions snapshot ${'$'}VERSIONS_FILE_PATH does not exist (CrsCompatTrace checkout failed or path renamed)" >&2
+                    exit 2
+                fi
+
+                # Read the components file: strip CRs (Windows-saved files),
+                # trim per-line whitespace, drop blank and comment-only lines.
+                # awk is one pass and won't trip set-e's pipefail on no-match.
+                TMP_LIST=${'$'}(awk '
+                    { sub(/\r${'$'}/, ""); gsub(/^[[:space:]]+|[[:space:]]+${'$'}/, "") }
+                    ${'$'}0 == "" || /^#/ { next }
+                    { print }
+                ' "${'$'}COMPONENTS_FILE_PATH")
+                if [ -z "${'$'}TMP_LIST" ]; then
+                    echo "ERROR: COMPAT_COMPONENTS_FILE=${'$'}COMPONENTS_FILE_PATH produced zero IDs after filtering blanks/comments" >&2
+                    exit 2
+                fi
+                COMPONENTS_CSV=${'$'}(printf '%s' "${'$'}TMP_LIST" | tr '\n' ',')
+                # Strip the trailing comma that `tr` adds when the input has a
+                # final newline (which `awk` always emits unless the input was
+                # empty — guarded above).
+                COMPONENTS_CSV="${'$'}{COMPONENTS_CSV%,}"
+                COMPONENTS_COUNT=${'$'}(printf '%s\n' "${'$'}TMP_LIST" | wc -l | tr -d ' ')
+                echo "Component set:   %COMPAT_COMPONENTS_FILE% (${'$'}COMPONENTS_COUNT IDs)"
+                echo "Versions file:   ${'$'}VERSIONS_FILE_PATH"
                 export BASELINE_JAR="${'$'}WORK_DIR/baseline.jar"
                 export CANDIDATE_JAR="${'$'}WORK_DIR/candidate.jar"
                 export BASELINE_LOG="${'$'}WORK_DIR/baseline.log"
                 export CANDIDATE_LOG="${'$'}WORK_DIR/candidate.log"
                 export LOCAL_VCS_ROOT="%teamcity.build.checkoutDir%/%COMPONENTS_REGISTRY_CHECKOUT_DIR%"
                 export SERVICE_CONFIG_DIR="%teamcity.build.checkoutDir%/service-config"
-                export COMPAT_SMOKE_COMPONENTS="%COMPAT_SMOKE_COMPONENTS%"
-                export COMPAT_RMS_URL="%COMPAT_RMS_URL%"
+                export COMPAT_SMOKE_COMPONENTS="${'$'}COMPONENTS_CSV"
+                # VersionSampler reads from the file directly (no RMS round-trip
+                # per call) when this is set. See loadVersionsFile in
+                # components-registry-compat-test for the contract.
+                export COMPAT_VERSIONS_FILE="${'$'}VERSIONS_FILE_PATH"
                 export COMPAT_FULL="%COMPAT_FULL%"
                 export COMPAT_PARALLELISM=8
                 export RESET_DB=1
