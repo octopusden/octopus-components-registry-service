@@ -18,6 +18,16 @@ import java.util.UUID
 object ExecutionLogger {
     private val mapper = jacksonObjectMapper()
     private val writeLock = Any()
+    private var counter = 0
+    private var diffCounter = 0
+    // Per-worker JVM counter; combine across workers in `compatibilityReporter` for
+    // a cross-fork total. The progress line below is best-effort visibility for the
+    // TC log, not a hard count for the operator (use execution-log.md for that).
+    // Print every 50 entries — at parallelism=8 that's roughly every ~5 sec of
+    // wall-clock for typical endpoint latencies, fast enough to feel live in TC
+    // without flooding the log on a 10k-request full sweep.
+    private const val PROGRESS_EVERY = 50
+
     private val workerFile: Path by lazy {
         val reportDir = Path.of("build/reports/compat").also { Files.createDirectories(it) }
         reportDir.resolve("exec-worker-${ProcessHandle.current().pid()}-${UUID.randomUUID()}.ndjson")
@@ -33,6 +43,7 @@ object ExecutionLogger {
             synchronized(writeLock) {
                 runCatching { w.flush() }
                 runCatching { w.close() }
+                System.out.println("[compat-exec] worker pid=${ProcessHandle.current().pid()} totals: $counter requests ($diffCounter with diffs)")
             }
         })
         w
@@ -43,6 +54,19 @@ object ExecutionLogger {
             writer.write(mapper.writeValueAsString(entry))
             writer.newLine()
             writer.flush()
+            counter++
+            if (entry.diffCount > 0) diffCounter++
+            if (counter == 1 || counter % PROGRESS_EVERY == 0) {
+                // Brief one-line progress so TC's build log shows the run is doing
+                // real work. Last endpoint + status pair is enough to debug
+                // "stuck at N" cases (e.g. baseline timing out on a single path).
+                System.out.println(
+                    "[compat-exec] $counter requests ($diffCounter with diffs) — " +
+                        "last: ${entry.endpoint} b=${entry.baselineStatus} c=${entry.candidateStatus} " +
+                        "b=${entry.baselineMs}ms c=${entry.candidateMs}ms diffs=${entry.diffCount}",
+                )
+                System.out.flush()
+            }
         }
     }
 
