@@ -27,7 +27,16 @@ object DiffCollector {
     // sharing the process-wide `records` queue.
     private val threadLocalCount = ThreadLocal.withInitial { 0 }
     private val workerFile: Path by lazy {
-        val reportDir = Path.of("build/reports/compat").also { Files.createDirectories(it) }
+        // Mirror the ExecutionLogger fix: take the gradle-managed absolute path
+        // from `compat.report-dir` system property, fall back to a relative
+        // path only for direct CLI invocations. Without this, the diff-worker
+        // ndjson lands in whatever CWD the test JVM was forked with — sometimes
+        // outside the module's build/ dir — and `compatibilityReporter` aggregates
+        // zero diffs even on a run that produced real divergences.
+        val baseDirProp = System.getProperty("compat.report-dir")
+        val reportDir = (if (baseDirProp != null) Path.of(baseDirProp) else Path.of("build/reports/compat"))
+            .toAbsolutePath()
+            .also { Files.createDirectories(it) }
         reportDir.resolve("diff-worker-${ProcessHandle.current().pid()}-${UUID.randomUUID()}.ndjson")
     }
     private val writer: BufferedWriter by lazy {
