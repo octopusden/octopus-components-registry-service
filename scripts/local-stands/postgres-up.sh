@@ -20,18 +20,17 @@ else
   exit 1
 fi
 
-echo ">>> ${COMPOSE[*]} up -d  ($COMPOSE_FILE)"
-"${COMPOSE[@]}" -f "$COMPOSE_FILE" up -d
+echo ">>> ${COMPOSE[*]} up -d --wait --wait-timeout 180  ($COMPOSE_FILE)"
+# `--wait` makes compose itself block until every service marked with a
+# healthcheck transitions to `healthy` (or errors); `--wait-timeout 180`
+# caps that at 3 minutes — enough room for a cold-cache `postgres:16`
+# pull + volume init on a TC podman agent, where the previous 60-sec
+# busy-poll (30×2s with python-json parsing of `compose ps`) was both too
+# short AND fragile.
+if ! "${COMPOSE[@]}" -f "$COMPOSE_FILE" up -d --wait --wait-timeout 180; then
+  echo "ERROR: Postgres did not become healthy within 180 sec. Recent container logs:"
+  "${COMPOSE[@]}" -f "$COMPOSE_FILE" logs --tail 80 postgres 2>&1 || true
+  exit 1
+fi
 
-echo ">>> waiting for Postgres healthcheck..."
-for i in $(seq 1 30); do
-  health=$("${COMPOSE[@]}" -f "$COMPOSE_FILE" ps --format json postgres 2>/dev/null | head -1 | python3 -c 'import sys,json; print(json.loads(sys.stdin.read() or "{}").get("Health","unknown"))' 2>/dev/null || echo unknown)
-  if [ "$health" = "healthy" ]; then
-    echo ">>> Postgres healthy (port ${CRS_DB_PORT:-5432})."
-    exit 0
-  fi
-  sleep 2
-done
-
-echo "WARN: Postgres did not become healthy within 60 sec. Check '${COMPOSE[*]} -f $COMPOSE_FILE logs postgres'."
-exit 1
+echo ">>> Postgres healthy (port ${CRS_DB_PORT:-5432})."
