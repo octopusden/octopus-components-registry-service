@@ -349,6 +349,31 @@ Raw per-line records: `execution-log.ndjson`
         logger.lifecycle("[compat] ${suppressedTotal} suppressed via known-deltas, ${activeTotal} active diffs (${envTotal} env-warnings)")
         logger.lifecycle("[compat] ${total} execution-log entries (${withDiffs} with diffs, ${total - withDiffs} clean)")
 
+        // TeamCity service messages (https://www.jetbrains.com/help/teamcity/service-messages.html):
+        // surface the compat numbers in TC's build status line / problems tab so an
+        // operator scanning the build dashboard sees the diff count without opening
+        // summary.md. {build.status.text} keeps TC's auto-generated test-count
+        // prefix ("Tests passed: N, ignored: M"), we append our own.
+        def statusBody = "compat: ${activeTotal} active diff(s)" +
+            " (${suppressedTotal} suppressed, ${envTotal} env), " +
+            "${total} cases executed"
+        // Escape `'`, `[`, `]`, `|`, `\n` per the service-message escaping rules.
+        def escape = { String s -> s
+            .replace('|', '||')
+            .replace("'", "|'")
+            .replace('\n', '|n')
+            .replace('\r', '|r')
+            .replace('[', '|[')
+            .replace(']', '|]')
+        }
+        println "##teamcity[buildStatus text='{build.status.text}; ${escape(statusBody)}']"
+        if (activeTotal > 0) {
+            // buildProblem surfaces in the build's Problems tab and tags the
+            // build as having a real failure category, separate from the
+            // gradle-task-failed default classification.
+            println "##teamcity[buildProblem description='Compat: ${escape(statusBody)} — see summary.md']"
+        }
+
         // Proof-of-execution guard: a green build with zero exec records means
         // the wrapper booted both stands but no compareResponses → ExecutionLogger
         // path ever ran (smoke component set didn't intersect, all tests
