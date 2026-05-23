@@ -81,8 +81,12 @@ test {
         // Absolute path to the same dir compatibilityReporter aggregates from.
         // DiffCollector / ExecutionLogger pick this up so the per-worker ndjson
         // files land where the reporter looks, regardless of the test JVM's
-        // forked CWD.
-        'compat.report-dir': layout.buildDirectory.dir('reports/compat').get().asFile.absolutePath,
+        // forked CWD. Use `file()` (resolves against this subproject) rather
+        // than `layout.buildDirectory.dir(...).get().asFile.absolutePath` —
+        // observed in id17 build #10 that the latter ended up as a path that
+        // Path.toAbsolutePath() didn't normalise to a leading-slash absolute
+        // form, so the reporter still saw zero files.
+        'compat.report-dir': file('build/reports/compat').absolutePath,
     ]
     // Surface compat config as system properties for the test code.
     ['compat.baseline.url', 'compat.candidate.url', 'compat.rms.url',
