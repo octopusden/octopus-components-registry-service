@@ -66,6 +66,28 @@ CANDIDATE_WORKTREE="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 [ -f "$BASELINE_JAR" ]  || { echo "ERROR: BASELINE_JAR=$BASELINE_JAR is not a file";   exit 2; }
 [ -f "$CANDIDATE_JAR" ] || { echo "ERROR: CANDIDATE_JAR=$CANDIDATE_JAR is not a file"; exit 2; }
+
+# Resolve `java` once. Both JARs are Spring Boot 3.x → require Java 17+
+# (JarLauncher class-file v61). The TC agent's default `java` on $PATH
+# is often Java 8, but TC exports a usable JDK as $JAVA_HOME (DSL sets
+# env.JAVA_HOME = %env.JDK_21_0_x64%). Prefer $JAVA_HOME/bin/java and
+# fail fast if neither path resolves to a Java 17+ binary.
+if [ -n "${JAVA_HOME:-}" ] && [ -x "$JAVA_HOME/bin/java" ]; then
+  JAVA_BIN="$JAVA_HOME/bin/java"
+else
+  JAVA_BIN="$(command -v java || true)"
+fi
+[ -n "$JAVA_BIN" ] && [ -x "$JAVA_BIN" ] || {
+  echo "ERROR: no usable java binary on this agent (JAVA_HOME=${JAVA_HOME:-unset}, PATH does not contain java)"
+  exit 2
+}
+java_major=$("$JAVA_BIN" -version 2>&1 | awk -F\" '/version/ {print $2}' | awk -F. '{ if ($1 == "1") print $2; else print $1 }')
+if [ -z "$java_major" ] || [ "$java_major" -lt 17 ]; then
+  echo "ERROR: $JAVA_BIN is Java $java_major; baseline + candidate JARs need Java 17+"
+  "$JAVA_BIN" -version 2>&1 || true
+  exit 2
+fi
+echo ">>> using java: $JAVA_BIN  (major=$java_major)"
 [ -d "$LOCAL_VCS_ROOT" ] || { echo "ERROR: LOCAL_VCS_ROOT=$LOCAL_VCS_ROOT is not a directory"; exit 2; }
 [ -d "$SERVICE_CONFIG_DIR" ] || { echo "ERROR: SERVICE_CONFIG_DIR=$SERVICE_CONFIG_DIR is not a directory"; exit 2; }
 [ -f "$SERVICE_CONFIG_DIR/application.yml" ] || {
@@ -131,7 +153,7 @@ BASELINE_ADDITIONAL="file:$CANDIDATE_WORKTREE/components-registry-service-server
 BASELINE_ADDITIONAL="$BASELINE_ADDITIONAL,file:$SERVICE_CONFIG_DIR/application.yml"
 BASELINE_ADDITIONAL="$BASELINE_ADDITIONAL,file:$SERVICE_CONFIG_DIR/components-registry-service.yml"
 
-nohup java -jar "$BASELINE_JAR" \
+nohup "$JAVA_BIN" -jar "$BASELINE_JAR" \
   --server.port="$BASELINE_PORT" \
   --spring.cloud.config.enabled=false \
   --spring.cloud.bootstrap.enabled=false \
@@ -177,7 +199,7 @@ CANDIDATE_ADDITIONAL="file:$CANDIDATE_WORKTREE/components-registry-service-serve
 CANDIDATE_ADDITIONAL="$CANDIDATE_ADDITIONAL,file:$SERVICE_CONFIG_DIR/components-registry-service.yml"
 CANDIDATE_PROFILES="dev,dev-vcs-local,dev-db-automigrate,dev-db-only,local"
 
-nohup java -jar "$CANDIDATE_JAR" \
+nohup "$JAVA_BIN" -jar "$CANDIDATE_JAR" \
   --server.port="$CANDIDATE_PORT" \
   --spring.profiles.active="$CANDIDATE_PROFILES" \
   --spring.config.additional-location="$CANDIDATE_ADDITIONAL" \
