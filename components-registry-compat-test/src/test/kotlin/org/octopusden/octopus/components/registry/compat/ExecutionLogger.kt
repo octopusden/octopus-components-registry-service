@@ -29,10 +29,26 @@ object ExecutionLogger {
     private const val PROGRESS_EVERY = 50
 
     private val workerFile: Path by lazy {
-        val reportDir = Path.of("build/reports/compat").also { Files.createDirectories(it) }
+        // System property `compat.report-dir` is set by the gradle test task to
+        // an ABSOLUTE path (layout.buildDirectory/reports/compat). Falling back
+        // to a relative `build/reports/compat` only protects against direct CLI
+        // invocations of the test class — under gradle that fallback would
+        // resolve to whatever JVM CWD gradle picked for the fork (sometimes
+        // the agent's $HOME, not the module dir), and the compatibilityReporter
+        // task would never find the exec-worker file. Symptom observed in id17
+        // build #9: 15834 progress lines on stdout but reporter saw 0 files.
+        val baseDirProp = System.getProperty("compat.report-dir")
+        val reportDir = (if (baseDirProp != null) Path.of(baseDirProp) else Path.of("build/reports/compat"))
+            .toAbsolutePath()
+            .also { Files.createDirectories(it) }
         reportDir.resolve("exec-worker-${ProcessHandle.current().pid()}-${UUID.randomUUID()}.ndjson")
     }
     private val writer: BufferedWriter by lazy {
+        // Log the resolved absolute path once on first write — gives the
+        // operator a single grep target ("Compat exec-log path:") in the TC
+        // build log if the path-vs-reporter mismatch ever recurs.
+        System.out.println("[compat-exec] Compat exec-log path: ${workerFile.toAbsolutePath()}")
+        System.out.flush()
         val w = Files.newBufferedWriter(
             workerFile,
             StandardCharsets.UTF_8,
