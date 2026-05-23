@@ -518,9 +518,12 @@ object id17CompatLocalStandManual : BuildType({
 
                 # ---- VCS root diagnostics (temporary) ---------------------
                 # Print what TC actually checked out into each secondary VCS
-                # root dir. Catches misconfigured %XXX_REPO_URL% server params
-                # (e.g. service-deployment vs service-config) and stale git
-                # mirror caches that don't re-clone after a param value change.
+                # root dir. Catches misconfigured XXX_REPO_URL-style server
+                # params (e.g. service-deployment vs service-config) and stale
+                # git mirror caches that don't re-clone after a param value
+                # change. (Names written without the percent delimiters here
+                # so TC doesn't read the comment as an implicit-requirement
+                # reference and mark every agent incompatible.)
                 echo "===== id17 VCS checkout diagnostics ====="
                 for d in "%teamcity.build.checkoutDir%/%COMPONENTS_REGISTRY_CHECKOUT_DIR%" \
                          "%teamcity.build.checkoutDir%/service-config" \
