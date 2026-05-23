@@ -110,6 +110,27 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Helper: print short git revision + describe for a checkout dir. Both stands
+# share the SAME LOCAL_VCS_ROOT / SERVICE_CONFIG_DIR / trace-data — recording
+# the revision in the banner makes "same CR version" guarantee auditable
+# without grepping for `Start computing revisions` in the TC log.
+git_id() {
+    local dir="$1"
+    if [ -d "$dir/.git" ] || git -C "$dir" rev-parse --git-dir >/dev/null 2>&1; then
+        local rev describe
+        rev=$(git -C "$dir" rev-parse --short=12 HEAD 2>/dev/null || echo "<unknown>")
+        describe=$(git -C "$dir" describe --tags --always --dirty 2>/dev/null || echo "")
+        printf "%s (%s)" "$rev" "${describe:-no-describe}"
+    else
+        printf "<not a git checkout>"
+    fi
+}
+
+LOCAL_VCS_ROOT_REV=$(git_id "$LOCAL_VCS_ROOT")
+SERVICE_CONFIG_REV=$(git_id "$SERVICE_CONFIG_DIR")
+TRACE_DATA_DIR="${TRACE_DATA_DIR:-${PWD}/trace-data}"
+TRACE_DATA_REV=$(git_id "$TRACE_DATA_DIR")
+
 echo "============================================================"
 echo "TeamCity compat run"
 echo "  baseline version:  ${COMPONENTS_REGISTRY_SERVICE_VERSION:-<unset>}"
@@ -117,7 +138,11 @@ echo "  baseline JAR:      $BASELINE_JAR"
 echo "  candidate version: ${BUILD_VERSION:-<unset>}"
 echo "  candidate JAR:     $CANDIDATE_JAR"
 echo "  DSL root:          $LOCAL_VCS_ROOT"
+echo "  DSL revision:      $LOCAL_VCS_ROOT_REV   ← shared by baseline AND candidate"
 echo "  service-config:    $SERVICE_CONFIG_DIR"
+echo "  service-cfg rev:   $SERVICE_CONFIG_REV"
+echo "  trace-data:        $TRACE_DATA_DIR"
+echo "  trace-data rev:    $TRACE_DATA_REV"
 echo "  ports:             baseline=$BASELINE_PORT  candidate=$CANDIDATE_PORT"
 echo "  compat.full:       ${COMPAT_FULL:-false}    parallelism=${COMPAT_PARALLELISM:-8}"
 echo "============================================================"
