@@ -44,10 +44,13 @@ object ExecutionLogger {
         reportDir.resolve("exec-worker-${ProcessHandle.current().pid()}-${UUID.randomUUID()}.ndjson")
     }
     private val writer: BufferedWriter by lazy {
-        // Log the resolved absolute path once on first write — gives the
-        // operator a single grep target ("Compat exec-log path:") in the TC
-        // build log if the path-vs-reporter mismatch ever recurs.
-        System.out.println("[compat-exec] Compat exec-log path: ${workerFile.toAbsolutePath()}")
+        // Log the resolved absolute path + system-property value once on first
+        // write. id17 build #10 surfaced a case where the property looked unset
+        // even though build.gradle set it; print both raw and resolved so the
+        // operator can tell from grep alone which branch fired.
+        val propValue = System.getProperty("compat.report-dir") ?: "(unset)"
+        val cwd = System.getProperty("user.dir") ?: "(unknown)"
+        System.out.println("[compat-exec] Compat exec-log path: ${workerFile.toAbsolutePath()} (compat.report-dir=$propValue, user.dir=$cwd)")
         System.out.flush()
         val w = Files.newBufferedWriter(
             workerFile,
