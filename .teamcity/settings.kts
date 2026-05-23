@@ -1,5 +1,6 @@
 import jetbrains.buildServer.configs.kotlin.*
 import jetbrains.buildServer.configs.kotlin.buildFeatures.XmlReport
+import jetbrains.buildServer.configs.kotlin.buildFeatures.dockerSupport
 import jetbrains.buildServer.configs.kotlin.buildFeatures.swabra
 import jetbrains.buildServer.configs.kotlin.buildFeatures.xmlReport
 import jetbrains.buildServer.configs.kotlin.buildSteps.gradle
@@ -415,8 +416,8 @@ object id17CompatLocalStandManual : BuildType({
     name = "[1.7] Compatibility Local-Stand [MANUAL]"
 
     artifactRules = """
-        components-registry-compat-test/build/reports/compat/** => reports/compat
-        components-registry-compat-test/build/test-results/**/*.xml => test-results/compat
+        **/build/reports/** => reports
+        **/build/test-results/**/*.xml => test-results
         /tmp/crs-id17-%teamcity.build.id%/baseline.log => logs/baseline.log
         /tmp/crs-id17-%teamcity.build.id%/candidate.log => logs/candidate.log
     """.trimIndent()
@@ -597,6 +598,33 @@ object id17CompatLocalStandManual : BuildType({
         xmlReport {
             reportType = XmlReport.XmlReportType.JUNIT
             rules = "+:components-registry-compat-test/build/test-results/test/*.xml"
+        }
+        // Docker Support: pre-login to the corporate Artifactory registry
+        // connections before the `extract_jars` script runs. id17 pulls a
+        // snapshot tag (id10's build number) which requires authenticated
+        // read access; release tags happen to be anonymously pullable, but
+        // snapshots are not. id10 inherits this from Octopus_OctopusGradleBuild
+        // template; id17 is template-less (pure shell-script) so it needs
+        // the feature declared explicitly.
+        //
+        // WARNING: dockerRegistryId is a comma-separated list of TC-internal
+        // ProjectFeature external IDs of the Docker Registry connections
+        // (under <parent project>/Connections). These IDs are SPECIFIC to
+        // THIS TeamCity installation — different TC servers will have
+        // different auto-generated PROJECT_EXT_xxx IDs for the same logical
+        // registries. If this DSL is ever applied on a different TC server
+        // (fork, DR site, migration), look up the equivalent connection IDs
+        // there and replace the list below. The values below map to:
+        //   - Artifactory Universal Registry (docker.artifactory.<host>)
+        //   - <two other corp registries, ID-aliased the same way>
+        // Listing all three is the conservative default — id17 only needs
+        // the Artifactory one, but logging into the sibling registries is
+        // a no-op cost if they're never pulled from.
+        dockerSupport {
+            id = "DockerSupport"
+            loginToRegistry = on {
+                dockerRegistryId = "PROJECT_EXT_177,PROJECT_EXT_350,PROJECT_EXT_351"
+            }
         }
     }
 
