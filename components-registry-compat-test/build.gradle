@@ -214,6 +214,40 @@ tasks.register('compatibilityReporter') {
 
         def diffFiles = dir.listFiles({ f -> f.name.startsWith('diff-worker-') && f.name.endsWith('.ndjson') } as FileFilter) ?: []
         def execFiles = dir.listFiles({ f -> f.name.startsWith('exec-worker-') && f.name.endsWith('.ndjson') } as FileFilter) ?: []
+
+        // DIAG (temporary, remove after exec-log mystery resolved):
+        // id17 builds #13 and #14 (`2.0.84-3604`) showed `Tests passed: 15834`
+        // with the ExecutionLogger shutdown hook reporting 15834 totals, yet
+        // execFiles aggregated to 0. The worker files must exist somewhere,
+        // but reporter's `dir` (= layout.buildDirectory.dir('reports/compat'))
+        // sees an empty list. Print the absolute path of `dir` and `ls -la`
+        // it from the gradle JVM perspective so we can compare against where
+        // the test JVM actually wrote.
+        logger.lifecycle("[compat-diag] reporter dir absolute: ${dir.absolutePath}")
+        logger.lifecycle("[compat-diag] reporter dir exists  : ${dir.exists()}")
+        if (dir.exists()) {
+            dir.listFiles()?.sort()?.each { f ->
+                logger.lifecycle("[compat-diag]   ${f.length()}\t${f.name}")
+            }
+        }
+        logger.lifecycle("[compat-diag] execFiles count = ${execFiles.size()}, diffFiles count = ${diffFiles.size()}")
+        // Also scan `${rootProject.projectDir}/build/reports/compat` and
+        // `${System.getProperty('user.dir')}/build/reports/compat` to catch
+        // the case where workers wrote to a doubled or unexpected path.
+        [
+            new File(rootProject.projectDir, 'build/reports/compat'),
+            new File(rootProject.projectDir, 'components-registry-compat-test/build/reports/compat'),
+            new File(System.getProperty('user.dir'), 'build/reports/compat'),
+            new File(System.getProperty('user.dir'), 'components-registry-compat-test/build/reports/compat'),
+        ].unique { it.absolutePath }.each { altDir ->
+            if (altDir.absolutePath != dir.absolutePath && altDir.exists()) {
+                def workers = altDir.listFiles({ f -> f.name.startsWith('exec-worker-') } as FileFilter) ?: []
+                if (workers) {
+                    logger.lifecycle("[compat-diag] FOUND ${workers.size()} exec-worker file(s) at UNEXPECTED path: ${altDir.absolutePath}")
+                    workers.each { logger.lifecycle("[compat-diag]   ${it.length()}\t${it.name}") }
+                }
+            }
+        }
         def summary = new File(dir, 'summary.md')
         def execMd = new File(dir, 'execution-log.md')
         def execNd = new File(dir, 'execution-log.ndjson')
