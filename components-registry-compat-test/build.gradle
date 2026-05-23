@@ -86,7 +86,8 @@ test {
      'compat.smoke-components',
      'compat.trace.file',
      'compat.verbose',
-     'compat.allow-non-db-candidate'].each { name ->
+     'compat.allow-non-db-candidate',
+     'compat.versions.file'].each { name ->
         def value = project.findProperty(name) ?: System.getenv(name.toUpperCase().replace('.', '_').replace('-', '_'))
         if (value != null) {
             systemProperty name, value
