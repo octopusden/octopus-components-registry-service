@@ -810,12 +810,15 @@ object id30DeployToOkdQaDevAuto : BuildType({
 // `scripts/teamcity/qa-post-deploy-migrate.sh` so it can be tested and
 // reviewed outside TC.
 //
-// Auth: %CRS_QA_ADMIN_TOKEN% — Keycloak-issued JWT for a service account
-// with the IMPORT_DATA role. The param is declared as a placeholder here;
-// the actual secret is configured on the TC server as a project-level
-// password parameter named `CRS_QA_ADMIN_TOKEN`. Until that secret is
-// provisioned this build will fail with a clear "auth rejected" message
-// in the script — that is intentional (no silent-skip on auth misconfig).
+// Auth: %CRS_QA_ADMIN_TOKEN% — the RAW Keycloak JWT for a service account
+// with the IMPORT_DATA role (the token value only, no `Authorization: ` /
+// no `Bearer ` prefix — the script adds `Authorization: Bearer <token>`
+// itself, and defensively strips a leading `Bearer ` if it was included).
+// The param is declared as a placeholder here; the actual secret is
+// configured on the TC server as a project-level password parameter named
+// `CRS_QA_ADMIN_TOKEN`. Until that secret is provisioned this build will
+// fail with a clear "auth rejected" message in the script — that is
+// intentional (no silent-skip on auth misconfig).
 object id31MigrateOnQaDevAuto : BuildType({
     id("31MigrateOnQaDevAuto")
     name = "[3.1] Migrate components on QA DEV [AUTO]"
@@ -829,9 +832,11 @@ object id31MigrateOnQaDevAuto : BuildType({
         // server-level param `CRS_QA_DEV_BASE_URL` (configure once on
         // the TC parent project, same pattern as OKD_SERVER_DEV_URL).
         param("env.CRS_BASE_URL", "%CRS_QA_DEV_BASE_URL%")
-        // Bearer JWT (service-account, role IMPORT_DATA). PLACEHOLDER —
-        // the project-level password parameter `CRS_QA_ADMIN_TOKEN` must
-        // be provisioned on the TC server before this build will succeed.
+        // Raw Keycloak JWT (service-account, role IMPORT_DATA) — token
+        // value only, NO `Bearer ` prefix; the script adds the scheme.
+        // PLACEHOLDER — the project-level password parameter
+        // `CRS_QA_ADMIN_TOKEN` must be provisioned on the TC server
+        // before this build will succeed.
         password("env.CRS_ADMIN_TOKEN", "%CRS_QA_ADMIN_TOKEN%")
     }
 

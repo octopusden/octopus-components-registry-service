@@ -39,7 +39,7 @@ to the open-source DSL:
 | Parameter             | Type     | Purpose                                              |
 | --------------------- | -------- | ---------------------------------------------------- |
 | `CRS_QA_DEV_BASE_URL` | text     | Base URL of the QA-DEV CRS route, e.g. `https://crs.qa-dev.example` |
-| `CRS_QA_ADMIN_TOKEN`  | password | Bearer JWT (Keycloak service account, `IMPORT_DATA`) |
+| `CRS_QA_ADMIN_TOKEN`  | password | Raw Keycloak JWT (service account, `IMPORT_DATA` role) — token value only, **no `Bearer ` prefix**; the script adds the scheme. A leading `Bearer ` is stripped defensively. |
 
 The build will fail loudly until both are populated. See
 `keycloak-setup.md` for the role-mapping side.

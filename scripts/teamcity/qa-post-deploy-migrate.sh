@@ -10,7 +10,12 @@
 #
 # Required env:
 #   CRS_BASE_URL          e.g. https://components-registry.qa.example/
-#   CRS_ADMIN_TOKEN       Bearer JWT with IMPORT_DATA role
+#   CRS_ADMIN_TOKEN       Raw Keycloak JWT with IMPORT_DATA role — the token
+#                         value ONLY, without an `Authorization: ` prefix and
+#                         without a leading `Bearer ` scheme word. The script
+#                         adds `Authorization: Bearer <token>` itself. A
+#                         leading `Bearer ` is stripped defensively in case
+#                         the TC parameter was provisioned with the prefix.
 #
 # Optional env:
 #   READINESS_TIMEOUT_SEC  default 300
@@ -42,6 +47,15 @@ case "$CRS_ADMIN_TOKEN" in
     log "Provision the project-level password parameter (e.g. CRS_QA_ADMIN_TOKEN) on the TC server."
     exit 1
     ;;
+esac
+
+# Defensively strip a leading `Bearer ` (case-insensitive) so the parameter
+# can be provisioned either as the raw JWT (preferred) or as the full
+# `Bearer <jwt>` header value without the script producing the broken
+# `Authorization: Bearer Bearer <jwt>` chain. The contract in the docstring
+# remains "raw JWT only" — this is just an operator-error safety net.
+case "$CRS_ADMIN_TOKEN" in
+  [Bb][Ee][Aa][Rr][Ee][Rr]\ *) CRS_ADMIN_TOKEN="${CRS_ADMIN_TOKEN#* }" ;;
 esac
 
 # JSON parsing uses python3 (see jget below). Most modern Linux TC agents
