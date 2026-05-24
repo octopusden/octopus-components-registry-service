@@ -187,6 +187,9 @@ nohup "$JAVA_BIN" -jar "$BASELINE_JAR" \
   --components-registry.vcs.root="file://$LOCAL_VCS_ROOT" \
   --components-registry.work-dir="$BASELINE_WORK_DIR" \
   --components-registry.groovy-path="$BASELINE_WORK_DIR/src/main/resources" \
+  --components-registry.version-name.service-branch=serviceCardsBranch \
+  --components-registry.version-name.service=serviceCards \
+  --components-registry.version-name.minor=minorCards \
   --auth-server.disabled=true \
   >"$BASELINE_LOG" 2>&1 &
 BASELINE_PID=$!
@@ -231,6 +234,9 @@ nohup "$JAVA_BIN" -jar "$CANDIDATE_JAR" \
   --components-registry.vcs.root="file://$LOCAL_VCS_ROOT" \
   --components-registry.work-dir="$CANDIDATE_WORK_DIR" \
   --components-registry.groovy-path="$CANDIDATE_WORK_DIR/src/main/resources" \
+  --components-registry.version-name.service-branch=serviceCardsBranch \
+  --components-registry.version-name.service=serviceCards \
+  --components-registry.version-name.minor=minorCards \
   --auth-server.disabled=true \
   >"$CANDIDATE_LOG" 2>&1 &
 CANDIDATE_PID=$!
