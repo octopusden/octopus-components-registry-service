@@ -19,3 +19,6 @@ BOOT-INF/
 # But do track the local-stands tooling — these are shared dev scripts, not ad-hoc.
 !scripts/local-stands/*.sh
 !scripts/local-stands/test/*.sh
+# CI helpers invoked from TeamCity build steps live in the repo so they can be
+# reviewed and tested outside TC.
+!scripts/teamcity/*.sh

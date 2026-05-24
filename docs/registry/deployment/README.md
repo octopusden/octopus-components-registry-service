@@ -8,6 +8,8 @@ This directory collects the deployment-related inputs and working documents for 
 - `keycloak-setup.md` — operator-facing setup steps for Keycloak realm-roles
   required by CRS authorization (manual Admin-Console actions not covered by
   source patches)
+- `qa-post-deploy-migration.md` — what the `[3.1] Migrate components on QA DEV
+  [AUTO]` TC build does, when it skips, and what TC parameters it expects
 - `references/teamcity/` — raw TeamCity Kotlin DSL snippets relevant to the current OKD deployment flow
 - `references/platform/okd-platform-patterns.md` — summarized conventions from `service-deployment`, `service-config`, `octopus-dms-ui`, and `octopus-api-gateway`
 
