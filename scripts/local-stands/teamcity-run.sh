@@ -306,6 +306,14 @@ echo ">>> Stage 4/4: compat-test"
 # twice on the same commit and produced 20 vs 22 active diffs — strong
 # race / VCS-refresh-cycle signal that disappears under sequential
 # execution).
+# TEMPORARY DIAGNOSTIC HARDCODE — revert before merge.
+# TC settings.kts is loaded from the `v3` branch, so the new
+# `COMPAT_PARALLELISM` prompt this PR adds to settings.kts is invisible
+# to the operator on id17 until merge. Hard-pin parallelism to 1 here so
+# the next id17 run on this branch answers the floating-diff-count
+# question (race vs deterministic) using the script that IS picked up
+# from this branch.
+COMPAT_PARALLELISM=1
 GRADLE_PARALLELISM_ARG=""
 if [ -n "${COMPAT_PARALLELISM:-}" ]; then
   GRADLE_PARALLELISM_ARG="-Pcompat.parallelism=${COMPAT_PARALLELISM}"
