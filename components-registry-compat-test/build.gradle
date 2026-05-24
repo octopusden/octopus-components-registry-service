@@ -87,13 +87,17 @@ test {
         'junit.jupiter.execution.parallel.config.strategy': 'fixed',
         'junit.jupiter.execution.parallel.config.fixed.parallelism': (project.findProperty('compat.parallelism') ?: '8') as String,
         // Absolute path to the same dir compatibilityReporter aggregates from.
-        // DiffCollector / ExecutionLogger pick this up so the per-worker ndjson
-        // files land where the reporter looks, regardless of the test JVM's
-        // forked CWD. Use `"${projectDir}/..."` (GString interpolation forces
-        // File.toString → absolute) rather than `file(...).absolutePath` —
-        // observed in id17 builds #10 and #13 that the latter still produced
-        // a relative-looking value on this TC agent's gradle/JVM combination.
-        'compat.report-dir': "${projectDir}/build/reports/compat".toString(),
+        // DiffCollector / ExecutionLogger pick this up so the per-worker
+        // ndjson files land where the reporter looks, regardless of the test
+        // JVM's forked CWD. Use `file('build/reports/compat').absolutePath`
+        // (java.io.File.getAbsolutePath()) — this is the only form that
+        // produced a reliably-absolute value on the TC agent's gradle/JVM
+        // combination in id17 build #3620 (the earlier `"${projectDir}/..."`
+        // attempt still landed as the relative module basename).
+        // `resolveReportDir` in the test code asserts the absolute-ness so a
+        // regression is caught at test-JVM startup with a clear message
+        // rather than as a silent vacuously-clean reporter run.
+        'compat.report-dir': file('build/reports/compat').absolutePath,
     ]
     // Surface compat config as system properties for the test code.
     ['compat.baseline.url', 'compat.candidate.url', 'compat.rms.url',

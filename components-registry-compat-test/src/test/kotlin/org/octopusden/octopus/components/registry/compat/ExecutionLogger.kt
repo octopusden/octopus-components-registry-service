@@ -29,17 +29,14 @@ object ExecutionLogger {
     private const val PROGRESS_EVERY = 50
 
     private val workerFile: Path by lazy {
-        // System property `compat.report-dir` is set by the gradle test task to
-        // an ABSOLUTE path (layout.buildDirectory/reports/compat). Falling back
-        // to a relative `build/reports/compat` only protects against direct CLI
-        // invocations of the test class — under gradle that fallback would
-        // resolve to whatever JVM CWD gradle picked for the fork (sometimes
-        // the agent's $HOME, not the module dir), and the compatibilityReporter
-        // task would never find the exec-worker file. Symptom observed in id17
-        // build #9: 15834 progress lines on stdout but reporter saw 0 files.
+        // Delegated to `resolveReportDir` (shared with DiffCollector). The
+        // resolver fails fast if `compat.report-dir` is non-null and
+        // relative — observed in id17 build #3620 that a relative value
+        // resolved against a relative `user.dir` writes to a doubled-prefix
+        // path the compatibilityReporter never reads, producing a vacuously-
+        // clean build despite 15834 testcases passing.
         val baseDirProp = System.getProperty("compat.report-dir")
-        val reportDir = (if (baseDirProp != null) Path.of(baseDirProp) else Path.of("build/reports/compat"))
-            .toAbsolutePath()
+        val reportDir = resolveReportDir(baseDirProp, Path.of("build/reports/compat"))
             .also { Files.createDirectories(it) }
         reportDir.resolve("exec-worker-${ProcessHandle.current().pid()}-${UUID.randomUUID()}.ndjson")
     }
