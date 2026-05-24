@@ -294,13 +294,27 @@ echo ">>> Stage 4/4: compat-test"
 # compat.sh exports COMPAT_BASELINE_URL=http://localhost:$BASELINE_PORT and
 # COMPAT_CANDIDATE_URL=http://localhost:$CANDIDATE_PORT, then invokes the
 # :components-registry-compat-test:test gradle task. It already accepts
-# COMPAT_RMS_URL / COMPAT_FULL / COMPAT_PARALLELISM / COMPAT_SMOKE_COMPONENTS
-# from the parent shell.
+# COMPAT_RMS_URL / COMPAT_FULL / COMPAT_SMOKE_COMPONENTS from the parent
+# shell.
+#
+# COMPAT_PARALLELISM is the env-var name TC uses for the prompted JUnit-5
+# parallelism level (default 8). build.gradle reads it as the gradle
+# property `compat.parallelism` (`project.findProperty('compat.parallelism')`
+# — env vars do NOT auto-translate to gradle properties), so forward it
+# explicitly as `-Pcompat.parallelism=<n>`. Lets the operator drop to 1
+# from the TC prompt when investigating flaky diff counts (#3634 ran
+# twice on the same commit and produced 20 vs 22 active diffs — strong
+# race / VCS-refresh-cycle signal that disappears under sequential
+# execution).
+GRADLE_PARALLELISM_ARG=""
+if [ -n "${COMPAT_PARALLELISM:-}" ]; then
+  GRADLE_PARALLELISM_ARG="-Pcompat.parallelism=${COMPAT_PARALLELISM}"
+fi
 #
 # Run as a foreground child (NOT `exec`) so the EXIT trap fires when compat
 # finishes — Stage-2 review found that `exec` was replacing the shell process
 # and silently discarding the trap, leaking the baseline/candidate JVMs and
 # the postgres container between TC runs on a persistent agent.
-"$SCRIPT_DIR/compat.sh" "$@"
+"$SCRIPT_DIR/compat.sh" $GRADLE_PARALLELISM_ARG "$@"
 COMPAT_EXIT=$?
 exit $COMPAT_EXIT
