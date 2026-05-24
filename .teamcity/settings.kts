@@ -469,6 +469,13 @@ object id17CompatLocalStandManual : BuildType({
         // assumeTrue. Same prompt as before for operator overrides; flip to
         // `false` to bypass parameterised endpoints for a quick env check.
         text("COMPAT_FULL", "true", allowEmpty = false, display = ParameterDisplay.PROMPT)
+        // JUnit 5 parallelism for the compat-test JVM. Default `8` matches
+        // the historical compat.sh / gradle setup. Set `1` for a sequential
+        // run when investigating flaky diff counts (id17 #3634 ran twice on
+        // the same commit and produced 20 vs 22 active diffs — strong race
+        // / VCS-refresh-cycle signal that disappears under sequential
+        // execution). Lower values trade run time for determinism.
+        text("COMPAT_PARALLELISM", "8", allowEmpty = false, display = ParameterDisplay.PROMPT)
         // Baseline version is the project-level `LAST_RELEASE_VERSION` (e.g.
         // `2.0.87`); pinned, not prompted — operator updates the project
         // param when a new release lands.
@@ -628,7 +635,14 @@ object id17CompatLocalStandManual : BuildType({
                 # components-registry-compat-test for the contract.
                 export COMPAT_VERSIONS_FILE="${'$'}VERSIONS_FILE_PATH"
                 export COMPAT_FULL="%COMPAT_FULL%"
-                export COMPAT_PARALLELISM=8
+                export COMPAT_PARALLELISM="%COMPAT_PARALLELISM%"
+                # Route the postgres pull through the artifactory mirror so
+                # id17 doesn't hit Docker Hub's anonymous-pull rate limit
+                # (#3636 failed mid-Stage-1 with `toomanyrequests`). The
+                # docker-compose.local-postgres.yml accepts `POSTGRES_IMAGE`
+                # with a `postgres:16` fallback for developers running
+                # outside TC.
+                export POSTGRES_IMAGE="%DOCKER_REGISTRY_INTERNAL%/postgres:16"
                 export RESET_DB=1
                 export COMPONENTS_REGISTRY_SERVICE_VERSION="%COMPAT_BASELINE_VERSION%"
                 export BUILD_VERSION="%COMPAT_CANDIDATE_VERSION%"
