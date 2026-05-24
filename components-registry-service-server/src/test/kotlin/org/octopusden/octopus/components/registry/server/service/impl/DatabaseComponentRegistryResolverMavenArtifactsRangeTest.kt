@@ -150,13 +150,23 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
 
     @Test
     @DisplayName(
-        "RES-C-001: per-range DISTRIBUTION_MAVEN marker overrides groupPattern " +
+        "RES-C-001: per-range GROUP_ARTIFACT_PATTERN marker overrides groupPattern " +
             "(bug-C-component-A shape: two ranges with distinct groupId per range)",
     )
     fun `RES-C-001 getMavenArtifactParameters returns per-range groupPattern from marker override`() {
         // bug-C-component-A shape:
         //   BASE at [1.1,) with maven artifact (com.example.ic, bug-C-component-A)
-        //   MARKER distribution.maven at [1.0,1.1) with maven artifact (com.example, bug-C-component-A)
+        //   MARKER GROUP_ARTIFACT_PATTERN at [1.0,1.1) with maven artifact (com.example, bug-C-component-A)
+        //
+        // V1-contract note (RES-C-007/008): only GROUP_ARTIFACT_PATTERN markers
+        // override /maven-artifacts' (groupPattern, artifactPattern). The
+        // historical version of this test used DISTRIBUTION_MAVEN — which is
+        // emitted by the importer for every per-range `distribution { gav = … }`
+        // block, regardless of whether the DSL explicitly redefined
+        // `groupId`/`artifactId` at the version level. That made the read-path
+        // emit GAV-derived tokens instead of the inherited contract field. Now
+        // we model the legitimate override (explicit per-range groupId/artifactId
+        // in the DSL) via GROUP_ARTIFACT_PATTERN.
         val comp = makeComponent("bug-C-component-A-like")
         comp.distributionExplicit = true
 
@@ -167,7 +177,7 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
         val base = makeBase(comp, "[1.1,)")
         addMavenArtifact(base, "com.example.ic", "bug-C-component-A")
 
-        val markerOld = makeMarkerRow(comp, "[1.0,1.1)", "distribution.maven")
+        val markerOld = makeMarkerRow(comp, "[1.0,1.1)", MarkerAttributes.GROUP_ARTIFACT_PATTERN)
         addMavenArtifact(markerOld, "com.example", "bug-C-component-A")
 
         comp.configurations.addAll(listOf(base, markerOld))
@@ -194,14 +204,15 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
 
     @Test
     @DisplayName(
-        "RES-C-002: per-range DISTRIBUTION_MAVEN marker override with multiple artifacts " +
+        "RES-C-002: per-range GROUP_ARTIFACT_PATTERN marker override with multiple artifacts " +
             "(bug-C-component-B shape: multi-artifact CSV, two ranges)",
     )
     fun `RES-C-002 getMavenArtifactParameters handles multi-artifact CSV override`() {
         // bug-C-component-B shape:
         //   BASE at [03.51.29.15,) with maven artifact (com.example.cardsmodel2.dummy, bug-C-component-B)
-        //   MARKER distribution.maven at (,03.51.29.15) with two artifacts:
+        //   MARKER GROUP_ARTIFACT_PATTERN at (,03.51.29.15) with two artifacts:
         //     (com.example.cardsmodel2, bug-C-fixture-v2) and (com.example.cardsmodel, bug-C-fixture-legacy)
+        // V1-contract update: switched from DISTRIBUTION_MAVEN to GROUP_ARTIFACT_PATTERN — see RES-C-001 comment.
         val comp = makeComponent("bug-C-fixture-B-shape")
         comp.distributionExplicit = true
 
@@ -211,7 +222,7 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
         val base = makeBase(comp, "[03.51.29.15,)")
         addMavenArtifact(base, "com.example.cardsmodel2.dummy", "bug-C-component-B", sortOrder = 0)
 
-        val markerOld = makeMarkerRow(comp, "(,03.51.29.15)", "distribution.maven")
+        val markerOld = makeMarkerRow(comp, "(,03.51.29.15)", MarkerAttributes.GROUP_ARTIFACT_PATTERN)
         addMavenArtifact(markerOld, "com.example.cardsmodel2", "bug-C-fixture-v2", sortOrder = 0)
         addMavenArtifact(markerOld, "com.example.cardsmodel", "bug-C-fixture-legacy", sortOrder = 1)
 
@@ -406,12 +417,15 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
 
     @Test
     @DisplayName(
-        "RES-C-005: mixed — BASE+GAV, MARKER for range B only → range B uses GAV, range A uses fallback",
+        "RES-C-005: mixed — BASE+fallback, MARKER for range B only → range B uses marker, range A uses fallback",
     )
-    fun `RES-C-005 marker-gated GAV extraction only for marked ranges`() {
+    fun `RES-C-005 marker-gated override only for marked ranges`() {
         // Demonstrates that the per-range MARKER gate is the discriminator:
-        //   - range A (BASE, no marker)            → wildcard from component-level fallback
-        //   - range B (DISTRIBUTION_MAVEN marker)  → GAV-derived CSV
+        //   - range A (BASE, no marker)                  → wildcard from component-level fallback
+        //   - range B (GROUP_ARTIFACT_PATTERN marker)    → marker-derived (groupPattern, artifactPattern)
+        // V1-contract update (see RES-C-001): the legitimate per-range override marker
+        // is GROUP_ARTIFACT_PATTERN; DISTRIBUTION_MAVEN no longer participates in
+        // /maven-artifacts resolution.
         val comp = makeComponent("res-c-prime-fixture-mixed")
         comp.distributionExplicit = true
 
@@ -420,7 +434,7 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
         val base = makeBase(comp, "(,1.0)")
         addMavenArtifact(base, "com.example.test", "art-x", sortOrder = 0)
 
-        val markerNew = makeMarkerRow(comp, "[1.0,)", "distribution.maven")
+        val markerNew = makeMarkerRow(comp, "[1.0,)", MarkerAttributes.GROUP_ARTIFACT_PATTERN)
         addMavenArtifact(markerNew, "com.example.new", "real-artifact-id", sortOrder = 0)
 
         comp.configurations.addAll(listOf(base, markerNew))
@@ -454,6 +468,132 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
             "real-artifact-id",
             rangeWithMarker.artifactPattern,
             "[1.0,) artifactPattern must come from the marker's GAV (override is active)",
+        )
+    }
+
+    // ========================================================================
+    // V1-contract preservation (RES-C-007, RES-C-008): when a per-range
+    // DISTRIBUTION_MAVEN marker exists BUT the DSL did not redefine
+    // groupId/artifactId at the version level, the V1 contract (see
+    // component-resolver-core JiraParametersResolver.groovy:67-68) returns the
+    // INHERITED top-level (artifactIdPattern, groupIdPattern) — never the
+    // GAV-token-derived values. Reproduced today on prod + QA + local baseline
+    // (curl 2026-05-24); the v3 DB-mode read-path returned GAV-derived strings
+    // and these tests pin V1 parity.
+    // ========================================================================
+
+    @Test
+    @DisplayName(
+        "RES-C-007: 3-token top-level artifactId + version-level DISTRIBUTION_MAVEN-only override " +
+            "preserves the inherited artifactPattern (V1 contract)",
+    )
+    fun `RES-C-007 DISTRIBUTION_MAVEN-only override preserves inherited artifactPattern`() {
+        // DSL shape (mirrors a real 3-artifact-token component):
+        //   "fixture-A" {
+        //       groupId = "com.example.fx"
+        //       artifactId = "art-a,art-b,art-c"          // inherited by every range
+        //       "[4.9.4-4181,)" {
+        //           distribution { gav = "...:lib-sdk:...×15" }
+        //           // NOTE: artifactId is NOT redefined here — only the distribution.GAV
+        //       }
+        //   }
+        //
+        // Import writes:
+        //   - component-level artifactIds row: artifactPattern="art-a,art-b,art-c"
+        //   - DISTRIBUTION_MAVEN marker on [4.9.4-4181,) with 15× (com.example.fx, lib-sdk)
+        //
+        // V1 contract: /maven-artifacts returns the inherited artifactPattern, NOT the GAV-derived one.
+        val comp = makeComponent("fixture-A-3-token")
+        comp.distributionExplicit = true
+
+        addComponentLevelArtifact(comp, "com.example.fx", "art-a", sortOrder = 0)
+        addComponentLevelArtifact(comp, "com.example.fx", "art-b", sortOrder = 1)
+        addComponentLevelArtifact(comp, "com.example.fx", "art-c", sortOrder = 2)
+
+        val base = makeBase(comp, "[4,4.9.4-4181)")
+        addMavenArtifact(base, "com.example.fx", "art-a", sortOrder = 0)
+        addMavenArtifact(base, "com.example.fx", "art-b", sortOrder = 1)
+        addMavenArtifact(base, "com.example.fx", "art-c", sortOrder = 2)
+
+        val distMaven = makeMarkerRow(comp, "[4.9.4-4181,)", MarkerAttributes.DISTRIBUTION_MAVEN)
+        // 15 GAV tokens like the production DSL — all map to (com.example.fx, lib-sdk).
+        repeat(15) { i -> addMavenArtifact(distMaven, "com.example.fx", "lib-sdk", sortOrder = i) }
+
+        comp.configurations.addAll(listOf(base, distMaven))
+        stubComponent(comp)
+
+        val result = resolver.getMavenArtifactParameters("fixture-A-3-token")
+
+        val rangeWithOverride = result["[4.9.4-4181,)"]
+        assertNotNull(rangeWithOverride, "[4.9.4-4181,) entry must be present")
+        assertEquals(
+            "com.example.fx",
+            rangeWithOverride!!.groupPattern,
+            "[4.9.4-4181,) groupPattern must be the inherited top-level — DISTRIBUTION_MAVEN does NOT override",
+        )
+        assertEquals(
+            "art-a,art-b,art-c",
+            rangeWithOverride.artifactPattern,
+            "[4.9.4-4181,) artifactPattern must be the inherited top-level — DISTRIBUTION_MAVEN does NOT override",
+        )
+    }
+
+    @Test
+    @DisplayName(
+        "RES-C-008: multi-element CSV groupId/artifactId at top-level, " +
+            "per-range DISTRIBUTION_MAVEN override preserves the inherited CSV (V1 contract)",
+    )
+    fun `RES-C-008 DISTRIBUTION_MAVEN-only override on multi-element top-level preserves CSV`() {
+        // DSL shape (mirrors a real two-element groupId CSV component):
+        //   "fixture-B" {
+        //       groupId = "com.example.fx.distrib,com.example.fx.distrib.installer"
+        //       artifactId = "installer-art,main-art"
+        //       "[1.7.3076,1.7.3209]" {
+        //           distribution { gav = "com.example.fx.bundled:main-art:zip:tag1,...×8" }
+        //       }
+        //   }
+        //
+        // V1 contract: /maven-artifacts for the override range returns the inherited
+        // CSV groupId AND CSV artifactId — NOT the single GAV-derived group nor the
+        // 8-token repeated artifact list.
+        val comp = makeComponent("fixture-B-csv")
+        comp.distributionExplicit = true
+
+        addComponentLevelArtifact(
+            comp,
+            "com.example.fx.distrib,com.example.fx.distrib.installer",
+            "installer-art,main-art",
+        )
+
+        val base = makeBase(comp, "[1.7,1.7.3076)")
+        addMavenArtifact(
+            base,
+            "com.example.fx.distrib,com.example.fx.distrib.installer",
+            "installer-art,main-art",
+        )
+
+        val distMaven = makeMarkerRow(comp, "[1.7.3076,1.7.3209]", MarkerAttributes.DISTRIBUTION_MAVEN)
+        // 8 GAV tokens like the production DSL — all map to (com.example.fx.bundled, main-art).
+        repeat(8) { i ->
+            addMavenArtifact(distMaven, "com.example.fx.bundled", "main-art", sortOrder = i)
+        }
+
+        comp.configurations.addAll(listOf(base, distMaven))
+        stubComponent(comp)
+
+        val result = resolver.getMavenArtifactParameters("fixture-B-csv")
+
+        val rangeWithOverride = result["[1.7.3076,1.7.3209]"]
+        assertNotNull(rangeWithOverride, "[1.7.3076,1.7.3209] entry must be present")
+        assertEquals(
+            "com.example.fx.distrib,com.example.fx.distrib.installer",
+            rangeWithOverride!!.groupPattern,
+            "groupPattern must be the inherited 2-element CSV — DISTRIBUTION_MAVEN does NOT collapse it to single GAV groupId",
+        )
+        assertEquals(
+            "installer-art,main-art",
+            rangeWithOverride.artifactPattern,
+            "artifactPattern must be the inherited CSV — DISTRIBUTION_MAVEN does NOT replace it with the GAV artifact-token list",
         )
     }
 
@@ -550,17 +690,15 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
     @Test
     @DisplayName(
         "MIG-047-RES-003: when both DISTRIBUTION_MAVEN and GROUP_ARTIFACT_PATTERN markers " +
-            "exist on the same versionRange, DISTRIBUTION_MAVEN wins deterministically",
+            "exist on the same versionRange, GROUP_ARTIFACT_PATTERN wins (DISTRIBUTION_MAVEN is ignored)",
     )
-    fun `MIG-047-RES-003 same-range conflict — DISTRIBUTION_MAVEN takes precedence over GROUP_ARTIFACT_PATTERN`() {
-        // Conflict shape: a V4 user added a distribution.maven override on a range that
-        // already had an import-managed GROUP_ARTIFACT_PATTERN row (V4 createFieldOverride
-        // only de-dupes by `overriddenAttribute`, so this pair is reachable). With the
-        // pre-fix `associateBy { it.versionRange }`, whichever row sits last in
-        // `componentEntity.configurations` wins — non-deterministic because @OneToMany
-        // does not specify iteration order. Post-fix, the explicit DISTRIBUTION_MAVEN
-        // override wins regardless of row-order (mirrors the V4 user's stated intent;
-        // GROUP_ARTIFACT_PATTERN is import-internal and supplanted).
+    fun `MIG-047-RES-003 same-range conflict — GROUP_ARTIFACT_PATTERN wins, DISTRIBUTION_MAVEN ignored`() {
+        // V1-contract design (RES-C-007/008): DISTRIBUTION_MAVEN does NOT influence
+        // /maven-artifacts at all — only GROUP_ARTIFACT_PATTERN does. So a range
+        // carrying both markers must resolve to the GROUP_ARTIFACT_PATTERN coords,
+        // not the DISTRIBUTION_MAVEN coords. The historical behaviour
+        // (DISTRIBUTION_MAVEN winning) was the source of the v3 DB-mode regression
+        // on 6 production components — see fix commit message for details.
         val comp = makeComponent("gamma-fixture-mig047-conflict")
         comp.distributionExplicit = true
 
@@ -569,9 +707,10 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
         val base = makeBase(comp, "[1.0,1.1)")
         addMavenArtifact(base, "com.example", "gamma-fixture")
 
-        // Build a deliberately adversarial ordering: GROUP_ARTIFACT_PATTERN appears AFTER
-        // DISTRIBUTION_MAVEN in the configurations list. The pre-fix `associateBy` keeps
-        // the LAST entry with the same key — so GROUP_ARTIFACT_PATTERN wins under the bug.
+        // Adversarial ordering preserved: DISTRIBUTION_MAVEN sits BEFORE
+        // GROUP_ARTIFACT_PATTERN in the configurations list. With the V1-contract
+        // fix the resolver filters DISTRIBUTION_MAVEN out of the marker set entirely,
+        // so GROUP_ARTIFACT_PATTERN wins regardless of row-order.
         val distributionMaven = makeMarkerRow(comp, "[1.1,)", MarkerAttributes.DISTRIBUTION_MAVEN)
         addMavenArtifact(distributionMaven, "com.example.user-explicit", "gamma-fixture")
 
@@ -588,9 +727,9 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
         val rangeOverride = result["[1.1,)"]
         assertNotNull(rangeOverride, "[1.1,) entry must be present")
         assertEquals(
-            "com.example.user-explicit",
+            "com.example.import-internal",
             rangeOverride!!.groupPattern,
-            "DISTRIBUTION_MAVEN must take precedence over GROUP_ARTIFACT_PATTERN on the same range",
+            "GROUP_ARTIFACT_PATTERN wins per V1 contract; DISTRIBUTION_MAVEN is invisible to /maven-artifacts",
         )
         assertEquals("gamma-fixture", rangeOverride.artifactPattern)
     }
