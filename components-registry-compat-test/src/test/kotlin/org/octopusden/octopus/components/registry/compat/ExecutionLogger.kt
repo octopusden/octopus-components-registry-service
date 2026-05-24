@@ -41,13 +41,32 @@ object ExecutionLogger {
         reportDir.resolve("exec-worker-${ProcessHandle.current().pid()}-${UUID.randomUUID()}.ndjson")
     }
     private val writer: BufferedWriter by lazy {
-        // Log the resolved absolute path + system-property value once on first
-        // write. id17 build #10 surfaced a case where the property looked unset
-        // even though build.gradle set it; print both raw and resolved so the
-        // operator can tell from grep alone which branch fired.
+        // Diagnostic print — fired once per worker JVM on first write. Builds
+        // #3620 and #3630 both showed empty per-worker ndjson in the
+        // aggregated artifact despite the worker counters reporting 15834
+        // requests; this trace captures every path representation we can get
+        // our hands on so the next run can be diffed against the
+        // compatibilityReporter's view (see build.gradle `compatibilityReporter`
+        // task — it prints the matching trace from its end).
         val propValue = System.getProperty("compat.report-dir") ?: "(unset)"
         val cwd = System.getProperty("user.dir") ?: "(unknown)"
-        System.out.println("[compat-exec] Compat exec-log path: ${workerFile.toAbsolutePath()} (compat.report-dir=$propValue, user.dir=$cwd)")
+        val workerFileObj = workerFile.toFile()
+        val workerAbs = workerFile.toAbsolutePath().toString()
+        val workerCanon = runCatching { workerFileObj.canonicalPath }.getOrElse { "(canon failed: ${it.message})" }
+        val parentExists = workerFile.parent?.let { Files.exists(it) } ?: false
+        val parentDir = workerFile.parent?.toString() ?: "(no parent)"
+        val parentDirCanon = workerFile.parent?.let { runCatching { it.toFile().canonicalPath }.getOrElse { e -> "(canon failed: ${e.message})" } } ?: "(no parent)"
+        val osCwdCanon = runCatching { java.io.File(".").canonicalPath }.getOrElse { "(canon failed: ${it.message})" }
+        System.out.println("[compat-exec] === ExecutionLogger init diagnostic ===")
+        System.out.println("[compat-exec]   compat.report-dir (raw)   = $propValue")
+        System.out.println("[compat-exec]   user.dir (sysprop)        = $cwd")
+        System.out.println("[compat-exec]   OS-level CWD (canonical)  = $osCwdCanon")
+        System.out.println("[compat-exec]   workerFile.toAbsolutePath = $workerAbs")
+        System.out.println("[compat-exec]   workerFile.canonicalPath  = $workerCanon")
+        System.out.println("[compat-exec]   parent dir                = $parentDir")
+        System.out.println("[compat-exec]   parent dir canonical      = $parentDirCanon")
+        System.out.println("[compat-exec]   parent dir exists         = $parentExists")
+        System.out.println("[compat-exec] === /diagnostic ===")
         System.out.flush()
         val w = Files.newBufferedWriter(
             workerFile,

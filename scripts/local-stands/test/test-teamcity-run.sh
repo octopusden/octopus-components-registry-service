@@ -82,16 +82,21 @@ run_case() {
   fi
 }
 
-count_in_file() {
+count_in_file_fixed() {
   local needle="$1" file="$2"
   grep -c -F -- "$needle" "$file"
+}
+
+count_in_file_regex() {
+  local pattern="$1" file="$2"
+  grep -c -E -- "$pattern" "$file"
 }
 
 case_each_flag_appears_at_least_twice() {
   local rc=0
   for flag in "${REQUIRED_FLAGS[@]}"; do
     local n
-    n=$(count_in_file "$flag" "$TEAMCITY_RUN_SH")
+    n=$(count_in_file_fixed "$flag" "$TEAMCITY_RUN_SH")
     if [ "$n" -lt 2 ]; then
       echo "    flag missing or single-stand-only (count=$n, expected >=2): $flag"
       rc=1
@@ -103,21 +108,27 @@ case_each_flag_appears_at_least_twice() {
 # Sanity guard: dev-profile values must NOT be hard-coded in teamcity-run.sh
 # itself. They live in components-registry-service-server/dev/application-
 # dev.yml; this guard catches a future drift where someone copy-pastes the
-# dev values into the start command. Trailing space matches the shell
-# line-continuation form `... \\` while avoiding a substring false-positive
-# against the prod literal `...=minorCards \\`.
+# dev values into the start command.
+#
+# Boundary heuristic: each dev value ends in `C`. The matching prod value
+# starts with `Cards`. To match `...=minorC` followed by space, backslash,
+# newline, end-of-line, or quote — but NOT followed by `a` (the start of
+# `Cards`) — anchor the regex on a NON-LETTER boundary character or
+# end-of-line. This catches all the realistic positions the dev value
+# could land (mid-CLI continuation, last arg with no trailing `\`, inside
+# an HEREDOC, etc.) without false-positives against the prod literal.
 case_dev_override_values_not_hardcoded() {
   local forbidden=(
-    "version-name.minor=minorC "
-    "version-name.service=serviceC "
-    "version-name.service-branch=serviceCBranch "
+    'version-name\.minor=minorC([^A-Za-z]|$)'
+    'version-name\.service=serviceC([^A-Za-z]|$)'
+    'version-name\.service-branch=serviceCBranch([^A-Za-z]|$)'
   )
   local rc=0
-  for needle in "${forbidden[@]}"; do
+  for pattern in "${forbidden[@]}"; do
     local n
-    n=$(count_in_file "$needle" "$TEAMCITY_RUN_SH")
+    n=$(count_in_file_regex "$pattern" "$TEAMCITY_RUN_SH")
     if [ "$n" -ne 0 ]; then
-      echo "    dev-profile value leaked into teamcity-run.sh (count=$n): $needle"
+      echo "    dev-profile value leaked into teamcity-run.sh (count=$n): $pattern"
       rc=1
     fi
   done

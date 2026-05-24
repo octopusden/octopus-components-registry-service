@@ -38,6 +38,30 @@ object DiffCollector {
         reportDir.resolve("diff-worker-${ProcessHandle.current().pid()}-${UUID.randomUUID()}.ndjson")
     }
     private val writer: BufferedWriter by lazy {
+        // Diagnostic mirror of ExecutionLogger — fires once per worker JVM
+        // on the first diff record. Lets the operator compare the path
+        // DiffCollector wrote to against the path compatibilityReporter
+        // read from in the same TC log.
+        val propValue = System.getProperty("compat.report-dir") ?: "(unset)"
+        val cwd = System.getProperty("user.dir") ?: "(unknown)"
+        val workerFileObj = workerFile.toFile()
+        val workerAbs = workerFile.toAbsolutePath().toString()
+        val workerCanon = runCatching { workerFileObj.canonicalPath }.getOrElse { "(canon failed: ${it.message})" }
+        val parentExists = workerFile.parent?.let { Files.exists(it) } ?: false
+        val parentDir = workerFile.parent?.toString() ?: "(no parent)"
+        val parentDirCanon = workerFile.parent?.let { runCatching { it.toFile().canonicalPath }.getOrElse { e -> "(canon failed: ${e.message})" } } ?: "(no parent)"
+        val osCwdCanon = runCatching { java.io.File(".").canonicalPath }.getOrElse { "(canon failed: ${it.message})" }
+        System.out.println("[compat-diff] === DiffCollector init diagnostic ===")
+        System.out.println("[compat-diff]   compat.report-dir (raw)   = $propValue")
+        System.out.println("[compat-diff]   user.dir (sysprop)        = $cwd")
+        System.out.println("[compat-diff]   OS-level CWD (canonical)  = $osCwdCanon")
+        System.out.println("[compat-diff]   workerFile.toAbsolutePath = $workerAbs")
+        System.out.println("[compat-diff]   workerFile.canonicalPath  = $workerCanon")
+        System.out.println("[compat-diff]   parent dir                = $parentDir")
+        System.out.println("[compat-diff]   parent dir canonical      = $parentDirCanon")
+        System.out.println("[compat-diff]   parent dir exists         = $parentExists")
+        System.out.println("[compat-diff] === /diagnostic ===")
+        System.out.flush()
         val w = Files.newBufferedWriter(
             workerFile,
             StandardCharsets.UTF_8,
@@ -51,6 +75,7 @@ object DiffCollector {
             synchronized(writeLock) {
                 runCatching { w.flush() }
                 runCatching { w.close() }
+                System.out.println("[compat-diff] worker pid=${ProcessHandle.current().pid()} totals: ${records.size} diff records persisted to $workerAbs")
             }
         })
         w

@@ -89,15 +89,19 @@ test {
         // Absolute path to the same dir compatibilityReporter aggregates from.
         // DiffCollector / ExecutionLogger pick this up so the per-worker
         // ndjson files land where the reporter looks, regardless of the test
-        // JVM's forked CWD. Use `file('build/reports/compat').absolutePath`
-        // (java.io.File.getAbsolutePath()) — this is the only form that
-        // produced a reliably-absolute value on the TC agent's gradle/JVM
-        // combination in id17 build #3620 (the earlier `"${projectDir}/..."`
-        // attempt still landed as the relative module basename).
-        // `resolveReportDir` in the test code asserts the absolute-ness so a
-        // regression is caught at test-JVM startup with a clear message
-        // rather than as a silent vacuously-clean reporter run.
-        'compat.report-dir': file('build/reports/compat').absolutePath,
+        // JVM's forked CWD. Use the SAME `layout.buildDirectory.dir(...)`
+        // expression as the `doFirst` cleanup and the compatibilityReporter
+        // task — keeping all three writers/readers anchored to the same
+        // Gradle layout primitive means a custom buildDir (or any future
+        // Gradle change to that primitive) moves them all together.
+        // `.get().asFile.absolutePath` collapses to the canonical absolute
+        // path on `java.io.File`, which works around the TC-agent gradle/JVM
+        // combination that rendered `"${projectDir}/..."` as the relative
+        // module basename in id17 build #3620.
+        // `resolveReportDir` in the test code asserts absolute-ness so a
+        // regression here is caught at test-JVM startup with a clear
+        // message rather than as a silent vacuously-clean reporter run.
+        'compat.report-dir': layout.buildDirectory.dir('reports/compat').get().asFile.absolutePath,
     ]
     // Surface compat config as system properties for the test code.
     ['compat.baseline.url', 'compat.candidate.url', 'compat.rms.url',
@@ -167,6 +171,63 @@ tasks.register('compatibilityReporter') {
     outputs.dir(reportDir)
     doLast {
         def dir = reportDir.get().asFile
+
+        // Diagnostic mirror of [DiffCollector] and [ExecutionLogger] init
+        // traces (in the test JVM). Print the SAME path representations from
+        // the gradle JVM's side so the operator can grep both traces from a
+        // single TC log and confirm whether the test-JVM writers and the
+        // reporter reader agree on the absolute path. Added after id17 #3620
+        // and #3630 both showed empty per-worker ndjson aggregation despite
+        // worker counters claiming 15834 requests / 17 diffs.
+        println "[compat-reporter] === compatibilityReporter doLast diagnostic ==="
+        println "[compat-reporter]   reportDir.absolutePath   = ${dir.absolutePath}"
+        def canonical = "(canon failed)"
+        try { canonical = dir.canonicalPath } catch (Exception ignored) { /* keep placeholder */ }
+        println "[compat-reporter]   reportDir.canonicalPath  = $canonical"
+        println "[compat-reporter]   reportDir.exists()       = ${dir.exists()}"
+        if (dir.exists()) {
+            def names = (dir.listFiles() ?: []).collect { it.name }.sort()
+            println "[compat-reporter]   reportDir.listFiles()    = $names"
+        }
+        // Walk one level up to spot a doubled-prefix path like
+        // `<projectDir>/components-registry-compat-test/build/reports/compat/`
+        // that the test JVM could be writing to while the reporter reads from
+        // the shallow form. Print the parent + grandparent dirs and a one-
+        // level recursive find for any orphan ndjson files outside the dir.
+        def parent = dir.parentFile
+        if (parent != null) {
+            println "[compat-reporter]   parent dir               = ${parent.absolutePath}"
+            def parentNames = (parent.listFiles() ?: []).collect { it.name }.sort()
+            println "[compat-reporter]   parent.listFiles()       = $parentNames"
+        }
+        // Hunt for orphan exec/diff worker ndjson files anywhere under
+        // projectDir — surfaces a doubled-prefix write path or a JVM-CWD
+        // mismatch in one grepable line per file. Caps the walk at depth 6
+        // to keep the trace from drowning the log on a large workspace.
+        def orphans = []
+        def projectRoot = project.projectDir
+        if (projectRoot.exists()) {
+            def stack = [[projectRoot, 0] as List]
+            while (!stack.isEmpty()) {
+                def (f, depth) = stack.remove(stack.size() - 1)
+                if (depth > 6) continue
+                if (f.isDirectory()) {
+                    f.listFiles()?.each { stack << ([it, depth + 1] as List) }
+                } else if ((f.name.startsWith('exec-worker-') || f.name.startsWith('diff-worker-')) && f.name.endsWith('.ndjson')) {
+                    if (f.parentFile?.absolutePath != dir.absolutePath) {
+                        orphans << f.absolutePath
+                    }
+                }
+            }
+        }
+        if (!orphans.isEmpty()) {
+            println "[compat-reporter]   ORPHAN per-worker ndjson FOUND outside reportDir:"
+            orphans.each { println "[compat-reporter]     $it" }
+        } else {
+            println "[compat-reporter]   no orphan per-worker ndjson under projectDir"
+        }
+        println "[compat-reporter] === /diagnostic ==="
+
         if (!dir.exists()) {
             return
         }
