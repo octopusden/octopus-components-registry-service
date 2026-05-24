@@ -4,6 +4,7 @@ import java.lang.reflect.Method
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
@@ -247,12 +248,17 @@ class MIG047PerRangeGroupIdImportTest {
 
     @Test
     @DisplayName(
-        "MIG-047-003 (anti-regression): emitMarkerOverrides does NOT double-create DISTRIBUTION_MAVEN MARKER " +
-            "when distribution.GAV already differs (existing RES-C path must not be duplicated)",
+        "MIG-047-003: when per-range distribution.GAV AND per-range artifactId both differ from base, " +
+            "emit BOTH a DISTRIBUTION_MAVEN MARKER and a GROUP_ARTIFACT_PATTERN MARKER (V1 contract)",
     )
-    fun `MIG-047-003 anti-regression no duplicate MARKER when distribution GAV already differs`() {
-        // If distribution.GAV() already differs, the existing mavenArtifactsDiffer path fires.
-        // The new groupIdPattern-check must NOT fire a second time for the same range.
+    fun `MIG-047-003 emit both markers when both diff conditions hold`() {
+        // V1-contract: per-range DSL overrides for `distribution { gav = … }` AND `artifactId`
+        // are orthogonal and must surface independently in the schema-v2 view. The previous
+        // assertion ("exactly one MARKER, not two") encoded a mutual-exclusion bug:
+        // `emitMarkerOverrides` used `if … else if …` so only DISTRIBUTION_MAVEN was emitted
+        // for the both-diff case. The read-path at /maven-artifacts then fell back to the
+        // inherited component-level artifactId instead of the per-range V1 value.
+        // After the fix, both markers must be present.
         val component = ComponentEntity(id = UUID.randomUUID(), componentKey = "gamma-fixture")
         val savedBase = ComponentConfigurationEntity(
             id = UUID.randomUUID(),
@@ -282,9 +288,67 @@ class MIG047PerRangeGroupIdImportTest {
 
         val result = callEmitMarkerOverrides(component, savedBase, baseConfig, overrideConfig)
 
-        // Must be exactly one DISTRIBUTION_MAVEN MARKER (from the existing GAV path),
-        // NOT two (one for GAV path + one for new groupIdPattern path).
-        assertEquals(1, result.size, "Must emit exactly one DISTRIBUTION_MAVEN MARKER, not two")
-        assertEquals(MarkerAttributes.DISTRIBUTION_MAVEN, result[0].overriddenAttribute)
+        assertEquals(2, result.size, "Must emit BOTH a DISTRIBUTION_MAVEN and a GROUP_ARTIFACT_PATTERN marker")
+        val attributes = result.map { it.overriddenAttribute }.toSet()
+        assertEquals(
+            setOf(MarkerAttributes.DISTRIBUTION_MAVEN, MarkerAttributes.GROUP_ARTIFACT_PATTERN),
+            attributes,
+            "Both marker kinds must be present (different read-paths consume them)",
+        )
+    }
+
+    @Test
+    @DisplayName(
+        "MIG-047-004: per-range artifactId='single-dist' AND distribution.GAV " +
+            "emits a GROUP_ARTIFACT_PATTERN marker carrying the per-range artifactId for /maven-artifacts",
+    )
+    fun `MIG-047-004 single-token per-range artifactId emits GROUP_ARTIFACT_PATTERN`() {
+        // DSL shape:
+        //   "fixture-X" {
+        //       groupId = "com.example.fixture"
+        //       artifactId = "sci_build|sci_utils|fixture_builder"   // top-level CSV fallback
+        //       "[6.22, )" {
+        //           artifactId = "single-dist"                       // per-range override
+        //           distribution { gav = "com.example.fixture:single-dist:zip" }
+        //       }
+        //   }
+        //
+        // V1-contract: /maven-artifacts for [6.22, ) returns artifactPattern="single-dist"
+        // (per-range artifactId), NOT the inherited top-level CSV.
+        val component = ComponentEntity(id = UUID.randomUUID(), componentKey = "fixture-X-single-dist")
+        val savedBase = ComponentConfigurationEntity(
+            id = UUID.randomUUID(),
+            component = component,
+            versionRange = "[5.1, 6.22)",
+            overriddenAttribute = null,
+            rowType = "BASE",
+        )
+
+        val baseDist = org.octopusden.octopus.escrow.model.Distribution(
+            true, false,
+            null,  // base has no GAV
+            null, null, null, null,
+        )
+        val overrideDist = org.octopusden.octopus.escrow.model.Distribution(
+            true, false,
+            "com.example.fixture:single-dist:zip",
+            null, null, null, null,
+        )
+
+        val baseConfig = makeConfig("com.example.fixture", "sci_build|sci_utils|fixture_builder", "[5.1, 6.22)")
+        setGroovyField(baseConfig, "distribution", baseDist)
+
+        val overrideConfig = makeConfig("com.example.fixture", "single-dist", "[6.22, )")
+        setGroovyField(overrideConfig, "distribution", overrideDist)
+
+        val result = callEmitMarkerOverrides(component, savedBase, baseConfig, overrideConfig)
+
+        assertEquals(2, result.size, "Both DISTRIBUTION_MAVEN and GROUP_ARTIFACT_PATTERN markers must be emitted")
+        val gap = result.firstOrNull { it.overriddenAttribute == MarkerAttributes.GROUP_ARTIFACT_PATTERN }
+        assertNotNull(gap, "GROUP_ARTIFACT_PATTERN marker missing (V1-contract gap)")
+        assertEquals(1, gap!!.mavenArtifacts.size, "Single-token artifactId override must produce one marker row")
+        val artifact = gap.mavenArtifacts.first()
+        assertEquals("com.example.fixture", artifact.groupPattern)
+        assertEquals("single-dist", artifact.artifactPattern)
     }
 }
