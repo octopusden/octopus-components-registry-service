@@ -33,15 +33,16 @@ import java.nio.file.Paths
  * The companion read-only test `FtDbProfileTest` already proves auto-migrate populates the DB
  * and read endpoints work under ft-db; this test exercises the write path.
  *
- * TODO(MIG-039): Re-enable once ImportServiceImpl.migrate() actually seeds the DB at startup
- *   under the ft-db profile. The Phase 5 ImportServiceImpl stub returns an empty result, so
- *   GET /rest/api/4/components returns an empty page and `firstComponent()` fails.
- *   Either wait for MIG-039 to land the §6 import pipeline, or rewrite @BeforeAll to seed
- *   at least one component via the v4 CRUD API before the write tests run.
+ * TODO(MIG-039 follow-up): The original disable reason ("Phase 5 ImportServiceImpl stub returns
+ *   an empty result") is now stale — `ImportServiceImpl.migrate()` runs `migrateDefaults()` +
+ *   `migrateAllComponents()` on top of the import pipeline that landed in `51ea4937`/`0c563755`,
+ *   and `FtDbProfileTest` confirms components are reachable via v1/v3 APIs under ft-db. This
+ *   test may pass with `@Disabled` lifted; if it still fails, capture the new failure reason
+ *   before re-disabling. Tracked as the experimental PR-A2 in .github/audit/TESTS-REVIEW-2026-05-23.md.
  */
 @Disabled(
-    "Phase 6: depends on auto-migrate seeding — re-enable when MIG-039 lands the §6 import " +
-        "pipeline, or rewrite to seed via v4 API in @BeforeAll.",
+    "Re-enable attempt deferred to PR-A2 (experimental). Original Phase 5 stub rationale is " +
+        "stale — see KDoc above for the current verification path.",
 )
 @AutoConfigureMockMvc
 @SpringBootTest(
