@@ -435,6 +435,8 @@ object id17CompatLocalStandManual : BuildType({
         **/build/test-results/**/*.xml => test-results
         /tmp/crs-id17-%teamcity.build.id%/baseline.log => logs/baseline.log
         /tmp/crs-id17-%teamcity.build.id%/candidate.log => logs/candidate.log
+        /tmp/compat-exec-logger-marker-*.txt => diag/
+        /tmp/compat-test-report-dir.txt => diag/
     """.trimIndent()
 
     vcs {
