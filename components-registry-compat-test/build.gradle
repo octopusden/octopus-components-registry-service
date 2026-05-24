@@ -71,6 +71,17 @@ test {
         } else {
             reportDir.mkdirs()
         }
+        // ALSO wipe the /tmp backup dir used by the workaround below. Without
+        // this, files from a prior aborted run accumulate on persistent TC
+        // agents — and if the current run's primary reportDir gets cleared
+        // mid-run (the known Gradle stale-output quirk we work around), the
+        // reporter's fallback would aggregate stale records from a different
+        // commit / DSL snapshot, producing a falsely-clean or falsely-red
+        // result. PR #297 review (P1): scope to the current run.
+        def tmpBackup = new File("${System.getProperty('java.io.tmpdir')}/crs-compat-backup")
+        if (tmpBackup.exists()) {
+            tmpBackup.listFiles({ f -> (f.name.startsWith('diff-worker-') || f.name.startsWith('exec-worker-')) && f.name.endsWith('.ndjson') } as FileFilter)?.each { it.delete() }
+        }
     }
     useJUnitPlatform {
         // Include-by-tag polarity: `:test` runs ONLY suites that extend

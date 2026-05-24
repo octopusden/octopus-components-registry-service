@@ -25,11 +25,14 @@ import java.nio.file.Path
  * failed the proof-of-execution guard despite 15834 testcases passing.
  *
  * The fix has two layers:
- *   1. `build.gradle` uses `layout.buildDirectory.dir('reports/compat').get()
- *      .asFile.absolutePath`, anchoring the writer property to the same
- *      Gradle layout primitive the `doFirst` cleanup and the
- *      `compatibilityReporter` task use, so a custom `buildDir` (or any
- *      future Gradle change to that primitive) moves all three together.
+ *   1. `build.gradle` resolves the writer property at execution time inside a
+ *      `doFirst` block and passes it via `jvmArgs "-Dcompat.report-dir=…"`,
+ *      using `layout.buildDirectory.dir('reports/compat').get().asFile
+ *      .canonicalPath` (defence-in-depth vs `.absolutePath` — canonical
+ *      resolves through the filesystem rather than via `user.dir`). The same
+ *      Gradle layout primitive backs the `doFirst` cleanup and the
+ *      `compatibilityReporter` task, so all three move together if `buildDir`
+ *      is ever customised.
  *   2. `resolveReportDir` fails fast when its input is non-null and relative,
  *      so any future regression of (1) surfaces as a clear test-JVM startup
  *      error instead of a silent doubled path that only the operator's grep
