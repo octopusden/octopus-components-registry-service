@@ -86,24 +86,31 @@ test {
         'junit.jupiter.execution.parallel.mode.default': 'concurrent',
         'junit.jupiter.execution.parallel.config.strategy': 'fixed',
         'junit.jupiter.execution.parallel.config.fixed.parallelism': (project.findProperty('compat.parallelism') ?: '8') as String,
-        // Absolute path to the same dir compatibilityReporter aggregates from.
-        // DiffCollector / ExecutionLogger pick this up so the per-worker
-        // ndjson files land where the reporter looks, regardless of the test
-        // JVM's forked CWD. Use the SAME `layout.buildDirectory.dir(...)`
-        // expression as the `doFirst` cleanup and the compatibilityReporter
-        // task — keeping all three writers/readers anchored to the same
-        // Gradle layout primitive means a custom buildDir (or any future
-        // Gradle change to that primitive) moves them all together.
-        // `.get().asFile.absolutePath` collapses to a `java.io.File`
-        // absolute path (NOT canonical — symlinks/`..` are not resolved),
-        // which works around the TC-agent gradle/JVM combination that
-        // rendered `"${projectDir}/..."` as the relative module basename
-        // in id17 build #3620.
-        // `resolveReportDir` in the test code asserts absolute-ness so a
-        // regression here is caught at test-JVM startup with a clear
-        // message rather than as a silent vacuously-clean reporter run.
-        'compat.report-dir': layout.buildDirectory.dir('reports/compat').get().asFile.absolutePath,
     ]
+    // Absolute path to the same dir compatibilityReporter aggregates from —
+    // wired SEPARATELY from the systemProperties map literal above because
+    // that map evaluates eagerly at configuration phase. On the TC agent in
+    // id17 build #3631, eager evaluation of
+    // `layout.buildDirectory.dir('reports/compat').get().asFile.absolutePath`
+    // returned the RELATIVE module basename `components-registry-compat-test
+    // /build/reports/compat` (confirmed by the diagnostic prints in
+    // ExecutionLogger / DiffCollector and the matching absolute-path output
+    // from the compatibilityReporter task that ran at execution phase). The
+    // value then resolved against the test JVM's relative `user.dir`
+    // (also `components-registry-compat-test`) and the per-worker ndjson
+    // landed in a doubled-prefix path the reporter never read.
+    //
+    // The provider form below DEFERS evaluation to task execution time, when
+    // Gradle has finalised the layout properties and `projectDir` is
+    // absolute. `.canonicalPath` (vs `.absolutePath`) additionally guarantees
+    // a true filesystem-resolved absolute path — defence in depth for the
+    // same TC quirk. `resolveReportDir` in the test code asserts
+    // absolute-ness so any future regression surfaces at test-JVM startup
+    // with a clear `IllegalStateException` instead of a silent
+    // vacuously-clean reporter run.
+    systemProperty 'compat.report-dir', providers.provider {
+        layout.buildDirectory.dir('reports/compat').get().asFile.canonicalPath
+    }
     // Surface compat config as system properties for the test code.
     ['compat.baseline.url', 'compat.candidate.url', 'compat.rms.url',
      'compat.full', 'compat.malformed', 'compat.versions-fallback',
