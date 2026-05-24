@@ -25,9 +25,11 @@ import java.nio.file.Path
  * failed the proof-of-execution guard despite 15834 testcases passing.
  *
  * The fix has two layers:
- *   1. `build.gradle` uses `file('build/reports/compat').absolutePath`, which
- *      forces a reliably-absolute path via java.io.File regardless of how
- *      Gradle renders `projectDir.toString()`.
+ *   1. `build.gradle` uses `layout.buildDirectory.dir('reports/compat').get()
+ *      .asFile.absolutePath`, anchoring the writer property to the same
+ *      Gradle layout primitive the `doFirst` cleanup and the
+ *      `compatibilityReporter` task use, so a custom `buildDir` (or any
+ *      future Gradle change to that primitive) moves all three together.
  *   2. `resolveReportDir` fails fast when its input is non-null and relative,
  *      so any future regression of (1) surfaces as a clear test-JVM startup
  *      error instead of a silent doubled path that only the operator's grep

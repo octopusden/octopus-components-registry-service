@@ -94,10 +94,11 @@ test {
         // task — keeping all three writers/readers anchored to the same
         // Gradle layout primitive means a custom buildDir (or any future
         // Gradle change to that primitive) moves them all together.
-        // `.get().asFile.absolutePath` collapses to the canonical absolute
-        // path on `java.io.File`, which works around the TC-agent gradle/JVM
-        // combination that rendered `"${projectDir}/..."` as the relative
-        // module basename in id17 build #3620.
+        // `.get().asFile.absolutePath` collapses to a `java.io.File`
+        // absolute path (NOT canonical — symlinks/`..` are not resolved),
+        // which works around the TC-agent gradle/JVM combination that
+        // rendered `"${projectDir}/..."` as the relative module basename
+        // in id17 build #3620.
         // `resolveReportDir` in the test code asserts absolute-ness so a
         // regression here is caught at test-JVM startup with a clear
         // message rather than as a silent vacuously-clean reporter run.
@@ -192,8 +193,9 @@ tasks.register('compatibilityReporter') {
         // Walk one level up to spot a doubled-prefix path like
         // `<projectDir>/components-registry-compat-test/build/reports/compat/`
         // that the test JVM could be writing to while the reporter reads from
-        // the shallow form. Print the parent + grandparent dirs and a one-
-        // level recursive find for any orphan ndjson files outside the dir.
+        // the shallow form. Print the parent dir + a bounded-depth recursive
+        // find under `projectDir` for any orphan ndjson files outside the
+        // reader-side dir.
         def parent = dir.parentFile
         if (parent != null) {
             println "[compat-reporter]   parent dir               = ${parent.absolutePath}"
