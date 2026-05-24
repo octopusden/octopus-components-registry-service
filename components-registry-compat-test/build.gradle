@@ -119,12 +119,19 @@ test {
     // layout.buildDirectory is finalised and `.canonicalPath` returns an
     // absolute path (defence in depth vs `.absolutePath` — canonical
     // resolves through the filesystem rather than going via user.dir).
-    // `systemProperty(name, String)` then registers a normal String value
-    // that the test JVM receives unmolested. The `resolveReportDir` check
-    // in the test code still asserts absolute-ness as a backstop for any
-    // future regression here.
+    //
+    // Wired via `jvmArgs "-D..."` rather than `systemProperty(...)`
+    // because id17 #3634 showed `systemProperty` set inside doFirst not
+    // taking effect — the test JVM kept seeing the (config-phase) value.
+    // `jvmArgs` mutates the JVM command-line that's assembled at fork
+    // time, so a value appended in doFirst lands on the actual JVM args.
+    //
+    // The `resolveReportDir` check in the test code still asserts
+    // absolute-ness as a backstop for any future regression.
     doFirst {
-        systemProperty 'compat.report-dir', layout.buildDirectory.dir('reports/compat').get().asFile.canonicalPath
+        def reportDirAbs = layout.buildDirectory.dir('reports/compat').get().asFile.canonicalPath
+        println "[compat-test] doFirst: setting -Dcompat.report-dir=${reportDirAbs}"
+        jvmArgs "-Dcompat.report-dir=${reportDirAbs}"
     }
     // Surface compat config as system properties for the test code.
     ['compat.baseline.url', 'compat.candidate.url', 'compat.rms.url',

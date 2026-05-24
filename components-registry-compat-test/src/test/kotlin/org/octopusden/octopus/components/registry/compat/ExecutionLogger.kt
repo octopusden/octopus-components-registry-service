@@ -57,14 +57,20 @@ object ExecutionLogger {
         val parentDir = workerFile.parent?.toString() ?: "(no parent)"
         val parentDirCanon = workerFile.parent?.let { runCatching { it.toFile().canonicalPath }.getOrElse { e -> "(canon failed: ${e.message})" } } ?: "(no parent)"
         val osCwdCanon = runCatching { java.io.File(".").canonicalPath }.getOrElse { "(canon failed: ${it.message})" }
+        val propIsAbsolute = runCatching { java.nio.file.Path.of(propValue).isAbsolute }.getOrElse { false }
+        val osCwdAbsViaFileApi = runCatching { java.io.File("").absoluteFile.path }.getOrElse { "(abs failed: ${it.message})" }
+        // Quote-wrap the strings so any trailing whitespace, hidden control
+        // characters, or TC-log-stripped prefixes become visible.
         System.out.println("[compat-exec] === ExecutionLogger init diagnostic ===")
-        System.out.println("[compat-exec]   compat.report-dir (raw)   = $propValue")
-        System.out.println("[compat-exec]   user.dir (sysprop)        = $cwd")
-        System.out.println("[compat-exec]   OS-level CWD (canonical)  = $osCwdCanon")
-        System.out.println("[compat-exec]   workerFile.toAbsolutePath = $workerAbs")
-        System.out.println("[compat-exec]   workerFile.canonicalPath  = $workerCanon")
-        System.out.println("[compat-exec]   parent dir                = $parentDir")
-        System.out.println("[compat-exec]   parent dir canonical      = $parentDirCanon")
+        System.out.println("[compat-exec]   compat.report-dir (raw)   = >>>${propValue}<<<")
+        System.out.println("[compat-exec]   compat.report-dir absolute? = $propIsAbsolute  (Path.of(raw).isAbsolute)")
+        System.out.println("[compat-exec]   user.dir (sysprop)        = >>>${cwd}<<<")
+        System.out.println("[compat-exec]   OS-level CWD (canonical)  = >>>${osCwdCanon}<<<")
+        System.out.println("[compat-exec]   OS-level CWD (File(\"\").absoluteFile.path) = >>>${osCwdAbsViaFileApi}<<<")
+        System.out.println("[compat-exec]   workerFile.toAbsolutePath = >>>${workerAbs}<<<")
+        System.out.println("[compat-exec]   workerFile.canonicalPath  = >>>${workerCanon}<<<")
+        System.out.println("[compat-exec]   parent dir                = >>>${parentDir}<<<")
+        System.out.println("[compat-exec]   parent dir canonical      = >>>${parentDirCanon}<<<")
         System.out.println("[compat-exec]   parent dir exists         = $parentExists")
         System.out.println("[compat-exec] === /diagnostic ===")
         System.out.flush()
