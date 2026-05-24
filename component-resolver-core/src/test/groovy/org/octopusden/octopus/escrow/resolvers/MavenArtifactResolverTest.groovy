@@ -10,7 +10,6 @@ import groovy.transform.TypeChecked
 import groovy.transform.TypeCheckingMode
 import org.apache.maven.artifact.DefaultArtifact
 import org.apache.maven.artifact.versioning.VersionRange
-import org.junit.Ignore
 import org.junit.Test
 
 import java.util.regex.Pattern
@@ -36,24 +35,6 @@ class MavenArtifactResolverTest {
 
     IModuleByArtifactResolver resolver
     //= new ModuleByArtifactResolver(new EscrowConfigurationLoader(new ConfigLoader(getClass().getClassLoader().getResource("testModuleConfig.groovy"))));
-
-    @Test
-    @Ignore
-    void testProdConfig() {
-        URL url = new File("C:\\projects\\escrow\\components-registry\\src\\main\\resources\\Aggregator.groovy").toURI().toURL()
-
-        def loader = new EscrowConfigurationLoader(
-                new ConfigLoader(ComponentRegistryInfo.createFromURL(url), VERSION_NAMES, PRODUCT_TYPES),
-                SUPPORTED_GROUP_IDS,
-                SUPPORTED_SYSTEMS,
-                VERSION_NAMES,
-                COPYRIGHT_PATH
-        )
-        JiraParametersResolver jiraParametersResolver = new JiraParametersResolver(loader, new HashMap<String, String>());
-        def vcsRoots = jiraParametersResolver.getVersionControlSystemRootsByJiraProject(JiraProjectVersion.create("MCOMPONENT", "1.0"))
-        assert vcsRoots.getVersionControlSystemRoots().size() == 1
-        assert "default" == vcsRoots.getVersionControlSystemRoots()[1].branch
-    }
 
     @Test
     public void testExistingArtifact() {

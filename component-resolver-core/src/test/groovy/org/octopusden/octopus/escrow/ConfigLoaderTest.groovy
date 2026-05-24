@@ -8,7 +8,6 @@ import org.octopusden.octopus.escrow.exceptions.EscrowConfigurationException
 import groovy.transform.TypeChecked
 import groovy.transform.TypeCheckingMode
 import org.junit.Assert
-import org.junit.Ignore
 import org.junit.Test
 import org.octopusden.releng.versions.VersionNames
 
@@ -72,18 +71,6 @@ class ConfigLoaderTest {
         checkAggregatorConfig(loader)
     }
 
-
-    @Test
-    @Ignore
-    void stressTest() {
-        def loader = new ConfigLoader(createFromFileSystem("vcs-resolver/src/test/resources", "testModuleConfig.groovy"),
-                VERSION_NAMES, PRODUCT_TYPES)
-        for (int i = 0; i < 10000; i++) {
-            println i;
-            loader.loadModuleConfig()
-        }
-        assert true
-    }
 
     @Test
     void testInvalidAttributesInSubComponent() {
