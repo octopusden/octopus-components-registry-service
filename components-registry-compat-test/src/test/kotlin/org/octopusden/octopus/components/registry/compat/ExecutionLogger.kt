@@ -110,6 +110,24 @@ object ExecutionLogger {
                 runCatching { w.flush() }
                 runCatching { w.close() }
                 System.out.println("[compat-exec] worker pid=${ProcessHandle.current().pid()} totals: $counter requests ($diffCounter with diffs)")
+                // INFRA-WORKAROUND: copy the per-worker ndjson to a stable
+                // /tmp location AFTER close, as a redundant copy that no
+                // Gradle output-tracking touches. id17 #3642 confirmed that
+                // files written to `build/reports/compat/` are
+                // non-deterministically removed between the `test` task's
+                // JVM exit and the `compatibilityReporter` task's doLast —
+                // most likely Gradle's stale-output cleanup acting on
+                // reportDir despite the `outputs.dir` declaration being
+                // removed (cleanup metadata persists from prior builds).
+                // The reporter falls back to this /tmp path when its
+                // primary reportDir is empty.
+                runCatching {
+                    val backupDir = Path.of(System.getProperty("java.io.tmpdir"), "crs-compat-backup")
+                    Files.createDirectories(backupDir)
+                    val dst = backupDir.resolve(workerFile.fileName)
+                    Files.copy(workerFile, dst, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+                    System.out.println("[compat-exec] copied $workerFile -> $dst")
+                }
             }
         })
         w

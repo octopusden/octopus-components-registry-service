@@ -76,6 +76,17 @@ object DiffCollector {
                 runCatching { w.flush() }
                 runCatching { w.close() }
                 System.out.println("[compat-diff] worker pid=${ProcessHandle.current().pid()} totals: ${records.size} diff records persisted to $workerAbs")
+                // INFRA-WORKAROUND: see ExecutionLogger.kt for full context. id17
+                // #3642 confirmed Gradle non-deterministically removes per-worker
+                // ndjson written under reportDir between test-JVM-exit and reporter
+                // doLast. Copy to a stable /tmp location no Gradle task tracks.
+                runCatching {
+                    val backupDir = Path.of(System.getProperty("java.io.tmpdir"), "crs-compat-backup")
+                    Files.createDirectories(backupDir)
+                    val dst = backupDir.resolve(workerFile.fileName)
+                    Files.copy(workerFile, dst, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+                    System.out.println("[compat-diff] copied $workerFile -> $dst")
+                }
             }
         })
         w
