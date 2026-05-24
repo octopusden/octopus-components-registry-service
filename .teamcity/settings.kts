@@ -873,7 +873,7 @@ object id31MigrateOnQaDevAuto : BuildType({
     }
 
     requirements {
-        doesNotContain("env.OS_TYPE", "WIN", "RQ_31_LINUX")
+        doesNotContain("env.OS_TYPE", "WIN", "RQ_2875")
     }
 })
 

@@ -75,14 +75,18 @@ BASE="${CRS_BASE_URL%/}"
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
 
-# curl wrapper: -sS keeps it quiet but reports errors; -o saves body;
-# -w writes status code to stdout; -m bounds per-call time.
+# curl wrappers: print the HTTP status code on stdout (always — even on
+# transport failure, where they print `000`). This shields call sites from
+# `set -e` aborting on a transient DNS/TLS/connect error before the caller
+# has a chance to log a clear "could not reach the pod" message. The
+# response body, if any, lands in $out.
 http_get() {
   local url="$1" out="$2"
   curl -sS -m 30 -o "$out" -w '%{http_code}' \
     -H "Authorization: Bearer ${CRS_ADMIN_TOKEN}" \
     -H 'Accept: application/json' \
-    "$url"
+    "$url" \
+    || echo 000
 }
 
 http_post() {
@@ -90,17 +94,24 @@ http_post() {
   curl -sS -m 30 -o "$out" -w '%{http_code}' -X POST \
     -H "Authorization: Bearer ${CRS_ADMIN_TOKEN}" \
     -H 'Accept: application/json' \
-    "$url"
+    "$url" \
+    || echo 000
 }
 
 # Anonymous probe — /actuator/health is permitAll (see WebSecurityConfig).
 http_get_anon() {
   local url="$1" out="$2"
-  curl -sS -m 10 -o "$out" -w '%{http_code}' "$url"
+  curl -sS -m 10 -o "$out" -w '%{http_code}' "$url" || echo 000
 }
 
-# Extract a JSON number/string field with python3 — robust vs grep/sed.
-# Usage: jget <file> <jq-style dotted path, only top-level keys supported>
+# Extract a top-level JSON field with python3 — robust vs grep/sed for
+# quoted/unquoted/edge-cased values.
+#
+# Usage: jget <file> <top-level-key>
+# Note: only top-level keys are supported (no dotted paths). All fields the
+# script reads (`state`, `phase`, `migrated`, `failed`, `skipped`, `total`,
+# `git`, `db`, `version`, `activeKind`, `code`) live at the top level of
+# their respective DTOs, so this is sufficient.
 jget() {
   local file="$1" key="$2"
   python3 - "$file" "$key" <<'PY'
@@ -118,7 +129,7 @@ log "Waiting up to ${READINESS_TIMEOUT_SEC}s for ${BASE}/actuator/health/readine
 deadline=$(( $(date +%s) + READINESS_TIMEOUT_SEC ))
 while :; do
   body="$WORK_DIR/readiness.json"
-  code="$(http_get_anon "${BASE}/actuator/health/readiness" "$body" || echo 000)"
+  code="$(http_get_anon "${BASE}/actuator/health/readiness" "$body")"
   if [ "$code" = "200" ]; then
     log "Readiness OK"
     break
@@ -134,7 +145,7 @@ done
 # 2. Log deployed version (no auth needed).
 ###############################################################################
 info="$WORK_DIR/info.json"
-info_code="$(http_get_anon "${BASE}/rest/api/4/info" "$info" || echo 000)"
+info_code="$(http_get_anon "${BASE}/rest/api/4/info" "$info")"
 if [ "$info_code" = "200" ]; then
   version="$(jget "$info" version)"
   log "Deployed version: ${version:-<unknown>}"
@@ -153,7 +164,17 @@ case "$status_code" in
     db_count="$(jget "$status" db)"
     total="$(jget "$status" total)"
     log "Migration status: git=${git_count} db=${db_count} total=${total}"
-    if [ "${git_count:-0}" = "0" ]; then
+    # Treat a missing / non-numeric `git` as a contract break and fail
+    # loudly. Defaulting it to 0 would silently skip migration if the
+    # response shape ever changes (e.g. field renamed, returned as null).
+    case "$git_count" in
+      ''|*[!0-9]*)
+        log "ERROR: /admin/migration-status returned a non-numeric 'git' field: '$git_count'"
+        log "Response body suppressed (may contain unexpected payload). Investigate the API contract."
+        exit 1
+        ;;
+    esac
+    if [ "$git_count" = "0" ]; then
       log "Nothing left to migrate — skip"
       exit 0
     fi
