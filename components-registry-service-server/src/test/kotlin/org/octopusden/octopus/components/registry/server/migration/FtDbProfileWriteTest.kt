@@ -35,14 +35,13 @@ import java.nio.file.Paths
  *
  * TODO(MIG-039): Re-enable once ImportServiceImpl.migrate() actually seeds the DB at startup
  *   under the ft-db profile. The Phase 5 ImportServiceImpl stub returns an empty result, so
- *   GET /rest/api/4/components returns an empty page and `firstComponent()` fails. This is the
- *   same blocker as FtDbProfileTest (which is already @Disabled for the same reason).
+ *   GET /rest/api/4/components returns an empty page and `firstComponent()` fails.
  *   Either wait for MIG-039 to land the §6 import pipeline, or rewrite @BeforeAll to seed
  *   at least one component via the v4 CRUD API before the write tests run.
  */
 @Disabled(
     "Phase 6: depends on auto-migrate seeding — re-enable when MIG-039 lands the §6 import " +
-        "pipeline, or rewrite to seed via v4 API in @BeforeAll. Same blocker as FtDbProfileTest.",
+        "pipeline, or rewrite to seed via v4 API in @BeforeAll.",
 )
 @AutoConfigureMockMvc
 @SpringBootTest(
