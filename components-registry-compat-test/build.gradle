@@ -198,7 +198,17 @@ tasks.register('compatibilityReporter') {
     // diffs that have nothing to do with the current code.
     onlyIf("at least one of compat.baseline.url / compat.candidate.url is set (partial config triggers explainInvalid)") { compatActivated() }
     def reportDir = layout.buildDirectory.dir('reports/compat')
-    outputs.dir(reportDir)
+    // Intentionally NOT declared as `outputs.dir(reportDir)` — id17 #3642 vs #3640
+    // showed non-deterministic loss of per-worker ndjson between the `test` task
+    // (writer) and `compatibilityReporter` (reader). Root cause: Gradle's
+    // CleanupStaleOutputsExecuter scans declared output dirs at the START of the
+    // owning task and deletes files not registered in `.gradle/buildOutputCleanup/
+    // outputFiles.bin` as known outputs of any task. The per-worker ndjson is
+    // produced by the `test` JVM but NOT declared as that task's output, so
+    // Gradle treats it as stale and deletes it before `compatibilityReporter`
+    // sees it. Removing the `outputs.dir` here deactivates stale-output cleanup
+    // for reportDir — the reporter doesn't need caching/up-to-date since it's
+    // already gated on `compatActivated()` and always re-aggregates.
     doLast {
         def dir = reportDir.get().asFile
 
