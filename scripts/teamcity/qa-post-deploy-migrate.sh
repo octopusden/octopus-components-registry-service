@@ -19,8 +19,39 @@
 
 set -euo pipefail
 
+log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
+
 : "${CRS_BASE_URL:?CRS_BASE_URL is required (e.g. https://crs.qa.example)}"
 : "${CRS_ADMIN_TOKEN:?CRS_ADMIN_TOKEN is required (Bearer JWT with IMPORT_DATA role)}"
+
+# TC substitutes `%PARAM_NAME%` references at runtime; if the project-level
+# parameter is not provisioned on the TC server, the literal `%PARAM_NAME%`
+# arrives here as a non-empty string and the `:?` check above is silent.
+# Detect that and bail out with a clear "TC parameter missing" message
+# instead of spending 300s polling a bogus URL.
+case "$CRS_BASE_URL" in
+  %*%)
+    log "ERROR: CRS_BASE_URL still contains an unresolved TC placeholder ($CRS_BASE_URL)."
+    log "Provision the project-level parameter (e.g. CRS_QA_DEV_BASE_URL) on the TC server."
+    exit 1
+    ;;
+esac
+case "$CRS_ADMIN_TOKEN" in
+  %*%)
+    log "ERROR: CRS_ADMIN_TOKEN still contains an unresolved TC placeholder."
+    log "Provision the project-level password parameter (e.g. CRS_QA_ADMIN_TOKEN) on the TC server."
+    exit 1
+    ;;
+esac
+
+# JSON parsing uses python3 (see jget below). Most modern Linux TC agents
+# ship python3 by default, but slim Alpine-based agents may not. Fail fast
+# with a clear message instead of crashing mid-poll with `python3: not found`.
+if ! command -v python3 >/dev/null 2>&1; then
+  log "ERROR: python3 is required by this script (used to parse JSON responses)."
+  log "Install it on the TC agent or pin the build to an agent label that has it."
+  exit 1
+fi
 
 READINESS_TIMEOUT_SEC="${READINESS_TIMEOUT_SEC:-300}"
 MIGRATE_TIMEOUT_SEC="${MIGRATE_TIMEOUT_SEC:-1800}"
@@ -29,8 +60,6 @@ POLL_INTERVAL_SEC="${POLL_INTERVAL_SEC:-10}"
 BASE="${CRS_BASE_URL%/}"
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
-
-log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
 
 # curl wrapper: -sS keeps it quiet but reports errors; -o saves body;
 # -w writes status code to stdout; -m bounds per-call time.
