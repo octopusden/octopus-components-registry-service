@@ -57,6 +57,11 @@ test {
     // Each run starts with a fresh report dir so per-worker ndjson files don't accumulate
     // across re-runs (the file names contain a UUID — old files would otherwise be merged
     // into summary.md again, double-counting diffs).
+    //
+    // ALSO: this is the place where we set `compat.report-dir` to the same dir
+    // — see the long comment above the second `doFirst` block below for why
+    // it has to happen at task-execution time rather than via the
+    // `systemProperties` map literal.
     doFirst {
         def reportDir = layout.buildDirectory.dir('reports/compat').get().asFile
         if (reportDir.exists()) {
@@ -88,28 +93,38 @@ test {
         'junit.jupiter.execution.parallel.config.fixed.parallelism': (project.findProperty('compat.parallelism') ?: '8') as String,
     ]
     // Absolute path to the same dir compatibilityReporter aggregates from —
-    // wired SEPARATELY from the systemProperties map literal above because
-    // that map evaluates eagerly at configuration phase. On the TC agent in
-    // id17 build #3631, eager evaluation of
-    // `layout.buildDirectory.dir('reports/compat').get().asFile.absolutePath`
-    // returned the RELATIVE module basename `components-registry-compat-test
-    // /build/reports/compat` (confirmed by the diagnostic prints in
-    // ExecutionLogger / DiffCollector and the matching absolute-path output
-    // from the compatibilityReporter task that ran at execution phase). The
-    // value then resolved against the test JVM's relative `user.dir`
-    // (also `components-registry-compat-test`) and the per-worker ndjson
-    // landed in a doubled-prefix path the reporter never read.
+    // wired inside a doFirst block (execution phase) because both earlier
+    // attempts failed on the TC agent's gradle/JVM combination:
     //
-    // The provider form below DEFERS evaluation to task execution time, when
-    // Gradle has finalised the layout properties and `projectDir` is
-    // absolute. `.canonicalPath` (vs `.absolutePath`) additionally guarantees
-    // a true filesystem-resolved absolute path — defence in depth for the
-    // same TC quirk. `resolveReportDir` in the test code asserts
-    // absolute-ness so any future regression surfaces at test-JVM startup
-    // with a clear `IllegalStateException` instead of a silent
-    // vacuously-clean reporter run.
-    systemProperty 'compat.report-dir', providers.provider {
-        layout.buildDirectory.dir('reports/compat').get().asFile.canonicalPath
+    //   - Putting `layout.buildDirectory.dir(...).get().asFile.absolutePath`
+    //     inside the `systemProperties = [...]` map literal evaluated eagerly
+    //     at configuration phase. id17 #3631 showed the result as the
+    //     RELATIVE module basename `components-registry-compat-test/build/
+    //     reports/compat` (while the compatibilityReporter task — same
+    //     expression, but running in doLast at execution phase — saw the
+    //     absolute `/opt/TeamCity/.../components-registry-compat-test/build/
+    //     reports/compat`). The relative value resolved against the test
+    //     JVM's relative `user.dir` and the per-worker ndjson landed in a
+    //     doubled-prefix path the reporter never read.
+    //   - Switching to `systemProperty(name, providers.provider { ... })`
+    //     (a deferred Provider) was a misread of the Gradle API. The Test
+    //     task's `systemProperty(String, Object)` documents the value is
+    //     converted via `Object.toString()`; the Provider is NOT unwrapped,
+    //     so the test JVM received the literal string `provider(?)` as the
+    //     property value. id17 #3633 surfaced this by failing 15834 tests
+    //     with `IllegalStateException: compat.report-dir must be absolute
+    //     — got 'provider(?)'` from `resolveReportDir`.
+    //
+    // The doFirst block below runs at task execution time, by which point
+    // layout.buildDirectory is finalised and `.canonicalPath` returns an
+    // absolute path (defence in depth vs `.absolutePath` — canonical
+    // resolves through the filesystem rather than going via user.dir).
+    // `systemProperty(name, String)` then registers a normal String value
+    // that the test JVM receives unmolested. The `resolveReportDir` check
+    // in the test code still asserts absolute-ness as a backstop for any
+    // future regression here.
+    doFirst {
+        systemProperty 'compat.report-dir', layout.buildDirectory.dir('reports/compat').get().asFile.canonicalPath
     }
     // Surface compat config as system properties for the test code.
     ['compat.baseline.url', 'compat.candidate.url', 'compat.rms.url',
