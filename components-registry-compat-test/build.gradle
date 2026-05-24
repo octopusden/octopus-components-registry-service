@@ -263,7 +263,11 @@ tasks.register('compatibilityReporter') {
         // path matches reader's). Each test JVM writes one marker per
         // workerFile lazy init.
         def tmpDir = new File("/tmp")
-        def markers = (tmpDir.listFiles({ f -> f.name.startsWith('compat-exec-logger-marker-') && f.name.endsWith('.txt') } as FileFilter) ?: []).sort { it.name }
+        // listFiles({...} as FileFilter) returns File[] (Java array). Force-coerce to a
+        // Groovy List before .sort()/.isEmpty() — id17 #3640 failed mid-doLast with
+        // "No signature of method: [Ljava.lang.Object;.isEmpty()" because File[] has no
+        // .isEmpty() extension method.
+        def markers = (tmpDir.listFiles({ f -> f.name.startsWith('compat-exec-logger-marker-') && f.name.endsWith('.txt') } as FileFilter)?.toList() ?: []).sort { it.name }
         if (markers.isEmpty()) {
             println "[compat-reporter]   /tmp marker files: none (writer init may not have fired)"
         } else {
