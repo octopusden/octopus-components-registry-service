@@ -12,13 +12,13 @@ Paths below are plain code-style references (no Markdown links), per the `feedba
 
 ## Baseline (Phase 0)
 
-All counts produced from `main/` with `_wt/**`, `.claude/worktrees/**`, `**/build/**` excluded (raw `find` from repo root includes nested worktree checkouts and triples some numbers — historical Explore-agent figures of "153 kt + 20 groovy + 147 parameterized" came from an un-pruned scan and are NOT the baseline here).
+All counts produced from the repo root with `_wt/**`, `.claude/worktrees/**`, `**/build/**` excluded (raw `find` from repo root without these excludes includes nested worktree checkouts and triples some numbers — historical Explore-agent figures of "153 kt + 20 groovy + 147 parameterized" came from an un-pruned scan and are NOT the baseline here). The local worktree used to author this audit happens to be at `main/`; the exact directory name doesn't affect reproducibility.
 
 ### File counts
 
 - Kotlin test files under `*/src/test/**`: **118** (canonical list: `/tmp/crs-kt-tests.txt`).
 - Groovy test files under `*/src/test/groovy/**`: **24** (20 in `component-resolver-core`, 4 in `component-resolver-api`).
-- Kotlin files with `@ParameterizedTest`: **18** (canonical: `rg -l '@ParameterizedTest' --glob '*.kt' --glob '!_wt/**' --glob '!.claude/worktrees/**' --glob '!**/build/**' main/`).
+- Kotlin files with `@ParameterizedTest`: **18** (canonical: `rg -l '@ParameterizedTest' --glob '*.kt' --glob '!_wt/**' --glob '!.claude/worktrees/**' --glob '!**/build/**' .`).
 
 ### Skip annotations on HEAD
 
@@ -31,14 +31,14 @@ All counts produced from `main/` with `_wt/**`, `.claude/worktrees/**`, `**/buil
 
 ### TC vs grep reconciliation
 
-TC build #3598 reports `Tests passed: 1772, ignored: 8`. Per-module Gradle HTML totals sum to 1086 tests / 5 ignored (server-test 725/3, server-integrationTest 3/0, resolver-core 213/2, resolver-api 20/0, registry-api 2/0, automation 12/0, dsl 24/0, service-client 85/0, light-client 2/0). The 1772 vs 1086 (and 8 vs 5) gap likely originates from JUnit XML aggregation counting test invocations differently from the per-class HTML "tests" column (parametrised expansion in JUnit reports is per-invocation in XML; the gradle HTML index sometimes shows the same as method count). This audit does not block on resolving the exact gap — `ignored: 8` vs `5 grep'd` is captured as an open item; the additional 3 ignored most likely sit inside JUnit XML aggregation outside the per-class HTML columns observed.
+TC build #3598 reports `Tests passed: 1772, ignored: 8`. Per-module Gradle HTML totals sum to **1083 tests / 5 ignored** (server-test 725/3, server-integrationTest 3/0, resolver-core 210/2, resolver-api 20/0, registry-api 2/0, automation 12/0, dsl 24/0, service-client 85/0, light-client 2/0). The 1772 vs 1083 (and 8 vs 5) gap likely originates from JUnit XML aggregation counting test invocations differently from the per-class HTML "tests" column (parametrised expansion in JUnit reports is per-invocation in XML; the gradle HTML index sometimes shows the same as method count). This audit does not block on resolving the exact gap — `ignored: 8` vs `5 grep'd` is captured as an open item; the additional 3 ignored most likely sit inside JUnit XML aggregation outside the per-class HTML columns observed.
 
 ### Per-module timing (artifact, build #3598)
 
 Module → tests / ignored / duration:
 - `components-registry-service-server` (`test`): 725 / 3 / **34.080s**
 - `components-registry-service-server` (`integrationTest`): 3 / 0 / **1m26.10s** (FatJar boot)
-- `component-resolver-core`: 210 / 2 / **1m16.43s** (earlier draft had 213 — that was an off-by-3 in absolute counting; the **delta** of -53 / -2 from PR-B holds against either baseline)
+- `component-resolver-core`: 210 / 2 / **1m16.43s**
 - `components-registry-service-client`: 85 / 0 / 3.972s
 - `components-registry-dsl`: 24 / 0 / 21.667s
 - `component-resolver-api`: 20 / 0 / 1.185s
@@ -180,11 +180,13 @@ The `components-registry-service-light-client/src/test/java/.../ComponentsRegist
 
 The user explicitly framed 10–17 min CI as "not a problem". This section is informational, not a recommendation to implement now.
 
-Observed configuration on HEAD:
+Configuration on the audited HEAD `71fcc9e6` (pre-#292 — the state when this audit was written):
 
-- `gradle.properties` has no `org.gradle.caching` or `org.gradle.configuration-cache` — neither build-cache nor configuration-cache is enabled. Heap is capped at `-Xmx2g` (GitHub-runner constraint, see `gradle.properties:5-9`).
+- `gradle.properties` had no `org.gradle.caching` or `org.gradle.configuration-cache` — neither build-cache nor configuration-cache was enabled. Heap is capped at `-Xmx2g` (GitHub-runner constraint, see `gradle.properties:5-9`).
 - `build.gradle:194-199` explicitly sets `'junit.jupiter.execution.parallel.enabled': false` due to historical flakes in `EscrowConfigurationLoaderTest` + `BuildToolResolverTest` on GH-hosted runners.
 - 11 separate `PostgreSQLContainer("postgres:16-alpine")` instances boot across the server module — one per test class. Each container start is on the order of seconds; this is the dominant testcontainer cost.
+
+(PR #292 since landed `org.gradle.caching=true`; see Pass 5 quick-win #1 below for the post-#292 state.)
 
 Quick-wins, ordered by ratio of `expected-saving / risk`:
 
