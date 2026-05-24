@@ -29,28 +29,75 @@ object ExecutionLogger {
     private const val PROGRESS_EVERY = 50
 
     private val workerFile: Path by lazy {
-        // System property `compat.report-dir` is set by the gradle test task to
-        // an ABSOLUTE path (layout.buildDirectory/reports/compat). Falling back
-        // to a relative `build/reports/compat` only protects against direct CLI
-        // invocations of the test class — under gradle that fallback would
-        // resolve to whatever JVM CWD gradle picked for the fork (sometimes
-        // the agent's $HOME, not the module dir), and the compatibilityReporter
-        // task would never find the exec-worker file. Symptom observed in id17
-        // build #9: 15834 progress lines on stdout but reporter saw 0 files.
+        // Delegated to `resolveReportDir` (shared with DiffCollector). The
+        // resolver fails fast if `compat.report-dir` is non-null and
+        // relative — observed in id17 build #3620 that a relative value
+        // resolved against a relative `user.dir` writes to a doubled-prefix
+        // path the compatibilityReporter never reads, producing a vacuously-
+        // clean build despite 15834 testcases passing.
         val baseDirProp = System.getProperty("compat.report-dir")
-        val reportDir = (if (baseDirProp != null) Path.of(baseDirProp) else Path.of("build/reports/compat"))
-            .toAbsolutePath()
+        val reportDir = resolveReportDir(baseDirProp, Path.of("build/reports/compat"))
             .also { Files.createDirectories(it) }
-        reportDir.resolve("exec-worker-${ProcessHandle.current().pid()}-${UUID.randomUUID()}.ndjson")
+        val resolved = reportDir.resolve("exec-worker-${ProcessHandle.current().pid()}-${UUID.randomUUID()}.ndjson")
+        // DIAGNOSTIC: also write a marker file under /tmp/ so the
+        // compatibilityReporter doLast can grep it without going through TC
+        // log capture (which strips the build agent path prefix from test
+        // JVM System.out). On id17 #3639 the writer's reportDir looked
+        // identical to the reporter's reportDir in the log, yet the reader
+        // saw an empty listFiles() — we need to confirm the absolute paths
+        // from outside the stripping pipeline.
+        runCatching {
+            val markerPath = Path.of("/tmp/compat-exec-logger-marker-${ProcessHandle.current().pid()}.txt")
+            Files.writeString(
+                markerPath,
+                buildString {
+                    append("compat.report-dir raw   : ").append(baseDirProp).append('\n')
+                    append("reportDir.toString()    : ").append(reportDir).append('\n')
+                    append("reportDir.toAbsolutePath: ").append(reportDir.toAbsolutePath()).append('\n')
+                    append("reportDir canonicalPath : ").append(reportDir.toFile().canonicalPath).append('\n')
+                    append("workerFile.toString()   : ").append(resolved).append('\n')
+                    append("workerFile.toAbsolutePath: ").append(resolved.toAbsolutePath()).append('\n')
+                    append("workerFile canonicalPath: ").append(resolved.toFile().canonicalPath).append('\n')
+                    append("user.dir property       : ").append(System.getProperty("user.dir")).append('\n')
+                    append("OS CWD via File('.')    : ").append(java.io.File(".").canonicalPath).append('\n')
+                },
+            )
+        }
+        resolved
     }
     private val writer: BufferedWriter by lazy {
-        // Log the resolved absolute path + system-property value once on first
-        // write. id17 build #10 surfaced a case where the property looked unset
-        // even though build.gradle set it; print both raw and resolved so the
-        // operator can tell from grep alone which branch fired.
+        // Diagnostic print — fired once per worker JVM on first write. Builds
+        // #3620 and #3630 both showed empty per-worker ndjson in the
+        // aggregated artifact despite the worker counters reporting 15834
+        // requests; this trace captures every path representation we can get
+        // our hands on so the next run can be diffed against the
+        // compatibilityReporter's view (see build.gradle `compatibilityReporter`
+        // task — it prints the matching trace from its end).
         val propValue = System.getProperty("compat.report-dir") ?: "(unset)"
         val cwd = System.getProperty("user.dir") ?: "(unknown)"
-        System.out.println("[compat-exec] Compat exec-log path: ${workerFile.toAbsolutePath()} (compat.report-dir=$propValue, user.dir=$cwd)")
+        val workerFileObj = workerFile.toFile()
+        val workerAbs = workerFile.toAbsolutePath().toString()
+        val workerCanon = runCatching { workerFileObj.canonicalPath }.getOrElse { "(canon failed: ${it.message})" }
+        val parentExists = workerFile.parent?.let { Files.exists(it) } ?: false
+        val parentDir = workerFile.parent?.toString() ?: "(no parent)"
+        val parentDirCanon = workerFile.parent?.let { runCatching { it.toFile().canonicalPath }.getOrElse { e -> "(canon failed: ${e.message})" } } ?: "(no parent)"
+        val osCwdCanon = runCatching { java.io.File(".").canonicalPath }.getOrElse { "(canon failed: ${it.message})" }
+        val propIsAbsolute = runCatching { java.nio.file.Path.of(propValue).isAbsolute }.getOrElse { false }
+        val osCwdAbsViaFileApi = runCatching { java.io.File("").absoluteFile.path }.getOrElse { "(abs failed: ${it.message})" }
+        // Quote-wrap the strings so any trailing whitespace, hidden control
+        // characters, or TC-log-stripped prefixes become visible.
+        System.out.println("[compat-exec] === ExecutionLogger init diagnostic ===")
+        System.out.println("[compat-exec]   compat.report-dir (raw)   = >>>${propValue}<<<")
+        System.out.println("[compat-exec]   compat.report-dir absolute? = $propIsAbsolute  (Path.of(raw).isAbsolute)")
+        System.out.println("[compat-exec]   user.dir (sysprop)        = >>>${cwd}<<<")
+        System.out.println("[compat-exec]   OS-level CWD (canonical)  = >>>${osCwdCanon}<<<")
+        System.out.println("[compat-exec]   OS-level CWD (File(\"\").absoluteFile.path) = >>>${osCwdAbsViaFileApi}<<<")
+        System.out.println("[compat-exec]   workerFile.toAbsolutePath = >>>${workerAbs}<<<")
+        System.out.println("[compat-exec]   workerFile.canonicalPath  = >>>${workerCanon}<<<")
+        System.out.println("[compat-exec]   parent dir                = >>>${parentDir}<<<")
+        System.out.println("[compat-exec]   parent dir canonical      = >>>${parentDirCanon}<<<")
+        System.out.println("[compat-exec]   parent dir exists         = $parentExists")
+        System.out.println("[compat-exec] === /diagnostic ===")
         System.out.flush()
         val w = Files.newBufferedWriter(
             workerFile,
@@ -63,6 +110,24 @@ object ExecutionLogger {
                 runCatching { w.flush() }
                 runCatching { w.close() }
                 System.out.println("[compat-exec] worker pid=${ProcessHandle.current().pid()} totals: $counter requests ($diffCounter with diffs)")
+                // INFRA-WORKAROUND: copy the per-worker ndjson to a stable
+                // /tmp location AFTER close, as a redundant copy that no
+                // Gradle output-tracking touches. id17 #3642 confirmed that
+                // files written to `build/reports/compat/` are
+                // non-deterministically removed between the `test` task's
+                // JVM exit and the `compatibilityReporter` task's doLast —
+                // most likely Gradle's stale-output cleanup acting on
+                // reportDir despite the `outputs.dir` declaration being
+                // removed (cleanup metadata persists from prior builds).
+                // The reporter falls back to this /tmp path when its
+                // primary reportDir is empty.
+                runCatching {
+                    val backupDir = Path.of(System.getProperty("java.io.tmpdir"), "crs-compat-backup")
+                    Files.createDirectories(backupDir)
+                    val dst = backupDir.resolve(workerFile.fileName)
+                    Files.copy(workerFile, dst, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+                    System.out.println("[compat-exec] copied $workerFile -> $dst")
+                }
             }
         })
         w

@@ -303,43 +303,56 @@ class DatabaseComponentRegistryResolver(
 
         // Per-range MARKER rows that carry an explicit per-range maven coordinate.
         //
-        // Two marker types may carry per-range maven artifact rows:
+        // Only GROUP_ARTIFACT_PATTERN markers participate in /maven-artifacts resolution
+        // per V1 contract (see filter below + commit history). The marker name is MIG-047:
+        // it represents the case where the DSL component sets `groupId`/`artifactId` per
+        // range (with or without an accompanying `distribution { gav = … }` block). A
+        // synthetic marker is emitted at import time with `mavenArtifacts` rows built from
+        // the per-range groupId/artifactId. This marker is intentionally NOT registered in
+        // MarkerAttributes.ALL so `buildEscrowModuleConfig` ignores it and
+        // `getAllJiraComponentVersionRanges` is not affected.
         //
-        //   DISTRIBUTION_MAVEN: the DSL component uses an explicit `distribution { gav = … }`
-        //     block per range.  The marker's `mavenArtifacts` collection is populated from
-        //     the GAV.  `getMavenArtifactParameters` reads it the same way as below.
+        // DISTRIBUTION_MAVEN markers also exist (emitted by the importer for every per-
+        // range `distribution { gav = … }` block) but are **not** consumed here — they
+        // feed V4 distribution endpoints (`getResolvedComponentDefinition`,
+        // `/distribution`). The V1 contract for /maven-artifacts is
+        // (EscrowModuleConfig.groupIdPattern, .artifactIdPattern), not GAV-derived;
+        // see filter at line 348 below.
         //
-        //   GROUP_ARTIFACT_PATTERN (MIG-047): the DSL component sets `groupId`/`artifactId`
-        //     per range WITHOUT an explicit `distribution { gav = … }` block.  A synthetic
-        //     marker was emitted at import time with `mavenArtifacts` built from the per-range
-        //     groupId/artifactId.  This marker is intentionally NOT registered in
-        //     MarkerAttributes.ALL so `buildEscrowModuleConfig` ignores it and
-        //     `getAllJiraComponentVersionRanges` is not affected.
+        // We extract the artifact configuration directly from the GROUP_ARTIFACT_PATTERN
+        // marker entity's `mavenArtifacts` child collection (sorted by `sortOrder`),
+        // bypassing `config.distribution.GAV()` to avoid the side-effect described above.
+        // V1 contract (component-resolver-core JiraParametersResolver.groovy:67-68):
+        // /maven-artifacts returns (groupIdPattern, artifactIdPattern) from the
+        // inherited EscrowModuleConfig chain — NEVER derived from distribution.GAV.
+        // Empirically confirmed today (2026-05-24) via curl on prod + QA: every
+        // range emits the inherited top-level (groupId, artifactId), regardless of
+        // whether a version-level `distribution { gav = … }` block exists.
         //
-        // For both types, we extract the artifact configuration directly from the marker
-        // entity's `mavenArtifacts` child collection (sorted by `sortOrder`), bypassing
-        // `config.distribution.GAV()` to avoid the side-effect described above.
-        // Same-range conflict resolution: a V4 user may add a DISTRIBUTION_MAVEN
-        // override on a range that already carries an import-managed
-        // GROUP_ARTIFACT_PATTERN row (V4 createFieldOverride only de-dupes by
-        // overriddenAttribute). `componentEntity.configurations` is a @OneToMany
-        // collection with no specified iteration order, so a naive `associateBy`
-        // makes selection non-deterministic. Resolve deterministically: the
-        // explicit DISTRIBUTION_MAVEN user override always wins; GROUP_ARTIFACT_PATTERN
-        // is the fallback (used only when no DISTRIBUTION_MAVEN exists on the range).
+        // Per-range override of these fields is meaningful ONLY when the DSL
+        // explicitly redefines groupId/artifactId at the version level — that case
+        // is encoded by the GROUP_ARTIFACT_PATTERN marker (see
+        // EntityMappers.kt:54-65; emitted by ImportServiceImpl.attachMavenArtifacts
+        // FromGroupArtifact). DISTRIBUTION_MAVEN markers, by contrast, carry only
+        // a GAV-token-derived (groupId, artifactId) reconstructed from the per-
+        // range `distribution.GAV()` string — never the V1 contract field. They
+        // are read by V4 distribution endpoints and by `buildEscrowModuleConfig`,
+        // but must NOT influence /maven-artifacts.
+        //
+        // Pre-fix bug (id17 #3640 compat-test diffs for 6 components): the
+        // filter also accepted DISTRIBUTION_MAVEN rows, so any DSL component
+        // with a version-level GAV override silently had its inherited
+        // artifactId discarded in favour of the GAV-derived token list. See
+        // RES-C-007 / RES-C-008 for fixtures pinning the V1 shape.
         val perRangeMarkerRows: Map<String, ComponentConfigurationEntity> =
             componentEntity.configurations
                 .asSequence()
                 .filter {
                     it.rowType == ROW_TYPE_MARKER &&
-                        (it.overriddenAttribute == MarkerAttributes.DISTRIBUTION_MAVEN ||
-                            it.overriddenAttribute == MarkerAttributes.GROUP_ARTIFACT_PATTERN)
+                        it.overriddenAttribute == MarkerAttributes.GROUP_ARTIFACT_PATTERN
                 }
                 .groupBy { it.versionRange }
-                .mapValues { (_, rows) ->
-                    rows.firstOrNull { it.overriddenAttribute == MarkerAttributes.DISTRIBUTION_MAVEN }
-                        ?: rows.first()
-                }
+                .mapValues { (_, rows) -> rows.first() }
 
         val module = componentEntity.toEscrowModule(versionRangeFactory, numericVersionFactory)
 

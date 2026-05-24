@@ -99,7 +99,31 @@ fun ComponentEntity.toEscrowModule(
     val module = EscrowModule()
     module.moduleName = this.componentKey
 
-    val configs = this.configurations.toList()
+    // Sort configurations deterministically before enumeration. `@OneToMany`
+    // collections have no order guarantee; on Postgres they come back in heap-
+    // scan order, which is non-deterministic and not aligned with DSL declaration
+    // order. For a synthetic-base component with multiple overrides (BASE range
+    // is suppressed below), `enumeratedRanges` builds from
+    // `overrides.map { versionRange }.distinct()` in iteration order — and a
+    // wrong first range silently leaks into `moduleConfigurations[0]`, which
+    // `BaseComponentController.createComponent` uses to populate the wire DTO.
+    //
+    // V1 reference iterates the loader's parse list in DSL declaration order;
+    // align v3 to that by sorting on `(rowType != "BASE", createdAt, id)`. The
+    // `@CreationTimestamp` column is monotonically populated by `ImportServiceImpl`
+    // as it persists rows top-to-bottom through the DSL, so `createdAt` is an
+    // accurate proxy for DSL position. The `rowType != "BASE"` leading key keeps
+    // BASE at index 0 of the sorted list (the subsequent `firstOrNull { rowType
+    // == "BASE" }` still works, but the consistent ordering makes the override
+    // enumeration deterministic regardless of heap-scan or test-fixture insertion
+    // order). `id` is the deterministic tiebreaker when createdAt collides.
+    val configs = this.configurations.sortedWith(
+        compareBy(
+            { it.rowType != "BASE" },
+            { it.createdAt ?: java.time.Instant.MIN },
+            { it.id?.toString() ?: "" },
+        ),
+    )
     val base =
         configs.firstOrNull { it.rowType == "BASE" }
             ?: return module

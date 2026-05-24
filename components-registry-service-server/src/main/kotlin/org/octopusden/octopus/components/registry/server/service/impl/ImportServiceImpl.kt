@@ -1316,7 +1316,18 @@ class ImportServiceImpl(
 
         // escrow aspect
         cfg.escrow?.let { escrow ->
-            escrow.generation.orElse(null)?.let { row.escrowGeneration = it.name }
+            // V1-contract: when a component config's escrow.generation is empty,
+            // fall back to the common Defaults.groovy generation (= AUTO per the
+            // shipped DSL). Without this fallback, components whose DSL omits an
+            // explicit `escrow { generation = … }` block (e.g. wscardsmodel) land
+            // with a NULL `escrow_generation` column, the read-path returns
+            // Optional.empty, and the downstream Component view diverges from V1
+            // (which always returns AUTO via Defaults inheritance). Reproduced
+            // today (2026-05-24) on the local candidate v3 schema-v2 DB-mode
+            // stand vs prod + QA + local baseline V1.
+            val genFromCfg = escrow.generation.orElse(null)
+            val genFromDefaults = commonDefaultsCache.escrow?.generation?.orElse(null)
+            (genFromCfg ?: genFromDefaults)?.let { row.escrowGeneration = it.name }
             row.escrowReusable = escrow.isReusable.takeIf { it }
             escrow.diskSpaceRequirement.orElse(null)?.let { row.escrowDiskSpace = it.toString() }
             row.escrowProvidedDependencies =
@@ -1440,18 +1451,26 @@ class ImportServiceImpl(
         val baseDist = base.distribution
         val overDist = override.distribution
 
+        // DISTRIBUTION_MAVEN and GROUP_ARTIFACT_PATTERN are orthogonal markers consumed by
+        // DIFFERENT read-paths (per the comment at DatabaseComponentRegistryResolver.kt:329-343):
+        // - DISTRIBUTION_MAVEN feeds buildEscrowModuleConfig and V4 distribution endpoints
+        //   (`getResolvedComponentDefinition`, `/distribution`); its `mavenArtifacts` rows are
+        //   parsed from `distribution.GAV()` tokens.
+        // - GROUP_ARTIFACT_PATTERN is the SOLE source of per-range overrides for
+        //   `/maven-artifacts` (see resolver fix 95bc74e8); its rows carry the per-range
+        //   DSL `groupId`/`artifactId` verbatim.
+        //
+        // When a DSL range sets BOTH `artifactId` AND `distribution { gav = … }`
+        // simultaneously, both diff conditions hold and BOTH markers must be
+        // emitted. The previous `if … else if …` shape emitted only
+        // DISTRIBUTION_MAVEN; the read-path then fell back to the inherited
+        // component-level CSV instead of the per-range V1 artifactId.
         if (mavenArtifactsDiffer(baseDist, overDist)) {
             saveMarkerRowWithChildren(component, versionRange, MarkerAttributes.DISTRIBUTION_MAVEN) { row ->
                 attachMavenArtifacts(row, overDist)
             }?.let { saved += it }
-        } else if (groupArtifactPatternsDiffer(base, override)) {
-            // MIG-047: DSL sets groupId/artifactId per range without distribution.GAV().
-            // Both distribution.GAV() are null so mavenArtifactsDiffer returns false, but
-            // the effective groupIdPattern/artifactIdPattern differ across ranges.
-            // Emit a GROUP_ARTIFACT_PATTERN marker (NOT distribution.maven) so that
-            // getMavenArtifactParameters can read the per-range values while
-            // getAllJiraComponentVersionRanges / buildEscrowModuleConfig remain unaffected
-            // (they only look at DISTRIBUTION_MAVEN markers for the distribution field).
+        }
+        if (groupArtifactPatternsDiffer(base, override)) {
             saveMarkerRowWithChildren(component, versionRange, MarkerAttributes.GROUP_ARTIFACT_PATTERN) { row ->
                 attachMavenArtifactsFromGroupArtifact(row, override.groupIdPattern, override.artifactIdPattern)
             }?.let { saved += it }
