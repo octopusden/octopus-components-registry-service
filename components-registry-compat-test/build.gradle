@@ -82,6 +82,13 @@ test {
         if (tmpBackup.exists()) {
             tmpBackup.listFiles({ f -> (f.name.startsWith('diff-worker-') || f.name.startsWith('exec-worker-')) && f.name.endsWith('.ndjson') } as FileFilter)?.each { it.delete() }
         }
+        // Also wipe the writer-init marker files. These accumulate on persistent
+        // TC agents (the reporter walks /tmp for them in its doLast diagnostic)
+        // and would otherwise mix diagnostics across builds.
+        def tmpDir2 = new File(System.getProperty('java.io.tmpdir'))
+        if (tmpDir2.exists()) {
+            tmpDir2.listFiles({ f -> f.name.startsWith('compat-exec-logger-marker-') && f.name.endsWith('.txt') } as FileFilter)?.each { it.delete() }
+        }
     }
     useJUnitPlatform {
         // Include-by-tag polarity: `:test` runs ONLY suites that extend
