@@ -44,6 +44,7 @@ project {
     buildType(id17CompatLocalStandManual)
     buildType(id20ValidateComponentsRegistryProductionDataAuto)
     buildType(id30DeployToOkdQaDevAuto)
+    buildType(id31MigrateOnQaDevAuto)
     buildType(id40ReleaseManual)
     buildType(id50ReleasePostProcessingAuto)
     buildType(id60DeployToOkdQaGhAuto)
@@ -57,6 +58,7 @@ project {
         id17CompatLocalStandManual,
         id20ValidateComponentsRegistryProductionDataAuto,
         id30DeployToOkdQaDevAuto,
+        id31MigrateOnQaDevAuto,
         id40ReleaseManual,
         id50ReleasePostProcessingAuto,
         id60DeployToOkdQaGhAuto,
@@ -792,6 +794,81 @@ object id30DeployToOkdQaDevAuto : BuildType({
     dependencies {
         snapshot(id20ValidateComponentsRegistryProductionDataAuto) {
         }
+    }
+})
+
+// Post-deploy: trigger Git→DB component migration on the freshly-deployed
+// QA pod. Idempotent and tolerant — exits 0 (skip, don't fail) if the
+// /admin/migration-status endpoint is missing (pre-v3 build) or returns
+// git==0 (nothing left to migrate). Fails the build only when migration
+// was attempted and ended in a FAILED state, so the QA-deploy chain
+// surfaces real migration breakage but does not break on routine
+// redeploys of an already-migrated stand.
+//
+// Pure shell-script build (no Gradle template) — VCS root is attached
+// explicitly, same pattern as id17 / id20. Script source lives at
+// `scripts/teamcity/qa-post-deploy-migrate.sh` so it can be tested and
+// reviewed outside TC.
+//
+// Auth: %CRS_QA_ADMIN_TOKEN% — Keycloak-issued JWT for a service account
+// with the IMPORT_DATA role. The param is declared as a placeholder here;
+// the actual secret is configured on the TC server as a project-level
+// password parameter named `CRS_QA_ADMIN_TOKEN`. Until that secret is
+// provisioned this build will fail with a clear "auth rejected" message
+// in the script — that is intentional (no silent-skip on auth misconfig).
+object id31MigrateOnQaDevAuto : BuildType({
+    id("31MigrateOnQaDevAuto")
+    name = "[3.1] Migrate components on QA DEV [AUTO]"
+
+    vcs {
+        root(AbsoluteId("Octopus_OctopusComponents_OctopusGithubVcsRoot"))
+    }
+
+    params {
+        // QA route to the freshly-deployed CRS pod. Sourced from the
+        // server-level param `CRS_QA_DEV_BASE_URL` (configure once on
+        // the TC parent project, same pattern as OKD_SERVER_DEV_URL).
+        param("env.CRS_BASE_URL", "%CRS_QA_DEV_BASE_URL%")
+        // Bearer JWT (service-account, role IMPORT_DATA). PLACEHOLDER —
+        // the project-level password parameter `CRS_QA_ADMIN_TOKEN` must
+        // be provisioned on the TC server before this build will succeed.
+        password("env.CRS_ADMIN_TOKEN", "%CRS_QA_ADMIN_TOKEN%")
+    }
+
+    steps {
+        script {
+            name = "Trigger Git→DB migration on QA"
+            id = "RUNNER_31_MIGRATE"
+            // The script file lives in the repo. Working dir is the
+            // checkout root; the +x bit is preserved in git but we
+            // restore it defensively in case the checkout strips mode.
+            scriptContent = """
+                chmod +x scripts/teamcity/qa-post-deploy-migrate.sh
+                exec scripts/teamcity/qa-post-deploy-migrate.sh
+            """.trimIndent()
+        }
+    }
+
+    triggers {
+        finishBuildTrigger {
+            id = "TRIGGER_31_AFTER_DEPLOY"
+            buildType = "${id30DeployToOkdQaDevAuto.id}"
+            successfulOnly = true
+        }
+    }
+
+    dependencies {
+        snapshot(id30DeployToOkdQaDevAuto) {
+            onDependencyFailure = FailureAction.FAIL_TO_START
+        }
+    }
+
+    failureConditions {
+        executionTimeoutMin = 45
+    }
+
+    requirements {
+        doesNotContain("env.OS_TYPE", "WIN", "RQ_31_LINUX")
     }
 })
 
