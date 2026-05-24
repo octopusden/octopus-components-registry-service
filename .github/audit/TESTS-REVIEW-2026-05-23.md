@@ -77,33 +77,39 @@ Cleanup task for the audit ledger: the stale comment in `FtDbProfileWriteTest.kt
 
 ### Groovy legacy delta (24 files under `*/src/test/groovy/**`)
 
-Analysis: per Groovy file, identify the production class under test, search for a Kotlin "double" (unit + integration), and decide based on whether the Kotlin coverage holds the same assertions. Result splits into **delete now** (8 files, ~1019 LOC) and **keep+rewrite** (16 files, ~1489 LOC — port to Kotlin before removal).
+Analysis: per Groovy file, identify the production class under test, search for a Kotlin "double" (unit + integration), and decide based on whether the Kotlin coverage holds the same assertions.
 
-Delete candidates (have Kotlin coverage that already asserts the same prod behaviour):
+**Post-review result (PR #291 + deep-dive subagent):** **0 file-level deletes safe now**; all 24 Groovy files become **keep+rewrite** (~2500 LOC port backlog) — port to Kotlin in PR-H before removal. The earlier "8 deletes" verdict from the initial Pass 1 subagent was systematically too lenient: every flagged Groovy file holds at least one unique assertion or unique resource fixture that no Kotlin/Java test asserts at any layer (unit, mapper, controller, or HTTP IT). Copilot review on PR #291 caught 3 such gaps directly (MavenArtifactResolverTest's `artifactId.trim()` fixture, ConfigLoaderTest's ambiguous-config validation paths, JiraParametersResolverTest's 5 untested methods); a follow-up deep-dive on the remaining 5 candidates found the same pattern for ComponentByJiraProjectResolverTest, ToolsInfoResolverTest, ReleaseInfoResolverTest, EscrowModeResolverTest, and BuildParametersTest.
 
-| Groovy file | Prod class under test | Kotlin double | Note |
-|---|---|---|---|
-| `component-resolver-core/src/test/groovy/.../escrow/ConfigLoaderTest.groovy` | `ConfigLoader` (Groovy prod) | indirectly via `configuration/loader/EscrowConfigurationLoaderTest.groovy` + server IT | smoke test only; `stressTest` already @Ignore |
-| `component-resolver-core/src/test/groovy/.../escrow/resolvers/MavenArtifactResolverTest.groovy` | `IModuleByArtifactResolver` | `components-registry-service-client/src/test/kotlin/.../ComponentRegistryServiceClientTest.kt` + `DatabaseComponentRegistryResolverMavenArtifactsRangeTest.kt` |  |
-| `component-resolver-core/src/test/groovy/.../escrow/resolvers/ComponentByJiraProjectResolverTest.groovy` | `JiraParametersResolver` | `test-common/src/testFixtures/kotlin/.../BaseComponentsRegistryServiceTest.kt` via controller IT |  |
-| `component-resolver-core/src/test/groovy/.../escrow/resolvers/ToolsInfoResolverTest.groovy` | `ReleaseInfoResolver` (tools list) | `BaseComponentsRegistryServiceTest.kt` exercises tools list via HTTP |  |
-| `component-resolver-core/src/test/groovy/.../escrow/resolvers/ReleaseInfoResolverTest.groovy` | `ReleaseInfoResolver` | `BaseComponentsRegistryServiceTest.kt` + `ComponentsRegistryServiceControllerTest.kt` |  |
-| `component-resolver-core/src/test/groovy/.../escrow/resolvers/JiraParametersResolverTest.groovy` | `JiraParametersResolver` | `BaseComponentsRegistryServiceTest.kt` + `ComponentRoutingResolverProjectNotFoundTest.kt` |  |
-| `component-resolver-core/src/test/groovy/.../escrow/resolvers/EscrowModeResolverTest.groovy` | `ReleaseInfoResolver` (escrow mode) | `ComponentsRegistryServiceControllerTest.kt` |  |
-| `component-resolver-core/src/test/groovy/.../escrow/configuration/model/BuildParametersTest.groovy` | `BuildParameters` (Groovy model) | indirectly via loader tests | 12 LOC, single test |
+**Safe** removal at file level requires the Kotlin port to land first; this is the PR-H workstream.
 
-Demoted from "delete" to "keep+rewrite" during review:
+Per-file rationale for the 8 originally-flagged-delete files (now demoted):
 
-- `component-resolver-core/src/test/groovy/.../escrow/resolvers/DocConfigurationLoaderTest.groovy` (67 LOC) — `Doc.component` validation assertions are unique to this file; no Kotlin unit-level equivalent for the doc-section schema validation path.
-- `component-resolver-core/src/test/groovy/.../escrow/resolvers/BuildToolResolverTest.groovy` (166 LOC) — `BuildToolsV2CompatTest.kt` runs cross-stand parity (and was SKIPPED in build #3598, providing no covering signal), and `mapper/BuildToolBeansMapperTest.kt` only covers entity→bean mapping. Neither covers product mapping, override-version behaviour, empty-tool behaviour, distribution entities, or `ignoreRequired` — all present in the Groovy file. Keep until ported.
-- `component-resolver-api/src/test/groovy/.../escrow/config/JiraComponentVersionRangeTest.groovy` (44 LOC) — path corrected (file is in `component-resolver-api`, not `component-resolver-core`). `ComponentRoutingResolverProjectNotFoundTest.kt` only mocks `JiraComponentVersionRange`; it does NOT cover `JiraComponentVersionRangeFactory.create(...)` or `range.jiraComponentVersion`. Keep until ported.
+| Groovy file | Unique coverage that prevents file-level deletion |
+|---|---|
+| `component-resolver-core/src/test/groovy/.../escrow/ConfigLoaderTest.groovy` | Only test for `ambiguousJiraConfig.groovy`, `ambiguousVCSConfig.groovy`, `invalidModuleConfig.groovy`, `invalidAttributeInSubComponent.groovy` validation error paths (Copilot finding). |
+| `component-resolver-core/src/test/groovy/.../escrow/resolvers/MavenArtifactResolverTest.groovy` | Only test using `artifactIdWithWhitespace.groovy` fixture — exercises `artifactId.trim()` in EscrowConfigurationLoader (Copilot finding). |
+| `component-resolver-core/src/test/groovy/.../escrow/resolvers/ComponentByJiraProjectResolverTest.groovy` | Only test for `getComponentByJiraProject`, `getVersionControlSystemRootsByJiraProject` (with branch-format + version-range boundaries), `getComponentConfig` — none of these methods exercised by any Kotlin/Java test. |
+| `component-resolver-core/src/test/groovy/.../escrow/resolvers/ToolsInfoResolverTest.groovy` | Only assertion `tools == [BuildEnv, AndroidSdk]` with `installScript = "androidSdkInstaller"` through `resolveRelease()`. Other tests use `bcomponent.groovy` but don't assert the full tool list. |
+| `component-resolver-core/src/test/groovy/.../escrow/resolvers/ReleaseInfoResolverTest.groovy` | `ReleaseInfoResolver.resolveRelease()` has no Kotlin/Java coverage at all. 5 distinct assertion classes: explicit/external distribution + multi-artifact GAV (`production/Aggregator.groovy`); per-range `hotfixBranch` ("hotfix:1.6"); excluded-distribution error path (`validation/invalid/Aggregator.groovy`); `PTKProductTool` instance through resolver (HTTP layer asserts beans, not internal type); DEB/RPM + GAV mappings (`deb-rpm/Aggregator.groovy`). |
+| `component-resolver-core/src/test/groovy/.../escrow/resolvers/JiraParametersResolverTest.groovy` | Removing leaves only `JiraParametersResolverWithConfigTest` covering `resolveComponent(ComponentVersion)`. Untouched: `getComponentByMavenArtifact`, `getComponentByJiraProject`, `getVersionControlSystemRootsByJiraProject`, `isComponentWithJiraParametersExists`, `getComponentConfig()` (Copilot finding). |
+| `component-resolver-core/src/test/groovy/.../escrow/resolvers/EscrowModeResolverTest.groovy` | Only test exercising `EscrowGenerationMode.AUTO/MANUAL/UNSUPPORTED` through `ReleaseInfoResolver.resolveRelease()` end-to-end. Loader tests assert `EscrowGenerationMode` at config-load time but not via the resolver pipeline. Fixture `escrowmode/Aggregator.groovy` exclusive. |
+| `component-resolver-core/src/test/groovy/.../escrow/configuration/model/BuildParametersTest.groovy` | Only test for `BuildParameters.getSystemPropertiesMap()` parsing of `-Da=b -DjavaVersion=1.8 -Dfindbugs.skip=true`. Zero Kotlin/Java coverage. |
 
-Keep+rewrite (unique unit-level coverage of Groovy production classes — port to Kotlin in a follow-up before removing the Groovy file). The 16 files split:
+Also demoted from "delete" earlier in the review chain (pre-Copilot):
 
-- Resolver-core (`component-resolver-core/src/test/groovy/...`):
-  `escrow/labels/ValidLabelsTest.groovy`, `escrow/labels/InvalidLabelsTest.groovy`, `escrow/resolvers/DocConfigurationLoaderTest.groovy` (demoted), `escrow/resolvers/EscrowConfigurationLoaderTest.groovy` (861-LOC — biggest, unique VCS-inheritance + version-range overlap assertions), `escrow/resolvers/BuildToolResolverTest.groovy` (demoted), `escrow/resolvers/VersionResolverTest.groovy`, `escrow/resolvers/RepositoryResolverTest.groovy`, `escrow/copyright/DefaultCopyrightTest.groovy`, `escrow/copyright/NonDefaultCopyrightTest.groovy`, `escrow/configuration/loader/EscrowConfigurationLoaderTest.groovy` (231-LOC, in a different package — the one taking **47.162s** to run; heaviest single test class in the build), `escrow/configuration/validation/GroovySlurperConfigValidatorTest.groovy`, `escrow/configuration/validation/VersionRangeTest.groovy`.
-- Resolver-api (`component-resolver-api/src/test/groovy/...`):
-  `escrow/ModelConfigPostProcessorTest.groovy`, `escrow/model/DependencyTest.groovy`, `escrow/model/SystemPropertiesParserTest.groovy`, `escrow/config/JiraComponentVersionRangeTest.groovy` (demoted).
+- `component-resolver-core/src/test/groovy/.../escrow/resolvers/DocConfigurationLoaderTest.groovy` (67 LOC) — `Doc.component` validation assertions are unique to this file.
+- `component-resolver-core/src/test/groovy/.../escrow/resolvers/BuildToolResolverTest.groovy` (166 LOC) — `BuildToolsV2CompatTest.kt` runs cross-stand parity (SKIPPED in CI without compat URLs) and `mapper/BuildToolBeansMapperTest.kt` only covers entity→bean. Neither covers product mapping, override-version, empty-tool, distribution entities, or `ignoreRequired`.
+- `component-resolver-api/src/test/groovy/.../escrow/config/JiraComponentVersionRangeTest.groovy` (44 LOC, path is `component-resolver-api`, not `core`) — `ComponentRoutingResolverProjectNotFoundTest.kt` only mocks `JiraComponentVersionRange`; does NOT cover `JiraComponentVersionRangeFactory.create(...)` or `range.jiraComponentVersion`.
+
+**Net-net for Pass 1:** the only safe file-level removal that lands on v3 right now is the **two method-level `@Ignore` cleanups** (see Pass 1 skip-annotation table — `ConfigLoaderTest#stressTest()` and `MavenArtifactResolverTest#testProdConfig()`). Everything at file level waits for the Kotlin port (PR-H).
+
+Keep+rewrite — all 24 Groovy files split by module (port to Kotlin in PR-H before removal):
+
+- Resolver-core (`component-resolver-core/src/test/groovy/...`, 20 files):
+  `escrow/ConfigLoaderTest.groovy` (post-Copilot demote), `escrow/labels/ValidLabelsTest.groovy`, `escrow/labels/InvalidLabelsTest.groovy`, `escrow/resolvers/ComponentByJiraProjectResolverTest.groovy` (post-Copilot demote), `escrow/resolvers/DocConfigurationLoaderTest.groovy`, `escrow/resolvers/EscrowConfigurationLoaderTest.groovy` (861-LOC — biggest, unique VCS-inheritance + version-range overlap assertions), `escrow/resolvers/EscrowModeResolverTest.groovy` (post-Copilot demote), `escrow/resolvers/BuildToolResolverTest.groovy`, `escrow/resolvers/JiraParametersResolverTest.groovy` (post-Copilot demote), `escrow/resolvers/MavenArtifactResolverTest.groovy` (post-Copilot demote), `escrow/resolvers/ReleaseInfoResolverTest.groovy` (post-Copilot demote), `escrow/resolvers/ToolsInfoResolverTest.groovy` (post-Copilot demote), `escrow/resolvers/VersionResolverTest.groovy`, `escrow/resolvers/RepositoryResolverTest.groovy`, `escrow/copyright/DefaultCopyrightTest.groovy`, `escrow/copyright/NonDefaultCopyrightTest.groovy`, `escrow/configuration/loader/EscrowConfigurationLoaderTest.groovy` (231-LOC, in a different package — the one taking **47.162s** to run; heaviest single test class in the build), `escrow/configuration/model/BuildParametersTest.groovy` (post-Copilot demote), `escrow/configuration/validation/GroovySlurperConfigValidatorTest.groovy`, `escrow/configuration/validation/VersionRangeTest.groovy`.
+- Resolver-api (`component-resolver-api/src/test/groovy/...`, 4 files):
+  `escrow/ModelConfigPostProcessorTest.groovy`, `escrow/model/DependencyTest.groovy`, `escrow/model/SystemPropertiesParserTest.groovy`, `escrow/config/JiraComponentVersionRangeTest.groovy`.
 
 Note about two `EscrowConfigurationLoaderTest.groovy` files: same class name in two different packages (`escrow/resolvers/` 861 LOC and `escrow/configuration/loader/` 231 LOC). Both genuinely unique — the resolvers-package one is broader (VCS inheritance, version ranges), the loader-package one is the loader's contract test (heavier per-test cost, 47s total). Keep both for now; flag for **consolidation** as part of the Kotlin port (one class testing one prod loader).
 
@@ -198,20 +204,20 @@ Per `project_crs_deploy_via_merge` (v3 → main eventual merge) and `project_crs
 
 ## Proposed PR split
 
-Total work: **8 Groovy files** deletable now (~1019 LOC), **16 ports + then-delete** in follow-ups (~1489 LOC to rewrite), plus method-level skip cleanup (~50 LOC) and the optional `ComponentDetail/Summary` mapper fixture extraction (~40 LOC). No Kotlin tests delete in Passes 2/3.
+Total work after the post-review pass: **0 Groovy files** safe-to-delete now at file level; **24 ports + then-delete** queued for the PR-H Kotlin-port workstream (~2500 LOC). Near-term concrete wins are limited to method-level `@Ignore` cleanup (~30 LOC) and the build-cache PR (#292, already landed). No Kotlin tests delete in Passes 2/3. The optional `ComponentDetail/Summary` mapper fixture refactor stays as PR-G (~40 LOC).
 
 | PR | Branch | Scope | Files | Risk | Sequencing |
 |---|---|---|---|---|---|
-| A | `chore/tests-disabled-cleanup` | If sequenced **before** PR-B: delete `ConfigLoaderTest.stressTest()` and `MavenArtifactResolverTest.testProdConfig()` method bodies + fix stale comment at `FtDbProfileWriteTest.kt:39`. If sequenced **after** PR-B: scope shrinks to only the `FtDbProfileWriteTest.kt:39` comment fix (the two parent Groovy files no longer exist). **Do not** lift the class-level `@Disabled` on `FtDbProfileWriteTest` in either form — that needs experimental re-enable + green build in a separate PR (A2: `chore/tests-ftdb-profile-write-reenable-attempt`). | 1–3 | low | order with B matters; pick one |
-| B | `chore/tests-drop-groovy-legacy-8` | Delete the 8 Groovy files from Pass 1 with Kotlin coverage already in place (post-review). Net ~1019 LOC removed. | 8 | low | independent of A |
+| A2 | `chore/tests-ftdb-profile-write-reenable-attempt` | Experimental: lift the class-level `@Disabled` on `FtDbProfileWriteTest.kt`. May revert if MIG-039 still gates it; per memory `project_schema_v2_phase6_remaining`. | 1 | med | optional, independent |
+| B | `chore/tests-drop-groovy-legacy-8` (PR #291, now downscoped) | Delete only the two `@Ignore`'d Groovy methods: `ConfigLoaderTest.stressTest()` and `MavenArtifactResolverTest.testProdConfig()` (and the `org.junit.Ignore` imports they were the only users of). Plus fix the stale comment in `FtDbProfileWriteTest.kt:39`. The parent Groovy files stay in place (demoted to keep+rewrite by Copilot review + deep-dive subagent — see Pass 1 table). | 3 | low | independent |
 | C | _(not used — Pass 2 produced no delete/merge candidates)_ | — | 0 | — | — |
 | D | _(not used — Pass 3 produced no candidates)_ | — | 0 | — | — |
-| E | `chore/tests-shrink-loader-fixtures` | Review the 23 fixtures consumed by `escrow/configuration/loader/EscrowConfigurationLoaderTest.groovy` (47s class). If 10+ are pure variations on the same loader branch, drop the redundant ones. Otherwise leave it and move the test to a separate `slowTest` task. | 1 + fixtures | med | after B (so the candidate file is unambiguous) |
-| F | `chore/build-cache-quick-wins` (landed in PR #292) | Add `org.gradle.caching=true` to `gradle.properties`. `org.gradle.configuration-cache=true` was attempted but reverted in the same PR due to `:components-registry-automation:zipMetarunners` capturing `Project` at config time — left as `=false` with an inline comment + follow-up note. Validated locally: cold 2m 17s → warm 58s. | 1 | low | done |
+| E | `chore/tests-shrink-loader-fixtures` | Review the 23 fixtures consumed by `escrow/configuration/loader/EscrowConfigurationLoaderTest.groovy` (47s class). If 10+ are pure variations on the same loader branch, drop the redundant fixtures. Otherwise leave it and move the test to a separate `slowTest` task. **Note:** must happen as part of, or after, the Kotlin port of that file (PR-H) — modifying live Groovy fixtures while the file itself is also in flight is too risky. | 1 + fixtures | med | after PR-H entry for this file |
+| F | `chore/build-cache-quick-wins` (PR #292) | Add `org.gradle.caching=true` to `gradle.properties`. `org.gradle.configuration-cache=true` was attempted but reverted in the same PR due to `:components-registry-automation:zipMetarunners` capturing `Project` at config time — left as `=false` with an inline comment + follow-up note. Validated locally: cold 2m 17s → warm 58s. | 1 | low | **done** |
 | G | `refactor/mapper-fixture-helper` (optional) | Extract `minimalComponent()` / `baseConfigFor()` / junction-entity builders from `ComponentDetailMapperTest.kt` + `ComponentSummaryMapperTest.kt` into `test-common` or a sibling `MapperTestFixtures.kt`. Pure refactor, no assertion changes. | 3 | low | independent |
-| H | `chore/tests-port-groovy-to-kotlin` (multi-PR follow-up, scoped per Groovy file) | Port the **16 keep+rewrite** Groovy tests to Kotlin one or two at a time. After each port lands green, the corresponding Groovy file is deleted in the same PR. | 1–2 per PR | med | sequential, large effort, separate workstream |
+| H | `chore/tests-port-groovy-to-kotlin` (multi-PR follow-up, scoped per Groovy file) | Port all **24 keep+rewrite** Groovy tests to Kotlin, one or two per PR. After each port lands green, the corresponding Groovy file is deleted in the same PR. Highest priority: the two `EscrowConfigurationLoaderTest.groovy` files (47s + 3.5s combined wall-clock) and the 5 files Copilot flagged as having unique coverage (`ConfigLoaderTest`, `MavenArtifactResolverTest`, `JiraParametersResolverTest`, `ComponentByJiraProjectResolverTest`, `ReleaseInfoResolverTest`). | 1–2 per PR | med | sequential, large effort, separate workstream |
 
-Order: A, B, F, G in parallel (all low-risk). E after B (so the file is unambiguously the loader-package one). H is a separate long-running workstream.
+Order: B and G in parallel (low-risk); A2 independent and experimental; PR-F is done. PR-H is the long-term workstream and gates PR-E.
 
 PR-A2 (re-enable attempt for `FtDbProfileWriteTest`) is the only "experimental" PR — explicitly framed as "may revert if still red".
 
@@ -221,25 +227,29 @@ For each PR at execution time:
 
 - `./gradlew build` with `AUTH_SERVER` env set, `-x docker* -x oc* -x components-registry-automation:test` per `project_crs_full_build_excludes`. Full build, not partial (`feedback_full_build_before_commit`).
 - Independent Sonnet review of the diff before push (`feedback_pr_review_via_subagent`).
-- For PR-B (whole-file Groovy deletes): after merge, re-run TC build and verify the test totals dropped **by exactly** the per-class invocation counts captured from the artifact, listed below. `failures: 0` must hold; any extra drop (a passing test was also affected) or under-drop (some referenced setup was sticky) is a regression signal.
+- For PR-B (method-level `@Ignore` cleanup): after merge, re-run TC build and verify `Tests passed` is unchanged (`stressTest` and `testProdConfig` were `@Ignore`'d and never counted as passing), and `ignored` drops by exactly **2** (from 8 → 6). `failures: 0` must hold.
 
-  Expected per-file invocation drops on PR-B merge (from `/tmp/crs-tc-artifacts-3598/reports/component-resolver-core/build/reports/tests/test/index.html`):
+- For PR-H (per-file Kotlin port): the PR that ports a Groovy file to Kotlin and removes the original must preserve the same number of assertions. Use the per-file invocation-count table below as the target for the Kotlin replacement, captured from `/tmp/crs-tc-artifacts-3598/reports/component-resolver-core/build/reports/tests/test/index.html`:
 
-  | File | Passing | Ignored | Duration freed |
-  |---|---|---|---|
-  | `ConfigLoaderTest.groovy` | 12 | 1 (`stressTest`) | 0.504s |
-  | `MavenArtifactResolverTest.groovy` (resolvers pkg) | 10 | 1 (`testProdConfig`) | 0.509s |
-  | `ComponentByJiraProjectResolverTest.groovy` | 5 | 0 | 0.508s |
-  | `ToolsInfoResolverTest.groovy` | 1 | 0 | 0.039s |
-  | `ReleaseInfoResolverTest.groovy` | 6 | 0 | 5.634s |
-  | `JiraParametersResolverTest.groovy` | 14 | 0 | 1.679s |
-  | `EscrowModeResolverTest.groovy` | 4 | 0 | 0.354s |
-  | `BuildParametersTest.groovy` | 1 | 0 | 0.005s |
-  | **Total** | **53** | **2** | **~9.2s** |
+  | Groovy file (slated for port) | Invocations | Duration |
+  |---|---|---|
+  | `escrow/configuration/loader/EscrowConfigurationLoaderTest.groovy` | 23 | **47.162s** (highest priority — wall-clock win after port) |
+  | `escrow/resolvers/EscrowConfigurationLoaderTest.groovy` | 51 | 3.453s |
+  | `escrow/resolvers/JiraParametersResolverTest.groovy` | 14 | 1.679s |
+  | `escrow/ConfigLoaderTest.groovy` | 12 | 0.504s (`stressTest` already removed by PR-B) |
+  | `escrow/resolvers/RepositoryResolverTest.groovy` | (see report) | 1.5s |
+  | `escrow/resolvers/MavenArtifactResolverTest.groovy` | 10 | 0.509s (`testProdConfig` already removed by PR-B) |
+  | `escrow/resolvers/BuildToolResolverTest.groovy` | 9 | **10.919s** (second-highest wall-clock win) |
+  | `escrow/resolvers/ReleaseInfoResolverTest.groovy` | 6 | 5.634s |
+  | `escrow/resolvers/ComponentByJiraProjectResolverTest.groovy` | 5 | 0.508s |
+  | `escrow/resolvers/EscrowModeResolverTest.groovy` | 4 | 0.354s |
+  | `escrow/resolvers/ToolsInfoResolverTest.groovy` | 1 | 0.039s |
+  | `escrow/configuration/model/BuildParametersTest.groovy` | 1 | 0.005s |
+  | …plus other resolver-core + resolver-api files (see Pass 1 list) | | |
 
-  Expected aggregate post-merge TC delta: `Tests passed` drops by exactly **53** (from 1772 → 1719) and `ignored` drops by exactly **2** (from 8 → 6). If PR-A already landed before PR-B, the 2 ignored drop is `0` (the ignored methods were removed earlier by A). Note: these baseline numbers are taken from build #3598; the next TC build should be compared against the most recent green build immediately preceding the PR-B merge, since other PRs may shift the baseline.
+  After each port-PR, `Tests passed` should remain the same (or increase if the Kotlin port adds boundary cases the original Groovy missed), and `ignored` should not increase.
 
-- For PR-E (loader-fixture shrink): apply the same per-file invocation-delta approach as PR-B — count the exact invocations dropped at `.../escrow/configuration/loader/EscrowConfigurationLoaderTest.groovy` (currently 23) and assert the post-merge TC totals match. Additionally run `./gradlew :components-registry-compat-test:test` against a local stand (`project_crs_compat_consumers`) to confirm baseline-vs-candidate parity, since `EscrowConfigurationLoader` is the integration boundary the compat-test consumes.
+- For PR-E (loader-fixture shrink, after that file is ported): count the exact invocations dropped at the **ported** Kotlin replacement of `escrow/configuration/loader/EscrowConfigurationLoaderTest.groovy` and assert the post-merge TC totals match. Additionally run `./gradlew :components-registry-compat-test:test` against a local stand (`project_crs_compat_consumers`) to confirm baseline-vs-candidate parity, since `EscrowConfigurationLoader` is the integration boundary the compat-test consumes.
 - For PR-F: one CI run cache-on vs cache-off on the same commit; compare TC build durations (not local timings).
 - Cross-branch check before merge: `git cherry-pick --no-commit` of each PR onto an `origin/main` snapshot, then `./gradlew help` + `./gradlew tasks --all`. Reset with `git reset --hard` after the check. This guards the `main`-branch invariants documented above.
 
