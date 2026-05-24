@@ -57,6 +57,11 @@ test {
     // Each run starts with a fresh report dir so per-worker ndjson files don't accumulate
     // across re-runs (the file names contain a UUID — old files would otherwise be merged
     // into summary.md again, double-counting diffs).
+    //
+    // ALSO: this is the place where we set `compat.report-dir` to the same dir
+    // — see the long comment above the second `doFirst` block below for why
+    // it has to happen at task-execution time rather than via the
+    // `systemProperties` map literal.
     doFirst {
         def reportDir = layout.buildDirectory.dir('reports/compat').get().asFile
         if (reportDir.exists()) {
@@ -65,6 +70,24 @@ test {
             new File(reportDir, 'execution-log.md').delete()
         } else {
             reportDir.mkdirs()
+        }
+        // ALSO wipe the /tmp backup dir used by the workaround below. Without
+        // this, files from a prior aborted run accumulate on persistent TC
+        // agents — and if the current run's primary reportDir gets cleared
+        // mid-run (the known Gradle stale-output quirk we work around), the
+        // reporter's fallback would aggregate stale records from a different
+        // commit / DSL snapshot, producing a falsely-clean or falsely-red
+        // result. PR #297 review (P1): scope to the current run.
+        def tmpBackup = new File("${System.getProperty('java.io.tmpdir')}/crs-compat-backup")
+        if (tmpBackup.exists()) {
+            tmpBackup.listFiles({ f -> (f.name.startsWith('diff-worker-') || f.name.startsWith('exec-worker-')) && f.name.endsWith('.ndjson') } as FileFilter)?.each { it.delete() }
+        }
+        // Also wipe the writer-init marker files. These accumulate on persistent
+        // TC agents (the reporter walks /tmp for them in its doLast diagnostic)
+        // and would otherwise mix diagnostics across builds.
+        def tmpDir2 = new File(System.getProperty('java.io.tmpdir'))
+        if (tmpDir2.exists()) {
+            tmpDir2.listFiles({ f -> f.name.startsWith('compat-exec-logger-marker-') && f.name.endsWith('.txt') } as FileFilter)?.each { it.delete() }
         }
     }
     useJUnitPlatform {
@@ -86,15 +109,48 @@ test {
         'junit.jupiter.execution.parallel.mode.default': 'concurrent',
         'junit.jupiter.execution.parallel.config.strategy': 'fixed',
         'junit.jupiter.execution.parallel.config.fixed.parallelism': (project.findProperty('compat.parallelism') ?: '8') as String,
-        // Absolute path to the same dir compatibilityReporter aggregates from.
-        // DiffCollector / ExecutionLogger pick this up so the per-worker ndjson
-        // files land where the reporter looks, regardless of the test JVM's
-        // forked CWD. Use `"${projectDir}/..."` (GString interpolation forces
-        // File.toString → absolute) rather than `file(...).absolutePath` —
-        // observed in id17 builds #10 and #13 that the latter still produced
-        // a relative-looking value on this TC agent's gradle/JVM combination.
-        'compat.report-dir': "${projectDir}/build/reports/compat".toString(),
     ]
+    // Absolute path to the same dir compatibilityReporter aggregates from —
+    // wired inside a doFirst block (execution phase) because both earlier
+    // attempts failed on the TC agent's gradle/JVM combination:
+    //
+    //   - Putting `layout.buildDirectory.dir(...).get().asFile.absolutePath`
+    //     inside the `systemProperties = [...]` map literal evaluated eagerly
+    //     at configuration phase. id17 #3631 showed the result as the
+    //     RELATIVE module basename `components-registry-compat-test/build/
+    //     reports/compat` (while the compatibilityReporter task — same
+    //     expression, but running in doLast at execution phase — saw the
+    //     absolute `/opt/TeamCity/.../components-registry-compat-test/build/
+    //     reports/compat`). The relative value resolved against the test
+    //     JVM's relative `user.dir` and the per-worker ndjson landed in a
+    //     doubled-prefix path the reporter never read.
+    //   - Switching to `systemProperty(name, providers.provider { ... })`
+    //     (a deferred Provider) was a misread of the Gradle API. The Test
+    //     task's `systemProperty(String, Object)` documents the value is
+    //     converted via `Object.toString()`; the Provider is NOT unwrapped,
+    //     so the test JVM received the literal string `provider(?)` as the
+    //     property value. id17 #3633 surfaced this by failing 15834 tests
+    //     with `IllegalStateException: compat.report-dir must be absolute
+    //     — got 'provider(?)'` from `resolveReportDir`.
+    //
+    // The doFirst block below runs at task execution time, by which point
+    // layout.buildDirectory is finalised and `.canonicalPath` returns an
+    // absolute path (defence in depth vs `.absolutePath` — canonical
+    // resolves through the filesystem rather than going via user.dir).
+    //
+    // Wired via `jvmArgs "-D..."` rather than `systemProperty(...)`
+    // because id17 #3634 showed `systemProperty` set inside doFirst not
+    // taking effect — the test JVM kept seeing the (config-phase) value.
+    // `jvmArgs` mutates the JVM command-line that's assembled at fork
+    // time, so a value appended in doFirst lands on the actual JVM args.
+    //
+    // The `resolveReportDir` check in the test code still asserts
+    // absolute-ness as a backstop for any future regression.
+    doFirst {
+        def reportDirAbs = layout.buildDirectory.dir('reports/compat').get().asFile.canonicalPath
+        println "[compat-test] doFirst: setting -Dcompat.report-dir=${reportDirAbs}"
+        jvmArgs "-Dcompat.report-dir=${reportDirAbs}"
+    }
     // Surface compat config as system properties for the test code.
     ['compat.baseline.url', 'compat.candidate.url', 'compat.rms.url',
      'compat.full', 'compat.malformed', 'compat.versions-fallback',
@@ -160,9 +216,118 @@ tasks.register('compatibilityReporter') {
     // diffs that have nothing to do with the current code.
     onlyIf("at least one of compat.baseline.url / compat.candidate.url is set (partial config triggers explainInvalid)") { compatActivated() }
     def reportDir = layout.buildDirectory.dir('reports/compat')
-    outputs.dir(reportDir)
+    // Intentionally NOT declared as `outputs.dir(reportDir)` — id17 #3642 vs #3640
+    // showed non-deterministic loss of per-worker ndjson between the `test` task
+    // (writer) and `compatibilityReporter` (reader). Root cause: Gradle's
+    // CleanupStaleOutputsExecuter scans declared output dirs at the START of the
+    // owning task and deletes files not registered in `.gradle/buildOutputCleanup/
+    // outputFiles.bin` as known outputs of any task. The per-worker ndjson is
+    // produced by the `test` JVM but NOT declared as that task's output, so
+    // Gradle treats it as stale and deletes it before `compatibilityReporter`
+    // sees it. Removing the `outputs.dir` here deactivates stale-output cleanup
+    // for reportDir — the reporter doesn't need caching/up-to-date since it's
+    // already gated on `compatActivated()` and always re-aggregates.
     doLast {
         def dir = reportDir.get().asFile
+
+        // Diagnostic mirror of [DiffCollector] and [ExecutionLogger] init
+        // traces (in the test JVM). Print the SAME path representations from
+        // the gradle JVM's side so the operator can grep both traces from a
+        // single TC log and confirm whether the test-JVM writers and the
+        // reporter reader agree on the absolute path. Added after id17 #3620
+        // and #3630 both showed empty per-worker ndjson aggregation despite
+        // worker counters claiming 15834 requests / 17 diffs.
+        println "[compat-reporter] === compatibilityReporter doLast diagnostic ==="
+        println "[compat-reporter]   reportDir.absolutePath   = ${dir.absolutePath}"
+        def canonical = "(canon failed)"
+        try { canonical = dir.canonicalPath } catch (Exception ignored) { /* keep placeholder */ }
+        println "[compat-reporter]   reportDir.canonicalPath  = $canonical"
+        println "[compat-reporter]   reportDir.exists()       = ${dir.exists()}"
+        if (dir.exists()) {
+            def names = (dir.listFiles() ?: []).collect { it.name }.sort()
+            println "[compat-reporter]   reportDir.listFiles()    = $names"
+        }
+        // Walk one level up to spot a doubled-prefix path like
+        // `<projectDir>/components-registry-compat-test/build/reports/compat/`
+        // that the test JVM could be writing to while the reporter reads from
+        // the shallow form. Print the parent dir + a bounded-depth recursive
+        // find under `projectDir` for any orphan ndjson files outside the
+        // reader-side dir.
+        def parent = dir.parentFile
+        if (parent != null) {
+            println "[compat-reporter]   parent dir               = ${parent.absolutePath}"
+            def parentNames = (parent.listFiles() ?: []).collect { it.name }.sort()
+            println "[compat-reporter]   parent.listFiles()       = $parentNames"
+        }
+        // Hunt for orphan exec/diff worker ndjson files anywhere under
+        // projectDir — surfaces a doubled-prefix write path or a JVM-CWD
+        // mismatch in one grepable line per file. Caps the walk at depth 6
+        // to keep the trace from drowning the log on a large workspace.
+        def orphans = []
+        def projectRoot = project.projectDir
+        if (projectRoot.exists()) {
+            def stack = [[projectRoot, 0] as List]
+            while (!stack.isEmpty()) {
+                def (f, depth) = stack.remove(stack.size() - 1)
+                if (depth > 6) continue
+                if (f.isDirectory()) {
+                    f.listFiles()?.each { stack << ([it, depth + 1] as List) }
+                } else if ((f.name.startsWith('exec-worker-') || f.name.startsWith('diff-worker-')) && f.name.endsWith('.ndjson')) {
+                    if (f.parentFile?.absolutePath != dir.absolutePath) {
+                        orphans << f.absolutePath
+                    }
+                }
+            }
+        }
+        if (!orphans.isEmpty()) {
+            println "[compat-reporter]   ORPHAN per-worker ndjson FOUND outside reportDir:"
+            orphans.each { println "[compat-reporter]     $it" }
+        } else {
+            println "[compat-reporter]   no orphan per-worker ndjson under projectDir"
+        }
+        // Read marker files left by ExecutionLogger writer-init in /tmp/.
+        // These bypass TC's test-suite System.out capture (which strips the
+        // build-agent path prefix and obscures whether writer's absolute
+        // path matches reader's). Each test JVM writes one marker per
+        // workerFile lazy init.
+        def tmpDir = new File("/tmp")
+        // listFiles({...} as FileFilter) returns File[] (Java array). Force-coerce to a
+        // Groovy List before .sort()/.isEmpty() — id17 #3640 failed mid-doLast with
+        // "No signature of method: [Ljava.lang.Object;.isEmpty()" because File[] has no
+        // .isEmpty() extension method.
+        def markers = (tmpDir.listFiles({ f -> f.name.startsWith('compat-exec-logger-marker-') && f.name.endsWith('.txt') } as FileFilter)?.toList() ?: []).sort { it.name }
+        if (markers.isEmpty()) {
+            println "[compat-reporter]   /tmp marker files: none (writer init may not have fired)"
+        } else {
+            println "[compat-reporter]   /tmp marker files: ${markers.size()} found"
+            markers.each { f ->
+                println "[compat-reporter]   --- ${f.absolutePath} ---"
+                f.text.eachLine { line -> println "[compat-reporter]     $line" }
+            }
+        }
+        // Also walk /tmp looking for orphan per-worker ndjson files outside
+        // both projectDir AND reportDir.
+        def tmpOrphans = []
+        if (tmpDir.exists()) {
+            def stack2 = [[tmpDir, 0] as List]
+            while (!stack2.isEmpty()) {
+                def (f, depth) = stack2.remove(stack2.size() - 1)
+                if (depth > 5) continue
+                if (f.isDirectory()) {
+                    f.listFiles()?.each { stack2 << ([it, depth + 1] as List) }
+                } else if ((f.name.startsWith('exec-worker-') || f.name.startsWith('diff-worker-')) && f.name.endsWith('.ndjson')) {
+                    tmpOrphans << f.absolutePath
+                }
+            }
+        }
+        if (!tmpOrphans.isEmpty()) {
+            println "[compat-reporter]   ORPHAN per-worker ndjson FOUND under /tmp:"
+            tmpOrphans.each { println "[compat-reporter]     $it" }
+        } else {
+            println "[compat-reporter]   no orphan per-worker ndjson under /tmp"
+        }
+        println "[compat-reporter] === /diagnostic ==="
+
         if (!dir.exists()) {
             return
         }
@@ -214,6 +379,31 @@ tasks.register('compatibilityReporter') {
 
         def diffFiles = dir.listFiles({ f -> f.name.startsWith('diff-worker-') && f.name.endsWith('.ndjson') } as FileFilter) ?: []
         def execFiles = dir.listFiles({ f -> f.name.startsWith('exec-worker-') && f.name.endsWith('.ndjson') } as FileFilter) ?: []
+        // INFRA-WORKAROUND: id17 #3642 confirmed that the per-worker ndjson files
+        // are non-deterministically removed between the test JVM's shutdown hook
+        // (which prints "persisted to ...ndjson") and this doLast. ExecutionLogger /
+        // DiffCollector now copy each worker file to /tmp/crs-compat-backup/ at JVM-
+        // shutdown — fall back to that location when reportDir is empty so the
+        // build doesn't fail with the proof-of-execution guard ("0 cases executed")
+        // when the writer actually ran (15834 cases per the test JVM counter).
+        // Restore both ndjson kinds AND any summary/execution-log artefacts so
+        // existing TC artifactRules pick them up from build/reports/compat.
+        if ((diffFiles.size() + execFiles.size()) == 0) {
+            def backupDir = new File("${System.getProperty('java.io.tmpdir')}/crs-compat-backup")
+            if (backupDir.exists()) {
+                def restored = []
+                backupDir.listFiles({ f -> (f.name.startsWith('diff-worker-') || f.name.startsWith('exec-worker-')) && f.name.endsWith('.ndjson') } as FileFilter)?.each { src ->
+                    def target = new File(dir, src.name)
+                    java.nio.file.Files.copy(src.toPath(), target.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+                    restored << src.name
+                }
+                if (!restored.isEmpty()) {
+                    println "[compat-reporter] reportDir was empty; restored ${restored.size()} per-worker file(s) from ${backupDir.absolutePath}: ${restored}"
+                    diffFiles = dir.listFiles({ f -> f.name.startsWith('diff-worker-') && f.name.endsWith('.ndjson') } as FileFilter) ?: []
+                    execFiles = dir.listFiles({ f -> f.name.startsWith('exec-worker-') && f.name.endsWith('.ndjson') } as FileFilter) ?: []
+                }
+            }
+        }
         def summary = new File(dir, 'summary.md')
         def execMd = new File(dir, 'execution-log.md')
         def execNd = new File(dir, 'execution-log.ndjson')

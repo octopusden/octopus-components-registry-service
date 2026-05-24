@@ -471,6 +471,68 @@ class DatabaseComponentRegistryResolverTest {
         assertEquals(ALL_VERSIONS, module.moduleConfigurations.first().versionRangeString)
     }
 
+    @Test
+    fun `(5e MIG-029) synthetic base with multiple overrides - first config follows DSL declaration order (createdAt), not heap-scan`() {
+        // Repros wscardsmodel-shape: synthetic base, multiple version-range blocks where
+        // one declares an explicit scalar override (e.g. escrow.generation = MANUAL) and
+        // others inherit from the synthetic base (escrow.generation = AUTO via Defaults).
+        //
+        // V1 contract (prod = QA = baseline): the controller's createComponent() picks
+        // moduleConfigurations[0], which V1 emits in DSL declaration order. For an archived
+        // component whose first DSL range has no escrow{} block, that's AUTO.
+        //
+        // v3 DB-mode used to iterate Hibernate @OneToMany configurations in DB heap-scan
+        // order — non-deterministic — so moduleConfigurations[0] could become the MANUAL
+        // override range, leaking MANUAL into the wire response and producing 6 stable
+        // diffs on id17 #3662 for wscardsmodel across `/v2/components/{c}`, list endpoints
+        // and `/v3/components`.
+        //
+        // The fixture below inserts rows in an ADVERSARIAL order (MANUAL override BEFORE
+        // the DSL-first RANGE_PRESENCE row) but assigns createdAt timestamps that reflect
+        // DSL declaration order. The fix in EntityMappers.toEscrowModule sorts configs by
+        // (rowType != "BASE", createdAt, id) before enumeration, which restores the V1
+        // contract: moduleConfigurations[0] is the DSL-first range (createdAt-min), not
+        // the adversarially-inserted MANUAL range.
+        val comp = makeComponent("COMP5E")
+        val base = makeBase(comp, isSyntheticBase = true).apply {
+            escrowGeneration = "AUTO"
+            createdAt = java.time.Instant.ofEpochMilli(1000)
+        }
+        // DSL-first override range — RANGE_PRESENCE only, no escrow.generation override.
+        // resolveForRange inherits escrow_generation from the synthetic base → AUTO.
+        val rangePresenceForAutoRange = ComponentConfigurationEntity(
+            component = comp,
+            versionRange = "[1.0,)",
+            overriddenAttribute = null,
+            rowType = "RANGE_PRESENCE",
+        ).apply { createdAt = java.time.Instant.ofEpochMilli(2000) }
+        // DSL-second override range — SCALAR_OVERRIDE for escrow.generation = MANUAL.
+        val manualOverride = makeScalarOverrideRow(comp, "(,1.0)", "escrow.generation").apply {
+            escrowGeneration = "MANUAL"
+            createdAt = java.time.Instant.ofEpochMilli(3000)
+        }
+        // Insertion order DELIBERATELY adversarial: MANUAL row before RANGE_PRESENCE.
+        // Pre-fix Hibernate could surface this same order on real Postgres heap-scan;
+        // post-fix the createdAt-based sort restores DSL order before enumeration.
+        comp.configurations.addAll(listOf(base, manualOverride, rangePresenceForAutoRange))
+        stubComponent(comp)
+
+        val module = resolver.getComponentById("COMP5E")
+        assertNotNull(module)
+        assertEquals(2, module!!.moduleConfigurations.size, "Both override ranges must be enumerated")
+        val first = module.moduleConfigurations.first()
+        assertEquals(
+            "[1.0,)",
+            first.versionRangeString,
+            "moduleConfigurations[0] must be the DSL-first range (lowest createdAt), NOT the adversarially-inserted MANUAL range",
+        )
+        assertEquals(
+            org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode.AUTO,
+            first.escrow!!.generation.orElse(null),
+            "First-enumerated range inherits escrow.generation from synthetic base (AUTO via Defaults), not MANUAL from the other range",
+        )
+    }
+
     // ========================================================================
     // (6) Doc-link resolution
     // ========================================================================

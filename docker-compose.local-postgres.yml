@@ -1,6 +1,12 @@
 services:
   postgres:
-    image: postgres:16
+    # `POSTGRES_IMAGE` lets the caller (TC build step or developer) point
+    # at an artifactory-hosted mirror to bypass Docker Hub's anonymous pull
+    # rate limit (id17 #3636 failed mid-Stage-1 with
+    # `toomanyrequests: You have reached your unauthenticated pull rate
+    # limit`). The fallback `postgres:16` keeps local-stand UX unchanged
+    # for developers running outside TC.
+    image: ${POSTGRES_IMAGE:-postgres:16}
     restart: unless-stopped
     ports:
       - "${CRS_DB_PORT:-5432}:5432"
