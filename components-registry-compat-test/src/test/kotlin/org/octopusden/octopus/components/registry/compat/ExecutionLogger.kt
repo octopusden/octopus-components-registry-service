@@ -38,7 +38,32 @@ object ExecutionLogger {
         val baseDirProp = System.getProperty("compat.report-dir")
         val reportDir = resolveReportDir(baseDirProp, Path.of("build/reports/compat"))
             .also { Files.createDirectories(it) }
-        reportDir.resolve("exec-worker-${ProcessHandle.current().pid()}-${UUID.randomUUID()}.ndjson")
+        val resolved = reportDir.resolve("exec-worker-${ProcessHandle.current().pid()}-${UUID.randomUUID()}.ndjson")
+        // DIAGNOSTIC: also write a marker file under /tmp/ so the
+        // compatibilityReporter doLast can grep it without going through TC
+        // log capture (which strips the build agent path prefix from test
+        // JVM System.out). On id17 #3639 the writer's reportDir looked
+        // identical to the reporter's reportDir in the log, yet the reader
+        // saw an empty listFiles() — we need to confirm the absolute paths
+        // from outside the stripping pipeline.
+        runCatching {
+            val markerPath = Path.of("/tmp/compat-exec-logger-marker-${ProcessHandle.current().pid()}.txt")
+            Files.writeString(
+                markerPath,
+                buildString {
+                    append("compat.report-dir raw   : ").append(baseDirProp).append('\n')
+                    append("reportDir.toString()    : ").append(reportDir).append('\n')
+                    append("reportDir.toAbsolutePath: ").append(reportDir.toAbsolutePath()).append('\n')
+                    append("reportDir canonicalPath : ").append(reportDir.toFile().canonicalPath).append('\n')
+                    append("workerFile.toString()   : ").append(resolved).append('\n')
+                    append("workerFile.toAbsolutePath: ").append(resolved.toAbsolutePath()).append('\n')
+                    append("workerFile canonicalPath: ").append(resolved.toFile().canonicalPath).append('\n')
+                    append("user.dir property       : ").append(System.getProperty("user.dir")).append('\n')
+                    append("OS CWD via File('.')    : ").append(java.io.File(".").canonicalPath).append('\n')
+                },
+            )
+        }
+        resolved
     }
     private val writer: BufferedWriter by lazy {
         // Diagnostic print — fired once per worker JVM on first write. Builds

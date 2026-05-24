@@ -257,6 +257,43 @@ tasks.register('compatibilityReporter') {
         } else {
             println "[compat-reporter]   no orphan per-worker ndjson under projectDir"
         }
+        // Read marker files left by ExecutionLogger writer-init in /tmp/.
+        // These bypass TC's test-suite System.out capture (which strips the
+        // build-agent path prefix and obscures whether writer's absolute
+        // path matches reader's). Each test JVM writes one marker per
+        // workerFile lazy init.
+        def tmpDir = new File("/tmp")
+        def markers = (tmpDir.listFiles({ f -> f.name.startsWith('compat-exec-logger-marker-') && f.name.endsWith('.txt') } as FileFilter) ?: []).sort { it.name }
+        if (markers.isEmpty()) {
+            println "[compat-reporter]   /tmp marker files: none (writer init may not have fired)"
+        } else {
+            println "[compat-reporter]   /tmp marker files: ${markers.size()} found"
+            markers.each { f ->
+                println "[compat-reporter]   --- ${f.absolutePath} ---"
+                f.text.eachLine { line -> println "[compat-reporter]     $line" }
+            }
+        }
+        // Also walk /tmp looking for orphan per-worker ndjson files outside
+        // both projectDir AND reportDir.
+        def tmpOrphans = []
+        if (tmpDir.exists()) {
+            def stack2 = [[tmpDir, 0] as List]
+            while (!stack2.isEmpty()) {
+                def (f, depth) = stack2.remove(stack2.size() - 1)
+                if (depth > 5) continue
+                if (f.isDirectory()) {
+                    f.listFiles()?.each { stack2 << ([it, depth + 1] as List) }
+                } else if ((f.name.startsWith('exec-worker-') || f.name.startsWith('diff-worker-')) && f.name.endsWith('.ndjson')) {
+                    tmpOrphans << f.absolutePath
+                }
+            }
+        }
+        if (!tmpOrphans.isEmpty()) {
+            println "[compat-reporter]   ORPHAN per-worker ndjson FOUND under /tmp:"
+            tmpOrphans.each { println "[compat-reporter]     $it" }
+        } else {
+            println "[compat-reporter]   no orphan per-worker ndjson under /tmp"
+        }
         println "[compat-reporter] === /diagnostic ==="
 
         if (!dir.exists()) {
