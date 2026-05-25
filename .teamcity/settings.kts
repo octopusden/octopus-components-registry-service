@@ -217,9 +217,9 @@ object id10CompileUtAuto : BuildType({
     }
 })
 
-// Compatibility Test — manual, on-demand. Runs the compat-test module against
-// a baseline (production / main) and candidate (v3 stand) deployment pair via
-// HTTP URLs (no JAR launch on the agent).
+// Compat — HTTP (two pre-deployed URLs) — manual, on-demand. Runs the compat-
+// test module against a baseline (production / main) and candidate (v3 stand)
+// deployment pair via HTTP URLs (no JAR launch on the agent).
 //
 // Modes (all opt-in via prompt params, default smoke):
 //   - default: smoke list (COMPAT_SMOKE_COMPONENTS, ~5 components) → ~1-3 min.
@@ -242,7 +242,7 @@ object id10CompileUtAuto : BuildType({
 object id15CompatManual : BuildType({
     templates(AbsoluteId("Octopus_OctopusGradleBuild"))
     id("15CompatManual")
-    name = "[1.5] Compatibility Test [MANUAL]"
+    name = "[1.5] Compat — HTTP (two pre-deployed URLs) [MANUAL]"
 
     artifactRules = """
         %ARTIFACT_PATH%
@@ -331,8 +331,8 @@ object id15CompatManual : BuildType({
     }
 })
 
-// Compatibility Trace Replay — manual, on-demand. Replays the deduplicated
-// production HTTP-traffic dump from the internal `crs-compat-trace` repo
+// Compat — Trace Replay (prod traffic) — manual, on-demand. Replays the
+// deduplicated production HTTP-traffic dump from the internal `crs-compat-trace` repo
 // against a baseline (prod) and candidate (v3 stand) URL pair, recording
 // diffs per tuple weighted by frequency.
 //
@@ -352,7 +352,7 @@ object id15CompatManual : BuildType({
 object id16CompatTraceReplayManual : BuildType({
     templates(AbsoluteId("Octopus_OctopusGradleBuild"))
     id("16CompatTraceReplayManual")
-    name = "[1.6] Compatibility Trace Replay [MANUAL]"
+    name = "[1.6] Compat — Trace Replay (prod traffic) [MANUAL]"
 
     artifactRules = """
         %ARTIFACT_PATH%
@@ -458,10 +458,11 @@ object id16CompatTraceReplayManual : BuildType({
     }
 })
 
-// Compatibility Local-Stand — manual-only with a snapshot dep on id10
-// (snapshot only, NOT a `finishBuildTrigger` — operator clicks Run and
-// id10 is pulled in transitively if needed; the build does not
-// auto-fire when id10 finishes). Spins TWO CRS instances side-by-side
+// Compat — Local Stand (baseline + candidate JARs) — auto-fires after id10
+// succeeds on non-main branches (see `triggers { finishBuildTrigger }` below)
+// AND has a snapshot dep on id10. Operator can still Run manually from any
+// branch — manual run from `main` is a tautological V1-vs-V1 measurement and
+// is skipped server-side. Spins TWO CRS instances side-by-side
 // on the agent: baseline (released `%LAST_RELEASE_VERSION%`, docker
 // image from corp registry) and candidate (current chain's image
 // pushed by id10), both pointed at the production Components-Registry
@@ -487,7 +488,7 @@ object id16CompatTraceReplayManual : BuildType({
 // `scripts/local-stands/TEAMCITY.md`.
 object id17CompatLocalStandManual : BuildType({
     id("17CompatLocalStandManual")
-    name = "[1.7] Compatibility Local-Stand [MANUAL]"
+    name = "[1.7] Compat — Local Stand (baseline + candidate JARs) [AUTO]"
 
     // Mirror id20's pattern: surface the upstream id10 build number as id17's
     // own build number so the TC dashboard / build chain UI shows the SAME
