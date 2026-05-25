@@ -329,6 +329,14 @@ object id15CompatManual : BuildType({
     // need anything compiled on the current branch's HEAD.
     dependencies {
     }
+
+    // Disable the inherited triggers from Octopus_OctopusGradleBuild:
+    //   TRIGGER_1003 — VCS Trigger (fires on every commit on every branch)
+    //   TRIGGER_1006 — Schedule Trigger (weekly cron, Sundays 10:00 UTC)
+    // id15 is operator-on-demand: any auto-fire would consume agent minutes
+    // without operator-supplied URL parameters (which have no defaults),
+    // producing either a misleading green build or a failure on main.
+    disableSettings("TRIGGER_1003", "TRIGGER_1006")
 })
 
 // Compat — Trace Replay (prod traffic) — manual, on-demand. Replays the
@@ -456,6 +464,14 @@ object id16CompatTraceReplayManual : BuildType({
     // need anything compiled on the current branch's HEAD.
     dependencies {
     }
+
+    // Disable the inherited triggers from Octopus_OctopusGradleBuild:
+    //   TRIGGER_1003 — VCS Trigger (fires on every commit on every branch)
+    //   TRIGGER_1006 — Schedule Trigger (weekly cron, Sundays 10:00 UTC)
+    // id16 is operator-on-demand and replays a trace from the CrsCompatTrace
+    // VCS root against URLs the operator supplies — any auto-fire would burn
+    // agent minutes with no usable signal.
+    disableSettings("TRIGGER_1003", "TRIGGER_1006")
 })
 
 // Compat — Local Stand (baseline + candidate JARs) — auto-fires after id10
