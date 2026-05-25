@@ -404,6 +404,29 @@ object id16CompatTraceReplayManual : BuildType({
         """.trimIndent())
     }
 
+    steps {
+        // Preflight guard — same rationale as id15CompatManual: if the operator
+        // picks branch=main in the TC UI, the compat-test module is absent and
+        // the template Gradle step would fail. Rewrite GRADLE_TASK to a no-op
+        // via TC service message so the build is a green no-op with a clear
+        // WARNING. See id15CompatManual for the mechanism details.
+        script {
+            name = "Preflight: skip-if-no-compat-test-module"
+            id = "PRECHECK_COMPAT_MODULE"
+            scriptContent = """
+                #!/usr/bin/env bash
+                set -eu
+                if [ ! -d components-registry-compat-test ]; then
+                  echo "::: components-registry-compat-test module not present in this checkout."
+                  echo "::: id16 is only meaningful on v3-family branches that carry the compat-test infra."
+                  echo "::: Rewriting GRADLE_TASK to 'help' so the template's Gradle step is a green no-op."
+                  echo "##teamcity[setParameter name='GRADLE_TASK' value='help']"
+                  echo "##teamcity[buildStatus status='SUCCESS' text='Skipped: compat-test module absent on this branch (likely main); run from v3 family instead.']"
+                fi
+            """.trimIndent()
+        }
+    }
+
     failureConditions {
         // 20 000 tuples × parallelism 10 took ~13 min in the 2026-05-17 run;
         // pad to 45 min for cold-cache agents + slower DB-mode candidate.
@@ -426,6 +449,13 @@ object id16CompatTraceReplayManual : BuildType({
 
     // id16 is standalone-manual like id15 — no chain dependency. The trace
     // replay runs against two already-deployed URLs the operator supplies.
+    //
+    // Explicit empty `dependencies {}` block to neutralise any snapshot
+    // dependency the parent template (Octopus_OctopusGradleBuild) might
+    // inject. id16 tests already-deployed services by URL — it does NOT
+    // need anything compiled on the current branch's HEAD.
+    dependencies {
+    }
 })
 
 // Compatibility Local-Stand — manual-only with a snapshot dep on id10
