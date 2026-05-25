@@ -275,6 +275,35 @@ object id15CompatManual : BuildType({
         """.trimIndent())
     }
 
+    steps {
+        // Preflight guard: id15 lives only in v3-family branches that carry the
+        // `components-registry-compat-test` module. If the operator triggers id15
+        // from `main` (the legacy V1 trunk), the module is absent and the template
+        // Gradle step would fail with "Project ':components-registry-compat-test'
+        // not found". Catch that case here: rewrite `GRADLE_TASK` to a Gradle
+        // no-op so the build passes green with a clear WARNING explaining why.
+        //
+        // The TC service message `setParameter` updates the build-level param at
+        // runtime — the subsequent template-provided Gradle runner then expands
+        // `%GRADLE_TASK%` to `help`, which is a Gradle built-in that prints task
+        // listing and exits 0.
+        script {
+            name = "Preflight: skip-if-no-compat-test-module"
+            id = "PRECHECK_COMPAT_MODULE"
+            scriptContent = """
+                #!/usr/bin/env bash
+                set -eu
+                if [ ! -d components-registry-compat-test ]; then
+                  echo "::: components-registry-compat-test module not present in this checkout."
+                  echo "::: id15 is only meaningful on v3-family branches that carry the compat-test infra."
+                  echo "::: Rewriting GRADLE_TASK to 'help' so the template's Gradle step is a green no-op."
+                  echo "##teamcity[setParameter name='GRADLE_TASK' value='help']"
+                  echo "##teamcity[buildStatus status='SUCCESS' text='Skipped: compat-test module absent on this branch (likely main); run from v3 family instead.']"
+                fi
+            """.trimIndent()
+        }
+    }
+
     failureConditions {
         executionTimeoutMin = 60
     }
@@ -293,6 +322,13 @@ object id15CompatManual : BuildType({
     // id15 is standalone-manual: ad-hoc prod-vs-QA via URLs, no auto-trigger,
     // not part of the release chain. Operator runs it on demand when they
     // want to spot-check two pre-deployed stands by URL.
+    //
+    // Explicit empty `dependencies {}` block to neutralise any snapshot
+    // dependency the parent template (Octopus_OctopusGradleBuild) might
+    // inject. id15 tests already-deployed services by URL — it does NOT
+    // need anything compiled on the current branch's HEAD.
+    dependencies {
+    }
 })
 
 // Compatibility Trace Replay — manual, on-demand. Replays the deduplicated
