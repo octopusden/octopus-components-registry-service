@@ -177,7 +177,11 @@ class MetaOptionsEndpointsTest {
                 post("/rest/api/4/components")
                     .with(adminJwt())
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"name":"$name","displayName":"$name","labels":[$labelsJson]}"""),
+                    .content(
+                        """{"name":"$name","displayName":"$name","labels":[$labelsJson],""" +
+                            """"group":{"groupKey":"org.example.test","isFake":false},""" +
+                            """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
+                    ),
             ).andExpect(status().isCreated)
     }
 
@@ -266,7 +270,11 @@ class MetaOptionsEndpointsTest {
                     post("/rest/api/4/components")
                         .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""{"name":"$anchorComponentName","displayName":"$anchorComponentName"}"""),
+                        .content(
+                            """{"name":"$anchorComponentName","displayName":"$anchorComponentName",""" +
+                                """"group":{"groupKey":"org.example.test","isFake":false},""" +
+                                """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
+                        ),
                 ).andExpect(status().isCreated)
                 .andReturn()
                 .response.contentAsString
@@ -317,7 +325,11 @@ class MetaOptionsEndpointsTest {
                 post("/rest/api/4/components")
                     .with(adminJwt())
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"name":"$name","displayName":"$name","systems":[$systemsJson]}"""),
+                    .content(
+                        """{"name":"$name","displayName":"$name","systems":[$systemsJson],""" +
+                            """"group":{"groupKey":"org.example.test","isFake":false},""" +
+                            """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
+                    ),
             ).andExpect(status().isCreated)
     }
 

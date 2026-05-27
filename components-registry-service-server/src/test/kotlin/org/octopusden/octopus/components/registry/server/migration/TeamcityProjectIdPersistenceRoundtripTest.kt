@@ -77,6 +77,10 @@ class TeamcityProjectIdPersistenceRoundtripTest {
     private fun createComponent(name: String, tcProjectId: String? = null): JsonNode {
         val body = buildMap<String, Any?> {
             put("name", name)
+            // Strict-contract minimum fields (UI-swift-sloth): every component
+            // must have a group and a baseConfiguration.build.buildSystem.
+            put("group", mapOf("groupKey" to "org.example.test", "isFake" to false))
+            put("baseConfiguration", mapOf("build" to mapOf("buildSystem" to "MAVEN")))
             if (tcProjectId != null) {
                 put("teamcityProjects", listOf(mapOf("projectId" to tcProjectId)))
             }

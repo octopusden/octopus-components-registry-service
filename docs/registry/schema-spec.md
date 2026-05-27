@@ -119,7 +119,7 @@ Identity + fields that never vary per version range.
 | `archived` | BOOLEAN | NOT NULL DEFAULT false | |
 | `solution` | BOOLEAN | nullable | |
 | `parent_component_id` | UUID | FK → components(id) | DSL `parentComponent = "X"` reference between peers |
-| `component_group_id` | UUID | FK → component_groups(id) | Aggregator membership; NULL for standalone components |
+| `component_group_id` | UUID | FK → component_groups(id) | Aggregator membership. Schema-nullable (FK), but the v4 service layer (`ComponentManagementServiceImpl.createComponent`) rejects payloads missing `group` with 400 — every newly-created component must belong to a group. PATCH semantics: `group == null` continues to mean "don't touch" (Jackson cannot distinguish absent-from-explicit-null without a presence-preserving DTO); `clearGroup: true` is rejected with 400. |
 | `release_manager` | VARCHAR(255) | nullable | |
 | `security_champion` | VARCHAR(255) | nullable | |
 | `copyright` | TEXT | nullable | |
@@ -188,6 +188,7 @@ Constraints:
 - Partial `UNIQUE INDEX uq_component_configurations_one_range_presence ON component_configurations(component_id, version_range) WHERE row_type = 'RANGE_PRESENCE'`
 - Positive taxonomy CHECK pairing `row_type` with `overridden_attribute` (NULL-safe — written as `A OR B OR C` rather than `NOT X OR y IN (...)` to avoid SQL UNKNOWN-passes-CHECK semantics)
 - Consolidated DB CHECK enforcing "all 28 typed scalar cols NULL when `row_type IN ('MARKER','RANGE_PRESENCE')`"
+- Targeted DB CHECK `(row_type <> 'BASE' OR build_system IS NOT NULL)` — UI-swift-sloth strict contract: every BASE row must declare a `build_system`. A column-level `NOT NULL` would clash with the consolidated MARKER/RANGE_PRESENCE CHECK (which forces ALL 28 typed scalars to be NULL on those rows); this targeted form leaves MARKER / RANGE_PRESENCE / SCALAR_OVERRIDE shapes untouched. Service layer (`ComponentManagementServiceImpl.createComponent`) produces the user-visible 400 — the DB CHECK is defence-in-depth.
 
 Indexes: `(component_id, version_range)`, `jira_project_key WHERE NOT NULL`, `updated_at`.
 

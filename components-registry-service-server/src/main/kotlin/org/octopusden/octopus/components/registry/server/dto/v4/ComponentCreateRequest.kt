@@ -6,8 +6,20 @@ package org.octopusden.octopus.components.registry.server.dto.v4
  * columns; nested collections map to per-component child tables.
  *
  * Per-version configuration is split: the base row is supplied via
- * `baseConfiguration` (defaults to a base row covering all versions when
- * omitted); override rows are added afterwards via the field-override API.
+ * `baseConfiguration`; override rows are added afterwards via the
+ * field-override API.
+ *
+ * **Strict contract (UI-swift-sloth)** — `ComponentManagementService`
+ * rejects payloads with **400 Bad Request** when:
+ *  - `group` is null, or `group.groupKey` is blank;
+ *  - `baseConfiguration` is null, or `baseConfiguration.build` is null,
+ *    or `baseConfiguration.build.buildSystem` is null/blank.
+ *
+ * In other words: although these fields are declared nullable at the
+ * Kotlin / Jackson layer for backward-compatible deserialisation, every
+ * created component MUST carry a group and a base build system. The
+ * Portal's Create Component dialog enforces both at the UX layer; the
+ * server is the source of truth.
  */
 data class ComponentCreateRequest(
     val name: String,

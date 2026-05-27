@@ -136,7 +136,11 @@ class ListComponentsSystemFilterTest {
                 post("/rest/api/4/components")
                     .with(adminJwt())
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"name":"$name","displayName":"$name","systems":[$systemsJson]}"""),
+                    .content(
+                        """{"name":"$name","displayName":"$name","systems":[$systemsJson],""" +
+                            """"group":{"groupKey":"org.example.test","isFake":false},""" +
+                            """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
+                    ),
             ).andExpect(status().isCreated)
     }
 

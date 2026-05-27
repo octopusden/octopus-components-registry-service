@@ -8,6 +8,18 @@ package org.octopusden.octopus.components.registry.server.dto.v4
  * `baseConfiguration` (when present) is also patched in-place with the same
  * rules — null aspect fields preserve, present child lists replace. Override
  * rows are managed via the field-override API, not from here.
+ *
+ * **Strict contract (UI-swift-sloth)** — `ComponentManagementService`
+ * rejects PATCH payloads with **400 Bad Request** when:
+ *  - `clearGroup == true` — every component must belong to a group, so
+ *    clearing the group via PATCH is no longer expressible. The frontend's
+ *    `buildUpdateRequest` always emits `clearGroup: false`.
+ *  - `group` is non-null with a blank `group.groupKey` — same blank-key
+ *    invariant as create.
+ *
+ * `group == null` continues to mean "don't touch" (Jackson cannot
+ * distinguish field-absent from explicit-null without a presence-preserving
+ * DTO, and every untouched-group PATCH today carries `group == null`).
  */
 data class ComponentUpdateRequest(
     val version: Long,
