@@ -191,7 +191,24 @@ CREATE TABLE component_configurations (
         AND jira_major_version_format IS NULL AND jira_release_version_format IS NULL
         AND jira_build_version_format IS NULL AND jira_line_version_format IS NULL
         AND jira_version_prefix IS NULL AND jira_version_format IS NULL
-    ))
+    )),
+
+    -- UI-swift-sloth: BASE rows must declare a build_system. Column-level
+    -- NOT NULL would clash with the consolidated CHECK above (which forces
+    -- ALL 28 typed scalars to be NULL on MARKER / RANGE_PRESENCE rows); a
+    -- targeted "BASE → build_system IS NOT NULL" defends the same invariant
+    -- at the right layer. The service layer (`ComponentManagementServiceImpl
+    -- .createComponent`) is the user-visible 400 path; this CHECK is
+    -- defence-in-depth against direct DB writes, future bulk-loaders, or
+    -- service-layer regressions that bypass controller validation.
+    -- MARKER / RANGE_PRESENCE / SCALAR_OVERRIDE shapes are unchanged.
+    --
+    -- Per project_db_fresh_on_deploy.md: every CRS environment recreates
+    -- the DB from scratch on deploy (pre-prod), so editing V1 here does
+    -- not break Flyway checksum validation anywhere. Re-evaluate this
+    -- assumption once CRS reaches a long-lived environment.
+    CONSTRAINT chk_component_configurations_base_build_system
+        CHECK (row_type <> 'BASE' OR build_system IS NOT NULL)
 );
 
 -- Partial unique index: at most one base row per component.
