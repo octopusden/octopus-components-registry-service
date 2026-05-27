@@ -68,6 +68,19 @@ class V4WriteValidationTest {
                     .content(body),
             )
 
+    /**
+     * Minimal valid create body that satisfies the UI-swift-sloth strict
+     * contract: every component must provide `group.groupKey` and
+     * `baseConfiguration.build.buildSystem`. Tests that previously seeded
+     * with `{"name": "..."}` or `{"name": "...", "baseConfiguration": {}}`
+     * now route through this helper so the field-override / PATCH cases
+     * that follow can run against a real saved component.
+     */
+    private fun validSeedBody(name: String): String =
+        """{"name": "$name",""" +
+            """"group":{"groupKey":"org.example.test","isFake":false},""" +
+            """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}"""
+
     @Test
     @DisplayName("CREATE rejects unknown productType")
     fun create_rejects_unknownProductType() {
@@ -78,8 +91,15 @@ class V4WriteValidationTest {
     @Test
     @DisplayName("CREATE rejects unknown baseConfiguration.build.buildSystem")
     fun create_rejects_unknownBuildSystem() {
+        // Sends a complete, strict-contract-valid envelope EXCEPT for the
+        // unknown enum token — so the 400 here is specifically due to
+        // `validateBuildSystem("NOT_A_BUILD_SYSTEM")`, not due to a missing
+        // top-level required field that would otherwise short-circuit the
+        // assertion.
         val body =
-            """{"name": "validation-test-comp-bs", "baseConfiguration": {"build": {"buildSystem": "NOT_A_BUILD_SYSTEM"}}}"""
+            """{"name": "validation-test-comp-bs",""" +
+                """"group":{"groupKey":"org.example.test","isFake":false},""" +
+                """"baseConfiguration": {"build": {"buildSystem": "NOT_A_BUILD_SYSTEM"}}}"""
         postCreate(body).andExpect(status().isBadRequest)
     }
 
@@ -121,7 +141,7 @@ class V4WriteValidationTest {
     @DisplayName("POST /field-overrides rejects scalar build.buildSystem with unknown enum value")
     fun fieldOverride_rejects_unknownBuildSystemScalar() {
         // Seed a minimal valid component first.
-        val createBody = """{"name": "validation-test-comp-bs-fo", "baseConfiguration": {}}"""
+        val createBody = validSeedBody("validation-test-comp-bs-fo")
         val seedResponse =
             postCreate(createBody)
                 .andExpect(status().is2xxSuccessful)
@@ -151,7 +171,7 @@ class V4WriteValidationTest {
         "field-override marker `vcs.settings` rejects unknown vcsEntries[].repositoryType",
     )
     fun fieldOverride_rejects_unknownRepositoryTypeInMarker() {
-        val createBody = """{"name": "validation-test-comp-rt-fo"}"""
+        val createBody = validSeedBody("validation-test-comp-rt-fo")
         val seedResponse =
             postCreate(createBody).andExpect(status().is2xxSuccessful).andReturn().response.contentAsString
         val id = objectMapper.readTree(seedResponse)["id"].asText()
@@ -182,7 +202,7 @@ class V4WriteValidationTest {
         "field-override marker `distribution.packages` rejects unknown packages[].packageType",
     )
     fun fieldOverride_rejects_unknownPackageTypeInMarker() {
-        val createBody = """{"name": "validation-test-comp-pkg-fo"}"""
+        val createBody = validSeedBody("validation-test-comp-pkg-fo")
         val seedResponse =
             postCreate(createBody).andExpect(status().is2xxSuccessful).andReturn().response.contentAsString
         val id = objectMapper.readTree(seedResponse)["id"].asText()
@@ -212,14 +232,17 @@ class V4WriteValidationTest {
     @DisplayName("CREATE rejects unknown baseConfiguration.escrow.generation")
     fun create_rejects_unknownEscrowGeneration() {
         val body =
-            """{"name": "validation-test-comp-gen", "baseConfiguration": {"escrow": {"generation": "NOT_A_GENERATION_MODE"}}}"""
+            """{"name": "validation-test-comp-gen",""" +
+                """"group":{"groupKey":"org.example.test","isFake":false},""" +
+                """"baseConfiguration": {"build": {"buildSystem": "MAVEN"}, """ +
+                """"escrow": {"generation": "NOT_A_GENERATION_MODE"}}}"""
         postCreate(body).andExpect(status().isBadRequest)
     }
 
     @Test
     @DisplayName("POST /field-overrides rejects scalar escrow.generation with unknown enum value")
     fun fieldOverride_rejects_unknownEscrowGenerationScalar() {
-        val createBody = """{"name": "validation-test-comp-gen-fo", "baseConfiguration": {}}"""
+        val createBody = validSeedBody("validation-test-comp-gen-fo")
         val seedResponse =
             postCreate(createBody)
                 .andExpect(status().is2xxSuccessful)
@@ -247,7 +270,7 @@ class V4WriteValidationTest {
     @Test
     @DisplayName("PATCH rejects unknown baseConfiguration.escrow.generation")
     fun patch_rejects_unknownEscrowGeneration() {
-        val createBody = """{"name": "validation-test-comp-gen-patch"}"""
+        val createBody = validSeedBody("validation-test-comp-gen-patch")
         val seedResponse =
             postCreate(createBody)
                 .andExpect(status().is2xxSuccessful)
@@ -271,7 +294,7 @@ class V4WriteValidationTest {
     @DisplayName("PATCH baseConfiguration.versionRange with bad syntax returns 400 (pre-existing)")
     fun patch_rejects_invalidVersionRangeSyntax() {
         // Seed a minimal valid component first.
-        val createBody = """{"name": "validation-test-comp-vr"}"""
+        val createBody = validSeedBody("validation-test-comp-vr")
         val seedResponse =
             postCreate(createBody)
                 .andExpect(status().is2xxSuccessful)
@@ -316,7 +339,10 @@ class V4WriteValidationTest {
         val name = "labels_trim_create_$suffix"
         val labelRaw = "lblcreate_$suffix" // canonical
         val labelWithSpace = "$labelRaw " // sent by caller
-        val body = """{"name":"$name","labels":["$labelWithSpace"]}"""
+        val body =
+            """{"name":"$name","labels":["$labelWithSpace"],""" +
+                """"group":{"groupKey":"org.example.test","isFake":false},""" +
+                """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}"""
         postCreate(body).andExpect(status().isCreated)
 
         // After write, GET /meta/labels must include the canonical form and NOT the raw one.
@@ -348,7 +374,10 @@ class V4WriteValidationTest {
         val suffix = uniqueSuffix()
         val name = "labels_dedupe_create_$suffix"
         val label = "lbldedupe_$suffix"
-        val body = """{"name":"$name","labels":["$label","$label"," $label "]}"""
+        val body =
+            """{"name":"$name","labels":["$label","$label"," $label "],""" +
+                """"group":{"groupKey":"org.example.test","isFake":false},""" +
+                """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}"""
         val created =
             postCreate(body)
                 .andExpect(status().isCreated)
@@ -370,7 +399,7 @@ class V4WriteValidationTest {
         val labelWithSpace = "$labelRaw "
 
         // Seed a minimal component, then PATCH labels.
-        val seedBody = """{"name":"$name"}"""
+        val seedBody = validSeedBody(name)
         val seedResponse =
             postCreate(seedBody)
                 .andExpect(status().isCreated)
@@ -399,7 +428,7 @@ class V4WriteValidationTest {
     @DisplayName("SYS-040: PATCH with labels=[\" \"] (single blank) returns 400")
     fun `SYS-040 patch with single blank label returns 400`() {
         val suffix = uniqueSuffix()
-        val seedBody = """{"name":"labels_blankonly_patch_$suffix"}"""
+        val seedBody = validSeedBody("labels_blankonly_patch_$suffix")
         val seedResponse =
             postCreate(seedBody)
                 .andExpect(status().isCreated)

@@ -1210,6 +1210,8 @@ Two additions to the v4 component surface.
 
 2. **`GET /rest/api/4/components/meta/labels`** — returns sorted distinct label codes currently attached to at least one component, sourced from the `component_labels` junction via a new repository method `ComponentLabelRepository.findDistinctLabelCodes()`. NOT sourced from the master `LabelEntity` table, which may contain orphan codes that no component carries — advertising those would create dead options in the Portal picker. Mirrors `/meta/owners` in shape and intent.
 
+   **Dictionary variant (UI-swift-sloth):** `GET /rest/api/4/components/meta/labels/dictionary` and `GET /rest/api/4/components/meta/systems/dictionary` expose **every row** of the master `labels` / `systems` tables, sorted ascending. The Portal's editor multi-select uses the dictionary variant so admin-seeded codes that no component carries yet are still selectable. The legacy junction-sourced variants (`/meta/labels`, `/meta/systems`) stay as-is for the filter-bar pickers, which deliberately want in-use values only.
+
 Auth: both gated by `ACCESS_COMPONENTS` (granted to `ROLE_ANONYMOUS` by default), matching the rest of the v4 read surface and parity with `/meta/owners`.
 
 **Preconditions:**

@@ -78,6 +78,8 @@ class BuildToolBeansEntityRoundTripTest {
                 component = component,
                 versionRange = "(,0),[0,)",
                 rowType = "BASE",
+                // UI-swift-sloth DB CHECK requires BASE rows to set buildSystem.
+                buildSystem = "MAVEN",
             ),
         )
     }

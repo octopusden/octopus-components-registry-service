@@ -68,18 +68,31 @@ class ListComponentsBuildSystemFilterTest {
             ).andExpect(status().isOk)
     }
 
+    // Post-strict-contract: a component with literally no buildSystem on its BASE
+    // configuration row is no longer expressible — the controller rejects with
+    // 400 and the DB CHECK rejects direct inserts. The "no build system" case
+    // these tests once exercised now reduces to "any non-matching buildSystem
+    // value", so the helper creates with `MAVEN` and the assertions
+    // `!names.contains(noBuildComp)` continue to hold against a `?buildSystem=GRADLE`
+    // filter. The displayed test names still mention "no build config" for
+    // historical continuity — observable behaviour (filter excludes
+    // non-matching rows) is unchanged.
     private fun createComponentWithoutBuildSystem(name: String) {
-        createComponent(name)
+        createComponent(name, "MAVEN")
     }
 
-    private fun createComponent(name: String): String {
+    private fun createComponent(name: String, buildSystem: String = "MAVEN"): String {
         val body =
             mvc
                 .perform(
                     post("/rest/api/4/components")
                         .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""{"name":"$name","displayName":"$name"}"""),
+                        .content(
+                            """{"name":"$name","displayName":"$name",""" +
+                                """"group":{"groupKey":"org.example.test","isFake":false},""" +
+                                """"baseConfiguration":{"build":{"buildSystem":"$buildSystem"}}}""",
+                        ),
                 ).andExpect(status().isCreated)
                 .andReturn()
                 .response.contentAsString

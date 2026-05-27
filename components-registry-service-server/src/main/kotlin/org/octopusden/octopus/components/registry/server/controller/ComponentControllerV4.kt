@@ -13,6 +13,8 @@ import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideUpd
 import org.octopusden.octopus.components.registry.server.repository.ComponentLabelRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentSystemRepository
+import org.octopusden.octopus.components.registry.server.repository.LabelRepository
+import org.octopusden.octopus.components.registry.server.repository.SystemRepository
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.RepositoryType
@@ -49,6 +51,8 @@ class ComponentControllerV4(
     private val componentRepository: ComponentRepository,
     private val componentLabelRepository: ComponentLabelRepository,
     private val componentSystemRepository: ComponentSystemRepository,
+    private val labelRepository: LabelRepository,
+    private val systemRepository: SystemRepository,
 ) {
     private val log = LoggerFactory.getLogger(ComponentControllerV4::class.java)
 
@@ -72,6 +76,23 @@ class ComponentControllerV4(
     @GetMapping("/meta/systems")
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
     fun getDistinctSystems(): List<String> = componentSystemRepository.findDistinctSystemCodes()
+
+    // Full master-table dictionary variants of /meta/labels and /meta/systems.
+    // The legacy `/meta/labels` and `/meta/systems` endpoints are sourced from
+    // the M:N junctions and advertise only codes currently attached to at
+    // least one component — correct for filter-bar pickers that filter
+    // existing data. The Portal's editor multi-select needs the FULL master
+    // dictionary so admin-seeded codes that no component carries yet are
+    // still selectable. These endpoints expose every row in the `labels` /
+    // `systems` master table, sorted ascending. Same `ACCESS_COMPONENTS`
+    // permission as the junction-sourced variants.
+    @GetMapping("/meta/labels/dictionary")
+    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
+    fun getAllLabels(): List<String> = labelRepository.findAllCodesSorted()
+
+    @GetMapping("/meta/systems/dictionary")
+    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
+    fun getAllSystems(): List<String> = systemRepository.findAllCodesSorted()
 
     // Domain-named option lists for the three free-form aspect string fields
     // (buildSystem, repositoryType, generation). The portal's EnumSelect uses

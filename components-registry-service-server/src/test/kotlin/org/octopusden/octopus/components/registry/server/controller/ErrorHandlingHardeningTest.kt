@@ -153,7 +153,11 @@ class ErrorHandlingHardeningTest {
                 post("/rest/api/4/components")
                     .with(adminJwt())
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"name":"$name"}"""),
+                    .content(
+                        """{"name":"$name",""" +
+                            """"group":{"groupKey":"org.example.test","isFake":false},""" +
+                            """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
+                    ),
             ).andExpect(status().isCreated)
     }
 
