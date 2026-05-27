@@ -1,6 +1,8 @@
 package org.octopusden.octopus.components.registry.server.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
@@ -834,17 +836,25 @@ class StrictContractTest {
         val updateEntries =
             auditPage.path("content")
                 .filter { it["action"].asText() == "UPDATE" }
-        assert(updateEntries.isNotEmpty()) {
-            "expected at least one UPDATE audit entry for component $id; got ${auditPage.path("content")}"
-        }
+        // Use JUnit assertions instead of Kotlin `assert(...)`: the Gradle
+        // build does not pass `-ea` to the JVM, so `kotlin.assert` would
+        // silently no-op and the ghost-write check would pass even when
+        // the regression is back. JUnit `assertTrue` / `assertEquals` run
+        // unconditionally and fail the test on mismatch.
+        assertTrue(
+            updateEntries.isNotEmpty(),
+            "expected at least one UPDATE audit entry for component $id; got ${auditPage.path("content")}",
+        )
         // Pick the most recent UPDATE entry (changedAt is ISO-8601, sortable lexicographically).
         val latest = updateEntries.maxBy { it["changedAt"].asText() }
         val newValueSystem = latest["newValue"]["system"]?.asText("(null)") ?: "(absent)"
-        assert(newValueSystem == "CLASSIC") {
+        assertEquals(
+            "CLASSIC",
+            newValueSystem,
             "audit ghost-write detected: PATCH was stripped by FC-hidden gate but " +
                 "audit newValue.system reads '$newValueSystem' (expected 'CLASSIC' — the " +
-                "actually-persisted value, not the would-have-been-written 'ALFA')."
-        }
+                "actually-persisted value, not the would-have-been-written 'ALFA').",
+        )
     }
 
     @Test
