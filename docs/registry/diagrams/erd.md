@@ -65,16 +65,15 @@ erDiagram
 
 ## Dictionaries + M:N junctions
 
-Reference data is admin-managed (or auto-discovered during migration). Components reference dictionaries through pure M:N junction tables.
+Reference data is admin-managed (or auto-discovered during migration). Components reference `labels` and `tools` through pure M:N junction tables. The `systems` dictionary is referenced via a scalar FK on `components.system_code` — a component belongs to at most one system (collapsed from a former M:N `component_systems` junction in the post-#299 follow-up; see `schema-spec.md` §4.1 + §4.5 for the cardinality rationale).
 
 ```mermaid
 erDiagram
     labels ||--o{ component_labels : "1:N"
-    systems ||--o{ component_systems : "1:N"
+    systems ||--o{ components : "1:0..1 (scalar FK)"
     tools ||--o{ component_required_tools : "1:N"
 
     components ||--o{ component_labels : "1:N"
-    components ||--o{ component_systems : "1:N"
     components ||--o{ component_required_tools : "1:N"
 
     labels {
@@ -94,10 +93,6 @@ erDiagram
     component_labels {
         uuid component_id PK,FK
         uuid label_id PK,FK
-    }
-    component_systems {
-        uuid component_id PK,FK
-        uuid system_id PK,FK
     }
     component_required_tools {
         uuid component_id PK,FK

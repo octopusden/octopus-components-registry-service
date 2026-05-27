@@ -15,8 +15,10 @@ import org.springframework.http.MediaType
 import org.springframework.test.annotation.DirtiesContext
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.nio.file.Paths
@@ -762,6 +764,87 @@ class StrictContractTest {
         postCreate(body)
             .andExpect(status().isCreated)
             .andExpect(jsonPath("$.system").value("CLASSIC"))
+    }
+
+    @Test
+    @DisplayName("PATCH with hidden `component.system` does not surface as a system change in the audit trail")
+    fun patch_with_hidden_system_does_not_ghost_audit() {
+        // Repro for the PR #301 P2 review finding: when `component.system`
+        // is hidden via field-config, the PATCH must NOT report a change
+        // it didn't actually persist. An earlier implementation passed
+        // `overrideSystem = canonicalSystem` into `scalarAuditMap` so the
+        // audit newValue carried the would-have-been-written value even
+        // though the FC-hidden gate stripped the entity update — a
+        // misleading audit trail of a change that never happened.
+        //
+        // Fix: `scalarAuditMap` now reads `entity.systemCode` directly
+        // after the FC-hidden gate decides whether to write. The audit
+        // newValue reflects what actually persisted.
+        val name = unique("strict-patch-system-hidden-audit")
+        val seedBody =
+            """
+            {
+              "name": "$name",
+              "system": "CLASSIC",
+              "group": {"groupKey": "org.example.test", "isFake": false},
+              "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
+            }
+            """.trimIndent()
+        val seedResponse =
+            postCreate(seedBody).andExpect(status().isCreated)
+                .andReturn().response.contentAsString
+        val seed = objectMapper.readTree(seedResponse)
+        val id = seed["id"].asText()
+        val versionLock = seed["version"].asLong()
+
+        // Hide `component.system` via field-config. Same put-endpoint
+        // pattern as `FieldConfigEnforcementIntegrationTest`.
+        val fieldConfigPayload =
+            """{"component": {"system": {"visibility": "hidden"}}}"""
+        mvc
+            .perform(
+                put("/rest/api/4/admin/config/field-config")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(fieldConfigPayload),
+            ).andExpect(status().is2xxSuccessful)
+
+        // PATCH would write ALFA if the field were not hidden.
+        val patchBody = """{"version": $versionLock, "clearGroup": false, "system": "ALFA"}"""
+        mvc.perform(
+            patch("/rest/api/4/components/$id")
+                .with(adminJwt())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(patchBody),
+        ).andExpect(status().isOk)
+            // GET reflects the unchanged stored value (already covered
+            // by the FC-enforcement integration test pattern, asserted
+            // here for tight repro locality).
+            .andExpect(jsonPath("$.system").value("CLASSIC"))
+
+        // Pull the audit log for this Component. The most recent UPDATE
+        // entry's newValue.system MUST be `CLASSIC` (the actually-persisted
+        // value), not `ALFA` (the would-have-been-written value).
+        val auditBody =
+            mvc
+                .perform(get("/rest/api/4/audit/Component/$id").with(adminJwt()))
+                .andExpect(status().isOk)
+                .andReturn().response.contentAsString
+        val auditPage = objectMapper.readTree(auditBody)
+        val updateEntries =
+            auditPage.path("content")
+                .filter { it["action"].asText() == "UPDATE" }
+        assert(updateEntries.isNotEmpty()) {
+            "expected at least one UPDATE audit entry for component $id; got ${auditPage.path("content")}"
+        }
+        // Pick the most recent UPDATE entry (changedAt is ISO-8601, sortable lexicographically).
+        val latest = updateEntries.maxBy { it["changedAt"].asText() }
+        val newValueSystem = latest["newValue"]["system"]?.asText("(null)") ?: "(absent)"
+        assert(newValueSystem == "CLASSIC") {
+            "audit ghost-write detected: PATCH was stripped by FC-hidden gate but " +
+                "audit newValue.system reads '$newValueSystem' (expected 'CLASSIC' — the " +
+                "actually-persisted value, not the would-have-been-written 'ALFA')."
+        }
     }
 
     @Test

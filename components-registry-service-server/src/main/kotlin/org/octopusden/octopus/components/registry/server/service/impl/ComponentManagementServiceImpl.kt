@@ -267,7 +267,6 @@ class ComponentManagementServiceImpl(
                 scalarAuditMap(
                     saved,
                     overrideLabels = canonicalizedLabels,
-                    overrideSystem = canonicalSystem,
                 ),
         )
 
@@ -377,13 +376,15 @@ class ComponentManagementServiceImpl(
             canon
         }
 
-        // Capture the pre-update label / system membership so the post-sync audit
-        // `newValue` (which is computed after `syncLabels` has bypassed the
-        // entity's in-memory junction collections) can compose the effective
-        // new set as `request.X ?: original`.
+        // Capture the pre-update label set so the post-sync audit `newValue`
+        // (which is computed after `syncLabels` has bypassed the entity's
+        // in-memory junction collections) can compose the effective new set
+        // as `request.labels ?: original`. `systemCode` does NOT need a
+        // captured original — it's a scalar column on the entity, the
+        // post-write read in `scalarAuditMap` reflects the actual persisted
+        // value including the FC-hidden no-op case.
         val originalLabels = entity.labelJunctions.map { it.labelCode }.toSet()
-        val originalSystem = entity.systemCode
-        val oldValue = scalarAuditMap(entity, originalLabels, originalSystem)
+        val oldValue = scalarAuditMap(entity, originalLabels)
 
         if (isRename) entity.componentKey = normalizedNewKey!!
 
@@ -505,7 +506,6 @@ class ComponentManagementServiceImpl(
                 scalarAuditMap(
                     saved,
                     overrideLabels = canonicalizedLabels ?: originalLabels,
-                    overrideSystem = canonicalSystem ?: originalSystem,
                 ),
         )
 
@@ -1582,16 +1582,26 @@ class ComponentManagementServiceImpl(
      * code for audit-log purposes. `overrideLabels` short-circuits the
      * entity's in-memory `labelJunctions` — needed after the `syncLabels`
      * repo-direct write, since it bypasses the entity collection.
-     * `overrideSystem` mirrors the same pattern even though `systemCode`
-     * is a scalar column already persisted with the parent flush — the
-     * caller may want to compose "new value if patched, else old" without
-     * touching the saved entity, so the parameter is symmetrical with
-     * `overrideLabels`.
+     *
+     * `system` is read directly from `entity.systemCode` — it's a scalar
+     * column on the entity, already persisted with the parent flush, and
+     * (critically) reflects the post-FC-hidden-gate value. A previous
+     * iteration accepted an `overrideSystem` parameter that mirrored the
+     * `overrideLabels` shape; in practice it caused an audit-trail bug
+     * when `component.system` was hidden via field-config: the FC gate
+     * correctly skipped `entity.systemCode = it`, but the caller still
+     * passed the would-have-been-written `canonicalSystem` as
+     * `overrideSystem`, producing a `newValue.system = "ALFA"` for a
+     * patch that never modified the column. The override path is
+     * unnecessary for a scalar — reading from the entity gives the
+     * correct "what actually persisted" view in all paths (FC-hidden,
+     * unchanged, or changed). Labels keep their override because labels
+     * are written through a separate `syncLabels` path that doesn't
+     * refresh the entity collection before this method runs.
      */
     private fun scalarAuditMap(
         entity: ComponentEntity,
         overrideLabels: Set<String>? = null,
-        overrideSystem: String? = null,
     ): Map<String, Any?> =
         mapOf(
             "name" to entity.componentKey,
@@ -1613,7 +1623,7 @@ class ComponentManagementServiceImpl(
             "distributionExplicit" to entity.distributionExplicit,
             "distributionExternal" to entity.distributionExternal,
             "labels" to (overrideLabels ?: entity.labelJunctions.map { it.labelCode }.toSet()),
-            "system" to (overrideSystem ?: entity.systemCode),
+            "system" to entity.systemCode,
         )
 
     private fun publishAuditEvent(
