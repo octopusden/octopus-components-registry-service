@@ -1167,6 +1167,43 @@ ARCHIVED_TEST_COMPONENT_WITH_DISPLAY_NAME {
 }
 
 
+// Regression fixture for the per-range `hotfixVersionFormat` override propagation
+// chain (task #16). The DSL declares a per-component (base) `hotfixVersionFormat`
+// and then OVERRIDES it for the version range `[2.0,)`. The v3 schema-v2 import
+// flow is expected to store the per-range value as a SCALAR_OVERRIDE row on
+// `component_configurations` (column `jira_hotfix_version_format`) rather than
+// flattening it into the per-component `components.jira_hotfix_version_format`
+// column. The resolver must surface the per-range value for versions IN the range
+// and fall back to the per-component base for versions OUTSIDE the range.
+//
+// All identifiers are RFC 2606 placeholders; no real product/customer names.
+TEST_PER_RANGE_HOTFIX_FORMAT {
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.test.hotfix.range"
+    artifactId = "test-per-range-hotfix"
+    jira {
+        projectKey = "PRHF"
+        majorVersionFormat = '$major'
+        releaseVersionFormat = '$major.$minor.$service'
+        buildVersionFormat = '$major.$minor.$service-$fix'
+        lineVersionFormat = '$major'
+        hotfixVersionFormat = '$major.$minor.$service-$fix'
+    }
+    distribution {
+        explicit = false
+        external = true
+    }
+    "[1.0,2.0)" {
+        // Mirror the base values so the lower range has a present row.
+    }
+    "[2.0,)" {
+        jira {
+            hotfixVersionFormat = '$major.$minor.$service-$fix-$build'
+        }
+    }
+}
+
+
 NON_ARCHIVED_TEST_COMPONENT {
     jira {
         projectKey = "TEST_ARCHIVED"
