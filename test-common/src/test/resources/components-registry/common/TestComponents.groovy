@@ -1194,7 +1194,8 @@ TEST_PER_RANGE_HOTFIX_FORMAT {
         external = true
     }
     "[1.0,2.0)" {
-        // Mirror the base values so the lower range has a present row.
+        // Empty body — produces a RANGE_PRESENCE row; no per-range override.
+        // Versions in this range fall back to the per-component base hotfixVersionFormat.
     }
     "[2.0,)" {
         jira {

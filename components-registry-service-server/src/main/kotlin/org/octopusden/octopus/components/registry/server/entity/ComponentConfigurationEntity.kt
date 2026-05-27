@@ -169,6 +169,16 @@ class ComponentConfigurationEntity(
     @Column(name = "jira_version_format")
     var jiraVersionFormat: String? = null,
 
+    /**
+     * Per-range override for `jira.componentVersionFormat.hotfixVersionFormat`.
+     * Sibling column to `jira_release_version_format` etc. The per-component
+     * base value (Defaults / top-level DSL) lives on
+     * `components.jira_hotfix_version_format`; the resolver layers this column
+     * on top when the row applies for the requested version range.
+     */
+    @Column(name = "jira_hotfix_version_format")
+    var jiraHotfixVersionFormat: String? = null,
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     var createdAt: Instant? = null,

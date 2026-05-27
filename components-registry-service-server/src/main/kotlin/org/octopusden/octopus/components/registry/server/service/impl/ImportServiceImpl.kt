@@ -1363,7 +1363,12 @@ class ImportServiceImpl(
                 row.jiraReleaseVersionFormat = cvf.releaseVersionFormat
                 row.jiraBuildVersionFormat = cvf.buildVersionFormat
                 row.jiraLineVersionFormat = cvf.lineVersionFormat
-                // hotfixVersionFormat goes to component level; skip here
+                // hotfixVersionFormat is also stored per-range so per-range DSL
+                // overrides survive into component_configurations. The
+                // per-component base value (Defaults / top-level DSL) is
+                // additionally captured on components.jira_hotfix_version_format
+                // in buildComponentEntity; the resolver layers per-range over base.
+                row.jiraHotfixVersionFormat = cvf.hotfixVersionFormat
             }
             jira.componentInfo?.let { info ->
                 // Do NOT collapse empty string to null for versionPrefix/versionFormat:
@@ -1928,6 +1933,7 @@ class ImportServiceImpl(
         diffScalar("jira.lineVersionFormat", base.jiraLineVersionFormat, override.jiraLineVersionFormat)
         diffScalar("jira.versionPrefix", base.jiraVersionPrefix, override.jiraVersionPrefix)
         diffScalar("jira.versionFormat", base.jiraVersionFormat, override.jiraVersionFormat)
+        diffScalar("jira.hotfixVersionFormat", base.jiraHotfixVersionFormat, override.jiraHotfixVersionFormat)
 
         return diffs
     }
@@ -1975,6 +1981,7 @@ class ImportServiceImpl(
             "jira.lineVersionFormat" -> row.jiraLineVersionFormat = value?.toString()
             "jira.versionPrefix" -> row.jiraVersionPrefix = value?.toString()
             "jira.versionFormat" -> row.jiraVersionFormat = value?.toString()
+            "jira.hotfixVersionFormat" -> row.jiraHotfixVersionFormat = value?.toString()
             else -> LOG.warn("Unknown scalar attribute path: '{}'", attrPath)
         }
     }

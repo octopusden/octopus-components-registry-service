@@ -1059,6 +1059,9 @@ class ComponentManagementServiceImpl(
             config.jiraLineVersionFormat = j.lineVersionFormat
             config.jiraVersionPrefix = j.versionPrefix
             config.jiraVersionFormat = j.versionFormat
+            // jiraHotfixVersionFormat per-range write is intentionally not
+            // exposed via V4 (no UI need today); DSL import is the only
+            // producer of the per-range column.
         }
         request.vcsEntries?.let { replaceVcsEntries(config, it) }
         request.mavenArtifacts?.let { replaceMavenArtifacts(config, it) }
@@ -1113,6 +1116,8 @@ class ComponentManagementServiceImpl(
             j.lineVersionFormat?.let { config.jiraLineVersionFormat = it }
             j.versionPrefix?.let { config.jiraVersionPrefix = it }
             j.versionFormat?.let { config.jiraVersionFormat = it }
+            // jiraHotfixVersionFormat per-range PATCH is intentionally not
+            // exposed via V4; see applyBaseConfigurationCreate above.
         }
         patch.vcsEntries?.let { replaceVcsEntries(config, it) }
         patch.mavenArtifacts?.let { replaceMavenArtifacts(config, it) }

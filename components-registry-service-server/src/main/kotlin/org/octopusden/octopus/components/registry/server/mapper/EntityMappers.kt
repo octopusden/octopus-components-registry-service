@@ -465,6 +465,7 @@ internal class ComponentConfigurationView {
     var jiraLineVersionFormat: String? = null
     var jiraVersionPrefix: String? = null
     var jiraVersionFormat: String? = null
+    var jiraHotfixVersionFormat: String? = null
 
     @Suppress("CyclomaticComplexMethod", "LongMethod")
     fun applyScalarOverride(override: ComponentConfigurationEntity) {
@@ -503,6 +504,7 @@ internal class ComponentConfigurationView {
             "jira.lineVersionFormat" -> jiraLineVersionFormat = override.jiraLineVersionFormat
             "jira.versionPrefix" -> jiraVersionPrefix = override.jiraVersionPrefix
             "jira.versionFormat" -> jiraVersionFormat = override.jiraVersionFormat
+            "jira.hotfixVersionFormat" -> jiraHotfixVersionFormat = override.jiraHotfixVersionFormat
 
             else -> Unit // unknown attribute path; ignore for forward-compat
         }
@@ -637,6 +639,7 @@ internal class ComponentConfigurationView {
                 jiraLineVersionFormat = base.jiraLineVersionFormat
                 jiraVersionPrefix = base.jiraVersionPrefix
                 jiraVersionFormat = base.jiraVersionFormat
+                jiraHotfixVersionFormat = base.jiraHotfixVersionFormat
             }
     }
 }
@@ -752,7 +755,12 @@ private fun buildJiraComponent(
     val releaseFmt = merged.jiraReleaseVersionFormat ?: "\$major.\$minor"
     val buildFmt = merged.jiraBuildVersionFormat ?: releaseFmt
     val lineFmt = merged.jiraLineVersionFormat ?: majorFmt
-    val hotfixFmt = component.jiraHotfixVersionFormat ?: ""
+    // Per-range override (from a SCALAR_OVERRIDE row on component_configurations
+    // for the matching range) takes precedence; falls back to the per-component
+    // base value stored on `components.jira_hotfix_version_format` (Defaults /
+    // top-level DSL). Empty string preserves the pre-existing "no format string"
+    // contract for components that declare no hotfixVersionFormat anywhere.
+    val hotfixFmt = merged.jiraHotfixVersionFormat ?: component.jiraHotfixVersionFormat ?: ""
 
     val format =
         ComponentVersionFormat.create(majorFmt, releaseFmt, buildFmt, lineFmt, hotfixFmt)

@@ -283,6 +283,7 @@ private fun ComponentConfigurationEntity.jiraAspectResponse(): JiraAspectRespons
         lineVersionFormat = jiraLineVersionFormat,
         versionPrefix = jiraVersionPrefix,
         versionFormat = jiraVersionFormat,
+        hotfixVersionFormat = jiraHotfixVersionFormat,
     )
 
 private fun ComponentConfigurationEntity.toMarkerChildrenPayload(): MarkerChildrenPayload =
