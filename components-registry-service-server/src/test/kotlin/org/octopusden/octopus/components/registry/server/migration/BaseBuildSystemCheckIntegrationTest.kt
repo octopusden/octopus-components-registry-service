@@ -41,8 +41,10 @@ import java.sql.SQLException
  * has not changed. This file pins both the positive and the negative
  * branches against the production Flyway schema.
  *
- * Uses PostgreSQL 16 testcontainer + Flyway-applied V1__schema.sql, mirroring
- * `MIG047SchemaConstraintIntegrationTest`.
+ * Uses PostgreSQL 16 testcontainer + Flyway-applied V1__schema.sql followed
+ * by V2__base_build_system_check.sql (the new CHECK lives in V2 to keep V1
+ * byte-stable for Flyway checksum validation on environments where V1 was
+ * already applied). Mirrors `MIG047SchemaConstraintIntegrationTest`.
  */
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,

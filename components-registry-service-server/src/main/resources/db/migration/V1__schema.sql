@@ -191,18 +191,7 @@ CREATE TABLE component_configurations (
         AND jira_major_version_format IS NULL AND jira_release_version_format IS NULL
         AND jira_build_version_format IS NULL AND jira_line_version_format IS NULL
         AND jira_version_prefix IS NULL AND jira_version_format IS NULL
-    )),
-
-    -- UI-swift-sloth: BASE rows must declare a build_system. Column-level
-    -- NOT NULL would break the consolidated CHECK above (which forces ALL 28
-    -- typed scalars to be NULL on MARKER / RANGE_PRESENCE rows); a targeted
-    -- "BASE → build_system IS NOT NULL" defends the same invariant at the
-    -- right layer. The service layer (ComponentManagementServiceImpl) is the
-    -- user-visible 400 path; this CHECK is defence-in-depth against direct
-    -- DB writes, future bulk-loaders, or service-layer regressions that
-    -- bypass the controller validation. MARKER / RANGE_PRESENCE / SCALAR_OVERRIDE
-    -- shapes are unchanged.
-    CHECK (row_type <> 'BASE' OR build_system IS NOT NULL)
+    ))
 );
 
 -- Partial unique index: at most one base row per component.

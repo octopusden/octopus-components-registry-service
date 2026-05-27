@@ -279,6 +279,20 @@ class ComponentManagementServiceImpl(
         require(!request.clearGroup) {
             "clearGroup: true is no longer allowed — every component must belong to a group"
         }
+        // Mirror the create-side `group.groupKey.isNotBlank()` validation:
+        // when PATCH carries `group: {...}`, the new key must be a real
+        // identifier. Otherwise a payload like
+        // `{"version": N, "clearGroup": false, "group": {"groupKey": "  "}}`
+        // would slip past the controller and persist a whitespace
+        // groupKey via `upsertGroup` (component_groups.group_key has only
+        // NOT NULL + UNIQUE constraints — no blank-rejection at the DB
+        // level). Keeping the check at the service layer also yields the
+        // same 400 + error-shape envelope the create path emits.
+        request.group?.let {
+            require(it.groupKey.isNotBlank()) {
+                "group.groupKey must not be blank"
+            }
+        }
 
         val oldKey = entity.componentKey
         val normalizedNewKey = request.name?.trim()

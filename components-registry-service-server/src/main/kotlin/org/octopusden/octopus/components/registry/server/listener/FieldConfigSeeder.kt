@@ -74,17 +74,34 @@ class FieldConfigSeeder(
                     return
                 }
 
-        val entity =
-            registryConfigRepository.findById(FIELD_CONFIG_KEY)
-                .orElse(RegistryConfigEntity(key = FIELD_CONFIG_KEY))
+        val existing = registryConfigRepository.findById(FIELD_CONFIG_KEY).orElse(null)
+        val entity = existing ?: RegistryConfigEntity(key = FIELD_CONFIG_KEY)
+
         // The Hibernate JSON converter exposes value as Map<String, Any?>.
-        // We re-build the section / field maps explicitly so the seed never
-        // mutates a structurally-incompatible existing blob (e.g. an admin
-        // wrote a non-object under `component`).
+        // We treat the blob as a tree of nested maps, but admin tooling
+        // (PUT /admin/config/field-config) accepts ANY JSON shape — so the
+        // root, the `component` section, or the `groupId` field could each
+        // independently be a non-Map (list, scalar, null). The seeder must
+        // NOT silently overwrite such admin data: it bails with a warning
+        // and leaves the blob untouched, so the next restart re-attempts
+        // once the operator has reshaped the JSON manually. The Portal's
+        // Create dialog already handles "no default available" gracefully.
+        if (existing != null) {
+            val incompatible = describeIncompatibleShape(existing.value)
+            if (incompatible != null) {
+                log.warn(
+                    "FieldConfigSeeder: existing 'field-config' blob has an incompatible shape ({}); " +
+                        "skipping seed to avoid clobbering admin data. Reshape via " +
+                        "PUT /admin/config/field-config and restart, or accept the absence of " +
+                        "the auto-suggest default in the Portal Create Component dialog.",
+                    incompatible,
+                )
+                return
+            }
+        }
 
         @Suppress("UNCHECKED_CAST")
-        val root: MutableMap<String, Any?> =
-            (entity.value as? Map<String, Any?>)?.toMutableMap() ?: mutableMapOf()
+        val root: MutableMap<String, Any?> = (entity.value as Map<String, Any?>).toMutableMap()
 
         @Suppress("UNCHECKED_CAST")
         val componentSection: MutableMap<String, Any?> =
@@ -115,6 +132,45 @@ class FieldConfigSeeder(
             firstPrefix,
             supported.size,
         )
+    }
+
+    /**
+     * Walk the existing `field-config` blob and return a human-readable
+     * description of the first incompatible shape — or `null` if the blob is
+     * structurally compatible with the seeder's nested-map convention.
+     *
+     * Checks (in order):
+     *  - root must be a `Map<*, *>`. In practice this branch is mostly
+     *    defensive — `PUT /admin/config/field-config` is typed
+     *    `@RequestBody Map<String, Any?>`, so Jackson rejects a non-object
+     *    JSON before it ever reaches the repository, and Hibernate's
+     *    `@JdbcTypeCode(SqlTypes.JSON)` would also fail to deserialise a
+     *    non-object back into the entity's `Map` field. The guard
+     *    therefore protects against direct-SQL writes only; if a future
+     *    code path swaps to a different deserialisation strategy that
+     *    tolerates non-objects, this branch becomes load-bearing.
+     *  - the `component` key (if present) must be a Map.
+     *  - the `component.groupId` key (if present) must be a Map.
+     *
+     * Returning `null` means "safe to merge" — the seeder may proceed.
+     * Returning a non-null string is the message logged at WARN level
+     * before the seeder bails out. Visible-for-test (`internal`) so the
+     * test suite can pin the "incompatible blob is preserved" contract
+     * directly without going through the full @EventListener lifecycle.
+     */
+    internal fun describeIncompatibleShape(value: Any?): String? {
+        if (value !is Map<*, *>) {
+            return "root is ${value?.javaClass?.simpleName ?: "null"}, expected a JSON object"
+        }
+        val componentSection = value[SECTION_COMPONENT]
+        if (componentSection != null && componentSection !is Map<*, *>) {
+            return "'$SECTION_COMPONENT' is ${componentSection.javaClass.simpleName}, expected a JSON object"
+        }
+        val groupIdField = (componentSection as? Map<*, *>)?.get(FIELD_GROUP_ID)
+        if (groupIdField != null && groupIdField !is Map<*, *>) {
+            return "'$SECTION_COMPONENT.$FIELD_GROUP_ID' is ${groupIdField.javaClass.simpleName}, expected a JSON object"
+        }
+        return null
     }
 
     companion object {

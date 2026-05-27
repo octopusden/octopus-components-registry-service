@@ -116,6 +116,44 @@ class FieldConfigSeederTest {
     }
 
     @Test
+    @DisplayName("Seeder bails out on a structurally-incompatible existing blob (non-Map root) without clobbering it")
+    fun preservesIncompatibleBlob() {
+        // Admin tooling (PUT /admin/config/field-config) accepts ANY JSON
+        // value, so an existing blob could be an array, a scalar, etc. The
+        // seeder must NOT silently replace such data with a fresh Map — it
+        // should detect the shape mismatch and leave the row untouched.
+        // We exercise this via the `describeIncompatibleShape` helper, which
+        // is the same check the seeder itself runs at startup.
+        val incompatibleList = listOf("not", "a", "map")
+        val msg = seeder.describeIncompatibleShape(incompatibleList)
+        assert(msg != null && msg.contains("root is")) {
+            "expected describeIncompatibleShape() to flag a list root; got '$msg'"
+        }
+
+        // Same for a Map whose `component` section is itself a non-Map.
+        val msgInnerSection = seeder.describeIncompatibleShape(mapOf("component" to listOf("a", "b")))
+        assert(msgInnerSection != null && msgInnerSection.contains("'component' is")) {
+            "expected describeIncompatibleShape() to flag a non-Map `component` section; got '$msgInnerSection'"
+        }
+
+        // Same for component.groupId being a non-Map (a scalar admin set
+        // directly, for instance).
+        val msgInnerField =
+            seeder.describeIncompatibleShape(mapOf("component" to mapOf("groupId" to "scalar-value")))
+        assert(msgInnerField != null && msgInnerField.contains("'component.groupId' is")) {
+            "expected describeIncompatibleShape() to flag a non-Map groupId field; got '$msgInnerField'"
+        }
+
+        // A well-shaped blob must return null.
+        assert(seeder.describeIncompatibleShape(mapOf("component" to mapOf("groupId" to mapOf("defaultValue" to "x")))) == null) {
+            "expected a well-shaped Map to pass describeIncompatibleShape()"
+        }
+        assert(seeder.describeIncompatibleShape(emptyMap<String, Any?>()) == null) {
+            "expected an empty Map to pass describeIncompatibleShape() (nothing to merge into)"
+        }
+    }
+
+    @Test
     @DisplayName("Seeder preserves unrelated sections in the field-config blob")
     fun preservesUnrelatedSections() {
         // Mutate the blob to include unrelated admin-edited entries; the seeder
@@ -139,8 +177,7 @@ class FieldConfigSeederTest {
         seeder.seedComponentGroupIdDefault()
 
         val reloaded = registryConfigRepository.findById("field-config").orElse(null)!!
-        @Suppress("UNCHECKED_CAST")
-        val root = reloaded.value as Map<String, Any?>
+        val root = reloaded.value
         @Suppress("UNCHECKED_CAST")
         val component = root["component"] as Map<String, Any?>
         @Suppress("UNCHECKED_CAST")

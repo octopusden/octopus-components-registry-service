@@ -220,6 +220,31 @@ class StrictContractTest {
     }
 
     @Test
+    @DisplayName("PATCH with {group: {groupKey: \"  \"}} returns 400 (blank groupKey rejected on update path)")
+    fun patch_rejects_blankGroupKey() {
+        // Mirrors the create-side blank-groupKey rejection: PATCH must NOT
+        // be allowed to overwrite an existing component with a whitespace
+        // groupKey via `upsertGroup` (component_groups.group_key has only
+        // NOT NULL + UNIQUE at the DB layer — no blank check there).
+        val name = unique("strict-patch-blank-grp")
+        val seedResponse =
+            postCreate(validCreateBody(name)).andExpect(status().isCreated)
+                .andReturn().response.contentAsString
+        val seed = objectMapper.readTree(seedResponse)
+        val id = seed["id"].asText()
+        val versionLock = seed["version"].asLong()
+
+        val patchBody =
+            """{"version": $versionLock, "clearGroup": false, "group": {"groupKey": "  ", "isFake": false}}"""
+        mvc.perform(
+            patch("/rest/api/4/components/$id")
+                .with(adminJwt())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(patchBody),
+        ).andExpect(status().isBadRequest)
+    }
+
+    @Test
     @DisplayName("PATCH with new {group: {...}} updates the group (2xx)")
     fun patch_accepts_newGroup() {
         val name = unique("strict-patch-newgrp")
