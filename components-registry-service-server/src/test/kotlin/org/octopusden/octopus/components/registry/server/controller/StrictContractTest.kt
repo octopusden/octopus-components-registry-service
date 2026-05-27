@@ -92,8 +92,12 @@ class StrictContractTest {
         """.trimIndent()
 
     @Test
-    @DisplayName("CREATE rejects payload missing 'group' (400 with group-required hint)")
+    @DisplayName("CREATE returns 400 when 'group' is missing")
     fun create_rejects_missingGroup() {
+        // The @DisplayName lists 400 status; the error message naming `group`
+        // is also part of the contract (the frontend / non-UI clients rely
+        // on the field name being mentioned). Asserting both pins the
+        // contract surface.
         val body =
             """
             {
@@ -101,11 +105,13 @@ class StrictContractTest {
               "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
             }
             """.trimIndent()
-        postCreate(body).andExpect(status().isBadRequest)
+        postCreate(body)
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.errorMessage", org.hamcrest.Matchers.containsString("group")))
     }
 
     @Test
-    @DisplayName("CREATE rejects payload missing 'baseConfiguration' entirely")
+    @DisplayName("CREATE returns 400 when 'baseConfiguration' is missing")
     fun create_rejects_missingBaseConfiguration() {
         val body =
             """
@@ -118,7 +124,7 @@ class StrictContractTest {
     }
 
     @Test
-    @DisplayName("CREATE rejects payload missing 'baseConfiguration.build.buildSystem'")
+    @DisplayName("CREATE returns 400 when 'baseConfiguration.build.buildSystem' is missing")
     fun create_rejects_missingBuildSystem() {
         val body =
             """
@@ -132,7 +138,7 @@ class StrictContractTest {
     }
 
     @Test
-    @DisplayName("CREATE rejects 'baseConfiguration.build' absent (no build block)")
+    @DisplayName("CREATE returns 400 when 'baseConfiguration.build' is missing")
     fun create_rejects_missingBuildBlock() {
         val body =
             """
@@ -146,7 +152,7 @@ class StrictContractTest {
     }
 
     @Test
-    @DisplayName("CREATE rejects 'group' present but groupKey blank")
+    @DisplayName("CREATE returns 400 when group.groupKey is blank (whitespace-only)")
     fun create_rejects_blankGroupKey() {
         val body =
             """
@@ -156,7 +162,9 @@ class StrictContractTest {
               "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
             }
             """.trimIndent()
-        postCreate(body).andExpect(status().isBadRequest)
+        postCreate(body)
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.errorMessage", org.hamcrest.Matchers.containsString("groupKey")))
     }
 
     @Test
@@ -265,5 +273,327 @@ class StrictContractTest {
                 .content(patchBody),
         ).andExpect(status().isOk)
             .andExpect(jsonPath("$.group.groupKey").value(newKey))
+    }
+
+    // -------------------------------------------------------------------
+    // Prefix validation against configHelper.supportedGroupIds()
+    //
+    // Frontend already validates against `GET /rest/api/2/common/supported-groups`,
+    // but a non-UI client (CLI, automation) could submit any prefix the
+    // frontend never would. The server is the source of truth and must
+    // reject prefixes that aren't in `components-registry.supportedGroupIds`.
+    //
+    // Test config (`application-common.yml`) sets the allowed list to
+    // `org.octopusden.octopus,io.bcomponent,org.example` — so any other
+    // prefix must produce a 400. Rejection-case fixtures use
+    // `com.someoneelse.*` (RFC 2606-style placeholder, deliberately NOT
+    // in the test allowed list).
+    // -------------------------------------------------------------------
+
+    @Test
+    @DisplayName("CREATE returns 400 when groupKey is outside the configured supportedGroupIds")
+    fun create_rejects_disallowed_groupId_prefix() {
+        val body =
+            """
+            {
+              "name": "${unique("strict-bad-prefix")}",
+              "group": {"groupKey": "com.someoneelse.legacy", "isFake": false},
+              "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
+            }
+            """.trimIndent()
+        postCreate(body)
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.errorMessage", org.hamcrest.Matchers.containsString("supportedGroupIds")))
+    }
+
+    @Test
+    @DisplayName("CREATE rejects 'org.exampleextra.foo' even though 'org.example' is an allowed prefix (no fuzzy prefix matching)")
+    fun create_rejects_prefix_with_extra_letters() {
+        // Specifically guards against `startsWith(prefix)` without a `.` separator,
+        // which would let allowed=`org.example` match `org.exampleextra.foo`. The
+        // validator must require an exact match OR `prefix + "."` — the test
+        // input `org.exampleextra.foo` starts with the allowed `org.example`
+        // characters but on a non-`.` boundary, so it must be rejected.
+        val body =
+            """
+            {
+              "name": "${unique("strict-fuzzy-prefix")}",
+              "group": {"groupKey": "org.exampleextra.foo", "isFake": false},
+              "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
+            }
+            """.trimIndent()
+        postCreate(body)
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.errorMessage", org.hamcrest.Matchers.containsString("supportedGroupIds")))
+    }
+
+    @Test
+    @DisplayName("CREATE accepts a groupKey whose entire value equals one of the supported prefixes")
+    fun create_accepts_exact_prefix_match() {
+        // `groupKey == prefix` (no trailing segments) must be accepted —
+        // not just `prefix + "."` form. Mirrors the frontend's
+        // `useSupportedGroups` check: `v === lp || v.startsWith(lp + '.')`.
+        val body =
+            """
+            {
+              "name": "${unique("strict-exact-prefix")}",
+              "group": {"groupKey": "org.example", "isFake": false},
+              "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
+            }
+            """.trimIndent()
+        // 201 (Created) specifically — the rest of the create-success
+        // cases in this file use `isCreated`; keep the assertion
+        // consistent so an accidental 200 regression would surface.
+        postCreate(body).andExpect(status().isCreated)
+    }
+
+    @Test
+    @DisplayName("CREATE accepts an upper-case groupKey when the allowed prefix matches case-insensitively (case is preserved on storage)")
+    fun create_accepts_uppercased_groupId_when_allowed_prefix_matches_case_insensitively() {
+        // Frontend (CreateComponentDialog.tsx / GeneralTab.tsx) lowercases
+        // both sides before comparing the user-typed groupId against the
+        // supportedGroupIds list. Without the same case-insensitive compare
+        // on the CRS side, a user who types `ORG.EXAMPLE.test` passes the
+        // portal pre-check (lowercased to `org.example.test` which matches
+        // `org.example`) and then sees a 400 from the server — confusing UX.
+        // This test pins the case-insensitive match. Additionally,
+        // case must be PRESERVED on storage: the persisted groupKey is
+        // exactly what the user typed (`ORG.EXAMPLE.test`), not the
+        // lowercased form (we don't want silent renaming).
+        val typedKey = "ORG.EXAMPLE.test.${UUID.randomUUID().toString().take(6)}"
+        val body =
+            """
+            {
+              "name": "${unique("strict-case-insensitive-create")}",
+              "group": {"groupKey": "$typedKey", "isFake": false},
+              "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
+            }
+            """.trimIndent()
+        val created =
+            postCreate(body).andExpect(status().isCreated)
+                .andReturn().response.contentAsString
+        val persistedKey = objectMapper.readTree(created)["group"]["groupKey"].asText()
+        assert(persistedKey == typedKey) {
+            "expected user-typed case to be preserved on storage; typed='$typedKey', got='$persistedKey'"
+        }
+    }
+
+    @Test
+    @DisplayName("PATCH accepts an upper-case groupKey when the allowed prefix matches case-insensitively (case is preserved on storage)")
+    fun patch_accepts_uppercased_groupId_when_allowed_prefix_matches_case_insensitively() {
+        val name = unique("strict-case-insensitive-patch")
+        val seedResponse =
+            postCreate(validCreateBody(name)).andExpect(status().isCreated)
+                .andReturn().response.contentAsString
+        val seed = objectMapper.readTree(seedResponse)
+        val id = seed["id"].asText()
+        val versionLock = seed["version"].asLong()
+
+        val typedKey = "ORG.EXAMPLE.other.${UUID.randomUUID().toString().take(6)}"
+        val patchBody =
+            """{"version": $versionLock, "clearGroup": false, "group": {"groupKey": "$typedKey", "isFake": false}}"""
+        val patched =
+            mvc.perform(
+                patch("/rest/api/4/components/$id")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(patchBody),
+            ).andExpect(status().isOk)
+                .andExpect(jsonPath("$.group.groupKey").value(typedKey))
+                .andReturn().response.contentAsString
+        val persistedKey = objectMapper.readTree(patched)["group"]["groupKey"].asText()
+        assert(persistedKey == typedKey) {
+            "expected user-typed case to be preserved on storage; typed='$typedKey', got='$persistedKey'"
+        }
+    }
+
+    @Test
+    @DisplayName("PATCH returns 400 when the new groupKey is outside supportedGroupIds")
+    fun patch_rejects_disallowed_groupId_prefix() {
+        val name = unique("strict-patch-bad-prefix")
+        val seedResponse =
+            postCreate(validCreateBody(name)).andExpect(status().isCreated)
+                .andReturn().response.contentAsString
+        val seed = objectMapper.readTree(seedResponse)
+        val id = seed["id"].asText()
+        val versionLock = seed["version"].asLong()
+
+        val patchBody =
+            """{"version": $versionLock, "clearGroup": false, "group": {"groupKey": "com.someoneelse.legacy", "isFake": false}}"""
+        mvc.perform(
+            patch("/rest/api/4/components/$id")
+                .with(adminJwt())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(patchBody),
+        )
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.errorMessage", org.hamcrest.Matchers.containsString("supportedGroupIds")))
+    }
+
+    // -------------------------------------------------------------------
+    // groupKey whitespace normalisation (Copilot review)
+    //
+    // `isNotBlank()` accepts `"org.example.test "` with trailing whitespace.
+    // Without trimming on the way in, `component_groups.group_key` UNIQUE
+    // would persist a distinct row from the canonical `"org.example.test"` —
+    // the kind of duplication that breaks aggregator queries silently.
+    // The fix is to trim the incoming key and use the trimmed form for
+    // both validation and persistence. CREATE and PATCH share the
+    // semantic.
+    // -------------------------------------------------------------------
+
+    @Test
+    @DisplayName("CREATE trims whitespace around groupKey before validating and persisting")
+    fun create_normalises_groupKey_whitespace() {
+        val name = unique("strict-create-trim")
+        val body =
+            """
+            {
+              "name": "$name",
+              "group": {"groupKey": "  org.example.trim.${UUID.randomUUID().toString().take(6)}  ", "isFake": false},
+              "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
+            }
+            """.trimIndent()
+        val created =
+            postCreate(body).andExpect(status().isCreated).andReturn().response.contentAsString
+        val groupKey = objectMapper.readTree(created)["group"]["groupKey"].asText()
+        // Asserts trimming applied: the persisted key has no leading/trailing
+        // whitespace. The leading/trailing-trim cases are both covered by the
+        // single quoted-whitespace input above.
+        assert(groupKey == groupKey.trim()) {
+            "expected persisted groupKey to be trimmed; got '$groupKey'"
+        }
+        assert(groupKey.startsWith("org.example.trim.")) {
+            "expected the canonical (trimmed) prefix to survive; got '$groupKey'"
+        }
+    }
+
+    // -------------------------------------------------------------------
+    // PATCH labels: explicit-clear vs no-op contract
+    //
+    // The portal's `buildUpdateRequest.ts` emits `labels: []` (literal empty
+    // array, NOT absent / undefined) when the user toggles every label off
+    // via the dictionary multi-select Clear action. This is an explicit
+    // clear. When the labels field is untouched, the wire shape omits the
+    // `labels` key entirely (Jackson + Kotlin nullability map this to
+    // `request.labels == null` → "don't touch").
+    //
+    // These tests pin both branches against the current service-layer
+    // implementation: `syncLabels(emptySet)` deletes all existing rows and
+    // adds none → cleared; `request.labels == null` short-circuits the
+    // sync entirely → preserved. Without these tests the contract was
+    // only documented in `buildUpdateRequest.ts` comments.
+    // -------------------------------------------------------------------
+
+    @Test
+    @DisplayName("PATCH with labels: [] (explicit empty array) clears all existing labels")
+    fun patch_with_labels_empty_array_clears_labels() {
+        val name = unique("strict-patch-labels-clear")
+        val seedBody =
+            """
+            {
+              "name": "$name",
+              "group": {"groupKey": "org.example.test", "isFake": false},
+              "baseConfiguration": {"build": {"buildSystem": "MAVEN"}},
+              "labels": ["lblA_${UUID.randomUUID().toString().take(6)}",
+                         "lblB_${UUID.randomUUID().toString().take(6)}"]
+            }
+            """.trimIndent()
+        val seedResponse =
+            postCreate(seedBody).andExpect(status().isCreated)
+                .andReturn().response.contentAsString
+        val seed = objectMapper.readTree(seedResponse)
+        val id = seed["id"].asText()
+        val versionLock = seed["version"].asLong()
+        val seededLabels = seed["labels"].map { it.asText() }
+        assert(seededLabels.size == 2) {
+            "precondition: seeded component should have 2 labels; got $seededLabels"
+        }
+
+        // The portal sends this exact shape from `buildUpdateRequest.ts` when
+        // the user toggles every label off — `labels: []` is the explicit-clear
+        // signal, and `clearGroup: false` is always present in the wire schema.
+        val patchBody =
+            """{"version": $versionLock, "clearGroup": false, "labels": []}"""
+        val patched =
+            mvc.perform(
+                patch("/rest/api/4/components/$id")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(patchBody),
+            ).andExpect(status().isOk)
+                .andReturn().response.contentAsString
+        val labelsAfter = objectMapper.readTree(patched)["labels"].map { it.asText() }
+        assert(labelsAfter.isEmpty()) {
+            "expected labels cleared to []; got $labelsAfter"
+        }
+    }
+
+    @Test
+    @DisplayName("PATCH without 'labels' key (field absent) preserves existing labels — no-op contract")
+    fun patch_with_labels_absent_preserves_labels() {
+        val name = unique("strict-patch-labels-noop")
+        val labelA = "lblA_${UUID.randomUUID().toString().take(6)}"
+        val labelB = "lblB_${UUID.randomUUID().toString().take(6)}"
+        val seedBody =
+            """
+            {
+              "name": "$name",
+              "group": {"groupKey": "org.example.test", "isFake": false},
+              "baseConfiguration": {"build": {"buildSystem": "MAVEN"}},
+              "labels": ["$labelA", "$labelB"]
+            }
+            """.trimIndent()
+        val seedResponse =
+            postCreate(seedBody).andExpect(status().isCreated)
+                .andReturn().response.contentAsString
+        val seed = objectMapper.readTree(seedResponse)
+        val id = seed["id"].asText()
+        val versionLock = seed["version"].asLong()
+
+        // No `labels` key at all — Kotlin/Jackson sees `request.labels == null`,
+        // which means "don't touch" per the PATCH no-op contract.
+        val patchBody = """{"version": $versionLock, "clearGroup": false}"""
+        val patched =
+            mvc.perform(
+                patch("/rest/api/4/components/$id")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(patchBody),
+            ).andExpect(status().isOk)
+                .andReturn().response.contentAsString
+        val labelsAfter = objectMapper.readTree(patched)["labels"].map { it.asText() }.toSet()
+        assert(labelsAfter == setOf(labelA, labelB)) {
+            "expected labels preserved as [$labelA, $labelB]; got $labelsAfter"
+        }
+    }
+
+    @Test
+    @DisplayName("PATCH trims whitespace around groupKey before validating and persisting")
+    fun patch_normalises_groupKey_whitespace() {
+        val name = unique("strict-patch-trim")
+        val seedResponse =
+            postCreate(validCreateBody(name)).andExpect(status().isCreated)
+                .andReturn().response.contentAsString
+        val seed = objectMapper.readTree(seedResponse)
+        val id = seed["id"].asText()
+        val versionLock = seed["version"].asLong()
+
+        val newKey = "org.example.patchtrim.${UUID.randomUUID().toString().take(6)}"
+        val patchBody =
+            """{"version": $versionLock, "clearGroup": false, "group": {"groupKey": "  $newKey  ", "isFake": false}}"""
+        val patched =
+            mvc.perform(
+                patch("/rest/api/4/components/$id")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(patchBody),
+            ).andExpect(status().isOk)
+                .andExpect(jsonPath("$.group.groupKey").value(newKey))
+                .andReturn().response.contentAsString
+        val persistedKey = objectMapper.readTree(patched)["group"]["groupKey"].asText()
+        assert(persistedKey == newKey) {
+            "expected PATCH to persist trimmed key '$newKey'; got '$persistedKey'"
+        }
     }
 }

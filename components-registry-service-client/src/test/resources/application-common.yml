@@ -10,7 +10,10 @@ components-registry:
   groovy-path: ${components-registry.work-dir}
   dependency-mapping-file: dependency_mapping.properties
 
-  supportedGroupIds: org.octopusden.octopus,io.bcomponent
+  # Mirrors the server module's test config; the shared
+  # `BaseComponentsRegistryServiceTest.testGetSupportedGroupIds` asserts
+  # the full list, so it must match the server's 3-element form.
+  supportedGroupIds: org.octopusden.octopus,io.bcomponent,org.example
   supportedSystems: NONE,CLASSIC,ALFA
   version-name:
     service-branch: serviceCBranch
