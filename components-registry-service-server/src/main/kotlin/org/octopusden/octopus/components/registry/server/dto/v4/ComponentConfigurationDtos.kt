@@ -96,6 +96,14 @@ data class JiraAspectResponse(
     val lineVersionFormat: String? = null,
     val versionPrefix: String? = null,
     val versionFormat: String? = null,
+    /**
+     * Per-range override for `componentVersionFormat.hotfixVersionFormat`.
+     * `null` here means "no per-range override for this range" — consumers
+     * MUST fall back to the per-component base on
+     * `ComponentDetailResponse.jiraHotfixVersionFormat` (which is itself
+     * inherited from `Defaults.groovy` if the DSL declared none).
+     */
+    val hotfixVersionFormat: String? = null,
 )
 
 data class VcsEntryResponse(
@@ -201,6 +209,12 @@ data class JiraAspectRequest(
     val lineVersionFormat: String? = null,
     val versionPrefix: String? = null,
     val versionFormat: String? = null,
+    // Intentionally NOT exposing per-range hotfixVersionFormat as a V4
+    // editor-write field — DSL import is currently the only producer in
+    // production and there's no UI for per-range hotfix overrides. The
+    // applyScalarValue plumbing on the entity side is available to
+    // a follow-up ticket if/when a UI need surfaces. Read-side exposure
+    // (`JiraAspectResponse.hotfixVersionFormat`) is unaffected.
 )
 
 data class VcsEntryRequest(

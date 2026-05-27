@@ -2001,5 +2001,71 @@
       ],
       "externalRegistry": null
     }
+  },
+  {
+    "componentName": "TEST_PER_RANGE_HOTFIX_FORMAT",
+    "versionRange": "[1.0,2.0)",
+    "component": {
+      "projectKey": "PRHF",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major",
+        "releaseVersionFormat": "$major.$minor.$service",
+        "buildVersionFormat": "$major.$minor.$service-$fix",
+        "lineVersionFormat": "$major",
+        "hotfixVersionFormat": "$major.$minor.$service-$fix"
+      },
+      "componentInfo": {
+        "versionPrefix": "",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "TEST_PER_RANGE_HOTFIX_FORMAT",
+    "versionRange": "[2.0,)",
+    "component": {
+      "projectKey": "PRHF",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major",
+        "releaseVersionFormat": "$major.$minor.$service",
+        "buildVersionFormat": "$major.$minor.$service-$fix",
+        "lineVersionFormat": "$major",
+        "hotfixVersionFormat": "$major.$minor.$service-$fix-$build"
+      },
+      "componentInfo": {
+        "versionPrefix": "",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [],
+      "externalRegistry": null
+    }
   }
 ]

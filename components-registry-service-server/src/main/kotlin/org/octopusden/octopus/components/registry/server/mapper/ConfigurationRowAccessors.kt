@@ -59,6 +59,7 @@ internal val SCALAR_ATTRIBUTE_PATHS: Set<String> =
         "jira.lineVersionFormat",
         "jira.versionPrefix",
         "jira.versionFormat",
+        "jira.hotfixVersionFormat",
     )
 
 /**
@@ -106,6 +107,7 @@ internal fun ComponentConfigurationEntity.extractScalarValue(): Any? =
         "jira.lineVersionFormat" -> jiraLineVersionFormat
         "jira.versionPrefix" -> jiraVersionPrefix
         "jira.versionFormat" -> jiraVersionFormat
+        "jira.hotfixVersionFormat" -> jiraHotfixVersionFormat
         else -> null
     }
 
@@ -164,6 +166,7 @@ internal fun ComponentConfigurationEntity.applyScalarValue(
         "jira.lineVersionFormat" -> jiraLineVersionFormat = requireString(attributePath, value)
         "jira.versionPrefix" -> jiraVersionPrefix = requireString(attributePath, value)
         "jira.versionFormat" -> jiraVersionFormat = requireString(attributePath, value)
+        "jira.hotfixVersionFormat" -> jiraHotfixVersionFormat = requireString(attributePath, value)
     }
 }
 
@@ -197,6 +200,7 @@ private fun ComponentConfigurationEntity.clearAllScalarColumns() {
     jiraLineVersionFormat = null
     jiraVersionPrefix = null
     jiraVersionFormat = null
+    jiraHotfixVersionFormat = null
 }
 
 private fun requireString(

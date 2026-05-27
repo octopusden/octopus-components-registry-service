@@ -424,6 +424,7 @@ class MigrationIntegrationTest {
         assertNull(presence.jiraMajorVersionFormat); assertNull(presence.jiraReleaseVersionFormat)
         assertNull(presence.jiraBuildVersionFormat); assertNull(presence.jiraLineVersionFormat)
         assertNull(presence.jiraVersionPrefix); assertNull(presence.jiraVersionFormat)
+        assertNull(presence.jiraHotfixVersionFormat)
 
         // `[1.0.107,)` must NOT get an extra presence row — it has real overrides.
         val rangeRows = allRows.filter { it.versionRange == "[1.0.107,)" }

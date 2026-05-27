@@ -58,7 +58,11 @@ CREATE TABLE components (
     releases_in_default_branch  BOOLEAN,
     -- jira fields that never vary per-version:
     jira_display_name           VARCHAR(255),
-    jira_hotfix_version_format  VARCHAR(255),                           -- UI read-only (inherited from Defaults)
+    -- Per-component base value for jira.componentVersionFormat.hotfixVersionFormat;
+    -- inherited from Defaults at import time. Per-range overrides live on
+    -- component_configurations.jira_hotfix_version_format and take precedence
+    -- when present (see EntityMappers.buildJiraComponent).
+    jira_hotfix_version_format  VARCHAR(255),
     vcs_external_registry       TEXT,
     -- distribution fields that never vary per-version:
     distribution_explicit       BOOLEAN,
@@ -150,6 +154,10 @@ CREATE TABLE component_configurations (
     jira_line_version_format                    VARCHAR(255),
     jira_version_prefix                         VARCHAR(255),
     jira_version_format                         VARCHAR(255),
+    -- Per-range override for jira.componentVersionFormat.hotfixVersionFormat.
+    -- Defaults / per-component base lives on components.jira_hotfix_version_format.
+    -- The resolver layers this on top of the base when present.
+    jira_hotfix_version_format                  VARCHAR(255),
     created_at                                  TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
     updated_at                                  TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
 
@@ -210,6 +218,7 @@ CREATE TABLE component_configurations (
         AND jira_major_version_format IS NULL AND jira_release_version_format IS NULL
         AND jira_build_version_format IS NULL AND jira_line_version_format IS NULL
         AND jira_version_prefix IS NULL AND jira_version_format IS NULL
+        AND jira_hotfix_version_format IS NULL
     )),
 
     -- UI-swift-sloth: BASE rows must declare a build_system. Column-level

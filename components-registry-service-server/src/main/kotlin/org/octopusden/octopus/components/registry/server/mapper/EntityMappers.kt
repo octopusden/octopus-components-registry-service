@@ -465,6 +465,25 @@ internal class ComponentConfigurationView {
     var jiraLineVersionFormat: String? = null
     var jiraVersionPrefix: String? = null
     var jiraVersionFormat: String? = null
+    var jiraHotfixVersionFormat: String? = null
+
+    /**
+     * Tracks presence (not value) of a per-range SCALAR_OVERRIDE for
+     * `jira.hotfixVersionFormat`. Set to `true` only when
+     * [applyScalarOverride] processes a row whose `overriddenAttribute ==
+     * "jira.hotfixVersionFormat"`. Required because this field has a
+     * per-component fallback layer (`components.jira_hotfix_version_format`)
+     * that the resolver consults when no per-range override is present —
+     * without the presence flag, an explicit null-clear (override row with
+     * NULL value) is silently undone by the Kotlin `?:` fallback chain in
+     * [buildJiraComponent], defeating the import-only null-clear contract.
+     *
+     * Sibling per-range scalars (e.g. `jiraReleaseVersionFormat`) do not
+     * need this flag — their resolver fallback is a hardcoded sentinel
+     * (`"$major.$minor"` etc.), not a per-component column, so a null
+     * value on the merged view is itself the null-clear result.
+     */
+    var jiraHotfixVersionFormatOverridden: Boolean = false
 
     @Suppress("CyclomaticComplexMethod", "LongMethod")
     fun applyScalarOverride(override: ComponentConfigurationEntity) {
@@ -503,6 +522,13 @@ internal class ComponentConfigurationView {
             "jira.lineVersionFormat" -> jiraLineVersionFormat = override.jiraLineVersionFormat
             "jira.versionPrefix" -> jiraVersionPrefix = override.jiraVersionPrefix
             "jira.versionFormat" -> jiraVersionFormat = override.jiraVersionFormat
+            "jira.hotfixVersionFormat" -> {
+                jiraHotfixVersionFormat = override.jiraHotfixVersionFormat
+                // Set presence regardless of value so a null-clear row
+                // (NULL on the typed column) is preserved by the resolver
+                // instead of being swallowed by the per-component fallback.
+                jiraHotfixVersionFormatOverridden = true
+            }
 
             else -> Unit // unknown attribute path; ignore for forward-compat
         }
@@ -637,6 +663,7 @@ internal class ComponentConfigurationView {
                 jiraLineVersionFormat = base.jiraLineVersionFormat
                 jiraVersionPrefix = base.jiraVersionPrefix
                 jiraVersionFormat = base.jiraVersionFormat
+                jiraHotfixVersionFormat = base.jiraHotfixVersionFormat
             }
     }
 }
@@ -752,7 +779,24 @@ private fun buildJiraComponent(
     val releaseFmt = merged.jiraReleaseVersionFormat ?: "\$major.\$minor"
     val buildFmt = merged.jiraBuildVersionFormat ?: releaseFmt
     val lineFmt = merged.jiraLineVersionFormat ?: majorFmt
-    val hotfixFmt = component.jiraHotfixVersionFormat ?: ""
+    // Per-range override (from a SCALAR_OVERRIDE row on component_configurations
+    // for the matching range) takes precedence; falls back to the per-component
+    // base value stored on `components.jira_hotfix_version_format` (Defaults /
+    // top-level DSL). Empty string preserves the pre-existing "no format string"
+    // contract for components that declare no hotfixVersionFormat anywhere.
+    //
+    // When [merged.jiraHotfixVersionFormatOverridden] is true the per-range
+    // SCALAR_OVERRIDE row took effect for this range — including a null-clear
+    // override (NULL typed column = "explicitly clear inherited value"). In
+    // that case the per-component fallback MUST NOT be consulted, otherwise
+    // the null-clear is silently undone. See the KDoc on
+    // [ComponentConfigurationView.jiraHotfixVersionFormatOverridden].
+    val hotfixFmt =
+        if (merged.jiraHotfixVersionFormatOverridden) {
+            merged.jiraHotfixVersionFormat ?: ""
+        } else {
+            merged.jiraHotfixVersionFormat ?: component.jiraHotfixVersionFormat ?: ""
+        }
 
     val format =
         ComponentVersionFormat.create(majorFmt, releaseFmt, buildFmt, lineFmt, hotfixFmt)
