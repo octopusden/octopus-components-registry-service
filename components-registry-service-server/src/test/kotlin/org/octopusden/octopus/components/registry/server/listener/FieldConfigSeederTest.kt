@@ -21,9 +21,11 @@ import java.nio.file.Paths
  * `ConfigHelper.supportedGroupIds()`.
  *
  * `application-common.yml` sets `components-registry.supportedGroupIds:
- * org.octopusden.octopus,io.bcomponent`, so the first prefix is
- * `org.octopusden.octopus` (RFC 2606 placeholder — never a real customer
- * domain).
+ * org.octopusden.octopus,io.bcomponent,org.example`, so the first prefix is
+ * `org.octopusden.octopus`. (`org.example` was added by the validation
+ * follow-up so existing test fixtures using `org.example.test` still pass
+ * the new server-side `validateGroupKeyPrefix` check; the seeder still
+ * picks the FIRST entry, which is unchanged.)
  *
  * The seeder fires on `ApplicationReadyEvent`, so by the time @SpringBootTest
  * wires up the context the field-config row exists.
@@ -112,6 +114,47 @@ class FieldConfigSeederTest {
 
         assert(readDefaultValue() == overrideValue) {
             "expected admin-set value '$overrideValue' to be preserved; got '${readDefaultValue()}'"
+        }
+    }
+
+    @Test
+    @DisplayName("Seeder preserves an admin-set defaultValue = null (key present with null value, treated as intentional opt-out)")
+    fun preservesExplicitNullDefaultValue() {
+        // Copilot review note (#298): the previous idempotency check was
+        // `if (groupIdField[KEY_DEFAULT_VALUE] != null) return`, which
+        // treated `defaultValue: null` as "missing" and silently re-seeded
+        // it. But an admin who explicitly set `null` may have done so to
+        // disable the Portal's auto-suggest default. Switching the check
+        // to key-presence (`containsKey`) preserves that intent.
+        @Suppress("UNCHECKED_CAST")
+        val nullDefault =
+            mapOf<String, Any?>(
+                "component" to mapOf<String, Any?>(
+                    "groupId" to mapOf<String, Any?>("defaultValue" to null),
+                ),
+            )
+        val entity =
+            registryConfigRepository.findById("field-config")
+                .orElse(RegistryConfigEntity(key = "field-config"))
+        entity.value = nullDefault
+        registryConfigRepository.save(entity)
+
+        seeder.seedComponentGroupIdDefault()
+
+        // The seeded key still resolves to null — NOT to the
+        // `org.octopusden.octopus` first-prefix that the seeder would
+        // produce on a blank DB.
+        assert(readDefaultValue() == null) {
+            "expected admin's explicit null defaultValue to be preserved; got '${readDefaultValue()}'"
+        }
+        // And the key must still be present in the blob.
+        val reloaded = registryConfigRepository.findById("field-config").orElse(null)!!
+        @Suppress("UNCHECKED_CAST")
+        val groupId =
+            ((reloaded.value as Map<String, Any?>)["component"] as Map<String, Any?>)["groupId"]
+                as Map<String, Any?>
+        assert(groupId.containsKey("defaultValue")) {
+            "expected 'defaultValue' key to remain present after seed; got $groupId"
         }
     }
 

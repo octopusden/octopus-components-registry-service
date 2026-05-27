@@ -95,6 +95,7 @@ class MIG047FieldOverrideWriteGuardTest {
                 fieldConfigService = mock(FieldConfigService::class.java),
                 teamcityProperties = mock(TeamcityProperties::class.java),
                 versionRangeFactory = VersionRangeFactory(versionNames),
+                environment = mock(org.springframework.core.env.Environment::class.java),
             )
 
         component = ComponentEntity(id = componentId, componentKey = "alpha-fixture")

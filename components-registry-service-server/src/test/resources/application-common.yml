@@ -9,7 +9,12 @@ components-registry:
   groovy-path: ${components-registry.work-dir}
   dependency-mapping-file: dependency_mapping.properties
 
-  supportedGroupIds: org.octopusden.octopus,io.bcomponent
+  # `org.example` is included so the broad test-fixture convention
+  # (`org.example.test` as the standard RFC 2606 placeholder, used by 14
+  # test files) passes the new server-side `validateGroupKeyPrefix` check.
+  # Rejection tests use a prefix that is NOT in this list (e.g.
+  # `com.someoneelse.*`).
+  supportedGroupIds: org.octopusden.octopus,io.bcomponent,org.example
   supportedSystems: NONE,CLASSIC,ALFA
   version-name:
     service-branch: serviceCBranch
