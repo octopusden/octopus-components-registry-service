@@ -98,7 +98,9 @@ class ComponentsRegistryServiceControllerTest : MockMvcRegistryTestSupport() {
             )
         expectedComponent.releaseManager = "user"
         expectedComponent.securityChampion = "user"
-        expectedComponent.system = setOf("ALFA", "CLASSIC")
+        // System set is backend-dependent (git here returns full set; db-source
+        // overrides `expectedTestoneSystemSet` to the single-value subset).
+        expectedComponent.system = expectedTestoneSystemSet
         expectedComponent.clientCode = "CLIENT_CODE"
         expectedComponent.releasesInDefaultBranch = false
         expectedComponent.solution = true
@@ -178,7 +180,9 @@ class ComponentsRegistryServiceControllerTest : MockMvcRegistryTestSupport() {
 
         expectedComponent.releaseManager = "user"
         expectedComponent.securityChampion = "user"
-        expectedComponent.system = setOf("ALFA", "CLASSIC")
+        // System set is backend-dependent (git here returns full set; db-source
+        // overrides `expectedTestoneSystemSet` to the single-value subset).
+        expectedComponent.system = expectedTestoneSystemSet
         expectedComponent.clientCode = "CLIENT_CODE"
         expectedComponent.releasesInDefaultBranch = false
         expectedComponent.solution = true

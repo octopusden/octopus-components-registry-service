@@ -119,6 +119,13 @@ class ComponentEntity(
     @Column(name = "distribution_external")
     var distributionExternal: Boolean? = null,
 
+    // Scalar FK to `systems(code)`. Collapsed from the M:N junction
+    // `component_systems` in this iteration — a component now belongs to
+    // at most one system. Nullable on the schema; service-layer rejects
+    // a non-blank value that is not in the master `systems` table.
+    @Column(name = "system_code", length = 50)
+    var systemCode: String? = null,
+
     @Version
     @Column(name = "version", nullable = false)
     var version: Long = 0,
@@ -150,7 +157,4 @@ class ComponentEntity(
 
     @OneToMany(mappedBy = "component", fetch = FetchType.LAZY)
     var labelJunctions: MutableList<ComponentLabelEntity> = mutableListOf(),
-
-    @OneToMany(mappedBy = "component", fetch = FetchType.LAZY)
-    var systemJunctions: MutableList<ComponentSystemEntity> = mutableListOf(),
 )

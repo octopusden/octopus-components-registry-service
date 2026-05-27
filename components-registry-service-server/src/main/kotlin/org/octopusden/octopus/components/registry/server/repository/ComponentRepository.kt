@@ -27,4 +27,27 @@ interface ComponentRepository :
             "ORDER BY c.componentOwner",
     )
     fun findDistinctOwners(): List<String>
+
+    /**
+     * Distinct system codes currently assigned to at least one component.
+     *
+     * Sourced from the scalar `components.system_code` column (the M:N
+     * `component_systems` junction was collapsed to a 1:0..1 reference in
+     * this iteration). NOT sourced from the master `SystemEntity` /
+     * `systems` table — that's the `/meta/systems/dictionary` endpoint;
+     * this endpoint advertises only codes actually in use, parity with
+     * `/meta/owners` and `/meta/labels`.
+     *
+     * Defensively filters null and blank/whitespace-only system_code
+     * values, mirroring the IS-NOT-NULL + non-empty guard on
+     * `findDistinctOwners`. A stray "" or "   " in the column (from
+     * direct DB write) would otherwise surface as an unselectable blank
+     * chip in the Portal picker.
+     */
+    @Query(
+        "SELECT DISTINCT c.systemCode FROM ComponentEntity c " +
+            "WHERE c.systemCode IS NOT NULL AND TRIM(c.systemCode) <> '' " +
+            "ORDER BY c.systemCode",
+    )
+    fun findDistinctSystemCodes(): List<String>
 }

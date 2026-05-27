@@ -10,7 +10,6 @@ import org.junit.jupiter.params.provider.CsvSource
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentLabelEntity
-import org.octopusden.octopus.components.registry.server.entity.ComponentSystemEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentTeamcityProjectEntity
 import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
 import java.util.UUID
@@ -62,7 +61,7 @@ class ComponentSummaryMapperTest {
     }
 
     @Test
-    @DisplayName("default entity → all SYS-040 fields null, labels empty, systems empty")
+    @DisplayName("default entity → all SYS-040 fields null, labels empty, system null")
     fun defaultEntity_allSys040FieldsNull() {
         val response = minimalComponent().toSummaryResponse()
 
@@ -72,22 +71,18 @@ class ComponentSummaryMapperTest {
         assertNull(response.teamcityProjectId)
         assertNull(response.teamcityProjectUrl)
         assertTrue(response.labels.isEmpty())
-        assertTrue(response.systems.isEmpty())
+        assertNull(response.system)
     }
 
     // -----------------------------------------------------------------------
-    // systemJunctions → systems: Set<String>
+    // systemCode → system: String? (single-value)
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("systemJunctions → systems set in summary response")
-    fun systemJunctions_mapsToSystems() {
-        val component = minimalComponent()
-        val id = component.id!!
-        component.systemJunctions.add(ComponentSystemEntity(componentId = id, systemCode = "UNIX"))
-        component.systemJunctions.add(ComponentSystemEntity(componentId = id, systemCode = "WIN"))
-
-        assertEquals(setOf("UNIX", "WIN"), component.toSummaryResponse().systems)
+    @DisplayName("entity systemCode → single-value `system` field in summary response")
+    fun systemCode_mapsToScalarSystem() {
+        val component = minimalComponent().also { it.systemCode = "UNIX" }
+        assertEquals("UNIX", component.toSummaryResponse().system)
     }
 
     // -----------------------------------------------------------------------

@@ -51,6 +51,9 @@ class ListComponentsSystemFilterTest {
     @Autowired
     private lateinit var objectMapper: ObjectMapper
 
+    @Autowired
+    private lateinit var systemRepository: org.octopusden.octopus.components.registry.server.repository.SystemRepository
+
     init {
         val testResourcesPath =
             Paths.get(ListComponentsSystemFilterTest::class.java.getResource("/expected-data")!!.toURI()).parent
@@ -67,12 +70,12 @@ class ListComponentsSystemFilterTest {
      * Behaviour, not just status: when the auto-migrated fixture contains
      * components with `system = "CLASSIC"` (see common/TestComponents.groovy),
      * filtering by `?system=CLASSIC` must return a non-empty content list AND
-     * every returned row must declare CLASSIC among its systems. A weaker
-     * "expect 200" check would still pass if the new junction-based filter
+     * every returned row must have `system == "CLASSIC"`. A weaker
+     * "expect 200" check would still pass if the new scalar-column filter
      * were silently ignored and the endpoint returned an unfiltered page.
      */
     @Test
-    @DisplayName("?system=CLASSIC returns only components whose systems include CLASSIC")
+    @DisplayName("?system=CLASSIC returns only components whose system == CLASSIC")
     fun systemFilter_includesMatchingComponents() {
         val body =
             mvc
@@ -82,10 +85,10 @@ class ListComponentsSystemFilterTest {
         val content = objectMapper.readTree(body).path("content")
         assertTrue(content.isArray && content.size() > 0, "Expected at least one CLASSIC component; got: ${body.take(400)}")
         for (component in content) {
-            val systems = component.path("systems").map { it.asText() }
+            val system = component.path("system").asText(null)
             assertTrue(
-                systems.contains("CLASSIC"),
-                "Component '${component.path("name").asText()}' returned by ?system=CLASSIC must declare CLASSIC; got systems=$systems",
+                system == "CLASSIC",
+                "Component '${component.path("name").asText()}' returned by ?system=CLASSIC must declare CLASSIC; got system=$system",
             )
         }
     }
@@ -116,28 +119,35 @@ class ListComponentsSystemFilterTest {
     // repeatable params (?system=A&system=B). Controller normalises both
     // via split-by-comma → trim → drop-empty → distinct → null-if-empty.
     // Multi-select semantics is OR — the picker means "components
-    // belonging to any of these systems". A component can carry several
-    // system junctions, so a single component may match multiple
-    // selections; the Specification uses one JOIN through systemJunctions
-    // + IN(...) which is naturally union-semantic.
+    // belonging to any of these systems". After collapsing the system
+    // model to a scalar (`components.system_code`), each component carries
+    // exactly zero-or-one system. The Specification reduces to a plain
+    // `IN(...)` predicate against the scalar column — no JOIN — and a
+    // component cannot match more than one selection at once.
     // -------------------------------------------------------------------
 
     private fun uniqueSysCode(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(6)}"
 
     private fun uniqueName(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(8)}"
 
-    private fun createComponentWithSystems(
+    private fun createComponentWithSystem(
         name: String,
-        systems: Set<String>,
+        system: String,
     ) {
-        val systemsJson = systems.joinToString(",") { "\"$it\"" }
+        // Pre-seed the master `systems` table — the service-layer
+        // validator rejects codes that aren't in the dictionary.
+        if (systemRepository.findByCode(system) == null) {
+            systemRepository.save(
+                org.octopusden.octopus.components.registry.server.entity.SystemEntity(code = system),
+            )
+        }
         mvc
             .perform(
                 post("/rest/api/4/components")
                     .with(adminJwt())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(
-                        """{"name":"$name","displayName":"$name","systems":[$systemsJson],""" +
+                        """{"name":"$name","displayName":"$name","system":"$system",""" +
                             """"group":{"groupKey":"org.example.test","isFake":false},""" +
                             """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
                     ),
@@ -168,8 +178,8 @@ class ListComponentsSystemFilterTest {
         val sysB = uniqueSysCode("sysB")
         val onlyA = uniqueName("sys_only_a")
         val onlyB = uniqueName("sys_only_b")
-        createComponentWithSystems(onlyA, setOf(sysA))
-        createComponentWithSystems(onlyB, setOf(sysB))
+        createComponentWithSystem(onlyA, sysA)
+        createComponentWithSystem(onlyB, sysB)
 
         val names = fetchNames("system" to sysA)
         assert(names.contains(onlyA)) { "expected $onlyA in $names" }
@@ -177,24 +187,25 @@ class ListComponentsSystemFilterTest {
     }
 
     @Test
-    @DisplayName("SYS-042: ?system=A,B (CSV) returns components carrying A OR B (OR semantics)")
+    @DisplayName("SYS-042: ?system=A,B (CSV) returns components whose single system is A OR B (OR semantics)")
     fun `SYS-042 system A,B CSV OR semantics`() {
+        // After the M:N collapse to single-value, a component cannot carry
+        // "both A and B". OR semantics still holds across distinct
+        // components: filter `?system=A,B` matches any component whose
+        // single `system_code` is in {A, B}.
         val sysA = uniqueSysCode("orsysa")
         val sysB = uniqueSysCode("orsysb")
         val sysC = uniqueSysCode("orsysc")
         val onlyA = uniqueName("sysor_only_a")
         val onlyB = uniqueName("sysor_only_b")
         val onlyC = uniqueName("sysor_only_c")
-        val both = uniqueName("sysor_both_ab")
-        createComponentWithSystems(onlyA, setOf(sysA))
-        createComponentWithSystems(onlyB, setOf(sysB))
-        createComponentWithSystems(onlyC, setOf(sysC))
-        createComponentWithSystems(both, setOf(sysA, sysB))
+        createComponentWithSystem(onlyA, sysA)
+        createComponentWithSystem(onlyB, sysB)
+        createComponentWithSystem(onlyC, sysC)
 
         val names = fetchNames("system" to "$sysA,$sysB")
         assert(names.contains(onlyA)) { "expected $onlyA in $names" }
         assert(names.contains(onlyB)) { "expected $onlyB in $names" }
-        assert(names.contains(both)) { "expected $both in $names (carries both)" }
         assert(!names.contains(onlyC)) { "did not expect $onlyC in $names (C not selected)" }
     }
 
@@ -207,9 +218,9 @@ class ListComponentsSystemFilterTest {
         val compA = uniqueName("sysrep_a")
         val compB = uniqueName("sysrep_b")
         val compC = uniqueName("sysrep_c")
-        createComponentWithSystems(compA, setOf(sysA))
-        createComponentWithSystems(compB, setOf(sysB))
-        createComponentWithSystems(compC, setOf(sysC))
+        createComponentWithSystem(compA, sysA)
+        createComponentWithSystem(compB, sysB)
+        createComponentWithSystem(compC, sysC)
 
         val body =
             mvc
@@ -233,7 +244,7 @@ class ListComponentsSystemFilterTest {
     fun `SYS-042 system blank value is no filter`() {
         val seedSys = uniqueSysCode("sysblank")
         val seed = uniqueName("sysblank_seed")
-        createComponentWithSystems(seed, setOf(seedSys))
+        createComponentWithSystem(seed, seedSys)
 
         val withoutParam = fetchNames()
         val withBlank = fetchNames("system" to "")
@@ -247,7 +258,7 @@ class ListComponentsSystemFilterTest {
     fun `SYS-042 system only blanks is no filter`() {
         val seedSys = uniqueSysCode("syscommas")
         val seed = uniqueName("syscommas_seed")
-        createComponentWithSystems(seed, setOf(seedSys))
+        createComponentWithSystem(seed, seedSys)
 
         val withoutParam = fetchNames()
         val withCommas = fetchNames("system" to ",,")
@@ -265,9 +276,9 @@ class ListComponentsSystemFilterTest {
         val compA = uniqueName("sysilv_a")
         val compB = uniqueName("sysilv_b")
         val compC = uniqueName("sysilv_c")
-        createComponentWithSystems(compA, setOf(sysA))
-        createComponentWithSystems(compB, setOf(sysB))
-        createComponentWithSystems(compC, setOf(sysC))
+        createComponentWithSystem(compA, sysA)
+        createComponentWithSystem(compB, sysB)
+        createComponentWithSystem(compC, sysC)
 
         val canonical = fetchNames("system" to "$sysA,$sysB")
         val interleaved = fetchNames("system" to ",$sysA,,$sysB,")
@@ -284,7 +295,7 @@ class ListComponentsSystemFilterTest {
     fun `SYS-042 system trailing whitespace trimmed`() {
         val sysA = uniqueSysCode("trimsysa")
         val tagged = uniqueName("systrim_tagged")
-        createComponentWithSystems(tagged, setOf(sysA))
+        createComponentWithSystem(tagged, sysA)
 
         val names = fetchNames("system" to "$sysA ")
         assert(names.contains(tagged)) { "expected $tagged in $names (trailing space should trim)" }
@@ -295,7 +306,7 @@ class ListComponentsSystemFilterTest {
     fun `SYS-042 system leading whitespace trimmed`() {
         val sysA = uniqueSysCode("ltrimsysa")
         val tagged = uniqueName("sysltrim_tagged")
-        createComponentWithSystems(tagged, setOf(sysA))
+        createComponentWithSystem(tagged, sysA)
 
         val names = fetchNames("system" to " $sysA")
         assert(names.contains(tagged)) { "expected $tagged in $names (leading space should trim)" }
@@ -312,8 +323,8 @@ class ListComponentsSystemFilterTest {
         val sysB = uniqueSysCode("dupsysb")
         val onlyA = uniqueName("sysdup_only_a")
         val onlyB = uniqueName("sysdup_only_b")
-        createComponentWithSystems(onlyA, setOf(sysA))
-        createComponentWithSystems(onlyB, setOf(sysB))
+        createComponentWithSystem(onlyA, sysA)
+        createComponentWithSystem(onlyB, sysB)
 
         val single = fetchNames("system" to sysA)
         val duplicated = fetchNames("system" to "$sysA,$sysA")
@@ -337,9 +348,9 @@ class ListComponentsSystemFilterTest {
         val second = "syspg_bbb_$suffix"
         val third = "syspg_ccc_$suffix"
         // Seed in reverse insertion order so a sort regression is visible.
-        createComponentWithSystems(third, setOf(sysB))
-        createComponentWithSystems(second, setOf(sysA))
-        createComponentWithSystems(first, setOf(sysA))
+        createComponentWithSystem(third, sysB)
+        createComponentWithSystem(second, sysA)
+        createComponentWithSystem(first, sysA)
 
         val pageBody =
             mvc
