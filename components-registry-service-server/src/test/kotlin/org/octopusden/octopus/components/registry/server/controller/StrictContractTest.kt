@@ -736,4 +736,62 @@ class StrictContractTest {
         ).andExpect(status().isOk)
             .andExpect(jsonPath("$.system").value("CLASSIC"))
     }
+
+    @Test
+    @DisplayName("CREATE normalises `system` to the configured supportedSystems casing (case-insensitive validation, canonical storage)")
+    fun create_normalises_system_casing_to_config() {
+        // The env config (`application-common.yml`) declares
+        // `supportedSystems: NONE,CLASSIC,ALFA` — all upper-case. The
+        // validator is case-insensitive on the config path (mirrors
+        // validateGroupKeyPrefix's leniency), but it must persist the
+        // CANONICAL form so the master `systems` table doesn't accumulate
+        // duplicate rows `("CLASSIC")` and `("Classic")` (PK is
+        // case-sensitive). Without canonical storage, `?system=CLASSIC`
+        // would miss the component stored as "Classic" and
+        // `/meta/systems/dictionary` would surface both as distinct
+        // entries — see PR #301 review thread.
+        val body =
+            """
+            {
+              "name": "${unique("strict-create-system-casing")}",
+              "system": "Classic",
+              "group": {"groupKey": "org.example.test", "isFake": false},
+              "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
+            }
+            """.trimIndent()
+        postCreate(body)
+            .andExpect(status().isCreated)
+            .andExpect(jsonPath("$.system").value("CLASSIC"))
+    }
+
+    @Test
+    @DisplayName("PATCH normalises `system` to the configured supportedSystems casing")
+    fun patch_normalises_system_casing_to_config() {
+        val name = unique("strict-patch-system-casing")
+        val seedBody =
+            """
+            {
+              "name": "$name",
+              "system": "CLASSIC",
+              "group": {"groupKey": "org.example.test", "isFake": false},
+              "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
+            }
+            """.trimIndent()
+        val seedResponse =
+            postCreate(seedBody).andExpect(status().isCreated)
+                .andReturn().response.contentAsString
+        val seed = objectMapper.readTree(seedResponse)
+        val id = seed["id"].asText()
+        val versionLock = seed["version"].asLong()
+
+        // PATCH with lower-case `alfa` — should land canonical `ALFA`.
+        val patchBody = """{"version": $versionLock, "clearGroup": false, "system": "alfa"}"""
+        mvc.perform(
+            patch("/rest/api/4/components/$id")
+                .with(adminJwt())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(patchBody),
+        ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.system").value("ALFA"))
+    }
 }

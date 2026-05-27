@@ -182,14 +182,19 @@ class ComponentManagementServiceImpl(
         // enum-like identifier). Blank-after-trim normalises to null so
         // a caller that posts `system: "  "` ends up with system_code =
         // NULL rather than an unselectable whitespace value. The
-        // master `systems` row is auto-created by `ensureSystemExists`
-        // post-validation so the FK from `components.system_code →
-        // systems(code)` is always satisfied on first write of a
-        // newly-introduced (but config-allowed) code.
-        val normalizedSystem = request.system?.trim()?.takeIf { it.isNotEmpty() }
-        normalizedSystem?.let {
-            validateSystemCode(it)
-            ensureSystemExists(it)
+        // validator returns the CANONICAL form (config's casing for
+        // config-allowed codes; master-table-verbatim for import-seeded
+        // codes), so a caller posting `Classic` lands `CLASSIC` on the
+        // entity — prevents a duplicate `systems("Classic")` row beside
+        // the canonical `systems("CLASSIC")`. The master `systems` row
+        // is auto-created by `ensureSystemExists` post-validation so
+        // the FK from `components.system_code → systems(code)` is
+        // always satisfied on first write of a newly-introduced (but
+        // config-allowed) code.
+        val canonicalSystem = request.system?.trim()?.takeIf { it.isNotEmpty() }?.let {
+            val canon = validateAndCanonicalizeSystemCode(it)
+            ensureSystemExists(canon)
+            canon
         }
 
         val parent =
@@ -220,7 +225,7 @@ class ComponentManagementServiceImpl(
                 vcsExternalRegistry = request.vcsExternalRegistry,
                 distributionExplicit = request.distributionExplicit,
                 distributionExternal = request.distributionExternal,
-                systemCode = normalizedSystem,
+                systemCode = canonicalSystem,
             )
 
         // Per-component child collections (cascade = ALL on these — flushed with the parent)
@@ -262,7 +267,7 @@ class ComponentManagementServiceImpl(
                 scalarAuditMap(
                     saved,
                     overrideLabels = canonicalizedLabels,
-                    overrideSystem = normalizedSystem,
+                    overrideSystem = canonicalSystem,
                 ),
         )
 
@@ -359,13 +364,17 @@ class ComponentManagementServiceImpl(
         // would normalise to null, but we treat that as a no-op here too —
         // an explicit clear requires a future `clearSystem` flag). The
         // config-driven validator runs only when the trimmed value is a
-        // real code; `ensureSystemExists` then auto-creates the master
-        // `systems` row so the FK from `components.system_code →
-        // systems(code)` is satisfied.
-        val normalizedSystem = request.system?.trim()?.takeIf { it.isNotEmpty() }
-        normalizedSystem?.let {
-            validateSystemCode(it)
-            ensureSystemExists(it)
+        // real code AND returns the canonical form (config's casing, not
+        // the caller's input) — so a PATCH posting `system: "Classic"`
+        // lands the canonical `"CLASSIC"` on the entity rather than
+        // creating a duplicate `systems("Classic")` master row beside
+        // `systems("CLASSIC")`. `ensureSystemExists` then auto-creates
+        // the master `systems` row so the FK from `components.system_code
+        // → systems(code)` is satisfied.
+        val canonicalSystem = request.system?.trim()?.takeIf { it.isNotEmpty() }?.let {
+            val canon = validateAndCanonicalizeSystemCode(it)
+            ensureSystemExists(canon)
+            canon
         }
 
         // Capture the pre-update label / system membership so the post-sync audit
@@ -404,11 +413,16 @@ class ComponentManagementServiceImpl(
         request.distributionExternal?.let {
             if (!fieldConfigService.isHidden("component.distributionExternal")) entity.distributionExternal = it
         }
-        // Single-value system: PATCH writes the trimmed-and-validated value
-        // directly onto the entity's scalar column. `null` (after trim/
-        // takeIf) means "don't touch" — see notes above on the no-explicit-
-        // clear semantic.
-        normalizedSystem?.let { entity.systemCode = it }
+        // Single-value system: PATCH writes the canonical (config-cased)
+        // value directly onto the entity's scalar column. `null` (after
+        // trim / takeIf) means "don't touch" — see notes above on the
+        // no-explicit-clear semantic. FC-gated like peer scalars so an
+        // admin can hide `component.system` via field-config and v4
+        // writes for the field become a silent no-op (consistent with
+        // displayName / componentOwner / productType etc. above).
+        canonicalSystem?.let {
+            if (!fieldConfigService.isHidden("component.system")) entity.systemCode = it
+        }
 
         // Junctions are synced via their repositories below — after the parent save —
         // because @OneToMany on `labelJunctions` has no cascade. `systemCode` is
@@ -491,7 +505,7 @@ class ComponentManagementServiceImpl(
                 scalarAuditMap(
                     saved,
                     overrideLabels = canonicalizedLabels ?: originalLabels,
-                    overrideSystem = normalizedSystem ?: originalSystem,
+                    overrideSystem = canonicalSystem ?: originalSystem,
                 ),
         )
 
@@ -889,13 +903,14 @@ class ComponentManagementServiceImpl(
      * Validate `value` against the env-config allowlist
      * `components-registry.supportedSystems` (primary path — mirrors the
      * analogous `validateGroupKeyPrefix` gate against `supportedGroupIds`
-     * for `groupKey`). A secondary path also accepts any code that's
-     * already in the master `systems` table — this matches the
-     * import-side seeding model in `ImportServiceImpl.seedSystems`,
-     * which auto-creates `SystemEntity` rows from DSL discovery without
-     * requiring an env-config redeploy. Without this secondary check,
-     * a v4 caller could not edit a component whose system code was
-     * legitimately introduced by a DSL import.
+     * for `groupKey`) AND return the canonical form. A secondary path
+     * also accepts any code that's already in the master `systems`
+     * table — this matches the import-side seeding model in
+     * `ImportServiceImpl.seedSystems`, which auto-creates `SystemEntity`
+     * rows from DSL discovery without requiring an env-config redeploy.
+     * Without this secondary check, a v4 caller could not edit a
+     * component whose system code was legitimately introduced by a DSL
+     * import.
      *
      * Caller is expected to trim + `takeIf(isNotEmpty)` before calling,
      * so we never see blank input here. A code that matches neither
@@ -904,24 +919,32 @@ class ComponentManagementServiceImpl(
      * no prefix logic: `system_code` is a flat enum-like identifier
      * (exact match against a configured / known value).
      *
-     * Case-insensitive compare on the config path mirrors
-     * `validateGroupKeyPrefix`'s leniency: the env config typically
-     * uses upper-case codes (`NONE,CLASSIC,ALFA`) but a caller posting
-     * `Classic` should not be rejected for a stylistic difference. The
-     * master-table compare is case-sensitive (PK on `systems.code`),
-     * which is consistent with how DSL import seeds the table verbatim.
-     * Case is preserved on storage (the trimmed user-typed value is
-     * what lands in `components.system_code`).
+     * **Returns the canonical form, NOT the caller's input.** Case
+     * matching against the config path is case-insensitive (mirrors
+     * `validateGroupKeyPrefix`'s leniency — env config typically uses
+     * upper-case codes `NONE,CLASSIC,ALFA` but a caller posting
+     * `Classic` should not be rejected for stylistic difference), but
+     * the form persisted to `components.system_code` is the config's
+     * canonical casing — NOT the caller's input. This prevents a v4
+     * write of `system: "Classic"` from creating a duplicate master
+     * `systems("Classic")` row alongside the canonical `systems("CLASSIC")`
+     * row (the PK on `systems.code` is case-sensitive), which would
+     * make `?system=CLASSIC` filter miss components stored as
+     * `"Classic"` and surface duplicate entries on
+     * `/meta/systems/dictionary`. The master-table fallback compares
+     * case-sensitively (PK match), so codes added by DSL import
+     * round-trip verbatim.
      */
-    private fun validateSystemCode(value: String) {
+    private fun validateAndCanonicalizeSystemCode(value: String): String {
         require(value.isNotBlank()) { "system must not be blank" }
         val allowed = configHelper.supportedSystems().toList()
-        val inConfig = allowed.any { it.equals(value, ignoreCase = true) }
-        val inMaster = !inConfig && systemRepository.findByCode(value) != null
-        require(inConfig || inMaster) {
+        val canonicalFromConfig = allowed.firstOrNull { it.equals(value, ignoreCase = true) }
+        if (canonicalFromConfig != null) return canonicalFromConfig
+        if (systemRepository.findByCode(value) != null) return value
+        throw IllegalArgumentException(
             "Invalid system: '$value' is not in the configured supportedSystems " +
-                "and is not a known imported system code. Allowed (config): $allowed"
-        }
+                "and is not a known imported system code. Allowed (config): $allowed",
+        )
     }
 
     /**

@@ -274,9 +274,22 @@ CREATE TABLE systems (
 -- table to exist before the FK constraint is created, even within a
 -- single transaction. The column itself is defined in the CREATE TABLE
 -- for `components` above.
+--
+-- ON DELETE SET NULL: removing a master system row should not be blocked
+-- by lingering component references. Components keep their identity, lose
+-- their system assignment, and become available again to the assignment
+-- workflow. Choosing SET NULL over RESTRICT (the Postgres default) trades
+-- a soft data-quality concern (orphaned components surfacing as
+-- `system: null` on the API) for admin operability — deleting a
+-- decommissioned system code from the dictionary is now a single
+-- operation rather than a multi-step "find and rewrite every dependent
+-- component first". The old M:N junction `component_systems` had the
+-- same default-RESTRICT FK to `systems(code)`, but junction rows could
+-- be removed independently of components; this clause preserves the
+-- spirit of that decoupling.
 ALTER TABLE components
     ADD CONSTRAINT fk_components_system
-    FOREIGN KEY (system_code) REFERENCES systems(code);
+    FOREIGN KEY (system_code) REFERENCES systems(code) ON DELETE SET NULL;
 
 CREATE TABLE tools (
     name                  VARCHAR(100) PRIMARY KEY,

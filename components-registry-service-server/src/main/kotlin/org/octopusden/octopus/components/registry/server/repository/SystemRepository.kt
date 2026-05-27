@@ -11,14 +11,16 @@ interface SystemRepository : JpaRepository<SystemEntity, String> {
     /**
      * All master-table system codes, sorted ascending. Backs
      * `GET /meta/systems/dictionary` — the "full dictionary" variant of
-     * `/meta/systems`, which is junction-sourced (in-use only).
+     * `/meta/systems`, which is sourced from the scalar
+     * `components.system_code` column (in-use only) via
+     * `ComponentRepository.findDistinctSystemCodes`.
      *
      * Defensively filters null and blank/whitespace-only codes, mirroring
-     * the secondary-defence read filter on `ComponentSystemRepository
-     * .findDistinctSystemCodes`. Even though `systems.code` is a `NOT NULL`
-     * PK, schema-migration drift or a direct DB write could still land a
-     * whitespace-only row, which would surface as an unselectable blank
-     * chip in the Portal picker.
+     * the secondary-defence read filter on
+     * `ComponentRepository.findDistinctSystemCodes`. Even though
+     * `systems.code` is a `NOT NULL` PK, schema-migration drift or a
+     * direct DB write could still land a whitespace-only row, which would
+     * surface as an unselectable blank chip in the Portal picker.
      */
     @Query(
         "SELECT s.code FROM SystemEntity s " +

@@ -1222,8 +1222,16 @@ class ImportServiceImpl(
         }
         upsertSystem(firstCode) // ensure dictionary exists
         component.systemCode = firstCode
-        // The parent component is already managed in the active persistence
-        // context, so the scalar update flushes with the next save.
+        // Defence-in-depth: explicit save on the managed entity. The
+        // outer batch loop (`flushAndClearComponentsBatch`) flushes +
+        // clears the persistence context every N components; an
+        // explicit save() here pins the dirty `systemCode` field
+        // through dirty-checking on the *next* flush rather than
+        // relying on the managed-entity invariant alone. Cheap (the
+        // entity is already managed, so save() is a no-op merge) and
+        // makes the field unambiguous against future refactors of the
+        // import loop's flush cadence.
+        componentRepository.save(component)
     }
 
     private fun linkLabels(

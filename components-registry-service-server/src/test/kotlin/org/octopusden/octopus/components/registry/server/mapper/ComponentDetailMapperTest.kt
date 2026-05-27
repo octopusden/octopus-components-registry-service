@@ -25,7 +25,7 @@ import java.util.UUID
  *
  * Scenarios covered:
  *  - Top-level scalar propagation (componentKey → name, all new v2 fields)
- *  - systemJunctions → systems: Set<String>
+ *  - systemCode → system: String? (single-value, post ui-swift-sloth-system-single)
  *  - labelJunctions  → labels:  Set<String>
  *  - configurations list: BASE / SCALAR_OVERRIDE / MARKER rowType discriminator
  *  - group: AGGREGATOR vs MEMBER role based on groupKey == componentKey
