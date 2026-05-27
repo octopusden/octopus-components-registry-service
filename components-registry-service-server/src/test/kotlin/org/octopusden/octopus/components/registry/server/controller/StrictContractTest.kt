@@ -1,6 +1,8 @@
 package org.octopusden.octopus.components.registry.server.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
@@ -15,8 +17,10 @@ import org.springframework.http.MediaType
 import org.springframework.test.annotation.DirtiesContext
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.nio.file.Paths
@@ -595,5 +599,292 @@ class StrictContractTest {
         assert(persistedKey == newKey) {
             "expected PATCH to persist trimmed key '$newKey'; got '$persistedKey'"
         }
+    }
+
+    // -------------------------------------------------------------------
+    // Single-value `system` field (M:N → 1:0..1 collapse).
+    //
+    // The previous iteration modelled system membership as a Set<String>
+    // backed by a `component_systems` M:N junction. This iteration
+    // collapses to a scalar `components.system_code` FK — a component
+    // belongs to at most one system. Tests pin:
+    //  - CREATE accepts a single value and persists it.
+    //  - CREATE accepts `null`/absent (system is optional).
+    //  - PATCH changes the value.
+    //  - List filter `?system=A,B` is OR-semantic across the scalar
+    //    (already covered by ListComponentsSystemFilterTest, but a smoke
+    //    test here pins the contract from the strict-contract surface).
+    // -------------------------------------------------------------------
+
+    @Test
+    @DisplayName("CREATE accepts a single `system` value and persists it on the components row")
+    fun create_accepts_single_system() {
+        // The test profile sets `components-registry.supportedSystems:
+        // NONE,CLASSIC,ALFA` in `application-common.yml`. Service-layer
+        // validation gates the `system` field against that env-config
+        // allowlist (mirrors the analogous `supportedGroupIds` gate for
+        // `groupKey`); the master `systems` row is auto-created by
+        // `ensureSystemExists` so the FK from `components.system_code →
+        // systems(code)` is always satisfied — no explicit per-test
+        // master-table seeding required. `CLASSIC` is the one we use
+        // for the single-value contract test here.
+        val body =
+            """
+            {
+              "name": "${unique("strict-create-single-system")}",
+              "system": "CLASSIC",
+              "group": {"groupKey": "org.example.test", "isFake": false},
+              "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
+            }
+            """.trimIndent()
+        postCreate(body)
+            .andExpect(status().isCreated)
+            .andExpect(jsonPath("$.system").value("CLASSIC"))
+    }
+
+    @Test
+    @DisplayName("CREATE accepts absent `system` (component without a system is valid; scalar is nullable)")
+    fun create_accepts_null_system() {
+        val body =
+            """
+            {
+              "name": "${unique("strict-create-null-system")}",
+              "group": {"groupKey": "org.example.test", "isFake": false},
+              "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
+            }
+            """.trimIndent()
+        postCreate(body)
+            .andExpect(status().isCreated)
+            .andExpect(jsonPath("$.system").isEmpty)
+    }
+
+    @Test
+    @DisplayName("CREATE rejects a `system` value that is not in the configured supportedSystems allowlist")
+    fun create_rejects_unknown_system() {
+        val body =
+            """
+            {
+              "name": "${unique("strict-create-bad-system")}",
+              "system": "NOT_A_REAL_SYSTEM_xyz",
+              "group": {"groupKey": "org.example.test", "isFake": false},
+              "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
+            }
+            """.trimIndent()
+        postCreate(body)
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.errorMessage", org.hamcrest.Matchers.containsString("system")))
+    }
+
+    @Test
+    @DisplayName("PATCH with a new `system` value updates the components.system_code column")
+    fun patch_changes_system() {
+        // Seed with CLASSIC, then PATCH to ALFA (both in the test
+        // profile's configured `supportedSystems` allowlist).
+        val name = unique("strict-patch-system")
+        val seedBody =
+            """
+            {
+              "name": "$name",
+              "system": "CLASSIC",
+              "group": {"groupKey": "org.example.test", "isFake": false},
+              "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
+            }
+            """.trimIndent()
+        val seedResponse =
+            postCreate(seedBody).andExpect(status().isCreated)
+                .andReturn().response.contentAsString
+        val seed = objectMapper.readTree(seedResponse)
+        val id = seed["id"].asText()
+        val versionLock = seed["version"].asLong()
+        assert(seed["system"].asText() == "CLASSIC") {
+            "precondition: seeded component should carry CLASSIC; got ${seed["system"]}"
+        }
+
+        val patchBody = """{"version": $versionLock, "clearGroup": false, "system": "ALFA"}"""
+        mvc.perform(
+            patch("/rest/api/4/components/$id")
+                .with(adminJwt())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(patchBody),
+        ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.system").value("ALFA"))
+    }
+
+    @Test
+    @DisplayName("PATCH without `system` key (field absent) preserves existing system — no-op contract")
+    fun patch_without_system_key_preserves_existing() {
+        val name = unique("strict-patch-system-noop")
+        val seedBody =
+            """
+            {
+              "name": "$name",
+              "system": "CLASSIC",
+              "group": {"groupKey": "org.example.test", "isFake": false},
+              "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
+            }
+            """.trimIndent()
+        val seedResponse =
+            postCreate(seedBody).andExpect(status().isCreated)
+                .andReturn().response.contentAsString
+        val seed = objectMapper.readTree(seedResponse)
+        val id = seed["id"].asText()
+        val versionLock = seed["version"].asLong()
+
+        // No `system` key — should be a no-op.
+        val patchBody = """{"version": $versionLock, "clearGroup": false}"""
+        mvc.perform(
+            patch("/rest/api/4/components/$id")
+                .with(adminJwt())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(patchBody),
+        ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.system").value("CLASSIC"))
+    }
+
+    @Test
+    @DisplayName("CREATE normalises `system` to the configured supportedSystems casing (case-insensitive validation, canonical storage)")
+    fun create_normalises_system_casing_to_config() {
+        // The env config (`application-common.yml`) declares
+        // `supportedSystems: NONE,CLASSIC,ALFA` — all upper-case. The
+        // validator is case-insensitive on the config path (mirrors
+        // validateGroupKeyPrefix's leniency), but it must persist the
+        // CANONICAL form so the master `systems` table doesn't accumulate
+        // duplicate rows `("CLASSIC")` and `("Classic")` (PK is
+        // case-sensitive). Without canonical storage, `?system=CLASSIC`
+        // would miss the component stored as "Classic" and
+        // `/meta/systems/dictionary` would surface both as distinct
+        // entries — see PR #301 review thread.
+        val body =
+            """
+            {
+              "name": "${unique("strict-create-system-casing")}",
+              "system": "Classic",
+              "group": {"groupKey": "org.example.test", "isFake": false},
+              "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
+            }
+            """.trimIndent()
+        postCreate(body)
+            .andExpect(status().isCreated)
+            .andExpect(jsonPath("$.system").value("CLASSIC"))
+    }
+
+    @Test
+    @DisplayName("PATCH with hidden `component.system` does not surface as a system change in the audit trail")
+    fun patch_with_hidden_system_does_not_ghost_audit() {
+        // Repro for the PR #301 P2 review finding: when `component.system`
+        // is hidden via field-config, the PATCH must NOT report a change
+        // it didn't actually persist. An earlier implementation passed
+        // `overrideSystem = canonicalSystem` into `scalarAuditMap` so the
+        // audit newValue carried the would-have-been-written value even
+        // though the FC-hidden gate stripped the entity update — a
+        // misleading audit trail of a change that never happened.
+        //
+        // Fix: `scalarAuditMap` now reads `entity.systemCode` directly
+        // after the FC-hidden gate decides whether to write. The audit
+        // newValue reflects what actually persisted.
+        val name = unique("strict-patch-system-hidden-audit")
+        val seedBody =
+            """
+            {
+              "name": "$name",
+              "system": "CLASSIC",
+              "group": {"groupKey": "org.example.test", "isFake": false},
+              "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
+            }
+            """.trimIndent()
+        val seedResponse =
+            postCreate(seedBody).andExpect(status().isCreated)
+                .andReturn().response.contentAsString
+        val seed = objectMapper.readTree(seedResponse)
+        val id = seed["id"].asText()
+        val versionLock = seed["version"].asLong()
+
+        // Hide `component.system` via field-config. Same put-endpoint
+        // pattern as `FieldConfigEnforcementIntegrationTest`.
+        val fieldConfigPayload =
+            """{"component": {"system": {"visibility": "hidden"}}}"""
+        mvc
+            .perform(
+                put("/rest/api/4/admin/config/field-config")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(fieldConfigPayload),
+            ).andExpect(status().is2xxSuccessful)
+
+        // PATCH would write ALFA if the field were not hidden.
+        val patchBody = """{"version": $versionLock, "clearGroup": false, "system": "ALFA"}"""
+        mvc.perform(
+            patch("/rest/api/4/components/$id")
+                .with(adminJwt())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(patchBody),
+        ).andExpect(status().isOk)
+            // GET reflects the unchanged stored value (already covered
+            // by the FC-enforcement integration test pattern, asserted
+            // here for tight repro locality).
+            .andExpect(jsonPath("$.system").value("CLASSIC"))
+
+        // Pull the audit log for this Component. The most recent UPDATE
+        // entry's newValue.system MUST be `CLASSIC` (the actually-persisted
+        // value), not `ALFA` (the would-have-been-written value).
+        val auditBody =
+            mvc
+                .perform(get("/rest/api/4/audit/Component/$id").with(adminJwt()))
+                .andExpect(status().isOk)
+                .andReturn().response.contentAsString
+        val auditPage = objectMapper.readTree(auditBody)
+        val updateEntries =
+            auditPage.path("content")
+                .filter { it["action"].asText() == "UPDATE" }
+        // Use JUnit assertions instead of Kotlin `assert(...)`: the Gradle
+        // build does not pass `-ea` to the JVM, so `kotlin.assert` would
+        // silently no-op and the ghost-write check would pass even when
+        // the regression is back. JUnit `assertTrue` / `assertEquals` run
+        // unconditionally and fail the test on mismatch.
+        assertTrue(
+            updateEntries.isNotEmpty(),
+            "expected at least one UPDATE audit entry for component $id; got ${auditPage.path("content")}",
+        )
+        // Pick the most recent UPDATE entry (changedAt is ISO-8601, sortable lexicographically).
+        val latest = updateEntries.maxBy { it["changedAt"].asText() }
+        val newValueSystem = latest["newValue"]["system"]?.asText("(null)") ?: "(absent)"
+        assertEquals(
+            "CLASSIC",
+            newValueSystem,
+            "audit ghost-write detected: PATCH was stripped by FC-hidden gate but " +
+                "audit newValue.system reads '$newValueSystem' (expected 'CLASSIC' — the " +
+                "actually-persisted value, not the would-have-been-written 'ALFA').",
+        )
+    }
+
+    @Test
+    @DisplayName("PATCH normalises `system` to the configured supportedSystems casing")
+    fun patch_normalises_system_casing_to_config() {
+        val name = unique("strict-patch-system-casing")
+        val seedBody =
+            """
+            {
+              "name": "$name",
+              "system": "CLASSIC",
+              "group": {"groupKey": "org.example.test", "isFake": false},
+              "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
+            }
+            """.trimIndent()
+        val seedResponse =
+            postCreate(seedBody).andExpect(status().isCreated)
+                .andReturn().response.contentAsString
+        val seed = objectMapper.readTree(seedResponse)
+        val id = seed["id"].asText()
+        val versionLock = seed["version"].asLong()
+
+        // PATCH with lower-case `alfa` — should land canonical `ALFA`.
+        val patchBody = """{"version": $versionLock, "clearGroup": false, "system": "alfa"}"""
+        mvc.perform(
+            patch("/rest/api/4/components/$id")
+                .with(adminJwt())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(patchBody),
+        ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.system").value("ALFA"))
     }
 }

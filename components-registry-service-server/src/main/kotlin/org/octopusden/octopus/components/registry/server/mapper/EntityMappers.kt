@@ -375,7 +375,12 @@ private fun buildEscrowModuleConfig(
     // Component-level (per-component, never per-version)
     setField(config, "componentDisplayName", component.displayName)
     setField(config, "componentOwner", component.componentOwner)
-    setField(config, "system", component.systemJunctions.joinToString(",") { it.systemCode })
+    // Single-value system: write the scalar code (or empty string when null).
+    // The legacy DSL field was a CSV; keeping the field name shape but
+    // emitting at most one comma-free token preserves backward compat for
+    // any v1-v3 consumer that still treats `system` as "the first / only
+    // entry of a CSV".
+    setField(config, "system", component.systemCode ?: "")
     setField(config, "clientCode", component.clientCode)
     setField(config, "solution", component.solution)
     setField(config, "parentComponent", component.parentComponent?.componentKey)

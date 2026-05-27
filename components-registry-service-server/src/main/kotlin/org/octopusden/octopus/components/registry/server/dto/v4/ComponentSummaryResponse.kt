@@ -18,7 +18,7 @@ data class ComponentSummaryResponse(
     val name: String,
     val displayName: String?,
     val componentOwner: String?,
-    val systems: Set<String>,
+    val system: String?,
     val productType: String?,
     val archived: Boolean,
     val updatedAt: Instant?,

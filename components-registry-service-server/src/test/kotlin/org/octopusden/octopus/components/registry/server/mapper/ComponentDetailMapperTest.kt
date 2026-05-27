@@ -13,7 +13,6 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentDocLink
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentGroupEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentLabelEntity
-import org.octopusden.octopus.components.registry.server.entity.ComponentSystemEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentTeamcityProjectEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionMavenArtifactEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionSecurityGroupEntity
@@ -26,7 +25,7 @@ import java.util.UUID
  *
  * Scenarios covered:
  *  - Top-level scalar propagation (componentKey → name, all new v2 fields)
- *  - systemJunctions → systems: Set<String>
+ *  - systemCode → system: String? (single-value, post ui-swift-sloth-system-single)
  *  - labelJunctions  → labels:  Set<String>
  *  - configurations list: BASE / SCALAR_OVERRIDE / MARKER rowType discriminator
  *  - group: AGGREGATOR vs MEMBER role based on groupKey == componentKey
@@ -77,7 +76,7 @@ class ComponentDetailMapperTest {
         assertNull(response.displayName)
         assertNull(response.componentOwner)
         assertNull(response.productType)
-        assertTrue(response.systems.isEmpty())
+        assertNull(response.system)
         assertNull(response.clientCode)
         assertEquals(false, response.archived)
         assertNull(response.solution)
@@ -155,18 +154,21 @@ class ComponentDetailMapperTest {
     }
 
     // -----------------------------------------------------------------------
-    // systemJunctions → systems: Set<String>
+    // systemCode → system: String? (single-value)
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("systemJunctions → systems set in detail response")
-    fun systemJunctions_mapsToSystemsSet() {
-        val component = minimalComponent()
-        val id = component.id!!
-        component.systemJunctions.add(ComponentSystemEntity(componentId = id, systemCode = "UNIX"))
-        component.systemJunctions.add(ComponentSystemEntity(componentId = id, systemCode = "WIN"))
+    @DisplayName("entity systemCode → single-value `system` field in detail response")
+    fun systemCode_mapsToScalarSystem() {
+        val component = minimalComponent().also { it.systemCode = "UNIX" }
+        assertEquals("UNIX", component.toDetailResponse().system)
+    }
 
-        assertEquals(setOf("UNIX", "WIN"), component.toDetailResponse().systems)
+    @Test
+    @DisplayName("null systemCode → system is null in detail response")
+    fun nullSystemCode_mapsToNull() {
+        val component = minimalComponent()
+        assertNull(component.toDetailResponse().system)
     }
 
     // -----------------------------------------------------------------------

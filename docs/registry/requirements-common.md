@@ -50,7 +50,7 @@
 | SYS-038 | Domain-named meta endpoints for free-form aspect option lists (buildSystem / repositoryType / generation) | Medium | integration-test | ✅ Tested |
 | SYS-040 | GET /components?labels=A,B filters by component_labels junction (AND across selected labels); GET /components/meta/labels returns sorted distinct codes in use | High | integration-test | ✅ Tested |
 | SYS-041 | GET /components?buildSystem=GRADLE,MAVEN accepts CSV multi-value with OR semantics across the BASE buildSystem column | High | integration-test | ✅ Tested |
-| SYS-042 | GET /components?system=A,B accepts CSV multi-value with OR semantics across component_systems; GET /components/meta/systems returns sorted distinct codes in use | High | integration-test | ✅ Tested |
+| SYS-042 | GET /components?system=A,B accepts CSV multi-value with OR semantics across the scalar `components.system_code` column (M:N collapsed to 1:0..1 post-#299); GET /components/meta/systems returns sorted distinct codes in use | High | integration-test | ✅ Tested |
 | SYS-043 | GET /components?owner=alice,bob accepts CSV multi-value with OR semantics over the scalar componentOwner column | High | integration-test | ✅ Tested |
 
 ---
@@ -1299,9 +1299,9 @@ The Portal `ComponentListPage` previously supported only a single-value `?system
 **Description:**
 Two additions to the v4 component surface, mirroring SYS-040 (labels) and SYS-041 (buildSystem).
 
-1. **`GET /rest/api/4/components?system=A,B`** — multi-value OR filter. A component matches when ANY of its `component_systems` junctions has a code in the list. Unlike labels (also junction-backed but AND across selections), the picker semantics for systems is "components belonging to any of these systems" — a component can carry several systems and selecting two should union those sets. CSV is the primary wire format; Spring also accepts repeatable params. The controller normalises both shapes through the same pipeline already used for labels and buildSystem (split → trim → filter empty → distinct → null-if-empty). The JPA Specification uses one JOIN through `systemJunctions` and a single `IN (?, ?, …)` predicate — naturally union-semantic, no separate predicate per code needed.
+1. **`GET /rest/api/4/components?system=A,B`** — multi-value OR filter. A component matches when its scalar `components.system_code` is in the list. After collapsing the system model to single-value (post-#299, see schema-spec.md §4.1), a component carries exactly zero-or-one system, so OR-semantic multi-select reduces to a plain `IN(...)` predicate against the scalar column — no JOIN, no `query.distinct(true)` needed. Components with `system_code IS NULL` never match a non-empty filter. CSV is the primary wire format; Spring also accepts repeatable params. The controller normalises both shapes through the same pipeline already used for labels and buildSystem (split → trim → filter empty → distinct → null-if-empty).
 
-2. **`GET /rest/api/4/components/meta/systems`** — returns sorted distinct system codes currently attached to at least one component, sourced from the `component_systems` junction via a new repository method `ComponentSystemRepository.findDistinctSystemCodes()`. Same blank/null defence as `findDistinctLabelCodes` and `findDistinctOwners`. Mirrors `/meta/owners` and `/meta/labels` in shape and intent.
+2. **`GET /rest/api/4/components/meta/systems`** — returns sorted distinct system codes currently assigned to at least one component, sourced from the scalar `components.system_code` column via `ComponentRepository.findDistinctSystemCodes()` (the legacy `ComponentSystemRepository.findDistinctSystemCodes` was removed alongside the M:N junction). Same blank/null defence as `findDistinctLabelCodes` and `findDistinctOwners`. Mirrors `/meta/owners` and `/meta/labels` in shape and intent.
 
 Auth: both gated by `ACCESS_COMPONENTS`, matching the rest of the v4 read surface.
 

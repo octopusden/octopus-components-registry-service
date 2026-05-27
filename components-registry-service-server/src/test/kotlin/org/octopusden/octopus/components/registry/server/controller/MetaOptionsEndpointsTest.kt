@@ -92,6 +92,9 @@ class MetaOptionsEndpointsTest {
     @Autowired
     private lateinit var labelRepository: LabelRepository
 
+    @Autowired
+    private lateinit var systemRepository: org.octopusden.octopus.components.registry.server.repository.SystemRepository
+
     init {
         val testResourcesPath =
             Paths.get(MetaOptionsEndpointsTest::class.java.getResource("/expected-data")!!.toURI()).parent
@@ -309,24 +312,33 @@ class MetaOptionsEndpointsTest {
         }
     }
 
-    // /meta/systems mirrors /meta/labels in shape and intent — sourced from
-    // the component_systems junction (NOT the master systems table) so the
-    // picker advertises only codes actually attached to a component.
+    // /meta/systems mirrors /meta/labels in shape and intent — now sourced
+    // from the scalar `components.system_code` column (the M:N junction was
+    // collapsed to a 1:0..1 reference) so the picker advertises only codes
+    // actually assigned to a component.
 
     private fun uniqueSystemCode(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(8)}"
 
-    private fun createComponentWithSystems(
+    private fun createComponentWithSystem(
         name: String,
-        systems: Set<String>,
+        system: String,
     ) {
-        val systemsJson = systems.joinToString(",") { "\"$it\"" }
+        // First make sure the system code exists in the master `systems`
+        // table — the service-layer validator rejects codes that aren't
+        // pre-seeded. Hitting the dictionary endpoint is overkill for a
+        // setup helper; we seed via the repository.
+        if (systemRepository.findByCode(system) == null) {
+            systemRepository.save(
+                org.octopusden.octopus.components.registry.server.entity.SystemEntity(code = system),
+            )
+        }
         mvc
             .perform(
                 post("/rest/api/4/components")
                     .with(adminJwt())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(
-                        """{"name":"$name","displayName":"$name","systems":[$systemsJson],""" +
+                        """{"name":"$name","displayName":"$name","system":"$system",""" +
                             """"group":{"groupKey":"org.example.test","isFake":false},""" +
                             """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
                     ),
@@ -334,19 +346,24 @@ class MetaOptionsEndpointsTest {
     }
 
     @Test
-    @DisplayName("SYS-042: GET /meta/systems returns sorted distinct system codes from the junction")
-    fun `SYS-042 GET meta systems returns sorted distinct codes from junction`() {
+    @DisplayName("SYS-042: GET /meta/systems returns sorted distinct system codes from components.system_code")
+    fun `SYS-042 GET meta systems returns sorted distinct codes`() {
         // Seed three components with overlapping system codes; distinct
         // ascending order must be alpha, beta, gamma regardless of
         // insertion order. Random suffixes keep this assertion independent
-        // of other tests in the same Spring context.
+        // of other tests in the same Spring context. With the new
+        // single-value model, each component carries exactly one code, so
+        // we seed enough components to cover the same set the legacy
+        // junction-based test did.
         val a = uniqueSystemCode("alphasys")
         val b = uniqueSystemCode("betasys")
         val g = uniqueSystemCode("gammasys")
 
-        createComponentWithSystems("meta_systems_one_${UUID.randomUUID().toString().take(6)}", setOf(b, a))
-        createComponentWithSystems("meta_systems_two_${UUID.randomUUID().toString().take(6)}", setOf(g, a))
-        createComponentWithSystems("meta_systems_three_${UUID.randomUUID().toString().take(6)}", setOf(b))
+        createComponentWithSystem("meta_systems_one_${UUID.randomUUID().toString().take(6)}", b)
+        createComponentWithSystem("meta_systems_two_${UUID.randomUUID().toString().take(6)}", a)
+        createComponentWithSystem("meta_systems_three_${UUID.randomUUID().toString().take(6)}", g)
+        // Duplicate `b` on a separate component to exercise DISTINCT.
+        createComponentWithSystem("meta_systems_four_${UUID.randomUUID().toString().take(6)}", b)
 
         val body =
             mvc
