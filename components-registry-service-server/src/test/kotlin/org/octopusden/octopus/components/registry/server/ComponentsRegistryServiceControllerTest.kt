@@ -334,6 +334,55 @@ class ComponentsRegistryServiceControllerTest : MockMvcRegistryTestSupport() {
         )
     }
 
+    /**
+     * Regression-pin for the per-range `hotfixVersionFormat` propagation
+     * chain — the v1-v2 jira-component endpoint must surface the value
+     * exactly as the DSL declared it, byte-for-byte.
+     *
+     * This test exercises the full propagation chain against the LOCAL
+     * test DSL fixture (independent of any production DSL state):
+     *
+     *   DSL `hotfixVersionFormat` (Defaults or per-component)
+     *   → `EscrowConfigurationLoader` merge
+     *   → `ImportServiceImpl.buildComponentEntity` writes
+     *     `entity.jiraHotfixVersionFormat` → `components.jira_hotfix_version_format`
+     *   → `DatabaseComponentRegistryResolver` reads the column into
+     *     `JiraComponent.componentVersionFormat.hotfixVersionFormat`
+     *   → GET `/rest/api/2/components/{c}/versions/{v}/jira-component`
+     *     surfaces it as
+     *     `component.componentVersionFormat.hotfixVersionFormat`
+     *
+     * Component `SUB` (`test-common/.../common/TestComponents.groovy`)
+     * declares `hotfixVersionFormat = '$major.$minor.$service-$build'`.
+     * A break anywhere in the propagation chain — service mapper change,
+     * resolver merge-order regression, JSON serialisation tweak — produces
+     * a different format string here, before the slow TC-only compat job
+     * notices the same break against the production DSL.
+     */
+    @Test
+    fun testHotfixVersionFormatRoundTripsThroughResolver() {
+        val response =
+            mvc
+                .perform(
+                    MockMvcRequestBuilders
+                        .get("/rest/api/2/components/SUB/versions/1.0.0/jira-component")
+                        .accept(APPLICATION_JSON),
+                ).andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString
+        // Use a substring assertion rather than full DTO unmarshalling — the
+        // surface under test is the format-string propagation, not the
+        // full JiraComponentVersionDTO shape. The Groovy literal is single-
+        // quoted, so the `$` placeholders are preserved verbatim through
+        // DSL parse + JSON serialisation.
+        val expectedFormat = "\$major.\$minor.\$service-\$build"
+        Assertions.assertTrue(
+            response.contains("\"hotfixVersionFormat\":\"$expectedFormat\""),
+            "expected jira-component response to carry SUB's DSL-declared " +
+                "hotfixVersionFormat='$expectedFormat'; got: ${response.take(800)}",
+        )
+    }
+
     @Test
     fun testGetComponentVersionDoc() {
         val actualComponent =
