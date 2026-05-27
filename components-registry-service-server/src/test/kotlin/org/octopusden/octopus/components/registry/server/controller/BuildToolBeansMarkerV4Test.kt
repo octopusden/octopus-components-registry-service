@@ -61,7 +61,10 @@ class BuildToolBeansMarkerV4Test {
     }
 
     private fun createComponent(name: String): String {
-        val body = """{"name": "$name", "baseConfiguration": {}}"""
+        val body =
+            """{"name": "$name",""" +
+                """"group":{"groupKey":"org.example.test","isFake":false},""" +
+                """"baseConfiguration": {"build": {"buildSystem": "MAVEN"}}}"""
         val response =
             mvc
                 .perform(

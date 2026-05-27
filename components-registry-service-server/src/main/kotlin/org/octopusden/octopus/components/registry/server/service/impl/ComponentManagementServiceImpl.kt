@@ -116,10 +116,40 @@ class ComponentManagementServiceImpl(
         require(!componentRepository.existsByComponentKey(normalizedKey)) {
             "Component with name '$normalizedKey' already exists"
         }
+        // Strict contract (UI-swift-sloth): a component cannot legitimately exist
+        // without an owning group or without a build system on its BASE
+        // configuration row. The Portal's Create dialog enforces both fields at
+        // the UX layer; the server is the source of truth and rejects payloads
+        // missing either field with 400. The frontend gates the Submit button
+        // on these constraints, so reaching this branch implies a misbehaving
+        // client (or a direct API caller skipping validation).
+        requireNotNull(request.group) {
+            "group is required: every component must belong to a group (groupKey is mandatory)"
+        }
+        require(request.group.groupKey.isNotBlank()) {
+            "group.groupKey must not be blank"
+        }
+        val baseConfigRequest =
+            requireNotNull(request.baseConfiguration) {
+                "baseConfiguration is required: provide baseConfiguration.build.buildSystem on create"
+            }
+        val buildAspect =
+            requireNotNull(baseConfigRequest.build) {
+                "baseConfiguration.build is required: provide baseConfiguration.build.buildSystem on create"
+            }
+        require(!buildAspect.buildSystem.isNullOrBlank()) {
+            "baseConfiguration.build.buildSystem is required and must not be blank"
+        }
+        // Capture the non-null buildSystem in a local so subsequent calls
+        // can pass it directly. The `require(!isNullOrBlank)` above
+        // guarantees the value, but Kotlin doesn't smart-cast through a
+        // property getter — so we hoist explicitly here rather than
+        // sprinkling `!!` or `?.let` at each call site.
+        val buildSystemValue: String = buildAspect.buildSystem!!
         request.productType?.let { validateProductType(it) }
-        request.baseConfiguration?.versionRange?.let { validateRangeSyntax(it) }
-        request.baseConfiguration?.build?.buildSystem?.let { validateBuildSystem(it) }
-        request.baseConfiguration?.escrow?.generation?.let { validateEscrowGenerationMode(it) }
+        baseConfigRequest.versionRange?.let { validateRangeSyntax(it) }
+        validateBuildSystem(buildSystemValue)
+        baseConfigRequest.escrow?.generation?.let { validateEscrowGenerationMode(it) }
         // vcsEntries[].repositoryType / packages[].packageType are validated
         // inside `replaceVcsEntries` / `replacePackages` (covers both base-config
         // and field-override marker paths).
@@ -137,7 +167,7 @@ class ComponentManagementServiceImpl(
                     ?: throw NotFoundException("Parent component '$parentKey' not found")
             }
 
-        val group = request.group?.let { upsertGroup(it) }
+        val group = upsertGroup(request.group)
 
         val entity =
             ComponentEntity(
@@ -169,7 +199,7 @@ class ComponentManagementServiceImpl(
 
         // Base configuration row (cascade = ALL — flushed with the parent)
         val baseConfig = ComponentConfigurationEntity(component = entity, versionRange = ALL_VERSIONS, rowType = "BASE")
-        applyBaseConfigurationCreate(baseConfig, request.baseConfiguration)
+        applyBaseConfigurationCreate(baseConfig, baseConfigRequest)
         entity.configurations.add(baseConfig)
 
         val saved = componentRepository.save(entity)
@@ -178,7 +208,7 @@ class ComponentManagementServiceImpl(
         // persisted via their own repositories AFTER the parent has an assigned id.
         syncLabels(saved.id!!, canonicalizedLabels)
         syncSystems(saved.id!!, request.systems)
-        val baseRequiredTools = request.baseConfiguration?.requiredTools
+        val baseRequiredTools = baseConfigRequest.requiredTools
         if (baseRequiredTools != null) syncRequiredTools(baseConfig.id!!, baseRequiredTools)
 
         // Refresh in-memory junction collections so the response DTO reflects the
@@ -235,6 +265,19 @@ class ComponentManagementServiceImpl(
             throw OptimisticLockException(
                 "Optimistic locking conflict: expected version ${request.version} but found ${entity.version}",
             )
+        }
+        // Strict contract (UI-swift-sloth): clearing the group via PATCH is no
+        // longer expressible — a component cannot legitimately exist without
+        // an owning group. The frontend's buildUpdateRequest always emits
+        // `clearGroup: false` (the wire schema requires the field be present),
+        // and only `clearGroup: true` is rejected. `group == null` continues
+        // to mean "don't touch" — Jackson cannot distinguish field-absent from
+        // explicit-null without a presence-preserving DTO, and every
+        // untouched-group PATCH today carries `group == null`. If clients
+        // later need to disambiguate, switch the DTO to a presence-preserving
+        // shape (JsonNullable / sentinel wrapper) — out of scope here.
+        require(!request.clearGroup) {
+            "clearGroup: true is no longer allowed — every component must belong to a group"
         }
 
         val oldKey = entity.componentKey
@@ -309,12 +352,11 @@ class ComponentManagementServiceImpl(
                     ?: throw NotFoundException("Parent component '$parentKey' not found")
         }
 
-        // Group: clearGroup flag wins over group payload when both present
-        when {
-            request.clearGroup -> entity.componentGroup = null
-            request.group != null -> entity.componentGroup = upsertGroup(request.group)
-            else -> Unit
-        }
+        // Group: `clearGroup: true` was rejected at the top of this method
+        // (strict contract — every component must belong to a group), so the
+        // only reachable shapes here are "no change" (request.group == null)
+        // or "replace with a new/upserted group" (request.group != null).
+        request.group?.let { entity.componentGroup = upsertGroup(it) }
 
         // Per-component child REPLACE — present collection wipes and refills
         request.artifactIds?.let {

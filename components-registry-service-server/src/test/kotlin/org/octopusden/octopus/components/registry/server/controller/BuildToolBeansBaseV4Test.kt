@@ -113,7 +113,9 @@ class BuildToolBeansBaseV4Test {
             """
             {
               "name": "btb-base-v4-test-002",
+              "group": {"groupKey": "org.example.test", "isFake": false},
               "baseConfiguration": {
+                "build": {"buildSystem": "MAVEN"},
                 "buildToolBeans": [
                   {
                     "beanType": "oracleDatabase",
@@ -177,7 +179,9 @@ class BuildToolBeansBaseV4Test {
             """
             {
               "name": "btb-base-v4-test-003",
+              "group": {"groupKey": "org.example.test", "isFake": false},
               "baseConfiguration": {
+                "build": {"buildSystem": "MAVEN"},
                 "buildToolBeans": [
                   {"beanType": "oracleDatabase", "versionPattern": "[11,)"}
                 ]
@@ -250,7 +254,9 @@ class BuildToolBeansBaseV4Test {
             """
             {
               "name": "btb-base-v4-test-004",
+              "group": {"groupKey": "org.example.test", "isFake": false},
               "baseConfiguration": {
+                "build": {"buildSystem": "MAVEN"},
                 "buildToolBeans": [
                   {"beanType": "dProduct", "versionPattern": "[2,)"}
                 ]

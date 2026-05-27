@@ -99,11 +99,15 @@ class MIG047SchemaConstraintIntegrationTest {
 
         // A BASE row is required because the override range's MARKER row references
         // the same (component, version_range) tuple where typed scalars live.
+        // `build_system` is set to satisfy the UI-swift-sloth CHECK
+        // (`row_type <> 'BASE' OR build_system IS NOT NULL`) — the legacy
+        // pre-strict shape persisted BASE rows with all scalars NULL.
         configurationRepository.save(
             ComponentConfigurationEntity(
                 component = component,
                 versionRange = "(,0),[0,)",
                 rowType = "BASE",
+                buildSystem = "MAVEN",
             ),
         )
 

@@ -77,7 +77,11 @@ class V4NullScalarOverrideContractTest {
                     post("/rest/api/4/components")
                         .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""{"name": "$name", "baseConfiguration": {}}"""),
+                        .content(
+                            """{"name": "$name",""" +
+                                """"group":{"groupKey":"org.example.test","isFake":false},""" +
+                                """"baseConfiguration": {"build": {"buildSystem": "MAVEN"}}}""",
+                        ),
                 )
                 .andExpect(status().is2xxSuccessful)
                 .andReturn()
