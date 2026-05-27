@@ -200,6 +200,72 @@ class ScalarNullOverrideRoundTripTest {
     }
 
     // ========================================================================
+    // (E) jira.hotfixVersionFormat null override — task #16
+    // ========================================================================
+
+    /**
+     * `jira.hotfixVersionFormat` is the one scalar with TWO storage layers:
+     * a per-component column on `components` (Defaults / top-level DSL) and a
+     * per-range column on `component_configurations` (per-range overrides
+     * introduced in task #16). The resolver layers per-range over per-component.
+     *
+     * A SCALAR_OVERRIDE row with NULL `jira_hotfix_version_format` must
+     * **explicitly clear** the inherited per-range value for the matched range
+     * — the resolver MUST NOT silently fall back to the per-component base
+     * (that would defeat the import-only null-clear contract documented on
+     * `ConfigurationRowAccessors.SCALAR_ATTRIBUTE_PATHS`).
+     *
+     * Sibling scalars (e.g. `releaseVersionFormat`) get the no-format sentinel
+     * `"$major.$minor"` for null-clear via the resolver's hardcoded fallback;
+     * `hotfixVersionFormat` has no hardcoded default, so the sentinel is empty
+     * string (matches the pre-task-#16 contract for components that declare no
+     * hotfixVersionFormat anywhere).
+     */
+    @Test
+    @DisplayName("Task #16: null jiraHotfixVersionFormat override clears inherited base value on override range")
+    fun `task-16 null jiraHotfixVersionFormat override - override range returns empty, base range returns base value`() {
+        val comp = makeComponent("NULL_OVERRIDE_HOTFIX")
+        // Per-component base on `components.jira_hotfix_version_format`.
+        comp.jiraHotfixVersionFormat = "\$major.\$minor.\$service-\$fix"
+        val base = makeBase(comp)
+        base.jiraProjectKey = "HF"
+        // Per-range base on `component_configurations.jira_hotfix_version_format`
+        // (mirrors what ImportServiceImpl.populateScalarsFromConfig writes for
+        // the base config).
+        base.jiraHotfixVersionFormat = "\$major.\$minor.\$service-\$fix"
+
+        // Override row: explicitly clears jiraHotfixVersionFormat for [2.0,)
+        val nullOverrideRow = makeNullScalarOverrideRow(comp, "[2.0,)", "jira.hotfixVersionFormat")
+        // jiraHotfixVersionFormat intentionally left null on this row
+
+        comp.configurations.addAll(listOf(base, nullOverrideRow))
+        stubComponent(comp)
+
+        // Base range (1.0): legacy range keeps the base value.
+        val baseCfg = resolver.getResolvedComponentDefinition("NULL_OVERRIDE_HOTFIX", "1.0.0")
+        assertNotNull(baseCfg)
+        assertEquals(
+            "\$major.\$minor.\$service-\$fix",
+            baseCfg!!.jiraConfiguration?.componentVersionFormat?.hotfixVersionFormat,
+        )
+
+        // Override range (2.0): null-clear must resolve to empty string, NOT
+        // fall back to the per-component base. Falling back would defeat the
+        // null-clear contract — a Kotlin `?:` chain in buildJiraComponent
+        // (`merged.jira... ?: component.jira... ?: ""`) treats the explicit
+        // null override as "no override at all", which is the bug this test
+        // pins against.
+        val overrideCfg = resolver.getResolvedComponentDefinition("NULL_OVERRIDE_HOTFIX", "2.0.0")
+        assertNotNull(overrideCfg)
+        assertEquals(
+            "",
+            overrideCfg!!.jiraConfiguration?.componentVersionFormat?.hotfixVersionFormat,
+            "jiraHotfixVersionFormat null-clear override must resolve to empty string for the override range; " +
+                "was: ${overrideCfg.jiraConfiguration?.componentVersionFormat?.hotfixVersionFormat}",
+        )
+    }
+
+    // ========================================================================
     // (D) Null-clear override does NOT disturb non-overlapping ranges
     // ========================================================================
 

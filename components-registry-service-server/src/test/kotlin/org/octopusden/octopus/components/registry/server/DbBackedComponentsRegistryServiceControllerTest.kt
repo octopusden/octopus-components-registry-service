@@ -132,6 +132,77 @@ class DbBackedComponentsRegistryServiceControllerTest : MockMvcRegistryTestSuppo
             ).andExpect(status().isOk)
     }
 
+    /**
+     * Regression pin for the per-range `hotfixVersionFormat` override
+     * propagation chain (task #16) on the DB-backed resolver path.
+     *
+     * The fixture component `TEST_PER_RANGE_HOTFIX_FORMAT` declares a
+     * per-component (base) `hotfixVersionFormat = '$major.$minor.$service-$fix'`
+     * and an override on version range `[2.0,)`:
+     *   `hotfixVersionFormat = '$major.$minor.$service-$fix-$build'`.
+     *
+     * For a version IN the override range (e.g. `2.0.0-1234`) the DB-backed
+     * resolver must surface the per-range value. v3 currently surfaces the
+     * per-component base value instead, because
+     * `ImportServiceImpl.populateScalarsFromConfig` explicitly skips writing
+     * `hotfixVersionFormat` to the per-range row, and
+     * `EntityMappers.buildJiraComponent` reads only the per-component scalar.
+     *
+     * The Git-backed resolver (`Mappers.kt` + `ComponentRegistryResolverImpl`)
+     * surfaces the per-range value correctly via the upstream Groovy loader,
+     * which is why the same UT passes in `ComponentsRegistryServiceControllerTest`
+     * (Git-mode profile). The DB-backed path is the one that diverges from
+     * v2.0.87 prod (= `f1-gateway` baseline); this test pins parity.
+     */
+    @Test
+    @DisplayName(
+        "GET /jira-component surfaces per-range hotfixVersionFormat override (DB resolver)",
+    )
+    fun testPerRangeHotfixVersionFormatOverridesBase_dbMode() {
+        val response =
+            mvc
+                .perform(
+                    get("/rest/api/2/components/TEST_PER_RANGE_HOTFIX_FORMAT/versions/2.0.0-1234/jira-component")
+                        .accept(APPLICATION_JSON),
+                ).andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString
+        val expected = "\$major.\$minor.\$service-\$fix-\$build"
+        assertTrue(
+            response.contains("\"hotfixVersionFormat\":\"$expected\""),
+            "expected jira-component for version 2.0.0-1234 (in range [2.0,)) to carry " +
+                "the per-range hotfixVersionFormat='$expected'; got: ${response.take(800)}",
+        )
+    }
+
+    /**
+     * Boundary companion to `testPerRangeHotfixVersionFormatOverridesBase_dbMode`:
+     * a version OUTSIDE the override range must fall back to the per-component
+     * (base) value on the DB-backed resolver. Pins that the fix does not
+     * regress the inheritance path for ranges without an explicit per-range
+     * override.
+     */
+    @Test
+    @DisplayName(
+        "GET /jira-component for version outside override range falls back to base hotfixVersionFormat (DB resolver)",
+    )
+    fun testVersionOutsidePerRangeHotfixOverrideFallsBackToBase_dbMode() {
+        val response =
+            mvc
+                .perform(
+                    get("/rest/api/2/components/TEST_PER_RANGE_HOTFIX_FORMAT/versions/1.5.0/jira-component")
+                        .accept(APPLICATION_JSON),
+                ).andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString
+        val expected = "\$major.\$minor.\$service-\$fix"
+        assertTrue(
+            response.contains("\"hotfixVersionFormat\":\"$expected\""),
+            "expected jira-component for version 1.5.0 (outside range [2.0,), in [1.0,2.0)) to carry " +
+                "the per-component base hotfixVersionFormat='$expected'; got: ${response.take(800)}",
+        )
+    }
+
     companion object {
         @JvmStatic
         val postgres =

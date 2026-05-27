@@ -107,7 +107,7 @@ class ComponentsRegistryServiceControllerTest : MockMvcRegistryTestSupport() {
         expectedComponent.copyright = "companyName1"
         expectedComponent.labels = setOf("Label2")
 
-        Assertions.assertEquals(58, components.components.size)
+        Assertions.assertEquals(59, components.components.size)
         Assertions.assertTrue(expectedComponent in components.components) {
             components.components.toString()
         }
