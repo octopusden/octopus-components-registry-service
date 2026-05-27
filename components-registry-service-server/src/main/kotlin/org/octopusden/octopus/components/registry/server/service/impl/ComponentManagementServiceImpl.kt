@@ -67,8 +67,10 @@ import org.octopusden.octopus.components.registry.server.security.CurrentUserRes
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
 import org.octopusden.octopus.components.registry.server.teamcity.TeamcityProperties
+import org.octopusden.octopus.escrow.config.ConfigHelper
 import org.octopusden.releng.versions.VersionRangeFactory
 import org.springframework.context.ApplicationEventPublisher
+import org.springframework.core.env.Environment
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Pageable
@@ -105,7 +107,16 @@ class ComponentManagementServiceImpl(
     private val fieldConfigService: FieldConfigService,
     private val teamcityProperties: TeamcityProperties,
     private val versionRangeFactory: VersionRangeFactory,
+    private val environment: Environment,
 ) : ComponentManagementService {
+    // ConfigHelper is constructed lazily because it touches the Spring
+    // Environment on first access; mirrors the pattern used by
+    // CommonControllerV2 and FieldConfigSeeder. The supported group-id
+    // list is environment-config-driven (read from
+    // `components-registry.supportedGroupIds`), so building it once at
+    // first access is sufficient — admins re-config via redeploy, not
+    // hot-reload.
+    private val configHelper: ConfigHelper by lazy { ConfigHelper(environment) }
     // ============================================================
     // Create
     // ============================================================
@@ -126,9 +137,18 @@ class ComponentManagementServiceImpl(
         requireNotNull(request.group) {
             "group is required: every component must belong to a group (groupKey is mandatory)"
         }
-        require(request.group.groupKey.isNotBlank()) {
+        // Trim first so leading/trailing whitespace doesn't survive into the
+        // `component_groups.group_key` UNIQUE index — a key like
+        // `"org.example.test "` and `"org.example.test"` would otherwise be
+        // two distinct group rows and silently fragment aggregator queries.
+        // Leniency for clients (we trim instead of rejecting), strict
+        // canonicalisation on storage.
+        val normalizedGroupKey = request.group.groupKey.trim()
+        require(normalizedGroupKey.isNotBlank()) {
             "group.groupKey must not be blank"
         }
+        validateGroupKeyPrefix(normalizedGroupKey)
+        val normalizedGroupRequest = request.group.copy(groupKey = normalizedGroupKey)
         val baseConfigRequest =
             requireNotNull(request.baseConfiguration) {
                 "baseConfiguration is required: provide baseConfiguration.build.buildSystem on create"
@@ -167,7 +187,7 @@ class ComponentManagementServiceImpl(
                     ?: throw NotFoundException("Parent component '$parentKey' not found")
             }
 
-        val group = upsertGroup(request.group)
+        val group = upsertGroup(normalizedGroupRequest)
 
         val entity =
             ComponentEntity(
@@ -279,20 +299,22 @@ class ComponentManagementServiceImpl(
         require(!request.clearGroup) {
             "clearGroup: true is no longer allowed — every component must belong to a group"
         }
-        // Mirror the create-side `group.groupKey.isNotBlank()` validation:
-        // when PATCH carries `group: {...}`, the new key must be a real
-        // identifier. Otherwise a payload like
-        // `{"version": N, "clearGroup": false, "group": {"groupKey": "  "}}`
-        // would slip past the controller and persist a whitespace
-        // groupKey via `upsertGroup` (component_groups.group_key has only
-        // NOT NULL + UNIQUE constraints — no blank-rejection at the DB
-        // level). Keeping the check at the service layer also yields the
-        // same 400 + error-shape envelope the create path emits.
-        request.group?.let {
-            require(it.groupKey.isNotBlank()) {
-                "group.groupKey must not be blank"
+        // Mirror the create-side validation on the PATCH path. Same
+        // trim-then-validate-then-canonicalise pipeline so a PATCH that
+        // sets `groupKey = "org.example.test "` rounds to the canonical
+        // form before it reaches `upsertGroup`. The trimmed value is also
+        // what's used for prefix validation and persistence, so the rest
+        // of the method must read from `normalizedGroupRequest` rather
+        // than `request.group`.
+        val normalizedGroupRequest =
+            request.group?.let { req ->
+                val trimmed = req.groupKey.trim()
+                require(trimmed.isNotBlank()) {
+                    "group.groupKey must not be blank"
+                }
+                validateGroupKeyPrefix(trimmed)
+                req.copy(groupKey = trimmed)
             }
-        }
 
         val oldKey = entity.componentKey
         val normalizedNewKey = request.name?.trim()
@@ -370,7 +392,9 @@ class ComponentManagementServiceImpl(
         // (strict contract — every component must belong to a group), so the
         // only reachable shapes here are "no change" (request.group == null)
         // or "replace with a new/upserted group" (request.group != null).
-        request.group?.let { entity.componentGroup = upsertGroup(it) }
+        // The normalised (trimmed + prefix-validated) form is used so the
+        // upserted row is byte-stable across whitespace-y inputs.
+        normalizedGroupRequest?.let { entity.componentGroup = upsertGroup(it) }
 
         // Per-component child REPLACE — present collection wipes and refills
         request.artifactIds?.let {
@@ -1298,6 +1322,60 @@ class ComponentManagementServiceImpl(
         require(value.isNotBlank()) { "productType must not be blank" }
         require(value in PRODUCT_TYPE_NAMES) {
             "Invalid productType: '$value'. Allowed: $PRODUCT_TYPE_NAMES"
+        }
+    }
+
+    /**
+     * Reject group keys whose prefix is not in
+     * `components-registry.supportedGroupIds`. The frontend already gates
+     * the Submit button on the same check (via
+     * `GET /rest/api/2/common/supported-groups`), but the server is the
+     * source of truth: a CLI / automation client that bypasses the UI
+     * cannot land a component on a disallowed prefix.
+     *
+     * Allowed iff `groupKey == prefix` OR `groupKey.startsWith(prefix + ".")`,
+     * **compared case-insensitively** (both sides lowercased before the
+     * compare). The trailing-dot boundary is critical: without it,
+     * allowed=`org.example` would let `org.exampleextra.foo` slip through.
+     * Mirrors the frontend's `useSupportedGroups` check exactly —
+     * `CreateComponentDialog.tsx` and `GeneralTab.tsx` both lowercase
+     * `groupId` and each `prefix` before `v === lp || v.startsWith(lp + '.')`.
+     * Without case-insensitive comparison on the CRS side, the portal
+     * passes its pre-check on `ORG.EXAMPLE.foo` and the server then
+     * returns 400 — confusing UX.
+     *
+     * Case is preserved on storage: the caller passes the user-typed
+     * value (trimmed) and persistence happens with that value, NOT the
+     * lowercased form. Lowercasing is a validation-time comparison only.
+     *
+     * Known trade-off: because `upsertGroup` does a case-sensitive
+     * `findByGroupKey`, a user can land `org.example.foo` AND
+     * `ORG.EXAMPLE.foo` as two distinct `component_groups` rows that
+     * both validate against the same prefix. If a future requirement
+     * surfaces (e.g. "same logical groupKey must dedupe regardless of
+     * case"), the fix is either (a) a case-insensitive lookup in
+     * `upsertGroup`, or (b) a DB-level `UNIQUE LOWER(group_key)`
+     * constraint. Out of scope here — the spec keeps user-typed case.
+     *
+     * The error message names the allowed prefixes verbatim so non-UI
+     * clients see actionable feedback (the frontend can also surface the
+     * server message when its own pre-check disagrees with the server).
+     *
+     * Assumes `value` is already trimmed by the caller (see CREATE/PATCH
+     * blocks). An empty `supportedGroupIds` list rejects everything —
+     * misconfigured envs produce a clear 400 rather than silently
+     * accepting any prefix.
+     */
+    private fun validateGroupKeyPrefix(value: String) {
+        val allowed = configHelper.supportedGroupIds().toList()
+        val lowerValue = value.lowercase()
+        val matches =
+            allowed.any { prefix ->
+                val lowerPrefix = prefix.lowercase()
+                lowerValue == lowerPrefix || lowerValue.startsWith("$lowerPrefix.")
+            }
+        require(matches) {
+            "group.groupKey '$value' is not in the configured supportedGroupIds. Allowed: $allowed"
         }
     }
 

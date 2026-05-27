@@ -111,8 +111,13 @@ class FieldConfigSeeder(
         val groupIdField: MutableMap<String, Any?> =
             (componentSection[FIELD_GROUP_ID] as? Map<String, Any?>)?.toMutableMap() ?: mutableMapOf()
 
-        if (groupIdField[KEY_DEFAULT_VALUE] != null) {
+        if (groupIdField.containsKey(KEY_DEFAULT_VALUE)) {
             // Admin- or prior-seed-set value already present — never clobber.
+            // Use key-presence (not `!= null`) so an explicit `defaultValue: null`
+            // is honoured as an intentional opt-out from the auto-suggest
+            // default. Previously the seeder treated `null` as "missing" and
+            // silently re-seeded it on every restart, which made the
+            // opt-out impossible.
             log.debug(
                 "FieldConfigSeeder: component.groupId.defaultValue already set to '{}'; preserved.",
                 groupIdField[KEY_DEFAULT_VALUE],

@@ -200,7 +200,14 @@ abstract class BaseComponentsRegistryServiceTest {
     @Test
     @DisplayName("RES-002: Supported group IDs returned")
     fun testGetSupportedGroupIds() {
-        Assertions.assertEquals(Arrays.asList("org.octopusden.octopus", "io.bcomponent").sorted(), getSupportedGroupIds().sorted())
+        // `org.example` was added to `application-common.yml` supportedGroupIds
+        // so the 14 server-side test fixtures using `org.example.test` keep
+        // passing the new server-side `validateGroupKeyPrefix` check. The
+        // /supported-groups endpoint surfaces the configured list as-is.
+        Assertions.assertEquals(
+            Arrays.asList("org.octopusden.octopus", "io.bcomponent", "org.example").sorted(),
+            getSupportedGroupIds().sorted(),
+        )
     }
 
     @Test
