@@ -14,7 +14,7 @@ This document is the canonical reference for the v2 schema. ADR-014 records the 
 | Core | `components`, `component_configurations` | 2 |
 | Aggregator grouping | `component_groups` | 1 |
 | Dictionaries | `labels`, `systems`, `tools` | 3 |
-| M:N junctions | `component_labels`, `component_systems`, `component_required_tools` | 3 |
+| M:N junctions | `component_labels`, `component_required_tools` | 2 |
 | Children of `components` | `component_artifact_ids`, `distribution_security_groups`, `component_teamcity_projects`, `component_doc_links` | 4 |
 | Children of `component_configurations` | `vcs_settings_entries`, `distribution_maven_artifacts`, `distribution_file_url_artifacts`, `distribution_docker_images`, `distribution_packages`, `component_build_tool_beans` | 6 |
 | Cross-cutting | `audit_log`, `registry_config`, `component_source`, `dependency_mappings`, `git_history_import_state` | 5 |
@@ -129,6 +129,7 @@ Identity + fields that never vary per version range.
 | `vcs_external_registry` | TEXT | nullable | vcsSettings.externalRegistry — per-component (audit assertion enforced at migration) |
 | `distribution_explicit` | BOOLEAN | nullable | |
 | `distribution_external` | BOOLEAN | nullable | |
+| `system_code` | VARCHAR(50) | nullable, FK → systems(code) | Single-value system assignment (a component belongs to at most one system). Collapsed from the M:N junction `component_systems` in the post-#299 follow-up. Schema-nullable; service-layer validates non-null values against the env-config `components-registry.supportedSystems` allowlist on CREATE/PATCH — mirrors the `validateGroupKeyPrefix` gate against `supportedGroupIds` — with a fallback path that also accepts codes already in the master `systems` table (so `ImportServiceImpl.seedSystems`-discovered codes remain editable through v4 without a config redeploy). The master row is auto-created via `ensureSystemExists` on first write so the FK is always satisfied. Filter `?system=A,B` is an `IN(...)` predicate against this column (OR-semantic across distinct components). |
 | `version` | BIGINT | NOT NULL DEFAULT 0 | `@Version` optimistic locking |
 | `created_at` | TIMESTAMP WITH TIME ZONE | NOT NULL DEFAULT now() | |
 | `updated_at` | TIMESTAMP WITH TIME ZONE | NOT NULL DEFAULT now() | |
@@ -247,8 +248,9 @@ Each junction has composite PK `(component_X_id, target_code)`.
 | Junction | Connects | FK targets |
 |---|---|---|
 | `component_labels` | `components` ↔ `labels` | components(id), labels(code) |
-| `component_systems` | `components` ↔ `systems` | components(id), systems(code) |
 | `component_required_tools` | `component_configurations` ↔ `tools` | component_configurations(id), tools(name) |
+
+System assignment was historically a third M:N junction (`component_systems`), but the cardinality was collapsed to 1:0..1 in the post-#299 follow-up — a component now belongs to at most one system, represented by the scalar FK `components.system_code → systems(code)` (see §4.1). The master `systems` table is unchanged; only the M:N junction was removed.
 
 `component_required_tools` is per-version-rangeable; replacement at a specific range uses the `build.requiredTools` marker row.
 

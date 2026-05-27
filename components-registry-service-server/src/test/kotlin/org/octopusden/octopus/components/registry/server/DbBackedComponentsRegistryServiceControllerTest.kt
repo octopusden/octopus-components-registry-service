@@ -41,6 +41,15 @@ class DbBackedComponentsRegistryServiceControllerTest : MockMvcRegistryTestSuppo
     @Autowired
     private lateinit var sourceRegistry: ComponentSourceRegistry
 
+    /**
+     * Post ui-swift-sloth-system-single: DB-source resolver stores TESTONE's
+     * system as the scalar `components.system_code = "CLASSIC"` (first
+     * non-blank entry from the `"CLASSIC,ALFA"` DSL CSV), so the V1 detail
+     * surface emits a single-entry set. Overrides the shared base default
+     * (which still reflects the git-source full-set shape).
+     */
+    override val expectedTestoneSystemSet: Set<String> = setOf("CLASSIC")
+
     init {
         val testResourcesUri =
             DbBackedComponentsRegistryServiceControllerTest::class.java

@@ -596,4 +596,144 @@ class StrictContractTest {
             "expected PATCH to persist trimmed key '$newKey'; got '$persistedKey'"
         }
     }
+
+    // -------------------------------------------------------------------
+    // Single-value `system` field (M:N → 1:0..1 collapse).
+    //
+    // The previous iteration modelled system membership as a Set<String>
+    // backed by a `component_systems` M:N junction. This iteration
+    // collapses to a scalar `components.system_code` FK — a component
+    // belongs to at most one system. Tests pin:
+    //  - CREATE accepts a single value and persists it.
+    //  - CREATE accepts `null`/absent (system is optional).
+    //  - PATCH changes the value.
+    //  - List filter `?system=A,B` is OR-semantic across the scalar
+    //    (already covered by ListComponentsSystemFilterTest, but a smoke
+    //    test here pins the contract from the strict-contract surface).
+    // -------------------------------------------------------------------
+
+    @Test
+    @DisplayName("CREATE accepts a single `system` value and persists it on the components row")
+    fun create_accepts_single_system() {
+        // The test profile sets `components-registry.supportedSystems:
+        // NONE,CLASSIC,ALFA` in `application-common.yml`. Service-layer
+        // validation gates the `system` field against that env-config
+        // allowlist (mirrors the analogous `supportedGroupIds` gate for
+        // `groupKey`); the master `systems` row is auto-created by
+        // `ensureSystemExists` so the FK from `components.system_code →
+        // systems(code)` is always satisfied — no explicit per-test
+        // master-table seeding required. `CLASSIC` is the one we use
+        // for the single-value contract test here.
+        val body =
+            """
+            {
+              "name": "${unique("strict-create-single-system")}",
+              "system": "CLASSIC",
+              "group": {"groupKey": "org.example.test", "isFake": false},
+              "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
+            }
+            """.trimIndent()
+        postCreate(body)
+            .andExpect(status().isCreated)
+            .andExpect(jsonPath("$.system").value("CLASSIC"))
+    }
+
+    @Test
+    @DisplayName("CREATE accepts absent `system` (component without a system is valid; scalar is nullable)")
+    fun create_accepts_null_system() {
+        val body =
+            """
+            {
+              "name": "${unique("strict-create-null-system")}",
+              "group": {"groupKey": "org.example.test", "isFake": false},
+              "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
+            }
+            """.trimIndent()
+        postCreate(body)
+            .andExpect(status().isCreated)
+            .andExpect(jsonPath("$.system").isEmpty)
+    }
+
+    @Test
+    @DisplayName("CREATE rejects a `system` value that is not in the configured supportedSystems allowlist")
+    fun create_rejects_unknown_system() {
+        val body =
+            """
+            {
+              "name": "${unique("strict-create-bad-system")}",
+              "system": "NOT_A_REAL_SYSTEM_xyz",
+              "group": {"groupKey": "org.example.test", "isFake": false},
+              "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
+            }
+            """.trimIndent()
+        postCreate(body)
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.errorMessage", org.hamcrest.Matchers.containsString("system")))
+    }
+
+    @Test
+    @DisplayName("PATCH with a new `system` value updates the components.system_code column")
+    fun patch_changes_system() {
+        // Seed with CLASSIC, then PATCH to ALFA (both in the test
+        // profile's configured `supportedSystems` allowlist).
+        val name = unique("strict-patch-system")
+        val seedBody =
+            """
+            {
+              "name": "$name",
+              "system": "CLASSIC",
+              "group": {"groupKey": "org.example.test", "isFake": false},
+              "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
+            }
+            """.trimIndent()
+        val seedResponse =
+            postCreate(seedBody).andExpect(status().isCreated)
+                .andReturn().response.contentAsString
+        val seed = objectMapper.readTree(seedResponse)
+        val id = seed["id"].asText()
+        val versionLock = seed["version"].asLong()
+        assert(seed["system"].asText() == "CLASSIC") {
+            "precondition: seeded component should carry CLASSIC; got ${seed["system"]}"
+        }
+
+        val patchBody = """{"version": $versionLock, "clearGroup": false, "system": "ALFA"}"""
+        mvc.perform(
+            patch("/rest/api/4/components/$id")
+                .with(adminJwt())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(patchBody),
+        ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.system").value("ALFA"))
+    }
+
+    @Test
+    @DisplayName("PATCH without `system` key (field absent) preserves existing system — no-op contract")
+    fun patch_without_system_key_preserves_existing() {
+        val name = unique("strict-patch-system-noop")
+        val seedBody =
+            """
+            {
+              "name": "$name",
+              "system": "CLASSIC",
+              "group": {"groupKey": "org.example.test", "isFake": false},
+              "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
+            }
+            """.trimIndent()
+        val seedResponse =
+            postCreate(seedBody).andExpect(status().isCreated)
+                .andReturn().response.contentAsString
+        val seed = objectMapper.readTree(seedResponse)
+        val id = seed["id"].asText()
+        val versionLock = seed["version"].asLong()
+
+        // No `system` key — should be a no-op.
+        val patchBody = """{"version": $versionLock, "clearGroup": false}"""
+        mvc.perform(
+            patch("/rest/api/4/components/$id")
+                .with(adminJwt())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(patchBody),
+        ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.system").value("CLASSIC"))
+    }
 }
