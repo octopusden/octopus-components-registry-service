@@ -1333,10 +1333,29 @@ class ComponentManagementServiceImpl(
      * source of truth: a CLI / automation client that bypasses the UI
      * cannot land a component on a disallowed prefix.
      *
-     * Allowed iff `groupKey == prefix` OR `groupKey.startsWith(prefix + ".")`.
-     * The trailing-dot boundary is critical: without it, allowed=`com.example`
-     * would let `com.exampleextra.foo` slip through. Mirrors the
-     * frontend's `useSupportedGroups` check (`v === lp || v.startsWith(lp + '.')`).
+     * Allowed iff `groupKey == prefix` OR `groupKey.startsWith(prefix + ".")`,
+     * **compared case-insensitively** (both sides lowercased before the
+     * compare). The trailing-dot boundary is critical: without it,
+     * allowed=`org.example` would let `org.exampleextra.foo` slip through.
+     * Mirrors the frontend's `useSupportedGroups` check exactly —
+     * `CreateComponentDialog.tsx` and `GeneralTab.tsx` both lowercase
+     * `groupId` and each `prefix` before `v === lp || v.startsWith(lp + '.')`.
+     * Without case-insensitive comparison on the CRS side, the portal
+     * passes its pre-check on `ORG.EXAMPLE.foo` and the server then
+     * returns 400 — confusing UX.
+     *
+     * Case is preserved on storage: the caller passes the user-typed
+     * value (trimmed) and persistence happens with that value, NOT the
+     * lowercased form. Lowercasing is a validation-time comparison only.
+     *
+     * Known trade-off: because `upsertGroup` does a case-sensitive
+     * `findByGroupKey`, a user can land `org.example.foo` AND
+     * `ORG.EXAMPLE.foo` as two distinct `component_groups` rows that
+     * both validate against the same prefix. If a future requirement
+     * surfaces (e.g. "same logical groupKey must dedupe regardless of
+     * case"), the fix is either (a) a case-insensitive lookup in
+     * `upsertGroup`, or (b) a DB-level `UNIQUE LOWER(group_key)`
+     * constraint. Out of scope here — the spec keeps user-typed case.
      *
      * The error message names the allowed prefixes verbatim so non-UI
      * clients see actionable feedback (the frontend can also surface the
@@ -1349,8 +1368,12 @@ class ComponentManagementServiceImpl(
      */
     private fun validateGroupKeyPrefix(value: String) {
         val allowed = configHelper.supportedGroupIds().toList()
+        val lowerValue = value.lowercase()
         val matches =
-            allowed.any { prefix -> value == prefix || value.startsWith("$prefix.") }
+            allowed.any { prefix ->
+                val lowerPrefix = prefix.lowercase()
+                lowerValue == lowerPrefix || lowerValue.startsWith("$lowerPrefix.")
+            }
         require(matches) {
             "group.groupKey '$value' is not in the configured supportedGroupIds. Allowed: $allowed"
         }

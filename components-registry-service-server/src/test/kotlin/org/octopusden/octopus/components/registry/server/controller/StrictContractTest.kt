@@ -348,6 +348,66 @@ class StrictContractTest {
     }
 
     @Test
+    @DisplayName("CREATE accepts an upper-case groupKey when the allowed prefix matches case-insensitively (case is preserved on storage)")
+    fun create_accepts_uppercased_groupId_when_allowed_prefix_matches_case_insensitively() {
+        // Frontend (CreateComponentDialog.tsx / GeneralTab.tsx) lowercases
+        // both sides before comparing the user-typed groupId against the
+        // supportedGroupIds list. Without the same case-insensitive compare
+        // on the CRS side, a user who types `ORG.EXAMPLE.test` passes the
+        // portal pre-check (lowercased to `org.example.test` which matches
+        // `org.example`) and then sees a 400 from the server — confusing UX.
+        // This test pins the case-insensitive match. Additionally,
+        // case must be PRESERVED on storage: the persisted groupKey is
+        // exactly what the user typed (`ORG.EXAMPLE.test`), not the
+        // lowercased form (we don't want silent renaming).
+        val typedKey = "ORG.EXAMPLE.test.${UUID.randomUUID().toString().take(6)}"
+        val body =
+            """
+            {
+              "name": "${unique("strict-case-insensitive-create")}",
+              "group": {"groupKey": "$typedKey", "isFake": false},
+              "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
+            }
+            """.trimIndent()
+        val created =
+            postCreate(body).andExpect(status().isCreated)
+                .andReturn().response.contentAsString
+        val persistedKey = objectMapper.readTree(created)["group"]["groupKey"].asText()
+        assert(persistedKey == typedKey) {
+            "expected user-typed case to be preserved on storage; typed='$typedKey', got='$persistedKey'"
+        }
+    }
+
+    @Test
+    @DisplayName("PATCH accepts an upper-case groupKey when the allowed prefix matches case-insensitively (case is preserved on storage)")
+    fun patch_accepts_uppercased_groupId_when_allowed_prefix_matches_case_insensitively() {
+        val name = unique("strict-case-insensitive-patch")
+        val seedResponse =
+            postCreate(validCreateBody(name)).andExpect(status().isCreated)
+                .andReturn().response.contentAsString
+        val seed = objectMapper.readTree(seedResponse)
+        val id = seed["id"].asText()
+        val versionLock = seed["version"].asLong()
+
+        val typedKey = "ORG.EXAMPLE.other.${UUID.randomUUID().toString().take(6)}"
+        val patchBody =
+            """{"version": $versionLock, "clearGroup": false, "group": {"groupKey": "$typedKey", "isFake": false}}"""
+        val patched =
+            mvc.perform(
+                patch("/rest/api/4/components/$id")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(patchBody),
+            ).andExpect(status().isOk)
+                .andExpect(jsonPath("$.group.groupKey").value(typedKey))
+                .andReturn().response.contentAsString
+        val persistedKey = objectMapper.readTree(patched)["group"]["groupKey"].asText()
+        assert(persistedKey == typedKey) {
+            "expected user-typed case to be preserved on storage; typed='$typedKey', got='$persistedKey'"
+        }
+    }
+
+    @Test
     @DisplayName("PATCH returns 400 when the new groupKey is outside supportedGroupIds")
     fun patch_rejects_disallowed_groupId_prefix() {
         val name = unique("strict-patch-bad-prefix")

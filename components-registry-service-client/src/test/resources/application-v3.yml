@@ -9,7 +9,9 @@ components-registry:
   main-groovy-file: Aggregator.groovy
   groovy-path: ${components-registry.work-dir}
 
-  supportedGroupIds: org.octopusden.octopus,io.bcomponent
+  # Same 3-element list as application-common.yml — keeps the v3-profile
+  # variant in sync with the shared base test's expected value.
+  supportedGroupIds: org.octopusden.octopus,io.bcomponent,org.example
   supportedSystems: NONE,CLASSIC,ALFA
   version-name:
     service-branch: serviceCBranch
