@@ -38,8 +38,10 @@ data class ComponentUpdateRequest(
     val solution: Boolean? = null,
     val parentComponentName: String? = null,
     val archived: Boolean? = null,
-    val releaseManager: String? = null,
-    val securityChampion: String? = null,
+    // Ordered multi-value (first = primary). PATCH: null = "don't touch";
+    // a provided list (including empty = clear) replaces the whole ordered list.
+    val releaseManager: List<String>? = null,
+    val securityChampion: List<String>? = null,
     val copyright: String? = null,
     val releasesInDefaultBranch: Boolean? = null,
     val labels: Set<String>? = null,

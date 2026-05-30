@@ -52,8 +52,10 @@ CREATE TABLE components (
     solution                    BOOLEAN,
     parent_component_id         UUID REFERENCES components(id),         -- DSL parentComponent = "X" reference
     component_group_id          UUID REFERENCES component_groups(id),   -- aggregator membership
-    release_manager             VARCHAR(255),
-    security_champion           VARCHAR(255),
+    -- release_manager / security_champion are NO LONGER scalar columns here.
+    -- They became ordered multi-value child tables (component_release_managers,
+    -- component_security_champions) further down — see "1:N children of
+    -- components". component_owner stays single-value scalar.
     copyright                   TEXT,
     releases_in_default_branch  BOOLEAN,
     -- jira fields that never vary per-version:
@@ -350,6 +352,34 @@ CREATE TABLE component_artifact_ids (
 );
 CREATE INDEX idx_artifact_ids_component        ON component_artifact_ids(component_id);
 CREATE INDEX idx_artifact_ids_group_artifact   ON component_artifact_ids(group_pattern, artifact_pattern);
+
+-- Ordered multi-value people: release managers and security champions. Mirror
+-- the `component_artifact_ids` surrogate-UUID-PK shape (NOT a composite
+-- (component_id, sort_order) PK). The clear/re-add edit pattern used by the
+-- service can INSERT new rows before deleting orphans; a composite PK on
+-- sort_order would collide, so the surrogate UUID key is used instead.
+-- `sort_order` preserves the ordered list (first = primary). Username
+-- uniqueness within a component is enforced by the service-layer keep-first
+-- dedupe (ComponentEntity.replace*Usernames), not a DB UNIQUE constraint.
+-- Each table has a `component_id` FK index — Postgres does not auto-index FKs,
+-- and lazy-collection loads + cascade deletes need it (matches artifact_ids).
+CREATE TABLE component_release_managers (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    component_id UUID NOT NULL REFERENCES components(id) ON DELETE CASCADE,
+    username     VARCHAR(255) NOT NULL,
+    sort_order   INT NOT NULL DEFAULT 0
+);
+CREATE INDEX idx_component_release_managers_component
+    ON component_release_managers(component_id);
+
+CREATE TABLE component_security_champions (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    component_id UUID NOT NULL REFERENCES components(id) ON DELETE CASCADE,
+    username     VARCHAR(255) NOT NULL,
+    sort_order   INT NOT NULL DEFAULT 0
+);
+CREATE INDEX idx_component_security_champions_component
+    ON component_security_champions(component_id);
 
 CREATE TABLE distribution_security_groups (
     id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),

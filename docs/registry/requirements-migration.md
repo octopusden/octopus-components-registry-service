@@ -273,7 +273,10 @@ into `registry_config` with key `component-defaults`.
 1. After `POST /rest/api/4/admin/migrate-defaults` returns 200
 2. `GET /rest/api/4/admin/component-defaults` returns JSON with `build.buildSystem = "MAVEN"`
 3. Nested objects (`build`, `escrow`, `jira`) are present in the response
-4. Scalar defaults fields (`copyright`, `releaseManager`) are also saved
+4. Scalar defaults fields (e.g. `copyright`) are also saved. People fields
+   (`componentOwner`, `releaseManager`, `securityChampion`) are **not** saved
+   into `component-defaults` — `Defaults.groovy` never sets them, so they were
+   removed from the defaults surface (see SYS-044).
 
 **Test method:** `MigrationIntegrationTest.MIG-010 migrateDefaults preserves nested objects`
 
@@ -340,9 +343,13 @@ is correctly transferred from DSL into `Component` entity fields.
 - Component defines `releaseManager = "user1"` and `securityChampion = "user2"`
 
 **Acceptance criteria:**
-1. `GET /rest/api/4/components/{id}` returns `releaseManager = "user1"`
-2. `securityChampion = "user2"`
+1. `GET /rest/api/4/components/{id}` returns `releaseManager = ["user1"]`
+   (v4 ordered `string[]`; the DSL CSV `"user1"` splits to a one-element list).
+2. `securityChampion = ["user2"]`
 3. If `copyright` is set in DSL or defaults, it is present in the response
+
+> Note: legacy v1/v2/v3 still return these as the comma-joined `String`
+> (`"user1"` / `"user2"`) — see SYS-044 in requirements-common.md.
 
 **Test method:** `MigrationIntegrationTest.MIG-013 metadata`
 
@@ -706,6 +713,13 @@ guarded behind `hasDefaultConfig` and never populated, leaving the v4
 only looked at component-level `jiraComponentConfigs`, which is intentionally
 left empty for version-range-only components (per `buildJiraVersionRangesForComponent`
 ALL_VERSIONS semantics).
+
+> Note (SYS-044): `release_manager` / `security_champion` are no longer scalar
+> columns. They are now ordered child tables (`component_release_managers` /
+> `component_security_champions`) and v4 returns them as ordered `string[]`.
+> The root-level-inheritance behaviour this requirement pins is unchanged —
+> only the storage shape and the v4 field type changed. Legacy v1/v2/v3 still
+> return the comma-joined `String`.
 
 **Acceptance criteria:**
 1. After migration of a version-range-only component:

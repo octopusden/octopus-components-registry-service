@@ -7,7 +7,7 @@ This document is the canonical reference for the v2 schema. ADR-014 records the 
 
 ## 1. Overview
 
-23 tables across 7 groups:
+25 tables across 7 groups:
 
 | Group | Tables | Count |
 |---|---|---:|
@@ -15,7 +15,7 @@ This document is the canonical reference for the v2 schema. ADR-014 records the 
 | Aggregator grouping | `component_groups` | 1 |
 | Dictionaries | `labels`, `systems`, `tools` | 3 |
 | M:N junctions | `component_labels`, `component_required_tools` | 2 |
-| Children of `components` | `component_artifact_ids`, `distribution_security_groups`, `component_teamcity_projects`, `component_doc_links` | 4 |
+| Children of `components` | `component_artifact_ids`, `component_release_managers`, `component_security_champions`, `distribution_security_groups`, `component_teamcity_projects`, `component_doc_links` | 6 |
 | Children of `component_configurations` | `vcs_settings_entries`, `distribution_maven_artifacts`, `distribution_file_url_artifacts`, `distribution_docker_images`, `distribution_packages`, `component_build_tool_beans` | 6 |
 | Cross-cutting | `audit_log`, `registry_config`, `component_source`, `dependency_mappings`, `git_history_import_state` | 5 |
 
@@ -51,6 +51,12 @@ This document is the canonical reference for the v2 schema. ADR-014 records the 
 ────  cross-cutting  ────
    audit_log     registry_config     component_source     dependency_mappings     git_history_import_state
 ```
+
+> The diagram above is a simplified overview. Two additional ordered 1:N
+> children of `components` — `component_release_managers` and
+> `component_security_champions` — carry the multi-value release-manager /
+> security-champion lists (see §4.6). The full Mermaid ERD is in
+> [diagrams/erd.md](diagrams/erd.md).
 
 ## 3. Core model: Model A' override taxonomy
 
@@ -120,8 +126,6 @@ Identity + fields that never vary per version range.
 | `solution` | BOOLEAN | nullable | |
 | `parent_component_id` | UUID | FK → components(id) | DSL `parentComponent = "X"` reference between peers |
 | `component_group_id` | UUID | FK → component_groups(id) | Aggregator membership. Schema-nullable (FK), but the v4 service layer (`ComponentManagementServiceImpl.createComponent`) rejects payloads missing `group` with 400 — every newly-created component must belong to a group. PATCH semantics: `group == null` continues to mean "don't touch" (Jackson cannot distinguish absent-from-explicit-null without a presence-preserving DTO); `clearGroup: true` is rejected with 400. |
-| `release_manager` | VARCHAR(255) | nullable | |
-| `security_champion` | VARCHAR(255) | nullable | |
 | `copyright` | TEXT | nullable | |
 | `releases_in_default_branch` | BOOLEAN | nullable | |
 | `jira_display_name` | VARCHAR(255) | nullable | jira.displayName — never varies per version per audit |
@@ -135,6 +139,16 @@ Identity + fields that never vary per version range.
 | `updated_at` | TIMESTAMP WITH TIME ZONE | NOT NULL DEFAULT now() | |
 
 Indexes: `archived`, `product_type`, `parent_component_id`, `component_group_id`, partial `component_key WHERE archived = false`.
+
+> **Multi-value people:** `release_manager` and `security_champion` are **no
+> longer scalar columns** on `components`. They moved to the ordered child
+> tables `component_release_managers` / `component_security_champions` (§4.6).
+> v4 exposes them as ordered `string[]` (first = primary); legacy v1/v2/v3 keep
+> the comma-joined `String` (joined in `EntityMappers`, split on import in
+> `ImportServiceImpl.buildComponentEntity`). `component_owner` stays single-value
+> scalar. Username uniqueness within a list is enforced by keep-first dedupe in
+> `ComponentEntity.replace*Usernames` (trim → drop blank → keep-first), not a DB
+> constraint.
 
 ### 4.2 `component_configurations`
 
@@ -259,6 +273,8 @@ System assignment was historically a third M:N junction (`component_systems`), b
 | Table | Key fields | Notes |
 |---|---|---|
 | `component_artifact_ids` | `group_pattern, artifact_pattern` | Used by `find-by-artifact` hot endpoint; indexed `(group_pattern, artifact_pattern)` |
+| `component_release_managers` | `username, sort_order` | Ordered multi-value (first = primary). Surrogate UUID PK (mirrors `component_artifact_ids`, NOT a composite PK on `sort_order` — avoids Hibernate INSERT-before-DELETE collisions on clear/re-add). No `UNIQUE(component_id, sort_order)`; username dedupe (keep-first, trim, drop-blank) is service-layer, not DB. Indexed `(component_id)`. Legacy v1/v2/v3 read the comma-joined string. |
+| `component_security_champions` | `username, sort_order` | Identical shape to `component_release_managers` (ordered multi-value security champions). |
 | `distribution_security_groups` | `group_type ∈ {read, write}, group_name` | Audit confirms never per-version |
 | `component_teamcity_projects` | `project_id, sort_order` | Multi-id supported |
 | `component_doc_links` | `doc_component_key, major_version, sort_order` | Soft-reference; target may be archived or out-of-installation; UNIQUE `(component_id, doc_component_key, major_version)` |
