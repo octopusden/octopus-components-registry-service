@@ -2,7 +2,7 @@
 
 Entity-relationship diagram of the v2 schema baseline (`V1__schema.sql`). The full column-by-column specification lives in [schema-spec.md](../schema-spec.md); the design rationale is in [ADR-014](../adr/014-schema-v2.md).
 
-23 tables across 7 groups. The diagram is split into views to stay readable.
+25 tables across 7 groups. The diagram is split into views to stay readable.
 
 ## Core + per-version configurations
 
@@ -12,6 +12,8 @@ The `components` table holds one row per component (canonical identity). All per
 erDiagram
     components ||--o{ component_configurations : "1:N"
     components ||--o{ component_artifact_ids : "1:N"
+    components ||--o{ component_release_managers : "1:N (ordered)"
+    components ||--o{ component_security_champions : "1:N (ordered)"
     components ||--o{ distribution_security_groups : "1:N"
     components ||--o{ component_teamcity_projects : "1:N"
     components ||--o{ component_doc_links : "1:N"
@@ -61,7 +63,29 @@ erDiagram
         timestamp migrated_at
         string migrated_by
     }
+
+    component_release_managers {
+        uuid id PK
+        uuid component_id FK
+        string username
+        int sort_order "ordered; first = primary"
+    }
+
+    component_security_champions {
+        uuid id PK
+        uuid component_id FK
+        string username
+        int sort_order "ordered; first = primary"
+    }
 ```
+
+`component_release_managers` / `component_security_champions` are ordered
+multi-value people lists (replaced the former scalar `release_manager` /
+`security_champion` columns on `components`). Surrogate UUID PK (mirrors
+`component_artifact_ids`); username uniqueness within a list is enforced by
+service-layer keep-first dedupe, not a DB constraint. v4 exposes ordered
+`string[]`; legacy v1/v2/v3 read the comma-joined `String`. `component_owner`
+stays single-value scalar on `components`.
 
 ## Dictionaries + M:N junctions
 

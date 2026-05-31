@@ -273,7 +273,10 @@ into `registry_config` with key `component-defaults`.
 1. After `POST /rest/api/4/admin/migrate-defaults` returns 200
 2. `GET /rest/api/4/admin/component-defaults` returns JSON with `build.buildSystem = "MAVEN"`
 3. Nested objects (`build`, `escrow`, `jira`) are present in the response
-4. Scalar defaults fields (`copyright`, `releaseManager`) are also saved
+4. Scalar defaults fields (e.g. `copyright`) are also saved. People fields
+   (`componentOwner`, `releaseManager`, `securityChampion`) are **not** saved
+   into `component-defaults` — `Defaults.groovy` never sets them, so they were
+   removed from the defaults surface (see SYS-044).
 
 **Test method:** `MigrationIntegrationTest.MIG-010 migrateDefaults preserves nested objects`
 
@@ -340,9 +343,13 @@ is correctly transferred from DSL into `Component` entity fields.
 - Component defines `releaseManager = "user1"` and `securityChampion = "user2"`
 
 **Acceptance criteria:**
-1. `GET /rest/api/4/components/{id}` returns `releaseManager = "user1"`
-2. `securityChampion = "user2"`
+1. `GET /rest/api/4/components/{id}` returns `releaseManager = ["user1"]`
+   (v4 ordered `string[]`; the DSL CSV `"user1"` splits to a one-element list).
+2. `securityChampion = ["user2"]`
 3. If `copyright` is set in DSL or defaults, it is present in the response
+
+> Note: legacy v1/v2/v3 still return these as the comma-joined `String`
+> (`"user1"` / `"user2"`) — see SYS-044 in requirements-common.md.
 
 **Test method:** `MigrationIntegrationTest.MIG-013 metadata`
 
@@ -707,29 +714,41 @@ only looked at component-level `jiraComponentConfigs`, which is intentionally
 left empty for version-range-only components (per `buildJiraVersionRangesForComponent`
 ALL_VERSIONS semantics).
 
+> Note (SYS-044): `release_manager` / `security_champion` are no longer scalar
+> columns. They are now ordered child tables (`component_release_managers` /
+> `component_security_champions`) and v4 returns them as ordered `string[]`.
+> The root-level-inheritance behaviour this requirement pins is unchanged —
+> only the storage shape and the v4 field type changed. Legacy v1/v2/v3 still
+> return the comma-joined `String`.
+
 **Acceptance criteria:**
 1. After migration of a version-range-only component:
    - `component_entity.labels` contains the root-level DSL labels
-   - `component_entity.release_manager` / `security_champion` / `group_id` /
-     `copyright` / `releases_in_default_branch` are populated from root-level
-     DSL values (or inherited defaults).
+   - the `component_release_managers` / `component_security_champions` ordered
+     child rows are populated from root-level DSL values (split from the
+     comma-separated string, keep-first deduped); `group_id` / `copyright` /
+     `releases_in_default_branch` are populated from root-level DSL values (or
+     inherited defaults).
    - Each `component_version_entity.jira_component_configs` row contains the
      range-specific (root-inherited + per-range override) jira config.
 2. v4 `GET /rest/api/4/components/{name}` returns:
    - `labels`, `releaseManager`, `securityChampion`, `groupId`,
-     `releasesInDefaultBranch` populated from the dedicated columns.
+     `releasesInDefaultBranch` populated — `releaseManager` / `securityChampion`
+     as ordered `string[]` from their child tables, the rest from their columns.
    - `jiraComponentConfigs` non-empty — falls back to the deduplicated set of
      version-entity jira configs when component-level is empty.
 3. v2 `GET /rest/api/2/components/{name}/versions/{ver}` continues to return
    correct `labels` / `releaseManager` / `securityChampion` for both
-   freshly-migrated rows (read from dedicated columns) and pre-fix rows
-   migrated with values in `metadata` (read via the `metadata` fallback in
-   `toEscrowModuleConfig`).
+   freshly-migrated rows (`labels` from its column; `releaseManager` /
+   `securityChampion` joined from the `component_release_managers` /
+   `component_security_champions` child rows, comma-joined for the legacy v2
+   wire) and pre-fix rows migrated with values in `metadata` (read via the
+   `metadata` fallback in `toEscrowModuleConfig`).
 4. `RES-001 / All Jira component version ranges` keeps emitting exactly one
    entry per `versionRange` (no spurious `ALL_VERSIONS` entry for
    version-range-only components).
 
-**Test method:** `MigrationIntegrationTest.MIG-025 version-range-only component preserves root-level metadata fields` against `TEST_COMPONENT3` (range blocks `(,1.0.107)` and `[1.0.107,)`, root-level labels/releaseManager/securityChampion/groupId/jira). Asserts dedicated-column values via the v4 detail response. RES-001 unchanged-output regression covered by `ComponentsRegistryServiceControllerTest` and `DbBackedComponentsRegistryServiceControllerTest`.
+**Test method:** `MigrationIntegrationTest.MIG-025 version-range-only component preserves root-level metadata fields` against `TEST_COMPONENT3` (range blocks `(,1.0.107)` and `[1.0.107,)`, root-level labels/releaseManager/securityChampion/groupId/jira). Asserts the migrated values via the v4 detail response (labels/groupId from columns; releaseManager/securityChampion as ordered arrays from their child tables). RES-001 unchanged-output regression covered by `ComponentsRegistryServiceControllerTest` and `DbBackedComponentsRegistryServiceControllerTest`.
 
 **Out of scope:**
 - Per-range jira surfacing in the v4 detail response: range-specific configs

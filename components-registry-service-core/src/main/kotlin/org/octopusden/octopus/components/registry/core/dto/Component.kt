@@ -8,7 +8,17 @@ abstract class Component(val id: String, val name: String?, val componentOwner: 
     var releasesInDefaultBranch: Boolean? = null
     var solution: Boolean? = null
     var parentComponent: String? = null
+
+    @Deprecated(
+        "Comma-joined string kept for v1/v2/v3 backward compatibility. " +
+            "Use the v4 API: GET /rest/api/4/components/{id} returns securityChampion as an ordered List<String>.",
+    )
     var securityChampion: String? = null
+
+    @Deprecated(
+        "Comma-joined string kept for v1/v2/v3 backward compatibility. " +
+            "Use the v4 API: GET /rest/api/4/components/{id} returns releaseManager as an ordered List<String>.",
+    )
     var releaseManager: String? = null
     var distribution: DistributionDTO? = null
     var archived: Boolean = false
@@ -16,6 +26,7 @@ abstract class Component(val id: String, val name: String?, val componentOwner: 
     var escrow: EscrowDTO? = null
     var copyright: String? = null
     var labels: Set<String> = emptySet()
+    @Suppress("DEPRECATION") // reads the deprecated comma-joined RM/SC props for value equality
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
@@ -41,6 +52,7 @@ abstract class Component(val id: String, val name: String?, val componentOwner: 
         return true
     }
 
+    @Suppress("DEPRECATION") // reads the deprecated comma-joined RM/SC props
     override fun hashCode(): Int {
         return Objects.hash(
             id,
@@ -62,6 +74,7 @@ abstract class Component(val id: String, val name: String?, val componentOwner: 
         )
     }
 
+    @Suppress("DEPRECATION") // reads the deprecated comma-joined RM/SC props
     override fun toString(): String {
         return "Component(id='$id', name=$name, componentOwner='$componentOwner', system=$system, " +
                 "clientCode=$clientCode, releasesInDefaultBranch=$releasesInDefaultBranch, solution=$solution, " +

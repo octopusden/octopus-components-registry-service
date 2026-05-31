@@ -52,6 +52,7 @@
 | SYS-041 | GET /components?buildSystem=GRADLE,MAVEN accepts CSV multi-value with OR semantics across the BASE buildSystem column | High | integration-test | ✅ Tested |
 | SYS-042 | GET /components?system=A,B accepts CSV multi-value with OR semantics across the scalar `components.system_code` column (M:N collapsed to 1:0..1 post-#299); GET /components/meta/systems returns sorted distinct codes in use | High | integration-test | ✅ Tested |
 | SYS-043 | GET /components?owner=alice,bob accepts CSV multi-value with OR semantics over the scalar componentOwner column | High | integration-test | ✅ Tested |
+| SYS-044 | releaseManager / securityChampion are ordered multi-value (`string[]`) in v4 with keep-first dedupe; legacy v1/v2/v3 keep the comma-joined `String`; componentOwner stays single-value and is removed from the global component-defaults surface | High | unit + integration-test | ✅ Tested |
 
 ---
 
@@ -1364,3 +1365,86 @@ The change is wire-compatible: a single value `?owner=alice` round-trips through
 **Out of scope:**
 - Group-by-owner.
 - AND across owners (would always yield zero matches given the scalar column; not useful).
+
+### SYS-044: Multi-value releaseManager / securityChampion (ordered, deduped)
+
+**Priority:** High
+**Test layer:** unit + integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+A component can have more than one release manager / security champion, and the
+order is meaningful (first = primary). Previously these were single scalar
+`VARCHAR(255)` columns on `components` surfaced as `String?` in v4. The DSL
+already stores each as a comma-separated string validated by `\w+(,\w+)*`.
+
+**Description:**
+- DB: `release_manager` / `security_champion` scalar columns are **dropped**;
+  two ordered child tables `component_release_managers` /
+  `component_security_champions` (surrogate UUID PK, `username`, `sort_order`,
+  `component_id` FK ON DELETE CASCADE) hold the lists. See schema-spec.md §4.1/§4.6.
+- v4 API: `ComponentDetailResponse` / `ComponentCreateRequest` expose
+  `List<String>` (default `emptyList()`); `ComponentUpdateRequest` uses
+  `List<String>?` (`null` = don't touch, provided list incl. empty = replace
+  whole ordered list).
+- Canonicalization (single point — `ComponentEntity.replace*Usernames`): trim →
+  drop blank → keep-first dedupe, applied uniformly to create, patch, and
+  import. Order preserved.
+- Legacy v1/v2/v3 stay **non-breaking**: `EntityMappers` joins the ordered list
+  back into a comma-string (empty → null); `ImportServiceImpl.buildComponentEntity`
+  splits the DSL CSV into the ordered list. No `component-resolver-core` / DSL /
+  `EscrowModuleConfig` changes.
+- `componentOwner` cardinality is **unchanged** (single-value scalar everywhere);
+  the only owner change is removing it (with releaseManager / securityChampion)
+  from the global `component-defaults` surface (`migrateDefaults` + the admin
+  defaults form), because `Defaults.groovy` never sets people fields.
+- Audit: `scalarAuditMap` emits the comma-joined value (empty → null), same rule
+  as the legacy mapper. The Git-history snapshot serializer is unaffected (it
+  reads the DSL CSV string straight from the loader).
+
+**Acceptance criteria:**
+1. Create / patch / import all collapse `[" alice ", "", "alice", "bob"]` →
+   `["alice", "bob"]` (trim → drop-blank → keep-first dedupe, order preserved).
+2. v4 PATCH with a list replaces the whole ordered list; empty list clears;
+   `null`/absent does not touch the stored list.
+3. Reordering round-trips (order is meaningful).
+4. Legacy resolve joins the ordered list to a comma-string; empty → null;
+   single value `"user"` round-trips unchanged.
+5. The Git-history snapshot preserves the DSL CSV string for a multi-value
+   component.
+6. A multi-value PATCH audits the comma-joined value in `scalarAuditMap`.
+
+**Test method:** every method below carries `SYS-044` in its name + a
+`@DisplayName("SYS-044: …")` (test-to-requirement traceability).
+- `ComponentPeopleAccessorTest` — `SYS-044 replaceReleaseManagerUsernames preserves order and assigns sortOrder by index`,
+  `SYS-044 releaseManagerUsernames sorts by sortOrder not collection or heap order`,
+  `SYS-044 release manager canonicalization trim drop-blank keep-first dedupe`,
+  `SYS-044 security champion canonicalization trim drop-blank keep-first dedupe`,
+  `SYS-044 empty list clears the ordered collection`,
+  `SYS-044 replace re-numbers sortOrder from 0 on reorder`,
+  `SYS-044 release manager and security champion lists are independent`.
+- `ImportServicePeopleCsvSplitTest` — `SYS-044 import splits releaseManager CSV into ordered list`,
+  `SYS-044 import splits securityChampion CSV into ordered list`,
+  `SYS-044 import is lenient about the spaced validator-invalid form`,
+  `SYS-044 import canonicalizes trim drop-blank keep-first dedupe`,
+  `SYS-044 import single-value CSV round-trips to one-element list`,
+  `SYS-044 import null CSV yields empty ordered list`.
+- `MultiValuePeopleLegacyCompatTest` — `SYS-044 multi-value lists join back to the original DSL comma-string`,
+  `SYS-044 empty people lists join to null not empty string`,
+  `SYS-044 single-value list round-trips to the same string`.
+- `MultiValuePeopleV4Test` (ft-db HTTP) — `SYS-044 CREATE canonicalizes people`,
+  `SYS-044 PATCH replaces the whole ordered list`,
+  `SYS-044 PATCH with empty list clears the ordered list`,
+  `SYS-044 PATCH null does not touch the stored list`,
+  `SYS-044 PATCH canonicalizes people the same way as create`,
+  `SYS-044 PATCH preserves reordering`,
+  `SYS-044 PATCH audit composes the comma-joined value`.
+- `ComponentDetailMapperTest` — `SYS-044 multi-value people map to ordered lists with sortOrder preserved`.
+- `Sys039PersistenceRoundtripTest.SYS-039: all six new scalar/array fields round-trip via PATCH + GET`
+  — extended to the `string[]` shape (array PATCH+GET round-trip).
+- `ComponentHistorySnapshotSerializerTest.multi-value DSL releaseManager and securityChampion preserve the CSV string in the snapshot`
+  — characterization guard for the Git-history path (no production change, plan §6).
+
+**Out of scope:**
+- Filtering by releaseManager / securityChampion (not requested).
+- `componentOwner` multi-value (stays single).

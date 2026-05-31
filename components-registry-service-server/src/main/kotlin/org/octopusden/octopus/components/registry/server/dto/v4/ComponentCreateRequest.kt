@@ -36,8 +36,10 @@ data class ComponentCreateRequest(
     val solution: Boolean? = null,
     val parentComponentName: String? = null,
     val archived: Boolean = false,
-    val releaseManager: String? = null,
-    val securityChampion: String? = null,
+    // Ordered multi-value (first = primary); canonicalized server-side
+    // (trim → drop blank → keep-first dedupe).
+    val releaseManager: List<String> = emptyList(),
+    val securityChampion: List<String> = emptyList(),
     val copyright: String? = null,
     val releasesInDefaultBranch: Boolean? = null,
     val labels: Set<String> = emptySet(),

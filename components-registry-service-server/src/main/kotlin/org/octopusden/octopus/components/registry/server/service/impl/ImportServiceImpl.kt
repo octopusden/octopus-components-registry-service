@@ -607,9 +607,10 @@ class ImportServiceImpl(
                 defaults.artifactIdPattern?.let { put("artifactIdPattern", it) }
                 defaults.groupIdPattern?.let { put("groupIdPattern", it) }
                 defaults.componentDisplayName?.let { put("componentDisplayName", it) }
-                defaults.componentOwner?.let { put("componentOwner", it) }
-                defaults.releaseManager?.let { put("releaseManager", it) }
-                defaults.securityChampion?.let { put("securityChampion", it) }
+                // componentOwner / releaseManager / securityChampion are people
+                // fields that the real Defaults.groovy never sets; they do not
+                // belong in the global component-defaults surface (matches the
+                // portal defaults-form removal). The `?.let` above was dead code.
                 defaults.system?.let { put("system", it) }
                 defaults.clientCode?.let { put("clientCode", it) }
                 defaults.parentComponent?.let { put("parentComponent", it) }
@@ -1129,8 +1130,11 @@ class ImportServiceImpl(
         entity.clientCode = cfg.clientCode
         entity.archived = cfg.archived
         entity.solution = cfg.solution
-        entity.releaseManager = cfg.releaseManager
-        entity.securityChampion = cfg.securityChampion
+        // CSV → ordered list happens HERE (the single split site). The accessor
+        // does trim → drop blank → keep-first dedupe, so import only needs the
+        // raw split. DSL validates the field as `\w+(,\w+)*` (EscrowConfigValidator).
+        entity.replaceReleaseManagerUsernames(cfg.releaseManager?.split(",") ?: emptyList())
+        entity.replaceSecurityChampionUsernames(cfg.securityChampion?.split(",") ?: emptyList())
         entity.copyright = cfg.copyright
         entity.releasesInDefaultBranch = cfg.releasesInDefaultBranch
 

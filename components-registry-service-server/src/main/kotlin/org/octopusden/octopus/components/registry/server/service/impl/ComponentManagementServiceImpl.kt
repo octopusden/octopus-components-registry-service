@@ -216,8 +216,6 @@ class ComponentManagementServiceImpl(
                 solution = request.solution,
                 parentComponent = parent,
                 componentGroup = group,
-                releaseManager = request.releaseManager,
-                securityChampion = request.securityChampion,
                 copyright = request.copyright,
                 releasesInDefaultBranch = request.releasesInDefaultBranch,
                 jiraDisplayName = request.jiraDisplayName,
@@ -229,6 +227,10 @@ class ComponentManagementServiceImpl(
             )
 
         // Per-component child collections (cascade = ALL on these — flushed with the parent)
+        // Ordered multi-value people — the accessor canonicalizes (trim → drop
+        // blank → keep-first dedupe), so create matches patch/import exactly.
+        entity.replaceReleaseManagerUsernames(request.releaseManager)
+        entity.replaceSecurityChampionUsernames(request.securityChampion)
         addArtifactIds(entity, request.artifactIds)
         addSecurityGroups(entity, request.securityGroups.map { it.groupType to it.groupName })
         addTeamcityProjects(entity, request.teamcityProjects.map { it.projectId })
@@ -395,8 +397,14 @@ class ComponentManagementServiceImpl(
         request.clientCode?.let { if (!fieldConfigService.isHidden("component.clientCode")) entity.clientCode = it }
         request.solution?.let { if (!fieldConfigService.isHidden("component.solution")) entity.solution = it }
         request.archived?.let { entity.archived = it }
-        request.releaseManager?.let { if (!fieldConfigService.isHidden("component.releaseManager")) entity.releaseManager = it }
-        request.securityChampion?.let { if (!fieldConfigService.isHidden("component.securityChampion")) entity.securityChampion = it }
+        // Ordered multi-value people. `null` = don't touch; a provided list
+        // (including empty = clear) replaces the whole ordered child collection.
+        request.releaseManager?.let {
+            if (!fieldConfigService.isHidden("component.releaseManager")) entity.replaceReleaseManagerUsernames(it)
+        }
+        request.securityChampion?.let {
+            if (!fieldConfigService.isHidden("component.securityChampion")) entity.replaceSecurityChampionUsernames(it)
+        }
         request.copyright?.let { if (!fieldConfigService.isHidden("component.copyright")) entity.copyright = it }
         request.releasesInDefaultBranch?.let {
             if (!fieldConfigService.isHidden("component.releasesInDefaultBranch")) entity.releasesInDefaultBranch = it
@@ -1618,8 +1626,10 @@ class ComponentManagementServiceImpl(
             "solution" to entity.solution,
             "parentComponentName" to entity.parentComponent?.componentKey,
             "groupKey" to entity.componentGroup?.groupKey,
-            "releaseManager" to entity.releaseManager,
-            "securityChampion" to entity.securityChampion,
+            // Comma-joined with the same empty→null rule as the legacy mapper,
+            // so an empty-list clear audits as null (not "").
+            "releaseManager" to entity.releaseManagerUsernames().joinToString(",").ifEmpty { null },
+            "securityChampion" to entity.securityChampionUsernames().joinToString(",").ifEmpty { null },
             "copyright" to entity.copyright,
             "releasesInDefaultBranch" to entity.releasesInDefaultBranch,
             "jiraDisplayName" to entity.jiraDisplayName,

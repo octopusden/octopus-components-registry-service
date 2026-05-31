@@ -30,8 +30,10 @@ data class ComponentDetailResponse(
     val version: Long,
     val createdAt: Instant?,
     val updatedAt: Instant?,
-    val releaseManager: String? = null,
-    val securityChampion: String? = null,
+    // Ordered multi-value (first = primary). Legacy v1/v2/v3 keep the
+    // comma-joined String; v4 exposes the ordered list directly.
+    val releaseManager: List<String> = emptyList(),
+    val securityChampion: List<String> = emptyList(),
     val copyright: String? = null,
     val releasesInDefaultBranch: Boolean? = null,
     val labels: Set<String> = emptySet(),
