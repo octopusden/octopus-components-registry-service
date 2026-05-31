@@ -50,4 +50,15 @@ interface ComponentRepository :
             "ORDER BY c.systemCode",
     )
     fun findDistinctSystemCodes(): List<String>
+
+    /**
+     * True when at least one component references [parentId] as its
+     * `parentComponent`. Used by the service layer to reject disabling
+     * `canBeParent` on a component that still has children.
+     */
+    @Query(
+        "SELECT CASE WHEN COUNT(c) > 0 THEN true ELSE false END " +
+            "FROM ComponentEntity c WHERE c.parentComponent.id = :parentId",
+    )
+    fun existsByParentComponentId(parentId: UUID): Boolean
 }

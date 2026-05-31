@@ -92,6 +92,15 @@ class ComponentEntity(
     @JoinColumn(name = "component_group_id")
     var componentGroup: ComponentGroupEntity? = null,
 
+    // True when this component is referenced as a `parentComponent` by at least
+    // one other component (i.e., it is an aggregator parent). Seeded by the
+    // Groovy import (sets true for DSL-referenced parents, never false) and
+    // editable via the v4 API. A component with `canBeParent = true` may not
+    // itself have a `parentComponent` (enforced in the service layer) — a
+    // parent cannot have a parent.
+    @Column(name = "can_be_parent", nullable = false)
+    var canBeParent: Boolean = false,
+
     // releaseManager / securityChampion are no longer scalar columns — they
     // moved to the ordered child collections below (releaseManagers /
     // securityChampions). componentOwner stays a single-value scalar.

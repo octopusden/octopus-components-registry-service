@@ -125,7 +125,8 @@ Identity + fields that never vary per version range.
 | `archived` | BOOLEAN | NOT NULL DEFAULT false | |
 | `solution` | BOOLEAN | nullable | |
 | `parent_component_id` | UUID | FK → components(id) | DSL `parentComponent = "X"` reference between peers |
-| `component_group_id` | UUID | FK → component_groups(id) | Aggregator membership. Schema-nullable (FK), but the v4 service layer (`ComponentManagementServiceImpl.createComponent`) rejects payloads missing `group` with 400 — every newly-created component must belong to a group. PATCH semantics: `group == null` continues to mean "don't touch" (Jackson cannot distinguish absent-from-explicit-null without a presence-preserving DTO); `clearGroup: true` is rejected with 400. |
+| `can_be_parent` | BOOLEAN | NOT NULL DEFAULT false | True when referenced as a `parentComponent` by ≥1 other component (an aggregator parent). Seeded by import (Pass 2 sets `true` for DSL-referenced parents, never `false`) and editable via v4. Service invariants: a chosen parent must be `can_be_parent`; a `can_be_parent` component may not have a parent (a parent cannot have a parent); `can_be_parent` may not be disabled while children still reference it. Grandfathered parent-of-parent rows are tolerated on no-op updates. The `?canBeParent=true` list filter backs the Portal parent picker. |
+| `component_group_id` | UUID | FK → component_groups(id) | Aggregator membership. Schema-nullable (FK), but the v4 service layer (`ComponentManagementServiceImpl.createComponent`) rejects payloads missing `group` with 400 — every newly-created component must belong to a group. PATCH semantics: `group == null` continues to mean "don't touch" (Jackson cannot distinguish absent-from-explicit-null without a presence-preserving DTO); `clearGroup: true` is rejected with 400. On UPDATE, when `parentComponentName` changes (or `clearParent` is set), the v4 service re-derives `component_group_id` from the parent relationship (child → parent's group, upserting one keyed by the parent's `component_key` if the parent had none; aggregator → its own group keyed by `component_key`; standalone → preserves its existing group, since every component must belong to a group), and preserves the existing group on a no-op so grandfathered parent-of-parent rows are never corrupted. |
 | `copyright` | TEXT | nullable | |
 | `releases_in_default_branch` | BOOLEAN | nullable | |
 | `jira_display_name` | VARCHAR(255) | nullable | jira.displayName — never varies per version per audit |
@@ -138,7 +139,7 @@ Identity + fields that never vary per version range.
 | `created_at` | TIMESTAMP WITH TIME ZONE | NOT NULL DEFAULT now() | |
 | `updated_at` | TIMESTAMP WITH TIME ZONE | NOT NULL DEFAULT now() | |
 
-Indexes: `archived`, `product_type`, `parent_component_id`, `component_group_id`, partial `component_key WHERE archived = false`.
+Indexes: `archived`, `product_type`, `parent_component_id`, `component_group_id`, partial `can_be_parent WHERE can_be_parent = true`, partial `component_key WHERE archived = false`.
 
 > **Multi-value people:** `release_manager` and `security_champion` are **no
 > longer scalar columns** on `components`. They moved to the ordered child
@@ -411,6 +412,9 @@ for ((childKey, parentKey) in pendingParentByKey) {
         log.warn("parentComponent='$parentKey' referenced by '$childKey' not found; leaving null")
         continue
     }
+    // Seed canBeParent on the referenced parent (idempotent: set true once,
+    // never false). FAKE aggregators have no ComponentEntity row, so excluded.
+    if (!parent.canBeParent) { parent.canBeParent = true; componentRepository.save(parent) }
     val child = componentRepository.findByComponentKey(childKey)!!
     child.parentComponentId = parent.id
     componentRepository.save(child)
@@ -418,6 +422,8 @@ for ((childKey, parentKey) in pendingParentByKey) {
 ```
 
 Missing parent references are tolerated (WARN log) — referenced component may be archived or in a different installation.
+
+`can_be_parent` is seeded here: any component referenced as a parent is an aggregator. A **multi-level hierarchy** (a key that is both referenced as a parent AND references a parent itself — e.g. `A → B → C`) is **tolerated** (WARN log, FK preserved — no silent data loss); the v4 API forbids only *new/changed* parent-of-parent assignments, so grandfathered rows survive and are remediated by clearing the offending parent (`clearParent`).
 
 ### 6.3 Aggregator handling
 
