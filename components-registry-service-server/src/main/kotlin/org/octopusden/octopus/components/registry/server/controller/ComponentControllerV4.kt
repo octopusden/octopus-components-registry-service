@@ -146,6 +146,14 @@ class ComponentControllerV4(
         @RequestParam(required = false) buildSystem: List<String>?,
         @RequestParam(required = false) labels: List<String>?,
         @RequestParam(required = false) canBeParent: Boolean?,
+        @RequestParam(required = false) clientCode: String?,
+        @RequestParam(required = false) solution: Boolean?,
+        @RequestParam(required = false) jiraProjectKey: String?,
+        @RequestParam(required = false) jiraTechnical: Boolean?,
+        @RequestParam(required = false) vcsPath: String?,
+        @RequestParam(required = false) productionBranch: String?,
+        @RequestParam(required = false) parentComponentName: String?,
+        @RequestParam(required = false) groupKey: String?,
         pageable: Pageable,
     ): Page<ComponentSummaryResponse> {
         // Each multi-value list filter parameter (system, owner, buildSystem,
@@ -163,6 +171,14 @@ class ComponentControllerV4(
                 buildSystem = normalizeCsvParam(buildSystem),
                 labels = normalizeCsvParam(labels),
                 canBeParent = canBeParent,
+                clientCode = clientCode,
+                solution = solution,
+                jiraProjectKey = jiraProjectKey,
+                jiraTechnical = jiraTechnical,
+                vcsPath = vcsPath,
+                productionBranch = productionBranch,
+                parentComponentName = parentComponentName,
+                groupKey = groupKey,
             )
         return componentManagementService.listComponents(filter, pageable)
     }
