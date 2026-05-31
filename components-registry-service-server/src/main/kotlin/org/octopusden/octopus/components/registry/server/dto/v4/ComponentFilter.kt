@@ -56,4 +56,23 @@ data class ComponentFilter(
      * "no extra filter applied". Scalar column, so no JOIN / distinct needed.
      */
     val canBeParent: Boolean? = null,
+    // ── Extended-search single-value filters (Portal "extended search" mode) ──
+    /** Case-insensitive LIKE on `components.client_code`. */
+    val clientCode: String? = null,
+    /** Exact match on `components.solution`. `solution=false` matches only rows
+     *  explicitly set false — rows where `solution IS NULL` (never set) are excluded. */
+    val solution: Boolean? = null,
+    /** Case-insensitive LIKE on the BASE configuration row's `jira_project_key`. */
+    val jiraProjectKey: String? = null,
+    /** Exact match on the BASE configuration row's `jira_technical`. As with
+     *  `solution`, `jiraTechnical=false` excludes rows where the value IS NULL. */
+    val jiraTechnical: Boolean? = null,
+    /** Case-insensitive LIKE on a BASE-row VCS entry's `vcs_path`. */
+    val vcsPath: String? = null,
+    /** Case-insensitive LIKE on a BASE-row VCS entry's `branch` (production branch). */
+    val productionBranch: String? = null,
+    /** Exact match on the parent component's `component_key`. */
+    val parentComponentName: String? = null,
+    /** Case-insensitive LIKE on the owning group's `group_key`. */
+    val groupKey: String? = null,
 )

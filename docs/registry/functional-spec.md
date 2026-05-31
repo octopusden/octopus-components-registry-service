@@ -8,7 +8,9 @@
 ## 1. Component Management
 
 ### 1.1 List Components
-- **Input**: Optional filters — `productType`, `archived`, `search` (name/displayName), `owner` (exact match on `componentOwner`, `SYS-035`). `system` is currently rejected with 400 (see ADR/TDD on JPA Criteria + `text[]` limitations); `clientCode` is reserved for future.
+- **Input**: Optional filters, ANDed when combined.
+  - **Main:** `search` (case-insensitive LIKE on name/displayName), `system` (multi-value, OR), `owner` (multi-value, OR on `componentOwner`, `SYS-035`), `buildSystem` (multi-value, OR on the BASE row), `labels` (multi-value, AND), `archived`, `productType`.
+  - **Extended** (single-value; back the Portal "extended search" mode): `clientCode` (LIKE), `solution`, `jiraProjectKey` (LIKE on the BASE row), `jiraTechnical`, `vcsPath` (LIKE on a BASE VCS entry), `productionBranch` (LIKE on a BASE VCS entry's `branch`), `parentComponentName` (exact, the parent's component key), `groupKey` (LIKE on the owning group), `canBeParent`. The BASE-row and VCS-entry joins use `distinct` so a multi-entry component is counted once.
 - **Output**: Paginated list of components with summary info
 - **Sorting**: By name (default), system, productType, updatedAt
 - **Pagination**: Page number + page size (default 20, max 100)
