@@ -82,6 +82,7 @@ class ComponentControllerV2(
         version: String,
     ) = componentRegistryResolver.getJiraComponentVersion(component, version).toDTO()
 
+    @Suppress("DEPRECATION") // sets the deprecated comma-joined RM/SC props on the legacy DTO for v2 compatibility
     private fun createDetailedComponent(
         componentName: String,
         version: String,

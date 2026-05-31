@@ -110,6 +110,7 @@ abstract class BaseComponentController<T : Component> {
                 ?: throw NotFoundException("Component id $component:$version is not found"),
         )
 
+    @Suppress("DEPRECATION") // sets the deprecated comma-joined RM/SC props on the legacy DTO for v1/v3 compatibility
     private fun createComponent(escrowModule: EscrowModule): T =
         with(createComponentFunc(escrowModule)) {
             val escrowModuleConfig = escrowModule.moduleConfigurations[0]

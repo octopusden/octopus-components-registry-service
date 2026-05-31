@@ -92,11 +92,9 @@ class ComponentEntity(
     @JoinColumn(name = "component_group_id")
     var componentGroup: ComponentGroupEntity? = null,
 
-    @Column(name = "release_manager")
-    var releaseManager: String? = null,
-
-    @Column(name = "security_champion")
-    var securityChampion: String? = null,
+    // releaseManager / securityChampion are no longer scalar columns — they
+    // moved to the ordered child collections below (releaseManagers /
+    // securityChampions). componentOwner stays a single-value scalar.
 
     @Column(name = "copyright", columnDefinition = "TEXT")
     var copyright: String? = null,
@@ -155,6 +153,61 @@ class ComponentEntity(
     @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
     var docLinks: MutableList<ComponentDocLinkEntity> = mutableListOf(),
 
+    // Ordered multi-value people. No `@OrderBy` — sort by `sortOrder` in the
+    // accessors / mappers (matching the artifactIds / docLinks convention).
+    @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
+    var releaseManagers: MutableList<ComponentReleaseManagerEntity> = mutableListOf(),
+
+    @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
+    var securityChampions: MutableList<ComponentSecurityChampionEntity> = mutableListOf(),
+
     @OneToMany(mappedBy = "component", fetch = FetchType.LAZY)
     var labelJunctions: MutableList<ComponentLabelEntity> = mutableListOf(),
-)
+) {
+    /** Ordered release-manager usernames (first = primary). */
+    fun releaseManagerUsernames(): List<String> =
+        releaseManagers.sortedBy { it.sortOrder }.map { it.username }
+
+    /**
+     * Replace the whole ordered release-manager list. Single canonicalization
+     * point for every write path (create / patch / import): trim → drop blanks
+     * → keep-first dedupe, then clear()+re-add child rows with `sortOrder =
+     * index` (the orphanRemoval clear/re-add pattern used for `artifactIds`).
+     */
+    fun replaceReleaseManagerUsernames(usernames: List<String>) {
+        val canonical = canonicalizeUsernames(usernames)
+        releaseManagers.clear()
+        canonical.forEachIndexed { index, username ->
+            releaseManagers.add(
+                ComponentReleaseManagerEntity(component = this, username = username, sortOrder = index),
+            )
+        }
+    }
+
+    /** Ordered security-champion usernames (first = primary). */
+    fun securityChampionUsernames(): List<String> =
+        securityChampions.sortedBy { it.sortOrder }.map { it.username }
+
+    /** Replace the whole ordered security-champion list (same canonical form as RM). */
+    fun replaceSecurityChampionUsernames(usernames: List<String>) {
+        val canonical = canonicalizeUsernames(usernames)
+        securityChampions.clear()
+        canonical.forEachIndexed { index, username ->
+            securityChampions.add(
+                ComponentSecurityChampionEntity(component = this, username = username, sortOrder = index),
+            )
+        }
+    }
+
+    private companion object {
+        /** trim → drop blank → keep-first dedupe, order preserved. */
+        fun canonicalizeUsernames(usernames: List<String>): List<String> {
+            val seen = LinkedHashSet<String>()
+            usernames.forEach { raw ->
+                val trimmed = raw.trim()
+                if (trimmed.isNotEmpty()) seen.add(trimmed)
+            }
+            return seen.toList()
+        }
+    }
+}

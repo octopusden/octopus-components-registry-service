@@ -81,8 +81,8 @@ class ComponentDetailMapperTest {
         assertEquals(false, response.archived)
         assertNull(response.solution)
         assertNull(response.parentComponentName)
-        assertNull(response.releaseManager)
-        assertNull(response.securityChampion)
+        assertTrue(response.releaseManager.isEmpty())
+        assertTrue(response.securityChampion.isEmpty())
         assertNull(response.copyright)
         assertNull(response.releasesInDefaultBranch)
         assertTrue(response.labels.isEmpty())
@@ -109,8 +109,8 @@ class ComponentDetailMapperTest {
             it.clientCode = "CLNT"
             it.archived = true
             it.solution = true
-            it.releaseManager = "rm-user"
-            it.securityChampion = "sc-user"
+            it.replaceReleaseManagerUsernames(listOf("rm-user"))
+            it.replaceSecurityChampionUsernames(listOf("sc-user"))
             it.copyright = "(c) 2026 Acme"
             it.releasesInDefaultBranch = true
             it.jiraDisplayName = "Alpha Jira"
@@ -127,8 +127,8 @@ class ComponentDetailMapperTest {
         assertEquals("CLNT", response.clientCode)
         assertEquals(true, response.archived)
         assertEquals(true, response.solution)
-        assertEquals("rm-user", response.releaseManager)
-        assertEquals("sc-user", response.securityChampion)
+        assertEquals(listOf("rm-user"), response.releaseManager)
+        assertEquals(listOf("sc-user"), response.securityChampion)
         assertEquals("(c) 2026 Acme", response.copyright)
         assertEquals(true, response.releasesInDefaultBranch)
         assertEquals("Alpha Jira", response.jiraDisplayName)
@@ -136,6 +136,21 @@ class ComponentDetailMapperTest {
         assertEquals("ssh://external.git", response.vcsExternalRegistry)
         assertEquals(true, response.distributionExplicit)
         assertEquals(false, response.distributionExternal)
+    }
+
+    @Test
+    @DisplayName("SYS-044: multi-value releaseManager / securityChampion map to ordered lists (sortOrder preserved)")
+    fun `SYS-044 multi-value people map to ordered lists with sortOrder preserved`() {
+        val component = minimalComponent().also {
+            // Insert out of sortOrder to prove the mapper sorts, not heap order.
+            it.replaceReleaseManagerUsernames(listOf("alice", "bob", "carol"))
+            it.releaseManagers.reverse()
+            it.replaceSecurityChampionUsernames(listOf("dave", "erin"))
+        }
+        val response = component.toDetailResponse()
+
+        assertEquals(listOf("alice", "bob", "carol"), response.releaseManager)
+        assertEquals(listOf("dave", "erin"), response.securityChampion)
     }
 
     @Test

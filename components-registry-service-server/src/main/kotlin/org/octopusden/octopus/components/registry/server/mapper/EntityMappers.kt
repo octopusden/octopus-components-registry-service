@@ -385,8 +385,11 @@ private fun buildEscrowModuleConfig(
     setField(config, "solution", component.solution)
     setField(config, "parentComponent", component.parentComponent?.componentKey)
     setField(config, "archived", component.archived)
-    setField(config, "releaseManager", component.releaseManager)
-    setField(config, "securityChampion", component.securityChampion)
+    // Legacy/compat join — the SINGLE point that keeps v1/v2/v3 non-breaking:
+    // collapse the ordered list back into a comma-string (empty list → null to
+    // preserve the previous nullable-scalar behaviour).
+    setField(config, "releaseManager", component.releaseManagerUsernames().joinToString(",").ifEmpty { null })
+    setField(config, "securityChampion", component.securityChampionUsernames().joinToString(",").ifEmpty { null })
     setField(config, "copyright", component.copyright)
     setField(config, "releasesInDefaultBranch", component.releasesInDefaultBranch)
 

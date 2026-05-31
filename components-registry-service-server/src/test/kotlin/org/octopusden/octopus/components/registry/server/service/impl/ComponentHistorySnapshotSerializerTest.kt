@@ -34,6 +34,30 @@ class ComponentHistorySnapshotSerializerTest {
     }
 
     @Test
+    fun `multi-value DSL releaseManager and securityChampion preserve the CSV string in the snapshot`() {
+        // The history snapshot serializes the EscrowModuleConfig that comes
+        // straight from the Git history loader, where these fields are a CSV
+        // String (DSL `\w+(,\w+)*`). The multi-value entity change does NOT
+        // touch this path — the snapshot must still carry the raw CSV string.
+        val config = EscrowModuleConfig()
+        setField(config, "buildSystem", BuildSystem.MAVEN)
+        setField(config, "versionRange", "1.0")
+        setField(config, "releaseManager", "alice,bob,carol")
+        setField(config, "securityChampion", "dave,erin")
+        val module = EscrowModule().apply {
+            moduleName = "svc"
+            moduleConfigurations = mutableListOf(config)
+        }
+
+        val snapshot = serializer.serialize(module)
+
+        @Suppress("UNCHECKED_CAST")
+        val configSnapshot = (snapshot["moduleConfigurations"] as List<Map<String, Any?>>)[0]
+        assertEquals("alice,bob,carol", configSnapshot["releaseManager"])
+        assertEquals("dave,erin", configSnapshot["securityChampion"])
+    }
+
+    @Test
     fun `labels are sorted for deterministic output`() {
         val a = module("svc", "1.0", BuildSystem.MAVEN, archived = false, labels = linkedSetOf("z", "a", "m"))
         val b = module("svc", "1.0", BuildSystem.MAVEN, archived = false, labels = linkedSetOf("m", "a", "z"))
