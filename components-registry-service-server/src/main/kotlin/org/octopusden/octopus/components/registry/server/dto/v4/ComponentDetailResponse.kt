@@ -27,6 +27,7 @@ data class ComponentDetailResponse(
     val archived: Boolean,
     val solution: Boolean?,
     val parentComponentName: String?,
+    val canBeParent: Boolean = false,
     val version: Long,
     val createdAt: Instant?,
     val updatedAt: Instant?,

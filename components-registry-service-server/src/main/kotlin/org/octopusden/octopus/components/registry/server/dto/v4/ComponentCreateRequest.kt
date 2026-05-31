@@ -35,6 +35,11 @@ data class ComponentCreateRequest(
     val clientCode: String? = null,
     val solution: Boolean? = null,
     val parentComponentName: String? = null,
+    // Whether this component may be referenced as a parent by others. Normally
+    // seeded by import; accepted here so an admin can create an aggregator up
+    // front. A component with `canBeParent = true` may not also set
+    // `parentComponentName` (a parent cannot have a parent) — service rejects it.
+    val canBeParent: Boolean = false,
     val archived: Boolean = false,
     // Ordered multi-value (first = primary); canonicalized server-side
     // (trim → drop blank → keep-first dedupe).

@@ -37,6 +37,9 @@ data class ComponentUpdateRequest(
     val clientCode: String? = null,
     val solution: Boolean? = null,
     val parentComponentName: String? = null,
+    // PATCH: null = "don't touch". Setting true on a component that has a parent,
+    // or false while children still reference it, is rejected by the service.
+    val canBeParent: Boolean? = null,
     val archived: Boolean? = null,
     // Ordered multi-value (first = primary). PATCH: null = "don't touch";
     // a provided list (including empty = clear) replaces the whole ordered list.
@@ -52,6 +55,11 @@ data class ComponentUpdateRequest(
     val distributionExternal: Boolean? = null,
     val group: ComponentGroupRequest? = null,
     val clearGroup: Boolean = false,
+    // Explicit "remove the parent" signal. `parentComponentName == null` means
+    // "don't touch" (JSON Merge Patch), so clearing a parent needs its own flag.
+    // Used to remediate a grandfathered parent-of-parent row: clearing the
+    // parent of a `canBeParent` component re-derives its group to its own key.
+    val clearParent: Boolean = false,
     val docs: List<DocLinkRequest>? = null,
     val artifactIds: List<ArtifactIdRequest>? = null,
     val securityGroups: List<SecurityGroupRequest>? = null,

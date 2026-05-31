@@ -49,4 +49,11 @@ data class ComponentFilter(
      * of blank/whitespace/duplicate entries.
      */
     val labels: List<String>? = null,
+    /**
+     * Optional filter on the scalar `components.can_be_parent` flag. When set,
+     * returns only components whose `canBeParent` equals this value. The Portal
+     * parent picker passes `canBeParent=true` to list eligible parents. Null =
+     * "no extra filter applied". Scalar column, so no JOIN / distinct needed.
+     */
+    val canBeParent: Boolean? = null,
 )

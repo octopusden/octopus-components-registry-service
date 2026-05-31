@@ -471,9 +471,22 @@ class ImportServiceImpl(
                 pass1Ms, migrated, skipped, failed, total,
             )
 
-            // Pass 2: resolve parentComponent FK references
+            // Pass 2: resolve parentComponent FK references + seed canBeParent
             LOG.info("§6.2 Pass 2: resolving {} parentComponent references", pendingParentByKey.size)
             val pass2Start = System.nanoTime()
+            // Grandfathered parent-of-parent detection: a key that is BOTH referenced
+            // as a parent AND references a parent itself. The schema-v2 contract
+            // forbids NEW parent-of-parent assignments (enforced by the v4 API), but
+            // legacy DSL may contain them — warn, never drop the FK (no silent data loss).
+            val multiLevelKeys = pendingParentByKey.values.toSet().intersect(pendingParentByKey.keys)
+            if (multiLevelKeys.isNotEmpty()) {
+                LOG.warn(
+                    "§6.2 multi-level hierarchy (parent-of-a-parent) for {} component(s): {} — FKs preserved; " +
+                        "the v4 API rejects new/changed parent-of-parent assignments (grandfathered rows are tolerated)",
+                    multiLevelKeys.size,
+                    multiLevelKeys.take(20),
+                )
+            }
             for ((childKey, parentKey) in pendingParentByKey) {
                 try {
                     val parent = componentRepository.findByComponentKey(parentKey)
@@ -484,6 +497,14 @@ class ImportServiceImpl(
                             childKey,
                         )
                         continue
+                    }
+                    // Seed canBeParent on the referenced parent: a component that is
+                    // referenced as a parent IS an aggregator. Idempotent — set true
+                    // once, never false. FAKE aggregators have no ComponentEntity row
+                    // (findByComponentKey returns null above), so they're excluded.
+                    if (!parent.canBeParent) {
+                        parent.canBeParent = true
+                        componentRepository.save(parent)
                     }
                     val child = componentRepository.findByComponentKey(childKey) ?: continue
                     child.parentComponent = parent

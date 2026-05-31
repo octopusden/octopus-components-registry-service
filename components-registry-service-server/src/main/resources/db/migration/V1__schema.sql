@@ -52,6 +52,7 @@ CREATE TABLE components (
     solution                    BOOLEAN,
     parent_component_id         UUID REFERENCES components(id),         -- DSL parentComponent = "X" reference
     component_group_id          UUID REFERENCES component_groups(id),   -- aggregator membership
+    can_be_parent               BOOLEAN NOT NULL DEFAULT false,         -- true if referenced as a parent (aggregator); seeded by import, editable via v4
     -- release_manager / security_champion are NO LONGER scalar columns here.
     -- They became ordered multi-value child tables (component_release_managers,
     -- component_security_champions) further down — see "1:N children of
@@ -91,6 +92,9 @@ CREATE TABLE components (
 CREATE INDEX idx_components_archived          ON components(archived);
 CREATE INDEX idx_components_product_type      ON components(product_type);
 CREATE INDEX idx_components_parent            ON components(parent_component_id);
+-- Partial index for the `?canBeParent=true` parent-picker filter — only the
+-- aggregator minority is indexed (the false majority never matches the filter).
+CREATE INDEX idx_components_can_be_parent     ON components(can_be_parent) WHERE can_be_parent = true;
 CREATE INDEX idx_components_group             ON components(component_group_id);
 CREATE INDEX idx_components_live              ON components(component_key) WHERE archived = false;
 -- Index supports the `?system=A,B` list-filter (`IN (...)`) on the scalar
