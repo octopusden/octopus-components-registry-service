@@ -724,14 +724,17 @@ ALL_VERSIONS semantics).
 **Acceptance criteria:**
 1. After migration of a version-range-only component:
    - `component_entity.labels` contains the root-level DSL labels
-   - `component_entity.release_manager` / `security_champion` / `group_id` /
-     `copyright` / `releases_in_default_branch` are populated from root-level
-     DSL values (or inherited defaults).
+   - the `component_release_managers` / `component_security_champions` ordered
+     child rows are populated from root-level DSL values (split from the
+     comma-separated string, keep-first deduped); `group_id` / `copyright` /
+     `releases_in_default_branch` are populated from root-level DSL values (or
+     inherited defaults).
    - Each `component_version_entity.jira_component_configs` row contains the
      range-specific (root-inherited + per-range override) jira config.
 2. v4 `GET /rest/api/4/components/{name}` returns:
    - `labels`, `releaseManager`, `securityChampion`, `groupId`,
-     `releasesInDefaultBranch` populated from the dedicated columns.
+     `releasesInDefaultBranch` populated — `releaseManager` / `securityChampion`
+     as ordered `string[]` from their child tables, the rest from their columns.
    - `jiraComponentConfigs` non-empty — falls back to the deduplicated set of
      version-entity jira configs when component-level is empty.
 3. v2 `GET /rest/api/2/components/{name}/versions/{ver}` continues to return
