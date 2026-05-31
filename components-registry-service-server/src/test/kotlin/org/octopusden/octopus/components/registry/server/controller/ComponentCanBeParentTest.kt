@@ -251,9 +251,12 @@ class ComponentCanBeParentTest {
                     .content("""{"version":${version(child)},"clearParent":true}"""),
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.parentComponentName").doesNotExist())
-            // A standalone (non-aggregator) child must keep its group — clearing
-            // the parent does not strip it (every component must belong to a group).
-            .andExpect(jsonPath("$.group.groupKey").value("org.example.test"))
+            // Clearing the parent must not STRIP the group (every component must
+            // belong to a group). The child joined the parent's group on create
+            // (schema-v2 derivation), so after clearParent it retains that derived
+            // group — the parent's own key — rather than the originally-requested
+            // org.example.test.
+            .andExpect(jsonPath("$.group.groupKey").value(parentName))
     }
 
     @Test
@@ -272,5 +275,56 @@ class ComponentCanBeParentTest {
                         """{"version":${version(child)},"clearParent":true,"parentComponentName":"$parentName"}""",
                     ),
             ).andExpect(status().isBadRequest)
+    }
+
+    // -----------------------------------------------------------------------
+    // Aggregator group keyed by own componentKey (create + promote)
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("create: an aggregator (canBeParent=true) gets its OWN-key group, not the requested group")
+    fun create_aggregator_ownKeyGroup() {
+        val name = uniqueName("cbp_create_agg")
+        val id = createComponent(name, canBeParent = true)
+        // The create helper requests group org.example.test, but an aggregator's
+        // group is keyed by its own componentKey so children inherit the aggregator
+        // key — not the (legacy) requested groupKey.
+        assert(getJson(id)["group"]["groupKey"].asText() == name) {
+            "expected aggregator group to equal its own key '$name', got " +
+                getJson(id)["group"]["groupKey"].asText()
+        }
+    }
+
+    @Test
+    @DisplayName("update: promoting a plain component to canBeParent re-keys its group to its own key; a child then inherits it")
+    fun update_promoteToCanBeParent_reKeysGroup_childInherits() {
+        // Plain component created with the legacy request.group org.example.test.
+        val aggregator = createComponent(uniqueName("cbp_promote"))
+        val aggregatorName = getJson(aggregator)["name"].asText()
+        assert(getJson(aggregator)["group"]["groupKey"].asText() == "org.example.test") {
+            "precondition: plain component should carry the requested group"
+        }
+
+        // Promote to canBeParent — the group must re-derive to the aggregator's own key.
+        mvc
+            .perform(
+                patch("/rest/api/4/components/$aggregator")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"version":${version(aggregator)},"canBeParent":true}"""),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.group.groupKey").value(aggregatorName))
+
+        // A child assigned afterwards inherits the aggregator's OWN-key group — not
+        // the legacy org.example.test it would have inherited before the fix.
+        val child = createComponent(uniqueName("cbp_promote_child"))
+        mvc
+            .perform(
+                patch("/rest/api/4/components/$child")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"version":${version(child)},"parentComponentName":"$aggregatorName"}"""),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.group.groupKey").value(aggregatorName))
     }
 }

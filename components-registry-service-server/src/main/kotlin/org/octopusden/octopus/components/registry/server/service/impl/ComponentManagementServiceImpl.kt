@@ -239,6 +239,15 @@ class ComponentManagementServiceImpl(
                 systemCode = canonicalSystem,
             )
 
+        // Group follows the parent/aggregator relationship (schema-v2), mirroring
+        // the update path: a child joins its parent's group and an aggregator
+        // (canBeParent) gets its own-key group — both override the requested group;
+        // a standalone keeps the (legacy) requested group set above. Without this an
+        // API-created aggregator would retain request.group and its children would
+        // inherit that key instead of the aggregator's own componentKey. (A full
+        // standalone -> null group awaits the deferred create-flow rework.)
+        entity.componentGroup = deriveComponentGroup(entity)
+
         // Per-component child collections (cascade = ALL on these — flushed with the parent)
         // Ordered multi-value people — the accessor canonicalizes (trim → drop
         // blank → keep-first dedupe), so create matches patch/import exactly.
@@ -482,21 +491,26 @@ class ComponentManagementServiceImpl(
         // or "replace with a new/upserted group" (request.group != null).
         // The normalised (trimmed + prefix-validated) form is used so the
         // upserted row is byte-stable across whitespace-y inputs.
-        // canBeParent invariants + parent-derived group (schema-v2: group
-        // membership follows the parent relationship). Rederive only when the
-        // parent actually changed; a no-op update preserves the existing group so
-        // a grandfathered parent-of-parent row (single componentGroup FK) is never
-        // corrupted by a blind recompute. Promoting canBeParent alone (no parent
-        // change) intentionally does NOT rederive — an aggregator's own-key group
-        // is established at create/import, not on promotion.
+        // canBeParent invariants + derived group (schema-v2: group membership
+        // follows the parent/aggregator relationship). Rederive whenever the parent
+        // OR the canBeParent flag actually changes:
+        //  - a child joins its parent's group;
+        //  - a component promoted to canBeParent gets its OWN-key group, so its
+        //    children inherit the aggregator key rather than whatever legacy group
+        //    it happened to carry (the bug this fixes);
+        //  - validateParentInvariants runs first, so a grandfathered
+        //    parent-of-parent row is only re-derived on a genuine parent change
+        //    (e.g. clearParent remediation), never corrupted by a no-op.
+        // A pure no-op (neither parent nor canBeParent changed) preserves the
+        // existing group and still honours a legacy request.group if present.
         val parentChanged = entity.parentComponent?.componentKey != oldParentKey
         val canBeParentChanged = entity.canBeParent != oldCanBeParent
         validateParentInvariants(entity, parentChanged, canBeParentChanged)
-        if (parentChanged) {
-            // Parent-derived group wins over any (legacy) request.group on a parent change.
+        if (parentChanged || canBeParentChanged) {
+            // Derived group wins over any (legacy) request.group on a relationship change.
             entity.componentGroup = deriveComponentGroup(entity)
         } else {
-            // Parent unchanged: honor an explicit (legacy) request.group if present.
+            // No relationship change: honor an explicit (legacy) request.group if present.
             normalizedGroupRequest?.let { entity.componentGroup = upsertGroup(it) }
         }
 
@@ -1078,8 +1092,11 @@ class ComponentManagementServiceImpl(
      *     upsert one keyed by the parent's componentKey and assign it to the parent;
      *   - aggregator (canBeParent, no parent): its own group keyed by componentKey;
      *   - standalone (no parent, not canBeParent): PRESERVE the existing group.
-     * Callers invoke this only when the parent actually changed, so a no-op update
-     * leaves the existing group untouched.
+     * Callers invoke this on create and whenever the parent OR canBeParent flag
+     * changes, so a no-op update leaves the existing group untouched. The
+     * aggregator branch re-keys to the own component key even if a legacy group
+     * was carried, which is how a promoted/created aggregator stops leaking its
+     * old group key to its children.
      */
     private fun deriveComponentGroup(entity: ComponentEntity): ComponentGroupEntity? {
         val parent = entity.parentComponent
