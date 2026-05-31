@@ -1723,6 +1723,98 @@ class ComponentManagementServiceImpl(
                     },
                 )
         }
+        // ── Extended-search filters (single-value; null/blank → no filter) ──
+        // Scalar columns on `components` — no JOIN, no distinct.
+        filter.clientCode?.takeIf { it.isNotBlank() }?.let { v ->
+            val pattern = "%${v.trim().lowercase()}%"
+            spec = spec.and(Specification { root, _, cb -> cb.like(cb.lower(root.get("clientCode")), pattern) })
+        }
+        filter.solution?.let { v ->
+            spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<Boolean>("solution"), v) })
+        }
+        // ManyToOne joins — a component has at most one parent / one group, so no
+        // row multiplication and no distinct needed.
+        filter.parentComponentName?.takeIf { it.isNotBlank() }?.let { v ->
+            spec =
+                spec.and(
+                    Specification { root, _, cb ->
+                        val parent = root.join<ComponentEntity, ComponentEntity>("parentComponent")
+                        cb.equal(parent.get<String>("componentKey"), v.trim())
+                    },
+                )
+        }
+        filter.groupKey?.takeIf { it.isNotBlank() }?.let { v ->
+            val pattern = "%${v.trim().lowercase()}%"
+            spec =
+                spec.and(
+                    Specification { root, _, cb ->
+                        val group = root.join<ComponentEntity, ComponentGroupEntity>("componentGroup")
+                        cb.like(cb.lower(group.get("groupKey")), pattern)
+                    },
+                )
+        }
+        // BASE configuration-row filters — one OneToMany JOIN through
+        // `configurations` (rowType=BASE), distinct(true) to dedupe (mirrors the
+        // buildSystem filter above).
+        filter.jiraProjectKey?.takeIf { it.isNotBlank() }?.let { v ->
+            val pattern = "%${v.trim().lowercase()}%"
+            spec =
+                spec.and(
+                    Specification { root, query, cb ->
+                        val cfg = root.join<ComponentEntity, ComponentConfigurationEntity>("configurations")
+                        query?.distinct(true)
+                        cb.and(
+                            cb.equal(cfg.get<String>("rowType"), "BASE"),
+                            cb.like(cb.lower(cfg.get("jiraProjectKey")), pattern),
+                        )
+                    },
+                )
+        }
+        filter.jiraTechnical?.let { v ->
+            spec =
+                spec.and(
+                    Specification { root, query, cb ->
+                        val cfg = root.join<ComponentEntity, ComponentConfigurationEntity>("configurations")
+                        query?.distinct(true)
+                        cb.and(
+                            cb.equal(cfg.get<String>("rowType"), "BASE"),
+                            cb.equal(cfg.get<Boolean>("jiraTechnical"), v),
+                        )
+                    },
+                )
+        }
+        // BASE-row VCS-entry filters — two-level JOIN (configurations(BASE) →
+        // vcsEntries), distinct(true) to dedupe multi-entry components.
+        filter.vcsPath?.takeIf { it.isNotBlank() }?.let { v ->
+            val pattern = "%${v.trim().lowercase()}%"
+            spec =
+                spec.and(
+                    Specification { root, query, cb ->
+                        val cfg = root.join<ComponentEntity, ComponentConfigurationEntity>("configurations")
+                        val vcs = cfg.join<ComponentConfigurationEntity, VcsSettingsEntryEntity>("vcsEntries")
+                        query?.distinct(true)
+                        cb.and(
+                            cb.equal(cfg.get<String>("rowType"), "BASE"),
+                            cb.like(cb.lower(vcs.get("vcsPath")), pattern),
+                        )
+                    },
+                )
+        }
+        filter.productionBranch?.takeIf { it.isNotBlank() }?.let { v ->
+            val pattern = "%${v.trim().lowercase()}%"
+            spec =
+                spec.and(
+                    Specification { root, query, cb ->
+                        val cfg = root.join<ComponentEntity, ComponentConfigurationEntity>("configurations")
+                        val vcs = cfg.join<ComponentConfigurationEntity, VcsSettingsEntryEntity>("vcsEntries")
+                        query?.distinct(true)
+                        cb.and(
+                            cb.equal(cfg.get<String>("rowType"), "BASE"),
+                            cb.like(cb.lower(vcs.get("branch")), pattern),
+                        )
+                    },
+                )
+        }
         return spec
     }
 
