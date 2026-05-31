@@ -205,6 +205,18 @@ class ComponentManagementServiceImpl(
 
         val group = upsertGroup(normalizedGroupRequest)
 
+        // Parent invariants (create = everything is new): a chosen parent must be
+        // marked can-be-parent, and a component that itself can be a parent may
+        // not have a parent (a parent cannot have a parent).
+        if (parent != null) {
+            require(parent.canBeParent) {
+                "parentComponentName: parent '${parent.componentKey}' is not marked can-be-parent"
+            }
+            require(!request.canBeParent) {
+                "parentComponentName: a component that can be a parent cannot itself have a parent"
+            }
+        }
+
         val entity =
             ComponentEntity(
                 componentKey = normalizedKey,
@@ -216,6 +228,7 @@ class ComponentManagementServiceImpl(
                 solution = request.solution,
                 parentComponent = parent,
                 componentGroup = group,
+                canBeParent = request.canBeParent,
                 copyright = request.copyright,
                 releasesInDefaultBranch = request.releasesInDefaultBranch,
                 jiraDisplayName = request.jiraDisplayName,
@@ -319,6 +332,11 @@ class ComponentManagementServiceImpl(
         require(!request.clearGroup) {
             "clearGroup: true is no longer allowed — every component must belong to a group"
         }
+        // `clearParent` (remove the parent) and `parentComponentName` (set a parent)
+        // are mutually exclusive — accepting both would silently drop one.
+        require(!(request.clearParent && request.parentComponentName != null)) {
+            "parentComponentName: clearParent and parentComponentName are mutually exclusive"
+        }
         // Mirror the create-side validation on the PATCH path. Same
         // trim-then-validate-then-canonicalise pipeline so a PATCH that
         // sets `groupKey = "org.example.test "` rounds to the canonical
@@ -387,6 +405,11 @@ class ComponentManagementServiceImpl(
         // value including the FC-hidden no-op case.
         val originalLabels = entity.labelJunctions.map { it.labelCode }.toSet()
         val oldValue = scalarAuditMap(entity, originalLabels)
+        // Snapshot parent + canBeParent BEFORE applying the patch — the group is
+        // rederived only when one of these actually changes (a no-op update
+        // preserves the existing group, incl. grandfathered parent-of-parent rows).
+        val oldParentKey = entity.parentComponent?.componentKey
+        val oldCanBeParent = entity.canBeParent
 
         if (isRename) entity.componentKey = normalizedNewKey!!
 
@@ -397,6 +420,9 @@ class ComponentManagementServiceImpl(
         request.clientCode?.let { if (!fieldConfigService.isHidden("component.clientCode")) entity.clientCode = it }
         request.solution?.let { if (!fieldConfigService.isHidden("component.solution")) entity.solution = it }
         request.archived?.let { entity.archived = it }
+        // canBeParent is structural (not field-config-gated). Invariants are
+        // validated below once the final parent/canBeParent state is known.
+        request.canBeParent?.let { entity.canBeParent = it }
         // Ordered multi-value people. `null` = don't touch; a provided list
         // (including empty = clear) replaces the whole ordered child collection.
         request.releaseManager?.let {
@@ -438,7 +464,12 @@ class ComponentManagementServiceImpl(
         // a scalar column on `components` itself and gets persisted with the
         // parent `saveAndFlush(entity)`.
 
-        // Parent (rename to null is not expressible by JSON Merge Patch; null parent → use clearGroup style if needed later)
+        // Parent. `parentComponentName == null` = don't touch (JSON Merge Patch);
+        // `clearParent` is the explicit removal signal (remediates a grandfathered
+        // parent-of-parent row by letting the user drop the parent).
+        if (request.clearParent) {
+            entity.parentComponent = null
+        }
         request.parentComponentName?.let { parentKey ->
             entity.parentComponent =
                 componentRepository.findByComponentKey(parentKey)
@@ -451,7 +482,23 @@ class ComponentManagementServiceImpl(
         // or "replace with a new/upserted group" (request.group != null).
         // The normalised (trimmed + prefix-validated) form is used so the
         // upserted row is byte-stable across whitespace-y inputs.
-        normalizedGroupRequest?.let { entity.componentGroup = upsertGroup(it) }
+        // canBeParent invariants + parent-derived group (schema-v2: group
+        // membership follows the parent relationship). Rederive only when the
+        // parent actually changed; a no-op update preserves the existing group so
+        // a grandfathered parent-of-parent row (single componentGroup FK) is never
+        // corrupted by a blind recompute. Promoting canBeParent alone (no parent
+        // change) intentionally does NOT rederive — an aggregator's own-key group
+        // is established at create/import, not on promotion.
+        val parentChanged = entity.parentComponent?.componentKey != oldParentKey
+        val canBeParentChanged = entity.canBeParent != oldCanBeParent
+        validateParentInvariants(entity, parentChanged, canBeParentChanged)
+        if (parentChanged) {
+            // Parent-derived group wins over any (legacy) request.group on a parent change.
+            entity.componentGroup = deriveComponentGroup(entity)
+        } else {
+            // Parent unchanged: honor an explicit (legacy) request.group if present.
+            normalizedGroupRequest?.let { entity.componentGroup = upsertGroup(it) }
+        }
 
         // Per-component child REPLACE — present collection wipes and refills
         request.artifactIds?.let {
@@ -1023,6 +1070,67 @@ class ComponentManagementServiceImpl(
                 ),
             )
 
+    /**
+     * Derive a component's aggregator group from its parent relationship
+     * (schema-v2: group membership follows structure, not a user-entered Maven
+     * groupId):
+     *   - child (has a parent): the parent's group; if the parent has none yet,
+     *     upsert one keyed by the parent's componentKey and assign it to the parent;
+     *   - aggregator (canBeParent, no parent): its own group keyed by componentKey;
+     *   - standalone (no parent, not canBeParent): PRESERVE the existing group.
+     * Callers invoke this only when the parent actually changed, so a no-op update
+     * leaves the existing group untouched.
+     */
+    private fun deriveComponentGroup(entity: ComponentEntity): ComponentGroupEntity? {
+        val parent = entity.parentComponent
+        return when {
+            parent != null ->
+                parent.componentGroup ?: run {
+                    val derived = upsertGroup(ComponentGroupRequest(groupKey = parent.componentKey, isFake = false))
+                    parent.componentGroup = derived
+                    componentRepository.save(parent)
+                    derived
+                }
+            entity.canBeParent ->
+                entity.componentGroup?.takeIf { it.groupKey == entity.componentKey }
+                    ?: upsertGroup(ComponentGroupRequest(groupKey = entity.componentKey, isFake = false))
+            // Standalone: PRESERVE the existing group rather than null it. Every
+            // component must belong to a group (create-side strict contract), so a
+            // bare `clearParent` on a plain child must not strip its group. Full
+            // standalone→no-group awaits the create-contract relaxation follow-up.
+            else -> entity.componentGroup
+        }
+    }
+
+    /**
+     * Enforce the parent/canBeParent invariants on create/update. Only fires on a
+     * genuinely new or changed relationship — a no-op update over a grandfathered
+     * parent-of-parent row passes untouched, and clearing the parent is always
+     * allowed (remediation path).
+     */
+    private fun validateParentInvariants(
+        entity: ComponentEntity,
+        parentChanged: Boolean,
+        canBeParentChanged: Boolean,
+    ) {
+        val parent = entity.parentComponent
+        if (parent != null && (parentChanged || canBeParentChanged)) {
+            require(parent.canBeParent) {
+                "parentComponentName: parent '${parent.componentKey}' is not marked can-be-parent"
+            }
+            require(!entity.canBeParent) {
+                "parentComponentName: a component that can be a parent cannot itself have a parent"
+            }
+        }
+        if (canBeParentChanged && !entity.canBeParent && entity.id != null &&
+            componentRepository.existsByParentComponentId(entity.id!!)
+        ) {
+            throw IllegalArgumentException(
+                "canBeParent: cannot disable can-be-parent while other components reference this as their parent",
+            )
+        }
+    }
+
     // ============================================================
     // Helpers — base configuration apply/patch
     // ============================================================
@@ -1587,6 +1695,17 @@ class ComponentManagementServiceImpl(
                     )
             }
         }
+        // Scalar boolean filter on `components.can_be_parent`. No JOIN — plain
+        // equality on the column; the partial index serves the `= true` case
+        // used by the Portal parent picker.
+        filter.canBeParent?.let { cbp ->
+            spec =
+                spec.and(
+                    Specification { root, _, cb ->
+                        cb.equal(root.get<Boolean>("canBeParent"), cbp)
+                    },
+                )
+        }
         return spec
     }
 
@@ -1625,6 +1744,7 @@ class ComponentManagementServiceImpl(
             "archived" to entity.archived,
             "solution" to entity.solution,
             "parentComponentName" to entity.parentComponent?.componentKey,
+            "canBeParent" to entity.canBeParent,
             "groupKey" to entity.componentGroup?.groupKey,
             // Comma-joined with the same empty→null rule as the legacy mapper,
             // so an empty-list clear audits as null (not "").

@@ -145,6 +145,7 @@ class ComponentControllerV4(
         @RequestParam(required = false) owner: List<String>?,
         @RequestParam(required = false) buildSystem: List<String>?,
         @RequestParam(required = false) labels: List<String>?,
+        @RequestParam(required = false) canBeParent: Boolean?,
         pageable: Pageable,
     ): Page<ComponentSummaryResponse> {
         // Each multi-value list filter parameter (system, owner, buildSystem,
@@ -161,6 +162,7 @@ class ComponentControllerV4(
                 owner = normalizeCsvParam(owner),
                 buildSystem = normalizeCsvParam(buildSystem),
                 labels = normalizeCsvParam(labels),
+                canBeParent = canBeParent,
             )
         return componentManagementService.listComponents(filter, pageable)
     }

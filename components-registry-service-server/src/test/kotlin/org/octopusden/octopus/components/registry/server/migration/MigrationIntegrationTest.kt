@@ -361,6 +361,11 @@ class MigrationIntegrationTest {
             "'versions-api' must have parentComponent resolved to TESTONE after Pass 2",
         )
         assertEquals("TESTONE", parentRef!!.componentKey, "parentComponent.componentKey must be 'TESTONE'")
+
+        // CRS-PR1: Pass 2 seeds canBeParent=true on the referenced parent; the
+        // child (referenced by no one) stays canBeParent=false.
+        assertTrue(parentRef.canBeParent, "TESTONE must be seeded canBeParent=true (referenced as a parent)")
+        assertFalse(versionsApi.canBeParent, "'versions-api' (a child, not a parent) must remain canBeParent=false")
     }
 
     // =========================================================================

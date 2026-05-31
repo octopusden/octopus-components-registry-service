@@ -550,6 +550,9 @@ class TeamcitySyncServiceTest {
         override fun findDistinctSystemCodes(): List<String> =
             components.mapNotNull { it.systemCode }.filter { it.isNotBlank() }.distinct().sorted()
 
+        override fun existsByParentComponentId(parentId: UUID): Boolean =
+            components.any { it.parentComponent?.id == parentId }
+
         override fun <S : ComponentEntity> save(entity: S): S = entity
         override fun <S : ComponentEntity> saveAll(entities: Iterable<S>): List<S> = unsupported()
         override fun <S : ComponentEntity> saveAndFlush(entity: S): S = entity

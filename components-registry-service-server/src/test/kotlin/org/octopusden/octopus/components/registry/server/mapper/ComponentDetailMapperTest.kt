@@ -168,6 +168,14 @@ class ComponentDetailMapperTest {
         assertEquals("parent-svc", child.toDetailResponse().parentComponentName)
     }
 
+    @Test
+    @DisplayName("canBeParent propagates to detail response (default false)")
+    fun canBeParent_propagates() {
+        assertEquals(false, minimalComponent().toDetailResponse().canBeParent)
+        val parent = minimalComponent().also { it.canBeParent = true }
+        assertEquals(true, parent.toDetailResponse().canBeParent)
+    }
+
     // -----------------------------------------------------------------------
     // systemCode → system: String? (single-value)
     // -----------------------------------------------------------------------
