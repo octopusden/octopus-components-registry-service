@@ -65,7 +65,7 @@ interface ComponentsRegistryServiceClient {
         @Param("vcsPath") vcsPath: String? = null,
         @Param("buildSystem") buildSystem: BuildSystem? = null,
         @Param("solution") solution: Boolean? = null,
-        @Param("systems") @QueryMap systems: List<String> = emptyList()
+        @Param("systems") systems: List<String> = emptyList()
     ): ComponentsDTO<ComponentV2>
 
     @RequestLine("GET rest/api/1/components/{componentKey}/versions/{version}/distribution")
