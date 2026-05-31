@@ -739,14 +739,16 @@ ALL_VERSIONS semantics).
      version-entity jira configs when component-level is empty.
 3. v2 `GET /rest/api/2/components/{name}/versions/{ver}` continues to return
    correct `labels` / `releaseManager` / `securityChampion` for both
-   freshly-migrated rows (read from dedicated columns) and pre-fix rows
-   migrated with values in `metadata` (read via the `metadata` fallback in
-   `toEscrowModuleConfig`).
+   freshly-migrated rows (`labels` from its column; `releaseManager` /
+   `securityChampion` joined from the `component_release_managers` /
+   `component_security_champions` child rows, comma-joined for the legacy v2
+   wire) and pre-fix rows migrated with values in `metadata` (read via the
+   `metadata` fallback in `toEscrowModuleConfig`).
 4. `RES-001 / All Jira component version ranges` keeps emitting exactly one
    entry per `versionRange` (no spurious `ALL_VERSIONS` entry for
    version-range-only components).
 
-**Test method:** `MigrationIntegrationTest.MIG-025 version-range-only component preserves root-level metadata fields` against `TEST_COMPONENT3` (range blocks `(,1.0.107)` and `[1.0.107,)`, root-level labels/releaseManager/securityChampion/groupId/jira). Asserts dedicated-column values via the v4 detail response. RES-001 unchanged-output regression covered by `ComponentsRegistryServiceControllerTest` and `DbBackedComponentsRegistryServiceControllerTest`.
+**Test method:** `MigrationIntegrationTest.MIG-025 version-range-only component preserves root-level metadata fields` against `TEST_COMPONENT3` (range blocks `(,1.0.107)` and `[1.0.107,)`, root-level labels/releaseManager/securityChampion/groupId/jira). Asserts the migrated values via the v4 detail response (labels/groupId from columns; releaseManager/securityChampion as ordered arrays from their child tables). RES-001 unchanged-output regression covered by `ComponentsRegistryServiceControllerTest` and `DbBackedComponentsRegistryServiceControllerTest`.
 
 **Out of scope:**
 - Per-range jira surfacing in the v4 detail response: range-specific configs
