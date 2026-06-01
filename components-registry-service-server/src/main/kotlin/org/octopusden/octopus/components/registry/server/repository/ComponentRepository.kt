@@ -52,6 +52,44 @@ interface ComponentRepository :
     fun findDistinctSystemCodes(): List<String>
 
     /**
+     * Distinct client codes currently in use on at least one component. Source for
+     * the `/meta/client-codes` dropdown (SYS-046). Scalar `components.client_code`
+     * column; same IS NOT NULL + non-blank defence as [findDistinctOwners].
+     */
+    @Query(
+        "SELECT DISTINCT c.clientCode FROM ComponentEntity c " +
+            "WHERE c.clientCode IS NOT NULL AND TRIM(c.clientCode) <> '' " +
+            "ORDER BY c.clientCode",
+    )
+    fun findDistinctClientCodes(): List<String>
+
+    /**
+     * Distinct BASE-configuration-row jira project keys currently in use. Source for
+     * the `/meta/jira-project-keys` dropdown (SYS-046). Restricted to `rowType=BASE`
+     * to match the `?jiraProjectKey=` filter (which only inspects the BASE row), so
+     * the dropdown never advertises an override-only value the filter can't match.
+     */
+    @Query(
+        "SELECT DISTINCT cfg.jiraProjectKey FROM ComponentEntity c JOIN c.configurations cfg " +
+            "WHERE cfg.rowType = 'BASE' AND cfg.jiraProjectKey IS NOT NULL AND TRIM(cfg.jiraProjectKey) <> '' " +
+            "ORDER BY cfg.jiraProjectKey",
+    )
+    fun findDistinctJiraProjectKeys(): List<String>
+
+    /**
+     * Distinct component keys actually referenced as some component's parent. Source
+     * for the `/meta/parent-component-names` FILTER dropdown (SYS-046) — the set of
+     * real parent refs in use, NOT the can-be-parent candidate set the editor's
+     * parent picker uses (that comes from `?canBeParent=true`). Do not conflate.
+     */
+    @Query(
+        "SELECT DISTINCT c.parentComponent.componentKey FROM ComponentEntity c " +
+            "WHERE c.parentComponent IS NOT NULL " +
+            "ORDER BY c.parentComponent.componentKey",
+    )
+    fun findDistinctParentComponentNames(): List<String>
+
+    /**
      * True when at least one component references [parentId] as its
      * `parentComponent`. Used by the service layer to reject disabling
      * `canBeParent` on a component that still has children.

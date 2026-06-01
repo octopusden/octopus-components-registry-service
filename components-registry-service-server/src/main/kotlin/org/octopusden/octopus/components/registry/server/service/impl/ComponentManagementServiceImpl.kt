@@ -1585,9 +1585,16 @@ class ComponentManagementServiceImpl(
         }
         // ── Extended-search filters (single-value; null/blank → no filter) ──
         // Scalar columns on `components` — no JOIN, no distinct.
-        filter.clientCode?.takeIf { it.isNotBlank() }?.let { v ->
-            val pattern = "%${v.trim().lowercase()}%"
-            spec = spec.and(Specification { root, _, cb -> cb.like(cb.lower(root.get("clientCode")), pattern) })
+        // SYS-046: multi-value exact OR on the scalar `components.client_code`.
+        // Scalar column, so no JOIN and no distinct. The controller's
+        // normalisation guarantees a non-empty, blank-free, duplicate-free list.
+        if (!filter.clientCode.isNullOrEmpty()) {
+            spec =
+                spec.and(
+                    Specification { root, _, _ ->
+                        root.get<String>("clientCode").`in`(filter.clientCode)
+                    },
+                )
         }
         filter.solution?.let { v ->
             spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<Boolean>("solution"), v) })
@@ -1603,30 +1610,35 @@ class ComponentManagementServiceImpl(
         }
         // ManyToOne joins — a component has at most one parent / one group, so no
         // row multiplication and no distinct needed.
-        filter.parentComponentName?.takeIf { it.isNotBlank() }?.let { v ->
+        // SYS-046: multi-value exact OR on the parent component's `component_key`
+        // (children of any of these parents). ManyToOne join → no distinct.
+        if (!filter.parentComponentName.isNullOrEmpty()) {
             spec =
                 spec.and(
-                    Specification { root, _, cb ->
+                    Specification { root, _, _ ->
                         val parent = root.join<ComponentEntity, ComponentEntity>("parentComponent")
-                        cb.equal(parent.get<String>("componentKey"), v.trim())
+                        parent.get<String>("componentKey").`in`(filter.parentComponentName)
                     },
                 )
         }
-        filter.groupKey?.takeIf { it.isNotBlank() }?.let { v ->
-            val pattern = "%${v.trim().lowercase()}%"
+        // SYS-046: multi-value exact OR on the owning group's `group_key`.
+        // ManyToOne join → no distinct.
+        if (!filter.groupKey.isNullOrEmpty()) {
             spec =
                 spec.and(
-                    Specification { root, _, cb ->
+                    Specification { root, _, _ ->
                         val group = root.join<ComponentEntity, ComponentGroupEntity>("componentGroup")
-                        cb.like(cb.lower(group.get("groupKey")), pattern)
+                        group.get<String>("groupKey").`in`(filter.groupKey)
                     },
                 )
         }
         // BASE configuration-row filters — one OneToMany JOIN through
         // `configurations` (rowType=BASE), distinct(true) to dedupe (mirrors the
         // buildSystem filter above).
-        filter.jiraProjectKey?.takeIf { it.isNotBlank() }?.let { v ->
-            val pattern = "%${v.trim().lowercase()}%"
+        // SYS-046: multi-value exact OR on the BASE configuration row's
+        // `jira_project_key`. One JOIN through `configurations` (rowType=BASE) +
+        // distinct(true) so a multi-config/multi-VCS component is counted once.
+        if (!filter.jiraProjectKey.isNullOrEmpty()) {
             spec =
                 spec.and(
                     Specification { root, query, cb ->
@@ -1634,7 +1646,7 @@ class ComponentManagementServiceImpl(
                         query?.distinct(true)
                         cb.and(
                             cb.equal(cfg.get<String>("rowType"), "BASE"),
-                            cb.like(cb.lower(cfg.get("jiraProjectKey")), pattern),
+                            cfg.get<String>("jiraProjectKey").`in`(filter.jiraProjectKey),
                         )
                     },
                 )

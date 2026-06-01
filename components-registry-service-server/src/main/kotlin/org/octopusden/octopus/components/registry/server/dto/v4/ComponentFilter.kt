@@ -56,14 +56,30 @@ data class ComponentFilter(
      * "no extra filter applied". Scalar column, so no JOIN / distinct needed.
      */
     val canBeParent: Boolean? = null,
-    // ── Extended-search single-value filters (Portal "extended search" mode) ──
-    /** Case-insensitive LIKE on `components.client_code`. */
-    val clientCode: String? = null,
+    // ── Extended-search filters (Portal "extended search" mode) ──
+    // clientCode / jiraProjectKey / parentComponentName / groupKey are MULTI-VALUE
+    // (SYS-046): the controller normalises CSV / repeatable params into a non-empty,
+    // blank-free, duplicate-free list, and the Specification matches with exact `IN`
+    // (OR across values), sourced from the in-use /meta/* option lists. The remaining
+    // extended scalars (solution, jiraTechnical, vcsPath, productionBranch) stay
+    // single-value.
+    /**
+     * Multi-value OR filter: exact match on the scalar `components.client_code`
+     * against any value in the list. Sourced from `/meta/client-codes`. Scalar
+     * column, so no JOIN / distinct. (Was a case-insensitive substring LIKE
+     * before SYS-046.)
+     */
+    val clientCode: List<String>? = null,
     /** Exact match on `components.solution`. `solution=false` matches only rows
      *  explicitly set false — rows where `solution IS NULL` (never set) are excluded. */
     val solution: Boolean? = null,
-    /** Case-insensitive LIKE on the BASE configuration row's `jira_project_key`. */
-    val jiraProjectKey: String? = null,
+    /**
+     * Multi-value OR filter: exact match on the BASE configuration row's
+     * `jira_project_key` against any value in the list. One JOIN through
+     * `configurations` (rowType=BASE) + `distinct(true)`. Sourced from
+     * `/meta/jira-project-keys`. (Was a substring LIKE before SYS-046.)
+     */
+    val jiraProjectKey: List<String>? = null,
     /** Exact match on the BASE configuration row's `jira_technical`. As with
      *  `solution`, `jiraTechnical=false` excludes rows where the value IS NULL. */
     val jiraTechnical: Boolean? = null,
@@ -71,10 +87,19 @@ data class ComponentFilter(
     val vcsPath: String? = null,
     /** Case-insensitive LIKE on a BASE-row VCS entry's `branch` (production branch). */
     val productionBranch: String? = null,
-    /** Exact match on the parent component's `component_key`. */
-    val parentComponentName: String? = null,
-    /** Case-insensitive LIKE on the owning group's `group_key`. */
-    val groupKey: String? = null,
+    /**
+     * Multi-value OR filter: exact match on the parent component's `component_key`
+     * against any value in the list (children of any of these parents). A ManyToOne
+     * join, so no distinct. Sourced from `/meta/parent-component-names`. (Was
+     * single-value exact before SYS-046.)
+     */
+    val parentComponentName: List<String>? = null,
+    /**
+     * Multi-value OR filter: exact match on the owning group's `group_key` against
+     * any value in the list. A ManyToOne join, so no distinct. Sourced from
+     * `/meta/group-keys`. (Was a substring LIKE before SYS-046.)
+     */
+    val groupKey: List<String>? = null,
     /** Exact match on `components.distribution_explicit`. Like `solution`,
      *  `distributionExplicit=false` excludes rows where the value IS NULL. */
     val distributionExplicit: Boolean? = null,
