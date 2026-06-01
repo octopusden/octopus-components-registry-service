@@ -53,6 +53,8 @@
 | SYS-042 | GET /components?system=A,B accepts CSV multi-value with OR semantics across the scalar `components.system_code` column (M:N collapsed to 1:0..1 post-#299); GET /components/meta/systems returns sorted distinct codes in use | High | integration-test | ✅ Tested |
 | SYS-043 | GET /components?owner=alice,bob accepts CSV multi-value with OR semantics over the scalar componentOwner column | High | integration-test | ✅ Tested |
 | SYS-044 | releaseManager / securityChampion are ordered multi-value (`string[]`) in v4 with keep-first dedupe; legacy v1/v2/v3 keep the comma-joined `String`; componentOwner stays single-value and is removed from the global component-defaults surface | High | unit + integration-test | ✅ Tested |
+| SYS-045 | GET /components?distributionExplicit= / ?distributionExternal= activate the two scalar distribution boolean filters (mirror `solution`; `=false` excludes NULL rows) | Medium | integration-test | ✅ Tested |
+| SYS-046 | clientCode / jiraProjectKey / parentComponentName / groupKey become multi-value exact-IN filters (CSV / repeatable); 4 companion in-use meta endpoints (/meta/client-codes, /meta/jira-project-keys, /meta/parent-component-names, /meta/group-keys) | High | integration-test | ✅ Tested |
 
 ---
 
@@ -1448,3 +1450,78 @@ already stores each as a comma-separated string validated by `\w+(,\w+)*`.
 **Out of scope:**
 - Filtering by releaseManager / securityChampion (not requested).
 - `componentOwner` multi-value (stays single).
+
+---
+
+### SYS-045: GET /components?distributionExplicit= / ?distributionExternal= activate the distribution boolean filters
+
+**Priority:** Medium
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+The Portal extended-search bar gains two distribution toggles (`distributionExplicit`, `distributionExternal`) — the pair that, when both true, drives the DMS link and the conditionally-required RM/SC/copyright validation (see the functional-spec distribution rules). The two `@RequestParam`s and the `ComponentFilter` fields were wired in an earlier WIP commit, but `buildSpecification` had **no matching predicate**, so `?distributionExplicit=…` was silently inert — it returned the full list rather than narrowing it. This requirement closes that gap.
+
+**Description:**
+Two scalar boolean filters on the `components.distribution_explicit` / `components.distribution_external` columns, mirroring the existing `solution` filter exactly. Each branch is a plain `cb.equal(root.get<Boolean>("distributionExplicit"/"distributionExternal"), value)` — no JOIN, no `query.distinct(true)`. Both columns are nullable, so `…=false` matches only rows explicitly set to `false`; rows where the value `IS NULL` (never set) are excluded — identical to `solution` semantics. Absent param = no distribution filter.
+
+**Preconditions:**
+- Caller has `ACCESS_COMPONENTS`.
+
+**Acceptance criteria:**
+1. `?distributionExplicit=true` returns only components whose `distributionExplicit` is `true`; a component with `distributionExplicit=false` is excluded.
+2. `?distributionExternal=true` returns only components whose `distributionExternal` is `true`; a `distributionExternal=false` component is excluded.
+3. `?distributionExplicit=false` excludes rows where the value `IS NULL` (never set), matching `solution` semantics.
+4. Absent param = no distribution filter (regression).
+
+**Test method:** `ListComponentsExtendedFiltersTest` — `` `SYS-045 distributionExplicit filter returns only explicit components`() `` and `` `SYS-045 distributionExternal filter returns only external components`() ``.
+
+**Out of scope:**
+- Tri-state wire encoding (the nullable `Boolean` param already covers true / false / absent).
+- Multi-value distribution filtering (a boolean has at most two values; multi-select is meaningless).
+
+---
+
+### SYS-046: clientCode / jiraProjectKey / parentComponentName / groupKey multi-value exact-IN + companion in-use meta endpoints
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+The first cut of the extended-search bar (functional-spec §Filters) backed `clientCode`, `jiraProjectKey`, `parentComponentName` and `groupKey` with free-text inputs — `clientCode` / `jiraProjectKey` / `groupKey` matched by case-insensitive `LIKE`, `parentComponentName` by exact equality. The Portal is moving these four to **multi-select dropdowns** sourced from the values actually in use (parity with the `owner` / `system` / `labels` pickers). A dropdown of real values wants exact-match OR semantics ("any of the selected values"), not substring search, so the four filters become multi-value exact-`IN`, and four companion `/meta/*` endpoints supply the distinct in-use option lists.
+
+**Description:**
+Mirrors SYS-040 (labels) / SYS-042 (system): a filter change plus a companion in-use meta endpoint, for four fields at once.
+
+1. **Filters** — the four `ComponentFilter` fields change `String?` → `List<String>?`; the controller `@RequestParam`s change to `List<String>?` and are normalised through the same `normalizeCsvParam` pipeline (split → trim → drop-empty → distinct → null-if-empty) already used by `owner` / `system` / `buildSystem` / `labels`. `buildSpecification` swaps each scalar/`LIKE` branch for an exact-`IN`:
+   - `clientCode` → `root.get<String>("clientCode").in(values)` — scalar column, no JOIN, no distinct. **Behaviour change: substring `LIKE` → exact `IN`.**
+   - `jiraProjectKey` → one JOIN through `configurations` (`rowType=BASE`) + `cfg.get("jiraProjectKey").in(values)` + `distinct(true)`. **Behaviour change: substring `LIKE` → exact `IN`.**
+   - `parentComponentName` → JOIN `parentComponent` + `parent.get("componentKey").in(values)` — ManyToOne, no distinct. (Was already exact; just widened to multi-value.)
+   - `groupKey` → JOIN `componentGroup` + `group.get("groupKey").in(values)` — ManyToOne, no distinct. **Behaviour change: substring `LIKE` → exact `IN`.**
+   The change is wire-compatible for the single-value case (`?clientCode=ACME` is a degenerate one-element `IN`). `ComponentFilter` is server-internal and not part of any external API surface.
+
+2. **Meta endpoints** (all gated by `ACCESS_COMPONENTS`, parity with `/meta/owners`) — each returns sorted distinct values **actually in use**, null/blank-filtered:
+   - `GET /rest/api/4/components/meta/client-codes` → `ComponentRepository.findDistinctClientCodes()` (scalar `components.client_code`).
+   - `GET /rest/api/4/components/meta/jira-project-keys` → `ComponentRepository.findDistinctJiraProjectKeys()` (distinct `jira_project_key` over BASE configuration rows).
+   - `GET /rest/api/4/components/meta/parent-component-names` → `ComponentRepository.findDistinctParentComponentNames()` (distinct `component_key` of components actually referenced as someone's parent — NOT the can-be-parent candidate set, which the editor parent picker uses via `?canBeParent=true`).
+   - `GET /rest/api/4/components/meta/group-keys` → `ComponentGroupRepository.findDistinctGroupKeys()` (distinct `group_key` of groups that own ≥1 component, so no dead options).
+
+**Preconditions:**
+- Caller has `ACCESS_COMPONENTS`.
+
+**Acceptance criteria:**
+1. `?clientCode=ACME` returns only components whose `clientCode` is exactly `ACME` (no longer a substring match).
+2. `?clientCode=ACME,BETA` returns components whose `clientCode` is `ACME` OR `BETA`; a third code is excluded.
+3. `?jiraProjectKey=AAA,BBB` returns components whose BASE `jira_project_key` is `AAA` OR `BBB` (exact); a multi-VCS / multi-config component is counted once (distinct).
+4. `?parentComponentName=p1,p2` returns children of `p1` OR `p2`; a standalone component is excluded.
+5. `?groupKey=g1,g2` returns components whose owning group key is exactly `g1` OR `g2`.
+6. Blank / interleaved-blank / dedupe / whitespace-trim normalisation matches the other multi-value filters (`?clientCode=`, `?clientCode=,,`, `?clientCode=A,A`).
+7. `GET /meta/client-codes` / `/meta/jira-project-keys` / `/meta/parent-component-names` / `/meta/group-keys` each return 200 + a sorted, duplicate-free JSON array of in-use values, never 404, regardless of DB state.
+8. `/meta/parent-component-names` lists only component keys actually referenced as a parent; `/meta/group-keys` lists only group keys with ≥1 member.
+
+**Test method:** `ListComponentsExtendedFiltersTest` (the `clientCode` / `jiraProjectKey` / `parentComponentName` / `groupKey` cases updated to exact-IN + a multi-value case) and `MetaInUseOptionsEndpointsTest` (the four endpoints).
+
+**Out of scope:**
+- Converting the remaining extended scalars (`vcsPath`, `productionBranch`) to multi-value — they stay single-value `LIKE` (free-text search, not dropdown-backed).
+- URL/bookmark state for the filters (Portal holds filter state in React, not query params).

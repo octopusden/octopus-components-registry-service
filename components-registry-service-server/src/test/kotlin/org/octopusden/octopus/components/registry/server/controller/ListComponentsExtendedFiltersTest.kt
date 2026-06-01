@@ -110,15 +110,25 @@ class ListComponentsExtendedFiltersTest {
             """"baseConfiguration":{$build}}"""
 
     @Test
-    @DisplayName("?clientCode= does a case-insensitive partial match")
-    fun clientCodeFilter() {
+    @DisplayName("SYS-046: ?clientCode= is an exact multi-value (IN) match, not a substring")
+    fun `SYS-046 clientCode exact multi-value filter`() {
         val match = uniqueName("ext_cc_match")
         val other = uniqueName("ext_cc_other")
+        val third = uniqueName("ext_cc_third")
         create(baseBody(match, ""","clientCode":"ACME-PORTAL""""))
-        create(baseBody(other, ""","clientCode":"OTHER""""))
-        val n = names("clientCode" to "acme")
-        assert(n.contains(match)) { "expected $match in $n" }
-        assert(!n.contains(other)) { "did not expect $other in $n" }
+        create(baseBody(other, ""","clientCode":"OTHER-CC""""))
+        create(baseBody(third, ""","clientCode":"THIRD-CC""""))
+        // Exact: a partial value no longer matches (was a substring LIKE pre-SYS-046).
+        val partial = names("clientCode" to "ACME")
+        assert(!partial.contains(match)) { "partial 'ACME' must not match 'ACME-PORTAL' after LIKE→IN; got $partial" }
+        // Exact single value matches only the exact code.
+        val exact = names("clientCode" to "ACME-PORTAL")
+        assert(exact.contains(match)) { "expected $match in $exact" }
+        assert(!exact.contains(other)) { "did not expect $other in $exact" }
+        // Multi-value OR: ACME-PORTAL,OTHER-CC returns both, excludes the third.
+        val multi = names("clientCode" to "ACME-PORTAL,OTHER-CC")
+        assert(multi.contains(match) && multi.contains(other)) { "expected both in $multi" }
+        assert(!multi.contains(third)) { "did not expect $third in $multi" }
     }
 
     @Test
@@ -134,15 +144,65 @@ class ListComponentsExtendedFiltersTest {
     }
 
     @Test
-    @DisplayName("?jiraProjectKey= matches on the BASE row's jira project key")
-    fun jiraProjectKeyFilter() {
+    @DisplayName("SYS-045: ?distributionExplicit= matches true/false exactly; =false excludes NULL rows")
+    fun `SYS-045 distributionExplicit filter returns only explicit components`() {
+        val yes = uniqueName("ext_de_true")
+        val no = uniqueName("ext_de_false")
+        val unset = uniqueName("ext_de_unset")
+        create(baseBody(yes, ""","distributionExplicit":true"""))
+        create(baseBody(no, ""","distributionExplicit":false"""))
+        create(baseBody(unset)) // distributionExplicit not set → NULL
+        val t = names("distributionExplicit" to "true")
+        assert(t.contains(yes)) { "expected $yes in $t" }
+        assert(!t.contains(no)) { "did not expect $no in $t" }
+        assert(!t.contains(unset)) { "did not expect NULL row $unset in $t" }
+        // =false matches only rows explicitly set false; the NULL row is excluded (mirrors solution).
+        val f = names("distributionExplicit" to "false")
+        assert(f.contains(no)) { "expected explicitly-false $no in $f" }
+        assert(!f.contains(yes)) { "did not expect true row $yes in $f" }
+        assert(!f.contains(unset)) { "NULL row $unset must be excluded by =false; got $f" }
+    }
+
+    @Test
+    @DisplayName("SYS-045: ?distributionExternal= matches true/false exactly; =false excludes NULL rows")
+    fun `SYS-045 distributionExternal filter returns only external components`() {
+        val yes = uniqueName("ext_dx_true")
+        val no = uniqueName("ext_dx_false")
+        val unset = uniqueName("ext_dx_unset")
+        create(baseBody(yes, ""","distributionExternal":true"""))
+        create(baseBody(no, ""","distributionExternal":false"""))
+        create(baseBody(unset)) // distributionExternal not set → NULL
+        val t = names("distributionExternal" to "true")
+        assert(t.contains(yes)) { "expected $yes in $t" }
+        assert(!t.contains(no)) { "did not expect $no in $t" }
+        assert(!t.contains(unset)) { "did not expect NULL row $unset in $t" }
+        // =false matches only rows explicitly set false; the NULL row is excluded (mirrors solution).
+        val f = names("distributionExternal" to "false")
+        assert(f.contains(no)) { "expected explicitly-false $no in $f" }
+        assert(!f.contains(yes)) { "did not expect true row $yes in $f" }
+        assert(!f.contains(unset)) { "NULL row $unset must be excluded by =false; got $f" }
+    }
+
+    @Test
+    @DisplayName("SYS-046: ?jiraProjectKey= is an exact multi-value (IN) match on the BASE row")
+    fun `SYS-046 jiraProjectKey exact multi-value filter`() {
         val match = uniqueName("ext_jpk_match")
         val other = uniqueName("ext_jpk_other")
+        val third = uniqueName("ext_jpk_third")
         create(baseBody(match, build = """"build":{"buildSystem":"MAVEN"},"jira":{"projectKey":"ZZJIRA"}"""))
         create(baseBody(other, build = """"build":{"buildSystem":"MAVEN"},"jira":{"projectKey":"AAOTHER"}"""))
-        val n = names("jiraProjectKey" to "zzjira")
-        assert(n.contains(match)) { "expected $match in $n" }
-        assert(!n.contains(other)) { "did not expect $other in $n" }
+        create(baseBody(third, build = """"build":{"buildSystem":"MAVEN"},"jira":{"projectKey":"MMTHIRD"}"""))
+        // Exact (case-sensitive): a lowercase value no longer matches.
+        assert(!names("jiraProjectKey" to "zzjira").contains(match)) {
+            "lowercase jiraProjectKey must not match after LIKE→IN"
+        }
+        val exact = names("jiraProjectKey" to "ZZJIRA")
+        assert(exact.contains(match)) { "expected $match in $exact" }
+        assert(!exact.contains(other)) { "did not expect $other in $exact" }
+        // Multi-value OR returns both listed, excludes the third.
+        val multi = names("jiraProjectKey" to "ZZJIRA,AAOTHER")
+        assert(multi.contains(match) && multi.contains(other)) { "expected both in $multi" }
+        assert(!multi.contains(third)) { "did not expect $third in $multi" }
     }
 
     @Test
@@ -158,23 +218,33 @@ class ListComponentsExtendedFiltersTest {
     }
 
     @Test
-    @DisplayName("?parentComponentName= returns children of that parent (parent must be canBeParent)")
-    fun parentComponentNameFilter() {
-        val parent = uniqueName("ext_p_parent")
-        create(baseBody(parent, ""","canBeParent":true"""))
-        val child = uniqueName("ext_p_child")
-        create(baseBody(child, ""","parentComponentName":"$parent""""))
+    @DisplayName("SYS-046: ?parentComponentName= returns children of any listed parent (multi-value)")
+    fun `SYS-046 parentComponentName multi-value filter`() {
+        val parentA = uniqueName("ext_p_parentA")
+        val parentB = uniqueName("ext_p_parentB")
+        create(baseBody(parentA, ""","canBeParent":true"""))
+        create(baseBody(parentB, ""","canBeParent":true"""))
+        val childA = uniqueName("ext_p_childA")
+        create(baseBody(childA, ""","parentComponentName":"$parentA""""))
+        val childB = uniqueName("ext_p_childB")
+        create(baseBody(childB, ""","parentComponentName":"$parentB""""))
         val standalone = uniqueName("ext_p_standalone")
         create(baseBody(standalone))
-        val n = names("parentComponentName" to parent)
-        assert(n.contains(child)) { "expected $child in $n" }
-        assert(!n.contains(standalone)) { "did not expect $standalone in $n" }
+        // Single value (backward compat).
+        val single = names("parentComponentName" to parentA)
+        assert(single.contains(childA)) { "expected $childA in $single" }
+        assert(!single.contains(childB)) { "did not expect $childB in $single" }
+        // Multi-value OR: children of A OR B; the standalone is excluded.
+        val multi = names("parentComponentName" to "$parentA,$parentB")
+        assert(multi.contains(childA) && multi.contains(childB)) { "expected both children in $multi" }
+        assert(!multi.contains(standalone)) { "did not expect $standalone in $multi" }
     }
 
     @Test
-    @DisplayName("?groupKey= matches the owning group key")
-    fun groupKeyFilter() {
+    @DisplayName("SYS-046: ?groupKey= is an exact multi-value (IN) match on the owning group key")
+    fun `SYS-046 groupKey exact multi-value filter`() {
         val unique = uniqueName("grp")
+        val groupKey = "org.example.$unique"
         val inGroup = uniqueName("ext_g_in")
         // Create via the API (valid component, null group), then attach the group
         // directly: groups are migration-owned aggregator membership and the API
@@ -183,12 +253,16 @@ class ListComponentsExtendedFiltersTest {
         val other = uniqueName("ext_g_other")
         create(baseBody(other))
         val group =
-            componentGroupRepository.save(ComponentGroupEntity(groupKey = "org.example.$unique", isFake = false))
+            componentGroupRepository.save(ComponentGroupEntity(groupKey = groupKey, isFake = false))
         val entity = componentRepository.findByComponentKey(inGroup)!!
         entity.componentGroup = group
         componentRepository.save(entity)
 
-        val n = names("groupKey" to unique)
+        // Exact: the bare suffix no longer matches (was a substring LIKE pre-SYS-046).
+        assert(!names("groupKey" to unique).contains(inGroup)) {
+            "partial groupKey '$unique' must not match '$groupKey' after LIKE→IN"
+        }
+        val n = names("groupKey" to groupKey)
         assert(n.contains(inGroup)) { "expected $inGroup in $n" }
         assert(!n.contains(other)) { "did not expect $other in $n" }
     }
