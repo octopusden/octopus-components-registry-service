@@ -11,6 +11,7 @@ import org.octopusden.octopus.components.registry.api.beans.PTDDbProductToolBean
 import org.octopusden.octopus.components.registry.api.beans.PTDProductToolBean
 import org.octopusden.octopus.components.registry.api.beans.PTKProductToolBean
 import org.octopusden.octopus.components.registry.api.build.tools.BuildTool
+import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactIdEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentBuildToolBeanEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
@@ -81,6 +82,7 @@ import java.time.Instant
  *  §6.7  Tools and required tools: junction rows.
  *  §6.8  `${version}` placeholders stored verbatim.
  */
+@ConditionalOnDatabaseEnabled
 @Service
 @Suppress("CyclomaticComplexMethod", "TooGenericExceptionCaught")
 class ImportServiceImpl(

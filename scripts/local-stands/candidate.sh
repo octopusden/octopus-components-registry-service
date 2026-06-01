@@ -15,12 +15,14 @@
 #                  has a `component_sources` row with source='db', so the fallback governs
 #                  unmigrated components only. This is the mode in which the four cluster-
 #                  fix PRs (#208/#209/#211/#212) are actually exercised.
-#   --mode=vcs           — components-registry.default-source=git (the global default);
-#                  V1 in-memory EscrowConfigurationLoader serves. Use for V1-vs-V1 parity-
-#                  debugging only.
+#   --mode=vcs           — no-db profile (issue #310): the JDBC/JPA/Flyway auto-configs
+#                  are excluded so the candidate boots with NO database;
+#                  components-registry.default-source=git, the V1 in-memory
+#                  EscrowConfigurationLoader serves. No Postgres required. Use for the
+#                  deploy-without-migration no-op check and V1-vs-V1 parity-debugging.
 #
-# Requires Postgres running (see postgres-up.sh).
-# Triggers full DSL→DB migration at startup (~30-60 sec on first run).
+# db-mode requires Postgres running (see postgres-up.sh) and triggers a full DSL→DB
+# migration at startup (~30-60 sec on first run); vcs/no-db mode needs neither.
 # Unlike baseline.sh, this script does NOT explicitly disable Spring Cloud Config — the
 # dev profile suite doesn't request cloud-config, so it's implicitly off.
 set -euo pipefail
@@ -61,15 +63,29 @@ ADDITIONAL_LOCATION="file:$CANDIDATE_WORKTREE/components-registry-service-server
 ADDITIONAL_LOCATION="$ADDITIONAL_LOCATION,file:$SERVICE_CONFIG_DIR/components-registry-service.yml"
 
 WORK_DIR="${WORK_DIR:-/tmp/crs-candidate-work}"
+NODB_OVERRIDE_ARGS=""
 if [ "$MODE" = "db" ]; then
   PROFILES="dev,dev-vcs-local,dev-db-automigrate,dev-db-only,local"
 else
-  PROFILES="dev,dev-vcs-local,dev-db-automigrate,local"
+  # vcs (no-db) mode: the `no-db` profile excludes the JDBC/JPA/Flyway auto-configs
+  # so the candidate boots with no database at all (issue #310); no Postgres needed.
+  PROFILES="dev,dev-vcs-local,no-db,local"
+  # Force all three no-db knobs at the CLI (highest precedence) so a stray override
+  # in service-config (loaded via additional-location, which outranks the bundled
+  # no-db profile YAML) cannot re-enable the DB beans / migration / db routing while
+  # JPA autoconfig stays excluded — mirrors teamcity-run.sh's git-mode args exactly.
+  NODB_OVERRIDE_ARGS=" --components-registry.database.enabled=false"
+  NODB_OVERRIDE_ARGS="$NODB_OVERRIDE_ARGS --components-registry.auto-migrate=false"
+  NODB_OVERRIDE_ARGS="$NODB_OVERRIDE_ARGS --components-registry.default-source=git"
 fi
 cd "$CANDIDATE_WORKTREE"
 echo ">>> candidate: $CANDIDATE_WORKTREE @ $(git rev-parse --short HEAD)"
 echo ">>> mode: $MODE   profiles: $PROFILES"
-echo ">>> port: $CANDIDATE_PORT,  VCS root: $LOCAL_VCS_ROOT  (work-dir: $WORK_DIR),  DB: localhost:${CRS_DB_PORT:-5432}"
+if [ "$MODE" = "db" ]; then
+  echo ">>> port: $CANDIDATE_PORT,  VCS root: $LOCAL_VCS_ROOT  (work-dir: $WORK_DIR),  DB: localhost:${CRS_DB_PORT:-5432}"
+else
+  echo ">>> port: $CANDIDATE_PORT,  VCS root: $LOCAL_VCS_ROOT  (work-dir: $WORK_DIR),  DB: none (no-db mode)"
+fi
 echo ">>> config: $SERVICE_CONFIG_DIR (overlaid on dev/)"
 exec ./gradlew :components-registry-service-server:bootRun --no-daemon --console=plain \
   --args="--server.port=$CANDIDATE_PORT \
@@ -78,4 +94,4 @@ exec ./gradlew :components-registry-service-server:bootRun --no-daemon --console
           --components-registry.vcs.root=file://$LOCAL_VCS_ROOT \
           --components-registry.work-dir=$WORK_DIR \
           --components-registry.groovy-path=$WORK_DIR/src/main/resources \
-          --auth-server.disabled=true"
+          --auth-server.disabled=true$NODB_OVERRIDE_ARGS"

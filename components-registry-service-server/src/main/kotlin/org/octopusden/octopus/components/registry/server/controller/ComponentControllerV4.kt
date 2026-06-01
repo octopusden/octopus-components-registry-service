@@ -2,6 +2,7 @@ package org.octopusden.octopus.components.registry.server.controller
 
 import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
+import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentCreateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentDetailResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentFilter
@@ -43,6 +44,7 @@ import java.util.UUID
  * read gate, which is the opposite of what "class-level default" suggests. Every
  * endpoint now declares the full set of permissions it requires.
  */
+@ConditionalOnDatabaseEnabled
 @RestController
 @RequestMapping("rest/api/4/components")
 @Suppress("TooManyFunctions")

@@ -20,7 +20,13 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
  * MigrateEndpointTest) without tripping Spring Boot's bean-definition-override
  * guard. With the test bean registered first via @TestConfiguration / @Import,
  * Spring sees the slot already filled and skips this method.
+ *
+ * `@ConditionalOnDatabaseEnabled` (class level, so the test-override path via
+ * `@ConditionalOnMissingBean` still works in db-mode): the only consumers of this
+ * executor are the DB-only migration / history / TC-sync job services, all of which
+ * are gated off in no-db mode — so there is no point creating the thread pool there.
  */
+@ConditionalOnDatabaseEnabled
 @Configuration
 open class MigrationExecutorConfig {
     @Bean("migrationExecutor")

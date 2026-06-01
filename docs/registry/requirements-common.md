@@ -55,6 +55,7 @@
 | SYS-044 | releaseManager / securityChampion are ordered multi-value (`string[]`) in v4 with keep-first dedupe; legacy v1/v2/v3 keep the comma-joined `String`; componentOwner stays single-value and is removed from the global component-defaults surface | High | unit + integration-test | ✅ Tested |
 | SYS-045 | GET /components?distributionExplicit= / ?distributionExternal= activate the two scalar distribution boolean filters (mirror `solution`; `=false` excludes NULL rows) | Medium | integration-test | ✅ Tested |
 | SYS-046 | clientCode / jiraProjectKey / parentComponentName / groupKey become multi-value exact-IN filters (CSV / repeatable); 4 companion in-use meta endpoints (/meta/client-codes, /meta/jira-project-keys, /meta/parent-component-names, /meta/group-keys) | High | integration-test | ✅ Tested |
+| SYS-047 | git-only no-DB boot mode: the `no-db` profile excludes the JDBC/JPA/Flyway auto-configs and gates every DB-coupled bean off (`@ConditionalOnDatabaseEnabled`), so the service boots with no database and serves v1/v2/v3 from the Git resolver — the compat git-mode stand (id18) needs no Postgres | High | unit / context-load test | ✅ Tested |
 
 ---
 
@@ -1525,3 +1526,62 @@ Mirrors SYS-040 (labels) / SYS-042 (system): a filter change plus a companion in
 **Out of scope:**
 - Converting the remaining extended scalars (`vcsPath`, `productionBranch`) to multi-value — they stay single-value `LIKE` (free-text search, not dropdown-backed).
 - URL/bookmark state for the filters (Portal holds filter state in React, not query params).
+
+### SYS-047: git-only no-DB boot mode
+
+**Priority:** High
+**Test layer:** unit / context-load test
+**Status:** ✅ Tested
+
+**Motivation:**
+The `[1.8]` git-mode compat stand (id18) runs the candidate with
+`auto-migrate=false` + `default-source=git`, serving every v1/v2/v3 request from
+the Git resolver. Before this change the candidate still booted a full JPA +
+Flyway + Hikari stack against Postgres purely because the active profile supplied a
+datasource — the DB was never read for serving. The stand therefore had to start
+Postgres for nothing (follow-up from #308 / #309, issue #310).
+
+**Description:**
+- New `no-db` Spring profile (`application-no-db.yml`) — the single switch. It (a)
+  sets `spring.autoconfigure.exclude` for `DataSourceAutoConfiguration`,
+  `DataSourceTransactionManagerAutoConfiguration`, `HibernateJpaAutoConfiguration`,
+  `JpaRepositoriesAutoConfiguration`, `FlywayAutoConfiguration`, and (b) sets
+  `components-registry.database.enabled=false` (plus `auto-migrate=false`,
+  `default-source=git`, `teamcity.sync.enabled=false`).
+- New `components-registry.database.enabled` flag (default `true`) and the
+  `@ConditionalOnDatabaseEnabled` meta-annotation
+  (`@ConditionalOnProperty(..., matchIfMissing = true)`) gate every DB-coupled bean:
+  the DB resolver, `ComponentSourceRegistry`, the `@Primary` routing resolver, the
+  import / component-management / audit / field-config / git-history / migration /
+  TeamCity-sync services, the TeamCity scheduler, the migration executor, the audit +
+  field-config listeners, and the v4 CRUD / admin / audit / config controllers. With
+  the flag unset, db-mode (id17) is unchanged.
+- The pure-Git `ComponentRegistryResolverImpl` already implements the full
+  `ComponentRegistryResolver` interface; when the `@Primary` routing resolver drops
+  out it becomes the **sole** resolver, so every v1/v2/v3 consumer binds to it — the
+  same code path as the 2.0.87 baseline.
+- The two git-path beans that inject DB deps (`ComponentsRegistryServiceImpl`,
+  `ComponentsRegistryServiceController`) take them as Kotlin-nullable (optional)
+  dependencies: status `dbComponentCount` is null-safe (0), and `updateCache` keeps
+  its per-pod refresh lock in **both** modes but skips the DB-only migration-status
+  / 410-retirement gate when no `ImportService` is wired.
+- Local stand: `teamcity-run.sh` / `candidate.sh` run git-mode with the `no-db`
+  profile and do NOT start Postgres (id18 drops the `POSTGRES_IMAGE` pull); db-mode
+  (id17) is untouched.
+
+**Acceptance criteria:**
+1. With the `no-db` profile active the context starts with **no `DataSource` bean**
+   and no Hikari/Flyway — no database is required.
+2. The `@Primary` `ComponentRoutingResolver` and all DB-coupled beans (v4 CRUD,
+   TeamCity sync, …) are absent; the sole `ComponentRegistryResolver` is the
+   pure-Git `ComponentRegistryResolverImpl`.
+3. `GET /rest/api/2/components-registry/service/status` reports `defaultSource=git`
+   and `dbComponentCount=0`.
+4. db-mode (no `no-db` profile) is unchanged — every gated bean is `matchIfMissing=true`.
+
+**Test method:** `NoDbModeContextTest` — four methods, each carrying `SYS-047` in
+its name + a `@DisplayName("SYS-047: …")` (test-to-requirement traceability):
+`SYS-047 no DataSource bean exists in no-db mode`,
+`SYS-047 git resolver is the sole resolver in no-db mode`,
+`SYS-047 db-only beans absent and git read path present in no-db mode`,
+`SYS-047 status reports defaultSource git and zero db components in no-db mode`.

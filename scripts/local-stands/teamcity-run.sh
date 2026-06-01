@@ -109,12 +109,13 @@ CANDIDATE_LOG="${CANDIDATE_LOG:-/tmp/crs-candidate-tc.log}"
 #   db  (default) — dev-db-automigrate + dev-db-only: DSL→DB migration at
 #                   startup, default-source=db. Compat asserts the schema-v2
 #                   DB resolver reproduces the v1/v2/v3 contract (id17 / [1.7]).
-#   git           — dev-db-automigrate only (DB present + Flyway schema so the
-#                   JAR boots), plus CLI --auto-migrate=false --default-source=git.
-#                   NO migration runs, component_source stays empty, every
-#                   component is served from the Git resolver — the same code
-#                   path as the 2.0.87 baseline. Compat asserts that deploying
-#                   v3 WITHOUT migrating is a no-op for v1/v2/v3 (id18 / [1.8]).
+#   git           — no-db profile (issue #310): the JDBC/JPA/Flyway auto-configs
+#                   are excluded so the candidate boots with NO database at all,
+#                   plus CLI --auto-migrate=false --default-source=git. NO
+#                   migration runs and every component is served from the Git
+#                   resolver — the same code path as the 2.0.87 baseline. Compat
+#                   asserts that deploying v3 WITHOUT migrating is a no-op for
+#                   v1/v2/v3 (id18 / [1.8]). Postgres is never started in git-mode.
 CANDIDATE_MODE="${CANDIDATE_MODE:-db}"
 case "$CANDIDATE_MODE" in
   db|git) ;;
@@ -183,7 +184,15 @@ if [ "$RESET_DB" = "1" ]; then
     fi
   fi
 fi
-"$SCRIPT_DIR/postgres-up.sh"
+if [ "$CANDIDATE_MODE" = "git" ]; then
+  # no-db git mode (issue #310): any stale Postgres from a prior db-mode run on a
+  # persistent agent was torn down above (RESET_DB); do NOT start a new one. The
+  # candidate boots with the `no-db` profile, which excludes the JDBC/JPA/Flyway
+  # auto-configs, so it needs no database at all — that absence is the point of id18.
+  echo "    git-mode (no-db): Postgres not started — candidate boots with no database"
+else
+  "$SCRIPT_DIR/postgres-up.sh"
+fi
 
 # ---------- Stage 2/4: baseline JAR ----------
 echo ">>> Stage 2/4: baseline JAR (V1 mode)"
@@ -241,22 +250,32 @@ CANDIDATE_WORK_DIR="${CANDIDATE_WORK_DIR:-/tmp/crs-candidate-tc-work}"
 # Candidate's profile suite. Common base:
 #   dev                  — base dev overlay
 #   dev-vcs-local        — file:// VCS access (no remote bitbucket pull)
+#   local                — local stand identity marker
+# db-mode (id17) adds:
 #   dev-db-automigrate   — datasource + Flyway schema (the JAR needs a live DB to
 #                          boot); in db-mode it ALSO runs the DSL→DB migration
-#   local                — local stand identity marker
-# db-mode adds:
 #   dev-db-only          — components-registry.default-source=db (schema-v2 code
 #                          path active for unmigrated-component fallback)
-# git-mode instead forces no-migration + git routing via the CLI overrides below
-# (top of Spring's property-source order, so they also beat service-config).
+# git-mode (id18, issue #310) adds:
+#   no-db                — excludes the JDBC/JPA/Flyway auto-configs so the JAR
+#                          boots with NO database; the CLI overrides below also
+#                          force no-migration + git routing (top of Spring's
+#                          property-source order, so they beat service-config).
 CANDIDATE_ADDITIONAL="file:$CANDIDATE_WORKTREE/components-registry-service-server/dev/"
 CANDIDATE_ADDITIONAL="$CANDIDATE_ADDITIONAL,file:$SERVICE_CONFIG_DIR/components-registry-service.yml"
 CANDIDATE_AUTOMIGRATE_ARG=""
 CANDIDATE_DEFAULTSOURCE_ARG=""
+CANDIDATE_DATABASE_ARG=""
 if [ "$CANDIDATE_MODE" = "git" ]; then
-  CANDIDATE_PROFILES="dev,dev-vcs-local,dev-db-automigrate,local"
+  CANDIDATE_PROFILES="dev,dev-vcs-local,no-db,local"
   CANDIDATE_AUTOMIGRATE_ARG="--components-registry.auto-migrate=false"
   CANDIDATE_DEFAULTSOURCE_ARG="--components-registry.default-source=git"
+  # Reinforce the no-db flag at the CLI (highest precedence) so a stray
+  # components-registry.database.enabled=true in service-config (loaded via
+  # additional-location, which outranks the bundled no-db profile YAML) cannot
+  # silently re-enable the DB beans. The autoconfigure-exclude still comes from
+  # the no-db profile; the Hikari/Flyway candidate.log guard below is the backstop.
+  CANDIDATE_DATABASE_ARG="--components-registry.database.enabled=false"
 else
   CANDIDATE_PROFILES="dev,dev-vcs-local,dev-db-automigrate,dev-db-only,local"
 fi
@@ -275,13 +294,14 @@ nohup "$JAVA_BIN" -jar "$CANDIDATE_JAR" \
   --auth-server.disabled=true \
   $CANDIDATE_AUTOMIGRATE_ARG \
   $CANDIDATE_DEFAULTSOURCE_ARG \
+  $CANDIDATE_DATABASE_ARG \
   >"$CANDIDATE_LOG" 2>&1 &
 CANDIDATE_PID=$!
 echo "    candidate started (PID=$CANDIDATE_PID, log=$CANDIDATE_LOG)"
 
 CANDIDATE_HEALTH_TIMEOUT_ITERS="${CANDIDATE_HEALTH_TIMEOUT_ITERS:-120}"
 # Auto-migrate import takes ~30-60s, plus startup ~20s, plus headroom for slow agents.
-echo -n "    waiting for candidate health on :$CANDIDATE_PORT (up to $((CANDIDATE_HEALTH_TIMEOUT_ITERS * 4 / 60)) min — includes auto-migrate)"
+echo -n "    waiting for candidate health on :$CANDIDATE_PORT (up to $((CANDIDATE_HEALTH_TIMEOUT_ITERS * 4 / 60)) min — db-mode also runs auto-migrate)"
 for i in $(seq 1 "$CANDIDATE_HEALTH_TIMEOUT_ITERS"); do
   if curl -fsS --max-time 2 "http://localhost:$CANDIDATE_PORT/actuator/health" >/dev/null 2>&1; then
     echo
@@ -335,6 +355,24 @@ elif [ "$CANDIDATE_DEFAULT_SOURCE" != "$CANDIDATE_MODE" ]; then
   exit 2
 else
   echo "    candidate routing: defaultSource=$CANDIDATE_DEFAULT_SOURCE ✓ (mode=$CANDIDATE_MODE)"
+fi
+
+# no-db guard (issue #310): git-mode MUST boot with NO database. The defaultSource
+# check above is necessary but NOT sufficient — default-source=git is forced via the
+# CLI, so it would still read 'git' even if a service-config override or a profile-
+# precedence regression let the JDBC/JPA/Flyway stack back in. The unambiguous signal
+# is the candidate's own log: a Hikari pool start or a Flyway run means a database was
+# wired. Assert their ABSENCE so id18 can never silently pass while running against a
+# DB — this is the acceptance evidence for the issue.
+if [ "$CANDIDATE_MODE" = "git" ]; then
+  if grep -Eq "HikariPool|HikariDataSource|Flyway Community|Migrating schema|DataSourceAutoConfiguration matched" "$CANDIDATE_LOG"; then
+    echo "ERROR: git-mode candidate started a database stack — Hikari/Flyway found in $CANDIDATE_LOG."
+    echo "       no-db mode must exclude DataSource/JPA/Flyway. Check that the 'no-db' profile is active"
+    echo "       and that no service-config override re-enabled spring.autoconfigure.exclude / database.enabled."
+    grep -En "HikariPool|HikariDataSource|Flyway Community|Migrating schema" "$CANDIDATE_LOG" | head -n 5 || true
+    exit 2
+  fi
+  echo "    no-db guard: no Hikari/Flyway in candidate.log ✓ (candidate booted with no database)"
 fi
 
 # ---------- Stage 4/4: compat ----------

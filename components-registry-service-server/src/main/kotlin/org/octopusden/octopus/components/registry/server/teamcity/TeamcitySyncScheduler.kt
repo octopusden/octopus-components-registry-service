@@ -1,6 +1,7 @@
 package org.octopusden.octopus.components.registry.server.teamcity
 
 import mu.KotlinLogging
+import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.service.MigrationConflictException
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.scheduling.annotation.EnableScheduling
@@ -35,6 +36,7 @@ import org.springframework.stereotype.Component
  * logged-and-swallowed so a transient TC outage / live migration does not
  * crash the bean and prevent next week's run.
  */
+@ConditionalOnDatabaseEnabled
 @Component
 @EnableScheduling
 @ConditionalOnProperty(prefix = "teamcity.sync", name = ["enabled"], havingValue = "true")

@@ -1,12 +1,14 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
 import org.octopusden.octopus.components.registry.server.config.ComponentsRegistryProperties
+import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.entity.ComponentSourceEntity
 import org.octopusden.octopus.components.registry.server.repository.ComponentSourceRepository
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
 import org.springframework.stereotype.Service
 import java.time.Instant
 
+@ConditionalOnDatabaseEnabled
 @Service
 class ComponentSourceRegistryImpl(
     private val componentSourceRepository: ComponentSourceRepository,

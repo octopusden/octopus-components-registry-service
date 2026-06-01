@@ -10,7 +10,7 @@ test against them — bypassing the TeamCity build + OKD deploy cycle.
 | Port | `4567` | `4568` |
 | Runtime | fat JAR (`java -jar`, built once via `bootJar`) | Gradle `bootRun` (incremental iteration) |
 | Mode | VCS (Git-DSL) | DB (Postgres + auto-migrate from VCS at startup; `default-source=db` so `DatabaseComponentRegistryResolver` serves the migrated components) |
-| Profiles | `dev,dev-vcs-local,local` | `dev,dev-vcs-local,dev-db-automigrate,dev-db-only,local` (default — `candidate.sh --mode=db`); fallback `dev,dev-vcs-local,dev-db-automigrate,local` (`--mode=vcs`, for V1-vs-V1 parity-debug) |
+| Profiles | `dev,dev-vcs-local,local` | `dev,dev-vcs-local,dev-db-automigrate,dev-db-only,local` (default — `candidate.sh --mode=db`); no-db `dev,dev-vcs-local,no-db,local` (`--mode=vcs` — no database, issue #310) |
 | Cloud Config | disabled (yamls mounted from local `service-config` clone) | not used (`dev` profile) |
 
 Both stands point at the same local Git-DSL clone (no remote git fetch) so the
@@ -149,10 +149,12 @@ serves component reads:
 | Mode | When | Profile added | Effect |
 |---|---|---|---|
 | `--mode=db` (**default**) | Validating cluster-fix PRs (#208/#209/#211/#212 family); measuring real schema-v2-vs-V1 deltas | `dev-db-only` — sets `components-registry.default-source=db` | `ComponentRoutingResolver` picks `DatabaseComponentRegistryResolver` for unmigrated components (post-automigrate everything is migrated, so DB serves all). |
-| `--mode=vcs` | V1-vs-V1 parity-debug only (e.g., comparing two test-builds of the V1 in-memory resolver) | (none added — falls back to global `default-source=git`) | V1 `EscrowConfigurationLoader` serves; schema-v2 code path is dormant. |
+| `--mode=vcs` | The deploy-without-migration no-op check (id18) and V1-vs-V1 parity-debug | `no-db` instead of `dev-db-automigrate` — excludes the JDBC/JPA/Flyway auto-configs and sets `default-source=git` (issue #310) | V1 `EscrowConfigurationLoader` serves; the candidate boots with **no database at all** (no Hikari/Flyway), so **no Postgres is needed**. |
 
 `verify.sh --restart` invokes `candidate.sh` without args → mode `db` by default.
-Use `--mode=vcs` only when you need to reproduce the V1-only behaviour.
+Use `--mode=vcs` for the no-migration / V1-only behaviour; it needs no Postgres
+(`postgres-up.sh` is for db-mode only). The TeamCity git-mode stand (`id18`,
+`CANDIDATE_MODE=git`) likewise starts no Postgres.
 
 ## Polluted-run guard
 

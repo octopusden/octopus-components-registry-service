@@ -1,0 +1,10 @@
+# Loaded by the Spring Cloud bootstrap context when the `no-db` profile is active
+# (mirrors bootstrap-test.yml). Without it, NoDbModeContextTest boots with
+# common+no-db but no bootstrap override, so ConfigServicePropertySourceLocator
+# tries to reach a Config Server and retries with exponential backoff — hanging
+# the test. The real no-db candidate (local stand / id18) activates `dev`, whose
+# suite already keeps Cloud Config off, so this is a test-only concern.
+spring:
+  cloud:
+    config:
+      enabled: false

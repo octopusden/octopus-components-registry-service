@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
+import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.entity.AuditLogEntity
 import org.octopusden.octopus.components.registry.server.entity.GitHistoryImportStateEntity
 import org.octopusden.octopus.components.registry.server.entity.GitHistoryImportStatus
@@ -16,6 +17,7 @@ import java.time.Instant
  * commit's rows are durable before the next commit is processed, which is
  * the v1 trade-off we accepted in lieu of full resume support.
  */
+@ConditionalOnDatabaseEnabled
 @Component
 class GitHistoryCommitWriter(
     private val auditLogRepository: AuditLogRepository,
