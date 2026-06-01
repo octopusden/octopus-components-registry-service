@@ -1465,7 +1465,7 @@ class ComponentManagementServiceImpl(
                 Specification { root, _, cb ->
                     val grp = root.join<ComponentEntity, ComponentGroupEntity>("componentGroup", JoinType.LEFT)
                     cb.or(
-                        cb.isNull(grp.get<Any>("id")),
+                        cb.isNull(grp.get<UUID>("id")),
                         cb.not(
                             cb.and(
                                 cb.isTrue(grp.get<Boolean>("isFake")),
