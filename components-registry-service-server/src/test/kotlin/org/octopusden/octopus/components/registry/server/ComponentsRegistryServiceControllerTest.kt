@@ -39,21 +39,26 @@ class ComponentsRegistryServiceControllerTest : MockMvcRegistryTestSupport() {
     }
 
     @Test
-    fun testUpdateCacheReturnsGone() {
-        // The legacy VCS refresh endpoint is retired in the DB-backed architecture.
-        // It must return 410 Gone and MUST NOT mutate cache state — otherwise callers
-        // that still hit it silently get a VCS refresh that masks the migration.
-        val statusBefore = getServiceStatus()
+    fun testUpdateCacheRefreshesWhenGitComponentsPresent() {
+        // Phase-aware contract: while any component is still served from Git
+        // (migration-status git > 0), updateCache is NOT retired — it re-reads
+        // the Git config and returns 200 with the refresh duration (ms), exactly
+        // as the pre-v3 endpoint did, so v1/v2/v3 behave like the old version.
+        // The 410-Gone retirement only applies once every component is migrated
+        // to the DB (git <= 0); see testUpdateCacheRetiredWhenFullyMigrated.
+        //
+        // In the (common,test) context all components are git-sourced (DB empty,
+        // no migration), so git > 0 here.
+        val body =
+            mvc
+                .perform(MockMvcRequestBuilders.put("/rest/api/2/components-registry/service/updateCache"))
+                .andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString
 
-        mvc
-            .perform(MockMvcRequestBuilders.put("/rest/api/2/components-registry/service/updateCache"))
-            .andExpect(status().isGone)
-
-        val statusAfter = getServiceStatus()
-        Assertions.assertEquals(
-            statusBefore.cacheUpdatedAt,
-            statusAfter.cacheUpdatedAt,
-            "410 Gone must not trigger a cache refresh",
+        Assertions.assertNotNull(
+            body.trim().toLongOrNull(),
+            "git-mode updateCache must return the numeric refresh duration (ms), got: '$body'",
         )
     }
 
