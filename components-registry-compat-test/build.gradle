@@ -338,19 +338,26 @@ tasks.register('compatibilityReporter') {
         // resolved at the operator level, not papered over.
         def envCategories = ['SNAPSHOT_MISMATCH', 'CANDIDATE_NOT_DB_MODE'] as Set
 
-        // Load known-deltas.json. Each entry suppresses matching diffs from the
+        // Load the known-deltas file. Each entry suppresses matching diffs from the
         // "Endpoint divergences" section into a separate "Suppressed (known deltas)"
         // section, with the entry's reason + regressionTest fields surfaced for review.
         // Spec: docs/registry/api-compat-deltas.md
-        def knownDeltasFile = file('src/test/resources/known-deltas.json')
+        //
+        // -Pcompat.known-deltas (or COMPAT_KNOWN_DELTAS) selects the per-mode file:
+        //   known-deltas-db.json  (default) — migrated candidate routed through the DB resolver
+        //   known-deltas-git.json — no-migration candidate served entirely from Git (intentionally empty)
+        def knownDeltasName = project.findProperty('compat.known-deltas') ?: System.getenv('COMPAT_KNOWN_DELTAS') ?: 'known-deltas-db.json'
+        def knownDeltasFile = file("src/test/resources/${knownDeltasName}")
         def knownDeltas = []
         if (knownDeltasFile.exists()) {
             try {
                 def parsed = slurper.parseText(knownDeltasFile.text)
                 knownDeltas = (parsed?.deltas as List) ?: []
             } catch (Exception e) {
-                logger.warn("[compat] failed to parse known-deltas.json: ${e.message}; treating as empty")
+                logger.warn("[compat] failed to parse ${knownDeltasName}: ${e.message}; treating as empty")
             }
+        } else {
+            logger.warn("[compat] known-deltas file not found: ${knownDeltasFile}; treating as empty")
         }
         def matchesDelta = { Map delta, Map record ->
             // endpoint + category are required match keys (endpoint already encodes the
