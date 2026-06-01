@@ -93,8 +93,17 @@ Phase 5 is split into three sub-stages, each independently revertible:
 - Deciding whether `/admin/migrate-history` itself stays or goes. Today it is useful (audit-log backfill is a one-time operation per cluster) but its dependency on the legacy DSL repo coincides with Stage 5C. If we want history backfill to remain available after the legacy repo is decommissioned, we'd need to materialize the import as a static fixture and ship it with the JAR. Tracked separately if needed.
 - Changing the v1/v2/v3 API contract. None of these stages touch it.
 
+## Phase-aware `updateCache` and the no-op compat gate
+
+Two pieces of runtime / CI behaviour reinforce this cutover and are recorded here so they are not mistaken for accidental:
+
+- **`PUT /service/updateCache` is phase-aware**, not unconditionally retired. While migration-status reports `git > 0`, git-sourced components are still served from the boot-time in-memory Git cache, so the endpoint re-reads the Git config and returns `200` with the refresh duration (ms) — exactly the pre-v3 behaviour — preserving the v1/v2/v3 contract throughout the hybrid period. It returns `410 Gone` only once `git <= 0` (every component migrated to the DB). The `410` is therefore the **end-state** of this ADR, reached when Stage 5A's bake-in confirms no component resolves via Git. Pinned by `ComponentsRegistryServiceControllerUpdateCacheTest`.
+
+- **`[1.8] Compat — Local Stand (no DB migration, git-mode)`** (TeamCity `id18`) runs the v1/v2/v3 compat suite against a candidate booted with **no** migration (`default-source=git`). Its known-deltas file (`known-deltas-git.json`) is intentionally empty: it asserts the **deploy-without-migration no-op invariant** — deploying v3 and not migrating must be byte-identical to 2.0.87 for v1/v2/v3. This guards the safety property the whole cutover relies on (deploying is safe *before* any per-component flip). See [api-compat-deltas.md](../api-compat-deltas.md) §"Per-mode known-deltas".
+
 ## References
 
 - PRD [§6 Phase 5](../prd.md#phase-5-cutover).
 - [ADR-007](007-dual-read-migration.md) — Component-Source Routing — current architecture being unwound.
 - [MIG-026](../requirements-migration.md) — `/admin/migrate-history` contract.
+- [api-compat-deltas.md](../api-compat-deltas.md) — per-mode known-deltas (db vs git) + the phase-aware `updateCache` contract.
