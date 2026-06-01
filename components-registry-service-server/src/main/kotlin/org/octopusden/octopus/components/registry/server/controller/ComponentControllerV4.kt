@@ -79,14 +79,11 @@ class ComponentControllerV4(
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
     fun getDistinctSystems(): List<String> = componentRepository.findDistinctSystemCodes()
 
-    // SYS-046 in-use option lists for the extended-search multi-select dropdowns:
-    // distinct client codes / BASE-row jira project keys / referenced parent
-    // component keys / owning group keys currently in use, each sorted ascending
-    // and null/blank-filtered. Parity with /meta/owners. `parent-component-names`
-    // lists only keys actually referenced as someone's parent (NOT the
-    // can-be-parent candidate set the editor picker uses via ?canBeParent=true);
-    // `group-keys` lists only groups that own at least one component, so no dead
-    // options.
+    // SYS-046 in-use option lists for the extended-search multi-select dropdowns
+    // (parity with /meta/owners), each sorted / distinct / null-blank-filtered.
+    // `parent-component-names` lists only keys actually referenced as a parent (NOT
+    // the can-be-parent set the editor picker uses via ?canBeParent=true);
+    // `group-keys` lists only groups that own ≥1 component, so no dead options.
     @GetMapping("/meta/client-codes")
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
     fun getDistinctClientCodes(): List<String> = componentRepository.findDistinctClientCodes()

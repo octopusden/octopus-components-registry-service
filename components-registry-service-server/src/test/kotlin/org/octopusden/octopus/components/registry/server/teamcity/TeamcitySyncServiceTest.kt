@@ -563,7 +563,7 @@ class TeamcitySyncServiceTest {
                 .sorted()
 
         override fun findDistinctParentComponentNames(): List<String> =
-            components.mapNotNull { it.parentComponent?.componentKey }.distinct().sorted()
+            components.mapNotNull { it.parentComponent?.componentKey }.filter { it.isNotBlank() }.distinct().sorted()
 
         override fun existsByParentComponentId(parentId: UUID): Boolean =
             components.any { it.parentComponent?.id == parentId }

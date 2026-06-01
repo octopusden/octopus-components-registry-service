@@ -144,27 +144,43 @@ class ListComponentsExtendedFiltersTest {
     }
 
     @Test
-    @DisplayName("SYS-045: ?distributionExplicit=true returns only explicit components")
+    @DisplayName("SYS-045: ?distributionExplicit= matches true/false exactly; =false excludes NULL rows")
     fun `SYS-045 distributionExplicit filter returns only explicit components`() {
         val yes = uniqueName("ext_de_true")
         val no = uniqueName("ext_de_false")
+        val unset = uniqueName("ext_de_unset")
         create(baseBody(yes, ""","distributionExplicit":true"""))
         create(baseBody(no, ""","distributionExplicit":false"""))
-        val n = names("distributionExplicit" to "true")
-        assert(n.contains(yes)) { "expected $yes in $n" }
-        assert(!n.contains(no)) { "did not expect $no in $n" }
+        create(baseBody(unset)) // distributionExplicit not set → NULL
+        val t = names("distributionExplicit" to "true")
+        assert(t.contains(yes)) { "expected $yes in $t" }
+        assert(!t.contains(no)) { "did not expect $no in $t" }
+        assert(!t.contains(unset)) { "did not expect NULL row $unset in $t" }
+        // =false matches only rows explicitly set false; the NULL row is excluded (mirrors solution).
+        val f = names("distributionExplicit" to "false")
+        assert(f.contains(no)) { "expected explicitly-false $no in $f" }
+        assert(!f.contains(yes)) { "did not expect true row $yes in $f" }
+        assert(!f.contains(unset)) { "NULL row $unset must be excluded by =false; got $f" }
     }
 
     @Test
-    @DisplayName("SYS-045: ?distributionExternal=true returns only external components")
+    @DisplayName("SYS-045: ?distributionExternal= matches true/false exactly; =false excludes NULL rows")
     fun `SYS-045 distributionExternal filter returns only external components`() {
         val yes = uniqueName("ext_dx_true")
         val no = uniqueName("ext_dx_false")
+        val unset = uniqueName("ext_dx_unset")
         create(baseBody(yes, ""","distributionExternal":true"""))
         create(baseBody(no, ""","distributionExternal":false"""))
-        val n = names("distributionExternal" to "true")
-        assert(n.contains(yes)) { "expected $yes in $n" }
-        assert(!n.contains(no)) { "did not expect $no in $n" }
+        create(baseBody(unset)) // distributionExternal not set → NULL
+        val t = names("distributionExternal" to "true")
+        assert(t.contains(yes)) { "expected $yes in $t" }
+        assert(!t.contains(no)) { "did not expect $no in $t" }
+        assert(!t.contains(unset)) { "did not expect NULL row $unset in $t" }
+        // =false matches only rows explicitly set false; the NULL row is excluded (mirrors solution).
+        val f = names("distributionExternal" to "false")
+        assert(f.contains(no)) { "expected explicitly-false $no in $f" }
+        assert(!f.contains(yes)) { "did not expect true row $yes in $f" }
+        assert(!f.contains(unset)) { "NULL row $unset must be excluded by =false; got $f" }
     }
 
     @Test
@@ -172,8 +188,10 @@ class ListComponentsExtendedFiltersTest {
     fun `SYS-046 jiraProjectKey exact multi-value filter`() {
         val match = uniqueName("ext_jpk_match")
         val other = uniqueName("ext_jpk_other")
+        val third = uniqueName("ext_jpk_third")
         create(baseBody(match, build = """"build":{"buildSystem":"MAVEN"},"jira":{"projectKey":"ZZJIRA"}"""))
         create(baseBody(other, build = """"build":{"buildSystem":"MAVEN"},"jira":{"projectKey":"AAOTHER"}"""))
+        create(baseBody(third, build = """"build":{"buildSystem":"MAVEN"},"jira":{"projectKey":"MMTHIRD"}"""))
         // Exact (case-sensitive): a lowercase value no longer matches.
         assert(!names("jiraProjectKey" to "zzjira").contains(match)) {
             "lowercase jiraProjectKey must not match after LIKE→IN"
@@ -181,9 +199,10 @@ class ListComponentsExtendedFiltersTest {
         val exact = names("jiraProjectKey" to "ZZJIRA")
         assert(exact.contains(match)) { "expected $match in $exact" }
         assert(!exact.contains(other)) { "did not expect $other in $exact" }
-        // Multi-value OR returns both.
+        // Multi-value OR returns both listed, excludes the third.
         val multi = names("jiraProjectKey" to "ZZJIRA,AAOTHER")
         assert(multi.contains(match) && multi.contains(other)) { "expected both in $multi" }
+        assert(!multi.contains(third)) { "did not expect $third in $multi" }
     }
 
     @Test

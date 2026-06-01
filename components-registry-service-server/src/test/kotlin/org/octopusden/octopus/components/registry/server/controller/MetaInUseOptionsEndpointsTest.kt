@@ -150,6 +150,24 @@ class MetaInUseOptionsEndpointsTest {
     }
 
     @Test
+    @DisplayName("SYS-046: the four in-use meta endpoints always return 200 + a JSON array (never 404)")
+    fun `SYS-046 meta endpoints always return 200 array`() {
+        // AC#7 shape contract: 200 + array regardless of DB state — the Portal's
+        // lazy-activation guard is for the transitional pre-deploy window only.
+        listOf(
+            "/rest/api/4/components/meta/client-codes",
+            "/rest/api/4/components/meta/jira-project-keys",
+            "/rest/api/4/components/meta/parent-component-names",
+            "/rest/api/4/components/meta/group-keys",
+        ).forEach { path ->
+            mvc
+                .perform(get(path).with(viewerJwt()))
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$").isArray)
+        }
+    }
+
+    @Test
     @DisplayName("SYS-046: GET /meta/group-keys lists only group keys with at least one member")
     fun `SYS-046 meta group-keys lists only groups with members`() {
         val withMember = "org.example.${uniqueName("gk_with")}"
