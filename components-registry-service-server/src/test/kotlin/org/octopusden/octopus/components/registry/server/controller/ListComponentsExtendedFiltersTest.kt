@@ -194,6 +194,61 @@ class ListComponentsExtendedFiltersTest {
     }
 
     @Test
+    @DisplayName(
+        "compat: a FAKE aggregator self-linked to its own fake group is hidden from the list; " +
+            "its members, ordinary components, and a REAL self-linked aggregator are not",
+    )
+    fun fakeAggregatorSelfLinkedGroupExcludedFromList() {
+        // Reproduces the compat-fix marker in isolation: the importer gives a FAKE aggregator a
+        // ComponentEntity row whose componentGroup is its OWN fake group, i.e.
+        // group.isFake == true AND group.groupKey == componentKey. buildSpecification must hide
+        // exactly that row from the v4 list — and nothing else. Seeded via the repos (groups are
+        // migration-owned; the API never assigns one — R1), so this stays a focused test that
+        // does not depend on the global Groovy fixtures.
+        val aggKey = uniqueName("fakeagg")
+        val memberKey = uniqueName("fakeagg_member")
+        val ordinary = uniqueName("fakeagg_ordinary")
+        val realAggKey = uniqueName("realagg")
+        create(baseBody(aggKey)) // the FAKE aggregator stub: componentKey == its fake group's key
+        create(baseBody(memberKey)) // a real member of that fake group
+        create(baseBody(ordinary)) // unrelated, group-less control
+        create(baseBody(realAggKey)) // a REAL aggregator self-linked to its own (non-fake) group
+
+        // Count BEFORE any group linking: all four are ordinary, listed components.
+        val totalBefore = page()["totalElements"].asLong()
+
+        // is_fake=true group keyed by the stub's OWN componentKey → the self-link exclusion marker.
+        val fakeGroup = componentGroupRepository.save(ComponentGroupEntity(groupKey = aggKey, isFake = true))
+        val stub = componentRepository.findByComponentKey(aggKey)!!
+        stub.componentGroup = fakeGroup
+        componentRepository.save(stub)
+        val member = componentRepository.findByComponentKey(memberKey)!!
+        member.componentGroup = fakeGroup
+        componentRepository.save(member)
+
+        // A REAL aggregator is ALSO self-linked (group.groupKey == componentKey) but is_fake=false,
+        // so it must NOT be excluded — proving the predicate is gated on is_fake, not the self-link.
+        val realGroup = componentGroupRepository.save(ComponentGroupEntity(groupKey = realAggKey, isFake = false))
+        val realStub = componentRepository.findByComponentKey(realAggKey)!!
+        realStub.componentGroup = realGroup
+        componentRepository.save(realStub)
+
+        val n = names()
+        assert(!n.contains(aggKey)) { "FAKE aggregator stub $aggKey must be excluded from the v4 list; got $n" }
+        assert(n.contains(memberKey)) { "member $memberKey (not the group owner) must remain in the list; got $n" }
+        assert(n.contains(ordinary)) { "ordinary group-less $ordinary must remain in the list; got $n" }
+        assert(n.contains(realAggKey)) { "REAL self-linked aggregator $realAggKey must remain (is_fake=false); got $n" }
+
+        // The COUNT query must also drop exactly the one fake-group owner: the LEFT join must
+        // not inflate totalElements, and the exclusion must apply to the count, not just the page.
+        val totalAfter = page()["totalElements"].asLong()
+        assert(totalAfter == totalBefore - 1) {
+            "v4 list count must fall by exactly 1 (only the fake aggregator owner drops out); " +
+                "before=$totalBefore after=$totalAfter"
+        }
+    }
+
+    @Test
     @DisplayName("?vcsPath= matches a BASE VCS entry; a multi-entry component is counted ONCE (distinct)")
     fun vcsPathFilterAndPaginationDistinct() {
         val multi = uniqueName("ext_vcs_multi")
