@@ -104,6 +104,23 @@ CANDIDATE_PORT="${CANDIDATE_PORT:-4568}"
 BASELINE_LOG="${BASELINE_LOG:-/tmp/crs-baseline-tc.log}"
 CANDIDATE_LOG="${CANDIDATE_LOG:-/tmp/crs-candidate-tc.log}"
 
+# ---------- candidate mode: db (migrated) vs git (no migration) ----------
+# CANDIDATE_MODE selects how the candidate stand is booted and validated:
+#   db  (default) — dev-db-automigrate + dev-db-only: DSL→DB migration at
+#                   startup, default-source=db. Compat asserts the schema-v2
+#                   DB resolver reproduces the v1/v2/v3 contract (id17 / [1.7]).
+#   git           — dev-db-automigrate only (DB present + Flyway schema so the
+#                   JAR boots), plus CLI --auto-migrate=false --default-source=git.
+#                   NO migration runs, component_source stays empty, every
+#                   component is served from the Git resolver — the same code
+#                   path as the 2.0.87 baseline. Compat asserts that deploying
+#                   v3 WITHOUT migrating is a no-op for v1/v2/v3 (id18 / [1.8]).
+CANDIDATE_MODE="${CANDIDATE_MODE:-db}"
+case "$CANDIDATE_MODE" in
+  db|git) ;;
+  *) echo "ERROR: CANDIDATE_MODE=$CANDIDATE_MODE is invalid (expected 'db' or 'git')"; exit 2 ;;
+esac
+
 cleanup() {
   echo ">>> teardown"
   "$SCRIPT_DIR/stop-all.sh" >/dev/null 2>&1 || true
@@ -144,6 +161,7 @@ echo "  service-cfg rev:   $SERVICE_CONFIG_REV"
 echo "  trace-data:        $TRACE_DATA_DIR"
 echo "  trace-data rev:    $TRACE_DATA_REV"
 echo "  ports:             baseline=$BASELINE_PORT  candidate=$CANDIDATE_PORT"
+echo "  candidate mode:    $CANDIDATE_MODE  (db=migrated/default-source=db, git=no-migration/default-source=git)"
 echo "  compat.full:       ${COMPAT_FULL:-false}    parallelism=${COMPAT_PARALLELISM:-8}"
 echo "============================================================"
 
@@ -214,19 +232,36 @@ if ! curl -fsS --max-time 2 "http://localhost:$BASELINE_PORT/actuator/health" >/
 fi
 
 # ---------- Stage 3/4: candidate JAR ----------
-echo ">>> Stage 3/4: candidate JAR (schema-v2 DB-mode + auto-migrate)"
+if [ "$CANDIDATE_MODE" = "git" ]; then
+  echo ">>> Stage 3/4: candidate JAR (git-mode — no migration, default-source=git)"
+else
+  echo ">>> Stage 3/4: candidate JAR (schema-v2 DB-mode + auto-migrate)"
+fi
 CANDIDATE_WORK_DIR="${CANDIDATE_WORK_DIR:-/tmp/crs-candidate-tc-work}"
-# Candidate's profile suite mirrors candidate.sh --mode=db:
+# Candidate's profile suite. Common base:
 #   dev                  — base dev overlay
 #   dev-vcs-local        — file:// VCS access (no remote bitbucket pull)
-#   dev-db-automigrate   — run DSL→DB migration at startup
+#   dev-db-automigrate   — datasource + Flyway schema (the JAR needs a live DB to
+#                          boot); in db-mode it ALSO runs the DSL→DB migration
+#   local                — local stand identity marker
+# db-mode adds:
 #   dev-db-only          — components-registry.default-source=db (schema-v2 code
 #                          path active for unmigrated-component fallback)
-#   local                — local stand identity marker
+# git-mode instead forces no-migration + git routing via the CLI overrides below
+# (top of Spring's property-source order, so they also beat service-config).
 CANDIDATE_ADDITIONAL="file:$CANDIDATE_WORKTREE/components-registry-service-server/dev/"
 CANDIDATE_ADDITIONAL="$CANDIDATE_ADDITIONAL,file:$SERVICE_CONFIG_DIR/components-registry-service.yml"
-CANDIDATE_PROFILES="dev,dev-vcs-local,dev-db-automigrate,dev-db-only,local"
+CANDIDATE_AUTOMIGRATE_ARG=""
+CANDIDATE_DEFAULTSOURCE_ARG=""
+if [ "$CANDIDATE_MODE" = "git" ]; then
+  CANDIDATE_PROFILES="dev,dev-vcs-local,dev-db-automigrate,local"
+  CANDIDATE_AUTOMIGRATE_ARG="--components-registry.auto-migrate=false"
+  CANDIDATE_DEFAULTSOURCE_ARG="--components-registry.default-source=git"
+else
+  CANDIDATE_PROFILES="dev,dev-vcs-local,dev-db-automigrate,dev-db-only,local"
+fi
 
+# shellcheck disable=SC2086  # CANDIDATE_*_ARG are single no-space tokens or empty
 nohup "$JAVA_BIN" -jar "$CANDIDATE_JAR" \
   --server.port="$CANDIDATE_PORT" \
   --spring.profiles.active="$CANDIDATE_PROFILES" \
@@ -238,6 +273,8 @@ nohup "$JAVA_BIN" -jar "$CANDIDATE_JAR" \
   --components-registry.version-name.service=serviceCards \
   --components-registry.version-name.minor=minorCards \
   --auth-server.disabled=true \
+  $CANDIDATE_AUTOMIGRATE_ARG \
+  $CANDIDATE_DEFAULTSOURCE_ARG \
   >"$CANDIDATE_LOG" 2>&1 &
 CANDIDATE_PID=$!
 echo "    candidate started (PID=$CANDIDATE_PID, log=$CANDIDATE_LOG)"
@@ -268,25 +305,36 @@ fi
 source "$SCRIPT_DIR/verify.sh"
 # `check_migration_health` exits 4 on its own (failed > 0 and ALLOW_PARTIAL=0).
 ALLOW_PARTIAL="${ALLOW_PARTIAL:-0}"
-check_migration_health "$CANDIDATE_LOG"
+if [ "$CANDIDATE_MODE" = "git" ]; then
+  echo "    git-mode: skipping migration-health check (auto-migrate is disabled — no import runs)"
+else
+  check_migration_health "$CANDIDATE_LOG"
+fi
 
-# Hard assert candidate routing mode (Stage-2 review NIT): if `dev-db-only.yml`
-# is ever dropped and the JVM silently falls back to `default-source=git`,
-# the compat run would tolerate it via the env-warning record but exit 0
-# anyway when no other diffs surface. Fail-fast here so a misconfiguration
-# is impossible to miss.
+# Hard assert candidate routing mode (Stage-2 review NIT), now mode-aware:
+#   db-mode  expects defaultSource=db — if `dev-db-only` is ever dropped and the
+#            JVM silently falls back to git, compat would measure V1-vs-V1.
+#   git-mode expects defaultSource=git — if the CLI override or a stray
+#            default-source=db (e.g. from service-config) flipped it to db, the
+#            run would no longer exercise the deploy-without-migration path.
+# Either mismatch is a misconfiguration; fail-fast so it is impossible to miss.
 CANDIDATE_STATUS_URL="http://localhost:$CANDIDATE_PORT/rest/api/2/components-registry/service/status"
 CANDIDATE_DEFAULT_SOURCE=$(curl -fsS --max-time 5 "$CANDIDATE_STATUS_URL" | sed -nE 's/.*"defaultSource":"([^"]*)".*/\1/p' || true)
 if [ -z "$CANDIDATE_DEFAULT_SOURCE" ]; then
   echo "WARN: could not read candidate /service/status.defaultSource (older candidate JVM that does not expose the field?)"
   echo "      Proceeding — compat-test's L3 preflight (SnapshotPreconditionTest) will catch a mismatch."
-elif [ "$CANDIDATE_DEFAULT_SOURCE" != "db" ]; then
-  echo "ERROR: candidate reports defaultSource=$CANDIDATE_DEFAULT_SOURCE — expected 'db'."
-  echo "       The schema-v2 DB resolver is dormant; compat would measure V1-vs-V1, not schema-v2-vs-V1."
-  echo "       Check that the 'dev-db-only' profile is active and that application-dev-db-only.yml is on the classpath."
+elif [ "$CANDIDATE_DEFAULT_SOURCE" != "$CANDIDATE_MODE" ]; then
+  echo "ERROR: candidate reports defaultSource=$CANDIDATE_DEFAULT_SOURCE — expected '$CANDIDATE_MODE' (CANDIDATE_MODE=$CANDIDATE_MODE)."
+  if [ "$CANDIDATE_MODE" = "git" ]; then
+    echo "       Expected git routing (no-migration path). Check that --components-registry.default-source=git took effect"
+    echo "       and that no profile/service-config override forced default-source=db."
+  else
+    echo "       The schema-v2 DB resolver is dormant; compat would measure V1-vs-V1, not schema-v2-vs-V1."
+    echo "       Check that the 'dev-db-only' profile is active and that application-dev-db-only.yml is on the classpath."
+  fi
   exit 2
 else
-  echo "    candidate routing: defaultSource=db ✓"
+  echo "    candidate routing: defaultSource=$CANDIDATE_DEFAULT_SOURCE ✓ (mode=$CANDIDATE_MODE)"
 fi
 
 # ---------- Stage 4/4: compat ----------
@@ -310,11 +358,19 @@ GRADLE_PARALLELISM_ARG=""
 if [ -n "${COMPAT_PARALLELISM:-}" ]; then
   GRADLE_PARALLELISM_ARG="-Pcompat.parallelism=${COMPAT_PARALLELISM}"
 fi
+# git-mode: select the (empty) git-mode known-deltas file and allow the
+# intentionally non-db candidate so the CANDIDATE_NOT_DB_MODE env-warning does
+# not fail the build. db-mode uses the defaults (known-deltas-db.json).
+GRADLE_MODE_ARGS=""
+if [ "$CANDIDATE_MODE" = "git" ]; then
+  GRADLE_MODE_ARGS="-Pcompat.known-deltas=known-deltas-git.json -Pcompat.allow-non-db-candidate=true"
+fi
 #
 # Run as a foreground child (NOT `exec`) so the EXIT trap fires when compat
 # finishes — Stage-2 review found that `exec` was replacing the shell process
 # and silently discarding the trap, leaking the baseline/candidate JVMs and
 # the postgres container between TC runs on a persistent agent.
-"$SCRIPT_DIR/compat.sh" $GRADLE_PARALLELISM_ARG "$@"
+# shellcheck disable=SC2086  # GRADLE_*_ARG(S) are space-separated -P tokens or empty
+"$SCRIPT_DIR/compat.sh" $GRADLE_PARALLELISM_ARG $GRADLE_MODE_ARGS "$@"
 COMPAT_EXIT=$?
 exit $COMPAT_EXIT
