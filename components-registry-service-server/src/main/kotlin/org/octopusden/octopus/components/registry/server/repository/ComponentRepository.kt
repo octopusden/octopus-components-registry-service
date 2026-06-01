@@ -84,7 +84,7 @@ interface ComponentRepository :
      */
     @Query(
         "SELECT DISTINCT c.parentComponent.componentKey FROM ComponentEntity c " +
-            "WHERE c.parentComponent IS NOT NULL " +
+            "WHERE c.parentComponent IS NOT NULL AND TRIM(c.parentComponent.componentKey) <> '' " +
             "ORDER BY c.parentComponent.componentKey",
     )
     fun findDistinctParentComponentNames(): List<String>

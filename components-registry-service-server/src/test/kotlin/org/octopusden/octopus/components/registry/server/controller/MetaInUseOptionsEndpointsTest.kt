@@ -187,4 +187,40 @@ class MetaInUseOptionsEndpointsTest {
         assert(!all.contains(memberless)) { "memberless group $memberless must NOT appear; got $all" }
         assert(all.size == all.toSet().size) { "expected no duplicates; got $all" }
     }
+
+    @Test
+    @DisplayName("SYS-046: /meta/group-keys excludes a fake self-owned aggregator whose only member is its own stub")
+    fun `SYS-046 meta group-keys excludes fake self-only aggregator`() {
+        // A FAKE aggregator self-linked to its own group (group.isFake=true,
+        // group.groupKey == stub.componentKey) is always hidden from the v4 list
+        // (buildSpecification). With NO real members, ?groupKey=<key> returns an empty
+        // page, so /meta/group-keys must NOT advertise it (no dead option). A fake group
+        // WITH a real (non-stub) child IS a valid filter target and must still appear.
+        val selfOnlyKey = uniqueName("gk_fakeself")
+        create(baseBody(selfOnlyKey)) // the stub; componentKey == its fake group's key
+        val selfOnlyGroup = componentGroupRepository.save(ComponentGroupEntity(groupKey = selfOnlyKey, isFake = true))
+        val stub = componentRepository.findByComponentKey(selfOnlyKey)!!
+        stub.componentGroup = selfOnlyGroup
+        componentRepository.save(stub)
+
+        val withChildKey = uniqueName("gk_fakechild")
+        create(baseBody(withChildKey)) // the stub
+        val realChild = uniqueName("gk_fakechild_member")
+        create(baseBody(realChild))
+        val withChildGroup = componentGroupRepository.save(ComponentGroupEntity(groupKey = withChildKey, isFake = true))
+        val withChildStub = componentRepository.findByComponentKey(withChildKey)!!
+        withChildStub.componentGroup = withChildGroup
+        componentRepository.save(withChildStub)
+        val child = componentRepository.findByComponentKey(realChild)!!
+        child.componentGroup = withChildGroup
+        componentRepository.save(child)
+
+        val all = metaList("/rest/api/4/components/meta/group-keys")
+        assert(!all.contains(selfOnlyKey)) {
+            "fake self-only aggregator $selfOnlyKey must NOT appear (its only member is the hidden stub); got $all"
+        }
+        assert(all.contains(withChildKey)) {
+            "fake aggregator $withChildKey with a real child must still appear; got $all"
+        }
+    }
 }

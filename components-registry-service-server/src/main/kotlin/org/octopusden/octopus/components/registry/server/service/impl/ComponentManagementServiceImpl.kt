@@ -1583,8 +1583,11 @@ class ComponentManagementServiceImpl(
                     },
                 )
         }
-        // ── Extended-search filters (single-value; null/blank → no filter) ──
-        // Scalar columns on `components` — no JOIN, no distinct.
+        // ── Extended-search filters ──
+        // clientCode / jiraProjectKey / parentComponentName / groupKey are multi-value
+        // (exact OR `IN`, SYS-046); solution / jiraTechnical / distributionExplicit /
+        // distributionExternal / vcsPath / productionBranch stay single-value.
+        // A null/empty list (or null scalar) means "no filter".
         // SYS-046: multi-value exact OR on the scalar `components.client_code`.
         // Scalar column, so no JOIN and no distinct. The controller's
         // normalisation guarantees a non-empty, blank-free, duplicate-free list.
