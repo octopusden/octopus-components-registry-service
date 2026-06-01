@@ -134,6 +134,30 @@ class ListComponentsExtendedFiltersTest {
     }
 
     @Test
+    @DisplayName("SYS-045: ?distributionExplicit=true returns only explicit components")
+    fun `SYS-045 distributionExplicit filter returns only explicit components`() {
+        val yes = uniqueName("ext_de_true")
+        val no = uniqueName("ext_de_false")
+        create(baseBody(yes, ""","distributionExplicit":true"""))
+        create(baseBody(no, ""","distributionExplicit":false"""))
+        val n = names("distributionExplicit" to "true")
+        assert(n.contains(yes)) { "expected $yes in $n" }
+        assert(!n.contains(no)) { "did not expect $no in $n" }
+    }
+
+    @Test
+    @DisplayName("SYS-045: ?distributionExternal=true returns only external components")
+    fun `SYS-045 distributionExternal filter returns only external components`() {
+        val yes = uniqueName("ext_dx_true")
+        val no = uniqueName("ext_dx_false")
+        create(baseBody(yes, ""","distributionExternal":true"""))
+        create(baseBody(no, ""","distributionExternal":false"""))
+        val n = names("distributionExternal" to "true")
+        assert(n.contains(yes)) { "expected $yes in $n" }
+        assert(!n.contains(no)) { "did not expect $no in $n" }
+    }
+
+    @Test
     @DisplayName("?jiraProjectKey= matches on the BASE row's jira project key")
     fun jiraProjectKeyFilter() {
         val match = uniqueName("ext_jpk_match")
