@@ -16,10 +16,13 @@ import org.springframework.http.HttpStatus
  * Phase-aware `updateCache` branch coverage — pure Mockito, no Spring context,
  * no global fixtures (per `feedback_regression_guards_avoid_global_fixtures`).
  *
- * - `git > 0`  → 200 + the refresh duration; re-reads the Git config (matches 2.0.87).
- * - `git == 0` → 410 Gone (endpoint retired once the cutover to DB is complete).
- * - `git < 0`  → 410 Gone too: `git` is `gitResolver.size - countBySource("db")`,
- *   so stale/extra `source='db'` rows can push it negative.
+ * Retirement (410) is gated on `status.total > 0 && status.git == 0L`:
+ * - `git > 0` (total > 0)  → 200 + the refresh duration; re-reads the Git config (matches 2.0.87).
+ * - `git == 0` (total > 0) → 410 Gone (fully migrated — cutover to DB complete).
+ * - `git < 0`  → 200 (not 410): `git = gitResolver.size - countBySource("db")`, so stale/extra
+ *   `source='db'` rows can push it negative while git-served components may still exist.
+ * - `total == 0` → 200 (not 410): the Git resolver returned empty or errored — indeterminate;
+ *   attempt the re-read (the recovery action), not a false retirement.
  * - COMPONENTS migration active → 409, without re-reading or even querying status.
  */
 class ComponentsRegistryServiceControllerUpdateCacheTest {
@@ -54,13 +57,31 @@ class ComponentsRegistryServiceControllerUpdateCacheTest {
     }
 
     @Test
-    fun `negative git from stale db rows still retires the endpoint with 410`() {
+    fun `negative git from stale db rows attempts refresh, not 410`() {
+        // total > 0 (the Git resolver parsed components) but git < 0 from stale/extra
+        // source='db' rows: git-served components may still exist, so re-read rather
+        // than falsely retire.
         doReturn(MigrationStatus(git = -2, db = 7, total = 5)).`when`(importService).getMigrationStatus()
+        doReturn(7L).`when`(componentsRegistryService).updateConfigCache()
 
         val response = controller.updateConfigCache()
 
-        assertEquals(HttpStatus.GONE, response.statusCode)
-        verify(componentsRegistryService, never()).updateConfigCache()
+        assertEquals(HttpStatus.OK, response.statusCode)
+        assertEquals(7L, response.body)
+        verify(componentsRegistryService).updateConfigCache()
+    }
+
+    @Test
+    fun `indeterminate git status (total zero) attempts refresh, not 410`() {
+        // total == 0 means the Git resolver returned empty or failed to load — do NOT
+        // falsely retire (410), since the re-read is exactly the recovery action.
+        doReturn(MigrationStatus(git = -3, db = 3, total = 0)).`when`(importService).getMigrationStatus()
+        doReturn(11L).`when`(componentsRegistryService).updateConfigCache()
+
+        val response = controller.updateConfigCache()
+
+        assertEquals(HttpStatus.OK, response.statusCode)
+        verify(componentsRegistryService).updateConfigCache()
     }
 
     @Test

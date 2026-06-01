@@ -15,7 +15,7 @@ The compat-test exercises **API contracts**:
 - `GET /rest/api/2/common/jira-component-version-ranges`
 - `POST /rest/api/2/components/find-by-artifact` and the batch detailed-versions endpoint
 - `GET /rest/api/2/components-registry/service/ping` — plain-text behavioral contract
-- `PUT /rest/api/2/components-registry/service/updateCache` — **phase-aware** contract: returns **200** + the Git-refresh duration (ms) while any component is still served from Git (migration-status `git > 0`), and **410 Gone** only once every component is migrated to the DB (`git <= 0`). A fully-migrated db-mode candidate returns 410 → suppressed via `known-deltas-db.json`; a git-mode (no-migration) candidate returns 200 and matches baseline → no delta. See "Per-mode known-deltas" below.
+- `PUT /rest/api/2/components-registry/service/updateCache` — **phase-aware** contract: returns **200** + the Git-refresh duration (ms) while any component is still served from Git (migration-status `git > 0`), and **410 Gone** only once fully migrated to the DB (`git == 0`). A fully-migrated db-mode candidate returns 410 → suppressed via `known-deltas-db.json`; a git-mode (no-migration) candidate returns 200 and matches baseline → no delta. See "Per-mode known-deltas" below.
 
 **Operational metadata endpoints are explicitly excluded** from the compat surface:
 
@@ -107,7 +107,7 @@ When a diff appears that wasn't there before, classify it as one of:
 ### 1. Intentional v3 change
 
 Example: `C.1` — `PUT /service/updateCache` returns `410 Gone` on a **fully-migrated**
-v3 candidate (`git<=0`), where it was `200` on v2. This is the end-state of the
+v3 candidate (fully migrated, `git==0`), where it was `200` on v2. This is the end-state of the
 phase-aware endpoint: once every component lives in the DB, a manual Git re-read is
 meaningless. (Note: this is a db-mode-only delta — a git-mode/no-migration candidate
 still returns 200, matching v2, so it is NOT a delta there.)

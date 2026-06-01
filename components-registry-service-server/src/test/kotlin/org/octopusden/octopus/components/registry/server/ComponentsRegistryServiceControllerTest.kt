@@ -44,9 +44,9 @@ class ComponentsRegistryServiceControllerTest : MockMvcRegistryTestSupport() {
         // (migration-status git > 0), updateCache is NOT retired — it re-reads
         // the Git config and returns 200 with the refresh duration (ms), exactly
         // as the pre-v3 endpoint did, so v1/v2/v3 behave like the old version.
-        // The 410-Gone retirement only applies once every component is migrated
-        // to the DB (git <= 0); that branch is covered by the unit test
-        // ComponentsRegistryServiceControllerUpdateCacheTest.
+        // The 410-Gone retirement only applies once fully migrated to the DB
+        // (git == 0 with components parsed); that branch is covered by the unit
+        // test ComponentsRegistryServiceControllerUpdateCacheTest.
         //
         // In the (common,test) context all components are git-sourced (DB empty,
         // no migration), so git > 0 here.
