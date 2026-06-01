@@ -1592,6 +1592,15 @@ class ComponentManagementServiceImpl(
         filter.solution?.let { v ->
             spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<Boolean>("solution"), v) })
         }
+        // SYS-045: scalar boolean distribution filters, mirroring `solution`. Both columns
+        // are nullable, so `=false` matches only rows explicitly set false (NULL rows are
+        // excluded). No JOIN, no distinct.
+        filter.distributionExplicit?.let { v ->
+            spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<Boolean>("distributionExplicit"), v) })
+        }
+        filter.distributionExternal?.let { v ->
+            spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<Boolean>("distributionExternal"), v) })
+        }
         // ManyToOne joins — a component has at most one parent / one group, so no
         // row multiplication and no distinct needed.
         filter.parentComponentName?.takeIf { it.isNotBlank() }?.let { v ->
