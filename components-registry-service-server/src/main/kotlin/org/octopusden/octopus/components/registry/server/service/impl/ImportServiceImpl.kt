@@ -175,37 +175,17 @@ class ImportServiceImpl(
                 // R1 §4.3/§6.3 — group membership is driven by the DSL `components { }`
                 // aggregator membership (fullConfig.aggregatorSubComponents), NOT the flat
                 // parentComponent field. `name` is an aggregator iff it owns a components{} block.
-                val firstCfgForCheck = module.moduleConfigurations.firstOrNull()
+                // NOTE: a FAKE aggregator STILL gets a ComponentEntity row (so the v1–v3
+                // resolver keeps serving it = compat parity with V1); it is only excluded from
+                // the v4 regular-components list (ComponentManagementServiceImpl.buildSpecification).
                 val subComponentsOfThis: Set<String> = fullConfig.aggregatorSubComponents[name] ?: emptySet()
                 val isAggregator = subComponentsOfThis.isNotEmpty()
-
-                // (a) FAKE aggregator (owns components{} AND stub) → group-only, no ComponentEntity row.
-                if (isAggregator && firstCfgForCheck != null && isFakeAggregator(firstCfgForCheck)) {
-                    sourceRegistry.setComponentSource(name, "db")
-                    val fakePass3Failures =
-                        linkAggregatorGroups(fullConfig.escrowModules, mapOf(name to subComponentsOfThis))
-                    if (fakePass3Failures.isNotEmpty()) {
-                        val msg = fakePass3Failures.joinToString(" | ") { "${it.first}=${it.second}" }
-                        return MigrationResult(
-                            componentName = name,
-                            success = false,
-                            dryRun = false,
-                            message = "§6.3 Pass 3 group-linking failed: ${msg.take(280)}",
-                        )
-                    }
-                    return MigrationResult(
-                        componentName = name,
-                        success = true,
-                        dryRun = false,
-                        message = "Skipped insert (FAKE aggregator: group-only per schema-spec §4.3); group upserted",
-                    )
-                }
 
                 importModule(name, module.moduleConfigurations)
                 sourceRegistry.setComponentSource(name, "db")
 
                 // §6.3 single-path grouping, keyed off `components { }` membership:
-                //   (b) REAL aggregator (owns components{}, not fake) → create its group,
+                //   (b) aggregator (owns components{}, fake OR real) → create its group,
                 //       self-link, and link any children already in DB;
                 //   (c) sub-component of some aggregator → link it to that aggregator's group.
                 val pass3Input: Map<String, Set<String>> =
@@ -316,11 +296,13 @@ class ImportServiceImpl(
                     }
                 }.toMap()
 
-            // schema-spec §4.3: FAKE aggregators are group-only — no ComponentEntity row. R1:
-            // an aggregator is a component that OWNS a `components { }` block (a key in
+            // R1: an aggregator is a component that OWNS a `components { }` block (a key in
             // `aggregatorSubComponents`), NOT merely a flat-`parentComponent` target. Among
-            // aggregators, the FAKE ones (stub VCS / artifactId) are skipped in Pass 1; Pass 3
-            // still creates their ComponentGroupEntity.
+            // aggregators the FAKE ones (stub VCS / artifactId) used to be group-only (no
+            // ComponentEntity row); they now get a normal row too — so the v1–v3 resolver keeps
+            // serving them (compat parity with V1) — and are excluded from the v4 list instead
+            // (ComponentManagementServiceImpl.buildSpecification). This set is kept only for the
+            // derivation-summary log below.
             val fakeAggregatorKeys: Set<String> =
                 fullConfig.aggregatorSubComponents.keys.filter { parentKey ->
                     val firstConfig = allModules[parentKey]?.moduleConfigurations?.firstOrNull()
@@ -365,8 +347,8 @@ class ImportServiceImpl(
             // flush boundary aligns with one full JDBC batch.
             //
             // The modulus below is on `total`, which is incremented
-            // unconditionally for every iteration — including skipped (FAKE
-            // aggregator, already-in-DB, no-configurations) and failed
+            // unconditionally for every iteration — including skipped
+            // (already-in-DB, no-configurations) and failed
             // entries. This is by design: the session may have grown via
             // partial cascades even on the skip paths, so the eviction
             // cadence is driven by iteration count, not persisted-row count.
@@ -378,23 +360,10 @@ class ImportServiceImpl(
                 }
                 total++
                 try {
-                    if (componentKey in fakeAggregatorKeys) {
-                        // Register FAKE aggregator as "db"-sourced even though it has no
-                        // ComponentEntity row — Pass 3 still owns its ComponentGroupEntity,
-                        // and the source flag keeps `getMigrationStatus` totals balanced
-                        // (total == db) so the orchestrator does not retry this component.
-                        stageSource(componentKey)
-                        skipped++
-                        results.add(
-                            MigrationResult(
-                                componentName = componentKey,
-                                success = true,
-                                dryRun = false,
-                                message = "Skipped (FAKE aggregator: group-only per schema-spec §4.3)",
-                            ),
-                        )
-                        continue
-                    }
+                    // NOTE: FAKE aggregators are NO LONGER skipped here. They get a normal
+                    // ComponentEntity row (inserted below) so the v1–v3 resolver keeps serving
+                    // them (compat parity with V1); Pass 3 still creates + self-links their
+                    // ComponentGroupEntity, and the v4 list excludes them via buildSpecification.
 
                     if (componentKey in existingComponentKeys) {
                         skipped++
@@ -510,8 +479,9 @@ class ImportServiceImpl(
                     // as a `parentComponent` becomes can-be-parent (eligible in the parent
                     // picker). This is INDEPENDENT of aggregator status — an aggregator owns
                     // a `components { }` block (§6.3 / aggregatorSubComponents), a separate
-                    // concept. Idempotent — set true once, never false. FAKE aggregators have
-                    // no ComponentEntity row (findByComponentKey returns null above), excluded.
+                    // concept. Idempotent — set true once, never false. A FAKE aggregator now
+                    // HAS a row, so it may be seeded can-be-parent here, but it stays excluded
+                    // from every v4 list query (buildSpecification) and so never enters the picker.
                     if (!parent.canBeParent) {
                         parent.canBeParent = true
                         componentRepository.save(parent)
@@ -2079,7 +2049,10 @@ class ImportServiceImpl(
      *     existing rows).
      *  3. Set `componentGroup` on every sub-component — and update it when the existing link
      *     points at a *different* group (DSL membership changed since the last migration).
-     *  4. For a REAL aggregator (non-fake): self-link the aggregator to its own group too.
+     *  4. Self-link the aggregator to its own group too — for BOTH real and fake aggregators.
+     *     A fake aggregator now keeps its ComponentEntity row (so v1–v3 still serves it for
+     *     compat parity); self-linking it to its own fake group is exactly the marker the v4
+     *     list uses to EXCLUDE it (group.isFake && group.groupKey == the row's componentKey).
      *
      * @return per-aggregator failures: list of `(aggregatorKey, errorMessage)`. Empty list on
      *         full success. Callers should fold these into their own result aggregation so a
@@ -2130,14 +2103,17 @@ class ImportServiceImpl(
                     }
                 }
 
-                // For a REAL aggregator, also link the parent itself to its own group
-                if (!fake) {
-                    val parent = componentRepository.findByComponentKey(parentKey)
-                    if (parent != null && parent.componentGroup?.id != group.id) {
-                        parent.componentGroup = group
-                        componentRepository.save(parent)
-                        LOG.debug("§6.3 Pass 3: linked REAL aggregator '{}' → its own group", parentKey)
-                    }
+                // Link the aggregator itself to its own group — for BOTH real and fake
+                // aggregators. A fake aggregator now has a ComponentEntity row (so the v1–v3
+                // resolver serves it = compat parity); self-linking it to its own fake group is
+                // exactly the marker the v4 list uses to EXCLUDE it (group.isFake &&
+                // group.groupKey == the row's componentKey). For a real aggregator this is its
+                // normal group membership.
+                val aggregatorRow = componentRepository.findByComponentKey(parentKey)
+                if (aggregatorRow != null && aggregatorRow.componentGroup?.id != group.id) {
+                    aggregatorRow.componentGroup = group
+                    componentRepository.save(aggregatorRow)
+                    LOG.debug("§6.3 Pass 3: linked aggregator '{}' (isFake={}) → its own group", parentKey, fake)
                 }
 
                 LOG.info(

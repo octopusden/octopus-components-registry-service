@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
+import org.octopusden.octopus.components.registry.server.dto.v4.ComponentFilter
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentGroupEntity
@@ -21,10 +22,12 @@ import org.octopusden.octopus.components.registry.server.repository.ComponentRep
 import org.octopusden.octopus.components.registry.server.repository.LabelRepository
 import org.octopusden.octopus.components.registry.server.repository.SystemRepository
 import org.octopusden.octopus.components.registry.server.repository.ToolRepository
+import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
 import org.octopusden.octopus.components.registry.server.service.ImportService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.mock.mockito.MockBean
+import org.springframework.data.domain.PageRequest
 import org.springframework.test.annotation.DirtiesContext
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.transaction.annotation.Transactional
@@ -75,6 +78,9 @@ class MigrationIntegrationTest {
 
     @Autowired
     private lateinit var importService: ImportService
+
+    @Autowired
+    private lateinit var componentManagementService: ComponentManagementService
 
     init {
         val testResourcesPath =
@@ -475,12 +481,24 @@ class MigrationIntegrationTest {
         assertNotNull(fakeGroup, "ComponentGroupEntity with groupKey='TEST_AGGREGATOR_FAKE' must be created by Pass 3")
         assertTrue(fakeGroup!!.isFake, "TEST_AGGREGATOR_FAKE group must have isFake=true (artifactId contains 'stub')")
 
-        // schema-spec invariant: FAKE aggregators are represented ONLY as a ComponentGroupEntity
-        // row; there must be no corresponding ComponentEntity. Guards against a regression where
-        // a FAKE aggregator slips through Pass 1 and lands as a real component row.
-        assertNull(
-            componentRepository.findByComponentKey("TEST_AGGREGATOR_FAKE"),
-            "TEST_AGGREGATOR_FAKE must NOT have a ComponentEntity row — FAKE aggregators are group-only",
+        // R1 compat parity: a FAKE aggregator now ALSO gets a ComponentEntity row (so the
+        // v1–v3 resolver keeps serving it) and is self-linked to its OWN fake group. That
+        // self-link (group.isFake && group.groupKey == componentKey) is the marker the v4 list
+        // uses to EXCLUDE it (asserted separately in mig041b). Guards the compat regression
+        // where #306 skipped the Pass-1 insert for fake aggregators and 404'd them in v3.
+        val fakeAggRow = componentRepository.findByComponentKey("TEST_AGGREGATOR_FAKE")
+        assertNotNull(
+            fakeAggRow,
+            "TEST_AGGREGATOR_FAKE MUST have a ComponentEntity row now (v1–v3 compat parity)",
+        )
+        assertNotNull(
+            fakeAggRow!!.componentGroup,
+            "TEST_AGGREGATOR_FAKE must be self-linked to its own group",
+        )
+        assertEquals(
+            fakeGroup.id,
+            fakeAggRow.componentGroup!!.id,
+            "TEST_AGGREGATOR_FAKE.componentGroup must reference its OWN fake group (self-link = v4-exclusion marker)",
         )
 
         // The member sub-component must have its component_group_id set
@@ -527,6 +545,47 @@ class MigrationIntegrationTest {
             realGroup.id,
             versionsApi.componentGroup!!.id,
             "versions-api.componentGroup must reference the TESTONE group",
+        )
+    }
+
+    @Test
+    @Transactional
+    @DisplayName(
+        "MIG-041b/compat: FAKE aggregator is fetchable by key (v1–v3 parity) but EXCLUDED from the " +
+            "v4 list; real aggregator + members + ordinary components remain in the v4 list",
+    )
+    fun mig041b_fakeAggregatorServedByResolverButHiddenFromV4List() {
+        // v1–v3 read path (DatabaseComponentRegistryResolver.getComponentById → findByComponentKey):
+        // the FAKE aggregator MUST still resolve. This is the exact #306 compat regression — the
+        // Pass-1 skip dropped its row and v3 began 404-ing it.
+        assertNotNull(
+            componentRepository.findByComponentKey("TEST_AGGREGATOR_FAKE"),
+            "TEST_AGGREGATOR_FAKE must be fetchable by key (v1–v3 compat parity)",
+        )
+
+        // v4 regular-components list: the FAKE aggregator stub must NOT appear; everything else does.
+        val listed =
+            componentManagementService
+                .listComponents(ComponentFilter(), PageRequest.of(0, 500))
+                .content
+                .map { it.name }
+                .toSet()
+
+        assertFalse(
+            "TEST_AGGREGATOR_FAKE" in listed,
+            "FAKE aggregator stub must be hidden from the v4 regular-components list",
+        )
+        assertTrue(
+            "TEST_AGGREGATOR_MEMBER" in listed,
+            "a FAKE aggregator's member is a real component — it must remain in the v4 list",
+        )
+        assertTrue(
+            "TESTONE" in listed,
+            "a REAL aggregator must remain in the v4 list (only FAKE stubs are hidden)",
+        )
+        assertTrue(
+            "versions-api" in listed,
+            "a REAL aggregator's member must remain in the v4 list",
         )
     }
 
