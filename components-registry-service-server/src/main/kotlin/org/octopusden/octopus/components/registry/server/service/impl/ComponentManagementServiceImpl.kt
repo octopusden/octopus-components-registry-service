@@ -8,7 +8,6 @@ import org.octopusden.octopus.components.registry.server.dto.v4.BuildToolBeanReq
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentCreateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentDetailResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentFilter
-import org.octopusden.octopus.components.registry.server.dto.v4.ComponentGroupRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentSummaryResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentUpdateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.DockerImageRequest
@@ -54,7 +53,6 @@ import org.octopusden.octopus.components.registry.server.mapper.toFieldOverrideR
 import org.octopusden.octopus.components.registry.server.mapper.toSummaryResponse
 import org.octopusden.octopus.components.registry.server.repository.ComponentBuildToolBeanRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
-import org.octopusden.octopus.components.registry.server.repository.ComponentGroupRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentLabelRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRequiredToolRepository
@@ -91,7 +89,6 @@ import java.util.UUID
 class ComponentManagementServiceImpl(
     private val componentRepository: ComponentRepository,
     private val configurationRepository: ComponentConfigurationRepository,
-    private val componentGroupRepository: ComponentGroupRepository,
     private val componentLabelRepository: ComponentLabelRepository,
     private val componentRequiredToolRepository: ComponentRequiredToolRepository,
     private val componentBuildToolBeanRepository: ComponentBuildToolBeanRepository,
@@ -125,27 +122,16 @@ class ComponentManagementServiceImpl(
             "Component with name '$normalizedKey' already exists"
         }
         // Strict contract (UI-swift-sloth): a component cannot legitimately exist
-        // without an owning group or without a build system on its BASE
-        // configuration row. The Portal's Create dialog enforces both fields at
-        // the UX layer; the server is the source of truth and rejects payloads
-        // missing either field with 400. The frontend gates the Submit button
-        // on these constraints, so reaching this branch implies a misbehaving
-        // client (or a direct API caller skipping validation).
-        requireNotNull(request.group) {
-            "group is required: every component must belong to a group (groupKey is mandatory)"
-        }
-        // Trim first so leading/trailing whitespace doesn't survive into the
-        // `component_groups.group_key` UNIQUE index — a key like
-        // `"org.example.test "` and `"org.example.test"` would otherwise be
-        // two distinct group rows and silently fragment aggregator queries.
-        // Leniency for clients (we trim instead of rejecting), strict
-        // canonicalisation on storage.
-        val normalizedGroupKey = request.group.groupKey.trim()
-        require(normalizedGroupKey.isNotBlank()) {
-            "group.groupKey must not be blank"
-        }
-        validateGroupKeyPrefix(normalizedGroupKey)
-        val normalizedGroupRequest = request.group.copy(groupKey = normalizedGroupKey)
+        // without a build system on its BASE configuration row. The Portal's Create
+        // dialog enforces it at the UX layer; the server is the source of truth and
+        // rejects a payload missing it with 400.
+        //
+        // R1 (aggregator/parentComponent decouple): `group` is NO LONGER required and
+        // is NOT assigned on the API path. A ComponentGroup represents DSL aggregator
+        // membership (a `components { }` owner + its sub-components) and is established
+        // ONLY by the migration/import path. An API-created component is therefore
+        // standalone → `componentGroup = null`; any `request.group` is accepted but
+        // ignored (creating a component via the API does not make it an aggregator).
         val baseConfigRequest =
             requireNotNull(request.baseConfiguration) {
                 "baseConfiguration is required: provide baseConfiguration.build.buildSystem on create"
@@ -203,8 +189,6 @@ class ComponentManagementServiceImpl(
                     ?: throw NotFoundException("Parent component '$parentKey' not found")
             }
 
-        val group = upsertGroup(normalizedGroupRequest)
-
         // Parent invariants (create = everything is new): a chosen parent must be
         // marked can-be-parent, and a component that itself can be a parent may
         // not have a parent (a parent cannot have a parent).
@@ -227,7 +211,8 @@ class ComponentManagementServiceImpl(
                 archived = request.archived,
                 solution = request.solution,
                 parentComponent = parent,
-                componentGroup = group,
+                // R1: group = migration-derived aggregator membership only; never assigned via API.
+                componentGroup = null,
                 canBeParent = request.canBeParent,
                 copyright = request.copyright,
                 releasesInDefaultBranch = request.releasesInDefaultBranch,
@@ -238,15 +223,6 @@ class ComponentManagementServiceImpl(
                 distributionExternal = request.distributionExternal,
                 systemCode = canonicalSystem,
             )
-
-        // Group follows the parent/aggregator relationship (schema-v2), mirroring
-        // the update path: a child joins its parent's group and an aggregator
-        // (canBeParent) gets its own-key group — both override the requested group;
-        // a standalone keeps the (legacy) requested group set above. Without this an
-        // API-created aggregator would retain request.group and its children would
-        // inherit that key instead of the aggregator's own componentKey. (A full
-        // standalone -> null group awaits the deferred create-flow rework.)
-        entity.componentGroup = deriveComponentGroup(entity)
 
         // Per-component child collections (cascade = ALL on these — flushed with the parent)
         // Ordered multi-value people — the accessor canonicalizes (trim → drop
@@ -328,40 +304,18 @@ class ComponentManagementServiceImpl(
                 "Optimistic locking conflict: expected version ${request.version} but found ${entity.version}",
             )
         }
-        // Strict contract (UI-swift-sloth): clearing the group via PATCH is no
-        // longer expressible — a component cannot legitimately exist without
-        // an owning group. The frontend's buildUpdateRequest always emits
-        // `clearGroup: false` (the wire schema requires the field be present),
-        // and only `clearGroup: true` is rejected. `group == null` continues
-        // to mean "don't touch" — Jackson cannot distinguish field-absent from
-        // explicit-null without a presence-preserving DTO, and every
-        // untouched-group PATCH today carries `group == null`. If clients
-        // later need to disambiguate, switch the DTO to a presence-preserving
-        // shape (JsonNullable / sentinel wrapper) — out of scope here.
-        require(!request.clearGroup) {
-            "clearGroup: true is no longer allowed — every component must belong to a group"
-        }
+        // R1 (aggregator/parentComponent decouple): a ComponentGroup is migration-derived
+        // aggregator membership (a `components { }` owner + its sub-components), NOT an
+        // API-editable field. On PATCH it is never touched — `request.group` is accepted
+        // but ignored, and `clearGroup` is an accepted no-op (both kept on the wire for
+        // backward compatibility). A `group == null` PATCH always meant "don't touch";
+        // now a non-null one means the same.
+        //
         // `clearParent` (remove the parent) and `parentComponentName` (set a parent)
         // are mutually exclusive — accepting both would silently drop one.
         require(!(request.clearParent && request.parentComponentName != null)) {
             "parentComponentName: clearParent and parentComponentName are mutually exclusive"
         }
-        // Mirror the create-side validation on the PATCH path. Same
-        // trim-then-validate-then-canonicalise pipeline so a PATCH that
-        // sets `groupKey = "org.example.test "` rounds to the canonical
-        // form before it reaches `upsertGroup`. The trimmed value is also
-        // what's used for prefix validation and persistence, so the rest
-        // of the method must read from `normalizedGroupRequest` rather
-        // than `request.group`.
-        val normalizedGroupRequest =
-            request.group?.let { req ->
-                val trimmed = req.groupKey.trim()
-                require(trimmed.isNotBlank()) {
-                    "group.groupKey must not be blank"
-                }
-                validateGroupKeyPrefix(trimmed)
-                req.copy(groupKey = trimmed)
-            }
 
         val oldKey = entity.componentKey
         val normalizedNewKey = request.name?.trim()
@@ -485,34 +439,15 @@ class ComponentManagementServiceImpl(
                     ?: throw NotFoundException("Parent component '$parentKey' not found")
         }
 
-        // Group: `clearGroup: true` was rejected at the top of this method
-        // (strict contract — every component must belong to a group), so the
-        // only reachable shapes here are "no change" (request.group == null)
-        // or "replace with a new/upserted group" (request.group != null).
-        // The normalised (trimmed + prefix-validated) form is used so the
-        // upserted row is byte-stable across whitespace-y inputs.
-        // canBeParent invariants + derived group (schema-v2: group membership
-        // follows the parent/aggregator relationship). Rederive whenever the parent
-        // OR the canBeParent flag actually changes:
-        //  - a child joins its parent's group;
-        //  - a component promoted to canBeParent gets its OWN-key group, so its
-        //    children inherit the aggregator key rather than whatever legacy group
-        //    it happened to carry (the bug this fixes);
-        //  - validateParentInvariants runs first, so a grandfathered
-        //    parent-of-parent row is only re-derived on a genuine parent change
-        //    (e.g. clearParent remediation), never corrupted by a no-op.
-        // A pure no-op (neither parent nor canBeParent changed) preserves the
-        // existing group and still honours a legacy request.group if present.
+        // Parent / canBeParent invariants (single-level — matches the DSL validator):
+        // a chosen parent must be can-be-parent; a can-be-parent component may not
+        // itself have a parent; a parent still referenced by children may not be
+        // demoted. Group membership is NOT re-derived here — it is migration-owned
+        // aggregator membership and the API leaves it untouched (see the group note at
+        // the top of this method).
         val parentChanged = entity.parentComponent?.componentKey != oldParentKey
         val canBeParentChanged = entity.canBeParent != oldCanBeParent
         validateParentInvariants(entity, parentChanged, canBeParentChanged)
-        if (parentChanged || canBeParentChanged) {
-            // Derived group wins over any (legacy) request.group on a relationship change.
-            entity.componentGroup = deriveComponentGroup(entity)
-        } else {
-            // No relationship change: honor an explicit (legacy) request.group if present.
-            normalizedGroupRequest?.let { entity.componentGroup = upsertGroup(it) }
-        }
 
         // Per-component child REPLACE — present collection wipes and refills
         request.artifactIds?.let {
@@ -970,9 +905,8 @@ class ComponentManagementServiceImpl(
 
     /**
      * Validate `value` against the env-config allowlist
-     * `components-registry.supportedSystems` (primary path — mirrors the
-     * analogous `validateGroupKeyPrefix` gate against `supportedGroupIds`
-     * for `groupKey`) AND return the canonical form. A secondary path
+     * `components-registry.supportedSystems` (primary path) AND return the
+     * canonical form. A secondary path
      * also accepts any code that's already in the master `systems`
      * table — this matches the import-side seeding model in
      * `ImportServiceImpl.seedSystems`, which auto-creates `SystemEntity`
@@ -989,10 +923,9 @@ class ComponentManagementServiceImpl(
      * (exact match against a configured / known value).
      *
      * **Returns the canonical form, NOT the caller's input.** Case
-     * matching against the config path is case-insensitive (mirrors
-     * `validateGroupKeyPrefix`'s leniency — env config typically uses
-     * upper-case codes `NONE,CLASSIC,ALFA` but a caller posting
-     * `Classic` should not be rejected for stylistic difference), but
+     * matching against the config path is case-insensitive (env config
+     * typically uses upper-case codes `NONE,CLASSIC,ALFA` but a caller
+     * posting `Classic` should not be rejected for stylistic difference), but
      * the form persisted to `components.system_code` is the config's
      * canonical casing — NOT the caller's input. This prevents a v4
      * write of `system: "Classic"` from creating a duplicate master
@@ -1073,50 +1006,6 @@ class ComponentManagementServiceImpl(
     private fun bumpParentVersion(component: ComponentEntity) {
         component.updatedAt = Instant.now()
         componentRepository.saveAndFlush(component)
-    }
-
-    private fun upsertGroup(request: ComponentGroupRequest): ComponentGroupEntity =
-        componentGroupRepository.findByGroupKey(request.groupKey)
-            ?: componentGroupRepository.save(
-                ComponentGroupEntity(
-                    groupKey = request.groupKey,
-                    isFake = request.isFake,
-                ),
-            )
-
-    /**
-     * Derive a component's aggregator group from its parent relationship
-     * (schema-v2: group membership follows structure, not a user-entered Maven
-     * groupId):
-     *   - child (has a parent): the parent's group; if the parent has none yet,
-     *     upsert one keyed by the parent's componentKey and assign it to the parent;
-     *   - aggregator (canBeParent, no parent): its own group keyed by componentKey;
-     *   - standalone (no parent, not canBeParent): PRESERVE the existing group.
-     * Callers invoke this on create and whenever the parent OR canBeParent flag
-     * changes, so a no-op update leaves the existing group untouched. The
-     * aggregator branch re-keys to the own component key even if a legacy group
-     * was carried, which is how a promoted/created aggregator stops leaking its
-     * old group key to its children.
-     */
-    private fun deriveComponentGroup(entity: ComponentEntity): ComponentGroupEntity? {
-        val parent = entity.parentComponent
-        return when {
-            parent != null ->
-                parent.componentGroup ?: run {
-                    val derived = upsertGroup(ComponentGroupRequest(groupKey = parent.componentKey, isFake = false))
-                    parent.componentGroup = derived
-                    componentRepository.save(parent)
-                    derived
-                }
-            entity.canBeParent ->
-                entity.componentGroup?.takeIf { it.groupKey == entity.componentKey }
-                    ?: upsertGroup(ComponentGroupRequest(groupKey = entity.componentKey, isFake = false))
-            // Standalone: PRESERVE the existing group rather than null it. Every
-            // component must belong to a group (create-side strict contract), so a
-            // bare `clearParent` on a plain child must not strip its group. Full
-            // standalone→no-group awaits the create-contract relaxation follow-up.
-            else -> entity.componentGroup
-        }
     }
 
     /**
@@ -1528,60 +1417,6 @@ class ComponentManagementServiceImpl(
         require(value.isNotBlank()) { "productType must not be blank" }
         require(value in PRODUCT_TYPE_NAMES) {
             "Invalid productType: '$value'. Allowed: $PRODUCT_TYPE_NAMES"
-        }
-    }
-
-    /**
-     * Reject group keys whose prefix is not in
-     * `components-registry.supportedGroupIds`. The frontend already gates
-     * the Submit button on the same check (via
-     * `GET /rest/api/2/common/supported-groups`), but the server is the
-     * source of truth: a CLI / automation client that bypasses the UI
-     * cannot land a component on a disallowed prefix.
-     *
-     * Allowed iff `groupKey == prefix` OR `groupKey.startsWith(prefix + ".")`,
-     * **compared case-insensitively** (both sides lowercased before the
-     * compare). The trailing-dot boundary is critical: without it,
-     * allowed=`org.example` would let `org.exampleextra.foo` slip through.
-     * Mirrors the frontend's `useSupportedGroups` check exactly —
-     * `CreateComponentDialog.tsx` and `GeneralTab.tsx` both lowercase
-     * `groupId` and each `prefix` before `v === lp || v.startsWith(lp + '.')`.
-     * Without case-insensitive comparison on the CRS side, the portal
-     * passes its pre-check on `ORG.EXAMPLE.foo` and the server then
-     * returns 400 — confusing UX.
-     *
-     * Case is preserved on storage: the caller passes the user-typed
-     * value (trimmed) and persistence happens with that value, NOT the
-     * lowercased form. Lowercasing is a validation-time comparison only.
-     *
-     * Known trade-off: because `upsertGroup` does a case-sensitive
-     * `findByGroupKey`, a user can land `org.example.foo` AND
-     * `ORG.EXAMPLE.foo` as two distinct `component_groups` rows that
-     * both validate against the same prefix. If a future requirement
-     * surfaces (e.g. "same logical groupKey must dedupe regardless of
-     * case"), the fix is either (a) a case-insensitive lookup in
-     * `upsertGroup`, or (b) a DB-level `UNIQUE LOWER(group_key)`
-     * constraint. Out of scope here — the spec keeps user-typed case.
-     *
-     * The error message names the allowed prefixes verbatim so non-UI
-     * clients see actionable feedback (the frontend can also surface the
-     * server message when its own pre-check disagrees with the server).
-     *
-     * Assumes `value` is already trimmed by the caller (see CREATE/PATCH
-     * blocks). An empty `supportedGroupIds` list rejects everything —
-     * misconfigured envs produce a clear 400 rather than silently
-     * accepting any prefix.
-     */
-    private fun validateGroupKeyPrefix(value: String) {
-        val allowed = configHelper.supportedGroupIds().toList()
-        val lowerValue = value.lowercase()
-        val matches =
-            allowed.any { prefix ->
-                val lowerPrefix = prefix.lowercase()
-                lowerValue == lowerPrefix || lowerValue.startsWith("$lowerPrefix.")
-            }
-        require(matches) {
-            "group.groupKey '$value' is not in the configured supportedGroupIds. Allowed: $allowed"
         }
     }
 

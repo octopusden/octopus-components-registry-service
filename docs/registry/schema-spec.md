@@ -125,8 +125,8 @@ Identity + fields that never vary per version range.
 | `archived` | BOOLEAN | NOT NULL DEFAULT false | |
 | `solution` | BOOLEAN | nullable | |
 | `parent_component_id` | UUID | FK → components(id) | DSL `parentComponent = "X"` reference between peers |
-| `can_be_parent` | BOOLEAN | NOT NULL DEFAULT false | True when referenced as a `parentComponent` by ≥1 other component (an aggregator parent). Seeded by import (Pass 2 sets `true` for DSL-referenced parents, never `false`) and editable via v4. Service invariants: a chosen parent must be `can_be_parent`; a `can_be_parent` component may not have a parent (a parent cannot have a parent); `can_be_parent` may not be disabled while children still reference it. Grandfathered parent-of-parent rows are tolerated on no-op updates. The `?canBeParent=true` list filter backs the Portal parent picker. |
-| `component_group_id` | UUID | FK → component_groups(id) | Aggregator membership. Schema-nullable (FK), but the v4 service layer (`ComponentManagementServiceImpl.createComponent`) rejects payloads missing `group` with 400 — every newly-created component must belong to a group. PATCH semantics: `group == null` continues to mean "don't touch" (Jackson cannot distinguish absent-from-explicit-null without a presence-preserving DTO); `clearGroup: true` is rejected with 400. On UPDATE, when `parentComponentName` changes (or `clearParent` is set), the v4 service re-derives `component_group_id` from the parent relationship (child → parent's group, upserting one keyed by the parent's `component_key` if the parent had none; aggregator → its own group keyed by `component_key`; standalone → preserves its existing group, since every component must belong to a group), and preserves the existing group on a no-op so grandfathered parent-of-parent rows are never corrupted. |
+| `can_be_parent` | BOOLEAN | NOT NULL DEFAULT false | True when referenced as a `parentComponent` by ≥1 other component — i.e. eligible to be selected as a parent in the Portal picker. **NOT the same as an aggregator:** being a `parentComponent` target is a flat peer reference, whereas an aggregator owns a `components { }` block (§4.3); the two are independent. Seeded by import (Pass 2 sets `true` for DSL-referenced parents, never `false`) and editable via v4. Service invariants: a chosen parent must be `can_be_parent`; a `can_be_parent` component may not have a parent (single-level — a parent cannot have a parent, matching the DSL validator); `can_be_parent` may not be disabled while children still reference it. Grandfathered parent-of-parent rows are tolerated on no-op updates. The `?canBeParent=true` list filter backs the Portal parent picker. |
+| `component_group_id` | UUID | FK → component_groups(id) | Aggregator membership — the group of the DSL `components { }` aggregator this component belongs to (§4.3). `NULL` = standalone (not part of any aggregator). Established **only by the migration/import path** (Pass 3, §6.3); it is keyed off DSL `components { }` membership, NOT the flat `parent_component_id` / `can_be_parent` relationship — being referenced as someone's `parentComponent` does NOT create a group. The v4 service layer does **NOT** assign or derive a group: CREATE ignores any `group` in the payload (an API-created component is standalone → `component_group_id = NULL`), and PATCH never touches it — a provided `group` is accepted-and-ignored and `clearGroup` (true or false) is an accepted no-op (both kept on the wire for backward compatibility). A `group == null` PATCH always meant "don't touch"; now a non-null one means the same. |
 | `copyright` | TEXT | nullable | |
 | `releases_in_default_branch` | BOOLEAN | nullable | |
 | `jira_display_name` | VARCHAR(255) | nullable | jira.displayName — never varies per version per audit |
@@ -134,7 +134,7 @@ Identity + fields that never vary per version range.
 | `vcs_external_registry` | TEXT | nullable | vcsSettings.externalRegistry — per-component (audit assertion enforced at migration) |
 | `distribution_explicit` | BOOLEAN | nullable | |
 | `distribution_external` | BOOLEAN | nullable | |
-| `system_code` | VARCHAR(50) | nullable, FK → systems(code) | Single-value system assignment (a component belongs to at most one system). Collapsed from the M:N junction `component_systems` in the post-#299 follow-up. Schema-nullable; service-layer validates non-null values against the env-config `components-registry.supportedSystems` allowlist on CREATE/PATCH — mirrors the `validateGroupKeyPrefix` gate against `supportedGroupIds` — with a fallback path that also accepts codes already in the master `systems` table (so `ImportServiceImpl.seedSystems`-discovered codes remain editable through v4 without a config redeploy). The master row is auto-created via `ensureSystemExists` on first write so the FK is always satisfied. Filter `?system=A,B` is an `IN(...)` predicate against this column (OR-semantic across distinct components). |
+| `system_code` | VARCHAR(50) | nullable, FK → systems(code) | Single-value system assignment (a component belongs to at most one system). Collapsed from the M:N junction `component_systems` in the post-#299 follow-up. Schema-nullable; service-layer validates non-null values against the env-config `components-registry.supportedSystems` allowlist on CREATE/PATCH, with a fallback path that also accepts codes already in the master `systems` table (so `ImportServiceImpl.seedSystems`-discovered codes remain editable through v4 without a config redeploy). The master row is auto-created via `ensureSystemExists` on first write so the FK is always satisfied. Filter `?system=A,B` is an `IN(...)` predicate against this column (OR-semantic across distinct components). |
 | `version` | BIGINT | NOT NULL DEFAULT 0 | `@Version` optimistic locking |
 | `created_at` | TIMESTAMP WITH TIME ZONE | NOT NULL DEFAULT now() | |
 | `updated_at` | TIMESTAMP WITH TIME ZONE | NOT NULL DEFAULT now() | |
@@ -225,11 +225,13 @@ Semantics:
 - **REAL aggregator** (`is_fake = false`): aggregator is itself a deployable component. Has its own row in `components` whose `component_group_id` points to this group. All sub-components also link to this group.
 - **FAKE aggregator** (`is_fake = true`): grouping-only entity. **No row in `components` for the aggregator itself.** Only sub-components link to the group.
 
+**Membership source (R1 — decoupled from `parentComponent`):** group membership is derived from the DSL `components { }` block. The loader surfaces it as `EscrowConfiguration.aggregatorSubComponents` (aggregatorKey → sub-component keys), and the importer (§6.3) keys grouping off *that map*, NOT the flat `parent_component_id` / `parentComponent` field. Being referenced as another component's `parentComponent` (without itself owning a `components { }` block) does **not** make a component an aggregator and creates **no** group. Migration is the sole writer of `component_group_id`; the v4 API never creates or assigns a group (see §4.1). A re-migration is idempotent and self-correcting: §6.3 deletes any `component_groups` row whose key is no longer a current aggregator (unlinking its members first), which clears groups left behind by the earlier flat-`parentComponent` grouping logic.
+
 Detection rule at migration:
 
 ```kotlin
 fun isFakeAggregator(cfg: EscrowModuleConfig): Boolean {
-    val vcsUrl = cfg.firstVcsUrlAcrossAllForms()    // form 1, 2, or 3
+    val vcsUrl = cfg.vcsSettings?.versionControlSystemRoots?.firstOrNull()?.vcsPath
     val artifactId = cfg.artifactIdPattern ?: ""
     return vcsUrl.isNullOrBlank()
         || isFakeVcsUrl(vcsUrl)
@@ -423,7 +425,7 @@ for ((childKey, parentKey) in pendingParentByKey) {
 
 Missing parent references are tolerated (WARN log) — referenced component may be archived or in a different installation.
 
-`can_be_parent` is seeded here: any component referenced as a parent is an aggregator. A **multi-level hierarchy** (a key that is both referenced as a parent AND references a parent itself — e.g. `A → B → C`) is **tolerated** (WARN log, FK preserved — no silent data loss); the v4 API forbids only *new/changed* parent-of-parent assignments, so grandfathered rows survive and are remediated by clearing the offending parent (`clearParent`).
+`can_be_parent` is seeded here: any component referenced as a `parentComponent` becomes `can_be_parent` (eligible to be selected as a parent in the picker). This is the flat peer-reference relationship and is **independent of aggregator status** — a `parentComponent` target is not necessarily a `components { }` aggregator, and aggregator grouping (§6.3) is keyed off the `components { }` block, not this field. A **multi-level hierarchy** (a key that is both referenced as a parent AND references a parent itself — e.g. `A → B → C`) is **tolerated** (WARN log, FK preserved — no silent data loss); the v4 API forbids only *new/changed* parent-of-parent assignments, so grandfathered rows survive and are remediated by clearing the offending parent (`clearParent`).
 
 ### 6.3 Aggregator handling
 
@@ -434,6 +436,8 @@ For each top-level DSL component:
    - Create `component_groups` row.
    - REAL: also create `components` row for the aggregator itself with `component_group_id` pointing to its own group.
    - For each sub-component (`EscrowConfigurationLoader` resolves parent defaults into the sub config): create `components` row with `component_group_id` pointing to the group.
+
+Grouping is keyed off the loader's `EscrowConfiguration.aggregatorSubComponents` (aggregatorKey → sub-component keys, derived from the `components { }` block), **never** the flat `parentComponent` field (§4.3). After linking, a **re-run cleanup** deletes any pre-existing `component_groups` row whose key is no longer a current aggregator — unlinking its members (`component_group_id = NULL`) first. This makes re-migration idempotent and removes groups left behind by the earlier flat-`parentComponent`-based grouping (a non-aggregator parent — one with no `components { }` block — no longer retains a group). Cleanup runs only on a **full batch** migration (`migrateAllComponents`); a single-component migration (`migrateComponent`) links its own group but does not sweep stale groups.
 
 ### 6.4 Base row determination
 

@@ -553,6 +553,9 @@ class TeamcitySyncServiceTest {
         override fun existsByParentComponentId(parentId: UUID): Boolean =
             components.any { it.parentComponent?.id == parentId }
 
+        override fun findByComponentGroupId(groupId: UUID): List<ComponentEntity> =
+            components.filter { it.componentGroup?.id == groupId }
+
         override fun <S : ComponentEntity> save(entity: S): S = entity
         override fun <S : ComponentEntity> saveAll(entities: Iterable<S>): List<S> = unsupported()
         override fun <S : ComponentEntity> saveAndFlush(entity: S): S = entity
