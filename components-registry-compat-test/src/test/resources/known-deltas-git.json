@@ -1,0 +1,4 @@
+{
+  "_comment": "Git-mode compat deltas — used when the candidate runs with NO DB migration (default-source=git), so every v1/v2/v3 response is served by the Git resolver, the same code path as the 2.0.87 baseline. Intentionally EMPTY: this encodes the deploy-without-migration no-op invariant. Any active diff against this file is a real regression of that invariant and must be FIXED, not suppressed here. The db-mode deltas (updateCache 410 Gone) live in known-deltas-db.json and do NOT apply in git-mode, because phase-aware updateCache returns 200 while git-sourced components remain (git>0). Selected via -Pcompat.known-deltas=known-deltas-git.json. See docs/registry/api-compat-deltas.md.",
+  "deltas": []
+}

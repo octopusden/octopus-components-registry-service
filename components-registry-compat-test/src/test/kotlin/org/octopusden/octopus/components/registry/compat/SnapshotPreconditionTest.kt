@@ -14,7 +14,7 @@ import java.time.Instant
  *
  * The test method itself ALWAYS passes — it only records [DiffRecord]s. The Gradle
  * `compatibilityReporter` task aggregates them; env categories are surfaced
- * separately and are NOT suppressible via `known-deltas.json` (they signal that
+ * separately and are NOT suppressible via the known-deltas files (they signal that
  * the comparison itself is unsound, not an intentional v3 delta).
  *
  * Why recorded diffs and not fail-fast assertions: per operator decision, we want

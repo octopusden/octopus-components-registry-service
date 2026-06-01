@@ -1,11 +1,13 @@
 import jetbrains.buildServer.configs.kotlin.*
 import jetbrains.buildServer.configs.kotlin.buildFeatures.XmlReport
 import jetbrains.buildServer.configs.kotlin.buildFeatures.dockerSupport
+import jetbrains.buildServer.configs.kotlin.buildFeatures.sharedResources
 import jetbrains.buildServer.configs.kotlin.buildFeatures.swabra
 import jetbrains.buildServer.configs.kotlin.buildFeatures.xmlReport
 import jetbrains.buildServer.configs.kotlin.buildSteps.gradle
 import jetbrains.buildServer.configs.kotlin.buildSteps.kotlinFile
 import jetbrains.buildServer.configs.kotlin.buildSteps.script
+import jetbrains.buildServer.configs.kotlin.projectFeatures.sharedResource
 import jetbrains.buildServer.configs.kotlin.triggers.finishBuildTrigger
 import jetbrains.buildServer.configs.kotlin.vcs.GitVcsRoot
 
@@ -38,10 +40,24 @@ project {
         param("CRS_COMPAT_TRACE_REPO_URL", "ssh://git@%GIT_SERVER_HOSTNAME%/CREG/crs-compat-trace.git")
     }
 
+    // Shared resource so the two local-stand compat builds never run at the
+    // same time: id17 (db-mode) and id18 (git-mode) both boot stands on the
+    // SAME fixed ports (4567/4568) and the SAME local Postgres compose, so a
+    // parallel run on one agent would collide on ports / reset the DB mid-run.
+    // Both builds take a writeLock on this quota-1 resource → mutual exclusion.
+    features {
+        sharedResource {
+            id = "CrsLocalStand"
+            name = "crs-local-stand"
+            resourceType = quoted(1)
+        }
+    }
+
     buildType(id10CompileUtAuto)
     buildType(id15CompatManual)
     buildType(id16CompatTraceReplayManual)
     buildType(id17CompatLocalStandManual)
+    buildType(id18CompatLocalStandGitModeAuto)
     buildType(id20ValidateComponentsRegistryProductionDataAuto)
     buildType(id30DeployToOkdQaDevAuto)
     buildType(id31MigrateOnQaDevAuto)
@@ -56,6 +72,7 @@ project {
         id15CompatManual,
         id16CompatTraceReplayManual,
         id17CompatLocalStandManual,
+        id18CompatLocalStandGitModeAuto,
         id20ValidateComponentsRegistryProductionDataAuto,
         id30DeployToOkdQaDevAuto,
         id31MigrateOnQaDevAuto,
@@ -624,10 +641,11 @@ object id17CompatLocalStandManual : BuildType({
             // overwrite each other's wrapper logs. The artifact rules at
             // the top of this BuildType pick these paths up via the same
             // `%teamcity.build.id%` substitution. Ports stay at the
-            // wrapper defaults (4567/4568) — TC's per-config serialization
-            // is sufficient guard against the same id17 running twice in
-            // parallel on one agent, and we don't expect multiple
-            // local-stand configs to coexist.
+            // wrapper defaults (4567/4568); the "crs-local-stand" shared-
+            // resource write-lock (declared in the project block, taken by
+            // both id17 and the git-mode sibling id18) serialises this build
+            // against id18 so the two never collide on those ports or the
+            // local Postgres compose on one agent.
             scriptContent = """
                 set -euo pipefail
                 WORK_DIR="/tmp/crs-id17-%teamcity.build.id%"
@@ -776,6 +794,11 @@ object id17CompatLocalStandManual : BuildType({
                 dockerRegistryId = "PROJECT_EXT_177,PROJECT_EXT_350,PROJECT_EXT_351"
             }
         }
+        // Mutual exclusion with the git-mode sibling id18: both boot stands on
+        // the same fixed ports (4567/4568) and the same local Postgres compose.
+        sharedResources {
+            writeLock("crs-local-stand")
+        }
     }
 
     requirements {
@@ -793,6 +816,215 @@ object id17CompatLocalStandManual : BuildType({
         // minutes (cold pulls, postgres init, two stand boots). Manual
         // Run from any branch — including main — still works because
         // the snapshot dep is the only hard requirement.
+        finishBuildTrigger {
+            buildType = "${id10CompileUtAuto.id}"
+            successfulOnly = true
+            branchFilter = """
+                +:*
+                -:main
+            """.trimIndent()
+        }
+    }
+
+    dependencies {
+        snapshot(id10CompileUtAuto) {
+            onDependencyFailure = FailureAction.CANCEL
+        }
+    }
+})
+
+// Git-mode sibling of id17. Boots the SAME baseline + candidate JARs, but runs
+// the candidate WITHOUT DB migration (CANDIDATE_MODE=git → --auto-migrate=false
+// --default-source=git): every v1/v2/v3 response is served by the Git resolver,
+// the same code path as the 2.0.87 baseline. This asserts the deploy-without-
+// migration NO-OP invariant — deploying v3 and not migrating must be byte-
+// identical to the old version for v1/v2/v3. It uses the (empty) git-mode
+// known-deltas file, so any active diff is a real regression of that invariant.
+//
+// Differs from id17 ONLY by: id/name, the /tmp/crs-id18-* work namespace, and
+// `export CANDIDATE_MODE=git` before the wrapper. Serialised against id17 via
+// the "crs-local-stand" shared-resource write-lock (same fixed ports + Postgres).
+object id18CompatLocalStandGitModeAuto : BuildType({
+    id("18CompatLocalStandGitModeAuto")
+    name = "[1.8] Compat — Local Stand (no DB migration, git-mode) [AUTO]"
+
+    // Surface the upstream id10 build number as id18's own (chain view shows the
+    // SAME version tag across id10 = id18 = …), mirroring id17.
+    buildNumberPattern = "%BUILD_NUMBER%"
+
+    artifactRules = """
+        **/build/reports/** => reports
+        **/build/test-results/**/*.xml => test-results
+        /tmp/crs-id18-%teamcity.build.id%/baseline.log => logs/baseline.log
+        /tmp/crs-id18-%teamcity.build.id%/candidate.log => logs/candidate.log
+        /tmp/compat-exec-logger-marker-*.txt => diag/
+        /tmp/compat-test-report-dir.txt => diag/
+    """.trimIndent()
+
+    vcs {
+        // Pure shell-script build (no Octopus_OctopusGradleBuild template), same
+        // as id17 — attach the GitHub root + secondary roots explicitly.
+        root(AbsoluteId("Octopus_OctopusComponents_OctopusGithubVcsRoot"))
+        root(ComponentsRegistry, "+:. => %COMPONENTS_REGISTRY_CHECKOUT_DIR%")
+        root(ServiceConfig, "+:. => service-config")
+        root(CrsCompatTrace, "+:. => trace-data/")
+    }
+
+    params {
+        text("COMPAT_COMPONENTS_FILE", "components/all.txt", allowEmpty = false, display = ParameterDisplay.PROMPT)
+        text("COMPAT_FULL", "true", allowEmpty = false, display = ParameterDisplay.PROMPT)
+        text("COMPAT_PARALLELISM", "8", allowEmpty = false, display = ParameterDisplay.PROMPT)
+        param("COMPAT_BASELINE_VERSION", "%LAST_RELEASE_VERSION%")
+        param("BUILD_NUMBER", "${id10CompileUtAuto.depParamRefs.buildNumber}")
+        param("COMPAT_CANDIDATE_VERSION", "%BUILD_NUMBER%")
+        param("DOCKER_REGISTRY_INTERNAL", "%DOCKER_REGISTRY%")
+    }
+
+    steps {
+        script {
+            name = "Extract JARs from docker images"
+            id = "extract_jars"
+            scriptContent = """
+                set -euo pipefail
+                BASELINE_IMAGE="%DOCKER_REGISTRY_INTERNAL%/octopusden/components-registry-service:%COMPAT_BASELINE_VERSION%"
+                CANDIDATE_IMAGE="%DOCKER_REGISTRY_INTERNAL%/octopusden/components-registry-service:%COMPAT_CANDIDATE_VERSION%"
+                WORK_DIR="/tmp/crs-id18-%teamcity.build.id%"
+                BCID=""
+                CCID=""
+                cleanup() {
+                    [ -n "${'$'}BCID" ] && docker rm -f "${'$'}BCID" >/dev/null 2>&1 || true
+                    [ -n "${'$'}CCID" ] && docker rm -f "${'$'}CCID" >/dev/null 2>&1 || true
+                }
+                trap cleanup EXIT
+                rm -rf "${'$'}WORK_DIR"
+                mkdir -p "${'$'}WORK_DIR"
+                echo "Pulling baseline:  ${'$'}BASELINE_IMAGE"
+                docker pull "${'$'}BASELINE_IMAGE"
+                echo "Pulling candidate: ${'$'}CANDIDATE_IMAGE"
+                docker pull "${'$'}CANDIDATE_IMAGE"
+                BCID=${'$'}(docker create "${'$'}BASELINE_IMAGE")
+                docker cp "${'$'}BCID:/app/app.jar" "${'$'}WORK_DIR/baseline.jar"
+                CCID=${'$'}(docker create "${'$'}CANDIDATE_IMAGE")
+                docker cp "${'$'}CCID:/app/app.jar" "${'$'}WORK_DIR/candidate.jar"
+                ls -lh "${'$'}WORK_DIR/baseline.jar" "${'$'}WORK_DIR/candidate.jar"
+            """.trimIndent()
+        }
+        script {
+            name = "Run local-stand compat (git-mode)"
+            id = "run_compat"
+            // Same wrapper as id17, namespaced under /tmp/crs-id18-%teamcity.build.id%
+            // and with CANDIDATE_MODE=git exported so the candidate boots with no
+            // migration (default-source=git). The "crs-local-stand" write-lock
+            // (project block) serialises this against id17 on a shared agent.
+            scriptContent = """
+                set -euo pipefail
+                WORK_DIR="/tmp/crs-id18-%teamcity.build.id%"
+                TRACE_DATA_DIR="%teamcity.build.checkoutDir%/trace-data"
+
+                echo "===== id18 VCS checkout diagnostics ====="
+                for d in "%teamcity.build.checkoutDir%/%COMPONENTS_REGISTRY_CHECKOUT_DIR%" \
+                         "%teamcity.build.checkoutDir%/service-config" \
+                         "${'$'}TRACE_DATA_DIR"; do
+                    echo "--- ${'$'}d ---"
+                    if [ -d "${'$'}d" ]; then
+                        ls -la "${'$'}d" | head -25
+                        if [ -d "${'$'}d/.git" ]; then
+                            (cd "${'$'}d" && git remote -v && git log -1 --oneline 2>/dev/null) || true
+                        fi
+                    else
+                        echo "(directory does not exist)"
+                    fi
+                done
+                echo "===== /diagnostics ====="
+
+                case "%COMPAT_COMPONENTS_FILE%" in
+                    *..*|/*)
+                        echo "ERROR: COMPAT_COMPONENTS_FILE=%COMPAT_COMPONENTS_FILE% must be a relative path inside trace-data/ (no '..' segments, no leading '/')" >&2
+                        exit 2
+                        ;;
+                esac
+
+                COMPONENTS_FILE_PATH="${'$'}TRACE_DATA_DIR/%COMPAT_COMPONENTS_FILE%"
+                VERSIONS_FILE_PATH="${'$'}TRACE_DATA_DIR/versions/component-versions.json"
+
+                if [ ! -f "${'$'}COMPONENTS_FILE_PATH" ]; then
+                    echo "ERROR: COMPAT_COMPONENTS_FILE=${'$'}COMPONENTS_FILE_PATH does not exist (CrsCompatTrace checkout failed or file renamed)" >&2
+                    exit 2
+                fi
+                if [ ! -f "${'$'}VERSIONS_FILE_PATH" ]; then
+                    echo "ERROR: versions snapshot ${'$'}VERSIONS_FILE_PATH does not exist (CrsCompatTrace checkout failed or path renamed)" >&2
+                    exit 2
+                fi
+
+                TMP_LIST=${'$'}(awk '
+                    { sub(/\r${'$'}/, ""); gsub(/^[[:space:]]+|[[:space:]]+${'$'}/, "") }
+                    ${'$'}0 == "" || /^#/ { next }
+                    { print }
+                ' "${'$'}COMPONENTS_FILE_PATH")
+                if [ -z "${'$'}TMP_LIST" ]; then
+                    echo "ERROR: COMPAT_COMPONENTS_FILE=${'$'}COMPONENTS_FILE_PATH produced zero IDs after filtering blanks/comments" >&2
+                    exit 2
+                fi
+                COMPONENTS_CSV=${'$'}(printf '%s' "${'$'}TMP_LIST" | tr '\n' ',')
+                COMPONENTS_CSV="${'$'}{COMPONENTS_CSV%,}"
+                COMPONENTS_COUNT=${'$'}(printf '%s\n' "${'$'}TMP_LIST" | wc -l | tr -d ' ')
+                echo "Component set:   %COMPAT_COMPONENTS_FILE% (${'$'}COMPONENTS_COUNT IDs)"
+                echo "Versions file:   ${'$'}VERSIONS_FILE_PATH"
+                export BASELINE_JAR="${'$'}WORK_DIR/baseline.jar"
+                export CANDIDATE_JAR="${'$'}WORK_DIR/candidate.jar"
+                export BASELINE_LOG="${'$'}WORK_DIR/baseline.log"
+                export CANDIDATE_LOG="${'$'}WORK_DIR/candidate.log"
+                export LOCAL_VCS_ROOT="%teamcity.build.checkoutDir%/%COMPONENTS_REGISTRY_CHECKOUT_DIR%"
+                export SERVICE_CONFIG_DIR="%teamcity.build.checkoutDir%/service-config"
+                export COMPAT_SMOKE_COMPONENTS="${'$'}COMPONENTS_CSV"
+                export COMPAT_VERSIONS_FILE="${'$'}VERSIONS_FILE_PATH"
+                export COMPAT_FULL="%COMPAT_FULL%"
+                export COMPAT_PARALLELISM="%COMPAT_PARALLELISM%"
+                export POSTGRES_IMAGE="%DOCKER_REGISTRY_INTERNAL%/postgres:16"
+                export RESET_DB=1
+                export COMPONENTS_REGISTRY_SERVICE_VERSION="%COMPAT_BASELINE_VERSION%"
+                export BUILD_VERSION="%COMPAT_CANDIDATE_VERSION%"
+                # No-migration / git-routing mode — the only behavioural delta vs id17.
+                export CANDIDATE_MODE=git
+                bash scripts/local-stands/teamcity-run.sh
+            """.trimIndent()
+        }
+    }
+
+    failureConditions {
+        // Git-mode skips auto-migrate, so the candidate comes up faster than id17;
+        // keep the same generous cap for cold pulls + postgres + two stand boots.
+        executionTimeoutMin = 120
+    }
+
+    features {
+        xmlReport {
+            reportType = XmlReport.XmlReportType.JUNIT
+            rules = "+:components-registry-compat-test/build/test-results/test/*.xml"
+        }
+        // Same Artifactory pre-login as id17 (snapshot candidate tag needs auth).
+        // See id17 for the dockerRegistryId caveat (IDs are TC-installation-specific).
+        dockerSupport {
+            id = "DockerSupport"
+            loginToRegistry = on {
+                dockerRegistryId = "PROJECT_EXT_177,PROJECT_EXT_350,PROJECT_EXT_351"
+            }
+        }
+        // Mutual exclusion with id17 (same ports + Postgres compose).
+        sharedResources {
+            writeLock("crs-local-stand")
+        }
+    }
+
+    requirements {
+        doesNotContain("env.OS_TYPE", "WIN", "RQ_2875")
+    }
+
+    triggers {
+        // Auto-fire alongside id17 whenever id10 finishes on a non-main branch.
+        // git-mode has signal on every branch (it guards the no-op invariant),
+        // but mirror id17's main exclusion to avoid burning agent minutes on the
+        // release trunk; Manual Run from any branch still works.
         finishBuildTrigger {
             buildType = "${id10CompileUtAuto.id}"
             successfulOnly = true
