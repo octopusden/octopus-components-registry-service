@@ -223,7 +223,7 @@ Aggregator grouping. An aggregator is a DSL component with a nested `components 
 
 Semantics:
 - **REAL aggregator** (`is_fake = false`): aggregator is itself a deployable component. Has its own row in `components` whose `component_group_id` points to this group. All sub-components also link to this group.
-- **FAKE aggregator** (`is_fake = true`): grouping-only entity. **No row in `components` for the aggregator itself.** Only sub-components link to the group.
+- **FAKE aggregator** (`is_fake = true`): a grouping stub (placeholder VCS / stub artifactId) that is not independently deployable. It **still has its own row in `components`** — so the **v1–v3 read API keeps serving it** (compat parity with the pre-schema-v2 registry, which had no aggregator concept and served these as ordinary components). That row's `component_group_id` self-links to its own group (so `group_key == component_key` with `is_fake = true`); sub-components link to the same group. The fake aggregator's own row is **excluded from the v4 regular-components list** (it represents a group, not a shippable component — groups may get their own UI later); the v4 list query filters out exactly the rows that are self-linked to their own fake group, and that self-link is the marker it keys off. (Historical note: before this compat fix, a fake aggregator had **no** `components` row at all, which 404'd it on the v1–v3 path.)
 
 **Membership source (R1 — decoupled from `parentComponent`):** group membership is derived from the DSL `components { }` block. The loader surfaces it as `EscrowConfiguration.aggregatorSubComponents` (aggregatorKey → sub-component keys), and the importer (§6.3) keys grouping off *that map*, NOT the flat `parent_component_id` / `parentComponent` field. Being referenced as another component's `parentComponent` (without itself owning a `components { }` block) does **not** make a component an aggregator and creates **no** group. Migration is the sole writer of `component_group_id`; the v4 API never creates or assigns a group (see §4.1). A re-migration is idempotent and self-correcting: §6.3 deletes any `component_groups` row whose key is no longer a current aggregator (unlinking its members first), which clears groups left behind by the earlier flat-`parentComponent` grouping logic.
 
@@ -415,7 +415,10 @@ for ((childKey, parentKey) in pendingParentByKey) {
         continue
     }
     // Seed canBeParent on the referenced parent (idempotent: set true once,
-    // never false). FAKE aggregators have no ComponentEntity row, so excluded.
+    // never false). canBeParent is the flat parentComponent-target concept,
+    // independent of aggregator status (§4.3) — a fake aggregator referenced
+    // here now has a row and may become can_be_parent, yet stays hidden from
+    // every v4 list query, so it never surfaces in the parent picker.
     if (!parent.canBeParent) { parent.canBeParent = true; componentRepository.save(parent) }
     val child = componentRepository.findByComponentKey(childKey)!!
     child.parentComponentId = parent.id
@@ -433,8 +436,8 @@ For each top-level DSL component:
 1. If no nested `components { }` block → STANDALONE; create one `components` row with `component_group_id = NULL`.
 2. Else (aggregator):
    - Classify REAL vs FAKE per the detection rule (§4.3).
-   - Create `component_groups` row.
-   - REAL: also create `components` row for the aggregator itself with `component_group_id` pointing to its own group.
+   - Create `component_groups` row (`is_fake` set accordingly).
+   - Create a `components` row for the aggregator itself — **REAL and FAKE alike** — and self-link its `component_group_id` to its own group. The REAL aggregator's row is an ordinary deployable component; the FAKE aggregator's row exists purely for **v1–v3 compat parity** and is **excluded from the v4 regular-components list** (the self-link to its own fake group is the marker the list query filters on — §4.3).
    - For each sub-component (`EscrowConfigurationLoader` resolves parent defaults into the sub config): create `components` row with `component_group_id` pointing to the group.
 
 Grouping is keyed off the loader's `EscrowConfiguration.aggregatorSubComponents` (aggregatorKey → sub-component keys, derived from the `components { }` block), **never** the flat `parentComponent` field (§4.3). After linking, a **re-run cleanup** deletes any pre-existing `component_groups` row whose key is no longer a current aggregator — unlinking its members (`component_group_id = NULL`) first. This makes re-migration idempotent and removes groups left behind by the earlier flat-`parentComponent`-based grouping (a non-aggregator parent — one with no `components { }` block — no longer retains a group). Cleanup runs only on a **full batch** migration (`migrateAllComponents`); a single-component migration (`migrateComponent`) links its own group but does not sweep stale groups.

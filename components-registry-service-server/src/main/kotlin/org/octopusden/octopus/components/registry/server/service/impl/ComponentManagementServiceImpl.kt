@@ -1,6 +1,7 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
 import jakarta.persistence.OptimisticLockException
+import jakarta.persistence.criteria.JoinType
 import org.octopusden.octopus.components.registry.core.exceptions.ComponentNameConflictException
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.server.dto.v4.BaseConfigurationRequest
@@ -1450,6 +1451,30 @@ class ComponentManagementServiceImpl(
 
     private fun buildSpecification(filter: ComponentFilter): Specification<ComponentEntity> {
         var spec = Specification.where<ComponentEntity>(null)
+
+        // Always-on exclusion (compat parity). A FAKE aggregator (stub VCS / artifactId that
+        // only owns a `components { }` block) keeps its ComponentEntity row so the v1–v3
+        // resolver still serves it — but it must NOT appear in the v4 regular-components list
+        // (it represents a group, not a shippable component; groups get their own UI later).
+        // The importer self-links such a stub to its OWN fake group, so the marker is:
+        // componentGroup is fake AND its groupKey equals the row's own componentKey. LEFT join
+        // so ordinary group-less components and real-aggregator members are all kept; a
+        // many-to-one join does not multiply rows, so no query.distinct(true) is needed.
+        spec =
+            spec.and(
+                Specification { root, _, cb ->
+                    val grp = root.join<ComponentEntity, ComponentGroupEntity>("componentGroup", JoinType.LEFT)
+                    cb.or(
+                        cb.isNull(grp.get<UUID>("id")),
+                        cb.not(
+                            cb.and(
+                                cb.isTrue(grp.get<Boolean>("isFake")),
+                                cb.equal(grp.get<String>("groupKey"), root.get<String>("componentKey")),
+                            ),
+                        ),
+                    )
+                },
+            )
 
         filter.productType?.let { pt ->
             spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<String>("productType"), pt) })
