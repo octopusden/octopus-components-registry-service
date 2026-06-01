@@ -75,4 +75,10 @@ data class ComponentFilter(
     val parentComponentName: String? = null,
     /** Case-insensitive LIKE on the owning group's `group_key`. */
     val groupKey: String? = null,
+    /** Exact match on `components.distribution_explicit`. Like `solution`,
+     *  `distributionExplicit=false` excludes rows where the value IS NULL. */
+    val distributionExplicit: Boolean? = null,
+    /** Exact match on `components.distribution_external`. Like `solution`,
+     *  `distributionExternal=false` excludes rows where the value IS NULL. */
+    val distributionExternal: Boolean? = null,
 )

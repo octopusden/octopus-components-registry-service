@@ -154,6 +154,8 @@ class ComponentControllerV4(
         @RequestParam(required = false) productionBranch: String?,
         @RequestParam(required = false) parentComponentName: String?,
         @RequestParam(required = false) groupKey: String?,
+        @RequestParam(required = false) distributionExplicit: Boolean?,
+        @RequestParam(required = false) distributionExternal: Boolean?,
         pageable: Pageable,
     ): Page<ComponentSummaryResponse> {
         // Each multi-value list filter parameter (system, owner, buildSystem,
@@ -179,6 +181,8 @@ class ComponentControllerV4(
                 productionBranch = productionBranch,
                 parentComponentName = parentComponentName,
                 groupKey = groupKey,
+                distributionExplicit = distributionExplicit,
+                distributionExternal = distributionExternal,
             )
         return componentManagementService.listComponents(filter, pageable)
     }
