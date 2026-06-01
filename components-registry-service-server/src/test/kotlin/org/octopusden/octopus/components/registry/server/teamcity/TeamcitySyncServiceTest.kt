@@ -550,6 +550,21 @@ class TeamcitySyncServiceTest {
         override fun findDistinctSystemCodes(): List<String> =
             components.mapNotNull { it.systemCode }.filter { it.isNotBlank() }.distinct().sorted()
 
+        override fun findDistinctClientCodes(): List<String> =
+            components.mapNotNull { it.clientCode }.filter { it.isNotBlank() }.distinct().sorted()
+
+        override fun findDistinctJiraProjectKeys(): List<String> =
+            components
+                .flatMap { it.configurations }
+                .filter { it.rowType == "BASE" }
+                .mapNotNull { it.jiraProjectKey }
+                .filter { it.isNotBlank() }
+                .distinct()
+                .sorted()
+
+        override fun findDistinctParentComponentNames(): List<String> =
+            components.mapNotNull { it.parentComponent?.componentKey }.filter { it.isNotBlank() }.distinct().sorted()
+
         override fun existsByParentComponentId(parentId: UUID): Boolean =
             components.any { it.parentComponent?.id == parentId }
 

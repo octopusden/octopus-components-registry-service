@@ -10,6 +10,7 @@ import org.octopusden.octopus.components.registry.server.dto.v4.ComponentUpdateR
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideCreateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideUpdateRequest
+import org.octopusden.octopus.components.registry.server.repository.ComponentGroupRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentLabelRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.LabelRepository
@@ -51,6 +52,7 @@ class ComponentControllerV4(
     private val componentLabelRepository: ComponentLabelRepository,
     private val labelRepository: LabelRepository,
     private val systemRepository: SystemRepository,
+    private val componentGroupRepository: ComponentGroupRepository,
 ) {
     private val log = LoggerFactory.getLogger(ComponentControllerV4::class.java)
 
@@ -76,6 +78,27 @@ class ComponentControllerV4(
     @GetMapping("/meta/systems")
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
     fun getDistinctSystems(): List<String> = componentRepository.findDistinctSystemCodes()
+
+    // SYS-046 in-use option lists for the extended-search multi-select dropdowns
+    // (parity with /meta/owners), each sorted / distinct / null-blank-filtered.
+    // `parent-component-names` lists only keys actually referenced as a parent (NOT
+    // the can-be-parent set the editor picker uses via ?canBeParent=true);
+    // `group-keys` lists only groups that own ≥1 component, so no dead options.
+    @GetMapping("/meta/client-codes")
+    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
+    fun getDistinctClientCodes(): List<String> = componentRepository.findDistinctClientCodes()
+
+    @GetMapping("/meta/jira-project-keys")
+    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
+    fun getDistinctJiraProjectKeys(): List<String> = componentRepository.findDistinctJiraProjectKeys()
+
+    @GetMapping("/meta/parent-component-names")
+    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
+    fun getDistinctParentComponentNames(): List<String> = componentRepository.findDistinctParentComponentNames()
+
+    @GetMapping("/meta/group-keys")
+    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
+    fun getDistinctGroupKeys(): List<String> = componentGroupRepository.findDistinctGroupKeys()
 
     // Full master-table dictionary variants of /meta/labels and /meta/systems.
     // The legacy `/meta/labels` and `/meta/systems` endpoints are sourced from
@@ -146,21 +169,24 @@ class ComponentControllerV4(
         @RequestParam(required = false) buildSystem: List<String>?,
         @RequestParam(required = false) labels: List<String>?,
         @RequestParam(required = false) canBeParent: Boolean?,
-        @RequestParam(required = false) clientCode: String?,
+        @RequestParam(required = false) clientCode: List<String>?,
         @RequestParam(required = false) solution: Boolean?,
-        @RequestParam(required = false) jiraProjectKey: String?,
+        @RequestParam(required = false) jiraProjectKey: List<String>?,
         @RequestParam(required = false) jiraTechnical: Boolean?,
         @RequestParam(required = false) vcsPath: String?,
         @RequestParam(required = false) productionBranch: String?,
-        @RequestParam(required = false) parentComponentName: String?,
-        @RequestParam(required = false) groupKey: String?,
+        @RequestParam(required = false) parentComponentName: List<String>?,
+        @RequestParam(required = false) groupKey: List<String>?,
+        @RequestParam(required = false) distributionExplicit: Boolean?,
+        @RequestParam(required = false) distributionExternal: Boolean?,
         pageable: Pageable,
     ): Page<ComponentSummaryResponse> {
         // Each multi-value list filter parameter (system, owner, buildSystem,
-        // labels) is normalised through `normalizeCsvParam` — see that
-        // helper for the wire-shape contract. The four downstream
-        // Specifications can rely on receiving a non-null, non-blank,
-        // duplicate-free list (or null = "no filter").
+        // labels, clientCode, jiraProjectKey, parentComponentName, groupKey) is
+        // normalised through `normalizeCsvParam` — see that helper for the
+        // wire-shape contract. The downstream Specifications can rely on
+        // receiving a non-null, non-blank, duplicate-free list (or null = "no
+        // filter").
         val filter =
             ComponentFilter(
                 system = normalizeCsvParam(system),
@@ -171,14 +197,16 @@ class ComponentControllerV4(
                 buildSystem = normalizeCsvParam(buildSystem),
                 labels = normalizeCsvParam(labels),
                 canBeParent = canBeParent,
-                clientCode = clientCode,
+                clientCode = normalizeCsvParam(clientCode),
                 solution = solution,
-                jiraProjectKey = jiraProjectKey,
+                jiraProjectKey = normalizeCsvParam(jiraProjectKey),
                 jiraTechnical = jiraTechnical,
                 vcsPath = vcsPath,
                 productionBranch = productionBranch,
-                parentComponentName = parentComponentName,
-                groupKey = groupKey,
+                parentComponentName = normalizeCsvParam(parentComponentName),
+                groupKey = normalizeCsvParam(groupKey),
+                distributionExplicit = distributionExplicit,
+                distributionExternal = distributionExternal,
             )
         return componentManagementService.listComponents(filter, pageable)
     }
