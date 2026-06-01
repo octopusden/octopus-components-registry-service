@@ -9,17 +9,13 @@ package org.octopusden.octopus.components.registry.server.dto.v4
  * rules — null aspect fields preserve, present child lists replace. Override
  * rows are managed via the field-override API, not from here.
  *
- * **Strict contract (UI-swift-sloth)** — `ComponentManagementService`
- * rejects PATCH payloads with **400 Bad Request** when:
- *  - `clearGroup == true` — every component must belong to a group, so
- *    clearing the group via PATCH is no longer expressible. The frontend's
- *    `buildUpdateRequest` always emits `clearGroup: false`.
- *  - `group` is non-null with a blank `group.groupKey` — same blank-key
- *    invariant as create.
- *
- * `group == null` continues to mean "don't touch" (Jackson cannot
- * distinguish field-absent from explicit-null without a presence-preserving
- * DTO, and every untouched-group PATCH today carries `group == null`).
+ * **`group` is migration-owned and is NEVER modified via PATCH** (R1
+ * aggregator/parentComponent decouple): a ComponentGroup is DSL aggregator
+ * membership, established only by the migration/import path. On PATCH the group is
+ * left untouched regardless of input — a provided `group` is accepted but IGNORED,
+ * and `clearGroup` (true or false) is an accepted no-op. Both are kept on the wire
+ * for backward compatibility (the frontend's `buildUpdateRequest` still emits
+ * `clearGroup: false`).
  */
 data class ComponentUpdateRequest(
     val version: Long,
@@ -53,6 +49,8 @@ data class ComponentUpdateRequest(
     val vcsExternalRegistry: String? = null,
     val distributionExplicit: Boolean? = null,
     val distributionExternal: Boolean? = null,
+    // Both accepted for backward compatibility but IGNORED (no-op): group membership
+    // is migration-owned and never modified via the API (see class KDoc).
     val group: ComponentGroupRequest? = null,
     val clearGroup: Boolean = false,
     // Explicit "remove the parent" signal. `parentComponentName == null` means

@@ -25,14 +25,19 @@ import java.nio.file.Paths
 import java.util.UUID
 
 /**
- * CRS-PR1 — `canBeParent` attribute end-to-end:
+ * `canBeParent` attribute end-to-end:
  *  - round-trips on create / detail / summary;
  *  - drives the `?canBeParent=true` list filter (parent picker);
  *  - enforces the parent invariants (chosen parent must be canBeParent; a
  *    canBeParent component may not have a parent; can't disable canBeParent
  *    while children reference it);
- *  - update derives the component group from the parent when the parent
- *    actually changes, and `clearParent` removes it.
+ *  - `clearParent` removes the parent.
+ *
+ * Group membership is NOT derived from the parent/canBeParent relationship on
+ * the API path (R1 decouple): a ComponentGroup is migration-owned aggregator
+ * membership (a DSL `components { }` owner + its sub-components), so an
+ * API-created/edited component carries a null group regardless of its parent or
+ * canBeParent flag.
  *
  * Focused integration test on the H2 `ft-db` profile — does NOT extend the
  * global Groovy fixtures (each case seeds its own uniquely-named components).
@@ -64,7 +69,11 @@ class ComponentCanBeParentTest {
 
     private fun uniqueName(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(8)}"
 
-    /** POST a component; returns its id. Expects 201. */
+    /**
+     * POST a component; returns its id. Expects 201. The body still carries a `group`
+     * (backward-compat wire shape), but the API accepts-and-IGNORES it (R1: group is
+     * migration-owned), so every component created here ends up with a null group.
+     */
     private fun createComponent(
         name: String,
         canBeParent: Boolean = false,
@@ -195,12 +204,12 @@ class ComponentCanBeParentTest {
     }
 
     // -----------------------------------------------------------------------
-    // Update-side derivation + invariants
+    // Update-side invariants
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("update: setting a parent derives the component into the parent's group")
-    fun update_setParent_derivesGroup() {
+    @DisplayName("update: setting a parent does NOT assign a group (R1: group is migration-owned, not parent-derived)")
+    fun update_setParent_doesNotDeriveGroup() {
         val parent = createComponent(uniqueName("cbp_d_parent"), canBeParent = true)
         val parentName = getJson(parent)["name"].asText()
         val child = createComponent(uniqueName("cbp_d_child"))
@@ -212,12 +221,11 @@ class ComponentCanBeParentTest {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"version":${version(child)},"parentComponentName":"$parentName"}"""),
             ).andExpect(status().isOk)
-
-        val childGroup = getJson(child)["group"]["groupKey"].asText()
-        val parentGroup = getJson(parent)["group"]["groupKey"].asText()
-        assert(childGroup == parentGroup) {
-            "expected child to join the parent's group; child=$childGroup parent=$parentGroup"
-        }
+            .andExpect(jsonPath("$.parentComponentName").value(parentName))
+            // The flat parentComponent reference does NOT make the child a group
+            // member — group membership comes only from DSL `components { }`
+            // aggregators via migration. The child's group stays null.
+            .andExpect(jsonPath("$.group").isEmpty)
     }
 
     @Test
@@ -237,7 +245,7 @@ class ComponentCanBeParentTest {
     }
 
     @Test
-    @DisplayName("update: clearParent removes the parent but PRESERVES the existing group")
+    @DisplayName("update: clearParent removes the parent (group is unaffected — it was never parent-derived)")
     fun update_clearParent_removesParent() {
         val parent = createComponent(uniqueName("cbp_c_parent"), canBeParent = true)
         val parentName = getJson(parent)["name"].asText()
@@ -251,12 +259,9 @@ class ComponentCanBeParentTest {
                     .content("""{"version":${version(child)},"clearParent":true}"""),
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.parentComponentName").doesNotExist())
-            // Clearing the parent must not STRIP the group (every component must
-            // belong to a group). The child joined the parent's group on create
-            // (schema-v2 derivation), so after clearParent it retains that derived
-            // group — the parent's own key — rather than the originally-requested
-            // org.example.test.
-            .andExpect(jsonPath("$.group.groupKey").value(parentName))
+            // R1: the child never had a parent-derived group (the API doesn't
+            // assign groups), so clearing the parent leaves the group null.
+            .andExpect(jsonPath("$.group").isEmpty)
     }
 
     @Test
@@ -278,34 +283,30 @@ class ComponentCanBeParentTest {
     }
 
     // -----------------------------------------------------------------------
-    // Aggregator group keyed by own componentKey (create + promote)
+    // R1: the API never assigns a ComponentGroup (group = migration-owned
+    // aggregator membership, decoupled from canBeParent / parentComponent)
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("create: an aggregator (canBeParent=true) gets its OWN-key group, not the requested group")
-    fun create_aggregator_ownKeyGroup() {
+    @DisplayName("create: a canBeParent component gets NO group via the API (group is null)")
+    fun create_canBeParent_noGroupAssigned() {
         val name = uniqueName("cbp_create_agg")
         val id = createComponent(name, canBeParent = true)
-        // The create helper requests group org.example.test, but an aggregator's
-        // group is keyed by its own componentKey so children inherit the aggregator
-        // key — not the (legacy) requested groupKey.
-        assert(getJson(id)["group"]["groupKey"].asText() == name) {
-            "expected aggregator group to equal its own key '$name', got " +
-                getJson(id)["group"]["groupKey"].asText()
+        // The create helper requests a group, but the API ignores it and does NOT
+        // derive one from canBeParent — only DSL `components { }` migration creates
+        // groups. So the response carries a null group.
+        val group = getJson(id)["group"]
+        assert(group == null || group.isNull) {
+            "expected null group for an API-created canBeParent component; got $group"
         }
     }
 
     @Test
-    @DisplayName("update: promoting a plain component to canBeParent re-keys its group to its own key; a child then inherits it")
-    fun update_promoteToCanBeParent_reKeysGroup_childInherits() {
-        // Plain component created with the legacy request.group org.example.test.
+    @DisplayName("update: promoting a plain component to canBeParent does NOT assign a group")
+    fun update_promoteToCanBeParent_noGroupAssigned() {
         val aggregator = createComponent(uniqueName("cbp_promote"))
-        val aggregatorName = getJson(aggregator)["name"].asText()
-        assert(getJson(aggregator)["group"]["groupKey"].asText() == "org.example.test") {
-            "precondition: plain component should carry the requested group"
-        }
-
-        // Promote to canBeParent — the group must re-derive to the aggregator's own key.
+        // Promote to canBeParent — no group should be derived (the API never
+        // assigns aggregator membership).
         mvc
             .perform(
                 patch("/rest/api/4/components/$aggregator")
@@ -313,18 +314,6 @@ class ComponentCanBeParentTest {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"version":${version(aggregator)},"canBeParent":true}"""),
             ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.group.groupKey").value(aggregatorName))
-
-        // A child assigned afterwards inherits the aggregator's OWN-key group — not
-        // the legacy org.example.test it would have inherited before the fix.
-        val child = createComponent(uniqueName("cbp_promote_child"))
-        mvc
-            .perform(
-                patch("/rest/api/4/components/$child")
-                    .with(adminJwt())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"version":${version(child)},"parentComponentName":"$aggregatorName"}"""),
-            ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.group.groupKey").value(aggregatorName))
+            .andExpect(jsonPath("$.group").isEmpty)
     }
 }

@@ -172,21 +172,18 @@ class ImportServiceImpl(
                     )
                 }
 
-                // schema-spec §4.3: when this name is referenced as parentComponent by some
-                // other DSL entry AND its first config classifies as a FAKE aggregator, it is
-                // group-only — no ComponentEntity row. Still upsert the ComponentGroupEntity
-                // and link any children that already exist in DB; otherwise an operator-driven
-                // single-component migration of the aggregator key would leave the group
-                // uncreated while marking source = "db".
+                // R1 §4.3/§6.3 — group membership is driven by the DSL `components { }`
+                // aggregator membership (fullConfig.aggregatorSubComponents), NOT the flat
+                // parentComponent field. `name` is an aggregator iff it owns a components{} block.
                 val firstCfgForCheck = module.moduleConfigurations.firstOrNull()
-                val childrenReferencingThis: Map<String, String> =
-                    fullConfig.escrowModules.mapNotNull { (otherKey, otherModule) ->
-                        val parentRef = otherModule.moduleConfigurations.firstOrNull()?.parentComponent
-                        if (otherKey != name && parentRef == name) otherKey to name else null
-                    }.toMap()
-                if (firstCfgForCheck != null && childrenReferencingThis.isNotEmpty() && isFakeAggregator(firstCfgForCheck)) {
+                val subComponentsOfThis: Set<String> = fullConfig.aggregatorSubComponents[name] ?: emptySet()
+                val isAggregator = subComponentsOfThis.isNotEmpty()
+
+                // (a) FAKE aggregator (owns components{} AND stub) → group-only, no ComponentEntity row.
+                if (isAggregator && firstCfgForCheck != null && isFakeAggregator(firstCfgForCheck)) {
                     sourceRegistry.setComponentSource(name, "db")
-                    val fakePass3Failures = linkAggregatorGroups(fullConfig.escrowModules, childrenReferencingThis)
+                    val fakePass3Failures =
+                        linkAggregatorGroups(fullConfig.escrowModules, mapOf(name to subComponentsOfThis))
                     if (fakePass3Failures.isNotEmpty()) {
                         val msg = fakePass3Failures.joinToString(" | ") { "${it.first}=${it.second}" }
                         return MigrationResult(
@@ -207,16 +204,24 @@ class ImportServiceImpl(
                 importModule(name, module.moduleConfigurations)
                 sourceRegistry.setComponentSource(name, "db")
 
-                // §6.3 Pass 3 for the single-component path: if the component
-                // declares a parentComponent, link it to (or create) the
-                // parent's aggregator group. The batch path handles this
-                // across the full DSL; here we only have the one component,
-                // so reverse-map just its parent.
-                val firstConfig = module.moduleConfigurations.firstOrNull()
+                // §6.3 single-path grouping, keyed off `components { }` membership:
+                //   (b) REAL aggregator (owns components{}, not fake) → create its group,
+                //       self-link, and link any children already in DB;
+                //   (c) sub-component of some aggregator → link it to that aggregator's group.
+                val pass3Input: Map<String, Set<String>> =
+                    if (isAggregator) {
+                        mapOf(name to subComponentsOfThis)
+                    } else {
+                        // case (c): `name` is a sub-component of one or more aggregators →
+                        // link it to each owning aggregator's group.
+                        fullConfig.aggregatorSubComponents.filter { (_, subKeys) -> name in subKeys }
+                    }
                 val pass3Failures: List<Pair<String, String>> =
-                    firstConfig?.parentComponent?.takeIf { it.isNotBlank() }?.let { parentKey ->
-                        linkAggregatorGroups(fullConfig.escrowModules, mapOf(name to parentKey))
-                    } ?: emptyList()
+                    if (pass3Input.isNotEmpty()) {
+                        linkAggregatorGroups(fullConfig.escrowModules, pass3Input)
+                    } else {
+                        emptyList()
+                    }
                 if (pass3Failures.isNotEmpty()) {
                     val msg = pass3Failures.joinToString(" | ") { "${it.first}=${it.second}" }
                     return MigrationResult(
@@ -311,17 +316,20 @@ class ImportServiceImpl(
                     }
                 }.toMap()
 
-            // schema-spec §4.3: FAKE aggregators are group-only — no ComponentEntity row. Detect
-            // which keys in `allModules` are referenced as parentComponent AND classify as FAKE,
-            // and skip them in Pass 1. Pass 3 still creates their ComponentGroupEntity.
+            // schema-spec §4.3: FAKE aggregators are group-only — no ComponentEntity row. R1:
+            // an aggregator is a component that OWNS a `components { }` block (a key in
+            // `aggregatorSubComponents`), NOT merely a flat-`parentComponent` target. Among
+            // aggregators, the FAKE ones (stub VCS / artifactId) are skipped in Pass 1; Pass 3
+            // still creates their ComponentGroupEntity.
             val fakeAggregatorKeys: Set<String> =
-                pendingParentByKey.values.toSet().filter { parentKey ->
+                fullConfig.aggregatorSubComponents.keys.filter { parentKey ->
                     val firstConfig = allModules[parentKey]?.moduleConfigurations?.firstOrNull()
                     firstConfig != null && isFakeAggregator(firstConfig)
                 }.toSet()
             LOG.info(
-                "§6 DSL derivation: {} ms ({} parent refs, {} FAKE aggregators)",
-                (System.nanoTime() - deriveStart) / 1_000_000, pendingParentByKey.size, fakeAggregatorKeys.size,
+                "§6 DSL derivation: {} ms ({} parent refs, {} aggregators, {} FAKE)",
+                (System.nanoTime() - deriveStart) / 1_000_000, pendingParentByKey.size,
+                fullConfig.aggregatorSubComponents.size, fakeAggregatorKeys.size,
             )
 
             var total = 0
@@ -498,10 +506,12 @@ class ImportServiceImpl(
                         )
                         continue
                     }
-                    // Seed canBeParent on the referenced parent: a component that is
-                    // referenced as a parent IS an aggregator. Idempotent — set true
-                    // once, never false. FAKE aggregators have no ComponentEntity row
-                    // (findByComponentKey returns null above), so they're excluded.
+                    // Seed canBeParent on the referenced parent: any component referenced
+                    // as a `parentComponent` becomes can-be-parent (eligible in the parent
+                    // picker). This is INDEPENDENT of aggregator status — an aggregator owns
+                    // a `components { }` block (§6.3 / aggregatorSubComponents), a separate
+                    // concept. Idempotent — set true once, never false. FAKE aggregators have
+                    // no ComponentEntity row (findByComponentKey returns null above), excluded.
                     if (!parent.canBeParent) {
                         parent.canBeParent = true
                         componentRepository.save(parent)
@@ -516,15 +526,21 @@ class ImportServiceImpl(
 
             LOG.info("§6.2 Pass 2 complete: {} ms ({} parent refs)", (System.nanoTime() - pass2Start) / 1_000_000, pendingParentByKey.size)
 
-            // §6.3 Pass 3: upsert component_groups rows and link component_group_id FKs.
-            // Runs after Pass 2 so all ComponentEntity rows are present and parentComponent FKs are resolved.
-            LOG.info("§6.3 Pass 3: linking aggregator groups for {} parent references", pendingParentByKey.size)
+            // §6.3 Pass 3: upsert component_groups rows and link component_group_id FKs from the
+            // DSL `components { }` aggregator membership (R1 — NOT the flat parentComponent graph).
+            // Runs after Pass 2 so all ComponentEntity rows are present.
+            LOG.info("§6.3 Pass 3: linking {} aggregator group(s)", fullConfig.aggregatorSubComponents.size)
             val pass3Start = System.nanoTime()
-            val pass3Failures = linkAggregatorGroups(allModules, pendingParentByKey)
+            val pass3Failures = linkAggregatorGroups(allModules, fullConfig.aggregatorSubComponents)
             LOG.info(
                 "§6.3 Pass 3 complete: {} ms ({} failures)",
                 (System.nanoTime() - pass3Start) / 1_000_000, pass3Failures.size,
             )
+            // §6.3 cleanup (re-run safety): the OLD logic grouped by flat parentComponent and could
+            // have created groups for non-aggregators (a plain parentComponent target with no
+            // components{} block). Remove any group whose key is
+            // not a current true aggregator — unlink its members and delete the orphaned row.
+            cleanupStaleGroups(fullConfig.aggregatorSubComponents.keys)
             for ((parentKey, errorMessage) in pass3Failures) {
                 failed++
                 results.add(
@@ -987,41 +1003,16 @@ class ImportServiceImpl(
     // =========================================================================
 
     /**
-     * Import a single DSL module (top-level component + its sub-components if
-     * it is an aggregator).
+     * Import a single DSL module: create its `components` row plus the
+     * `component_configurations` rows (BASE + per-version + markers). Sets only
+     * scalar / per-component fields on the entity.
      *
-     * §6.3: aggregator detection — if any config in [configs] has sub-components
-     * (detected by `EscrowModule.moduleConfigurations` containing configs with
-     * identical jira/build but different artifactIds, which is the DSL pattern),
-     * then classify as aggregator. However, sub-components are returned as
-     * separate top-level EscrowModule entries by the loader, so at this level
-     * we only handle the top-level module. The loader already flattened the
-     * sub-component tree. We detect aggregator by checking if an EscrowModule
-     * in the config map appears to be a "parent" (has sub-components registered
-     * under the same group pattern) — but the loader doesn't expose that
-     * information directly.
-     *
-     * Since the loader flattens sub-components into peer-level EscrowModules,
-     * the `componentGroup` linkage must be done via `parentComponent` field:
-     * sub-components reference their parent via `parentComponent`.
-     *
-     * Simplified aggregator detection: an EscrowModule is an aggregator (and
-     * thus should have a ComponentGroupEntity) when there exists at least one
-     * other module in the full config whose configs reference this module's name
-     * as `parentComponent` OR when the first config has `isFakeAggregator` = true
-     * with a known aggregator VCS URL pattern.
-     *
-     * For the migration pipeline, we handle group creation in Pass 2 (after all
-     * components exist) based on parentComponent linkages. A simpler approach
-     * used here: check if the DSL for this module has a `components {}` block
-     * by detecting `sub-components` in the full configuration.
-     *
-     * The loader returns all sub-components as top-level EscrowModules (peers).
-     * The `parentComponent` field on a sub-component's config points to the
-     * parent. So we DON'T need to detect aggregators at importModule time;
-     * we just save each module as a standalone ComponentEntity and wire
-     * parentComponent in Pass 2. ComponentGroupEntity is created as a follow-on
-     * step based on parentComponent graph.
+     * Relationships are resolved in LATER passes, not here:
+     *  - `parent_component_id` FK and `can_be_parent` seeding → Pass 2 (§6.2),
+     *    from the flat `parentComponent` field;
+     *  - `component_group_id` (aggregator membership) → Pass 3 (§6.3), keyed off
+     *    the DSL `components { }` block (EscrowConfiguration.aggregatorSubComponents),
+     *    NEVER the flat `parentComponent` field.
      */
     @Suppress("CyclomaticComplexMethod", "LongMethod")
     private fun importModule(
@@ -2080,35 +2071,35 @@ class ImportServiceImpl(
     /**
      * Pass 3 (§6.3): create `component_groups` rows and set `component_group_id` FKs.
      *
-     * Strategy: build a reverse map parentKey → [childKeys] from [pendingParentByKey], then
-     * for each aggregator parent:
-     *  1. Classify REAL vs FAKE via [isFakeAggregator] against the parent's first DSL config.
-     *  2. Upsert a [ComponentGroupEntity] (idempotent — re-runs skip existing rows).
-     *  3. Set `componentGroup` on every child component — and update it when the existing
-     *     link points at a *different* group (DSL parent changed since the last migration).
-     *  4. For a REAL aggregator: same self-link update rule.
+     * Input is [aggregatorSubComponents] (aggregatorKey → its sub-component keys), derived by
+     * the loader from DSL `components { }` blocks — NOT the flat `parentComponent` field. For
+     * each aggregator key:
+     *  1. Classify REAL vs FAKE via [isFakeAggregator] against the aggregator's first DSL config.
+     *  2. Upsert a [ComponentGroupEntity] keyed by the aggregator key (idempotent — re-runs skip
+     *     existing rows).
+     *  3. Set `componentGroup` on every sub-component — and update it when the existing link
+     *     points at a *different* group (DSL membership changed since the last migration).
+     *  4. For a REAL aggregator (non-fake): self-link the aggregator to its own group too.
      *
-     * @return per-parent failures: list of `(parentKey, errorMessage)`. Empty list on full
-     *         success. Callers should fold these into their own result aggregation so a
+     * @return per-aggregator failures: list of `(aggregatorKey, errorMessage)`. Empty list on
+     *         full success. Callers should fold these into their own result aggregation so a
      *         partial Pass 3 failure does not silently look like a fully-successful migration.
      */
     private fun linkAggregatorGroups(
         allModules: Map<String, EscrowModule>,
-        pendingParentByKey: Map<String, String>,
+        aggregatorSubComponents: Map<String, Set<String>>,
     ): List<Pair<String, String>> {
-        // Reverse the child→parent map to parent→[children]
-        val childrenByParent = mutableMapOf<String, MutableList<String>>()
-        for ((childKey, parentKey) in pendingParentByKey) {
-            childrenByParent.getOrPut(parentKey) { mutableListOf() }.add(childKey)
-        }
-
+        // R1: group membership is driven by the DSL `components { }` block
+        // (aggregatorKey → its sub-component keys), NOT the flat `parentComponent`
+        // field. `aggregatorSubComponents` is already parent→children, so no
+        // reversal is needed.
+        //
         // Aggregate per-parent failures and log a single summary at the end
         // instead of letting individual WARN lines hide a systemic issue. A
         // migration step is a one-shot batch — silent partial-success is the
-        // wrong default. Callers that need stricter behaviour can inspect the
-        // summary log or wire this list into BatchMigrationResult later.
+        // wrong default.
         val failures = mutableListOf<Pair<String, String>>()
-        for ((parentKey, childKeys) in childrenByParent) {
+        for ((parentKey, childKeys) in aggregatorSubComponents) {
             try {
                 val parentModule = allModules[parentKey]
                 if (parentModule == null) {
@@ -2170,14 +2161,53 @@ class ImportServiceImpl(
         return failures
     }
 
-    /** Upsert a [ComponentGroupEntity] by [groupKey]. Idempotent. */
+    /**
+     * Upsert a [ComponentGroupEntity] by [groupKey]. Idempotent. On a re-run the
+     * `isFake` flag is refreshed when the DSL classification flips (REAL↔FAKE), so the
+     * stored flag never goes stale. (NB: a REAL→FAKE flip also leaves the aggregator's
+     * old ComponentEntity row behind; that row-level transition is out of scope here.)
+     */
     private fun upsertComponentGroup(
         groupKey: String,
         isFake: Boolean,
     ): ComponentGroupEntity {
         val existing = componentGroupRepository.findByGroupKey(groupKey)
-        if (existing != null) return existing
+        if (existing != null) {
+            if (existing.isFake != isFake) {
+                existing.isFake = isFake
+                return componentGroupRepository.save(existing)
+            }
+            return existing
+        }
         return componentGroupRepository.save(ComponentGroupEntity(groupKey = groupKey, isFake = isFake))
+    }
+
+    /**
+     * Re-run cleanup (R1): the previous logic created a ComponentGroup for every flat
+     * `parentComponent` target, including non-aggregators (a plain parentComponent target that
+     * owns no `components { }` block). Group membership
+     * is now driven solely by `components { }` aggregators, so any EXISTING group whose key is
+     * NOT a current true aggregator ([validAggregatorKeys]) is stale: unlink its members
+     * (`componentGroup = null`) and delete the orphaned `component_groups` row. Real-aggregator
+     * groups are preserved. Operates on existing DB rows, so it runs correctly even when Pass 1
+     * skipped already-present components.
+     */
+    private fun cleanupStaleGroups(validAggregatorKeys: Set<String>) {
+        val stale = componentGroupRepository.findAll().filter { it.groupKey !in validAggregatorKeys }
+        if (stale.isEmpty()) return
+        for (group in stale) {
+            val members = group.id?.let { componentRepository.findByComponentGroupId(it) } ?: emptyList()
+            for (member in members) {
+                member.componentGroup = null
+                componentRepository.save(member)
+            }
+            componentGroupRepository.delete(group)
+            LOG.info(
+                "§6.3 cleanup: removed stale (non-aggregator) group '{}' — unlinked {} member(s)",
+                group.groupKey, members.size,
+            )
+        }
+        LOG.info("§6.3 cleanup: removed {} stale group(s)", stale.size)
     }
 
     // =========================================================================

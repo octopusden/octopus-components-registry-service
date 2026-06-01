@@ -11,6 +11,8 @@ import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
+import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
+import org.octopusden.octopus.components.registry.server.entity.ComponentGroupEntity
 import org.octopusden.octopus.components.registry.server.mapper.ALL_VERSIONS
 import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
 import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
@@ -19,6 +21,7 @@ import org.octopusden.octopus.components.registry.server.repository.ComponentRep
 import org.octopusden.octopus.components.registry.server.repository.LabelRepository
 import org.octopusden.octopus.components.registry.server.repository.SystemRepository
 import org.octopusden.octopus.components.registry.server.repository.ToolRepository
+import org.octopusden.octopus.components.registry.server.service.ImportService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.mock.mockito.MockBean
@@ -69,6 +72,9 @@ class MigrationIntegrationTest {
 
     @Autowired
     private lateinit var labelRepository: LabelRepository
+
+    @Autowired
+    private lateinit var importService: ImportService
 
     init {
         val testResourcesPath =
@@ -522,6 +528,102 @@ class MigrationIntegrationTest {
             versionsApi.componentGroup!!.id,
             "versions-api.componentGroup must reference the TESTONE group",
         )
+    }
+
+    // =========================================================================
+    // R1 §6.3 cleanup-on-rerun: the OLD importer grouped by flat parentComponent
+    // and could leave a ComponentGroup for a non-aggregator (a plain parentComponent
+    // target with no components{} block).
+    // A re-migration must remove any group whose key is NOT a current true
+    // aggregator (a `components { }` owner) — unlinking its members — while
+    // PRESERVING real-aggregator groups (TESTONE / TEST_AGGREGATOR_FAKE).
+    // =========================================================================
+
+    @Test
+    @Transactional
+    @DisplayName(
+        "MIG-R1/§6.3: re-migration deletes a stale (non-aggregator) group and unlinks its members, " +
+            "but preserves the real-aggregator groups",
+    )
+    fun migR1_rerunRemovesStaleGroupsButPreservesAggregators() {
+        // Seed a stale group whose key is NOT any DSL aggregator, plus a victim
+        // component linked to it (mimicking a leftover from the old flat-parent
+        // grouping). The victim is not in the DSL, so re-migration ignores it
+        // except for the cleanup unlink.
+        val staleKey = "org.example.STALE_FLAT_PARENT_GROUP"
+        val staleGroup = componentGroupRepository.save(ComponentGroupEntity(groupKey = staleKey, isFake = false))
+        val victim = componentRepository.save(ComponentEntity(componentKey = "stale-cleanup-victim"))
+        victim.componentGroup = staleGroup
+        componentRepository.save(victim)
+
+        // Real-aggregator groups created at startup must exist beforehand.
+        val testoneIdBefore = componentGroupRepository.findByGroupKey("TESTONE")?.id
+        val fakeIdBefore = componentGroupRepository.findByGroupKey("TEST_AGGREGATOR_FAKE")?.id
+        assertNotNull(testoneIdBefore, "precondition: TESTONE group must exist from the initial migration")
+        assertNotNull(fakeIdBefore, "precondition: TEST_AGGREGATOR_FAKE group must exist from the initial migration")
+        assertNotNull(
+            componentRepository.findByComponentKey("stale-cleanup-victim")?.componentGroup,
+            "precondition: victim must carry the stale group before re-migration (else the test is vacuous)",
+        )
+
+        // Re-run the full batch migration (idempotent) — Pass 3 + cleanup run.
+        importService.migrateAllComponents()
+
+        // The stale group is gone and its member is unlinked.
+        assertNull(
+            componentGroupRepository.findByGroupKey(staleKey),
+            "stale non-aggregator group '$staleKey' must be removed on re-migration",
+        )
+        val victimAfter = componentRepository.findByComponentKey("stale-cleanup-victim")
+        assertNotNull(victimAfter, "victim component must still exist (cleanup unlinks, does not delete members)")
+        assertNull(
+            victimAfter!!.componentGroup,
+            "victim's componentGroup must be cleared when its stale group is removed",
+        )
+
+        // Real-aggregator groups are preserved (same rows, idempotent upsert).
+        assertEquals(
+            testoneIdBefore,
+            componentGroupRepository.findByGroupKey("TESTONE")?.id,
+            "REAL aggregator group TESTONE must be preserved across re-migration",
+        )
+        assertEquals(
+            fakeIdBefore,
+            componentGroupRepository.findByGroupKey("TEST_AGGREGATOR_FAKE")?.id,
+            "FAKE aggregator group TEST_AGGREGATOR_FAKE must be preserved across re-migration",
+        )
+    }
+
+    @Test
+    @Transactional
+    @DisplayName(
+        "MIG-R1/§6.3: re-migration refreshes a stale component_groups.is_fake flag (REAL aggregator " +
+            "wrongly stored as fake is corrected back to is_fake=false)",
+    )
+    fun migR1_rerunRefreshesStaleIsFakeFlag() {
+        // TESTONE is a REAL aggregator (real VCS + non-stub artifactId) → is_fake=false
+        // from the initial migration. Simulate a stale flag (e.g. left by an older import
+        // or a transient mis-classification) by flipping it to true in the DB, then re-run
+        // the migration: upsertComponentGroup must refresh the flag back to the DSL-correct
+        // value (false), keeping the SAME group row (not a delete+recreate).
+        val before = componentGroupRepository.findByGroupKey("TESTONE")
+        assertNotNull(before, "precondition: TESTONE group must exist from the initial migration")
+        assertFalse(before!!.isFake, "precondition: TESTONE is a REAL aggregator (is_fake=false)")
+        val groupIdBefore = before.id
+
+        before.isFake = true
+        componentGroupRepository.save(before)
+        assertTrue(
+            componentGroupRepository.findByGroupKey("TESTONE")!!.isFake,
+            "precondition: stale is_fake=true must be persisted before re-migration",
+        )
+
+        importService.migrateAllComponents()
+
+        val after = componentGroupRepository.findByGroupKey("TESTONE")
+        assertNotNull(after, "TESTONE group must still exist after re-migration")
+        assertFalse(after!!.isFake, "re-migration must refresh the stale flag back to is_fake=false")
+        assertEquals(groupIdBefore, after.id, "the group row must be refreshed in place, not recreated")
     }
 
     // =========================================================================

@@ -69,12 +69,14 @@ class V4WriteValidationTest {
             )
 
     /**
-     * Minimal valid create body that satisfies the UI-swift-sloth strict
-     * contract: every component must provide `group.groupKey` and
-     * `baseConfiguration.build.buildSystem`. Tests that previously seeded
-     * with `{"name": "..."}` or `{"name": "...", "baseConfiguration": {}}`
-     * now route through this helper so the field-override / PATCH cases
-     * that follow can run against a real saved component.
+     * Minimal valid create body. The only hard create requirement is
+     * `baseConfiguration.build.buildSystem`. A `group` is included for
+     * backward-compat coverage but is accepted-and-ignored by the API (R1:
+     * group is migration-owned aggregator membership, never assigned via the
+     * API). Tests that previously seeded with `{"name": "..."}` or
+     * `{"name": "...", "baseConfiguration": {}}` route through this helper so
+     * the field-override / PATCH cases that follow run against a real saved
+     * component.
      */
     private fun validSeedBody(name: String): String =
         """{"name": "$name",""" +
