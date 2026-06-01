@@ -176,16 +176,15 @@ configure(subprojects) {
     }
 
     afterEvaluate {
-        // SpotBugs disabled for this project. The octopus-quality convention plugin enables it,
-        // but bytecode-flow analysis produced a 95% false-positive rate on Kotlin lateinit / DSL
-        // getter / test code in build 2.0.84-3436 (1 real bug out of 21 HIGH-priority findings,
-        // resolved in PR #218). The remaining toolchain — Checkstyle + PMD (Java, blocking),
-        // detekt + ktlint (Kotlin, blocking), CodeNarc (Groovy, report-only) — already covers
-        // each language with native rule sets. Keeping SpotBugs would require ongoing exclude-filter
-        // maintenance for marginal signal. See AGENTS.md Quality Gates section.
+        // SpotBugs stays disabled. octopus-quality 2.3.5 already gates SpotBugs to Java-without-
+        // Kotlin modules, but CRS's Java/Groovy modules (component-resolver-*, *-light-client) still
+        // yield low-value noise — EI_EXPOSE_REP on the escrow model/config POJOs plus findings on
+        // Groovy-generated classes (22 in component-resolver-api alone) — exactly the exclude-filter
+        // maintenance we opted out of (1 real bug / 21 HIGH in build 2.0.84-3436, PR #218).
+        // Checkstyle + PMD (Java, blocking), detekt + ktlint (Kotlin, blocking) and CodeNarc (Groovy)
+        // already cover each language. See AGENTS.md Quality Gates section.
         //
-        // We disable the *tasks* rather than apply-false the plugin: the SpotBugs plugin is owned
-        // by octopus-quality (shared convention), so opting out happens at the consumer side here.
+        // Disable the *tasks* (not apply-false): the SpotBugs plugin is owned by octopus-quality.
         if (pluginManager.hasPlugin('com.github.spotbugs')) {
             tasks.matching { it.name.startsWith('spotbugs') }.configureEach { enabled = false }
         }
