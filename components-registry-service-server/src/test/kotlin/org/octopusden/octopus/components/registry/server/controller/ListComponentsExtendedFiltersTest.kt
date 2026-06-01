@@ -6,6 +6,9 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
+import org.octopusden.octopus.components.registry.server.entity.ComponentGroupEntity
+import org.octopusden.octopus.components.registry.server.repository.ComponentGroupRepository
+import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.octopusden.octopus.components.registry.server.support.viewerJwt
 import org.springframework.beans.factory.annotation.Autowired
@@ -49,6 +52,14 @@ class ListComponentsExtendedFiltersTest {
 
     @Autowired
     private lateinit var objectMapper: ObjectMapper
+
+    // R1: a ComponentGroup is migration-owned, never assigned via the API, so the
+    // `?groupKey=` filter test seeds the group + link directly through the repos.
+    @Autowired
+    private lateinit var componentRepository: ComponentRepository
+
+    @Autowired
+    private lateinit var componentGroupRepository: ComponentGroupRepository
 
     init {
         val testResourcesPath =
@@ -165,13 +176,18 @@ class ListComponentsExtendedFiltersTest {
     fun groupKeyFilter() {
         val unique = uniqueName("grp")
         val inGroup = uniqueName("ext_g_in")
-        create(
-            """{"name":"$inGroup","displayName":"$inGroup",""" +
-                """"group":{"groupKey":"org.example.$unique","isFake":false},""" +
-                """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
-        )
+        // Create via the API (valid component, null group), then attach the group
+        // directly: groups are migration-owned aggregator membership and the API
+        // never assigns one (R1). This still exercises the `?groupKey=` JOIN.
+        create(baseBody(inGroup))
         val other = uniqueName("ext_g_other")
         create(baseBody(other))
+        val group =
+            componentGroupRepository.save(ComponentGroupEntity(groupKey = "org.example.$unique", isFake = false))
+        val entity = componentRepository.findByComponentKey(inGroup)!!
+        entity.componentGroup = group
+        componentRepository.save(entity)
+
         val n = names("groupKey" to unique)
         assert(n.contains(inGroup)) { "expected $inGroup in $n" }
         assert(!n.contains(other)) { "did not expect $other in $n" }

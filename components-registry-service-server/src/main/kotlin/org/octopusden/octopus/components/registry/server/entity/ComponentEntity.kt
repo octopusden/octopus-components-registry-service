@@ -92,12 +92,14 @@ class ComponentEntity(
     @JoinColumn(name = "component_group_id")
     var componentGroup: ComponentGroupEntity? = null,
 
-    // True when this component is referenced as a `parentComponent` by at least
-    // one other component (i.e., it is an aggregator parent). Seeded by the
-    // Groovy import (sets true for DSL-referenced parents, never false) and
-    // editable via the v4 API. A component with `canBeParent = true` may not
-    // itself have a `parentComponent` (enforced in the service layer) — a
-    // parent cannot have a parent.
+    // True when this component is referenced as a `parentComponent` by at least one
+    // other component — i.e. it is eligible to be picked as a parent. This is the flat
+    // peer-reference relationship and is INDEPENDENT of aggregator status: an
+    // aggregator owns a `components { }` block and forms a ComponentGroup
+    // (`componentGroup` above), a separate concept. Seeded by the Groovy import (sets
+    // true for DSL-referenced parents, never false) and editable via the v4 API. A
+    // component with `canBeParent = true` may not itself have a `parentComponent`
+    // (enforced in the service layer) — single-level: a parent cannot have a parent.
     @Column(name = "can_be_parent", nullable = false)
     var canBeParent: Boolean = false,
 

@@ -557,6 +557,31 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 copyright: "companyName1",
         )
         assert expectedModuleConfig == modelConfiguration
+
+        // R1 — aggregator membership captured from the Groovy `components {}` block.
+        // `bcomponent` owns the block, so it is the (only) aggregator and its members
+        // are exactly the four sub-components. A component that does NOT own a
+        // `components {}` block (including the sub-components themselves) never appears
+        // as a key. This map is the authoritative ComponentGroup source the importer
+        // reads — NOT the flat `parentComponent` field.
+        assert (configuration.aggregatorSubComponents.keySet() == ([TEST_MODULE] as Set))
+        assert (configuration.aggregatorSubComponents[TEST_MODULE] ==
+                (["buildsystem-model", "buildsystem-mojo", "notJiraComponent", "sub-component-with-defaults"] as Set))
+        assert !configuration.aggregatorSubComponents.containsKey("buildsystem-model")
+    }
+
+    @Test
+    void testFlatParentComponentIsNotAggregator() {
+        EscrowConfiguration configuration = loadConfiguration("flatParentComponent.groovy")
+        assert 2 == configuration.escrowModules.size()
+        // `childcomp` references `parentcomp` via the flat `parentComponent` field, but
+        // NEITHER owns a `components { }` block — so neither is an aggregator. A flat
+        // parentComponent reference must NOT create aggregator/group membership (R1):
+        // extractAggregatorMembership reads only `components { }`, never `parentComponent`.
+        assert configuration.aggregatorSubComponents.isEmpty()
+        // The flat reference is still resolved — it's a separate concept the importer
+        // keeps as the parentComponent FK; it just doesn't form a group.
+        assert "parentcomp" == configuration.escrowModules["childcomp"].moduleConfigurations[0].parentComponent
     }
 
     private static EscrowModuleConfig getAndAssertConfiguration(EscrowConfiguration configuration, String moduleName) {

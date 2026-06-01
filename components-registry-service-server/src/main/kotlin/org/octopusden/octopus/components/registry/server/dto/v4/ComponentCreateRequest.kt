@@ -9,17 +9,18 @@ package org.octopusden.octopus.components.registry.server.dto.v4
  * `baseConfiguration`; override rows are added afterwards via the
  * field-override API.
  *
- * **Strict contract (UI-swift-sloth)** — `ComponentManagementService`
- * rejects payloads with **400 Bad Request** when:
- *  - `group` is null, or `group.groupKey` is blank;
- *  - `baseConfiguration` is null, or `baseConfiguration.build` is null,
- *    or `baseConfiguration.build.buildSystem` is null/blank.
- *
- * In other words: although these fields are declared nullable at the
- * Kotlin / Jackson layer for backward-compatible deserialisation, every
- * created component MUST carry a group and a base build system. The
- * Portal's Create Component dialog enforces both at the UX layer; the
+ * **Strict contract** — `ComponentManagementService` rejects a payload with
+ * **400 Bad Request** when `baseConfiguration` is null, or
+ * `baseConfiguration.build` is null, or `baseConfiguration.build.buildSystem` is
+ * null/blank. Although declared nullable for backward-compatible
+ * deserialisation, every created component MUST carry a base build system; the
  * server is the source of truth.
+ *
+ * **`group` is NOT required and is NOT assigned via the API** (R1
+ * aggregator/parentComponent decouple): a ComponentGroup is DSL aggregator
+ * membership (a `components { }` owner + its sub-components), established only by
+ * the migration/import path. A provided `group` here is accepted but IGNORED —
+ * an API-created component is standalone (`componentGroup = null`).
  */
 data class ComponentCreateRequest(
     val name: String,
@@ -35,10 +36,12 @@ data class ComponentCreateRequest(
     val clientCode: String? = null,
     val solution: Boolean? = null,
     val parentComponentName: String? = null,
-    // Whether this component may be referenced as a parent by others. Normally
-    // seeded by import; accepted here so an admin can create an aggregator up
-    // front. A component with `canBeParent = true` may not also set
-    // `parentComponentName` (a parent cannot have a parent) — service rejects it.
+    // Whether this component may be referenced as a parent by others (parent-picker
+    // eligibility). Normally seeded by import; accepted here so an admin can mark a
+    // component can-be-parent. NOTE: this is NOT the same as an aggregator (a
+    // `components { }` owner that forms a group — see `group`); the two are
+    // independent. A component with `canBeParent = true` may not also set
+    // `parentComponentName` (single-level: a parent cannot have a parent) — rejected.
     val canBeParent: Boolean = false,
     val archived: Boolean = false,
     // Ordered multi-value (first = primary); canonicalized server-side
@@ -53,6 +56,8 @@ data class ComponentCreateRequest(
     val vcsExternalRegistry: String? = null,
     val distributionExplicit: Boolean? = null,
     val distributionExternal: Boolean? = null,
+    // Accepted for backward compatibility but IGNORED: group membership is
+    // migration-owned (DSL `components { }` aggregators), never assigned via the API.
     val group: ComponentGroupRequest? = null,
     val docs: List<DocLinkRequest> = emptyList(),
     val artifactIds: List<ArtifactIdRequest> = emptyList(),

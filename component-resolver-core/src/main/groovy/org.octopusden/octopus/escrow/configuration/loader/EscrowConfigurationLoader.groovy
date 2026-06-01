@@ -223,11 +223,21 @@ class EscrowConfigurationLoader {
                 validationConfig
         )
 
+        // TRUE-aggregator membership (a component that owns a `components{}` block) —
+        // the authoritative source for ComponentGroup membership, distinct from the
+        // flat `parentComponent` reference. Captured from the Groovy ConfigObject tree...
+        fullConfig.aggregatorSubComponents.putAll(extractAggregatorMembership(rootObject))
         dslComponents.forEach { component ->
             LOG.debug("processing dsl $component")
             validator.validateEscrow(component, fullConfig)
             mergeGroovyAndDslComponent(component, fullConfig)
             component.subComponents.forEach { name, subComponent -> mergeGroovyAndDslSubComponent(subComponent, fullConfig) }
+            // ...and from the Kotlin-DSL Components (which expose subComponents directly).
+            if (component.subComponents != null && !component.subComponents.isEmpty()) {
+                fullConfig.aggregatorSubComponents
+                        .computeIfAbsent(component.name, { new HashSet<String>() })
+                        .addAll(component.subComponents.keySet())
+            }
         }
 
         if (!ignoreUnknownAttributes) {
@@ -313,6 +323,30 @@ class EscrowConfigurationLoader {
             }
         }
         componentList
+    }
+
+    /**
+     * TRUE-aggregator membership from the Groovy DSL: a component is an aggregator iff
+     * it owns a {@code components { ... }} block; the keys of that block are its
+     * sub-components. Returns aggregator key -> sub-component keys. This is the
+     * authoritative grouping signal — a flat {@code parentComponent} reference does
+     * NOT make a component an aggregator and never appears here as a key.
+     */
+    private static Map<String, Set<String>> extractAggregatorMembership(ConfigObject rootObject) {
+        Map<String, Set<String>> result = new HashMap<>()
+        getComponentList(rootObject).each { String componentName ->
+            def componentObject = rootObject.get(componentName)
+            if (componentObject instanceof ConfigObject && ((ConfigObject) componentObject).containsKey("components")) {
+                def componentsObject = ((ConfigObject) componentObject).get("components")
+                if (componentsObject instanceof ConfigObject) {
+                    Set<String> subs = new HashSet<>(getComponentList((ConfigObject) componentsObject))
+                    if (!subs.isEmpty()) {
+                        result.put(componentName, subs)
+                    }
+                }
+            }
+        }
+        return result
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)

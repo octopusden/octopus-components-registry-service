@@ -61,4 +61,11 @@ interface ComponentRepository :
             "FROM ComponentEntity c WHERE c.parentComponent.id = :parentId",
     )
     fun existsByParentComponentId(parentId: UUID): Boolean
+
+    /**
+     * All components whose `componentGroup` is [groupId]. Used by migration cleanup
+     * (§6.3) to unlink the members of a group that is no longer a true aggregator
+     * before deleting the now-orphaned `component_groups` row.
+     */
+    fun findByComponentGroupId(groupId: UUID): List<ComponentEntity>
 }
