@@ -1,13 +1,11 @@
 import jetbrains.buildServer.configs.kotlin.*
 import jetbrains.buildServer.configs.kotlin.buildFeatures.XmlReport
 import jetbrains.buildServer.configs.kotlin.buildFeatures.dockerSupport
-import jetbrains.buildServer.configs.kotlin.buildFeatures.sharedResources
 import jetbrains.buildServer.configs.kotlin.buildFeatures.swabra
 import jetbrains.buildServer.configs.kotlin.buildFeatures.xmlReport
 import jetbrains.buildServer.configs.kotlin.buildSteps.gradle
 import jetbrains.buildServer.configs.kotlin.buildSteps.kotlinFile
 import jetbrains.buildServer.configs.kotlin.buildSteps.script
-import jetbrains.buildServer.configs.kotlin.projectFeatures.sharedResource
 import jetbrains.buildServer.configs.kotlin.triggers.finishBuildTrigger
 import jetbrains.buildServer.configs.kotlin.vcs.GitVcsRoot
 
@@ -40,18 +38,12 @@ project {
         param("CRS_COMPAT_TRACE_REPO_URL", "ssh://git@%GIT_SERVER_HOSTNAME%/CREG/crs-compat-trace.git")
     }
 
-    // Shared resource so the two local-stand compat builds never run at the
-    // same time: id17 (db-mode) and id18 (git-mode) both boot stands on the
-    // SAME fixed ports (4567/4568) and the SAME local Postgres compose, so a
-    // parallel run on one agent would collide on ports / reset the DB mid-run.
-    // Both builds take a writeLock on this quota-1 resource → mutual exclusion.
-    features {
-        sharedResource {
-            id = "CrsLocalStand"
-            name = "crs-local-stand"
-            resourceType = quoted(1)
-        }
-    }
+    // NOTE: id17 (db-mode) and id18 (git-mode) are both local-stand compat builds
+    // that boot stands on fixed ports (4567/4568) + a local Postgres compose, but
+    // they run on SEPARATE agents — each with its own localhost and Docker — so
+    // they cannot collide and need no cross-build lock. (An earlier Shared
+    // Resources write-lock was removed: unnecessary given separate agents, and
+    // unsupported by this server's kotlin-dsl distribution.)
 
     buildType(id10CompileUtAuto)
     buildType(id15CompatManual)
@@ -640,12 +632,10 @@ object id17CompatLocalStandManual : BuildType({
             // so two concurrent id17 builds on a shared agent host don't
             // overwrite each other's wrapper logs. The artifact rules at
             // the top of this BuildType pick these paths up via the same
-            // `%teamcity.build.id%` substitution. Ports stay at the
-            // wrapper defaults (4567/4568); the "crs-local-stand" shared-
-            // resource write-lock (declared in the project block, taken by
-            // both id17 and the git-mode sibling id18) serialises this build
-            // against id18 so the two never collide on those ports or the
-            // local Postgres compose on one agent.
+            // `%teamcity.build.id%` substitution. Ports stay at the wrapper
+            // defaults (4567/4568); the git-mode sibling id18 uses the same
+            // defaults but runs on a SEPARATE agent (own localhost + Docker),
+            // so there is no port / Postgres collision between them.
             scriptContent = """
                 set -euo pipefail
                 WORK_DIR="/tmp/crs-id17-%teamcity.build.id%"
@@ -794,11 +784,6 @@ object id17CompatLocalStandManual : BuildType({
                 dockerRegistryId = "PROJECT_EXT_177,PROJECT_EXT_350,PROJECT_EXT_351"
             }
         }
-        // Mutual exclusion with the git-mode sibling id18: both boot stands on
-        // the same fixed ports (4567/4568) and the same local Postgres compose.
-        sharedResources {
-            writeLock("crs-local-stand")
-        }
     }
 
     requirements {
@@ -842,8 +827,8 @@ object id17CompatLocalStandManual : BuildType({
 // known-deltas file, so any active diff is a real regression of that invariant.
 //
 // Differs from id17 ONLY by: id/name, the /tmp/crs-id18-* work namespace, and
-// `export CANDIDATE_MODE=git` before the wrapper. Serialised against id17 via
-// the "crs-local-stand" shared-resource write-lock (same fixed ports + Postgres).
+// `export CANDIDATE_MODE=git` before the wrapper. Runs on a separate agent from
+// id17, so the shared default ports (4567/4568) + local Postgres don't collide.
 object id18CompatLocalStandGitModeAuto : BuildType({
     id("18CompatLocalStandGitModeAuto")
     name = "[1.8] Compat — Local Stand (no DB migration, git-mode) [AUTO]"
@@ -914,8 +899,8 @@ object id18CompatLocalStandGitModeAuto : BuildType({
             id = "run_compat"
             // Same wrapper as id17, namespaced under /tmp/crs-id18-%teamcity.build.id%
             // and with CANDIDATE_MODE=git exported so the candidate boots with no
-            // migration (default-source=git). The "crs-local-stand" write-lock
-            // (project block) serialises this against id17 on a shared agent.
+            // migration (default-source=git). Runs on a separate agent from id17,
+            // so the shared default ports + local Postgres don't collide.
             scriptContent = """
                 set -euo pipefail
                 WORK_DIR="/tmp/crs-id18-%teamcity.build.id%"
@@ -1009,10 +994,6 @@ object id18CompatLocalStandGitModeAuto : BuildType({
             loginToRegistry = on {
                 dockerRegistryId = "PROJECT_EXT_177,PROJECT_EXT_350,PROJECT_EXT_351"
             }
-        }
-        // Mutual exclusion with id17 (same ports + Postgres compose).
-        sharedResources {
-            writeLock("crs-local-stand")
         }
     }
 
