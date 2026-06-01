@@ -1,0 +1,19 @@
+{
+  "_comment": "Documented compat deltas. Each entry suppresses a matching DiffRecord from the active section of summary.md and surfaces it under '## Suppressed (known deltas)' with its reason + regressionTest. See docs/registry/api-compat-deltas.md.",
+  "deltas": [
+    {
+      "endpoint": "PUT /rest/api/2/components-registry/service/updateCache",
+      "category": "STATUS_CODE_DIFF",
+      "candidateValue": "410",
+      "reason": "v3's updateCache is phase-aware: 200 + Git-refresh duration while git-sourced components remain (migration-status git>0), 410 Gone once fully migrated to the DB (git==0, with the Git resolver still parsing components). A db-mode compat candidate is fully migrated (auto-migrate -> git==0) so it returns 410 here; the git-mode candidate (no migration, git>0) returns 200 and matches baseline, so this delta does NOT appear in known-deltas-git.json (empty). baselineValue intentionally omitted: under parallel test load the V1 baseline can transport-fail this heavy operation (Git DSL re-clone) before the HTTP client's timeout — same root cause regardless of whether baseline answers 200 or transport-fails (0). id17 #3666 reproduced the transport-failure variant. Confirmed intentional 2026-05-15; updated for phase-aware 2026-06-01.",
+      "regressionTest": "ComponentsRegistryServiceControllerUpdateCacheTest.git equal to zero retires the endpoint with 410 and does not re-read"
+    },
+    {
+      "endpoint": "PUT /rest/api/2/components-registry/service/updateCache",
+      "category": "HEADER_DIFF",
+      "candidateValue": "application/json",
+      "reason": "Symptom of the STATUS_CODE_DIFF entry above — when the V1 baseline transport-fails the heavy /updateCache call under parallel load, no response headers come back and only candidate (which answers 410 with a JSON ErrorResponse body) reports a content-type. Suppressed together with the status-code deprecation delta.",
+      "regressionTest": "ComponentsRegistryServiceControllerUpdateCacheTest.git equal to zero retires the endpoint with 410 and does not re-read"
+    }
+  ]
+}

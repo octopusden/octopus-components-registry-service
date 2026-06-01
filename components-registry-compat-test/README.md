@@ -65,7 +65,7 @@ Two diff categories are surfaced as environment warnings at the top of `summary.
 - **`SNAPSHOT_MISMATCH`** — baseline and candidate `/service/status .versionControlRevision` differ. The compat run is non-authoritative: data drift between snapshots cannot be distinguished from migration regression. Resolve by re-syncing the candidate stand to the baseline VCS revision.
 - **`CANDIDATE_NOT_DB_MODE`** — emitted by `SnapshotPreconditionTest` when the candidate's `/service/status` reports `defaultSource != "db"` OR `dbComponentCount` below the `0.9 × baselineComponentCount` threshold (i.e. migration didn't import meaningfully). Indicates the candidate is still serving the V1 in-memory resolver, so the compat run is measuring V1 vs V1 rather than schema-v2 vs V1. Resolve by switching the candidate stand into DB mode (`-Pcompat.allow-non-db-candidate=true` is the documented escape hatch for the rare parity-debug case).
 
-Both env categories cause the build to fail. They are **not** suppressible via `known-deltas.json` — the reporter explicitly excludes env categories from known-delta matching, since they signal that the comparison itself is unsound (different snapshots, wrong service mode) rather than an intentional v3 delta. Resolve at the operator level.
+Both env categories cause the build to fail. They are **not** suppressible via the known-deltas files (`known-deltas-{db,git}.json`, selected by `-Pcompat.known-deltas`) — the reporter explicitly excludes env categories from known-delta matching, since they signal that the comparison itself is unsound (different snapshots, wrong service mode) rather than an intentional v3 delta. Resolve at the operator level.
 
 ## Reports
 

@@ -135,9 +135,33 @@ case_dev_override_values_not_hardcoded() {
   return $rc
 }
 
+# git-mode wiring guard (CANDIDATE_MODE=git): the no-migration CLI overrides and
+# the git-mode known-deltas selection must stay present, else id18 ([1.8]) would
+# silently fall back to db-mode behaviour and stop guarding the deploy-as-no-op
+# invariant (v3 with no migration == 2.0.87 for v1/v2/v3).
+case_git_mode_wiring_present() {
+  local needles=(
+    '--components-registry.auto-migrate=false'
+    '--components-registry.default-source=git'
+    'known-deltas-git.json'
+    'CANDIDATE_MODE="${CANDIDATE_MODE:-db}"'
+  )
+  local rc=0
+  for needle in "${needles[@]}"; do
+    local n
+    n=$(count_in_file_fixed "$needle" "$TEAMCITY_RUN_SH")
+    if [ "$n" -lt 1 ]; then
+      echo "    git-mode wiring missing (count=$n): $needle"
+      rc=1
+    fi
+  done
+  return $rc
+}
+
 echo "=== teamcity-run.sh prod-alignment overrides ==="
 run_case "each version-name override appears in both baseline and candidate start commands" case_each_flag_appears_at_least_twice
 run_case "dev-profile values not hard-coded in teamcity-run.sh" case_dev_override_values_not_hardcoded
+run_case "git-mode wiring present (CANDIDATE_MODE overrides + git known-deltas)" case_git_mode_wiring_present
 
 echo
 echo "=== summary ==="

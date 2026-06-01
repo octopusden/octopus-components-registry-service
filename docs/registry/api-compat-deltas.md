@@ -15,7 +15,7 @@ The compat-test exercises **API contracts**:
 - `GET /rest/api/2/common/jira-component-version-ranges`
 - `POST /rest/api/2/components/find-by-artifact` and the batch detailed-versions endpoint
 - `GET /rest/api/2/components-registry/service/ping` — plain-text behavioral contract
-- `PUT /rest/api/2/components-registry/service/updateCache` — legacy contract (intentionally returns 410 Gone on v3; see `known-deltas.json`)
+- `PUT /rest/api/2/components-registry/service/updateCache` — **phase-aware** contract: returns **200** + the Git-refresh duration (ms) while any component is still served from Git (migration-status `git > 0`), and **410 Gone** only once fully migrated to the DB (`git == 0`). A fully-migrated db-mode candidate returns 410 → suppressed via `known-deltas-db.json`; a git-mode (no-migration) candidate returns 200 and matches baseline → no delta. See "Per-mode known-deltas" below.
 
 **Operational metadata endpoints are explicitly excluded** from the compat surface:
 
@@ -67,9 +67,26 @@ running, confirm:
    `doFirst` block now handles this automatically, and `outputs.upToDateWhen { false }`
    forces re-run.
 
+## Per-mode known-deltas (db vs git)
+
+The candidate can run in two modes, and the sanctioned deltas differ, so the
+deltas live in **two files** selected by `-Pcompat.known-deltas` (or
+`COMPAT_KNOWN_DELTAS`), default `known-deltas-db.json`:
+
+| File | Candidate mode | Selected by | Contents |
+|---|---|---|---|
+| `known-deltas-db.json` | migrated, `default-source=db` (`git==0`) — id17 / `[1.7]` | default | the `updateCache` 410 delta (db-mode is fully migrated, so the endpoint is retired) |
+| `known-deltas-git.json` | no-migration, `default-source=git` (`git>0`) — id18 / `[1.8]` | `-Pcompat.known-deltas=known-deltas-git.json` (set by `teamcity-run.sh` when `CANDIDATE_MODE=git`) | **intentionally empty** |
+
+`known-deltas-git.json` is empty by design: in git-mode every v1/v2/v3 response
+is served by the Git resolver — the same code path as the 2.0.87 baseline — and
+phase-aware `updateCache` returns 200, so there are **no** sanctioned deviations.
+This encodes the **deploy-without-migration no-op invariant**: any active diff in
+git-mode is a real regression and must be fixed, never suppressed.
+
 ## Known-delta entry format
 
-Each entry in `components-registry-compat-test/src/test/resources/known-deltas.json`
+Each entry in the active known-deltas file (see "Per-mode known-deltas" above)
 under `deltas[]`:
 
 | Field | Required | Semantics |
@@ -81,7 +98,7 @@ under `deltas[]`:
 | `pathParams` | no | Map exact-match; `null` means "any". |
 | `queryParams` | no | Map exact-match; `null` means "any". Required to distinguish e.g. `?ignore-required=true` from `?ignore-required=false` when only one of the two variants is intentional. |
 | `reason` | yes | Free-text justification. Should reference the relevant code path and/or PR. |
-| `regressionTest` | yes | UT method name in `ClassName.testMethodName` form (simple class name, no package prefix — e.g. `ComponentsRegistryServiceControllerTest.testUpdateCacheReturnsGone`) that pins the intended behavior. This is the contract that prevents the entry from going stale. |
+| `regressionTest` | yes | UT method name in `ClassName.testMethodName` form (simple class name, no package prefix — e.g. `ComponentsRegistryServiceControllerUpdateCacheTest.git equal to zero retires the endpoint with 410 and does not re-read`) that pins the intended behavior. This is the contract that prevents the entry from going stale. |
 
 ## Categories of resolution
 
@@ -89,13 +106,15 @@ When a diff appears that wasn't there before, classify it as one of:
 
 ### 1. Intentional v3 change
 
-Example: `C.1` — `PUT /service/updateCache` returns `410 Gone` on v3 (was `200` on v2).
-The behavior change is part of the v3 deprecation surface; the legacy endpoint is
-no longer functional and is replaced by service-startup cache rebuild.
+Example: `C.1` — `PUT /service/updateCache` returns `410 Gone` on a **fully-migrated**
+v3 candidate (fully migrated, `git==0`), where it was `200` on v2. This is the end-state of the
+phase-aware endpoint: once every component lives in the DB, a manual Git re-read is
+meaningless. (Note: this is a db-mode-only delta — a git-mode/no-migration candidate
+still returns 200, matching v2, so it is NOT a delta there.)
 
 **Procedure**:
 1. Ship a regression UT that pins the intended behavior on the candidate side.
-2. Add an entry to `known-deltas.json` referencing that UT in `regressionTest`.
+2. Add an entry to the appropriate per-mode file — normally `known-deltas-db.json` (migrated/db-mode candidate) — referencing that UT in `regressionTest`. `known-deltas-git.json` stays empty; a git-mode diff is a real regression, not a sanctioned delta. See "Per-mode known-deltas".
 3. PR description justifies why this is intentional (link to ADR / spec / ticket).
 
 ### 2. Data drift after tag-revision divergence
@@ -133,7 +152,7 @@ then fix the code. Do NOT enter as known-delta; the entry would mask the bug.
    category 2/3/4, follow that category's procedure instead.
 2. Ship the regression UT first; entry's `regressionTest` field is mandatory
    and must reference an existing test method.
-3. Add the entry to `known-deltas.json`.
+3. Add the entry to `known-deltas-db.json` (db-mode; `known-deltas-git.json` stays empty — see "Per-mode known-deltas").
 4. PR description justifies the intentional behavior change with a link to
    the relevant ADR / spec section / ticket.
 

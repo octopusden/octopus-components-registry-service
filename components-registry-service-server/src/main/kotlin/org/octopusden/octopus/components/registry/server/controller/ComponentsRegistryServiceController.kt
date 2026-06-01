@@ -1,9 +1,12 @@
 package org.octopusden.octopus.components.registry.server.controller
 
 import io.swagger.v3.oas.annotations.Operation
+import java.util.concurrent.atomic.AtomicBoolean
 import org.octopusden.octopus.components.registry.core.dto.ErrorResponse
 import org.octopusden.octopus.components.registry.core.dto.ServiceStatusDTO
 import org.octopusden.octopus.components.registry.server.service.ComponentsRegistryService
+import org.octopusden.octopus.components.registry.server.service.ImportService
+import org.octopusden.octopus.components.registry.server.service.MigrationLifecycleGate
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
@@ -17,20 +20,70 @@ import org.springframework.web.bind.annotation.RestController
 @RequestMapping("rest/api/2/components-registry/service")
 class ComponentsRegistryServiceController(
     private val componentsRegistryService: ComponentsRegistryService,
+    private val importService: ImportService,
+    private val migrationLifecycleGate: MigrationLifecycleGate,
 ) {
+    // Per-pod mutual exclusion for the Git re-read: updateConfigCache() ->
+    // gitResolver.updateCache() deletes and recreates the shared Git work dir
+    // (GitVcsServiceImpl.cloneComponentsRegistry), so two concurrent PUTs would
+    // race on it. Single-pod scope, like MigrationLifecycleGate.
+    private val refreshInProgress = AtomicBoolean(false)
+
     /**
-     * Legacy endpoint kept for URL compatibility only. In the DB-backed architecture the
-     * cache is always consistent with the live DB, so a manual VCS refresh is meaningless
-     * and the endpoint has been retired. Callers get HTTP 410 Gone and a pointer to the
-     * replacement endpoint instead of a silent refresh that masks the migration.
+     * Phase-aware VCS-refresh endpoint.
+     *
+     * While any component is still served from Git, those components live in the
+     * boot-time in-memory Git cache, so a manual re-read is still meaningful:
+     * re-read and return HTTP 200 with the refresh duration (ms) — exactly the
+     * pre-v3 behaviour — so v1/v2/v3 keep working like the old version throughout
+     * the hybrid (pre-cutover) period.
+     *
+     * The endpoint is retired with **410 Gone** ONLY when we can positively
+     * confirm full migration: the Git resolver parsed components (`total > 0`)
+     * AND none are still git-served (`git == 0`, i.e. `gitResolver.size ==
+     * countBySource("db")`). Two cases deliberately do NOT retire and instead
+     * attempt the refresh (the recovery action):
+     *  - `total == 0` — Git status is indeterminate (the resolver returned empty
+     *    or failed to load); falsely returning 410 here would block the very
+     *    re-read an operator needs to recover the cache.
+     *  - `git < 0` — stale/extra `source='db'` rows skew the count below zero
+     *    while git-served components may still exist.
+     *
+     * Refused with **409** when (a) a COMPONENTS migration is running (it reads
+     * from the Git resolver to validate each component, so swapping the in-memory
+     * config under it would race the import), or (b) another refresh is already
+     * in progress on this pod.
      */
     @PutMapping("updateCache")
-    @Operation(deprecated = true, summary = "Removed — use POST /rest/api/4/admin/migrate")
-    fun updateConfigCache(): ResponseEntity<ErrorResponse> {
-        log.warn("PUT /rest/api/2/components-registry/service/updateCache is no longer supported; use POST /rest/api/4/admin/migrate")
-        return ResponseEntity
-            .status(HttpStatus.GONE)
-            .body(ErrorResponse("updateCache is no longer supported; use POST /rest/api/4/admin/migrate"))
+    @Operation(summary = "Re-read Git config while git-sourced components remain; 410 Gone once fully migrated to DB")
+    fun updateConfigCache(): ResponseEntity<Any> {
+        val activeJob = migrationLifecycleGate.current()
+        if (activeJob?.kind == MigrationLifecycleGate.JobKind.COMPONENTS) {
+            return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body<Any>(ErrorResponse("A components migration is in progress; retry updateCache after it completes"))
+        }
+        if (!refreshInProgress.compareAndSet(false, true)) {
+            return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body<Any>(ErrorResponse("A cache refresh is already in progress; retry updateCache after it completes"))
+        }
+        try {
+            val status = importService.getMigrationStatus()
+            // status.total = git-resolver component count (0 if it errored/empty);
+            // status.git = total - countBySource("db"). Retire only on a confirmed
+            // fully-migrated state; otherwise attempt the refresh.
+            val fullyMigrated = status.total > 0 && status.git == 0L
+            if (!fullyMigrated) {
+                return ResponseEntity.ok<Any>(componentsRegistryService.updateConfigCache())
+            }
+            log.warn("PUT /rest/api/2/components-registry/service/updateCache is no longer supported; use POST /rest/api/4/admin/migrate")
+            return ResponseEntity
+                .status(HttpStatus.GONE)
+                .body<Any>(ErrorResponse("updateCache is no longer supported; use POST /rest/api/4/admin/migrate"))
+        } finally {
+            refreshInProgress.set(false)
+        }
     }
 
     @GetMapping("status", produces = [MediaType.APPLICATION_JSON_VALUE])

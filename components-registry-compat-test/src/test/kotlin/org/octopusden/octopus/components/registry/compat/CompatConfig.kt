@@ -21,7 +21,21 @@ data class CompatConfig(
      * (default) keeps the RMS fallback for local dev.
      */
     val versionsFile: String?,
+    /**
+     * Candidate routing mode: "db" (migrated, default-source=db — the id17 / [1.7]
+     * config) or "git" (no migration, default-source=git — id18 / [1.8]). Set by
+     * `teamcity-run.sh` from CANDIDATE_MODE. Drives mode-specific skips: the heavy,
+     * side-effecting `PUT updateCache` re-read is excluded from the git-mode
+     * read-parity surface — its git-mode 200 behaviour is unit/integration-tested
+     * in the server module, and under parallel load the baseline's heavy re-parse
+     * can transport-fail, which would otherwise be an unsuppressable flake against
+     * the intentionally-empty git-mode known-deltas.
+     */
+    val candidateMode: String = "db",
 ) {
+    /** True when the candidate runs git-routed with no migration (id18 / [1.8]). */
+    val gitMode: Boolean get() = candidateMode.equals("git", ignoreCase = true)
+
     /** Either both URLs are set (active run), or neither (skipped). */
     val active: Boolean get() = !baselineUrl.isNullOrBlank() && !candidateUrl.isNullOrBlank()
 
@@ -60,6 +74,7 @@ data class CompatConfig(
                 versionsFallback = read("compat.versions-fallback")?.toBooleanStrictOrNull() ?: false,
                 maxComponents = maxComponents,
                 versionsFile = read("compat.versions.file"),
+                candidateMode = read("compat.candidate.mode")?.lowercase() ?: "db",
             )
         }
 
