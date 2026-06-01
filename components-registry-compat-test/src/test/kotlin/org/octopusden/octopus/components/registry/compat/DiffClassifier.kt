@@ -5,7 +5,7 @@ package org.octopusden.octopus.components.registry.compat
  */
 enum class DiffClassifier {
     // Environment / precondition issues — surfaced once at the top of the report.
-    // Both categories are non-suppressible via known-deltas.json (see envCategories in build.gradle).
+    // Both categories are non-suppressible via the known-deltas files (see envCategories in build.gradle).
     SNAPSHOT_MISMATCH,         // baseline vs candidate /service/status .versionControlRevision differ
     CANDIDATE_NOT_DB_MODE,     // candidate /service/status .defaultSource != "db" or .dbComponentCount == 0 —
                                // the candidate is serving the V1 in-memory resolver, schema-v2 DB code path

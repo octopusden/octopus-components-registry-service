@@ -114,7 +114,7 @@ still returns 200, matching v2, so it is NOT a delta there.)
 
 **Procedure**:
 1. Ship a regression UT that pins the intended behavior on the candidate side.
-2. Add an entry to `known-deltas.json` referencing that UT in `regressionTest`.
+2. Add an entry to the appropriate per-mode file — normally `known-deltas-db.json` (migrated/db-mode candidate) — referencing that UT in `regressionTest`. `known-deltas-git.json` stays empty; a git-mode diff is a real regression, not a sanctioned delta. See "Per-mode known-deltas".
 3. PR description justifies why this is intentional (link to ADR / spec / ticket).
 
 ### 2. Data drift after tag-revision divergence
@@ -152,7 +152,7 @@ then fix the code. Do NOT enter as known-delta; the entry would mask the bug.
    category 2/3/4, follow that category's procedure instead.
 2. Ship the regression UT first; entry's `regressionTest` field is mandatory
    and must reference an existing test method.
-3. Add the entry to `known-deltas.json`.
+3. Add the entry to `known-deltas-db.json` (db-mode; `known-deltas-git.json` stays empty — see "Per-mode known-deltas").
 4. PR description justifies the intentional behavior change with a link to
    the relevant ADR / spec section / ticket.
 

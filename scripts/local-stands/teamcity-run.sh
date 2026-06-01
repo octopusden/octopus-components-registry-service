@@ -358,12 +358,14 @@ GRADLE_PARALLELISM_ARG=""
 if [ -n "${COMPAT_PARALLELISM:-}" ]; then
   GRADLE_PARALLELISM_ARG="-Pcompat.parallelism=${COMPAT_PARALLELISM}"
 fi
-# git-mode: select the (empty) git-mode known-deltas file and allow the
-# intentionally non-db candidate so the CANDIDATE_NOT_DB_MODE env-warning does
+# Always tell the compat suite which mode the candidate is in (drives mode-aware
+# test skips, e.g. excluding the heavy/flaky updateCache re-read in git-mode).
+# git-mode additionally: select the (empty) git-mode known-deltas file and allow
+# the intentionally non-db candidate so the CANDIDATE_NOT_DB_MODE env-warning does
 # not fail the build. db-mode uses the defaults (known-deltas-db.json).
-GRADLE_MODE_ARGS=""
+GRADLE_MODE_ARGS="-Pcompat.candidate.mode=${CANDIDATE_MODE}"
 if [ "$CANDIDATE_MODE" = "git" ]; then
-  GRADLE_MODE_ARGS="-Pcompat.known-deltas=known-deltas-git.json -Pcompat.allow-non-db-candidate=true"
+  GRADLE_MODE_ARGS="${GRADLE_MODE_ARGS} -Pcompat.known-deltas=known-deltas-git.json -Pcompat.allow-non-db-candidate=true"
 fi
 #
 # Run as a foreground child (NOT `exec`) so the EXIT trap fires when compat
