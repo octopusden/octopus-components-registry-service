@@ -2,6 +2,7 @@ package org.octopusden.octopus.components.registry.server.service.impl
 
 import jakarta.persistence.OptimisticLockException
 import jakarta.persistence.criteria.JoinType
+import org.apache.maven.artifact.versioning.DefaultArtifactVersion
 import org.octopusden.octopus.components.registry.core.exceptions.ComponentNameConflictException
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
@@ -591,13 +592,24 @@ class ComponentManagementServiceImpl(
         request: FieldOverrideCreateRequest,
     ): FieldOverrideResponse {
         val component = findComponentOr404(componentId)
-        validateRangeSyntax(request.versionRange)
+        // Whitespace normalisation up-front so the DB UNIQUE (which is exact-
+        // string) and the duplicate-row lookup agree with the partial-overlap
+        // validator below: `[1.0, 2.0)` stored as `[1.0,2.0)` lets the next
+        // POST of `[1.0,2.0)` short-circuit at the UNIQUE check instead of
+        // creating a near-duplicate row.
+        val canonicalRange = normalizeRange(request.versionRange)
+        validateFieldOverrideRange(
+            range = canonicalRange,
+            component = component,
+            attribute = request.overriddenAttribute,
+            excludeOverrideId = null,
+        )
         require(configurationRepository.findByComponentIdAndVersionRangeAndOverriddenAttribute(
             componentId,
-            request.versionRange,
+            canonicalRange,
             request.overriddenAttribute,
         ) == null) {
-            "Override row for attribute '${request.overriddenAttribute}' and range '${request.versionRange}' already exists"
+            "Override row for attribute '${request.overriddenAttribute}' and range '$canonicalRange' already exists"
         }
 
         val rowType =
@@ -612,7 +624,7 @@ class ComponentManagementServiceImpl(
         val row =
             ComponentConfigurationEntity(
                 component = component,
-                versionRange = request.versionRange,
+                versionRange = canonicalRange,
                 overriddenAttribute = request.overriddenAttribute,
                 rowType = rowType,
             )
@@ -672,8 +684,14 @@ class ComponentManagementServiceImpl(
         requireNotImportManagedMarker(row, "update")
 
         request.versionRange?.let {
-            validateRangeSyntax(it)
-            row.versionRange = it
+            val canonicalRange = normalizeRange(it)
+            validateFieldOverrideRange(
+                range = canonicalRange,
+                component = row.component,
+                attribute = row.overriddenAttribute!!,
+                excludeOverrideId = row.id,
+            )
+            row.versionRange = canonicalRange
         }
 
         val pendingTools: List<String>? =
@@ -1391,21 +1409,178 @@ class ComponentManagementServiceImpl(
 
     /**
      * Parse `range` via the shared `VersionRangeFactory`; throws
-     * [IllegalArgumentException] if the syntax is invalid. Partial-overlap
-     * detection across other override rows is intentionally NOT enforced here —
-     * the DB UNIQUE on (component_id, version_range, overridden_attribute)
-     * blocks equal ranges; strict containment and disjoint ranges are allowed
-     * per schema-spec.md §7 (transitional). Write-side partial-overlap
-     * rejection shares the same root blocker (no `containsRange` API in the
-     * version-range library) as the read-side strict-containment heuristic in
-     * `EntityMappers.rangeApplies` — see TD-010 §"Out of scope" for that
-     * cross-reference; the write-side fix is a separate follow-up.
+     * [IllegalArgumentException] if the syntax is invalid.
+     *
+     * Used on BASE-row paths where universal `(,0),[0,)` is the sentinel and
+     * sibling-overlap detection does not apply. Field-override write paths
+     * call [validateFieldOverrideRange] instead, which additionally enforces
+     * the partial-overlap and semantic-equality rules of schema-spec §3.5.
+     * D5 (closed-range only) is NOT enforced server-side yet — the Portal
+     * blocks open-upward input client-side; see [validateFieldOverrideRange]
+     * for the full deferred-D5 rationale.
      */
     private fun validateRangeSyntax(range: String) {
         try {
             versionRangeFactory.create(range)
         } catch (e: Exception) {
             throw IllegalArgumentException("Invalid version range: '$range'", e)
+        }
+    }
+
+    // ─── Field-override range validation (partial-overlap, matches Portal) ───────
+    //
+    // The Portal applies the same partial-overlap and semantic-equality rules
+    // client-side via `versionRange.ts` (`rangesOverlap`). Keeping the two
+    // implementations in sync is the explicit goal — a client-side `false`
+    // should not surprise the user with a server 400 and vice versa.
+    //
+    // D5 (closed-range only) is enforced by the Portal at input but is NOT
+    // yet mirrored here; see the validateFieldOverrideRange KDoc.
+
+    private val FIELD_OVERRIDE_ROW_TYPES = setOf("SCALAR_OVERRIDE", "MARKER")
+
+    // Anchored regex matches only single-segment ranges (no top-level comma
+    // between segments), so composites short-circuit via the regex-mismatch
+    // path inside parseSimpleSegment without a separate composite-detector.
+    private val SIMPLE_SEGMENT_PATTERN = Regex("^([\\[(])([^,]*),([^,]*)([\\])])$")
+
+    private data class ParsedSimpleRange(
+        val lo: String?,
+        val loIncl: Boolean,
+        val hi: String?,
+        val hiIncl: Boolean,
+    )
+
+    private fun normalizeRange(range: String): String =
+        range.trim().replace(Regex("\\s+"), "")
+
+    private fun parseSimpleSegment(range: String): ParsedSimpleRange? {
+        val compact = normalizeRange(range)
+        val m = SIMPLE_SEGMENT_PATTERN.matchEntire(compact) ?: return null
+        val (open, loStr, hiStr, close) = m.destructured
+        if (loStr.any { it in "()[]" } || hiStr.any { it in "()[]" }) return null
+        return ParsedSimpleRange(
+            lo = loStr.trim().takeIf { it.isNotEmpty() },
+            loIncl = open == "[",
+            hi = hiStr.trim().takeIf { it.isNotEmpty() },
+            hiIncl = close == "]",
+        )
+    }
+
+    private fun compareMavenVersions(a: String, b: String): Int =
+        DefaultArtifactVersion(a).compareTo(DefaultArtifactVersion(b))
+
+    private fun simpleContains(outer: ParsedSimpleRange, inner: ParsedSimpleRange): Boolean {
+        val leftOK = when {
+            outer.lo == null -> true
+            inner.lo == null -> false
+            else -> {
+                val cmp = compareMavenVersions(outer.lo, inner.lo)
+                cmp < 0 || (cmp == 0 && (outer.loIncl || !inner.loIncl))
+            }
+        }
+        if (!leftOK) return false
+        return when {
+            outer.hi == null -> true
+            inner.hi == null -> false
+            else -> {
+                val cmp = compareMavenVersions(outer.hi, inner.hi)
+                cmp > 0 || (cmp == 0 && (outer.hiIncl || !inner.hiIncl))
+            }
+        }
+    }
+
+    /**
+     * Enforces the field-override range contract for write paths:
+     *
+     * 1. Syntax — must parse via [VersionRangeFactory.create].
+     * 2. The submitted range must be a single segment. Composite Maven
+     *    ranges (e.g. `(,1.0),[2.0,3.0)`) are rejected on POST / PATCH:
+     *    composite-vs-anything containment cannot be decided without a
+     *    Maven range-algebra primitive the releng library does not expose,
+     *    so we'd be forced to either over-reject (false positives on
+     *    strict containment) or over-allow (false negatives on partial
+     *    overlap). Users compose multiple separate overrides instead.
+     *    Existing composite rows (legacy DSL import) are untouched — the
+     *    sibling walk below uses `isIntersect` on them but treats them as
+     *    opaque when measuring containment.
+     * 3. Partial overlap with sibling overrides on the same attribute is
+     *    rejected per schema-spec §3.5.
+     * 4. Semantic equality (each contains the other after Maven-comparator
+     *    normalisation) is rejected as a duplicate, even when the raw strings
+     *    differ by whitespace or trailing zeros (`[1.0, 2.0)` vs `[1.0,2.0)`
+     *    or `[1,2)` vs `[1.0,2.0)`). The DB UNIQUE constraint catches only
+     *    exact-string duplicates.
+     * 5. Strict containment is allowed (per schema-spec §3.5).
+     *
+     * D5 (closed-range only) is NOT enforced here — the Portal blocks
+     * open-upward input client-side; server-side D5 is tracked as a follow-up
+     * because several existing API tests seed throwaway components with
+     * `[X,)` overrides and would break under a strict server rejection.
+     *
+     * When the SIBLING row carries a legacy composite range, intersection is
+     * still detected via [VersionRange.isIntersect], but containment is
+     * undecidable; the validator defers (allows) and trusts the DB UNIQUE
+     * constraint for exact-string duplicates. A future releng-versions
+     * `containsRange` API will let us tighten this back up.
+     */
+    private fun validateFieldOverrideRange(
+        range: String,
+        component: ComponentEntity,
+        attribute: String,
+        excludeOverrideId: UUID?,
+    ) {
+        validateRangeSyntax(range)
+        val parsedNew = parseSimpleSegment(range)
+        require(parsedNew != null) {
+            "Field-override range '$range' must be a single Maven segment " +
+                "(e.g. [1.0,2.0)). Composite ranges are not accepted on POST / " +
+                "PATCH — split the override into multiple rows, one per segment."
+        }
+        val newRangeObj = versionRangeFactory.create(range)
+        for (row in component.configurations) {
+            if (row.id != null && row.id == excludeOverrideId) continue
+            if (row.overriddenAttribute != attribute) continue
+            if (row.rowType !in FIELD_OVERRIDE_ROW_TYPES) continue
+            val existingRangeObj = try {
+                versionRangeFactory.create(row.versionRange)
+            } catch (_: Exception) {
+                continue
+            }
+            if (!newRangeObj.isIntersect(existingRangeObj)) continue
+            // Intersect. Three sub-cases under schema-spec §3.5:
+            //   - each contains the other → semantically EQUAL → reject as
+            //     a duplicate (the DB UNIQUE on the raw versionRange string
+            //     catches exact textual equality, but `[1.0,2.0)` vs
+            //     `[1.0, 2.0)` or `[1,2)` vs `[1.0,2.0)` slip past it).
+            //   - exactly one contains the other → strict containment → allow.
+            //   - neither contains → partial overlap → reject.
+            //
+            // `parsedNew` is non-null (composites are rejected up-front above).
+            // If the SIBLING row is a legacy composite (`parsedExisting` null),
+            // we cannot decide strict containment with the simple-segment
+            // heuristic, so we DEFER and trust the DB UNIQUE for exact-string
+            // duplicates. A future releng-versions `containsRange` API will
+            // let us tighten this back up.
+            val parsedExisting = parseSimpleSegment(row.versionRange)
+            if (parsedExisting == null) continue
+            val aContainsB = simpleContains(parsedNew, parsedExisting)
+            val bContainsA = simpleContains(parsedExisting, parsedNew)
+            if (aContainsB && bContainsA) {
+                throw IllegalArgumentException(
+                    "Range '$range' is semantically equal to existing " +
+                        "override range '${row.versionRange}' on attribute " +
+                        "'$attribute'. Each version range can only have one " +
+                        "override per attribute (schema-spec §3.5 / UNIQUE).",
+                )
+            }
+            if (aContainsB || bContainsA) continue
+            throw IllegalArgumentException(
+                "Range '$range' partially overlaps with existing override range " +
+                    "'${row.versionRange}' on attribute '$attribute'. Equal " +
+                    "ranges are blocked by the unique index; strict containment " +
+                    "is allowed; partial overlap is rejected per schema-spec §3.5.",
+            )
         }
     }
 
