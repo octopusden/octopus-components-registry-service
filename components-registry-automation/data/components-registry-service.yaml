@@ -57,7 +57,7 @@ octopus-security:
       - DELETE_COMPONENTS
       - IMPORT_DATA
       - ACCESS_AUDIT
-      - ADMIN_DATA
+      - EDIT_METADATA
 
 logging:
   level:
