@@ -113,8 +113,9 @@ a "Show migration" toggle (default off). (SYS-049)
 ### No-op suppression
 A write that changes nothing must not leave an audit row. `AuditEventListener`
 drops an event whose `oldValue` and `newValue` are both present but whose computed
-`change_diff` is empty. This is centralised in the listener, so it covers every
-publisher. `CREATE` (null `oldValue`) and `DELETE` legitimately have a null diff
+`change_diff` is empty — `AuditDiff.compute` returns `null` for an empty diff, and
+the guard condition is `oldValue != null && newValue != null && changeDiff == null`.
+This is centralised in the listener, so it covers every publisher. `CREATE` (null `oldValue`) and `DELETE` legitimately have a null diff
 and are always kept. (SYS-048)
 
 ### Coverage: field overrides

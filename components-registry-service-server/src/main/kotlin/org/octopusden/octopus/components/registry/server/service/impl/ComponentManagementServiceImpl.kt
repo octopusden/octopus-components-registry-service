@@ -1966,6 +1966,12 @@ class ComponentManagementServiceImpl(
      * diff. Captures the version range and the resolved scalar value / marker
      * children. Used as the old/new payload for the synthetic Component UPDATE
      * events published on field-override writes. SYS-050.
+     *
+     * Create/delete pass an empty map (not `null`) for the absent side: with an
+     * empty map `AuditDiff` computes a non-null diff that records the override as
+     * added / removed, whereas `null` would yield a null diff and lose that
+     * detail. Both sides are non-null, so the SYS-048 no-op guard still drops a
+     * genuine no-op PATCH (before == after).
      */
     private fun fieldOverrideAuditSnapshot(row: ComponentConfigurationEntity): Map<String, Any?> {
         val resp = row.toFieldOverrideResponse()

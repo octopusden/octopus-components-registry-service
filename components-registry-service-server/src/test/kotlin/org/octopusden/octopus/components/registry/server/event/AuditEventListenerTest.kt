@@ -109,4 +109,23 @@ class AuditEventListenerTest {
 
         verify(auditLogRepository).save(any())
     }
+
+    @Test
+    @DisplayName("SYS-048: DELETE with a null newValue is always persisted (guard only fires when both present)")
+    fun `SYS-048 DELETE with null newValue is persisted`() {
+        // The no-op guard keys on BOTH snapshots being present. A delete-style
+        // event carrying only an oldValue (e.g. the git-history DELETE shape)
+        // yields a null diff but must never be suppressed.
+        listener.handleAuditEvent(
+            AuditEvent(
+                entityType = "Component",
+                entityId = "c1",
+                action = "DELETE",
+                oldValue = mapOf("displayName" to "Widget"),
+                newValue = null,
+            ),
+        )
+
+        verify(auditLogRepository).save(any())
+    }
 }
