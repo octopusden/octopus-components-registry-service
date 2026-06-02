@@ -552,6 +552,101 @@ class V4WriteValidationTest {
     }
 
     @Test
+    @DisplayName("R3: PATCH /field-overrides/{id} rejects a range update that overlaps a sibling")
+    fun fieldOverride_patch_rejects_partialOverlap() {
+        val id = seedComponentForOverlap("patch-ov-${uniqueSuffix()}")
+        // Sibling A — stays put.
+        postFieldOverride(
+            id,
+            """{"overriddenAttribute":"build.javaVersion","versionRange":"[1.0,3.0)","value":"11"}""",
+        ).andExpect(status().isCreated)
+        // Sibling B — disjoint at create time.
+        val bCreate =
+            postFieldOverride(
+                id,
+                """{"overriddenAttribute":"build.javaVersion","versionRange":"[5.0,6.0)","value":"17"}""",
+            ).andExpect(status().isCreated)
+                .andReturn().response.contentAsString
+        val bId = objectMapper.readTree(bCreate)["id"].asText()
+        // Now PATCH B's range to overlap A — must be rejected; excludeOverrideId
+        // means the walk skips B against itself, so the failure is purely the
+        // partial-overlap rule.
+        mvc
+            .perform(
+                patch("/rest/api/4/components/$id/field-overrides/$bId")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"versionRange":"[2.0,4.0)"}"""),
+            ).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    @DisplayName("R3: PATCH /field-overrides/{id} rejects a semantic-equal range update")
+    fun fieldOverride_patch_rejects_semanticEqualWhitespace() {
+        val id = seedComponentForOverlap("patch-eq-${uniqueSuffix()}")
+        postFieldOverride(
+            id,
+            """{"overriddenAttribute":"build.javaVersion","versionRange":"[1.0,2.0)","value":"11"}""",
+        ).andExpect(status().isCreated)
+        val bCreate =
+            postFieldOverride(
+                id,
+                """{"overriddenAttribute":"build.javaVersion","versionRange":"[5.0,6.0)","value":"17"}""",
+            ).andExpect(status().isCreated)
+                .andReturn().response.contentAsString
+        val bId = objectMapper.readTree(bCreate)["id"].asText()
+        // PATCH B to a whitespace-different version of A's range — semantic-
+        // equal → 400. Confirms PATCH-side normalisation + duplicate check.
+        mvc
+            .perform(
+                patch("/rest/api/4/components/$id/field-overrides/$bId")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"versionRange":"[1.0, 2.0)"}"""),
+            ).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    @DisplayName("R3: PATCH /field-overrides/{id} permits re-saving the same range on the row itself")
+    fun fieldOverride_patch_allows_selfRangeReassign() {
+        val id = seedComponentForOverlap("patch-self-${uniqueSuffix()}")
+        val created =
+            postFieldOverride(
+                id,
+                """{"overriddenAttribute":"build.javaVersion","versionRange":"[1.0,2.0)","value":"11"}""",
+            ).andExpect(status().isCreated)
+                .andReturn().response.contentAsString
+        val oid = objectMapper.readTree(created)["id"].asText()
+        // Submitting the same range back must NOT trip the semantic-equal
+        // check — excludeOverrideId excludes the row from its own walk.
+        mvc
+            .perform(
+                patch("/rest/api/4/components/$id/field-overrides/$oid")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"versionRange":"[1.0,2.0)","value":"17"}"""),
+            ).andExpect(status().is2xxSuccessful)
+    }
+
+    @Test
+    @DisplayName("R3: POST /field-overrides defers (allows) when one side is a composite range")
+    fun fieldOverride_allows_compositeFallback() {
+        val id = seedComponentForOverlap("composite-${uniqueSuffix()}")
+        // Existing composite: `(,1.0),[5.0,10.0)`. The new range `[2.0,3.0)` is
+        // disjoint from both segments, but the simple-segment parser returns
+        // null for the composite — server defers (allows) instead of throwing
+        // a false partial-overlap. The Portal mirrors with 'unknown'.
+        postFieldOverride(
+            id,
+            """{"overriddenAttribute":"build.javaVersion","versionRange":"(,1.0),[5.0,10.0)","value":"11"}""",
+        ).andExpect(status().isCreated)
+        postFieldOverride(
+            id,
+            """{"overriddenAttribute":"build.javaVersion","versionRange":"[2.0,3.0)","value":"17"}""",
+        ).andExpect(status().isCreated)
+    }
+
+    @Test
     @DisplayName("R3: POST /field-overrides ignores overlap against a sibling on a DIFFERENT attribute")
     fun fieldOverride_allows_overlapAcrossAttributes() {
         val id = seedComponentForOverlap("diff-attr-${uniqueSuffix()}")

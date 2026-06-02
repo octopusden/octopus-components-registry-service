@@ -1535,20 +1535,28 @@ class ComponentManagementServiceImpl(
             //     `[1.0, 2.0)` or `[1,2)` vs `[1.0,2.0)` slip past it).
             //   - exactly one contains the other → strict containment → allow.
             //   - neither contains → partial overlap → reject.
+            //
+            // The containment check is approximated via simple-segment bound
+            // comparison; if either side is a composite (or carries qualifier-
+            // bearing bounds we don't parse), we cannot reason about strict
+            // containment client-side, so we DEFER — same as the Portal returns
+            // 'unknown' for composites. The DB UNIQUE constraint still catches
+            // exact-string duplicates; semantic and partial-overlap rules over
+            // composites will get a proper check when releng-versions exposes a
+            // `containsRange` API.
             val parsedExisting = parseSimpleSegment(row.versionRange)
-            if (parsedNew != null && parsedExisting != null) {
-                val aContainsB = simpleContains(parsedNew, parsedExisting)
-                val bContainsA = simpleContains(parsedExisting, parsedNew)
-                if (aContainsB && bContainsA) {
-                    throw IllegalArgumentException(
-                        "Range '$range' is semantically equal to existing " +
-                            "override range '${row.versionRange}' on attribute " +
-                            "'$attribute'. Each version range can only have one " +
-                            "override per attribute (schema-spec §3.5 / UNIQUE).",
-                    )
-                }
-                if (aContainsB || bContainsA) continue
+            if (parsedNew == null || parsedExisting == null) continue
+            val aContainsB = simpleContains(parsedNew, parsedExisting)
+            val bContainsA = simpleContains(parsedExisting, parsedNew)
+            if (aContainsB && bContainsA) {
+                throw IllegalArgumentException(
+                    "Range '$range' is semantically equal to existing " +
+                        "override range '${row.versionRange}' on attribute " +
+                        "'$attribute'. Each version range can only have one " +
+                        "override per attribute (schema-spec §3.5 / UNIQUE).",
+                )
             }
+            if (aContainsB || bContainsA) continue
             throw IllegalArgumentException(
                 "Range '$range' partially overlaps with existing override range " +
                     "'${row.versionRange}' on attribute '$attribute'. Equal " +
