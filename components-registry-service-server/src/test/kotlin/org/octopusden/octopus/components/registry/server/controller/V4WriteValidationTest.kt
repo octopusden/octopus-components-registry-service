@@ -476,7 +476,7 @@ class V4WriteValidationTest {
         )
 
     @Test
-    @DisplayName("POST /field-overrides rejects a range partially overlapping a sibling on the same attribute")
+    @DisplayName("R3: POST /field-overrides rejects a range partially overlapping a sibling on the same attribute")
     fun fieldOverride_rejects_partialOverlapWithSibling() {
         val id = seedComponentForOverlap("partial-${uniqueSuffix()}")
         postFieldOverride(
@@ -491,7 +491,7 @@ class V4WriteValidationTest {
     }
 
     @Test
-    @DisplayName("POST /field-overrides accepts a range strictly contained inside a sibling (schema-spec §3.5)")
+    @DisplayName("R3: POST /field-overrides accepts a range strictly contained inside a sibling (schema-spec §3.5)")
     fun fieldOverride_allows_strictContainment() {
         val id = seedComponentForOverlap("contained-${uniqueSuffix()}")
         postFieldOverride(
@@ -506,7 +506,7 @@ class V4WriteValidationTest {
     }
 
     @Test
-    @DisplayName("POST /field-overrides accepts a disjoint range on the same attribute")
+    @DisplayName("R3: POST /field-overrides accepts a disjoint range on the same attribute")
     fun fieldOverride_allows_disjoint() {
         val id = seedComponentForOverlap("disjoint-${uniqueSuffix()}")
         postFieldOverride(
@@ -520,7 +520,7 @@ class V4WriteValidationTest {
     }
 
     @Test
-    @DisplayName("POST /field-overrides rejects a semantically-equal range differing only by whitespace")
+    @DisplayName("R3: POST /field-overrides rejects a semantically-equal range differing only by whitespace")
     fun fieldOverride_rejects_semanticEqualWhitespace() {
         val id = seedComponentForOverlap("ws-${uniqueSuffix()}")
         postFieldOverride(
@@ -536,7 +536,7 @@ class V4WriteValidationTest {
     }
 
     @Test
-    @DisplayName("POST /field-overrides rejects a semantically-equal range differing only by trailing zero")
+    @DisplayName("R3: POST /field-overrides rejects a semantically-equal range differing only by trailing zero")
     fun fieldOverride_rejects_semanticEqualTrailingZero() {
         val id = seedComponentForOverlap("tz-${uniqueSuffix()}")
         postFieldOverride(
@@ -552,7 +552,7 @@ class V4WriteValidationTest {
     }
 
     @Test
-    @DisplayName("POST /field-overrides ignores overlap against a sibling on a DIFFERENT attribute")
+    @DisplayName("R3: POST /field-overrides ignores overlap against a sibling on a DIFFERENT attribute")
     fun fieldOverride_allows_overlapAcrossAttributes() {
         val id = seedComponentForOverlap("diff-attr-${uniqueSuffix()}")
         postFieldOverride(
