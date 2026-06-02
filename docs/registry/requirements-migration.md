@@ -44,6 +44,9 @@ Numbered MIG-NNN contracts registry, peer of `requirements-common.md` (SYS-NNN) 
 | MIG-036 | Per-attribute version-range overrides via Model A' | High | integration-test | ❌ Not tested |
 | MIG-037 | Unified VCS model (no discriminator) | Medium | unit-test | ❌ Not tested |
 | MIG-038 | Endpoint kill-list (5 endpoints dropped/stubbed) | Low | integration-test | ❌ Not tested |
+| MIG-039 | find-by-artifacts gates by configuration version range | High | unit-test | ✅ Tested |
+| MIG-040 | find-by-docker-images version-substitutes distribution | Low | integration-test | ✅ Fixed |
+| MIG-041 | importer preserves component-level artifactId CSV tokens | Medium | integration-test | ⏳ Follow-up |
 
 ---
 
@@ -1059,3 +1062,79 @@ Five effectively-dead endpoints (≤2 calls in 2 production days) are removed or
 1. `GET /rest/api/3/components` returns 410 Gone.
 2. `PUT /rest/api/2/components-registry/service/updateCache` returns 410 Gone (matches deployed behaviour).
 3. `GET /rest/api/2/components` (no params), `GET /rest/api/2/projects/{k}/jira-component-version-ranges`, `GET /rest/api/1/components` (no filter) each return 200 with empty array.
+
+### MIG-039: find-by-artifacts must gate by configuration version range
+
+**Priority:** High
+**Test layer:** unit-test
+**Status:** ✅ Tested
+**Test method:** `DatabaseComponentRegistryResolverFindByArtifactTest` — `MIG-039 gates artifact resolution by configuration version range`, `MIG-039 resolves a per-range artifactId override in the overriding range`, `MIG-039 does not resolve a superseded artifactId for a version in the overriding range`, plus the out-of-range / unknown-artifact null guards.
+
+`POST /rest/api/3/components/find-by-artifacts` (and the v2 alias / single `find-by-artifact`)
+must mirror V1's `EscrowModuleConfigMatcher`: a `groupIdPattern`/`artifactIdPattern` match is
+necessary but NOT sufficient — the artifact version must also fall within one of the component's
+configuration version ranges.
+
+**Context:** the DB resolver's `findComponentByArtifactOrNull` matched only `component_artifact_ids`
+group/artifact patterns and tie-broke by `artifactPattern.length`, ignoring version ranges. An
+archived/old component whose long `|`-union `artifactId` still matched the name (but whose ranges
+excluded the version) then won the tie-break. Live repro (2026-06-02): an artifact
+`<group>:<artifact>:11.1.157` resolved to an archived component (ranges `[1.0.x,…)`) instead of the
+active one (range `[11.1,…)`). V1 gates by `versionRange.containsVersion` + the "exactly one config"
+rule, so it uniquely picks the in-range component.
+(An earlier attempt matched `distribution.GAV()` — reverted: V1 never consults GAV, so that
+over-resolved and remained version-range-blind.)
+
+**Acceptance criteria:**
+1. An artifact resolves to the component whose configuration version range contains the artifact
+   version, not to a pattern-matching component whose ranges exclude it.
+2. An artifact whose version is outside all matching components' ranges resolves to `null`.
+3. An artifact matching no component pattern resolves to `null`.
+
+### MIG-040: find-by-docker-images must version-substitute the distribution
+
+**Priority:** Low
+**Test layer:** integration-test (real-body replay)
+**Status:** ✅ Fixed; behavioural proof via the [1.7] real-body replay
+
+`POST /rest/api/3/components/find-by-docker-images` returned an empty set on a DB-mode candidate
+where the V1 baseline returned 22 (2026-06-02 replay).
+
+**Cause (live repro):** the `distribution_docker_images` rows are stored correctly (image name
+without tag), so the image→component index is fine. But `findConfigurationByDockerImage` resolved
+the config via `toResolvedEscrowModuleConfig`, whose `distribution.docker()` lacks the version tag
+(`composeDockerCsv` emits `img` not `img:<version>` when flavor is null). The membership check
+`docker().contains("$imageName:$imageTag")` therefore never matched. The version is normally
+appended by `EscrowConfigurationLoader.calculateDistribution`, which `getResolvedComponentDefinition`
+applies but `findConfigurationByDockerImage` did not.
+
+**Fix:** resolve via `getResolvedComponentDefinition` so `calculateDistribution` runs, mirroring the
+`/versions/{v}/distribution` endpoint.
+
+**Acceptance criteria:**
+1. For a migrated component declaring a docker image, `find-by-docker-images` returns the same
+   `ComponentImage` set as the V1 baseline (verified by the [1.7] real-body replay).
+
+### MIG-041: importer must preserve all component-level artifactId CSV tokens
+
+**Priority:** Medium
+**Test layer:** integration-test
+**Status:** ⏳ Follow-up (distinct, narrower defect than MIG-039)
+
+A second find-by-artifacts defect from the same 2026-06-02 repro: a component whose component-level
+DSL `artifactId` is a CSV (e.g. `comp-foo,comp-bar`) migrated only the FIRST
+version-range block's `artifactId` into `component_artifact_ids`
+(`ImportServiceImpl.importModule`: `baseConfig = configs.firstOrNull { ALL_VERSIONS } ?: configs.first()`,
+then `buildComponentEntity` writes rows from `baseConfig.artifactIdPattern`). The dropped token means
+the reverse lookup cannot map that artifact to the owning component (it falls to the literal
+same-named component instead).
+
+**Caveat (why it is a careful follow-up, not bundled with MIG-039):** `component_artifact_ids` is
+ALSO the fallback source for `/maven-artifacts` (`getMavenArtifactParameters`), so it must NOT be
+naively unioned with per-range override tokens — that would change `/maven-artifacts` output. The
+fix must source the true component-level (default) `artifactId`, with an integration test covering
+BOTH `find-by-artifacts` and `/maven-artifacts`.
+
+**Acceptance criteria:**
+1. All component-level `artifactId` CSV tokens are matchable by `find-by-artifacts`.
+2. `/maven-artifacts` per-range output is unchanged.
