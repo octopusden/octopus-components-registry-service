@@ -520,6 +520,38 @@ class V4WriteValidationTest {
     }
 
     @Test
+    @DisplayName("POST /field-overrides rejects a semantically-equal range differing only by whitespace")
+    fun fieldOverride_rejects_semanticEqualWhitespace() {
+        val id = seedComponentForOverlap("ws-${uniqueSuffix()}")
+        postFieldOverride(
+            id,
+            """{"overriddenAttribute":"build.javaVersion","versionRange":"[1.0,2.0)","value":"11"}""",
+        ).andExpect(status().isCreated)
+        // Same range with a stray space — exact-string UNIQUE would miss it
+        // without input normalisation; semantic-equal check rejects it.
+        postFieldOverride(
+            id,
+            """{"overriddenAttribute":"build.javaVersion","versionRange":"[1.0, 2.0)","value":"17"}""",
+        ).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    @DisplayName("POST /field-overrides rejects a semantically-equal range differing only by trailing zero")
+    fun fieldOverride_rejects_semanticEqualTrailingZero() {
+        val id = seedComponentForOverlap("tz-${uniqueSuffix()}")
+        postFieldOverride(
+            id,
+            """{"overriddenAttribute":"build.javaVersion","versionRange":"[1.0,2.0)","value":"11"}""",
+        ).andExpect(status().isCreated)
+        // [1,2) describes the same versions as [1.0,2.0) per Maven semantics
+        // — DefaultArtifactVersion sees `1` and `1.0` as equal.
+        postFieldOverride(
+            id,
+            """{"overriddenAttribute":"build.javaVersion","versionRange":"[1,2)","value":"17"}""",
+        ).andExpect(status().isBadRequest)
+    }
+
+    @Test
     @DisplayName("POST /field-overrides ignores overlap against a sibling on a DIFFERENT attribute")
     fun fieldOverride_allows_overlapAcrossAttributes() {
         val id = seedComponentForOverlap("diff-attr-${uniqueSuffix()}")

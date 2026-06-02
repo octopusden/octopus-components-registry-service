@@ -592,18 +592,24 @@ class ComponentManagementServiceImpl(
         request: FieldOverrideCreateRequest,
     ): FieldOverrideResponse {
         val component = findComponentOr404(componentId)
+        // Whitespace normalisation up-front so the DB UNIQUE (which is exact-
+        // string) and the duplicate-row lookup agree with the partial-overlap
+        // validator below: `[1.0, 2.0)` stored as `[1.0,2.0)` lets the next
+        // POST of `[1.0,2.0)` short-circuit at the UNIQUE check instead of
+        // creating a near-duplicate row.
+        val canonicalRange = normalizeRange(request.versionRange)
         validateFieldOverrideRange(
-            range = request.versionRange,
+            range = canonicalRange,
             component = component,
             attribute = request.overriddenAttribute,
             excludeOverrideId = null,
         )
         require(configurationRepository.findByComponentIdAndVersionRangeAndOverriddenAttribute(
             componentId,
-            request.versionRange,
+            canonicalRange,
             request.overriddenAttribute,
         ) == null) {
-            "Override row for attribute '${request.overriddenAttribute}' and range '${request.versionRange}' already exists"
+            "Override row for attribute '${request.overriddenAttribute}' and range '$canonicalRange' already exists"
         }
 
         val rowType =
@@ -618,7 +624,7 @@ class ComponentManagementServiceImpl(
         val row =
             ComponentConfigurationEntity(
                 component = component,
-                versionRange = request.versionRange,
+                versionRange = canonicalRange,
                 overriddenAttribute = request.overriddenAttribute,
                 rowType = rowType,
             )
@@ -678,13 +684,14 @@ class ComponentManagementServiceImpl(
         requireNotImportManagedMarker(row, "update")
 
         request.versionRange?.let {
+            val canonicalRange = normalizeRange(it)
             validateFieldOverrideRange(
-                range = it,
+                range = canonicalRange,
                 component = row.component,
                 attribute = row.overriddenAttribute!!,
                 excludeOverrideId = row.id,
             )
-            row.versionRange = it
+            row.versionRange = canonicalRange
         }
 
         val pendingTools: List<String>? =
@@ -1514,16 +1521,26 @@ class ComponentManagementServiceImpl(
                 continue
             }
             if (!newRangeObj.isIntersect(existingRangeObj)) continue
-            // Intersect. Strict containment is allowed; only partial overlap
-            // is rejected. Containment requires endpoint comparison —
-            // approximated here by parsing simple segments and comparing
-            // bounds with `DefaultArtifactVersion` (Maven's reference
-            // comparator, the same one releng's `VersionRange` uses
-            // internally).
+            // Intersect. Three sub-cases under schema-spec §3.5:
+            //   - each contains the other → semantically EQUAL → reject as
+            //     a duplicate (the DB UNIQUE on the raw versionRange string
+            //     catches exact textual equality, but `[1.0,2.0)` vs
+            //     `[1.0, 2.0)` or `[1,2)` vs `[1.0,2.0)` slip past it).
+            //   - exactly one contains the other → strict containment → allow.
+            //   - neither contains → partial overlap → reject.
             val parsedExisting = parseSimpleSegment(row.versionRange)
             if (parsedNew != null && parsedExisting != null) {
-                if (simpleContains(parsedNew, parsedExisting)) continue
-                if (simpleContains(parsedExisting, parsedNew)) continue
+                val aContainsB = simpleContains(parsedNew, parsedExisting)
+                val bContainsA = simpleContains(parsedExisting, parsedNew)
+                if (aContainsB && bContainsA) {
+                    throw IllegalArgumentException(
+                        "Range '$range' is semantically equal to existing " +
+                            "override range '${row.versionRange}' on attribute " +
+                            "'$attribute'. Each version range can only have one " +
+                            "override per attribute (schema-spec §3.5 / UNIQUE).",
+                    )
+                }
+                if (aContainsB || bContainsA) continue
             }
             throw IllegalArgumentException(
                 "Range '$range' partially overlaps with existing override range " +
