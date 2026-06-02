@@ -177,6 +177,38 @@ Git repository is preserved read-only until all components are validated in DB +
 - Set target date for Phase 4 to prevent indefinite dual-running
 - `component_source` can be dropped after Phase 5
 
+## No-Database Boot Mode (git-only, issue #310, SYS-047)
+
+The dual-read model above assumes a database is present: every read passes through
+`ComponentRoutingResolver`, which consults the `component_source` table. For the
+**git-mode compat stand** (id18) and any "deploy v3 but do not migrate" scenario the
+DB is never read — yet the service still booted a full JPA + Flyway + Hikari stack
+just to satisfy the routing wiring.
+
+The `no-db` Spring profile (`application-no-db.yml`) removes that cost. It excludes
+the JDBC / JPA / Flyway auto-configurations and sets
+`components-registry.database.enabled=false`, which drops every DB-coupled bean via
+the `@ConditionalOnDatabaseEnabled` meta-annotation — including
+`ComponentRoutingResolver` itself. With the `@Primary` routing resolver gone, the
+pure-Git `ComponentRegistryResolverImpl` (which already implements the whole
+`ComponentRegistryResolver` interface) becomes the **sole** resolver, so v1/v2/v3 are
+served exactly as on the pre-v3 (2.0.87) baseline — with no database at all.
+
+This is opt-in and orthogonal to the per-component routing above: db-mode never
+activates the profile and never sets the flag (`matchIfMissing = true`), so it is
+unchanged. v4 CRUD / admin / audit and all migration machinery are DB-only and are
+absent in no-db mode — acceptable because the sole purpose of this mode is serving
+v1/v2/v3 from Git.
+
+**Coverage note:** because `ComponentRoutingResolver` is now absent in no-db, the
+git-mode compat stand (id18) exercises `ComponentRegistryResolverImpl` directly — it
+no longer covers `ComponentRoutingResolver`'s git branch and aggregate-merge code
+(which, with an empty `component_source`, reduced to git-only anyway). That routing
+code stays covered by db-mode (id17). This is a deliberate, accepted coverage shift,
+not a regression of the no-op invariant.
+
+See requirement **SYS-047** and `NoDbModeContextTest`.
+
 ## References
 - Strangler Fig pattern: https://martinfowler.com/bliki/StranglerFigApplication.html
 - `ComponentRegistryResolver` interface: `components-registry-service-server/.../service/ComponentRegistryResolver.kt`

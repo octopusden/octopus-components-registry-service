@@ -8,6 +8,7 @@ import org.octopusden.octopus.components.registry.core.dto.ComponentImage
 import org.octopusden.octopus.components.registry.core.dto.Image
 import org.octopusden.octopus.components.registry.core.dto.VersionedComponent
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
+import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.service.ComponentRegistryResolver
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
 import org.octopusden.octopus.escrow.config.JiraComponentVersionRange
@@ -22,6 +23,7 @@ import org.springframework.context.annotation.Primary
 import org.springframework.stereotype.Service
 import java.util.EnumMap
 
+@ConditionalOnDatabaseEnabled
 @Service
 @Primary
 @Suppress("TooManyFunctions")

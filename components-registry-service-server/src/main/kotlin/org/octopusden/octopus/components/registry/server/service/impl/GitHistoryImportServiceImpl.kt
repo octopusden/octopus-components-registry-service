@@ -10,6 +10,7 @@ import org.eclipse.jgit.revwalk.RevWalk
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider
 import org.eclipse.jgit.treewalk.CanonicalTreeParser
 import org.octopusden.octopus.components.registry.server.config.ComponentsRegistryProperties
+import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.dto.v4.HistoryImportResult
 import org.octopusden.octopus.components.registry.server.entity.AuditLogEntity
 import org.octopusden.octopus.components.registry.server.entity.GitHistoryImportStatus
@@ -52,6 +53,7 @@ private const val SHORT_SHA_LENGTH = 7
  */
 private val HEARTBEAT_INTERVAL: java.time.Duration = java.time.Duration.ofMinutes(5)
 
+@ConditionalOnDatabaseEnabled
 @Service
 class GitHistoryImportServiceImpl(
     private val componentsRegistryProperties: ComponentsRegistryProperties,

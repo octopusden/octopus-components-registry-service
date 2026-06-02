@@ -1,0 +1,45 @@
+# SYS-047: no-DB boot mode. Activate this profile (alongside the usual
+# dev / dev-vcs-local / local set) to run the service with NO database at all:
+# every v1/v2/v3 request is served by the Git resolver — the same code path as
+# the pre-v3 (2.0.87) baseline. Used by the git-mode compat local stand (id18),
+# which no longer needs Postgres.
+#
+# This profile is the single switch. It does two things:
+#  1. Excludes the JDBC/JPA/Flyway auto-configurations so Spring never opens a
+#     Hikari pool or runs Flyway (spring.autoconfigure.exclude is read from the
+#     Environment before AutoConfigurationImportSelector runs, so a profile YAML
+#     is an effective place to set it).
+#  2. Sets components-registry.database.enabled=false, which makes every
+#     DB-coupled bean (@ConditionalOnDatabaseEnabled) drop out of the context.
+#
+# db-mode (id17) never activates this profile and never sets the flag, so it is
+# completely unchanged (every gated bean is matchIfMissing=true).
+#
+# Note: this profile does NOT disable Spring Cloud Config itself — that is a
+# bootstrap-context concern. Activate `no-db` alongside a profile that turns Cloud
+# Config off at bootstrap (the `dev` suite does, same as db-mode id17); tests use
+# `bootstrap-no-db.yml`. Running `no-db` with neither would hit the Config Server
+# bootstrap retry loop.
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration
+      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.jpa.JpaRepositoriesAutoConfiguration
+      - org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration
+  flyway:
+    enabled: false
+
+components-registry:
+  database:
+    enabled: false
+  auto-migrate: false
+  default-source: git
+
+# Defensive: the DB-backed TeamCity sync scheduler is also gated by
+# @ConditionalOnDatabaseEnabled, but keep sync disabled here so a stray
+# teamcity.sync.enabled=true from service-config cannot try to wire it.
+teamcity:
+  sync:
+    enabled: false

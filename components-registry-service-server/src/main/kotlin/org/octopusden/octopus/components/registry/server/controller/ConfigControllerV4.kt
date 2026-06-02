@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.controller
 
+import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.entity.RegistryConfigEntity
 import org.octopusden.octopus.components.registry.server.repository.RegistryConfigRepository
 import org.springframework.http.ResponseEntity
@@ -16,6 +17,7 @@ import java.time.Instant
  * via `@JdbcTypeCode(SqlTypes.JSON)`. Hibernate handles JSON marshalling on
  * read and write — the controller just passes the map through.
  */
+@ConditionalOnDatabaseEnabled
 @RestController
 @RequestMapping("rest/api/4")
 class ConfigControllerV4(

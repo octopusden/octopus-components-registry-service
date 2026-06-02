@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.event
 
+import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.entity.AuditLogEntity
 import org.octopusden.octopus.components.registry.server.repository.AuditLogRepository
 import org.octopusden.octopus.components.registry.server.util.AuditDiff
@@ -7,6 +8,7 @@ import org.springframework.stereotype.Component
 import org.springframework.transaction.event.TransactionPhase
 import org.springframework.transaction.event.TransactionalEventListener
 
+@ConditionalOnDatabaseEnabled
 @Component
 class AuditEventListener(
     private val auditLogRepository: AuditLogRepository,

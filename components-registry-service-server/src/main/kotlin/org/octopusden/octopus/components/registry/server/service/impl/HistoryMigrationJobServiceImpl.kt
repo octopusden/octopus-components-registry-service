@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
+import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.entity.GitHistoryImportStateEntity
 import org.octopusden.octopus.components.registry.server.entity.GitHistoryImportStatus
 import org.octopusden.octopus.components.registry.server.repository.GitHistoryImportStateRepository
@@ -34,6 +35,7 @@ import java.time.Instant
  * [current] synthesizes a state from it so the SPA can render the right action
  * (Retry on COMPLETED/FAILED, Force-reset on stale IN_PROGRESS).
  */
+@ConditionalOnDatabaseEnabled
 @Service
 class HistoryMigrationJobServiceImpl(
     private val gitHistoryImportService: GitHistoryImportService,

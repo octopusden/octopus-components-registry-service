@@ -20,7 +20,10 @@ import org.springframework.web.bind.annotation.RestController
 @RequestMapping("rest/api/2/components-registry/service")
 class ComponentsRegistryServiceController(
     private val componentsRegistryService: ComponentsRegistryService,
-    private val importService: ImportService,
+    // Nullable: ImportService is part of the database layer (@ConditionalOnDatabaseEnabled)
+    // and is therefore absent in no-db mode. Spring treats a Kotlin-nullable constructor
+    // parameter as an optional dependency, injecting null when no bean exists.
+    private val importService: ImportService?,
     private val migrationLifecycleGate: MigrationLifecycleGate,
 ) {
     // Per-pod mutual exclusion for the Git re-read: updateConfigCache() ->
@@ -69,11 +72,15 @@ class ComponentsRegistryServiceController(
                 .body<Any>(ErrorResponse("A cache refresh is already in progress; retry updateCache after it completes"))
         }
         try {
-            val status = importService.getMigrationStatus()
+            // DB-mode only: getMigrationStatus() reads countBySource("db"). In no-db
+            // mode ImportService is absent (importService == null) — there is no
+            // migration that can be "fully done", so always fall through to the Git
+            // re-read and return HTTP 200, exactly like the pre-v3 endpoint.
+            val status = importService?.getMigrationStatus()
             // status.total = git-resolver component count (0 if it errored/empty);
             // status.git = total - countBySource("db"). Retire only on a confirmed
             // fully-migrated state; otherwise attempt the refresh.
-            val fullyMigrated = status.total > 0 && status.git == 0L
+            val fullyMigrated = status != null && status.total > 0 && status.git == 0L
             if (!fullyMigrated) {
                 return ResponseEntity.ok<Any>(componentsRegistryService.updateConfigCache())
             }
