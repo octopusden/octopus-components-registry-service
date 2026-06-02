@@ -447,4 +447,91 @@ class V4WriteValidationTest {
                     .content(patchBody),
             ).andExpect(status().isBadRequest)
     }
+
+    // -------------------------------------------------------------------
+    // Partial-overlap rejection (R3 / schema-spec §3.5).
+    //
+    // Mirrors the Portal-side preview from PR #65: a new field-override
+    // range that partially overlaps a sibling on the same attribute is
+    // rejected with 400. Strict containment and disjoint ranges remain
+    // allowed; equal ranges are still caught by the DB UNIQUE constraint.
+    // -------------------------------------------------------------------
+
+    private fun seedComponentForOverlap(suffix: String): String {
+        val createBody = validSeedBody("validation-test-comp-overlap-$suffix")
+        val seedResponse =
+            postCreate(createBody)
+                .andExpect(status().is2xxSuccessful)
+                .andReturn()
+                .response.contentAsString
+        return objectMapper.readTree(seedResponse)["id"].asText()
+    }
+
+    private fun postFieldOverride(componentId: String, body: String) =
+        mvc.perform(
+            post("/rest/api/4/components/$componentId/field-overrides")
+                .with(adminJwt())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body),
+        )
+
+    @Test
+    @DisplayName("POST /field-overrides rejects a range partially overlapping a sibling on the same attribute")
+    fun fieldOverride_rejects_partialOverlapWithSibling() {
+        val id = seedComponentForOverlap("partial-${uniqueSuffix()}")
+        postFieldOverride(
+            id,
+            """{"overriddenAttribute":"build.javaVersion","versionRange":"[1.0,3.0)","value":"11"}""",
+        ).andExpect(status().isCreated)
+        // [2.0,4.0) overlaps [1.0,3.0) on [2.0,3.0); neither contains the other → reject.
+        postFieldOverride(
+            id,
+            """{"overriddenAttribute":"build.javaVersion","versionRange":"[2.0,4.0)","value":"17"}""",
+        ).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    @DisplayName("POST /field-overrides accepts a range strictly contained inside a sibling (schema-spec §3.5)")
+    fun fieldOverride_allows_strictContainment() {
+        val id = seedComponentForOverlap("contained-${uniqueSuffix()}")
+        postFieldOverride(
+            id,
+            """{"overriddenAttribute":"build.javaVersion","versionRange":"[1.0,5.0)","value":"11"}""",
+        ).andExpect(status().isCreated)
+        // [2.0,3.0) is fully inside [1.0,5.0) → strict containment, accepted.
+        postFieldOverride(
+            id,
+            """{"overriddenAttribute":"build.javaVersion","versionRange":"[2.0,3.0)","value":"17"}""",
+        ).andExpect(status().isCreated)
+    }
+
+    @Test
+    @DisplayName("POST /field-overrides accepts a disjoint range on the same attribute")
+    fun fieldOverride_allows_disjoint() {
+        val id = seedComponentForOverlap("disjoint-${uniqueSuffix()}")
+        postFieldOverride(
+            id,
+            """{"overriddenAttribute":"build.javaVersion","versionRange":"[1.0,2.0)","value":"11"}""",
+        ).andExpect(status().isCreated)
+        postFieldOverride(
+            id,
+            """{"overriddenAttribute":"build.javaVersion","versionRange":"[5.0,6.0)","value":"17"}""",
+        ).andExpect(status().isCreated)
+    }
+
+    @Test
+    @DisplayName("POST /field-overrides ignores overlap against a sibling on a DIFFERENT attribute")
+    fun fieldOverride_allows_overlapAcrossAttributes() {
+        val id = seedComponentForOverlap("diff-attr-${uniqueSuffix()}")
+        postFieldOverride(
+            id,
+            """{"overriddenAttribute":"build.javaVersion","versionRange":"[1.0,3.0)","value":"11"}""",
+        ).andExpect(status().isCreated)
+        // Same range on a different attribute — not a conflict by the
+        // partial-overlap rule (rule is per-attribute).
+        postFieldOverride(
+            id,
+            """{"overriddenAttribute":"jira.releaseVersionFormat","versionRange":"[2.0,4.0)","value":"${'$'}major"}""",
+        ).andExpect(status().isCreated)
+    }
 }
