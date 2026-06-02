@@ -378,6 +378,20 @@ Effectively-dead endpoints (≤2 calls in 2 production days) are dropped or stub
 
 All other v1-v3 endpoints preserve byte-for-byte response shape for unchanged components, validated against the prod-aligned fixture suite.
 
+### 5.2 As-code rendering (`GET /rest/api/4/components/{idOrName}/as-code`)
+
+A read-only **Groovy-style** projection of a component (the reverse of the §6 import; a plain
+string builder — no GroovyShell). `ComponentCodeRenderer` walks the entity:
+
+| Mode | Source | Shape |
+|---|---|---|
+| **FULL** (no `version`) | `ComponentEntity` + its `configurations` rows | Delta-style: top-level block (per-component fields + BASE-row aspects) + one `"<range>" { … }` block per distinct override range. Reuses the §3 row taxonomy — SCALAR_OVERRIDE rows become `field = value` (or `field = null` for the import-only null-clear, §3.2), MARKER rows become the replaced child block. RANGE_PRESENCE-only ranges (§3.4) and the synthetic-base row aspects (§3.4, when overrides exist) are suppressed. |
+| **RESOLVED** (`?version=X`) | merged single view | Reuses the §3.5 resolve primitives (`ComponentConfigurationView.applyScalarOverride` for scalars, marker-pick for child collections) — values match the v2 version-resolution endpoints. Single block, no range sub-blocks. **Difference vs the v2 resolver:** distribution `$version` substitution (§6.8, a runtime concern) is intentionally not applied, so distribution patterns render as the stored templates — consistent with the FULL view. |
+
+Null-clear (§3.2) is preserved in FULL: a SCALAR_OVERRIDE row is rendered by *presence* of the
+row (keyed on `overridden_attribute`), not by value, so a NULL typed column emits `field = null`.
+Renderer/HTTP contract is covered by `ComponentCodeRendererTest` and `ComponentControllerAsCodeV4Test`.
+
 ## 6. Migration approach
 
 `POST /admin/migrate` is rewritten to populate the new schema from DSL. Async-job semantics (MIG-027/028) are unchanged.
