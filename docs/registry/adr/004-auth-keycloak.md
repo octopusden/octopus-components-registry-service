@@ -177,7 +177,7 @@ class ComponentCrudController(private val service: ComponentManagementService) {
 
 ### Roles & Permissions
 
-Permissions (7):
+Permissions (8):
 
 | Permission | Endpoint / Operation |
 |---|---|
@@ -188,6 +188,7 @@ Permissions (7):
 | `DELETE_COMPONENTS` | `DELETE /{id}` — hard delete, ADMIN-only |
 | `IMPORT_DATA` | `POST /rest/api/4/admin/**`, `PUT /rest/api/4/admin/config/**` (migrate/import/global-config writes) |
 | `ACCESS_AUDIT` | `GET /rest/api/4/audit/**` |
+| `ADMIN_DATA` | admin-tier data administration — gates the Portal Field-Overrides edit surface (add/edit/delete, incl. marker editing). `ROLE_ADMIN` only. Currently enforced client-side in the Portal; the permission is surfaced via `/auth/me` |
 
 Role map (`octopus-security.roles` in `components-registry-service.yml`):
 
@@ -222,6 +223,7 @@ octopus-security:
       - DELETE_COMPONENTS
       - IMPORT_DATA
       - ACCESS_AUDIT
+      - ADMIN_DATA
 ```
 
 Notes on the model:

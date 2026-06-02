@@ -32,7 +32,7 @@ out of the box:
 |---|---|---|
 | `ROLE_COMPONENTS_REGISTRY_VIEWER` | `ACCESS_COMPONENTS`, `ACCESS_AUDIT` | `COMPONENTS_REGISTRY_VIEWER` |
 | `ROLE_COMPONENTS_REGISTRY_EDITOR` | `+ EDIT_COMPONENTS` | `COMPONENTS_REGISTRY_EDITOR` |
-| `ROLE_ADMIN` | all permissions including `ARCHIVE_COMPONENTS`, `RENAME_COMPONENTS`, `DELETE_COMPONENTS`, `IMPORT_DATA` | usually a platform-wide `ADMIN` realm-role you already have |
+| `ROLE_ADMIN` | all permissions including `ARCHIVE_COMPONENTS`, `RENAME_COMPONENTS`, `DELETE_COMPONENTS`, `IMPORT_DATA`, `ADMIN_DATA` | usually a platform-wide `ADMIN` realm-role you already have |
 | `ROLE_ANONYMOUS` | `ACCESS_COMPONENTS` (public read on v4 GETs) | implicit Spring authority — no Keycloak action needed |
 
 Authority naming convention: `UserInfoGrantedAuthoritiesConverter` (from
@@ -147,6 +147,16 @@ In the impersonated session, open the portal and check:
   `octopus-security.roles` map in your config server overlay
   accordingly (see [ADR-004](../adr/004-auth-keycloak.md) for the
   pattern).
+- **Config-overlay lists REPLACE, they do not append.** Production reads
+  `octopus-security.roles` from the `service-config` overlay
+  (`<env>/service-config: components-registry-service.yml`), which Spring
+  merges over the bundled `application.yml`. YAML *list* properties are
+  replaced wholesale, so an overlay that redefines `ROLE_ADMIN` shadows the
+  bundled permission list entirely. **When a new permission is added (e.g.
+  `ADMIN_DATA`), it must be added to `ROLE_ADMIN` in every overlay too** —
+  otherwise admins keep `ROLE_ADMIN` but silently lose the new capability
+  (here: the Portal Field-Overrides edit surface). Verify post-deploy via an
+  admin's `/auth/me` or the startup role-→-permission log.
 - **Diagnosing a 403 when you expect 200.** Enable
   `logging.level.org.octopusden.cloud.commons.security: TRACE` in
   the CRS config. The startup log prints the resolved role-→-permission

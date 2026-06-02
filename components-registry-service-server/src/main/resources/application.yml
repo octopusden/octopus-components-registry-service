@@ -98,3 +98,5 @@ octopus-security:
       - DELETE_COMPONENTS
       - IMPORT_DATA
       - ACCESS_AUDIT
+      # Admin-tier data administration (e.g. Portal Field-Overrides edit surface).
+      - ADMIN_DATA

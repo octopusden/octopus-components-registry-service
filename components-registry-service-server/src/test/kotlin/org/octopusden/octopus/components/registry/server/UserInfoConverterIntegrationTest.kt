@@ -92,6 +92,9 @@ class UserInfoConverterIntegrationTest {
             .andExpect(jsonPath("$.username").value("alice"))
             .andExpect(jsonPath("$.roles[0].name").value("ROLE_ADMIN"))
             .andExpect(jsonPath("$.roles[0].permissions", org.hamcrest.Matchers.hasItem("ACCESS_COMPONENTS")))
+            // ADMIN_DATA gates the admin-only data-administration surface
+            // (e.g. the Portal Field-Overrides edit tab). Admins must carry it.
+            .andExpect(jsonPath("$.roles[0].permissions", org.hamcrest.Matchers.hasItem("ADMIN_DATA")))
     }
 
     @Test
