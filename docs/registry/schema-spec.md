@@ -378,7 +378,7 @@ Effectively-dead endpoints (≤2 calls in 2 production days) are dropped or stub
 
 All other v1-v3 endpoints preserve byte-for-byte response shape for unchanged components, validated against the prod-aligned fixture suite.
 
-### 5.2 As-code rendering (`GET /api/4/components/{idOrName}/as-code`)
+### 5.2 As-code rendering (`GET /rest/api/4/components/{idOrName}/as-code`)
 
 A read-only **Groovy-style** projection of a component (the reverse of the §6 import; a plain
 string builder — no GroovyShell). `ComponentCodeRenderer` walks the entity:
