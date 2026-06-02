@@ -92,6 +92,37 @@ CREATE TABLE audit_log (
 ### Risks
 - Missed audit entries if writes bypass service layer → enforce via architecture (no direct repository writes from controllers)
 
+## Refinements (post-acceptance)
+
+These tighten the original mechanism; the table + domain-event design is unchanged.
+
+### Action vocabulary
+`action` is `CREATE | UPDATE | DELETE | RENAME | MIGRATED`. `MIGRATED`
+(`AuditLogEntity.ACTION_MIGRATED`) is written by the git-history backfill for a
+component's **first appearance** in history, instead of `CREATE`. It marks
+migration-origin baseline rows so the audit views can hide them by default — one
+`MIGRATED` row per component is noise, not an operational event. Runtime API
+creates stay `CREATE`. (SYS-049)
+
+### Migration noise hidden by default
+Both read endpoints (`GET /audit/recent`, `GET /audit/{entityType}/{entityId}`)
+exclude `action = MIGRATED` rows unless the caller passes `includeMigrated=true`,
+or pins them with an explicit `action=MIGRATED` filter. The Portal exposes this as
+a "Show migration" toggle (default off). (SYS-049)
+
+### No-op suppression
+A write that changes nothing must not leave an audit row. `AuditEventListener`
+drops an event whose `oldValue` and `newValue` are both present but whose computed
+`change_diff` is empty. This is centralised in the listener, so it covers every
+publisher. `CREATE` (null `oldValue`) and `DELETE` legitimately have a null diff
+and are always kept. (SYS-048)
+
+### Coverage: field overrides
+Field-override (version-ranged attribute override) create/update/delete publish a
+Component `UPDATE` event keyed by the overridden attribute, so version-range edits
+appear in the component history alongside top-level attribute edits — closing the
+"all write paths go through audited service methods" risk for these paths. (SYS-050)
+
 ## References
 - [DMS Event pattern](https://github.com/octopusden/octopus-dms-service) — `server/.../event/`
 - [PostgreSQL JSONB operators](https://www.postgresql.org/docs/current/functions-json.html)
