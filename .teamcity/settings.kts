@@ -398,6 +398,10 @@ object id16CompatTraceReplayManual : BuildType({
         // dated subdir. Operator can override at run time (e.g. to a specific
         // snapshot for reproducibility).
         text("COMPAT_TRACE_FILE_RELATIVE", "latest-top.txt", allowEmpty = false, display = ParameterDisplay.PROMPT)
+        // Real-body sidecar (post-bodies.ndjson) replayed by RealBodyReplayCompatTest.
+        // Also a symlink in the trace repo; override for a pinned snapshot. If the
+        // resolved file is absent the test SKIPs (assumeTrue), so this never fails id16.
+        text("COMPAT_BODIES_FILE_RELATIVE", "latest-bodies.ndjson", allowEmpty = false, display = ParameterDisplay.PROMPT)
         param("ARTIFACT_PATH", """
             components-registry-compat-test/build/reports/compat/** => reports/compat
             components-registry-compat-test/build/test-results/**/*.xml => test-results/compat
@@ -410,13 +414,14 @@ object id16CompatTraceReplayManual : BuildType({
         // "Unknown command-line option '--tests'"). Inline the filter into
         // GRADLE_TASK between the test and reporter task refs so the option
         // attaches to the correct task; do NOT move it back into the extras.
-        param("GRADLE_TASK", ":components-registry-compat-test:test --tests *TraceReplayCompatTest* :components-registry-compat-test:compatibilityReporter")
+        param("GRADLE_TASK", ":components-registry-compat-test:test --tests *TraceReplayCompatTest* --tests *RealBodyReplayCompatTest* :components-registry-compat-test:compatibilityReporter")
         param("GRADLE_EXTRA_PARAMETERS", """
             -Pcompat.baseline.url=%COMPAT_BASELINE_URL%
             -Pcompat.candidate.url=%COMPAT_CANDIDATE_URL%
             -Pcompat.rms.url=%COMPAT_RMS_URL%
             -Pcompat.allow-non-db-candidate=%COMPAT_ALLOW_NON_DB_CANDIDATE%
             -Pcompat.trace.file=%teamcity.build.checkoutDir%/trace-data/%COMPAT_TRACE_FILE_RELATIVE%
+            -Pcompat.bodies.file=%teamcity.build.checkoutDir%/trace-data/%COMPAT_BODIES_FILE_RELATIVE%
             -Pcompat.parallelism=10
         """.trimIndent())
     }
@@ -729,6 +734,19 @@ object id17CompatLocalStandManual : BuildType({
                 export COMPAT_VERSIONS_FILE="${'$'}VERSIONS_FILE_PATH"
                 export COMPAT_FULL="%COMPAT_FULL%"
                 export COMPAT_PARALLELISM="%COMPAT_PARALLELISM%"
+                # Real captured POST bodies (post-bodies.ndjson) replayed by
+                # RealBodyReplayCompatTest. Fail-FAST on a missing sidecar (Stage-2
+                # review): the trace repo's master carries latest-bodies.ndjson, so
+                # an absent file means the CrsCompatTrace checkout is broken. Fail-soft
+                # would silently SKIP the real-body replay and a green build would be
+                # indistinguishable from one that actually replayed the real bodies.
+                BODIES_FILE_PATH="${'$'}TRACE_DATA_DIR/latest-bodies.ndjson"
+                if [ ! -f "${'$'}BODIES_FILE_PATH" ]; then
+                    echo "ERROR: real-body sidecar ${'$'}BODIES_FILE_PATH does not exist (CrsCompatTrace checkout failed or post-bodies.ndjson missing)" >&2
+                    exit 2
+                fi
+                export COMPAT_BODIES_FILE="${'$'}BODIES_FILE_PATH"
+                echo "Bodies file:     ${'$'}BODIES_FILE_PATH"
                 # Route the postgres pull through the artifactory mirror so
                 # id17 doesn't hit Docker Hub's anonymous-pull rate limit
                 # (#3636 failed mid-Stage-1 with `toomanyrequests`). The
@@ -967,6 +985,19 @@ object id18CompatLocalStandGitModeAuto : BuildType({
                 export COMPAT_VERSIONS_FILE="${'$'}VERSIONS_FILE_PATH"
                 export COMPAT_FULL="%COMPAT_FULL%"
                 export COMPAT_PARALLELISM="%COMPAT_PARALLELISM%"
+                # Real captured POST bodies (post-bodies.ndjson) replayed by
+                # RealBodyReplayCompatTest. Fail-FAST on a missing sidecar (Stage-2
+                # review): the trace repo's master carries latest-bodies.ndjson, so
+                # an absent file means the CrsCompatTrace checkout is broken. Fail-soft
+                # would silently SKIP the real-body replay and a green build would be
+                # indistinguishable from one that actually replayed the real bodies.
+                BODIES_FILE_PATH="${'$'}TRACE_DATA_DIR/latest-bodies.ndjson"
+                if [ ! -f "${'$'}BODIES_FILE_PATH" ]; then
+                    echo "ERROR: real-body sidecar ${'$'}BODIES_FILE_PATH does not exist (CrsCompatTrace checkout failed or post-bodies.ndjson missing)" >&2
+                    exit 2
+                fi
+                export COMPAT_BODIES_FILE="${'$'}BODIES_FILE_PATH"
+                echo "Bodies file:     ${'$'}BODIES_FILE_PATH"
                 # git-mode (no-db, issue #310) does NOT start Postgres, so no POSTGRES_IMAGE
                 # pull is needed. RESET_DB=1 only drives teamcity-run.sh's pre-run teardown
                 # of any stale Postgres left by a prior db-mode run on this (persistent) agent.
