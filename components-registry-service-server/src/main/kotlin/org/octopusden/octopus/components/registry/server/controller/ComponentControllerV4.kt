@@ -22,7 +22,11 @@ import org.octopusden.octopus.escrow.RepositoryType
 import org.slf4j.LoggerFactory
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
+import org.springframework.http.ContentDisposition
+import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
+import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
@@ -34,7 +38,10 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
+import java.nio.charset.StandardCharsets
 import java.util.UUID
+
+private const val TEXT_PLAIN_UTF8 = "text/plain;charset=UTF-8"
 
 /**
  * `@PreAuthorize` is applied method-by-method rather than at class level because
@@ -266,6 +273,36 @@ class ComponentControllerV4(
             }
         }
         return componentManagementService.getComponentByName(idOrName)
+    }
+
+    /**
+     * Render the component as a Groovy-style "as-code" definition (text/plain).
+     * Without `version` → the FULL view (all version ranges); with `version` →
+     * the view RESOLVED/merged for that concrete version. The component is
+     * resolved by UUID or name, identical to [getComponent].
+     */
+    @GetMapping("/{idOrName}/as-code", produces = [TEXT_PLAIN_UTF8])
+    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
+    fun getComponentAsCode(
+        @PathVariable idOrName: String,
+        @RequestParam(required = false) version: String?,
+    ): ResponseEntity<String> {
+        val rendered =
+            if (version.isNullOrBlank()) {
+                componentManagementService.renderComponentAsCode(idOrName)
+            } else {
+                componentManagementService.renderResolvedComponentAsCode(idOrName, version)
+            }
+        val disposition =
+            ContentDisposition
+                .inline()
+                .filename("${rendered.componentKey}.groovy", StandardCharsets.UTF_8)
+                .build()
+        return ResponseEntity
+            .ok()
+            .contentType(MediaType.parseMediaType(TEXT_PLAIN_UTF8))
+            .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+            .body(rendered.body)
     }
 
     // Field-level gating: a plain edit passes on EDIT_COMPONENTS alone, but switching

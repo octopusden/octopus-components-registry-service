@@ -77,6 +77,29 @@ Base URLs for links are configurable per deployment via `registry_config` (same 
 - **Hard delete**: Admin-only, removes component and all related data (with CASCADE)
 - **Audit**: DELETE event logged
 
+### 1.6 View as Code
+
+- **Endpoint**: `GET /rest/api/4/components/{idOrName}/as-code` — auth `ACCESS_COMPONENTS`
+- **Output**: `text/plain;charset=UTF-8` — a human-readable, **Groovy-style** rendering of the
+  component definition (the reverse of the legacy Groovy import). `Content-Disposition: inline;
+  filename="{componentKey}.groovy"`.
+- **Two modes**:
+  - **FULL** (no `version` param): the whole component **with all version ranges**, delta-style —
+    a top-level block with the per-component fields + BASE-row aspects, followed by one
+    `"<range>" { … }` block per distinct override range carrying only the fields that range
+    overrides (a per-range `field = null` line denotes an explicit null-clear).
+  - **RESOLVED** (`?version=<v>`): the component flattened/merged for one concrete version — a
+    single block, no range sub-blocks. The scalar + child-collection merge reuses the same
+    primitives as version resolution, so values match the v2 version-resolution endpoints. (One
+    deliberate difference: distribution `$version` substitution — a runtime concern — is not
+    applied, so distribution patterns show the same templates as the FULL view.)
+- **404** when the component is unknown, or (RESOLVED) when no configuration resolves for the
+  version (no BASE row / unparseable version). A version that simply matches no override range
+  still renders the BASE view (resolver fallback semantics).
+- **Read-only**: the rendering is a projection; it is not parsed back (no GroovyShell / legacy
+  escrow libraries are involved — it is a plain string builder). Surfaced in the Portal as the
+  read-only **"As Code"** tab on the component page (syntax-highlighted, with Full/Resolved toggle).
+
 ## 2. Version Range Management
 
 Version overrides are **per-field**, not per-component-version. Each field in each parameter group (build, VCS, jira, distribution, escrow) can have its own independent set of version ranges.

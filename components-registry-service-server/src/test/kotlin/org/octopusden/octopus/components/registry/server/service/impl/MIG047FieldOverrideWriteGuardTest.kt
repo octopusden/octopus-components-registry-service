@@ -30,6 +30,7 @@ import org.octopusden.octopus.components.registry.server.repository.SystemReposi
 import org.octopusden.octopus.components.registry.server.repository.ToolRepository
 import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
+import org.octopusden.octopus.components.registry.server.util.ComponentCodeRenderer
 import org.octopusden.octopus.components.registry.server.teamcity.TeamcityProperties
 import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionNames
@@ -92,6 +93,11 @@ class MIG047FieldOverrideWriteGuardTest {
                 teamcityProperties = mock(TeamcityProperties::class.java),
                 versionRangeFactory = VersionRangeFactory(versionNames),
                 environment = mock(org.springframework.core.env.Environment::class.java),
+                componentCodeRenderer =
+                    ComponentCodeRenderer(
+                        VersionRangeFactory(versionNames),
+                        NumericVersionFactory(versionNames),
+                    ),
             )
 
         component = ComponentEntity(id = componentId, componentKey = "alpha-fixture")

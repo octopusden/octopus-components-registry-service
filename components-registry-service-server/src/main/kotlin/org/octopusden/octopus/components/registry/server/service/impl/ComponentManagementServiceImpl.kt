@@ -65,7 +65,9 @@ import org.octopusden.octopus.components.registry.server.repository.ToolReposito
 import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
+import org.octopusden.octopus.components.registry.server.service.RenderedComponentCode
 import org.octopusden.octopus.components.registry.server.teamcity.TeamcityProperties
+import org.octopusden.octopus.components.registry.server.util.ComponentCodeRenderer
 import org.octopusden.octopus.escrow.config.ConfigHelper
 import org.octopusden.releng.versions.VersionRangeFactory
 import org.springframework.context.ApplicationEventPublisher
@@ -106,6 +108,7 @@ class ComponentManagementServiceImpl(
     private val teamcityProperties: TeamcityProperties,
     private val versionRangeFactory: VersionRangeFactory,
     private val environment: Environment,
+    private val componentCodeRenderer: ComponentCodeRenderer,
 ) : ComponentManagementService {
     // ConfigHelper is constructed lazily because it touches the Spring
     // Environment on first access; mirrors the pattern used by
@@ -291,6 +294,28 @@ class ComponentManagementServiceImpl(
             componentRepository.findByComponentKey(name)
                 ?: throw NotFoundException("Component with name '$name' not found")
         ).toDetailResponse(teamcityProperties.baseUrl)
+
+    // The renderer walks LAZY child collections, so it must run inside this
+    // readOnly transaction (the Hibernate session that loaded the entity).
+    @Transactional(readOnly = true)
+    override fun renderComponentAsCode(idOrName: String): RenderedComponentCode {
+        val entity = findByIdOrName(idOrName)
+        return RenderedComponentCode(entity.componentKey, componentCodeRenderer.renderFull(entity))
+    }
+
+    @Transactional(readOnly = true)
+    override fun renderResolvedComponentAsCode(
+        idOrName: String,
+        version: String,
+    ): RenderedComponentCode {
+        val entity = findByIdOrName(idOrName)
+        val body =
+            componentCodeRenderer.renderResolved(entity, version)
+                ?: throw NotFoundException(
+                    "No configuration resolves for component '${entity.componentKey}' at version '$version'",
+                )
+        return RenderedComponentCode(entity.componentKey, body)
+    }
 
     // ============================================================
     // Update
@@ -1406,6 +1431,22 @@ class ComponentManagementServiceImpl(
         componentRepository.findById(id).orElseThrow {
             NotFoundException("Component with id '$id' not found")
         }
+
+    /**
+     * Resolve a component by UUID-or-name, mirroring `ComponentControllerV4.getComponent`:
+     * try the UUID path when the token parses as one, fall back to a name lookup
+     * (a name that happens to parse as a UUID but has no id match still resolves
+     * by name). Infra errors from `findById` propagate; only a missing row falls
+     * through. Throws `NotFoundException` when neither matches.
+     */
+    private fun findByIdOrName(idOrName: String): ComponentEntity {
+        val asUuid = runCatching { UUID.fromString(idOrName) }.getOrNull()
+        if (asUuid != null) {
+            componentRepository.findById(asUuid).orElse(null)?.let { return it }
+        }
+        return componentRepository.findByComponentKey(idOrName)
+            ?: throw NotFoundException("Component '$idOrName' not found")
+    }
 
     /**
      * Parse `range` via the shared `VersionRangeFactory`; throws
