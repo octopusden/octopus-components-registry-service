@@ -15,6 +15,17 @@ class AuditEventListener(
 ) {
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     fun handleAuditEvent(event: AuditEvent) {
+        val changeDiff = AuditDiff.compute(event.oldValue, event.newValue)
+
+        // Suppress no-op updates: when both snapshots are present but nothing
+        // actually changed, AuditDiff yields null. Persisting such a row clutters
+        // the audit log with meaningless "saved, changed nothing" entries (e.g. a
+        // Save click on an unmodified form). CREATE (null oldValue) and DELETE
+        // (null newValue) legitimately produce a null diff and must still be kept.
+        if (event.oldValue != null && event.newValue != null && changeDiff == null) {
+            return
+        }
+
         val auditLog =
             AuditLogEntity(
                 entityType = event.entityType,
@@ -23,7 +34,7 @@ class AuditEventListener(
                 changedBy = event.changedBy,
                 oldValue = event.oldValue,
                 newValue = event.newValue,
-                changeDiff = AuditDiff.compute(event.oldValue, event.newValue),
+                changeDiff = changeDiff,
             )
         auditLogRepository.save(auditLog)
     }
