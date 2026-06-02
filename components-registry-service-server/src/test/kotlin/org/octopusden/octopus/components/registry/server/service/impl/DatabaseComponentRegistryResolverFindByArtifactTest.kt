@@ -15,6 +15,8 @@ import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactIdEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
+import org.octopusden.octopus.components.registry.server.entity.DistributionMavenArtifactEntity
+import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.DependencyMappingRepository
 import org.octopusden.releng.versions.NumericVersionFactory
@@ -84,6 +86,29 @@ class DatabaseComponentRegistryResolverFindByArtifactTest {
         )
     }
 
+    /** A per-range `GROUP_ARTIFACT_PATTERN` marker carrying an overriding maven coordinate. */
+    private fun addMarkerWithMavenArtifact(
+        component: ComponentEntity,
+        versionRange: String,
+        groupPattern: String,
+        artifactPattern: String,
+    ) {
+        val marker = ComponentConfigurationEntity(
+            component = component,
+            versionRange = versionRange,
+            overriddenAttribute = MarkerAttributes.GROUP_ARTIFACT_PATTERN,
+            rowType = "MARKER",
+        )
+        marker.mavenArtifacts.add(
+            DistributionMavenArtifactEntity(
+                componentConfiguration = marker,
+                groupPattern = groupPattern,
+                artifactPattern = artifactPattern,
+            ),
+        )
+        component.configurations.add(marker)
+    }
+
     @Test
     @DisplayName("MIG-039: resolves the in-range component, not an archived one whose ranges exclude the version")
     fun `MIG-039 gates artifact resolution by configuration version range`() {
@@ -136,5 +161,111 @@ class DatabaseComponentRegistryResolverFindByArtifactTest {
 
         val artifact = ArtifactDependency("com.other.group", "totally-unrelated", "11.1.0")
         assertNull(resolver.findComponentsByArtifact(setOf(artifact))[artifact])
+    }
+
+    @Test
+    @DisplayName("MIG-039: per-range artifactId override — the new artifact resolves in its own range")
+    fun `MIG-039 resolves a per-range artifactId override in the overriding range`() {
+        // base [1.0.0,2.0.0) publishes 'old' (component-level); a GROUP_ARTIFACT_PATTERN marker
+        // overrides [2.0.0,) to publish 'new'. V1 matches artifact pattern AND range on the SAME
+        // config, so 'new:2.5.0' must resolve via the [2.0.0,) range (it isn't in the
+        // component-level artifactIds at all — the pre-fix component-level match would miss it).
+        val comp = makeComponent("ovr")
+        addArtifactId(comp, "com.example.x", "old")
+        addConfig(comp, "[1.0.0,2.0.0)")
+        addMarkerWithMavenArtifact(comp, "[2.0.0,)", "com.example.x", "new")
+        `when`(componentRepository.findAll()).thenReturn(mutableListOf(comp))
+
+        val artifact = ArtifactDependency("com.example.x", "new", "2.5.0")
+        val resolved = resolver.findComponentsByArtifact(setOf(artifact))[artifact]
+        assertNotNull(resolved, "the per-range 'new' artifact must resolve in [2.0.0,)")
+        assertEquals("ovr", resolved!!.id)
+    }
+
+    @Test
+    @DisplayName("MIG-039: per-range artifactId override — a superseded artifact does NOT resolve for a version in the override range")
+    fun `MIG-039 does not resolve a superseded artifactId for a version in the overriding range`() {
+        val comp = makeComponent("ovr")
+        addArtifactId(comp, "com.example.x", "old")
+        addConfig(comp, "[1.0.0,2.0.0)")
+        addMarkerWithMavenArtifact(comp, "[2.0.0,)", "com.example.x", "new")
+        `when`(componentRepository.findAll()).thenReturn(mutableListOf(comp))
+
+        // 'old' was published only in [1.0.0,2.0.0); at 2.5.0 the effective artifact is 'new', so
+        // 'old:2.5.0' must NOT resolve (the pre-fix gate accepted it because some range covered 2.5.0
+        // and the component-level 'old' matched).
+        val artifact = ArtifactDependency("com.example.x", "old", "2.5.0")
+        assertNull(resolver.findComponentsByArtifact(setOf(artifact))[artifact])
+    }
+
+    @Test
+    @DisplayName("MIG-023/039: a specific (exact) artifactId mapping beats a generic one regardless of findAll() order")
+    fun `MIG-039 prefers the most specific in-range mapping over a generic one listed first`() {
+        // MIG-023: when two components match the same artifact in range, the more specific
+        // (exact) mapping must win — even if findAll() returns the generic one first.
+        val generic = makeComponent("generic-comp")
+        addArtifactId(generic, "com.example.x", "core|other") // |-union → less specific
+        addConfig(generic, "[1.0.0,2.0.0)")
+        val specific = makeComponent("specific-comp")
+        addArtifactId(specific, "com.example.x", "core") // exact → more specific
+        addConfig(specific, "[1.0.0,2.0.0)")
+        // generic is returned FIRST — a first-in-range-wins matcher would (wrongly) pick it.
+        `when`(componentRepository.findAll()).thenReturn(mutableListOf(generic, specific))
+
+        val artifact = ArtifactDependency("com.example.x", "core", "1.5.0")
+        val resolved = resolver.findComponentsByArtifact(setOf(artifact))[artifact]
+        assertNotNull(resolved)
+        assertEquals(
+            "specific-comp",
+            resolved!!.id,
+            "the exact mapping must win over the generic |-union one regardless of findAll() order",
+        )
+    }
+
+    @Test
+    @DisplayName("MIG-023/039: the inherited default catch-all regex must lose to a concrete multi-artifact mapping")
+    fun `MIG-039 ranks the default catch-all regex below a concrete union mapping`() {
+        // A component without an explicit artifactId inherits the default ANY_ARTIFACT regex,
+        // stored verbatim (e.g. [\w-\.]+). MIG-023: it must NOT beat a component that lists the
+        // concrete artifact in a |-union, even though the regex isn't the literal "*".
+        val generic = makeComponent("generic-comp")
+        addArtifactId(generic, "com.example.x", "[\\w-\\.]+") // inherited default catch-all regex
+        addConfig(generic, "[1.0.0,2.0.0)")
+        val concrete = makeComponent("concrete-comp")
+        addArtifactId(concrete, "com.example.x", "core|api") // concrete multi-artifact union
+        addConfig(concrete, "[1.0.0,2.0.0)")
+        `when`(componentRepository.findAll()).thenReturn(mutableListOf(generic, concrete))
+
+        val artifact = ArtifactDependency("com.example.x", "core", "1.5.0")
+        val resolved = resolver.findComponentsByArtifact(setOf(artifact))[artifact]
+        assertNotNull(resolved)
+        assertEquals(
+            "concrete-comp",
+            resolved!!.id,
+            "the default catch-all regex must rank below a concrete union mapping",
+        )
+    }
+
+    @Test
+    @DisplayName("MIG-023/039: the dot-less default catch-all regex form also loses to a concrete mapping")
+    fun `MIG-039 ranks the dotless default catch-all regex below a concrete union mapping`() {
+        // Some fixtures store the default as [\w-]+ (no dot). It must also be treated as catch-all,
+        // not specific — the catch-all probe must therefore contain no dot/dash.
+        val generic = makeComponent("generic-comp")
+        addArtifactId(generic, "com.example.x", "[\\w-]+") // dot-less default catch-all regex
+        addConfig(generic, "[1.0.0,2.0.0)")
+        val concrete = makeComponent("concrete-comp")
+        addArtifactId(concrete, "com.example.x", "core|api")
+        addConfig(concrete, "[1.0.0,2.0.0)")
+        `when`(componentRepository.findAll()).thenReturn(mutableListOf(generic, concrete))
+
+        val artifact = ArtifactDependency("com.example.x", "core", "1.5.0")
+        val resolved = resolver.findComponentsByArtifact(setOf(artifact))[artifact]
+        assertNotNull(resolved)
+        assertEquals(
+            "concrete-comp",
+            resolved!!.id,
+            "the dot-less [\\w-]+ catch-all must rank below a concrete union mapping",
+        )
     }
 }

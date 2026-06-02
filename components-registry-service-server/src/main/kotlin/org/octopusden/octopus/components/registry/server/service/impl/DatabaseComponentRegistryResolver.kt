@@ -10,7 +10,6 @@ import org.octopusden.octopus.components.registry.core.dto.Image
 import org.octopusden.octopus.components.registry.core.dto.VersionedComponent
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
-import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactIdEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
@@ -20,8 +19,6 @@ import org.octopusden.octopus.components.registry.server.repository.ComponentRep
 import org.octopusden.octopus.components.registry.server.repository.DependencyMappingRepository
 import org.octopusden.octopus.components.registry.server.service.ComponentRegistryResolver
 import org.octopusden.octopus.components.registry.server.util.formatVersion
-import org.octopusden.octopus.components.registry.server.util.parseMavenGavEntry
-import org.octopusden.octopus.components.registry.server.util.splitCsv
 import org.octopusden.octopus.escrow.MavenArtifactMatcher
 import org.octopusden.octopus.escrow.ModelConfigPostProcessor
 import org.octopusden.octopus.escrow.config.JiraComponentVersionRange
@@ -265,13 +262,28 @@ class DatabaseComponentRegistryResolver(
 
     override fun findComponentsByArtifact(artifacts: Set<ArtifactDependency>): Map<ArtifactDependency, VersionedComponent?> {
         log.debug("Find components by artifacts: {}", artifacts)
-        return artifacts.associateWith { artifact -> findComponentByArtifactOrNull(artifact) }
+        // Build per-component per-range effective (group, artifact) ONCE, then match each artifact
+        // — avoids re-reading all components and reconstructing their escrow view per artifact.
+        val perComponent = loadPerComponentArtifactParameters()
+        return artifacts.associateWith { artifact -> matchArtifact(artifact, perComponent) }
     }
 
     override fun getMavenArtifactParameters(component: String): Map<String, ComponentArtifactConfiguration> {
         val componentEntity =
             componentRepository.findByComponentKey(component)
                 ?: throw NotFoundException("Component '$component' is not found")
+        return mavenArtifactParametersFor(componentEntity)
+    }
+
+    /**
+     * Per-range effective `(groupPattern, artifactPattern)` for a component — marker-aware
+     * (`GROUP_ARTIFACT_PATTERN` per-range overrides) with the component-level `artifactIds`
+     * fallback. Shared by `/maven-artifacts` and (MIG-039) `find-by-artifacts` so both use
+     * identical per-range semantics; keyed by version-range string.
+     */
+    private fun mavenArtifactParametersFor(
+        componentEntity: ComponentEntity,
+    ): Map<String, ComponentArtifactConfiguration> {
 
         // Component-level fallback: the top-level groupId/artifactId rows imported from DSL.
         // For components whose DSL omits an explicit `artifactId` line, the import path
@@ -534,62 +546,94 @@ class DatabaseComponentRegistryResolver(
         }
     }
 
-    private fun findComponentByArtifactOrNull(artifact: ArtifactDependency): VersionedComponent? {
-        val matches =
-            componentRepository
-                .findAll()
-                .flatMap { component ->
-                    component.artifactIds.mapNotNull { artifactIdEntity ->
-                        toArtifactMatchOrNull(artifactIdEntity, artifact)
+    private fun findComponentByArtifactOrNull(artifact: ArtifactDependency): VersionedComponent? =
+        matchArtifact(artifact, loadPerComponentArtifactParameters())
+
+    /** Snapshot every component's marker-aware per-range (group, artifact) patterns. */
+    private fun loadPerComponentArtifactParameters(): List<Pair<String, Map<String, ComponentArtifactConfiguration>>> =
+        componentRepository.findAll().map { it.componentKey to mavenArtifactParametersFor(it) }
+
+    /**
+     * MIG-039 + MIG-023: resolve an artifact to a component by mirroring V1's
+     * `EscrowModuleConfigMatcher` per config — for each component, a version range whose EFFECTIVE
+     * `(groupPattern, artifactPattern)` matches the artifact AND that contains the artifact
+     * version (reusing the same marker-aware per-range patterns as `/maven-artifacts`,
+     * [mavenArtifactParametersFor]), so per-range `artifactId` overrides resolve correctly and an
+     * archived/old out-of-range range no longer pollutes resolution.
+     *
+     * All in-range matches are then ranked by artifact-pattern specificity so a more specific
+     * (exact / version-aware) mapping beats a generic wildcard/`|`-union one regardless of
+     * `findAll()` order — MIG-023 requires the specific match to win when both apply. (V1 treats
+     * >1 as a conflict; a batch endpoint instead picks the most specific rather than failing the
+     * whole request.)
+     */
+    private fun matchArtifact(
+        artifact: ArtifactDependency,
+        perComponent: List<Pair<String, Map<String, ComponentArtifactConfiguration>>>,
+    ): VersionedComponent? {
+        val best =
+            perComponent
+                .flatMap { (componentKey, perRange) ->
+                    perRange.mapNotNull { (rangeKey, cfg) ->
+                        if (cfg.groupPattern.isNotBlank() &&
+                            cfg.artifactPattern.isNotBlank() &&
+                            MavenArtifactMatcher.groupIdMatches(artifact.group, cfg.groupPattern) &&
+                            MavenArtifactMatcher.artifactIdMatches(artifact.name, cfg.artifactPattern) &&
+                            versionInRange(rangeKey, artifact.version)
+                        ) {
+                            componentKey to cfg.artifactPattern
+                        } else {
+                            null
+                        }
                     }
                 }
-        if (matches.isEmpty()) return null
-
-        // Per-version specificity is not modelled at the component_artifact_ids
-        // level under Model A' — those rows belong to the component, not the
-        // configuration. Match by pattern specificity alone (mirrors v3 contract
-        // since the version-specific tier is empty in production today).
-        val resolvedMatch =
-            matches.maxWithOrNull(
-                compareBy<ArtifactMatch>(
-                    { artifactSpecificity(it.artifactPattern, artifact.name) },
-                    { it.artifactPattern.length },
-                ),
-            ) ?: return null
-
-        return VersionedComponent(resolvedMatch.componentName, null, artifact.version, "")
+                .maxWithOrNull(
+                    compareBy(
+                        { artifactSpecificity(it.second, artifact.name) },
+                        { it.second.length },
+                    ),
+                ) ?: return null
+        return VersionedComponent(best.first, null, artifact.version, "")
     }
 
-    private fun toArtifactMatchOrNull(
-        artifactIdEntity: ComponentArtifactIdEntity,
-        artifact: ArtifactDependency,
-    ): ArtifactMatch? {
-        val groupPattern = artifactIdEntity.groupPattern
-        val artifactPattern = artifactIdEntity.artifactPattern
-        if (!MavenArtifactMatcher.groupIdMatches(artifact.group, groupPattern) ||
-            !MavenArtifactMatcher.artifactIdMatches(artifact.name, artifactPattern)
-        ) {
-            return null
-        }
-        return ArtifactMatch(artifactIdEntity.component.componentKey, artifactPattern, false)
-    }
-
-    private fun artifactSpecificity(
-        artifactPattern: String,
-        artifactName: String,
-    ): Int =
+    /**
+     * MIG-023: higher = more specific. An exact artifactId beats a multi-token (`|`/`,`) union,
+     * which beats a catch-all. Used to prefer a specific mapping over a generic one when both match
+     * the same artifact in range.
+     */
+    private fun artifactSpecificity(artifactPattern: String, artifactName: String): Int =
         when {
             artifactPattern == artifactName -> 3
-            artifactPattern == "*" -> 0
+            isCatchAllArtifactPattern(artifactPattern) -> 0
             artifactPattern.contains("|") || artifactPattern.contains(",") -> 1
             else -> 2
         }
 
-    private data class ArtifactMatch(
-        val componentName: String,
-        val artifactPattern: String,
-        val versionSpecific: Boolean,
-    )
+    /**
+     * MIG-023: a "catch-all" artifact pattern — literal `*`, or the inherited default ANY_ARTIFACT
+     * regex (`.*`, `[\w-\.]+`, `[\w-]+`) the importer writes verbatim for components without an
+     * explicit `artifactId` — must rank BELOW any concrete mapping. Detected behaviourally: a
+     * pattern that matches an arbitrary probe id matches essentially anything, so it is a catch-all.
+     *
+     * The probe is intentionally pure lowercase letters — NO dot, dash, digit or underscore — so it
+     * is matched by every `[\w…]`-family default form (`[\w-]+`, `[\w-\.]+`, `.*`, `\w+`, `[a-z]+`).
+     * A probe containing a dot would miss the dot-less `[\w-]+` default; a probe with a dash would
+     * miss a `\w+` default. Concrete names and `|`/`,` unions never match it.
+     */
+    private fun isCatchAllArtifactPattern(artifactPattern: String): Boolean =
+        artifactPattern == "*" ||
+            MavenArtifactMatcher.artifactIdMatches("xanyartifactprobe", artifactPattern)
+
+    /**
+     * MIG-039: true iff [versionString] is contained in [rangeString], using the same
+     * version-range semantics V1's [org.octopusden.octopus.escrow.configuration.validation.EscrowModuleConfigMatcher]
+     * applies. Unparseable range/version → false (no match) rather than throwing.
+     */
+    private fun versionInRange(rangeString: String, versionString: String): Boolean =
+        runCatching {
+            versionRangeFactory.create(rangeString)
+                .containsVersion(numericVersionFactory.create(versionString))
+        }.getOrDefault(false)
 
     private fun buildImageToComponentMap(): Map<String, String> {
         val result = mutableMapOf<String, String>()
@@ -614,13 +658,13 @@ class DatabaseComponentRegistryResolver(
             } catch (_: NotFoundException) {
                 return null
             }
-        val component = componentRepository.findByComponentKey(componentKey) ?: return null
-        val config =
-            component.toResolvedEscrowModuleConfig(
-                version = versionString,
-                versionRangeFactory = versionRangeFactory,
-                numericVersionFactory = numericVersionFactory,
-            ) ?: return null
+        // MIG-040: resolve via getResolvedComponentDefinition so the distribution version
+        // substitution (EscrowConfigurationLoader.calculateDistribution) is applied — exactly as
+        // the /versions/{v}/distribution endpoint does. A plain toResolvedEscrowModuleConfig leaves
+        // docker() WITHOUT the version tag (e.g. "img" instead of "img:4.0.427"), so the
+        // "$imageName:$imageTag" membership check never matched and find-by-docker-images returned
+        // empty where the V1 baseline (whose escrow model is version-substituted) returns the image.
+        val config = getResolvedComponentDefinition(componentKey, versionString) ?: return null
         return config.distribution?.let { dist ->
             if (dist.docker()?.split(',')?.contains("$imageName:$imageTag") == true) {
                 ComponentImage(componentKey, versionString, Image(imageName, imageTag))
