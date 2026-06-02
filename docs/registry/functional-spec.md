@@ -211,7 +211,7 @@ All admin endpoints below live under `POST /rest/api/4/admin/**` and require `IM
 
 The canonical role/permission matrix, filter-chain rules, and Keycloak role naming convention live in [ADR-004 — Authentication & Authorization via Keycloak](adr/004-auth-keycloak.md). That document is the source of truth; this section only sketches the shape so a reader of the functional spec has enough context without jumping.
 
-- **Permissions** (7): `ACCESS_COMPONENTS`, `EDIT_COMPONENTS`, `ARCHIVE_COMPONENTS`, `RENAME_COMPONENTS`, `DELETE_COMPONENTS`, `IMPORT_DATA`, `ACCESS_AUDIT`.
+- **Permissions** (8): `ACCESS_COMPONENTS`, `EDIT_COMPONENTS`, `ARCHIVE_COMPONENTS`, `RENAME_COMPONENTS`, `DELETE_COMPONENTS`, `IMPORT_DATA`, `ACCESS_AUDIT`, `ADMIN_DATA` (admin-tier data administration — gates the Portal Field-Overrides edit surface; `ROLE_ADMIN` only).
 - **Roles** (4): `ROLE_ANONYMOUS` → public reads only; `ROLE_COMPONENTS_REGISTRY_VIEWER`; `ROLE_COMPONENTS_REGISTRY_EDITOR`; `ROLE_ADMIN` (super-admin, reuses the existing Keycloak `ADMIN` realm-role). No separate `COMPONENTS_REGISTRY_ADMIN` — we piggyback on the platform admin role.
 - **v1/v2/v3 reads**: public (Phase 1 backward compat).
 - **v4 GET `/components/**` and `/config/**`**: public via `ROLE_ANONYMOUS` → `ACCESS_COMPONENTS`. All other v4 endpoints (writes, admin, audit) require authentication + the permission named in ADR-004.

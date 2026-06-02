@@ -28,6 +28,14 @@ class PermissionEvaluator(
 
     fun canImport(): Boolean = hasPermission(IMPORT_DATA)
 
+    /**
+     * Admin-tier data administration — gates power-user / escape-hatch editing
+     * surfaces (e.g. the Portal Field-Overrides tab's add/edit/delete actions,
+     * incl. marker editing). Distinct from IMPORT_DATA (bulk import). Mapped to
+     * ROLE_ADMIN in octopus-security.roles.
+     */
+    fun canAdminData(): Boolean = hasPermission(ADMIN_DATA)
+
     companion object {
         const val ACCESS_COMPONENTS = "ACCESS_COMPONENTS"
         const val EDIT_COMPONENTS = "EDIT_COMPONENTS"
@@ -36,5 +44,6 @@ class PermissionEvaluator(
         const val DELETE_COMPONENTS = "DELETE_COMPONENTS"
         const val IMPORT_DATA = "IMPORT_DATA"
         const val ACCESS_AUDIT = "ACCESS_AUDIT"
+        const val ADMIN_DATA = "ADMIN_DATA"
     }
 }
