@@ -167,6 +167,8 @@ All four `COMPAT_*` values are confidential per the open-source rule — they li
 
 **One-shot bootstrap** (first time on a clean host, or after `stop-all.sh`): `postgres-up.sh` → `baseline.sh` (one-time `bootJar`, ~2 min) → `candidate.sh` → then `verify.sh` for subsequent iterations. Baseline is `origin/main` (or whatever fat JAR is in `_wt/local-baseline/components-registry-service-server/build/libs/`); `baseline.sh` rebuilds the JAR automatically when any `*.kt`/`*.java`/`*.gradle` in the baseline worktree is newer.
 
+**Git-mode (no-db) stands need no Postgres** (issue #310 / SYS-047): `candidate.sh --mode=vcs` and the TeamCity git-mode stand (`id18`, `CANDIDATE_MODE=git`) boot the candidate with the `no-db` profile, which excludes the JDBC/JPA/Flyway auto-configs — the candidate runs with no database. Skip `postgres-up.sh` for these; only db-mode (`--mode=db` / `id17`) requires Postgres.
+
 **Reading `build/reports/compat/summary.md`:**
 - `Total recorded / Suppressed / Active` counts at the top — exit code is `0` iff active == 0.
 - Diffs are grouped under `### STATUS_CODE_DIFF`, `### STRUCTURAL_DIFF`, `### VALUE_DIFF` headings (plus `### TIMESTAMP_DRIFT` etc. when present).

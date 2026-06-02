@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
+import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.repository.RegistryConfigRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -32,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional
  * un-configured field, so this service can land without a config-data
  * migration.
  */
+@ConditionalOnDatabaseEnabled
 @Service
 @Transactional(readOnly = true)
 class FieldConfigService(

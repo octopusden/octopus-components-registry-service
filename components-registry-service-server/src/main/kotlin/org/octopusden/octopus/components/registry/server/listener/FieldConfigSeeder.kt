@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.listener
 
+import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.entity.RegistryConfigEntity
 import org.octopusden.octopus.components.registry.server.repository.RegistryConfigRepository
 import org.octopusden.octopus.escrow.config.ConfigHelper
@@ -44,6 +45,7 @@ import java.time.Instant
  * `{"<section>": {"<field>": {"defaultValue": ...}}}` — i.e.
  * `{"component": {"groupId": {"defaultValue": "<prefix>"}}}`.
  */
+@ConditionalOnDatabaseEnabled
 @Component
 class FieldConfigSeeder(
     private val registryConfigRepository: RegistryConfigRepository,

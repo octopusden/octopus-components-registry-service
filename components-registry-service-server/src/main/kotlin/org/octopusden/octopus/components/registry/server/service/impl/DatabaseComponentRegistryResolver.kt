@@ -9,6 +9,7 @@ import org.octopusden.octopus.components.registry.core.dto.ComponentImage
 import org.octopusden.octopus.components.registry.core.dto.Image
 import org.octopusden.octopus.components.registry.core.dto.VersionedComponent
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
+import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactIdEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
@@ -56,6 +57,7 @@ import java.util.EnumMap
  * Synthetic-base handling lives in the mapper (MIG-029 fix); the resolver does
  * not special-case it here.
  */
+@ConditionalOnDatabaseEnabled
 @Suppress("TooManyFunctions")
 @Service("databaseComponentRegistryResolver")
 @Transactional(readOnly = true)

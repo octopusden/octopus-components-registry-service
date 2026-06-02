@@ -819,16 +819,18 @@ object id17CompatLocalStandManual : BuildType({
 })
 
 // Git-mode sibling of id17. Boots the SAME baseline + candidate JARs, but runs
-// the candidate WITHOUT DB migration (CANDIDATE_MODE=git → --auto-migrate=false
-// --default-source=git): every v1/v2/v3 response is served by the Git resolver,
-// the same code path as the 2.0.87 baseline. This asserts the deploy-without-
-// migration NO-OP invariant — deploying v3 and not migrating must be byte-
-// identical to the old version for v1/v2/v3. It uses the (empty) git-mode
+// the candidate WITHOUT a database (CANDIDATE_MODE=git → the `no-db` profile +
+// --auto-migrate=false --default-source=git): the JDBC/JPA/Flyway auto-configs are
+// excluded so the candidate needs no Postgres, and every v1/v2/v3 response is served
+// by the Git resolver — the same code path as the 2.0.87 baseline. This asserts the
+// deploy-without-migration NO-OP invariant — deploying v3 and not migrating must be
+// byte-identical to the old version for v1/v2/v3. It uses the (empty) git-mode
 // known-deltas file, so any active diff is a real regression of that invariant.
 //
-// Differs from id17 ONLY by: id/name, the /tmp/crs-id18-* work namespace, and
-// `export CANDIDATE_MODE=git` before the wrapper. Runs on a separate agent from
-// id17, so the shared default ports (4567/4568) + local Postgres don't collide.
+// Differs from id17 by: id/name, the /tmp/crs-id18-* work namespace, and
+// `export CANDIDATE_MODE=git` before the wrapper (which selects the no-db,
+// no-Postgres candidate). Runs on a separate agent from id17 so the shared
+// default ports (4567/4568) don't collide.
 object id18CompatLocalStandGitModeAuto : BuildType({
     id("18CompatLocalStandGitModeAuto")
     name = "[1.8] Compat — Local Stand (no DB migration, git-mode) [AUTO]"
@@ -898,9 +900,9 @@ object id18CompatLocalStandGitModeAuto : BuildType({
             name = "Run local-stand compat (git-mode)"
             id = "run_compat"
             // Same wrapper as id17, namespaced under /tmp/crs-id18-%teamcity.build.id%
-            // and with CANDIDATE_MODE=git exported so the candidate boots with no
-            // migration (default-source=git). Runs on a separate agent from id17,
-            // so the shared default ports + local Postgres don't collide.
+            // and with CANDIDATE_MODE=git exported so the candidate boots with the no-db
+            // profile (no database, no migration, default-source=git; issue #310).
+            // Runs on a separate agent from id17 so the shared default ports don't collide.
             scriptContent = """
                 set -euo pipefail
                 WORK_DIR="/tmp/crs-id18-%teamcity.build.id%"
@@ -965,11 +967,13 @@ object id18CompatLocalStandGitModeAuto : BuildType({
                 export COMPAT_VERSIONS_FILE="${'$'}VERSIONS_FILE_PATH"
                 export COMPAT_FULL="%COMPAT_FULL%"
                 export COMPAT_PARALLELISM="%COMPAT_PARALLELISM%"
-                export POSTGRES_IMAGE="%DOCKER_REGISTRY_INTERNAL%/postgres:16"
+                # git-mode (no-db, issue #310) does NOT start Postgres, so no POSTGRES_IMAGE
+                # pull is needed. RESET_DB=1 only drives teamcity-run.sh's pre-run teardown
+                # of any stale Postgres left by a prior db-mode run on this (persistent) agent.
                 export RESET_DB=1
                 export COMPONENTS_REGISTRY_SERVICE_VERSION="%COMPAT_BASELINE_VERSION%"
                 export BUILD_VERSION="%COMPAT_CANDIDATE_VERSION%"
-                # No-migration / git-routing mode — the only behavioural delta vs id17.
+                # No-migration / no-DB git-routing mode — the only behavioural delta vs id17.
                 export CANDIDATE_MODE=git
                 bash scripts/local-stands/teamcity-run.sh
             """.trimIndent()
@@ -977,8 +981,8 @@ object id18CompatLocalStandGitModeAuto : BuildType({
     }
 
     failureConditions {
-        // Git-mode skips auto-migrate, so the candidate comes up faster than id17;
-        // keep the same generous cap for cold pulls + postgres + two stand boots.
+        // Git-mode skips auto-migrate AND Postgres, so the candidate comes up faster
+        // than id17; keep a generous cap for cold image pulls + two stand boots.
         executionTimeoutMin = 120
     }
 

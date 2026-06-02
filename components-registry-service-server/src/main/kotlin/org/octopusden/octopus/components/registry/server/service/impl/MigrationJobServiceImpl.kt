@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
+import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.service.AsyncJobLifecycle
 import org.octopusden.octopus.components.registry.server.service.FullMigrationResult
 import org.octopusden.octopus.components.registry.server.service.ImportService
@@ -40,6 +41,7 @@ import java.time.Instant
  *    it queues the second submit, so without the gate both `startAsync` calls
  *    would return 202 and the SPA would render two RUNNING jobs.
  */
+@ConditionalOnDatabaseEnabled
 @Service
 class MigrationJobServiceImpl(
     private val importService: ImportService,

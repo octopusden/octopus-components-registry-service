@@ -4,6 +4,7 @@ import jakarta.persistence.OptimisticLockException
 import jakarta.persistence.criteria.JoinType
 import org.octopusden.octopus.components.registry.core.exceptions.ComponentNameConflictException
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
+import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.dto.v4.BaseConfigurationRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.BuildToolBeanRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentCreateRequest
@@ -84,6 +85,7 @@ import java.util.UUID
  * configuration lives on `component_configurations` rows — base + scalar/marker
  * overrides — and is edited via the field-override sub-resource.
  */
+@ConditionalOnDatabaseEnabled
 @Service
 @Transactional
 @Suppress("TooManyFunctions", "LongParameterList", "LargeClass")

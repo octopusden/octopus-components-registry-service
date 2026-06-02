@@ -28,7 +28,16 @@ class ComponentsRegistryProperties(
     // every component to the git resolver.
     @field:Pattern(regexp = "git|db", message = "default-source must be exactly 'git' or 'db'")
     val defaultSource: String = "git",
+    // SYS-047: when false (set by the `no-db` profile), every DB-coupled bean is
+    // gated out via @ConditionalOnDatabaseEnabled and the JDBC/JPA/Flyway
+    // auto-configs are excluded, so the service boots with no database and serves
+    // v1/v2/v3 purely from the Git resolver. Default true → unchanged db-mode.
+    val database: DatabaseSettings = DatabaseSettings(),
 ) {
+    data class DatabaseSettings(
+        val enabled: Boolean = true,
+    )
+
     data class VcsSettings(
         val enabled: Boolean = true,
         val root: String?,

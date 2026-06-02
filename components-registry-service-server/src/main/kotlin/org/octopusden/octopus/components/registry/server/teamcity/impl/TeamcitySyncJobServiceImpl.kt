@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.teamcity.impl
 
+import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.service.AsyncJobLifecycle
 import org.octopusden.octopus.components.registry.server.service.JobState
 import org.octopusden.octopus.components.registry.server.service.MigrationLifecycleGate
@@ -24,6 +25,7 @@ import java.time.Instant
  * surface — those exist on history because of its DB-backed
  * `git_history_import_state` row; TC has nothing equivalent to clear.
  */
+@ConditionalOnDatabaseEnabled
 @Service
 class TeamcitySyncJobServiceImpl(
     private val teamcitySyncService: TeamcitySyncService,

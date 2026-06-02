@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.controller
 
+import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.dto.v4.AuditLogFilter
 import org.octopusden.octopus.components.registry.server.dto.v4.AuditLogResponse
 import org.octopusden.octopus.components.registry.server.service.AuditService
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import java.time.Instant
 
+@ConditionalOnDatabaseEnabled
 @RestController
 @RequestMapping("rest/api/4/audit")
 @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_AUDIT')")

@@ -20,8 +20,11 @@ class ComponentsRegistryServiceImpl(
     private val componentRegistryResolver: ComponentRegistryResolver,
     private val serviceStatus: ServiceStatus,
     private val properties: ComponentsRegistryProperties,
-    private val importService: ImportService,
-    private val componentSourceRepository: ComponentSourceRepository,
+    // Nullable: both are part of the database layer (@ConditionalOnDatabaseEnabled /
+    // JPA) and absent in no-db mode. Spring injects null for a Kotlin-nullable
+    // constructor parameter when no candidate bean exists; in db-mode both are wired.
+    private val importService: ImportService?,
+    private val componentSourceRepository: ComponentSourceRepository?,
 ) : ComponentsRegistryService {
     override fun updateConfigCache(): Long {
         log.info("Start update of Component Registry")
@@ -41,7 +44,8 @@ class ComponentsRegistryServiceImpl(
             serviceMode = serviceStatus.serviceMode,
             versionControlRevision = serviceStatus.versionControlRevision,
             defaultSource = properties.defaultSource,
-            dbComponentCount = componentSourceRepository.countBySource("db"),
+            // null-safe: no ComponentSourceRepository in no-db mode → no DB-sourced components.
+            dbComponentCount = componentSourceRepository?.countBySource("db") ?: 0L,
         )
 
     @PostConstruct
@@ -50,7 +54,13 @@ class ComponentsRegistryServiceImpl(
         updateConfigCache()
         if (properties.autoMigrate) {
             log.info("Auto-migrate enabled, migrating all components to database...")
-            val result = importService.migrate()
+            // auto-migrate is a DB-mode-only operation, so ImportService is always present
+            // here; the no-db profile forces auto-migrate=false, so this branch is unreachable
+            // when the DB layer is absent.
+            val result =
+                checkNotNull(importService) {
+                    "auto-migrate requires the database layer (ImportService bean); it must not be enabled in no-db mode"
+                }.migrate()
             log.info(
                 "Auto-migrate complete: ${result.components.migrated} migrated, " +
                     "${result.components.skipped} skipped, ${result.components.failed} failed",

@@ -1,6 +1,7 @@
 package org.octopusden.octopus.components.registry.server.teamcity
 
 import mu.KotlinLogging
+import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentTeamcityProjectEntity
 import org.octopusden.octopus.components.registry.server.event.AuditEvent
@@ -63,6 +64,7 @@ import java.util.UUID
  * scheduler. Per-write JPA failures inside the transaction template cause the
  * whole transaction to roll back, leaving DB state untouched.
  */
+@ConditionalOnDatabaseEnabled
 @Service
 class TeamcitySyncService(
     private val componentRepository: ComponentRepository,
