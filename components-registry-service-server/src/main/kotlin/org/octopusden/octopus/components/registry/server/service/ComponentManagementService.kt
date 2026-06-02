@@ -49,4 +49,27 @@ interface ComponentManagementService {
     )
 
     fun listFieldOverrides(componentId: UUID): List<FieldOverrideResponse>
+
+    /**
+     * Render the component (resolved by UUID or name) as a Groovy-style "as-code"
+     * definition with ALL version ranges. Carries the canonical component key so
+     * the controller can build the download filename without a second lookup.
+     */
+    fun renderComponentAsCode(idOrName: String): RenderedComponentCode
+
+    /**
+     * Render the component flattened/merged for a single concrete [version].
+     * Throws `NotFoundException` when the component has no resolvable
+     * configuration for the version (e.g. no BASE row, or unparseable version).
+     */
+    fun renderResolvedComponentAsCode(
+        idOrName: String,
+        version: String,
+    ): RenderedComponentCode
 }
+
+/** A rendered as-code document plus the canonical component key (for the filename). */
+data class RenderedComponentCode(
+    val componentKey: String,
+    val body: String,
+)
