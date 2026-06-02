@@ -11,7 +11,11 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * Replay of REAL captured POST/PUT request bodies.
+ * Replay of REAL captured POST request bodies.
+ *
+ * (PUT-with-body is parsed by [parseBodyLine] but NOT replayed — the captured
+ * corpus is POST-only; the only prod PUT, `updateCache`, carries no body and is
+ * dropped by the extractor. The replay loop filters to POST below.)
  *
  * Where [TraceReplayCompatTest] replays the deduplicated `(method, path)` trace
  * and SYNTHESISES bodies (`BodyFixtures`), this test replays the actual bodies
@@ -73,7 +77,18 @@ class RealBodyReplayCompatTest : CompatibilityTestBase() {
                 "(point it at post-bodies.ndjson to activate).",
         )
         val file = File(bodiesFilePath!!)
-        assumeTrue(file.exists() && file.canRead(), "bodies file not readable: $bodiesFilePath")
+        // From here the test is CONFIGURED (the path is set), so every downstream
+        // failure is HARD (`check`), not an `assumeTrue` skip. The TeamCity layer
+        // only fail-fasts on file EXISTENCE; a present-but-empty/corrupt sidecar
+        // must still fail the build here rather than silently skip and leave the
+        // auto [1.7]/[1.8] chain green with zero real-body coverage (the rest of
+        // the suite keeps the run's execution count non-zero, so the reporter's
+        // zero-execution guard would not notice). This in-JVM parse is the
+        // authoritative parseability gate.
+        check(file.exists() && file.canRead()) {
+            "compat.bodies.file=$bodiesFilePath is set but the file is not readable — a configured " +
+                "real-body replay must fail, not skip. Check the CrsCompatTrace checkout / the path."
+        }
 
         val mapper = jacksonObjectMapper()
         val (entries, droppedDiagnostic, malformed) =
@@ -97,15 +112,18 @@ class RealBodyReplayCompatTest : CompatibilityTestBase() {
                 Triple(parsed, dropped, bad)
             }
 
-        // Vacuous-pass guard: a present-but-unparseable or all-diagnostic file
-        // would otherwise replay zero requests and report 0 diffs as GREEN. Skip
-        // (not pass) so the operator sees the corpus never reached the stands.
-        assumeTrue(
-            entries.isNotEmpty(),
-            "no replayable POST bodies parsed from $bodiesFilePath " +
-                "(malformed=$malformed, dropped-diagnostic=$droppedDiagnostic) — " +
-                "verify the NDJSON sidecar is the {count,method,path,body} format from enrich-trace.py.",
-        )
+        // Vacuous-pass guard (reviewer P1): a present-but-empty/corrupt sidecar
+        // parses to zero entries. Fail HARD — NOT an assumeTrue skip — because the
+        // other compat tests keep the run's execution count non-zero, so the
+        // reporter's zero-execution guard would NOT notice that the real-body
+        // replay never ran, leaving the auto chain green with the new coverage
+        // absent. assumeTrue-skip is reserved above for the not-configured case.
+        check(entries.isNotEmpty()) {
+            "compat.bodies.file=$bodiesFilePath is configured but yielded zero replayable POST " +
+                "bodies (malformed=$malformed, dropped-diagnostic=$droppedDiagnostic). An empty or " +
+                "corrupt sidecar must fail the build, not skip. Verify the NDJSON is the " +
+                "{count,method,path,body} format from enrich-trace.py."
+        }
 
         // Distinct stands required (Stage-2 review): identical baseline/candidate
         // URLs make every pair byte-identical → 0 diffs → vacuous GREEN on the
@@ -213,6 +231,13 @@ class RealBodyReplayCompatTest : CompatibilityTestBase() {
                         }
                     }.also { f -> futureToEntry[f] = entry }
                 }
+            // NOTE (Copilot review): this walks futures in submission order, so the
+            // 90s budget is wall-clock from each get(), not from submission — a
+            // pathological all-hung run can approach O(N*90s). For this corpus
+            // (~hundreds of bodies, far smaller than the 40k trace) it is not a
+            // problem in practice; this deliberately mirrors TraceReplayCompatTest.
+            // A shared future fix (ExecutorCompletionService / per-submission
+            // deadline) would tighten both tests together — tracked there.
             futures.forEach { f ->
                 val entry = futureToEntry[f]
                 try {

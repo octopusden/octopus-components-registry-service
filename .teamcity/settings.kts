@@ -734,7 +734,7 @@ object id17CompatLocalStandManual : BuildType({
                 export COMPAT_VERSIONS_FILE="${'$'}VERSIONS_FILE_PATH"
                 export COMPAT_FULL="%COMPAT_FULL%"
                 export COMPAT_PARALLELISM="%COMPAT_PARALLELISM%"
-                # Real captured POST/PUT bodies (post-bodies.ndjson) replayed by
+                # Real captured POST bodies (post-bodies.ndjson) replayed by
                 # RealBodyReplayCompatTest. Fail-FAST on a missing sidecar (Stage-2
                 # review): the trace repo's master carries latest-bodies.ndjson, so
                 # an absent file means the CrsCompatTrace checkout is broken. Fail-soft
@@ -985,7 +985,7 @@ object id18CompatLocalStandGitModeAuto : BuildType({
                 export COMPAT_VERSIONS_FILE="${'$'}VERSIONS_FILE_PATH"
                 export COMPAT_FULL="%COMPAT_FULL%"
                 export COMPAT_PARALLELISM="%COMPAT_PARALLELISM%"
-                # Real captured POST/PUT bodies (post-bodies.ndjson) replayed by
+                # Real captured POST bodies (post-bodies.ndjson) replayed by
                 # RealBodyReplayCompatTest. Fail-FAST on a missing sidecar (Stage-2
                 # review): the trace repo's master carries latest-bodies.ndjson, so
                 # an absent file means the CrsCompatTrace checkout is broken. Fail-soft
