@@ -58,4 +58,16 @@ class AuditLogEntity(
 
     @Column(name = "source", nullable = false, length = 20)
     var source: String = "api",
-)
+) {
+    companion object {
+        /**
+         * Audit action assigned to a component's first appearance during the
+         * git-history backfill. Distinct from the runtime `CREATE` action so the
+         * audit views can hide migration noise by default (SYS-049). Other actions
+         * (CREATE/UPDATE/DELETE/RENAME) remain inline literals at their write
+         * sites — only MIGRATED needs to be shared between the writer
+         * (`GitHistoryImportServiceImpl`) and the query filter (`AuditServiceImpl`).
+         */
+        const val ACTION_MIGRATED = "MIGRATED"
+    }
+}

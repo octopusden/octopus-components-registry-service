@@ -486,7 +486,7 @@ class GitHistoryImportServiceImpl(
             newValue: Map<String, Any?>?,
         ): String? =
             when {
-                oldValue == null && newValue != null -> "CREATE"
+                oldValue == null && newValue != null -> AuditLogEntity.ACTION_MIGRATED
                 oldValue != null && newValue == null -> "DELETE"
                 oldValue != null && newValue != null && oldValue != newValue -> "UPDATE"
                 else -> null

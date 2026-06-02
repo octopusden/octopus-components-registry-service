@@ -25,11 +25,20 @@ class AuditServiceImpl(
     override fun getEntityHistory(
         entityType: String,
         entityId: String,
+        includeMigrated: Boolean,
         pageable: Pageable,
     ): Page<AuditLogResponse> =
-        auditLogRepository
-            .findByEntityTypeAndEntityId(entityType, entityId, pageable)
-            .map { it.toResponse() }
+        if (includeMigrated) {
+            auditLogRepository.findByEntityTypeAndEntityId(entityType, entityId, pageable)
+        } else {
+            // Default: hide git-history baseline noise (action = MIGRATED). SYS-049.
+            auditLogRepository.findByEntityTypeAndEntityIdAndActionNot(
+                entityType,
+                entityId,
+                AuditLogEntity.ACTION_MIGRATED,
+                pageable,
+            )
+        }.map { it.toResponse() }
 
     override fun getRecentChanges(
         filter: AuditLogFilter,
@@ -73,6 +82,18 @@ class AuditServiceImpl(
 
         filter.action?.let { action ->
             spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<String>("action"), action) })
+        }
+
+        // Hide git-history baseline rows (action = MIGRATED) unless the caller opted
+        // in via includeMigrated, or pinned them with an explicit action filter
+        // (which the equal-predicate above already enforces). SYS-049.
+        if (!filter.includeMigrated && filter.action == null) {
+            spec =
+                spec.and(
+                    Specification { root, _, cb ->
+                        cb.notEqual(root.get<String>("action"), AuditLogEntity.ACTION_MIGRATED)
+                    },
+                )
         }
 
         filter.from?.let { from ->

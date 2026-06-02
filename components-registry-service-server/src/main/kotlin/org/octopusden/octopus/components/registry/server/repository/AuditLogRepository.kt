@@ -19,6 +19,19 @@ interface AuditLogRepository :
         pageable: Pageable,
     ): Page<AuditLogEntity>
 
+    /**
+     * Entity history with git-history baseline rows hidden — `action != :action`
+     * (where `:action` is `MIGRATED`). Backs the default (`includeMigrated=false`)
+     * path of `getEntityHistory`; the unfiltered method above serves the opt-in
+     * path. SYS-049.
+     */
+    fun findByEntityTypeAndEntityIdAndActionNot(
+        entityType: String,
+        entityId: String,
+        action: String,
+        pageable: Pageable,
+    ): Page<AuditLogEntity>
+
     fun findByChangedBy(
         changedBy: String,
         pageable: Pageable,
