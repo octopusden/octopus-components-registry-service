@@ -1427,10 +1427,12 @@ class ComponentManagementServiceImpl(
         }
     }
 
-    // ─── Field-override range validation (partial-overlap, matches Portal) ───────
+    // ─── Field-override range validation (disjoint-only, matches Portal) ─────────
     //
-    // The Portal applies the same partial-overlap and semantic-equality rules
-    // client-side via `versionRange.ts` (`rangesOverlap`). Keeping the two
+    // The Portal applies the same disjoint-only rule client-side via
+    // `versionRange.ts` (`rangesOverlap` / `classifyRangeConflict`): two
+    // overrides on one attribute conflict if they intersect at all — partial
+    // overlap, strict containment, or semantic equality. Keeping the two
     // implementations in sync is the explicit goal — a client-side `false`
     // should not surprise the user with a server 400 and vice versa.
     //
@@ -1504,25 +1506,31 @@ class ComponentManagementServiceImpl(
      *    Existing composite rows (legacy DSL import) are untouched — the
      *    sibling walk below uses `isIntersect` on them but treats them as
      *    opaque when measuring containment.
-     * 3. Partial overlap with sibling overrides on the same attribute is
-     *    rejected per schema-spec §3.5.
+     * 3. Any intersection with a sibling override on the same attribute is
+     *    rejected — field-override ranges must be DISJOINT. Partial overlap
+     *    AND strict containment are both conflicts: a version inside the
+     *    intersection would match both overrides, so the resolved value would
+     *    be ambiguous. (This is stricter than the original schema-spec §3.5,
+     *    which allowed strict containment; see also Portal #67.)
      * 4. Semantic equality (each contains the other after Maven-comparator
-     *    normalisation) is rejected as a duplicate, even when the raw strings
-     *    differ by whitespace or trailing zeros (`[1.0, 2.0)` vs `[1.0,2.0)`
-     *    or `[1,2)` vs `[1.0,2.0)`). The DB UNIQUE constraint catches only
-     *    exact-string duplicates.
-     * 5. Strict containment is allowed (per schema-spec §3.5).
+     *    normalisation) is also a conflict but is reported with a distinct
+     *    "duplicate" message, even when the raw strings differ by whitespace
+     *    or trailing zeros (`[1.0, 2.0)` vs `[1.0,2.0)` or `[1,2)` vs
+     *    `[1.0,2.0)`). The DB UNIQUE constraint catches only exact-string
+     *    duplicates.
      *
      * D5 (closed-range only) is NOT enforced here — the Portal blocks
      * open-upward input client-side; server-side D5 is tracked as a follow-up
      * because several existing API tests seed throwaway components with
      * `[X,)` overrides and would break under a strict server rejection.
      *
-     * When the SIBLING row carries a legacy composite range, intersection is
-     * still detected via [VersionRange.isIntersect], but containment is
-     * undecidable; the validator defers (allows) and trusts the DB UNIQUE
-     * constraint for exact-string duplicates. A future releng-versions
-     * `containsRange` API will let us tighten this back up.
+     * Intersection is detected via [VersionRange.isIntersect], which handles
+     * legacy composite SIBLING rows correctly. Because the disjoint-only rule
+     * rejects on ANY intersection, we no longer need to classify partial vs
+     * containment for composite siblings — so a simple new range intersecting
+     * a composite sibling is now rejected too (closing the former composite-
+     * vs-simple gap). Composite NEW ranges are still rejected up front
+     * (point 2); users compose multiple single-segment overrides instead.
      */
     private fun validateFieldOverrideRange(
         range: String,
@@ -1548,25 +1556,21 @@ class ComponentManagementServiceImpl(
                 continue
             }
             if (!newRangeObj.isIntersect(existingRangeObj)) continue
-            // Intersect. Three sub-cases under schema-spec §3.5:
-            //   - each contains the other → semantically EQUAL → reject as
-            //     a duplicate (the DB UNIQUE on the raw versionRange string
-            //     catches exact textual equality, but `[1.0,2.0)` vs
-            //     `[1.0, 2.0)` or `[1,2)` vs `[1.0,2.0)` slip past it).
-            //   - exactly one contains the other → strict containment → allow.
-            //   - neither contains → partial overlap → reject.
+            // They intersect → conflict. Field-override ranges on one attribute
+            // must be DISJOINT, so partial overlap, strict containment, AND
+            // semantic equality are all rejected (a version in the intersection
+            // would match both overrides — ambiguous). We only distinguish the
+            // semantic-equal case for a clearer "duplicate" message. If the
+            // SIBLING is a legacy composite (`parsedExisting` null) we cannot
+            // classify it precisely, but `isIntersect` returning true is already
+            // sufficient grounds to reject.
             //
             // `parsedNew` is non-null (composites are rejected up-front above).
-            // If the SIBLING row is a legacy composite (`parsedExisting` null),
-            // we cannot decide strict containment with the simple-segment
-            // heuristic, so we DEFER and trust the DB UNIQUE for exact-string
-            // duplicates. A future releng-versions `containsRange` API will
-            // let us tighten this back up.
             val parsedExisting = parseSimpleSegment(row.versionRange)
-            if (parsedExisting == null) continue
-            val aContainsB = simpleContains(parsedNew, parsedExisting)
-            val bContainsA = simpleContains(parsedExisting, parsedNew)
-            if (aContainsB && bContainsA) {
+            if (parsedExisting != null &&
+                simpleContains(parsedNew, parsedExisting) &&
+                simpleContains(parsedExisting, parsedNew)
+            ) {
                 throw IllegalArgumentException(
                     "Range '$range' is semantically equal to existing " +
                         "override range '${row.versionRange}' on attribute " +
@@ -1574,12 +1578,16 @@ class ComponentManagementServiceImpl(
                         "override per attribute (schema-spec §3.5 / UNIQUE).",
                 )
             }
-            if (aContainsB || bContainsA) continue
+            // Reached for partial overlap, strict containment, and (composite
+            // sibling) intersections — for composite siblings the semantic-equal
+            // message above is unreachable (parsedExisting is null), and this
+            // generic reject is the correct outcome anyway.
             throw IllegalArgumentException(
-                "Range '$range' partially overlaps with existing override range " +
-                    "'${row.versionRange}' on attribute '$attribute'. Equal " +
-                    "ranges are blocked by the unique index; strict containment " +
-                    "is allowed; partial overlap is rejected per schema-spec §3.5.",
+                "Range '$range' overlaps existing override range " +
+                    "'${row.versionRange}' on attribute '$attribute'. " +
+                    "Field-override ranges on one attribute must be disjoint — " +
+                    "partial overlap and strict containment are both rejected " +
+                    "(a version in the intersection would match both overrides).",
             )
         }
     }
