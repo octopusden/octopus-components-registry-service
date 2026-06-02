@@ -157,6 +157,7 @@ test {
      'compat.max-components',
      'compat.smoke-components',
      'compat.trace.file',
+     'compat.bodies.file',
      'compat.verbose',
      'compat.allow-non-db-candidate',
      'compat.candidate.mode',
