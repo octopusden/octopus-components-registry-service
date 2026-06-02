@@ -1494,23 +1494,35 @@ class ComponentManagementServiceImpl(
      * Enforces the field-override range contract for write paths:
      *
      * 1. Syntax — must parse via [VersionRangeFactory.create].
-     * 2. Partial overlap with sibling overrides on the same attribute is
+     * 2. The submitted range must be a single segment. Composite Maven
+     *    ranges (e.g. `(,1.0),[2.0,3.0)`) are rejected on POST / PATCH:
+     *    composite-vs-anything containment cannot be decided without a
+     *    Maven range-algebra primitive the releng library does not expose,
+     *    so we'd be forced to either over-reject (false positives on
+     *    strict containment) or over-allow (false negatives on partial
+     *    overlap). Users compose multiple separate overrides instead.
+     *    Existing composite rows (legacy DSL import) are untouched — the
+     *    sibling walk below uses `isIntersect` on them but treats them as
+     *    opaque when measuring containment.
+     * 3. Partial overlap with sibling overrides on the same attribute is
      *    rejected per schema-spec §3.5.
-     * 3. Semantic equality (each contains the other after Maven-comparator
+     * 4. Semantic equality (each contains the other after Maven-comparator
      *    normalisation) is rejected as a duplicate, even when the raw strings
      *    differ by whitespace or trailing zeros (`[1.0, 2.0)` vs `[1.0,2.0)`
      *    or `[1,2)` vs `[1.0,2.0)`). The DB UNIQUE constraint catches only
      *    exact-string duplicates.
-     * 4. Strict containment is allowed (per schema-spec §3.5).
+     * 5. Strict containment is allowed (per schema-spec §3.5).
      *
      * D5 (closed-range only) is NOT enforced here — the Portal blocks
      * open-upward input client-side; server-side D5 is tracked as a follow-up
      * because several existing API tests seed throwaway components with
      * `[X,)` overrides and would break under a strict server rejection.
      *
-     * For unparseable inputs (qualifier-bearing bounds, exotic composites) the
-     * containment check falls back to "any intersection rejects" — slightly
-     * stricter than the Portal but never less strict.
+     * When the SIBLING row carries a legacy composite range, intersection is
+     * still detected via [VersionRange.isIntersect], but containment is
+     * undecidable; the validator defers (allows) and trusts the DB UNIQUE
+     * constraint for exact-string duplicates. A future releng-versions
+     * `containsRange` API will let us tighten this back up.
      */
     private fun validateFieldOverrideRange(
         range: String,
@@ -1519,8 +1531,13 @@ class ComponentManagementServiceImpl(
         excludeOverrideId: java.util.UUID?,
     ) {
         validateRangeSyntax(range)
-        val newRangeObj = versionRangeFactory.create(range)
         val parsedNew = parseSimpleSegment(range)
+        require(parsedNew != null) {
+            "Field-override range '$range' must be a single Maven segment " +
+                "(e.g. [1.0,2.0)). Composite ranges are not accepted on POST / " +
+                "PATCH — split the override into multiple rows, one per segment."
+        }
+        val newRangeObj = versionRangeFactory.create(range)
         for (row in component.configurations) {
             if (row.id != null && row.id == excludeOverrideId) continue
             if (row.overriddenAttribute != attribute) continue
@@ -1539,16 +1556,14 @@ class ComponentManagementServiceImpl(
             //   - exactly one contains the other → strict containment → allow.
             //   - neither contains → partial overlap → reject.
             //
-            // The containment check is approximated via simple-segment bound
-            // comparison; if either side is a composite (or carries qualifier-
-            // bearing bounds we don't parse), we cannot reason about strict
-            // containment client-side, so we DEFER — same as the Portal returns
-            // 'unknown' for composites. The DB UNIQUE constraint still catches
-            // exact-string duplicates; semantic and partial-overlap rules over
-            // composites will get a proper check when releng-versions exposes a
-            // `containsRange` API.
+            // `parsedNew` is non-null (composites are rejected up-front above).
+            // If the SIBLING row is a legacy composite (`parsedExisting` null),
+            // we cannot decide strict containment with the simple-segment
+            // heuristic, so we DEFER and trust the DB UNIQUE for exact-string
+            // duplicates. A future releng-versions `containsRange` API will
+            // let us tighten this back up.
             val parsedExisting = parseSimpleSegment(row.versionRange)
-            if (parsedNew == null || parsedExisting == null) continue
+            if (parsedExisting == null) continue
             val aContainsB = simpleContains(parsedNew, parsedExisting)
             val bContainsA = simpleContains(parsedExisting, parsedNew)
             if (aContainsB && bContainsA) {

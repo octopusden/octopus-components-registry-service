@@ -629,21 +629,16 @@ class V4WriteValidationTest {
     }
 
     @Test
-    @DisplayName("R3: POST /field-overrides defers (allows) when one side is a composite range")
-    fun fieldOverride_allows_compositeFallback() {
+    @DisplayName("R3: POST /field-overrides rejects composite Maven ranges (single-segment only)")
+    fun fieldOverride_rejects_compositeRange() {
         val id = seedComponentForOverlap("composite-${uniqueSuffix()}")
-        // Existing composite: `(,1.0),[5.0,10.0)`. The new range `[2.0,3.0)` is
-        // disjoint from both segments, but the simple-segment parser returns
-        // null for the composite — server defers (allows) instead of throwing
-        // a false partial-overlap. The Portal mirrors with 'unknown'.
+        // Composites cannot be reasoned about for containment without a
+        // releng `containsRange` API, so the API rejects them entirely.
+        // Users split a composite into separate single-segment overrides.
         postFieldOverride(
             id,
             """{"overriddenAttribute":"build.javaVersion","versionRange":"(,1.0),[5.0,10.0)","value":"11"}""",
-        ).andExpect(status().isCreated)
-        postFieldOverride(
-            id,
-            """{"overriddenAttribute":"build.javaVersion","versionRange":"[2.0,3.0)","value":"17"}""",
-        ).andExpect(status().isCreated)
+        ).andExpect(status().isBadRequest)
     }
 
     @Test
