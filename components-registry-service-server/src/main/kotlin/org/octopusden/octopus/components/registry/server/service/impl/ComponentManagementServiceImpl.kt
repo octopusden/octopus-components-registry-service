@@ -662,6 +662,12 @@ class ComponentManagementServiceImpl(
             refreshConfigRequiredToolsInMemory(saved, pendingTools)
         }
         bumpParentVersion(component)
+        publishAuditEvent(
+            action = "UPDATE",
+            entityId = component.id.toString(),
+            oldValue = emptyMap(),
+            newValue = fieldOverrideAuditSnapshot(saved),
+        )
         return saved.toFieldOverrideResponse()
     }
 
@@ -682,6 +688,8 @@ class ComponentManagementServiceImpl(
             "Cannot update id $overrideId via field-override endpoint (row_type=${row.rowType})"
         }
         requireNotImportManagedMarker(row, "update")
+
+        val beforeSnapshot = fieldOverrideAuditSnapshot(row)
 
         request.versionRange?.let {
             val canonicalRange = normalizeRange(it)
@@ -714,6 +722,12 @@ class ComponentManagementServiceImpl(
             refreshConfigRequiredToolsInMemory(saved, pendingTools)
         }
         bumpParentVersion(row.component)
+        publishAuditEvent(
+            action = "UPDATE",
+            entityId = row.component.id.toString(),
+            oldValue = beforeSnapshot,
+            newValue = fieldOverrideAuditSnapshot(saved),
+        )
         return saved.toFieldOverrideResponse()
     }
 
@@ -733,8 +747,15 @@ class ComponentManagementServiceImpl(
         }
         requireNotImportManagedMarker(row, "delete")
         val owningComponent = row.component
+        val beforeSnapshot = fieldOverrideAuditSnapshot(row)
         configurationRepository.delete(row)
         bumpParentVersion(owningComponent)
+        publishAuditEvent(
+            action = "UPDATE",
+            entityId = owningComponent.id.toString(),
+            oldValue = beforeSnapshot,
+            newValue = emptyMap(),
+        )
     }
 
     /**
@@ -1938,6 +1959,25 @@ class ComponentManagementServiceImpl(
             "labels" to (overrideLabels ?: entity.labelJunctions.map { it.labelCode }.toSet()),
             "system" to entity.systemCode,
         )
+
+    /**
+     * Snapshot of a field-override row for the audit trail, keyed by the
+     * overridden attribute so the change reads as `fieldOverride[<attr>]` in the
+     * diff. Captures the version range and the resolved scalar value / marker
+     * children. Used as the old/new payload for the synthetic Component UPDATE
+     * events published on field-override writes. SYS-050.
+     */
+    private fun fieldOverrideAuditSnapshot(row: ComponentConfigurationEntity): Map<String, Any?> {
+        val resp = row.toFieldOverrideResponse()
+        return mapOf(
+            "fieldOverride[${resp.overriddenAttribute}]" to
+                mapOf(
+                    "versionRange" to resp.versionRange,
+                    "value" to resp.value,
+                    "markerChildren" to resp.markerChildren,
+                ),
+        )
+    }
 
     private fun publishAuditEvent(
         action: String,
