@@ -1412,9 +1412,12 @@ class ComponentManagementServiceImpl(
      * [IllegalArgumentException] if the syntax is invalid.
      *
      * Used on BASE-row paths where universal `(,0),[0,)` is the sentinel and
-     * partial-overlap detection does not apply. Field-override write paths
+     * sibling-overlap detection does not apply. Field-override write paths
      * call [validateFieldOverrideRange] instead, which additionally enforces
-     * D5 (closed-range only) and the partial-overlap rule of schema-spec §3.5.
+     * the partial-overlap and semantic-equality rules of schema-spec §3.5.
+     * D5 (closed-range only) is NOT enforced server-side yet — the Portal
+     * blocks open-upward input client-side; see [validateFieldOverrideRange]
+     * for the full deferred-D5 rationale.
      */
     private fun validateRangeSyntax(range: String) {
         try {
