@@ -449,13 +449,16 @@ class V4WriteValidationTest {
     }
 
     // -------------------------------------------------------------------
-    // Partial-overlap rejection (R3 / schema-spec §3.5).
+    // Overlap rejection — disjoint-only rule (R3 / schema-spec §3.5).
     //
-    // Mirrors the Portal-side preview from
-    // octopusden/octopus-components-management-portal#65: a new field-override
-    // range that partially overlaps a sibling on the same attribute is
-    // rejected with 400. Strict containment and disjoint ranges remain
-    // allowed; equal ranges are still caught by the DB UNIQUE constraint.
+    // Mirrors the Portal-side preview
+    // (octopusden/octopus-components-management-portal#67): field-overrides on
+    // the same attribute must be DISJOINT. A new range that intersects a
+    // sibling in any way — partial overlap, strict containment, or semantic
+    // equality — is rejected with 400. Only a disjoint range is accepted.
+    // (This is stricter than the original schema-spec §3.5, which allowed
+    // strict containment; a version inside the inner range would match both
+    // overrides, so the resolved value would be ambiguous.)
     // -------------------------------------------------------------------
 
     private fun seedComponentForOverlap(suffix: String): String {
@@ -492,18 +495,35 @@ class V4WriteValidationTest {
     }
 
     @Test
-    @DisplayName("R3: POST /field-overrides accepts a range strictly contained inside a sibling (schema-spec §3.5)")
-    fun fieldOverride_allows_strictContainment() {
+    @DisplayName("R3: POST /field-overrides rejects a range strictly contained inside a sibling (disjoint-only)")
+    fun fieldOverride_rejects_strictContainment_innerInsideExisting() {
         val id = seedComponentForOverlap("contained-${uniqueSuffix()}")
         postFieldOverride(
             id,
             """{"overriddenAttribute":"build.javaVersion","versionRange":"[1.0,5.0)","value":"11"}""",
         ).andExpect(status().isCreated)
-        // [2.0,3.0) is fully inside [1.0,5.0) → strict containment, accepted.
+        // [2.0,3.0) is fully inside [1.0,5.0) → a version like 2.5 matches both
+        // overrides → ambiguous → reject.
         postFieldOverride(
             id,
             """{"overriddenAttribute":"build.javaVersion","versionRange":"[2.0,3.0)","value":"17"}""",
+        ).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    @DisplayName("R3: POST /field-overrides rejects a range that strictly contains a sibling (disjoint-only)")
+    fun fieldOverride_rejects_strictContainment_newContainsExisting() {
+        val id = seedComponentForOverlap("contains-${uniqueSuffix()}")
+        // Reported case: existing [1.0,2.0], new [0,3.0] which fully contains
+        // it — version 1.5 matches both → must be rejected, not accepted.
+        postFieldOverride(
+            id,
+            """{"overriddenAttribute":"build.javaVersion","versionRange":"[1.0,2.0]","value":"17"}""",
         ).andExpect(status().isCreated)
+        postFieldOverride(
+            id,
+            """{"overriddenAttribute":"build.javaVersion","versionRange":"[0,3.0]","value":"18"}""",
+        ).andExpect(status().isBadRequest)
     }
 
     @Test
@@ -517,6 +537,25 @@ class V4WriteValidationTest {
         postFieldOverride(
             id,
             """{"overriddenAttribute":"build.javaVersion","versionRange":"[5.0,6.0)","value":"17"}""",
+        ).andExpect(status().isCreated)
+    }
+
+    @Test
+    @DisplayName("R3: POST /field-overrides accepts adjacent half-open ranges sharing a boundary point")
+    fun fieldOverride_allows_adjacentHalfOpenRanges() {
+        // Boundary regression guard: isIntersect is now the sole gate for the
+        // disjoint-only rule. 2.0 is excluded from [1.0,2.0) and included in
+        // [2.0,3.0) — no version falls in both, so this MUST stay accepted.
+        // If a releng upgrade ever made touching-exclusive bounds "intersect",
+        // contiguous half-open coverage would break and this test would catch it.
+        val id = seedComponentForOverlap("adjacent-${uniqueSuffix()}")
+        postFieldOverride(
+            id,
+            """{"overriddenAttribute":"build.javaVersion","versionRange":"[1.0,2.0)","value":"11"}""",
+        ).andExpect(status().isCreated)
+        postFieldOverride(
+            id,
+            """{"overriddenAttribute":"build.javaVersion","versionRange":"[2.0,3.0)","value":"17"}""",
         ).andExpect(status().isCreated)
     }
 
@@ -604,6 +643,33 @@ class V4WriteValidationTest {
                     .with(adminJwt())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"versionRange":"[1.0, 2.0)"}"""),
+            ).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    @DisplayName("R3: PATCH /field-overrides/{id} rejects a range update that contains a sibling")
+    fun fieldOverride_patch_rejects_strictContainment() {
+        val id = seedComponentForOverlap("patch-contain-${uniqueSuffix()}")
+        // Sibling A — stays put, narrow.
+        postFieldOverride(
+            id,
+            """{"overriddenAttribute":"build.javaVersion","versionRange":"[2.0,3.0)","value":"11"}""",
+        ).andExpect(status().isCreated)
+        // Sibling B — disjoint at create time.
+        val bCreate =
+            postFieldOverride(
+                id,
+                """{"overriddenAttribute":"build.javaVersion","versionRange":"[8.0,9.0)","value":"17"}""",
+            ).andExpect(status().isCreated)
+                .andReturn().response.contentAsString
+        val bId = objectMapper.readTree(bCreate)["id"].asText()
+        // PATCH B to [1.0,5.0) which fully contains A's [2.0,3.0) → reject.
+        mvc
+            .perform(
+                patch("/rest/api/4/components/$id/field-overrides/$bId")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"versionRange":"[1.0,5.0)"}"""),
             ).andExpect(status().isBadRequest)
     }
 

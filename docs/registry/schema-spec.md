@@ -105,7 +105,7 @@ For request `(component, version V)`:
 1. Load base row + all matching override rows: `WHERE component_id = X AND (row_type = 'BASE' OR range_contains(version_range, V))`. RANGE_PRESENCE rows are loaded but discarded before scalar/marker overlay.
 2. Start with base row scalar values; for each scalar override row matching V, set its single non-NULL column on the merged result.
 3. For child collections, pick the most-specific marker override row whose `version_range` contains V; if found, its children REPLACE base children (full replacement). If no marker matches, use base children.
-4. Transitional constraint: version_range of override rows within one component MUST NOT partially overlap (equal ranges are blocked by UNIQUE; strict containment and disjoint allowed; partial overlap rejected at write-time). Under this constraint, at most one override per attribute matches V — no runtime tiebreaker needed.
+4. Constraint: version_range of override rows within one component MUST be pairwise **disjoint** per attribute. Any intersection — partial overlap, strict containment, or equality — is rejected at write-time by the service validator (`validateFieldOverrideRange`); the DB UNIQUE on `(component_id, version_range, overridden_attribute)` additionally blocks only *exact-text* duplicates, while *semantic*-equal ranges differing by whitespace or trailing zeros (`[1.0, 2.0)` / `[1,2)` vs `[1.0,2.0)`) are caught by the validator. This guarantees at most one override per attribute matches V, so no runtime tiebreaker is needed. (Stricter than the earlier transitional rule, which allowed strict containment — but that left a version inside the inner range matching *two* overrides, which contradicts the "at most one matches V" guarantee. Enforced client-side in Portal #67 and server-side in `validateFieldOverrideRange`.)
 5. For the legacy variants-Map endpoints, skip emitting the base row entry if `is_synthetic_base = true` (this is the MIG-029 fix). For single-version resolve (hot path), synthetic base is always used as fallback.
 
 ## 4. Table specifications
@@ -482,7 +482,7 @@ DSL strings containing `${version}`, `${env.X}`, `${major}`, etc. are stored **v
 - Base row: at least one typed column may be filled; child rows allowed.
 - Scalar override row: `overridden_attribute` is a known `aspect.field`; exactly one matching typed column non-NULL; no child rows.
 - Marker override row: `overridden_attribute` ∈ marker set; all typed scalar columns NULL (DB CHECK also enforces this); child rows attached.
-- Version_range overlap (transitional): override rows within one component must not partially overlap (equal ranges blocked by UNIQUE; strict containment and disjoint allowed).
+- Version_range overlap: override rows within one component must be pairwise disjoint per attribute — any intersection (partial overlap, strict containment, or equality) is rejected at write-time by the service validator; the DB UNIQUE additionally blocks only exact-text duplicates (semantic-equal ranges are caught by the validator).
 
 DB-level CHECK constraints defend against migration / bulk-load bypassing the service layer (one CHECK per marker name).
 
