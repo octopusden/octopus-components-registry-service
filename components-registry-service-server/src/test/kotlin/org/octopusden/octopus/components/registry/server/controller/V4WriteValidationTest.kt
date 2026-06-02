@@ -451,7 +451,8 @@ class V4WriteValidationTest {
     // -------------------------------------------------------------------
     // Partial-overlap rejection (R3 / schema-spec §3.5).
     //
-    // Mirrors the Portal-side preview from PR #65: a new field-override
+    // Mirrors the Portal-side preview from
+    // octopusden/octopus-components-management-portal#65: a new field-override
     // range that partially overlaps a sibling on the same attribute is
     // rejected with 400. Strict containment and disjoint ranges remain
     // allowed; equal ranges are still caught by the DB UNIQUE constraint.

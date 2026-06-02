@@ -1467,7 +1467,7 @@ class ComponentManagementServiceImpl(
         )
     }
 
-    private fun compareSemver(a: String, b: String): Int =
+    private fun compareMavenVersions(a: String, b: String): Int =
         DefaultArtifactVersion(a).compareTo(DefaultArtifactVersion(b))
 
     private fun simpleContains(outer: ParsedSimpleRange, inner: ParsedSimpleRange): Boolean {
@@ -1475,7 +1475,7 @@ class ComponentManagementServiceImpl(
             outer.lo == null -> true
             inner.lo == null -> false
             else -> {
-                val cmp = compareSemver(outer.lo, inner.lo)
+                val cmp = compareMavenVersions(outer.lo, inner.lo)
                 cmp < 0 || (cmp == 0 && (outer.loIncl || !inner.loIncl))
             }
         }
@@ -1484,7 +1484,7 @@ class ComponentManagementServiceImpl(
             outer.hi == null -> true
             inner.hi == null -> false
             else -> {
-                val cmp = compareSemver(outer.hi, inner.hi)
+                val cmp = compareMavenVersions(outer.hi, inner.hi)
                 cmp > 0 || (cmp == 0 && (outer.hiIncl || !inner.hiIncl))
             }
         }
@@ -1528,7 +1528,7 @@ class ComponentManagementServiceImpl(
         range: String,
         component: ComponentEntity,
         attribute: String,
-        excludeOverrideId: java.util.UUID?,
+        excludeOverrideId: UUID?,
     ) {
         validateRangeSyntax(range)
         val parsedNew = parseSimpleSegment(range)
