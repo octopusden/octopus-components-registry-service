@@ -101,4 +101,92 @@ class TraceReplayParsingTest {
         assertThat(endpoint).doesNotContain("?")
         assertThat(endpoint).isEqualTo("GET /rest/api/2/components")
     }
+
+    // --- trace-replay cap + endpoint-coverage (compat.trace.limit, [1.7]/[1.8] 30k gate) ---
+
+    @Test
+    @DisplayName("parseTraceLimit: positive parses; null/blank/zero/negative/garbage => null (fail-open to full)")
+    fun parseTraceLimitCases() {
+        assertThat(parseTraceLimit("30000")).isEqualTo(30000)
+        assertThat(parseTraceLimit("  30000 ")).isEqualTo(30000)
+        assertThat(parseTraceLimit(null)).isNull()
+        assertThat(parseTraceLimit("")).isNull()
+        assertThat(parseTraceLimit("0")).isNull()
+        assertThat(parseTraceLimit("-5")).isNull()
+        assertThat(parseTraceLimit("abc")).isNull()
+    }
+
+    @Test
+    @DisplayName("applyTraceLimit: caps to the top-N (rank-ordered input); null / >= size => unchanged")
+    fun applyTraceLimitCases() {
+        val list = listOf("a", "b", "c", "d", "e")
+        assertThat(applyTraceLimit(list, 3)).containsExactly("a", "b", "c")
+        assertThat(applyTraceLimit(list, null)).isEqualTo(list)
+        assertThat(applyTraceLimit(list, 5)).isEqualTo(list)
+        assertThat(applyTraceLimit(list, 99)).isEqualTo(list)
+    }
+
+    @Test
+    @DisplayName("endpointTemplate: collapses {component}/{version}/{project} but preserves static find-by-* actions")
+    fun endpointTemplateCases() {
+        assertThat(endpointTemplate("GET", "/rest/api/2/components/foo-bar/vcs-settings"))
+            .isEqualTo("GET /rest/api/2/components/{component}/vcs-settings")
+        assertThat(endpointTemplate("GET", "/rest/api/2/components/foo/versions/1.2.3"))
+            .isEqualTo("GET /rest/api/2/components/{component}/versions/{version}")
+        assertThat(endpointTemplate("GET", "/rest/api/2/projects/PRJ/jira-components"))
+            .isEqualTo("GET /rest/api/2/projects/{project}/jira-components")
+        // static actions after /components/ must NOT collapse to {component}
+        assertThat(endpointTemplate("POST", "/rest/api/3/components/find-by-artifacts"))
+            .isEqualTo("POST /rest/api/3/components/find-by-artifacts")
+        assertThat(endpointTemplate("POST", "/rest/api/2/components/find-by-artifact"))
+            .isEqualTo("POST /rest/api/2/components/find-by-artifact")
+        assertThat(endpointTemplate("POST", "/rest/api/3/components/find-by-docker-images"))
+            .isEqualTo("POST /rest/api/3/components/find-by-docker-images")
+        // legacy camelCase v2 action must ALSO be preserved (regression guard: a
+        // hard-coded kebab-only set silently collapsed this to POST .../components/{component})
+        assertThat(endpointTemplate("POST", "/rest/api/2/components/findByArtifacts"))
+            .isEqualTo("POST /rest/api/2/components/findByArtifacts")
+        // query dropped; list endpoint unchanged
+        assertThat(endpointTemplate("GET", "/rest/api/2/components?vcs-path=x"))
+            .isEqualTo("GET /rest/api/2/components")
+        assertThat(endpointTemplate("GET", "/rest/api/3/components"))
+            .isEqualTo("GET /rest/api/3/components")
+    }
+
+    @Test
+    @DisplayName("ensureEndpointCoverage: re-adds the busiest rep of an endpoint the frequency cap dropped")
+    fun ensureEndpointCoverageReAddsMissing() {
+        // `all` is rank-ordered desc: two GETs on the SAME endpoint fill the cap,
+        // one low-traffic OTHER endpoint (build-tools) sits just below it.
+        val all =
+            listOf(
+                "GET" to "/rest/api/2/components/a/vcs-settings",
+                "GET" to "/rest/api/2/components/b/vcs-settings",
+                "GET" to "/rest/api/3/components/c/build-tools",
+            )
+        val key = { e: Pair<String, String> -> endpointTemplate(e.first, e.second) }
+        val capped = all.take(2)
+        // RED: the frequency cap alone drops the build-tools endpoint
+        assertThat(capped.map(key).toSet()).doesNotContain("GET /rest/api/3/components/{component}/build-tools")
+        // GREEN: coverage union re-adds its busiest representative, on top of the cap
+        val covered = ensureEndpointCoverage(capped, all, key)
+        assertThat(covered.map(key).toSet()).contains(
+            "GET /rest/api/2/components/{component}/vcs-settings",
+            "GET /rest/api/3/components/{component}/build-tools",
+        )
+        assertThat(covered).hasSize(3)
+        assertThat(covered.subList(0, 2)).isEqualTo(capped)
+    }
+
+    @Test
+    @DisplayName("ensureEndpointCoverage: no-op when the cap already covers every endpoint")
+    fun ensureEndpointCoverageNoop() {
+        val all =
+            listOf(
+                "GET" to "/rest/api/2/components/a/vcs-settings",
+                "GET" to "/rest/api/3/components/c/build-tools",
+            )
+        val key = { e: Pair<String, String> -> endpointTemplate(e.first, e.second) }
+        assertThat(ensureEndpointCoverage(all, all, key)).isEqualTo(all)
+    }
 }
