@@ -48,7 +48,16 @@ object RawArraySorters {
         // JiraComponentDTO with projectKey / displayName / componentInfo — no `id`).
         val componentName = node.path("componentName").asText("")
         val versionRange = node.path("versionRange").asText("")
-        componentName + KEY_SEP + versionRange
+        // (componentName, versionRange) is NOT unique within a project's response
+        // (observed in production: several entries share it but differ in distribution /
+        // vcsSettings / component.displayName). A colliding key lets the stable sort keep
+        // each stand's arbitrary Set-iteration order → positional misalignment → false
+        // STRUCTURAL_DIFFs. Append a canonical (recursively field-name-sorted) serialization
+        // of the WHOLE element as a tie-breaker: collision-free and deterministic on both
+        // stands. It never masks a real diff — two elements differing in any field get
+        // different keys, so a genuine divergence still surfaces as that element, not as
+        // positional noise.
+        componentName + KEY_SEP + versionRange + KEY_SEP + canonicalJson(node)
     }
 
     /**
@@ -156,5 +165,46 @@ object RawArraySorters {
         val out = JsonNodeFactory.instance.arrayNode(sorted.size)
         sorted.forEach { out.add(it) }
         return out
+    }
+
+    /**
+     * Deterministic, field-order-independent serialization of [node]: object field
+     * names are sorted recursively, so two structurally-equal elements that differ
+     * only in JSON field ORDER (Jackson preserves wire order, which can differ between
+     * the two stands) produce the SAME string. Used only as a Set-sort tie-breaker —
+     * inner-array order is left as-is, since a size/content difference inside an element
+     * is a real per-element difference and SHOULD change the key.
+     */
+    private fun canonicalJson(node: JsonNode): String {
+        val sb = StringBuilder()
+        appendCanonical(node, sb)
+        return sb.toString()
+    }
+
+    private fun appendCanonical(node: JsonNode, sb: StringBuilder) {
+        when {
+            node.isObject -> {
+                sb.append('{')
+                var first = true
+                node.fieldNames().asSequence().sorted().forEach { name ->
+                    if (!first) sb.append(',')
+                    first = false
+                    sb.append(name).append(':')
+                    appendCanonical(node.get(name), sb)
+                }
+                sb.append('}')
+            }
+            node.isArray -> {
+                sb.append('[')
+                var first = true
+                node.forEach { child ->
+                    if (!first) sb.append(',')
+                    first = false
+                    appendCanonical(child, sb)
+                }
+                sb.append(']')
+            }
+            else -> sb.append(node.toString())
+        }
     }
 }
