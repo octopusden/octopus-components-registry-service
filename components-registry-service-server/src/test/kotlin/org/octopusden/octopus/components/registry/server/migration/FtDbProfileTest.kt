@@ -3,6 +3,7 @@ package org.octopusden.octopus.components.registry.server.migration
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import org.hamcrest.Matchers.greaterThan
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -33,6 +34,7 @@ import java.nio.file.Paths
 )
 @ActiveProfiles("common", "ft-db")
 @Timeout(120)
+@Tag("integration")
 class FtDbProfileTest {
     @MockBean
     @Suppress("UnusedPrivateProperty")

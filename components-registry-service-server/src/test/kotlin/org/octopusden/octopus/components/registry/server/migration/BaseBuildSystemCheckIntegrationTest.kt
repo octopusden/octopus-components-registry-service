@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.migration
 
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -53,6 +54,7 @@ import java.sql.SQLException
 )
 @ActiveProfiles("common", "test-db-validate")
 @Timeout(120)
+@Tag("integration")
 class BaseBuildSystemCheckIntegrationTest {
     @MockBean
     @Suppress("UnusedPrivateProperty")

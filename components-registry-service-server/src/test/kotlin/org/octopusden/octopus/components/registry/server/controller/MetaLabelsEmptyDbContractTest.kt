@@ -2,6 +2,7 @@ package org.octopusden.octopus.components.registry.server.controller
 
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
@@ -43,6 +44,7 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 @ActiveProfiles("common", "ft-db")
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Timeout(120)
+@Tag("integration")
 class MetaLabelsEmptyDbContractTest {
     @MockBean
     @Suppress("UnusedPrivateProperty")

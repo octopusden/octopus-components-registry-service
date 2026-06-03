@@ -2,6 +2,7 @@ package org.octopusden.octopus.components.registry.server.service.impl
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.eclipse.jgit.api.Git
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -62,6 +63,7 @@ import kotlin.streams.asSequence
 )
 @Import(MigrateHistoryIntegrationTest.SyncMigrationExecutorConfig::class)
 @ActiveProfiles("common", "test-db")
+@Tag("integration")
 class MigrateHistoryIntegrationTest {
     @MockBean
     @Suppress("UnusedPrivateProperty")

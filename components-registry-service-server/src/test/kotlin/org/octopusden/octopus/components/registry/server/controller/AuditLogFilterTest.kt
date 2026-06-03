@@ -2,6 +2,7 @@ package org.octopusden.octopus.components.registry.server.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
@@ -59,6 +60,7 @@ import java.util.UUID
 @ActiveProfiles("common", "ft-db")
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Timeout(180)
+@Tag("integration")
 class AuditLogFilterTest {
     @MockBean
     @Suppress("UnusedPrivateProperty")

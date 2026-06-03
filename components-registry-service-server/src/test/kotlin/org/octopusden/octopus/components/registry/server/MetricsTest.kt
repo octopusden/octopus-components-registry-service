@@ -2,6 +2,7 @@ package org.octopusden.octopus.components.registry.server
 
 import org.hamcrest.Matchers.containsInAnyOrder
 import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.octopusden.cloud.commons.security.client.AuthServerClient
@@ -27,6 +28,7 @@ import java.nio.file.Paths
     classes = [ComponentRegistryServiceApplication::class],
 )
 @ActiveProfiles("common", "test")
+@Tag("integration")
 class MetricsTest {
     @MockBean
     @Suppress("UnusedPrivateProperty")

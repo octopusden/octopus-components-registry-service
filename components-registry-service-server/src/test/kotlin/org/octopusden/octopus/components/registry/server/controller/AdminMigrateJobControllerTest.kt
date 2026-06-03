@@ -1,6 +1,7 @@
 package org.octopusden.octopus.components.registry.server.controller
 
 import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.`when`
 import org.octopusden.cloud.commons.security.client.AuthServerClient
@@ -43,6 +44,7 @@ import java.time.Instant
     classes = [ComponentRegistryServiceApplication::class],
 )
 @ActiveProfiles("common", "test")
+@Tag("integration")
 class AdminMigrateJobControllerTest {
     @MockBean
     @Suppress("UnusedPrivateProperty")

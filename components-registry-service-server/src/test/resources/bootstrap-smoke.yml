@@ -1,0 +1,8 @@
+# Loaded by the Spring Cloud bootstrap context when the `smoke` profile is active
+# (mirrors bootstrap-ft-db.yml). Without it the smoke test boots with common+smoke but
+# no bootstrap override, so ConfigServicePropertySourceLocator would retry-loop against
+# an absent Config Server.
+spring:
+  cloud:
+    config:
+      enabled: false

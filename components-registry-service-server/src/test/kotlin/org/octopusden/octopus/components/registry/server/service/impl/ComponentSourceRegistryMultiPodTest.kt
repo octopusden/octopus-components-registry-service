@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
@@ -55,6 +56,7 @@ import java.util.UUID
 @TestPropertySource(properties = ["components-registry.default-source=git"])
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Timeout(120)
+@Tag("integration")
 class ComponentSourceRegistryMultiPodTest {
     @MockBean
     @Suppress("UnusedPrivateProperty")

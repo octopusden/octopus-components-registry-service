@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.migration
 
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -53,6 +54,7 @@ import java.nio.file.Paths
 @ActiveProfiles("common", "ft-db")
 @DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_CLASS)
 @Timeout(120)
+@Tag("integration")
 class MigrationIntegrationTest {
     @MockBean
     @Suppress("UnusedPrivateProperty")
