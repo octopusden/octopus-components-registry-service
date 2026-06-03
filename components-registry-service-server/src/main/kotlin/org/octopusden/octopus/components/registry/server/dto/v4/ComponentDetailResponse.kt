@@ -52,4 +52,11 @@ data class ComponentDetailResponse(
     val teamcityProjects: List<TeamcityProjectResponse> = emptyList(),
     // Configuration rows (base + overrides) ————————————————————————————————
     val configurations: List<ComponentConfigurationResponse> = emptyList(),
+    // Per-user affordance: true when the CURRENT caller may edit this component
+    // (is its componentOwner / releaseManager / securityChampion, or an admin).
+    // Stamped by the controller from `PermissionEvaluator.canEditComponent` on
+    // every detail-returning endpoint (GET, create, update) so the Portal can
+    // hide the Edit affordances. Null when not evaluated (e.g. produced outside
+    // a request context); the Portal then falls back to its global permission.
+    val canEdit: Boolean? = null,
 )

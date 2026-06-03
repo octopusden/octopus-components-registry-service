@@ -37,7 +37,9 @@ import java.nio.file.Paths
  *   1. Pick an existing component from the ft-db seed.
  *   2. As admin, write a field-config row that sets
  *      `component.displayName.visibility = "hidden"`.
- *   3. As editor, PATCH the component with a new `displayName`.
+ *   3. PATCH the component with a new `displayName` (as admin — the seed
+ *      component has no owner/RM/SC, so a plain editor would be 403'd by the
+ *      per-component edit gate; field-config stripping is principal-agnostic).
  *   4. Assert the stored `displayName` is unchanged — the value was
  *      silently stripped at the service layer per the Risk-1 contract.
  *
@@ -120,7 +122,7 @@ class FieldConfigEnforcementIntegrationTest {
                     .content(objectMapper.writeValueAsBytes(fieldConfigPayload)),
             ).andExpect(status().is2xxSuccessful)
 
-        // Step 2: as editor, PATCH with a brand-new displayName.
+        // Step 2: PATCH with a brand-new displayName (as admin — see class doc).
         val attempted = "ATTEMPTED-CHANGE-${System.nanoTime()}"
         assertNotEquals(originalDisplayName, attempted, "test data invariant")
         val patchPayload =
@@ -131,7 +133,7 @@ class FieldConfigEnforcementIntegrationTest {
         mvc
             .perform(
                 patch("/rest/api/4/components/$id")
-                    .with(editorJwt())
+                    .with(adminJwt())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(patchPayload)),
             ).andExpect(status().is2xxSuccessful)
@@ -184,7 +186,7 @@ class FieldConfigEnforcementIntegrationTest {
         mvc
             .perform(
                 patch("/rest/api/4/components/$id")
-                    .with(editorJwt())
+                    .with(adminJwt())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(patchPayload)),
             ).andExpect(status().is2xxSuccessful)

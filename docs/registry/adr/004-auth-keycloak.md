@@ -130,15 +130,28 @@ class WebSecurityConfig(
 ```kotlin
 @Component
 class PermissionEvaluator(
-    securityService: SecurityService
+    securityService: SecurityService,
+    private val componentRepository: ComponentRepository,
 ) : BasePermissionEvaluator(securityService) {
 
     fun hasPermission(permission: String): Boolean =
         super.hasPermission(permission)
 
-    fun canEditComponent(componentName: String): Boolean =
-        hasPermission("EDIT_COMPONENTS")
-        // Future: component-level ownership check
+    // Per-component ownership gate (IMPLEMENTED — the "component-level ownership
+    // check" this section originally reserved). A user may
+    // edit a component only if they are its componentOwner / releaseManager /
+    // securityChampion, OR they hold EDIT_ANY_COMPONENT (admin). `componentIdOrName`
+    // may be a UUID (the live v4 call site) or a component key. Usernames are matched
+    // trimmed + case-insensitively; a component with no owner AND no RM AND no SC is
+    // admin-only; an unresolvable id/key denies (→ 403, since @PreAuthorize runs
+    // before the controller). Owner/RM/SC are read via scalar projection queries so
+    // the LAZY child collections are never touched outside a Hibernate session.
+    fun canEditComponent(componentIdOrName: String): Boolean {
+        if (!hasPermission("EDIT_COMPONENTS")) return false
+        if (hasPermission("EDIT_ANY_COMPONENT")) return true
+        val username = securityService.getCurrentUser().username
+        // resolve UUID-or-key, then match `username` against owner / RM / SC …
+    }
 
     fun canDeleteComponent(componentName: String): Boolean =
         hasPermission("DELETE_COMPONENTS")
@@ -177,12 +190,13 @@ class ComponentCrudController(private val service: ComponentManagementService) {
 
 ### Roles & Permissions
 
-Permissions (8):
+Permissions (9):
 
 | Permission | Endpoint / Operation |
 |---|---|
 | `ACCESS_COMPONENTS` | read v1–v4 (public; `ROLE_ANONYMOUS` gets it so `@PreAuthorize` on GET methods also passes without auth) |
-| `EDIT_COMPONENTS` | `POST /rest/api/4/components`, `PATCH /{id}` (regular attributes), field-overrides CRUD |
+| `EDIT_COMPONENTS` | `POST /rest/api/4/components` (create — no owner exists yet, so this is the sole gate). **Necessary but not sufficient** for `PATCH /{id}` (regular attributes) and field-overrides CRUD: those additionally require the caller to be the component's owner/RM/SC **or** to hold `EDIT_ANY_COMPONENT` — see `canEditComponent` |
+| `EDIT_ANY_COMPONENT` | bypass the per-component owner/RM/SC edit check — edit ANY component (e.g. to reassign a departed owner). `ROLE_ADMIN` only. `EDIT_COMPONENTS` remains a prerequisite |
 | `ARCHIVE_COMPONENTS` | set `archived` via `PATCH /{id}` (future: dedicated `POST /{id}/archive`). Reserved — may move to per-component check (componentOwner, releaseManager) |
 | `RENAME_COMPONENTS` | change `name` via `PATCH /{id}` (future: dedicated `POST /{id}/rename`). Impactful — breaks legacy-resolve consumers |
 | `DELETE_COMPONENTS` | `DELETE /{id}` — hard delete, ADMIN-only |
@@ -218,6 +232,7 @@ octopus-security:
     ROLE_ADMIN:
       - ACCESS_COMPONENTS
       - EDIT_COMPONENTS
+      - EDIT_ANY_COMPONENT
       - ARCHIVE_COMPONENTS
       - RENAME_COMPONENTS
       - DELETE_COMPONENTS
@@ -228,6 +243,7 @@ octopus-security:
 
 Notes on the model:
 
+- **Per-component edit ownership (implemented).** `PATCH /{id}` and all field-override CRUD (`POST`/`PATCH`/`DELETE /{id}/field-overrides`) are gated by `canEditComponent`: the caller must be the component's `componentOwner`, a `releaseManager`, or a `securityChampion`, **or** hold `EDIT_ANY_COMPONENT` (admin). Matching is trimmed + case-insensitive against the JWT `preferred_username`. A component with no owner AND empty RM AND empty SC is editable only by `EDIT_ANY_COMPONENT` holders; an unresolvable id/key denies, so a `PATCH` of a non-existent component returns **403, not 404** (the `@PreAuthorize` gate runs before the controller). `createComponent` stays on bare `EDIT_COMPONENTS` (no owner exists at create time). The detail response (`GET`/create/`PATCH`) carries a per-caller `canEdit` boolean computed from the same predicate so the Portal can hide the edit affordances.
 - `ROLE_COMPONENTS_REGISTRY_EDITOR` deliberately does **not** carry `ARCHIVE_COMPONENTS` or `RENAME_COMPONENTS`. Archive/rename are reserved for ADMIN (or, longer-term, for a per-component check against `componentOwner` / `releaseManager` — the permission name is kept stable so that check can be added without re-wiring the role map).
 - The `PATCH /{id}` SpEL guard enforces this field-by-field: `... and (#request.archived == null or canArchiveComponent(...)) and (#request.name == null or canRenameComponent(...))`. Plain edits stay on `EDIT_COMPONENTS`; archive/rename payloads fail closed with 403 for anyone without the extra permission.
 - Super-admin role is `ROLE_ADMIN`, reusing whatever existing platform-wide admin realm-role your Keycloak instance already carries (commonly literally named `ADMIN`). This diverges from an earlier draft that proposed a dedicated `ROLE_<PRODUCT>_ADMIN`; reusing the platform admin avoids wiring admin-access through a role nobody currently carries.

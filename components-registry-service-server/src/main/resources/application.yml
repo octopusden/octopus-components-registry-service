@@ -93,6 +93,9 @@ octopus-security:
     ROLE_ADMIN:
       - ACCESS_COMPONENTS
       - EDIT_COMPONENTS
+      # Bypass the per-component owner/RM/SC edit check — edit ANY component
+      # (e.g. to reassign a departed owner). See PermissionEvaluator.canEditComponent.
+      - EDIT_ANY_COMPONENT
       - ARCHIVE_COMPONENTS
       - RENAME_COMPONENTS
       - DELETE_COMPONENTS

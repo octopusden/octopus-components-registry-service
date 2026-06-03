@@ -112,13 +112,13 @@ POST   /rest/api/4/components
   Auth:     EDIT_COMPONENTS
 
 GET    /rest/api/4/components/{id}
-  Response: ComponentDetailResponse (full tree with all nested configs)
+  Response: ComponentDetailResponse (full tree with all nested configs; incl. per-caller `canEdit`)
   Auth:     ACCESS_COMPONENTS
 
 PATCH  /rest/api/4/components/{id}
   Request:  ComponentUpdateRequest { version, displayName, productType, build, escrow, ... }
-  Response: ComponentDetailResponse
-  Auth:     EDIT_COMPONENTS
+  Response: ComponentDetailResponse (incl. per-caller `canEdit`)
+  Auth:     EDIT_COMPONENTS AND canEditComponent (owner/RM/SC, or EDIT_ANY_COMPONENT for admin)
   Headers:  If-Match (optional, alternative to version field for optimistic locking)
   Validation: Bean Validation (Jakarta @Valid, @NotBlank, @Size, etc.)
   Semantics: JSON Merge Patch (RFC 7396):
@@ -144,15 +144,15 @@ GET    /rest/api/4/components?productType=&archived=&search=&owner=
 POST   /rest/api/4/components/{id}/field-overrides
   Request:  FieldOverrideCreateRequest { fieldPath, versionRange, value }
   Example:  { "fieldPath": "build.buildSystem", "versionRange": "[1.0, 2.0)", "value": "MAVEN" }
-  Auth:     EDIT_COMPONENTS
+  Auth:     EDIT_COMPONENTS AND canEditComponent (owner/RM/SC, or EDIT_ANY_COMPONENT)
   Validation: No overlap with existing ranges for the same field (409 Conflict)
 
 PATCH  /rest/api/4/components/{id}/field-overrides/{overrideId}
   Request:  FieldOverrideUpdateRequest { versionRange?, value? }
-  Auth:     EDIT_COMPONENTS
+  Auth:     EDIT_COMPONENTS AND canEditComponent (owner/RM/SC, or EDIT_ANY_COMPONENT)
 
 DELETE /rest/api/4/components/{id}/field-overrides/{overrideId}
-  Auth:     EDIT_COMPONENTS
+  Auth:     EDIT_COMPONENTS AND canEditComponent (owner/RM/SC, or EDIT_ANY_COMPONENT)
 
 GET    /rest/api/4/components/{id}/field-overrides
   Response: List of all field overrides for the component, grouped by field path
@@ -319,7 +319,7 @@ Implemented in `WebSecurityConfig.kt` (extends `CloudCommonWebSecurityConfig` fr
 
 | Method | Required permission | Used on |
 |---|---|---|
-| `canEditComponent(name)` | `EDIT_COMPONENTS` | `PATCH /components/{id}` (plain edit; `POST /components` uses `hasPermission('EDIT_COMPONENTS')` directly — no `name` arg available) |
+| `canEditComponent(idOrName)` | `EDIT_COMPONENTS` **and** (owner/RM/SC membership **or** `EDIT_ANY_COMPONENT`) | `PATCH /components/{id}` (plain edit) and all field-override CRUD (`POST`/`PATCH`/`DELETE /{id}/field-overrides`). `POST /components` (create) uses `hasPermission('EDIT_COMPONENTS')` directly — no owner exists yet |
 | `canArchiveComponent(name)` | `ARCHIVE_COMPONENTS` | `PATCH /components/{id}` when `archived` is in payload |
 | `canRenameComponent(name)` | `RENAME_COMPONENTS` | `PATCH /components/{id}` when `name` is in payload |
 | `canDeleteComponent(name)` | `DELETE_COMPONENTS` | `DELETE /components/{id}` |
@@ -332,7 +332,7 @@ The `PATCH /components/{id}` SpEL guard combines these (the path variable is a `
 ```
 Plain edits stay on `EDIT_COMPONENTS`; archive/rename payloads fail closed with 403 for anyone without the extra permission.
 
-Per-component ownership (`componentOwner`, `releaseManager`) is a deferred layer — the permission names are stable across that future change so the role map does not need to move.
+**Per-component edit ownership (implemented).** `canEditComponent(idOrName)` resolves the component (UUID, or component key as a fallback) and allows the edit only when the caller's JWT `preferred_username` matches the component's `componentOwner`, a `releaseManager`, or a `securityChampion` (trimmed, case-insensitive) — unless the caller holds `EDIT_ANY_COMPONENT` (mapped to `ROLE_ADMIN`), which bypasses the membership check. `EDIT_COMPONENTS` is a prerequisite (short-circuits before any DB lookup, so viewers/anonymous reads computing `canEdit` cost nothing). A component with no owner AND empty RM AND empty SC is editable only by `EDIT_ANY_COMPONENT` holders; an unresolvable id/key denies — so `PATCH` of a non-existent component is **403, not 404** (the gate runs before the controller). Owner/RM/SC are read via scalar projection queries on `ComponentRepository` (never the LAZY child collections, since `@PreAuthorize` runs outside a Hibernate session). The same predicate stamps the per-caller `canEdit` flag on the `GET`/create/`PATCH` detail responses for the Portal. This mirrors the entity-scoped evaluator pattern already used in `octopus-dms-service` (`hasPermissionByComponent`).
 
 ### 6.4 Audit `changedBy` wiring
 

@@ -569,6 +569,19 @@ class TeamcitySyncServiceTest {
         override fun findByComponentGroupId(groupId: UUID): List<ComponentEntity> =
             components.filter { it.componentGroup?.id == groupId }
 
+        // Edit-ownership projections. Safe to read the entity accessors here: these are
+        // plain in-memory test entities (no Hibernate proxy), so touching the RM/SC lists
+        // can't raise LazyInitializationException — the production code uses scalar
+        // projection queries precisely to avoid that outside a session.
+        override fun findComponentOwnerById(id: UUID): String? =
+            components.firstOrNull { it.id == id }?.componentOwner
+
+        override fun findReleaseManagerUsernames(id: UUID): List<String> =
+            components.firstOrNull { it.id == id }?.releaseManagerUsernames() ?: emptyList()
+
+        override fun findSecurityChampionUsernames(id: UUID): List<String> =
+            components.firstOrNull { it.id == id }?.securityChampionUsernames() ?: emptyList()
+
         override fun <S : ComponentEntity> save(entity: S): S = entity
         override fun <S : ComponentEntity> saveAll(entities: Iterable<S>): List<S> = unsupported()
         override fun <S : ComponentEntity> saveAndFlush(entity: S): S = entity

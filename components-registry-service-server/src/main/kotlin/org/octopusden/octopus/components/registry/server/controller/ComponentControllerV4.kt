@@ -16,6 +16,7 @@ import org.octopusden.octopus.components.registry.server.repository.ComponentLab
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.LabelRepository
 import org.octopusden.octopus.components.registry.server.repository.SystemRepository
+import org.octopusden.octopus.components.registry.server.security.PermissionEvaluator
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.RepositoryType
@@ -62,8 +63,22 @@ class ComponentControllerV4(
     private val labelRepository: LabelRepository,
     private val systemRepository: SystemRepository,
     private val componentGroupRepository: ComponentGroupRepository,
+    private val permissionEvaluator: PermissionEvaluator,
 ) {
     private val log = LoggerFactory.getLogger(ComponentControllerV4::class.java)
+
+    /**
+     * Stamp the per-user [ComponentDetailResponse.canEdit] flag onto a detail
+     * response. Applied to EVERY endpoint that returns a detail (GET, create,
+     * update) — not just GET — because the Portal overwrites its cached detail
+     * with the create/PATCH response body; an omitted flag would drop the Portal
+     * back to its global EDIT_COMPONENTS heuristic and could disagree with the
+     * next backend 403 (e.g. after an owner removes themselves). Reuses the exact
+     * [PermissionEvaluator.canEditComponent] logic so the flag can never
+     * contradict the actual gate.
+     */
+    private fun withCanEdit(detail: ComponentDetailResponse): ComponentDetailResponse =
+        detail.copy(canEdit = permissionEvaluator.canEditComponent(detail.id.toString()))
 
     @GetMapping("/meta/owners")
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
@@ -165,7 +180,7 @@ class ComponentControllerV4(
     )
     fun createComponent(
         @RequestBody request: ComponentCreateRequest,
-    ): ComponentDetailResponse = componentManagementService.createComponent(request)
+    ): ComponentDetailResponse = withCanEdit(componentManagementService.createComponent(request))
 
     @GetMapping
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
@@ -263,7 +278,7 @@ class ComponentControllerV4(
         val asUuid = runCatching { UUID.fromString(idOrName) }.getOrNull()
         if (asUuid != null) {
             try {
-                return componentManagementService.getComponent(asUuid)
+                return withCanEdit(componentManagementService.getComponent(asUuid))
             } catch (e: NotFoundException) {
                 // Id not found — continue to the name lookup below. Log at debug
                 // so unrelated callers aren't noisy in production; the name
@@ -272,7 +287,7 @@ class ComponentControllerV4(
                 log.debug("id lookup missed for '{}', falling back to name lookup: {}", idOrName, e.message)
             }
         }
-        return componentManagementService.getComponentByName(idOrName)
+        return withCanEdit(componentManagementService.getComponentByName(idOrName))
     }
 
     /**
@@ -321,7 +336,7 @@ class ComponentControllerV4(
     fun updateComponent(
         @PathVariable id: UUID,
         @RequestBody request: ComponentUpdateRequest,
-    ): ComponentDetailResponse = componentManagementService.updateComponent(id, request)
+    ): ComponentDetailResponse = withCanEdit(componentManagementService.updateComponent(id, request))
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
@@ -335,11 +350,15 @@ class ComponentControllerV4(
         componentManagementService.deleteComponent(id)
     }
 
+    // Field-overrides are a per-component edit surface, so they are gated by the
+    // same component-level ownership check as the scalar PATCH (canEditComponent)
+    // rather than the bare EDIT_COMPONENTS permission — otherwise a non-owner
+    // editor blocked from PATCH could still mutate behaviour via overrides.
     @PostMapping("/{id}/field-overrides")
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize(
         "@permissionEvaluator.hasPermission('ACCESS_COMPONENTS') " +
-            "and @permissionEvaluator.hasPermission('EDIT_COMPONENTS')",
+            "and @permissionEvaluator.canEditComponent(#id.toString())",
     )
     fun createFieldOverride(
         @PathVariable id: UUID,
@@ -349,7 +368,7 @@ class ComponentControllerV4(
     @PatchMapping("/{id}/field-overrides/{overrideId}")
     @PreAuthorize(
         "@permissionEvaluator.hasPermission('ACCESS_COMPONENTS') " +
-            "and @permissionEvaluator.hasPermission('EDIT_COMPONENTS')",
+            "and @permissionEvaluator.canEditComponent(#id.toString())",
     )
     fun updateFieldOverride(
         @PathVariable id: UUID,
@@ -361,7 +380,7 @@ class ComponentControllerV4(
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize(
         "@permissionEvaluator.hasPermission('ACCESS_COMPONENTS') " +
-            "and @permissionEvaluator.hasPermission('EDIT_COMPONENTS')",
+            "and @permissionEvaluator.canEditComponent(#id.toString())",
     )
     fun deleteFieldOverride(
         @PathVariable id: UUID,
