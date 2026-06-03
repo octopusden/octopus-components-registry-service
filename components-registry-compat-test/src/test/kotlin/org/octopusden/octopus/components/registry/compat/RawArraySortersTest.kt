@@ -113,6 +113,36 @@ class RawArraySortersTest {
 
     @Test
     @DisplayName(
+        "Set elements sharing (componentName, versionRange) but differing in content still align (canonical tie-breaker)",
+    )
+    fun jiraComponentVersionRanges_collidingPrimaryKey_zeroDiffsAfterSort() {
+        // Real production shape: two entries share componentName+versionRange but differ
+        // in content (here one carries component.displayName, one doesn't). As a multiset
+        // both stands are identical — only the wire order differs. The (name,range) key
+        // alone COLLIDES, so a stable sort preserves each stand's arbitrary input order and
+        // the positional compare reports false displayName KEY_MISSING diffs. The canonical
+        // tie-breaker must make the order deterministic on both sides so they realign.
+        val endpoint = "GET /rest/api/2/projects/{projectKey}/jira-component-version-ranges"
+        val baseline = factory.arrayNode().apply {
+            add(rangeEntry("dup-fixture", "[1.0,)", displayName = "Alpha"))
+            add(rangeEntry("dup-fixture", "[1.0,)"))
+        }
+        val candidate = factory.arrayNode().apply {
+            add(rangeEntry("dup-fixture", "[1.0,)"))
+            add(rangeEntry("dup-fixture", "[1.0,)", displayName = "Alpha"))
+        }
+        val diffs = JsonShape.diff(
+            RawArraySorters.stableSorted(endpoint, baseline),
+            RawArraySorters.stableSorted(endpoint, candidate),
+        )
+        assertTrue(
+            diffs.isEmpty(),
+            "colliding (componentName, versionRange) entries must realign via the canonical tie-breaker; got: $diffs",
+        )
+    }
+
+    @Test
+    @DisplayName(
         "regression guard: heterogeneous-shape entries (one with displayName, one without) " +
             "produce zero diffs ONLY after key-correct sort — no-op or wrong-key sorter would surface KEY_MISSING",
     )
