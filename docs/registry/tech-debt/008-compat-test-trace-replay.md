@@ -117,8 +117,41 @@ to fix or waiver via `known-deltas.json`).
 | Env / -P | Default | Purpose |
 |---|---|---|
 | `COMPAT_TRACE_FILE` / `compat.trace.file` | _(none — must set)_ | Trace dump path |
+| `COMPAT_TRACE_LIMIT` / `compat.trace.limit` | _(none — full file)_ | Replay only the top-N tuples of the (rank-ordered) file. The [1.7]/[1.8] auto gate sets `30000`; id16 leaves it unset (full ~75 k). Non-positive / unparseable ⇒ no cap (fail-open to full). |
 | `COMPAT_TRACE_TOP_N` / `compat.trace.top-n` | `20` | Top-N in the weighted table |
 | `COMPAT_TRACE_PARALLELISM` / `compat.trace.parallelism` | `8` | Concurrent in-flight per stand |
+
+## Replay tiers & endpoint coverage
+
+- **[1.7]/[1.8] auto gate (id17/id18):** `COMPAT_TRACE_LIMIT=30000` — replays the
+  30 000 highest-traffic business tuples on every build, alongside the real-body
+  replay (`RealBodyReplayCompatTest`, ~1.7 k real POST/PUT bodies). Sized so the
+  auto gate reflects realistic prod traffic without an unbounded run.
+- **id16 manual:** no limit — replays the full `latest-top.txt` (~75 k unique now,
+  growing toward 100 k as more capture windows accumulate).
+- **Endpoint-coverage guarantee (trace-present endpoints):** the cap is ranked by
+  hit-count, so a rarely-called business endpoint could fall below it. After capping,
+  `ensureEndpointCoverage` re-adds the busiest representative of every business-endpoint
+  TEMPLATE present in the trace that the cap omitted (`endpointTemplate` collapses
+  `{component}`/`{version}`/`{project}` but preserves `find*` actions —
+  `find-by-artifact[s]`, `find-by-docker-images`, the legacy camelCase `findByArtifacts`).
+  So the 30 k slice always exercises **every business endpoint seen in the capture
+  window**. Unit-tested in `TraceReplayParsingTest` (`parseTraceLimit` /
+  `applyTraceLimit` / `endpointTemplate` / `ensureEndpointCoverage`).
+- **Zero-hit endpoints are NOT in scope of trace replay** (they are absent from the
+  trace, so nothing can synthesise them here) — they are covered by dedicated
+  `*CompatTest` classes that run in the same [1.7]/[1.8] `test` task. The find-by-* POST
+  endpoints are covered by `RealBodyReplayCompatTest`; the formerly-uncovered zero-hit
+  endpoints (#324) now have dedicated suites:
+  - `CopyrightCompatTest` — `GET /rest/api/3/components/{c}/copyright` (binary octet-stream;
+    byte-compare with **content redaction** — only byte lengths are recorded on a mismatch,
+    never the licensee-identifying bytes).
+  - `DistributionCompatTest` — component-level `GET /rest/api/{1,2}/components/{c}/distribution`
+    plus the v2 per-version `.../versions/{v}/distribution`.
+  - `ComponentsListV1CompatTest` — `GET /rest/api/1/components` (+ v1 detail).
+
+  Net: every business endpoint is now exercised by the trace slice, the real-body replay,
+  or a dedicated suite.
 
 ## Implementation
 
