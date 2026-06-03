@@ -1076,11 +1076,11 @@ The Portal `AuditLogPage` filter sidebar drives a server-side query — without 
 Supported filters:
 | Param | Type | Notes |
 |---|---|---|
-| `entityType` | string | Currently only `Component` is emitted (capitalized — `cb.equal` is case-sensitive). `FieldOverride` and other entity types are reserved for future audit instrumentation; field-override CRUD does not publish `AuditEvent` yet. |
+| `entityType` | string | Currently only `Component` is emitted (capitalized — `cb.equal` is case-sensitive). `FieldOverride` and other entity types are reserved for future audit instrumentation; field-override CRUD is audited as a `Component` `UPDATE` (SYS-050), not under a `FieldOverride` entity type. |
 | `entityId` | string | usually a UUID; combine with `entityType` for entity-scoped history reachable in the same query as user/source filters |
 | `changedBy` | string | username from `audit_log.changed_by`. For runtime API events the value is resolved by `CurrentUserResolver` (see TDD §6.4); for git-history backfill rows it is the git author signature. |
 | `source` | string | Currently only `api` (default for runtime events) and `git-history` (backfill from `/admin/migrate-history`) are emitted. Other values are reserved for future writers. |
-| `action` | string | `CREATE` \| `UPDATE` \| `DELETE` \| `RENAME` \| `ARCHIVE` \| … |
+| `action` | string | `CREATE` \| `UPDATE` \| `DELETE` \| `RENAME` \| `MIGRATED` (hidden by default — see SYS-049) |
 | `from`, `to` | ISO-8601 instant | half-open `[from, to)` over `audit_log.changed_at`; either or both optional |
 
 **Preconditions:**

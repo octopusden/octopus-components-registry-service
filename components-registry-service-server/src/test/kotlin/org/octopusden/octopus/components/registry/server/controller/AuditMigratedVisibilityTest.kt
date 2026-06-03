@@ -4,6 +4,9 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import java.nio.file.Paths
 import java.util.UUID
 import java.util.concurrent.TimeUnit
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
@@ -68,8 +71,8 @@ class AuditMigratedVisibilityTest {
         seedRow(entityId = "${tag}_migrated", action = "MIGRATED", source = "git-history")
 
         val actions = recentActionsForTag(tag)
-        assert(actions.contains("CREATE")) { "expected the CREATE row to be visible by default, got $actions" }
-        assert(!actions.contains("MIGRATED")) { "expected MIGRATED rows to be hidden by default, got $actions" }
+        assertTrue(actions.contains("CREATE"), "expected the CREATE row to be visible by default, got $actions")
+        assertFalse(actions.contains("MIGRATED"), "expected MIGRATED rows to be hidden by default, got $actions")
     }
 
     @Test
@@ -80,8 +83,8 @@ class AuditMigratedVisibilityTest {
         seedRow(entityId = "${tag}_migrated", action = "MIGRATED", source = "git-history")
 
         val actions = recentActionsForTag(tag, includeMigrated = true)
-        assert(actions.contains("CREATE")) { "expected CREATE row, got $actions" }
-        assert(actions.contains("MIGRATED")) { "expected MIGRATED row when includeMigrated=true, got $actions" }
+        assertTrue(actions.contains("CREATE"), "expected CREATE row, got $actions")
+        assertTrue(actions.contains("MIGRATED"), "expected MIGRATED row when includeMigrated=true, got $actions")
     }
 
     @Test
@@ -105,9 +108,11 @@ class AuditMigratedVisibilityTest {
                 .filter { it["entityId"].asText().startsWith(tag) }
                 .map { it["entityId"].asText() }
                 .toSet()
-        assert(migratedIds == setOf("${tag}_migrated")) {
-            "explicit action=MIGRATED must return the MIGRATED row, got $migratedIds"
-        }
+        assertEquals(
+            setOf("${tag}_migrated"),
+            migratedIds,
+            "explicit action=MIGRATED must return the MIGRATED row, got $migratedIds",
+        )
     }
 
     @Test
@@ -118,14 +123,18 @@ class AuditMigratedVisibilityTest {
         seedRow(entityId = entityId, action = "UPDATE", source = "api")
 
         val defaultActions = entityHistoryActions(entityId)
-        assert(defaultActions == setOf("UPDATE")) {
-            "entity history must hide MIGRATED by default, got $defaultActions"
-        }
+        assertEquals(
+            setOf("UPDATE"),
+            defaultActions,
+            "entity history must hide MIGRATED by default, got $defaultActions",
+        )
 
         val withMigrated = entityHistoryActions(entityId, includeMigrated = true)
-        assert(withMigrated == setOf("UPDATE", "MIGRATED")) {
-            "entity history with includeMigrated=true must include MIGRATED, got $withMigrated"
-        }
+        assertEquals(
+            setOf("UPDATE", "MIGRATED"),
+            withMigrated,
+            "entity history with includeMigrated=true must include MIGRATED, got $withMigrated",
+        )
     }
 
     private fun recentActionsForTag(

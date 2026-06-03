@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import java.nio.file.Paths
 import java.util.UUID
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
@@ -65,7 +67,7 @@ class FieldOverrideAuditTest {
         val id = createComponent("sys050_${UUID.randomUUID().toString().take(8)}")
 
         // Baseline: component create wrote a CREATE row, no override UPDATEs yet.
-        assert(updateRowCount(id) == 0) { "expected no UPDATE rows before any override edit, got ${historyActions(id)}" }
+        assertEquals(0, updateRowCount(id), "expected no UPDATE rows before any override edit, got ${historyActions(id)}")
 
         // CREATE override → one UPDATE audit row carrying the attribute in its diff.
         val overrideId =
@@ -73,18 +75,19 @@ class FieldOverrideAuditTest {
                 id,
                 """{"overriddenAttribute":"build.buildFilePath","versionRange":"[1.0,2.0)","value":"FileA"}""",
             )
-        assert(updateRowCount(id) == 1) { "createFieldOverride must write 1 UPDATE row, got ${historyActions(id)}" }
-        assert(latestUpdateMentions(id, "build.buildFilePath")) {
-            "override audit diff must mention the overridden attribute"
-        }
+        assertEquals(1, updateRowCount(id), "createFieldOverride must write 1 UPDATE row, got ${historyActions(id)}")
+        assertTrue(
+            latestUpdateMentions(id, "build.buildFilePath"),
+            "override audit diff must mention the overridden attribute",
+        )
 
         // UPDATE override (value change) → second UPDATE audit row.
         patchFieldOverride(id, overrideId, """{"value":"FileB"}""")
-        assert(updateRowCount(id) == 2) { "updateFieldOverride must write a 2nd UPDATE row, got ${historyActions(id)}" }
+        assertEquals(2, updateRowCount(id), "updateFieldOverride must write a 2nd UPDATE row, got ${historyActions(id)}")
 
         // DELETE override → third UPDATE audit row.
         deleteFieldOverride(id, overrideId)
-        assert(updateRowCount(id) == 3) { "deleteFieldOverride must write a 3rd UPDATE row, got ${historyActions(id)}" }
+        assertEquals(3, updateRowCount(id), "deleteFieldOverride must write a 3rd UPDATE row, got ${historyActions(id)}")
     }
 
     @Test
@@ -101,9 +104,11 @@ class FieldOverrideAuditTest {
         // PATCH with the same value — nothing actually changes.
         patchFieldOverride(id, overrideId, """{"value":"Same"}""")
 
-        assert(updateRowCount(id) == afterCreate) {
-            "a no-op override PATCH must not add an audit row, got ${historyActions(id)}"
-        }
+        assertEquals(
+            afterCreate,
+            updateRowCount(id),
+            "a no-op override PATCH must not add an audit row, got ${historyActions(id)}",
+        )
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
