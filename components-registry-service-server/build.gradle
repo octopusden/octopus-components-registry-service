@@ -64,11 +64,9 @@ dependencies {
 }
 
 // Applies to EVERY Test task (test, dbTest, integrationTest) so the heavy DB/Spring tests
-// get the same Testcontainers/Docker env no matter which task runs them.
+// get the same Docker env no matter which task runs them. (Ryuk is disabled globally for
+// all modules in the root build.gradle.)
 tasks.withType(Test).configureEach {
-    // Ryuk (Testcontainers resource reaper) requires mounting /var/run/docker.sock inside itself,
-    // which Podman rootless forbids on CI. Disable Ryuk so containers can start normally.
-    environment 'TESTCONTAINERS_RYUK_DISABLED', 'true'
     // Expose DOCKER_REGISTRY so DockerRegistryImageSubstitutor can redirect image pulls
     // through the internal registry mirror (avoids Docker Hub anonymous rate limits).
     def registry = System.getenv().getOrDefault("DOCKER_REGISTRY", project.findProperty("docker.registry")?.toString() ?: "")
@@ -134,9 +132,10 @@ tasks.register('jacocoIntegrationTestReport', org.gradle.testing.jacoco.tasks.Ja
     }
 }
 
-// integrationTest (fat-jar boot FT) is intentionally NOT wired into `check`: it runs in
-// CI [1.1] (where it gates publish/dockerPushImage) and in GH `qualityCoverage`, never in
-// the fast [1.0] Compile&UT gate. See root build.gradle (qualityCoverage + publish gating).
+// integrationTest (fat-jar boot FT) is intentionally NOT wired into `check`/`build`: in CI it
+// runs in [1.0] only because dockerPushImage HARD-depends on it (so it gates publish/push),
+// and on GH PRs it runs under `qualityCoverage`. See root build.gradle (qualityCoverage +
+// publish gating).
 integrationTest.dependsOn bootJar
 integrationTest.finalizedBy jacocoIntegrationTestReport
 

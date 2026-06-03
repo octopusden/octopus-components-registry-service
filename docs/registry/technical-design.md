@@ -428,7 +428,7 @@ class ComponentRoutingResolver(
 
 | Layer | Tool | What | Runs in |
 |-------|------|------|---------|
-| Unit | JUnit 5 + Mockito | Service logic, DSL→Entity mappers, DTO converters | Fast gate `[1.0]` + every PR |
+| Unit | JUnit 5 + Mockito | Service logic, DSL→Entity mappers, DTO converters | `[1.0]` + every PR |
 | Integration | Testcontainers (PostgreSQL) | Repository queries, Flyway migrations, transactions | `@Tag("integration")` → `[1.2]` / `qualityCoverage` (every PR) |
 | Contract | Spring Cloud Contract / Pact | Feign client compatibility (28 methods) | Every PR |
 | API Snapshot | Custom JSON diff | v1/v2/v3 response structure unchanged | Every PR |
@@ -467,41 +467,45 @@ See [Non-Functional Specification §5](non-functional-spec.md#5-reliability--fit
 
 ### 8.4 Fast gate vs heavy suite (`@Tag("integration")` split)
 
-To keep the `[1.0] Compile & UT` gate fast (target < 5 min, Docker-free) without losing
-coverage, tests are split by JUnit 5 tag:
+The build splits tests by JUnit 5 tag so the heavy DB suite runs off the critical path
+(in `[1.2]`, parallel to deploy prep) instead of inside the build, without losing coverage:
 
 - **Unit + smoke** (untagged) — pure unit tests, plus `NoDbModeContextTest` (boots the
   prod Spring context in git/`no-db` mode) and `BasicFunctionalitySmokeTest` (boots the
   full DB-backed context on in-memory **H2** — profile `smoke`, no Testcontainers — and
   exercises the v4 read path + a JPA `@JdbcTypeCode(JSON)`→`TEXT` round-trip). The root
-  `test` task runs `useJUnitPlatform { excludeTags 'integration' }`, so these are all
-  that `check` (hence the `[1.0]` gate) runs.
+  `test` task runs `useJUnitPlatform { excludeTags 'integration' }`, so `check`/`build`
+  (the `[1.0]` step) run these only.
 - **Heavy** (`@Tag("integration")`) — anything needing a Postgres Testcontainer or a full
   Spring context on the `test`/`test-db`/`ft-db`/… profiles, across
   `server`/`client`/`light-client`. These run in the `dbTest` task
-  (`includeTags 'integration'`) — **not** in `check` — together with the fat-jar
-  `integrationTest`. They run in CI `[1.2]` and, on GitHub PRs, under `qualityCoverage`
-  (the `quality` job), so coverage **and** correctness are still gated on every PR.
+  (`includeTags 'integration'`) — **not** in `check`/`build` — in CI `[1.2]`, and on
+  GitHub PRs under `qualityCoverage` (the `quality` job), so coverage **and** correctness
+  are still gated on every PR.
 
-JaCoCo aggregates `test` + `dbTest` + `integrationTest` exec data, so the 70% coverage
-gate is unchanged by the split. `dockerPushImage` depends on the fat-jar `integrationTest`
-and Maven `publish` is ordered after it, so a broken boot jar can never be published/pushed.
+JaCoCo aggregates `test` + `dbTest` + `integrationTest` exec data, so the 70% coverage gate
+is unchanged. All `Test` tasks set `TESTCONTAINERS_RYUK_DISABLED=true` (the Ryuk reaper
+can't mount the docker socket on Podman-rootless CI agents). `dockerPushImage` depends on
+the fat-jar `integrationTest` and Maven `publish` is ordered after it, so a broken boot jar
+is never published/pushed.
 
 **TeamCity build chain** (`.teamcity/settings.kts`):
 
 ```
-[1.0] Compile & UT [AUTO]   gradle `check -x :…-automation:test`
-   │     (compile + unit + smoke + static quality; no Docker; target < 5 min)
-   ├─→ [1.1] Package & Publish [AUTO]   assemble + publish + dockerPushImage + fat-jar FT + automation:test
-   │        │   (inherits [1.0]'s PROJECT_VERSION/BUILD_NUMBER → image keeps its build-number tag;
-   │        │    automation:test deploys the pushed image to OKD via ocCreate → runs where the push is)
-   │        └─→ [1.7]/[1.8] Compat, [2.0] Validate, [3.0] Deploy   (consume the image/artifacts from [1.1])
+[1.0] Compile & UT [AUTO]   gradle `clean build publish dockerPushImage`
+   │     compile + unit + smoke + static quality + publish + image (~10 min). `build` also
+   │     pulls the fat-jar FT (dockerPushImage depends on it → gates the push) and
+   │     automation:test (depends on ocCreate → dockerPushImage). Heavy @Tag("integration")
+   │     DB tests excluded by tag. The image carries [1.0]'s OWN build number (no cross-
+   │     config version-propagation) — exactly what the downstream configs pull.
+   ├─→ [1.7]/[1.8] Compat, [2.0] Validate, [3.0] Deploy   (consume id10's image/artifacts)
    └─→ [1.2] Integration & DB Tests [AUTO]   dbTest (server/client/light-client)
             └─ gates [3.0] Deploy (snapshot, FAIL_TO_START)
 ```
 
-> A new heavy `@SpringBootTest` (Postgres / `ft-db` / …) MUST be tagged
-> `@Tag("integration")`, otherwise it runs in the fast gate and pulls a container into `[1.0]`.
+> A new heavy `@SpringBootTest` (Postgres / `ft-db` / …) should be tagged `@Tag("integration")`
+> so it runs in `[1.2]`, not inside `[1.0]`. (`[1.0]` has Docker, so an untagged one only
+> slows the step — it won't break.)
 
 ## 9. New Dependencies (build.gradle)
 
