@@ -370,17 +370,6 @@ class GitHistoryImportServiceImpl(
         }
     }
 
-    private fun resolveAction(
-        oldValue: Map<String, Any?>?,
-        newValue: Map<String, Any?>?,
-    ): String? =
-        when {
-            oldValue == null && newValue != null -> "CREATE"
-            oldValue != null && newValue == null -> "DELETE"
-            oldValue != null && newValue != null && oldValue != newValue -> "UPDATE"
-            else -> null
-        }
-
     private fun firstParentChain(
         walk: RevWalk,
         targetSha: ObjectId,
@@ -485,5 +474,22 @@ class GitHistoryImportServiceImpl(
 
     companion object {
         private val log = LoggerFactory.getLogger(GitHistoryImportServiceImpl::class.java)
+
+        /**
+         * Maps a per-commit `(old, new)` snapshot pair to an audit action, or
+         * `null` when there is nothing to record. Pure and side-effect-free —
+         * lifted to the companion so the action mapping can be unit-tested
+         * without standing up the service's heavy dependency graph.
+         */
+        internal fun resolveAction(
+            oldValue: Map<String, Any?>?,
+            newValue: Map<String, Any?>?,
+        ): String? =
+            when {
+                oldValue == null && newValue != null -> AuditLogEntity.ACTION_MIGRATED
+                oldValue != null && newValue == null -> "DELETE"
+                oldValue != null && newValue != null && oldValue != newValue -> "UPDATE"
+                else -> null
+            }
     }
 }

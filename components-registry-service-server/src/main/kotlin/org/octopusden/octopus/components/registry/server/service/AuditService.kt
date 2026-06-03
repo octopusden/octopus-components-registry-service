@@ -9,6 +9,7 @@ interface AuditService {
     fun getEntityHistory(
         entityType: String,
         entityId: String,
+        includeMigrated: Boolean,
         pageable: Pageable,
     ): Page<AuditLogResponse>
 

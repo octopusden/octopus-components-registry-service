@@ -72,7 +72,7 @@ class TeamcitySyncServiceTest {
     // ---------- Tests --------------------------------------------------------
 
     @Test
-    @DisplayName("happy path: writes TC row; counts updated; emits audit event")
+    @DisplayName("SYS-051 happy path: writes TC row; counts updated; NO audit event")
     fun happyPath() {
         val components = listOf(component(alice, "alpha"))
         val fetcher = stubFetcher(
@@ -103,19 +103,11 @@ class TeamcitySyncServiceTest {
         // v2: TC project written to child table, not to entity scalar fields.
         assertEquals("Alpha_Build", tcRepo.findByComponentId(alice).single().projectId)
 
-        val audit = publisher.events.filterIsInstance<AuditEvent>().single()
-        assertEquals("Component", audit.entityType)
-        assertEquals("UPDATE", audit.action)
-        assertEquals("admin", audit.changedBy)
-        assertEquals(mapOf("teamcityProjectId" to null, "teamcityProjectUrl" to null), audit.oldValue)
-        assertEquals(
-            mapOf(
-                "teamcityProjectId" to "Alpha_Build",
-                // URL is composed at write-time from base-url + projectId; pick.webUrl is only
-                // used as a guard (must start with http/https) — it does not become the stored URL.
-                "teamcityProjectUrl" to "https://teamcity.example.com/project/Alpha_Build",
-            ),
-            audit.newValue,
+        // SYS-051: TeamCity sync is an automated reconciliation (changedBy=system) and
+        // must NOT write audit rows — that noise was cluttering the component history.
+        assertTrue(
+            publisher.events.filterIsInstance<AuditEvent>().isEmpty(),
+            "TeamCity sync must not publish an AuditEvent even when it writes/updates the TC row (SYS-051)",
         )
     }
 
@@ -206,7 +198,10 @@ class TeamcitySyncServiceTest {
         assertEquals(1, result.ambiguousAutoResolved)
         // v2: TC row stores only the projectId; URL is derived at read-time via composeTeamcityProjectUrl.
         assertEquals("Project_B_Release", tcRepo.findByComponentId(alice).single().projectId)
-        assertEquals(1, publisher.events.filterIsInstance<AuditEvent>().size)
+        assertTrue(
+            publisher.events.filterIsInstance<AuditEvent>().isEmpty(),
+            "TeamCity sync must not publish an AuditEvent (SYS-051)",
+        )
     }
 
     @Test
@@ -410,7 +405,10 @@ class TeamcitySyncServiceTest {
         assertEquals(1, result.skippedNoMatch) // gamma
         assertEquals(0, result.skippedAmbiguous)
         assertTrue(result.errors.isEmpty())
-        assertEquals(1, publisher.events.filterIsInstance<AuditEvent>().size, "one audit event for alpha")
+        assertTrue(
+            publisher.events.filterIsInstance<AuditEvent>().isEmpty(),
+            "TeamCity sync must not publish an AuditEvent for any synced component (SYS-051)",
+        )
     }
 
     // -- Test doubles ---------------------------------------------------------
