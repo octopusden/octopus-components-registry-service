@@ -17,6 +17,8 @@ import org.octopusden.octopus.components.registry.server.repository.ComponentRep
 import org.octopusden.octopus.components.registry.server.repository.LabelRepository
 import org.octopusden.octopus.components.registry.server.repository.SystemRepository
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
+import org.octopusden.octopus.components.registry.server.service.impl.EmployeeDirectoryService
+import org.octopusden.octopus.components.registry.server.service.impl.EmployeeMatch
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.RepositoryType
 import org.slf4j.LoggerFactory
@@ -62,12 +64,35 @@ class ComponentControllerV4(
     private val labelRepository: LabelRepository,
     private val systemRepository: SystemRepository,
     private val componentGroupRepository: ComponentGroupRepository,
+    private val employeeDirectory: EmployeeDirectoryService,
 ) {
     private val log = LoggerFactory.getLogger(ComponentControllerV4::class.java)
 
     @GetMapping("/meta/owners")
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
     fun getDistinctOwners(): List<String> = componentRepository.findDistinctOwners()
+
+    // Employee picker lookup (Stage 2). The employee-service client exposes no
+    // prefix search, so this is an exact-match probe of `search`: it returns a
+    // single `[{username, active}]` when the user exists, or an empty list when
+    // it does not / employee-service is disabled or unreachable (fail-open).
+    // Typeahead SUGGESTIONS still come from /meta/owners; this endpoint
+    // validates/annotates the active flag for an exact username.
+    @GetMapping("/meta/employees")
+    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
+    fun searchEmployees(
+        @RequestParam search: String,
+    ): List<EmployeeMatch> = employeeDirectory.search(search)
+
+    // Batch active/inactive status for the component view's "inactive" badge.
+    // Body is a list of usernames; response maps each to true (active),
+    // false (inactive), or null (unknown / unavailable / employee-service
+    // disabled → the Portal renders no badge). Fail-open: null never blocks.
+    @PostMapping("/meta/employees/status")
+    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
+    fun employeeStatuses(
+        @RequestBody usernames: List<String>,
+    ): Map<String, Boolean?> = employeeDirectory.statuses(usernames)
 
     // Distinct label codes currently in use on at least one component, sorted
     // ascending. Sourced from the component_labels junction, NOT from the
