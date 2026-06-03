@@ -139,12 +139,19 @@ to fix or waiver via `known-deltas.json`).
   window**. Unit-tested in `TraceReplayParsingTest` (`parseTraceLimit` /
   `applyTraceLimit` / `endpointTemplate` / `ensureEndpointCoverage`).
 - **Zero-hit endpoints are NOT in scope of trace replay** (they are absent from the
-  trace, so nothing can synthesise them here). They are covered ONLY where a dedicated
-  `*CompatTest` exists. The find-by-* POST endpoints are covered by
-  `RealBodyReplayCompatTest`. **Known gap — currently covered by neither trace nor a
-  dedicated test:** `GET /rest/api/3/components/{c}/copyright` (binary; needs a
-  byte-compare test), the component-level `GET /rest/api/{1,2}/components/{c}/distribution`,
-  and the bare `GET /rest/api/1/components` list. Tracked as a follow-up (see Related).
+  trace, so nothing can synthesise them here) — they are covered by dedicated
+  `*CompatTest` classes that run in the same [1.7]/[1.8] `test` task. The find-by-* POST
+  endpoints are covered by `RealBodyReplayCompatTest`; the formerly-uncovered zero-hit
+  endpoints (#324) now have dedicated suites:
+  - `CopyrightCompatTest` — `GET /rest/api/3/components/{c}/copyright` (binary octet-stream;
+    byte-compare with **content redaction** — only byte lengths are recorded on a mismatch,
+    never the licensee-identifying bytes).
+  - `DistributionCompatTest` — component-level `GET /rest/api/{1,2}/components/{c}/distribution`
+    plus the v2 per-version `.../versions/{v}/distribution`.
+  - `ComponentsListV1CompatTest` — `GET /rest/api/1/components` (+ v1 detail).
+
+  Net: every business endpoint is now exercised by the trace slice, the real-body replay,
+  or a dedicated suite.
 
 ## Implementation
 
