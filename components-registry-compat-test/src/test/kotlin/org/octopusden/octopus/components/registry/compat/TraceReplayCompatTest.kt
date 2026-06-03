@@ -13,6 +13,76 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
+ * Parses the optional trace-replay cap (`compat.trace.limit` / `COMPAT_TRACE_LIMIT`).
+ * Returns null (= no cap) for null/blank/non-numeric/non-positive input, so a
+ * misconfigured value fails OPEN to the full trace rather than silently replaying
+ * zero tuples. Extracted for unit testing (see TraceReplayParsingTest).
+ */
+internal fun parseTraceLimit(raw: String?): Int? = raw?.trim()?.toIntOrNull()?.takeIf { it > 0 }
+
+/**
+ * Applies [limit] to an already rank-ordered [entries] list. The trace file is
+ * sorted by descending count, so `take(limit)` yields the N highest-traffic tuples
+ * (the [1.7]/[1.8] auto gate caps at 30k). A null limit, or one >= the list size,
+ * returns the list unchanged (full replay — e.g. the id16 manual tier).
+ */
+internal fun <T> applyTraceLimit(entries: List<T>, limit: Int?): List<T> =
+    if (limit != null && entries.size > limit) entries.take(limit) else entries
+
+/**
+ * True when the segment after `/components/` is an ACTION, not a component id, and
+ * so must NOT be collapsed to `{component}`. The v1/v2/v3 actions are
+ * `find-by-artifact`, `find-by-artifacts`, `find-by-docker-images` (kebab) and the
+ * legacy camelCase `findByArtifacts` (v2) — all share the `find` prefix, and no real
+ * component id starts with `find`. A prefix test (vs. a hard-coded set) is
+ * staleness-proof: a future `find*` action can't silently collapse into a phantom
+ * `{component}` key the way a missing set entry would.
+ */
+private fun isComponentsAction(segment: String): Boolean = segment.startsWith("find")
+
+/**
+ * Collapses the dynamic id/version/project segments of a request path to a stable
+ * endpoint key (`"METHOD /rest/api/2/components/{component}/vcs-settings"`), so two
+ * concrete requests to the same endpoint share a key. The segment after
+ * `components` becomes `{component}` UNLESS it is a known static action
+ * (`find-by-artifacts`, …); after `projects` → `{project}`; after `versions` →
+ * `{version}`. Query string is dropped. Used to guarantee endpoint coverage of the
+ * capped replay slice (see [ensureEndpointCoverage]).
+ */
+internal fun endpointTemplate(method: String, rawPath: String): String {
+    val segs = rawPath.substringBefore('?').split('/').toMutableList()
+    for (i in 1 until segs.size) {
+        if (segs[i].isEmpty()) continue
+        when (segs[i - 1]) {
+            "components" -> if (!isComponentsAction(segs[i])) segs[i] = "{component}"
+            "projects" -> segs[i] = "{project}"
+            "versions" -> segs[i] = "{version}"
+        }
+    }
+    return "$method ${segs.joinToString("/")}"
+}
+
+/**
+ * Guarantees that every endpoint [keyOf] present in [all] is represented in the
+ * returned list, even when the frequency [capped] slice dropped it. For each key
+ * missing from [capped], the FIRST occurrence in [all] is appended — [all] is
+ * rank-ordered (desc count), so that is the busiest representative. This keeps the
+ * [1.7]/[1.8] auto gate exercising all business endpoints, not only high-traffic
+ * ones, while adding only a handful of low-frequency tuples on top of the cap.
+ */
+internal fun <T> ensureEndpointCoverage(capped: List<T>, all: List<T>, keyOf: (T) -> String): List<T> {
+    if (capped.size >= all.size) return capped
+    val cappedKeys = capped.mapTo(HashSet(), keyOf)
+    val reps =
+        all.asSequence()
+            .filterNot { keyOf(it) in cappedKeys }
+            .groupBy(keyOf)
+            .values
+            .map { it.first() }
+    return if (reps.isEmpty()) capped else capped + reps
+}
+
+/**
  * Production-trace replay (TD-008 implementation).
  *
  * Reads a deduplicated trace file (`<count>\t<METHOD>\t<path>` per line) from
@@ -240,10 +310,29 @@ class TraceReplayCompatTest : CompatibilityTestBase() {
                 }
         assumeTrue(entries.isNotEmpty(), "trace file is empty: $traceFilePath")
 
+        // Optional cap for the auto gate: [1.7]/[1.8] replay the top-N most-frequent
+        // tuples (compat.trace.limit / COMPAT_TRACE_LIMIT); id16 replays the full file
+        // unlimited. The trace is ranked by descending count, so take(N) is the N
+        // highest-traffic business tuples. A non-positive / unparseable value = no cap.
+        val traceLimit =
+            parseTraceLimit(System.getProperty("compat.trace.limit") ?: System.getenv("COMPAT_TRACE_LIMIT"))
+        val capped = applyTraceLimit(entries, traceLimit)
+        // Guarantee every business endpoint PRESENT IN THE TRACE is replayed, even if the
+        // frequency cap ranked it below the cut — adds the busiest representative of each
+        // such endpoint template on top of the cap. NOTE: endpoints with ZERO hits in the
+        // capture window are not in `entries`, so this cannot synthesise them; they rely on
+        // a dedicated *CompatTest (see TD-008 "Replay tiers & endpoint coverage" for the
+        // currently-uncovered ones: copyright, component-level distribution, the v1 list).
+        val replaySet = ensureEndpointCoverage(capped, entries) { endpointTemplate(it.method, it.path) }
+        val coverageAdded = replaySet.size - capped.size
+
         log.info(
-            "replaying ${entries.size} unique (method, path) tuples from $traceFilePath " +
+            "replaying ${replaySet.size} unique (method, path) tuples from $traceFilePath " +
                 "(parallelism=${config.parallelism}, " +
-                "dropped $droppedDiagnostic diagnostic-surface tuples)",
+                "dropped $droppedDiagnostic diagnostic-surface tuples" +
+                (if (capped.size < entries.size) ", capped from ${entries.size} via compat.trace.limit=$traceLimit" else "") +
+                (if (coverageAdded > 0) ", +$coverageAdded endpoint-coverage tuples" else "") +
+                ")",
         )
 
         // Discover request-body fixtures once, before the parallel replay starts.
@@ -328,7 +417,7 @@ class TraceReplayCompatTest : CompatibilityTestBase() {
 
         try {
             val futures =
-                entries.map { entry ->
+                replaySet.map { entry ->
                     pool.submit {
                         // ThreadLocal count — `snapshot().size` is the global queue and
                         // races with other workers between read points. count() is
@@ -387,7 +476,7 @@ class TraceReplayCompatTest : CompatibilityTestBase() {
                         if (newDiffs > 0) withDiffs.incrementAndGet()
                         if (n % 100 == 0) {
                             log.info(
-                                "trace-replay progress: $n / ${entries.size} " +
+                                "trace-replay progress: $n / ${replaySet.size} " +
                                     "(${withDiffs.get()} tuples with diffs, ${hungEntries.size} hung)",
                             )
                         }
@@ -441,7 +530,7 @@ class TraceReplayCompatTest : CompatibilityTestBase() {
         // test-results XML). For a richer report, see `CompatibilityReporter` —
         // this in-test print is a stop-gap until that task is extended.
         val topN = weightByBucket.entries.sortedByDescending { it.value }.take(20)
-        val totalTuples = entries.size
+        val totalTuples = replaySet.size
         val totalWithDiffs = withDiffs.get()
         log.info(
             "trace-replay done: $totalTuples tuples replayed, " +
