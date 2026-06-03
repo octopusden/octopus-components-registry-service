@@ -88,8 +88,8 @@ class TeamcitySyncService(
      * a slow/stalled TC server cannot hold a JDBC connection or extend a
      * transaction's lifetime. Per-component writes happen inside a single
      * [TransactionTemplate.execute] block so the bulk write is still atomic
-     * (either all changes commit, or none do on JPA failure), and the audit
-     * events published BEFORE_COMMIT remain in the same tx as their row writes.
+     * (either all changes commit, or none do on JPA failure). TC sync writes no
+     * audit rows — the re-link is logged at INFO instead (SYS-051).
      */
     fun resync(): TeamcitySyncResult {
         check(teamcityProperties.baseUrl.isNotBlank()) {
