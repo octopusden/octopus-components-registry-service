@@ -91,23 +91,26 @@ class ComponentCodeRenderer(
             return cb.toString()
         }
 
-        // Per schema-spec.md §3.4 (MIG-029): a synthetic base whose component also
-        // has overrides is just a placeholder anchor — its row-level aspects are
-        // not a meaningful default view, so suppress them at top level. The
-        // per-component fields (identity / people / docs / …) still render once.
-        val renderRowAspects = !(base.isSyntheticBase && overrides.isNotEmpty())
-        val view = if (renderRowAspects) ComponentConfigurationView.from(base) else ComponentConfigurationView()
+        // Always render the base row's aspects. Even a "synthetic" base (one with
+        // no explicit all-versions DSL block) carries the real shared values the
+        // Groovy loader merged in from the component's top-level fields, and the
+        // resolver starts from the base row for EVERY version — so these are the
+        // fallback that applies to all version ranges. Suppressing them made
+        // base-level vcsSettings / build / jira / distribution look range-only.
+        // (The earlier MIG-029 suppression was about not emitting a spurious
+        // all-versions *variant* in the v1-v3 map — a different concern that does
+        // not apply to this code view.)
         writeComponentBody(
             cb = cb,
             component = component,
-            scalars = view,
-            vcsEntries = if (renderRowAspects) base.vcsEntries.toList() else emptyList(),
-            mavenArtifacts = if (renderRowAspects) base.mavenArtifacts.toList() else emptyList(),
-            fileUrlArtifacts = if (renderRowAspects) base.fileUrlArtifacts.toList() else emptyList(),
-            dockerImages = if (renderRowAspects) base.dockerImages.toList() else emptyList(),
-            packages = if (renderRowAspects) base.packages.toList() else emptyList(),
-            requiredTools = if (renderRowAspects) base.requiredToolJunctions.map { it.toolName } else emptyList(),
-            buildToolBeans = if (renderRowAspects) base.buildToolBeans.toList() else emptyList(),
+            scalars = ComponentConfigurationView.from(base),
+            vcsEntries = base.vcsEntries.toList(),
+            mavenArtifacts = base.mavenArtifacts.toList(),
+            fileUrlArtifacts = base.fileUrlArtifacts.toList(),
+            dockerImages = base.dockerImages.toList(),
+            packages = base.packages.toList(),
+            requiredTools = base.requiredToolJunctions.map { it.toolName },
+            buildToolBeans = base.buildToolBeans.toList(),
         )
 
         // Distinct override ranges in deterministic (DSL declaration) order.
