@@ -28,6 +28,12 @@ components-registry:
 
 pathToConfig: file://${components-registry.groovy-path}
 
+# Employee-service active-employee check is OFF in tests by default — no real
+# calls. Tests that exercise the active-check path inject a mocked
+# EmployeeDirectoryService instead of flipping this flag.
+employee-service:
+  enabled: false
+
 eureka.client.enabled: false
 
 management:

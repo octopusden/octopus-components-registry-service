@@ -14,6 +14,20 @@ teamcity:
   sync:
     cron: "0 0 4 * * SUN"
 
+# Employee-service active-employee validation. Defaults are inert: with
+# `enabled` false (and `url` blank) no EmployeeServiceClient bean is wired, so
+# the active-employee check on componentOwner/releaseManager/securityChampion
+# degrades to DISABLED (fail-open) — required/pattern checks still run. Production
+# enables it and supplies url/token (or username/password) via `service-config`
+# per env; env var names mirror EMPLOYEE_SERVICE_URL / EMPLOYEE_SERVICE_TOKEN.
+employee-service:
+  enabled: false
+  url:
+  token:
+  username:
+  password:
+  retry-time-millis: 5000
+
 # auth-server.url and auth-server.realm bind from AUTH_SERVER_URL / AUTH_SERVER_REALM
 # env vars via Spring Boot's relaxed binding. Production and dev profiles must
 # supply them; WebSecurityConfig.jwtDecoder() fails fast if either is missing.
