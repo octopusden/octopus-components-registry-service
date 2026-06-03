@@ -81,9 +81,11 @@ object PersonFieldValidator {
             if (!ownerHidden && !owner.isNullOrBlank()) {
                 requireActive("componentOwner", owner, directory)
             }
-            if (gate) {
-                if (!rmHidden) releaseManagers.forEach { requireActive("releaseManager", it, directory) }
-                if (!scHidden) securityChampions.forEach { requireActive("securityChampion", it, directory) }
+            if (!rmHidden) {
+                releaseManagers.filter { it.isNotBlank() }.forEach { requireActive("releaseManager", it, directory) }
+            }
+            if (!scHidden) {
+                securityChampions.filter { it.isNotBlank() }.forEach { requireActive("securityChampion", it, directory) }
             }
         }
     }

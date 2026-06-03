@@ -217,10 +217,10 @@ class PersonFieldValidatorTest {
     }
 
     @Test
-    @DisplayName("active check covers RM/SC only under the gate")
-    fun `active check on rm sc only under gate`() {
-        // gate off → RM/SC active never checked even if inactive
-        assertDoesNotThrow {
+    @DisplayName("active check covers RM/SC even when gate is off")
+    fun `active check on rm sc even when gate is off`() {
+        // gate off → inactive RM rejected
+        val exOff = assertThrows<IllegalArgumentException> {
             validate(
                 owner = "owner1",
                 explicit = false,
@@ -230,8 +230,10 @@ class PersonFieldValidatorTest {
                 directory = FakeDirectory(mapOf("rmInactive" to ActiveStatus.INACTIVE)),
             )
         }
+        assertTrue(exOff.message!!.startsWith("releaseManager"), exOff.message)
+
         // gate on → inactive RM rejected
-        val ex = assertThrows<IllegalArgumentException> {
+        val exOn = assertThrows<IllegalArgumentException> {
             validate(
                 owner = "owner1",
                 explicit = true,
@@ -248,7 +250,7 @@ class PersonFieldValidatorTest {
                 ),
             )
         }
-        assertTrue(ex.message!!.startsWith("releaseManager"), ex.message)
+        assertTrue(exOn.message!!.startsWith("releaseManager"), exOn.message)
     }
 
     @Test
