@@ -82,6 +82,7 @@ class V4WriteValidationTest {
      */
     private fun validSeedBody(name: String): String =
         """{"name": "$name",""" +
+            """"componentOwner":"owner1",""" +
             """"group":{"groupKey":"org.example.test","isFake":false},""" +
             """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}"""
 
@@ -344,7 +345,7 @@ class V4WriteValidationTest {
         val labelRaw = "lblcreate_$suffix" // canonical
         val labelWithSpace = "$labelRaw " // sent by caller
         val body =
-            """{"name":"$name","labels":["$labelWithSpace"],""" +
+            """{"name":"$name","componentOwner":"owner1","labels":["$labelWithSpace"],""" +
                 """"group":{"groupKey":"org.example.test","isFake":false},""" +
                 """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}"""
         postCreate(body).andExpect(status().isCreated)
@@ -379,7 +380,7 @@ class V4WriteValidationTest {
         val name = "labels_dedupe_create_$suffix"
         val label = "lbldedupe_$suffix"
         val body =
-            """{"name":"$name","labels":["$label","$label"," $label "],""" +
+            """{"name":"$name","componentOwner":"owner1","labels":["$label","$label"," $label "],""" +
                 """"group":{"groupKey":"org.example.test","isFake":false},""" +
                 """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}"""
         val created =
