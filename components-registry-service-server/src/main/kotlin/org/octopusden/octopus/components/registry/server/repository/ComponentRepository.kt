@@ -106,4 +106,30 @@ interface ComponentRepository :
      * before deleting the now-orphaned `component_groups` row.
      */
     fun findByComponentGroupId(groupId: UUID): List<ComponentEntity>
+
+    // --- Edit-ownership projections (ADR-004 Phase 2) ---
+    // These power `PermissionEvaluator.canEditComponent`, which runs inside a
+    // Spring Security @PreAuthorize interceptor — i.e. OUTSIDE any open Hibernate
+    // session/transaction. Walking the LAZY `releaseManagers` / `securityChampions`
+    // collections there (via `ComponentEntity.releaseManagerUsernames()` etc.) would
+    // throw LazyInitializationException. These queries return bare username scalars
+    // — no entity hydration, no LAZY exposure — so the gate is safe to call there.
+
+    /** The single `component_owner` username (or null) for one component. */
+    @Query("SELECT c.componentOwner FROM ComponentEntity c WHERE c.id = :id")
+    fun findComponentOwnerById(id: UUID): String?
+
+    /** Ordered release-manager usernames for one component (first = primary). */
+    @Query(
+        "SELECT rm.username FROM ComponentEntity c JOIN c.releaseManagers rm " +
+            "WHERE c.id = :id ORDER BY rm.sortOrder",
+    )
+    fun findReleaseManagerUsernames(id: UUID): List<String>
+
+    /** Ordered security-champion usernames for one component (first = primary). */
+    @Query(
+        "SELECT sc.username FROM ComponentEntity c JOIN c.securityChampions sc " +
+            "WHERE c.id = :id ORDER BY sc.sortOrder",
+    )
+    fun findSecurityChampionUsernames(id: UUID): List<String>
 }

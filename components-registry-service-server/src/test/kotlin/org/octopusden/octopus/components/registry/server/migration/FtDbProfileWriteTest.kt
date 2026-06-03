@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
+import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.octopusden.octopus.components.registry.server.support.editorJwt
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
@@ -118,7 +119,10 @@ class FtDbProfileWriteTest {
         mvc
             .perform(
                 patch("/rest/api/4/components/$id")
-                    .with(editorJwt())
+                    // admin: the ft-db seed component has no owner/RM/SC, so a plain
+                    // editor would be 403'd by the per-component edit gate. This test
+                    // exercises the jsonb write path, not authorization.
+                    .with(adminJwt())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(payload)),
             ).andExpect(status().is2xxSuccessful)
@@ -165,7 +169,9 @@ class FtDbProfileWriteTest {
             mvc
                 .perform(
                     post("/rest/api/4/components/$id/field-overrides")
-                        .with(editorJwt())
+                        // admin — see the PATCH test above; field-overrides are now
+                        // ownership-gated and this seed component has no owner.
+                        .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(request)),
                 ).andExpect(status().is2xxSuccessful)
