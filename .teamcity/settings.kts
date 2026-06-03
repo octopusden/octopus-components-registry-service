@@ -46,6 +46,8 @@ project {
     // unsupported by this server's kotlin-dsl distribution.)
 
     buildType(id10CompileUtAuto)
+    buildType(id11PackagePublishAuto)
+    buildType(id12IntegrationDbTestsAuto)
     buildType(id15CompatManual)
     buildType(id16CompatTraceReplayManual)
     buildType(id17CompatLocalStandManual)
@@ -61,6 +63,8 @@ project {
 
     buildTypesOrder = arrayListOf(
         id10CompileUtAuto,
+        id11PackagePublishAuto,
+        id12IntegrationDbTestsAuto,
         id15CompatManual,
         id16CompatTraceReplayManual,
         id17CompatLocalStandManual,
@@ -146,7 +150,11 @@ object id10CompileUtAuto : BuildType({
             -Pokd.cluster-domain=%OKD_APPS_DOMAIN_DEV%
             -Pokd.project=%OKD_F1_TEST_PROJECT%
         """.trimIndent())
-        param("GRADLE_TASK", "clean build publish dockerPushImage")
+        // Fast gate: compile + unit + H2/MOCK smoke + static quality only. Heavy
+        // DB/Spring/integration tests (@Tag("integration")) are excluded from `check`
+        // and run in [1.2]; packaging (publish + image + fat-jar FT) runs in [1.1].
+        // automation:test is CI-only and runs in [1.2], so exclude it here too.
+        param("GRADLE_TASK", "clean check -x :components-registry-automation:test")
         param("COMPONENTS_REGISTRY_BRANCH", "master")
     }
 
@@ -209,10 +217,8 @@ object id10CompileUtAuto : BuildType({
         xmlReport {
             id = "BUILD_EXT_1815"
             reportType = XmlReport.XmlReportType.JUNIT
-            rules = """
-                +:**/build/test-results/integrationTest/*.xml
-                +:**/build/test-results/test/*.xml
-            """.trimIndent()
+            // [1.0] now runs `check` (unit + smoke only); integrationTest moved to [1.1].
+            rules = "+:**/build/test-results/test/*.xml"
         }
         xmlReport {
             id = "BUILD_EXT_1817"
@@ -223,6 +229,210 @@ object id10CompileUtAuto : BuildType({
 
     requirements {
         doesNotContain("env.OS_TYPE", "WIN", "RQ_2875")
+    }
+})
+
+// [1.1] Package & Publish — runs right after the fast [1.0] gate on EVERY id10
+// success. It does the work [1.0] used to do at the end of its step: assemble +
+// publish the Maven artifacts + build & push the Docker image, and runs the fat-jar
+// startup FT (the FT gates publish/push at the Gradle level — see root build.gradle).
+// Inherits id10's PROJECT_VERSION + BUILD_NUMBER (the id40 pattern) so the pushed
+// image keeps id10's build-number tag; downstream image consumers (id17/id18) and the
+// deploy (id30) now take the image/version from THIS build, not id10.
+object id11PackagePublishAuto : BuildType({
+    templates(AbsoluteId("Octopus_OctopusGradleBuild"))
+    id("11PackagePublishAuto")
+    name = "[1.1] Package & Publish [AUTO]"
+
+    buildNumberPattern = "%BUILD_NUMBER%"
+
+    artifactRules = """
+        **/*.log => logs.zip
+        %ARTIFACT_PATH%
+        **/reports
+        **/test-results
+    """.trimIndent()
+
+    params {
+        param("ARTIFACT_PATH", """      **/build/reports/** => reports
+      **/build/test-results/**/*.xml => test-results
+      build/**/logs/** => logs
+      build/**/diagnostics/** => diagnostics""")
+        param("GRADLE_EXTRA_PARAMETERS", """
+            -Pokd.cluster-domain=%OKD_APPS_DOMAIN_DEV%
+            -Pokd.project=%OKD_F1_TEST_PROJECT%
+        """.trimIndent())
+        // automation:test runs HERE (not [1.2]): it deploys the just-pushed image to OKD
+        // via ocCreate (ocCreate dependsOn dockerPushImage), so it must run in the same
+        // invocation that pushes — otherwise it would re-push the image and race [1.1].
+        param("GRADLE_TASK", "clean assemble :components-registry-service-server:integrationTest publish dockerPushImage :components-registry-automation:test")
+        param("COMPONENTS_REGISTRY_BRANCH", "master")
+        // Reuse id10's computed version + build number so the image tag and published
+        // artifact version match id10 and the chain view shows one number throughout.
+        param("PROJECT_VERSION", "${id10CompileUtAuto.depParamRefs["PROJECT_VERSION"]}")
+        param("BUILD_NUMBER", "${id10CompileUtAuto.depParamRefs.buildNumber}")
+    }
+
+    steps {
+        script {
+            name = "Login to the OKD cluster"
+            id = "Login_to_the_OKD_cluster"
+            scriptContent = """
+                oc login --token=%OKD_F1_FT_TOKEN% %OKD_SERVER_DEV_URL%
+                oc project %OKD_F1_TEST_PROJECT%
+            """.trimIndent()
+            param("org.jfrog.artifactory.selectedDeployableServer.useSpecs", "false")
+            param("org.jfrog.artifactory.selectedDeployableServer.uploadSpecSource", "Job configuration")
+            param("org.jfrog.artifactory.selectedDeployableServer.downloadSpecSource", "Job configuration")
+        }
+        gradle {
+            name = "Gradle Package & Publish"
+            id = "RUNNER_1768"
+            tasks = "%GRADLE_TASK%"
+            workingDir = "%WORK_DIR%"
+            gradleParams = """
+                --info
+                %GRADLE_STANDARD_PARAMETERS%
+                %GRADLE_EXTRA_PARAMETERS%
+            """.trimIndent()
+            enableStacktrace = true
+            jdkHome = "%env.JAVA_HOME%"
+            jvmArgs = "%JDK_CMDLINE_PARAMETERS%"
+            dockerRunParameters = "--userns=keep-id -e JAVA_HOME=/opt/java/openjdk -v %env.BUILD_ENV%:/opt/BUILD_ENV -v %teamcity.build.checkoutDir%:/home/tcagent/work -v %teamcity.agent.jvm.user.home%:/home/tcagent -w /home/tcagent/work -e TZ=Europe/Brussels"
+            param("org.jfrog.artifactory.selectedDeployableServer.defaultModuleVersionConfiguration", "GLOBAL")
+        }
+        stepsOrder = arrayListOf("Login_to_the_OKD_cluster", "RUNNER_1720", "RUNNER_1768")
+    }
+
+    failureConditions {
+        executionTimeoutMin = 240
+    }
+
+    features {
+        xmlReport {
+            id = "BUILD_EXT_1815"
+            reportType = XmlReport.XmlReportType.JUNIT
+            rules = """
+                +:**/build/test-results/integrationTest/*.xml
+                +:components-registry-automation/build/test-results/test/*.xml
+            """.trimIndent()
+        }
+    }
+
+    requirements {
+        doesNotContain("env.OS_TYPE", "WIN", "RQ_2875")
+    }
+
+    triggers {
+        finishBuildTrigger {
+            buildType = "${id10CompileUtAuto.id}"
+            successfulOnly = true
+            branchFilter = "+:*"
+        }
+    }
+
+    dependencies {
+        snapshot(id10CompileUtAuto) {
+            onDependencyFailure = FailureAction.FAIL_TO_START
+        }
+    }
+})
+
+// [1.2] Integration & DB Tests — runs the heavy @Tag("integration") DB suite (Postgres
+// Testcontainers / full Spring context, across server/client/light-client) in parallel
+// with [1.1] after every id10 success. These are the tests excluded from the fast [1.0]
+// gate; they still gate the deploy via id30's snapshot dependency below. automation:test
+// runs in [1.1], NOT here — it transitively triggers dockerPushImage (see its GRADLE_TASK).
+object id12IntegrationDbTestsAuto : BuildType({
+    templates(AbsoluteId("Octopus_OctopusGradleBuild"))
+    id("12IntegrationDbTestsAuto")
+    name = "[1.2] Integration & DB Tests [AUTO]"
+
+    buildNumberPattern = "%BUILD_NUMBER%"
+
+    artifactRules = """
+        **/*.log => logs.zip
+        %ARTIFACT_PATH%
+        **/reports
+        **/test-results
+    """.trimIndent()
+
+    params {
+        param("ARTIFACT_PATH", """      **/build/reports/** => reports
+      **/build/test-results/**/*.xml => test-results
+      build/**/logs/** => logs
+      build/**/diagnostics/** => diagnostics""")
+        param("GRADLE_EXTRA_PARAMETERS", """
+            -Pokd.cluster-domain=%OKD_APPS_DOMAIN_DEV%
+            -Pokd.project=%OKD_F1_TEST_PROJECT%
+        """.trimIndent())
+        // Pure DB/Spring heavy suite only. automation:test is intentionally NOT here: it
+        // transitively triggers dockerPushImage (ocCreate -> dockerPushImage), which would
+        // re-push the image; it runs in [1.1] instead. dbTest pulls no docker/publish task.
+        param("GRADLE_TASK", "clean :components-registry-service-server:dbTest :components-registry-service-client:dbTest :components-registry-service-light-client:dbTest")
+        param("COMPONENTS_REGISTRY_BRANCH", "master")
+        param("BUILD_NUMBER", "${id10CompileUtAuto.depParamRefs.buildNumber}")
+    }
+
+    steps {
+        script {
+            name = "Login to the OKD cluster"
+            id = "Login_to_the_OKD_cluster"
+            scriptContent = """
+                oc login --token=%OKD_F1_FT_TOKEN% %OKD_SERVER_DEV_URL%
+                oc project %OKD_F1_TEST_PROJECT%
+            """.trimIndent()
+            param("org.jfrog.artifactory.selectedDeployableServer.useSpecs", "false")
+            param("org.jfrog.artifactory.selectedDeployableServer.uploadSpecSource", "Job configuration")
+            param("org.jfrog.artifactory.selectedDeployableServer.downloadSpecSource", "Job configuration")
+        }
+        gradle {
+            name = "Gradle Integration & DB Tests"
+            id = "RUNNER_1768"
+            tasks = "%GRADLE_TASK%"
+            workingDir = "%WORK_DIR%"
+            gradleParams = """
+                --info
+                %GRADLE_STANDARD_PARAMETERS%
+                %GRADLE_EXTRA_PARAMETERS%
+            """.trimIndent()
+            enableStacktrace = true
+            jdkHome = "%env.JAVA_HOME%"
+            jvmArgs = "%JDK_CMDLINE_PARAMETERS%"
+            dockerRunParameters = "--userns=keep-id -e JAVA_HOME=/opt/java/openjdk -v %env.BUILD_ENV%:/opt/BUILD_ENV -v %teamcity.build.checkoutDir%:/home/tcagent/work -v %teamcity.agent.jvm.user.home%:/home/tcagent -w /home/tcagent/work -e TZ=Europe/Brussels"
+            param("org.jfrog.artifactory.selectedDeployableServer.defaultModuleVersionConfiguration", "GLOBAL")
+        }
+        stepsOrder = arrayListOf("Login_to_the_OKD_cluster", "RUNNER_1720", "RUNNER_1768")
+    }
+
+    failureConditions {
+        executionTimeoutMin = 240
+    }
+
+    features {
+        xmlReport {
+            id = "BUILD_EXT_1815"
+            reportType = XmlReport.XmlReportType.JUNIT
+            rules = "+:**/build/test-results/dbTest/*.xml"
+        }
+    }
+
+    requirements {
+        doesNotContain("env.OS_TYPE", "WIN", "RQ_2875")
+    }
+
+    triggers {
+        finishBuildTrigger {
+            buildType = "${id10CompileUtAuto.id}"
+            successfulOnly = true
+            branchFilter = "+:*"
+        }
+    }
+
+    dependencies {
+        snapshot(id10CompileUtAuto) {
+            onDependencyFailure = FailureAction.FAIL_TO_START
+        }
     }
 })
 
@@ -844,7 +1054,7 @@ object id17CompatLocalStandManual : BuildType({
         // Run from any branch — including main — still works because
         // the snapshot dep is the only hard requirement.
         finishBuildTrigger {
-            buildType = "${id10CompileUtAuto.id}"
+            buildType = "${id11PackagePublishAuto.id}"
             successfulOnly = true
             branchFilter = """
                 +:*
@@ -854,7 +1064,7 @@ object id17CompatLocalStandManual : BuildType({
     }
 
     dependencies {
-        snapshot(id10CompileUtAuto) {
+        snapshot(id11PackagePublishAuto) {
             onDependencyFailure = FailureAction.CANCEL
         }
     }
@@ -1090,7 +1300,7 @@ object id18CompatLocalStandGitModeAuto : BuildType({
         // but mirror id17's main exclusion to avoid burning agent minutes on the
         // release trunk; Manual Run from any branch still works.
         finishBuildTrigger {
-            buildType = "${id10CompileUtAuto.id}"
+            buildType = "${id11PackagePublishAuto.id}"
             successfulOnly = true
             branchFilter = """
                 +:*
@@ -1100,7 +1310,7 @@ object id18CompatLocalStandGitModeAuto : BuildType({
     }
 
     dependencies {
-        snapshot(id10CompileUtAuto) {
+        snapshot(id11PackagePublishAuto) {
             onDependencyFailure = FailureAction.CANCEL
         }
     }
@@ -1144,7 +1354,7 @@ object id20ValidateComponentsRegistryProductionDataAuto : BuildType({
 
     triggers {
         finishBuildTrigger {
-            buildType = "${id10CompileUtAuto.id}"
+            buildType = "${id11PackagePublishAuto.id}"
             successfulOnly = true
             branchFilter = "+:*"
         }
@@ -1156,7 +1366,7 @@ object id20ValidateComponentsRegistryProductionDataAuto : BuildType({
     }
 
     dependencies {
-        snapshot(id10CompileUtAuto) {
+        snapshot(id11PackagePublishAuto) {
             onDependencyFailure = FailureAction.FAIL_TO_START
         }
         artifacts(AbsoluteId("bt774")) {
@@ -1188,6 +1398,15 @@ object id30DeployToOkdQaDevAuto : BuildType({
 
     dependencies {
         snapshot(id20ValidateComponentsRegistryProductionDataAuto) {
+        }
+        // The image to deploy is pushed by [1.1], and the heavy DB/integration suite
+        // [1.2] must pass before we deploy — both block the deploy from starting on
+        // failure (they run in parallel off [1.0], so by deploy time both are done).
+        snapshot(id11PackagePublishAuto) {
+            onDependencyFailure = FailureAction.FAIL_TO_START
+        }
+        snapshot(id12IntegrationDbTestsAuto) {
+            onDependencyFailure = FailureAction.FAIL_TO_START
         }
     }
 })
