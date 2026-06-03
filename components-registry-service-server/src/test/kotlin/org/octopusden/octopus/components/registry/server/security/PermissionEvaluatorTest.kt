@@ -184,7 +184,7 @@ class PermissionEvaluatorTest {
     }
 
     @Test
-    @DisplayName("anonymous username → deny even when listed as the component owner")
+    @DisplayName("anonymous username → deny before ownership lookup")
     fun `anonymous username denied`() {
         loginAs(
             User("anonymous", setOf(Role("ROLE_ANONYMOUS", setOf("ACCESS_COMPONENTS"))), emptySet()),
