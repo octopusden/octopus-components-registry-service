@@ -109,6 +109,7 @@ class ComponentManagementServiceImpl(
     private val versionRangeFactory: VersionRangeFactory,
     private val environment: Environment,
     private val componentCodeRenderer: ComponentCodeRenderer,
+    private val employeeDirectory: EmployeeDirectoryService,
 ) : ComponentManagementService {
     // ConfigHelper is constructed lazily because it touches the Spring
     // Environment on first access; mirrors the pattern used by
@@ -245,6 +246,11 @@ class ComponentManagementServiceImpl(
         val baseConfig = ComponentConfigurationEntity(component = entity, versionRange = ALL_VERSIONS, rowType = "BASE")
         applyBaseConfigurationCreate(baseConfig, baseConfigRequest)
         entity.configurations.add(baseConfig)
+
+        // Person fields (componentOwner / releaseManager / securityChampion).
+        // On create everything is new, so the active-employee check is always
+        // triggered (subject to the flag). Validates the final entity state.
+        validatePersonFields(entity, runActiveCheck = true)
 
         val saved = componentRepository.save(entity)
 
@@ -402,6 +408,15 @@ class ComponentManagementServiceImpl(
         // preserves the existing group, incl. grandfathered parent-of-parent rows).
         val oldParentKey = entity.parentComponent?.componentKey
         val oldCanBeParent = entity.canBeParent
+        // Snapshot the person fields + distribution gate BEFORE the patch so we
+        // can decide whether to re-run the active-employee check (building-block
+        // #4): it fires when a person field changes OR the gate flips. When
+        // neither changes, pre-existing values are grandfathered (not re-checked).
+        val oldOwner = entity.componentOwner
+        val oldReleaseManagers = entity.releaseManagerUsernames()
+        val oldSecurityChampions = entity.securityChampionUsernames()
+        val oldExplicit = entity.distributionExplicit
+        val oldExternal = entity.distributionExternal
 
         if (isRename) entity.componentKey = normalizedNewKey!!
 
@@ -477,6 +492,19 @@ class ComponentManagementServiceImpl(
         val parentChanged = entity.parentComponent?.componentKey != oldParentKey
         val canBeParentChanged = entity.canBeParent != oldCanBeParent
         validateParentInvariants(entity, parentChanged, canBeParentChanged)
+
+        // Person fields. Required/pattern run unconditionally on the FINAL state;
+        // the active-employee check fires only when a person field changed OR the
+        // distribution gate flipped (so previously-saved values are grandfathered
+        // when neither changes — e.g. a label-only PATCH won't re-validate them).
+        val personFieldChanged =
+            entity.componentOwner != oldOwner ||
+                entity.releaseManagerUsernames() != oldReleaseManagers ||
+                entity.securityChampionUsernames() != oldSecurityChampions
+        val gateFlipped =
+            entity.distributionExplicit != oldExplicit ||
+                entity.distributionExternal != oldExternal
+        validatePersonFields(entity, runActiveCheck = personFieldChanged || gateFlipped)
 
         // Per-component child REPLACE — present collection wipes and refills
         request.artifactIds?.let {
@@ -1666,6 +1694,38 @@ class ComponentManagementServiceImpl(
         require(value in PRODUCT_TYPE_NAMES) {
             "Invalid productType: '$value'. Allowed: $PRODUCT_TYPE_NAMES"
         }
+    }
+
+    /**
+     * Person-field validation (audit #1/#3/#4/#7), restored on the v4 write
+     * path. Delegates the rules to [PersonFieldValidator] so they stay unit-
+     * testable in isolation; this method just supplies the FINAL entity state
+     * and the active-check trigger.
+     *
+     * Inputs are read off [entity] AFTER the patch/create has been applied
+     * (so PATCH callers needn't resend unchanged fields, matching the old
+     * "validate whole config" model). [runActiveCheck] is true when a person
+     * field changed OR the distribution gate flipped (per building-block #4):
+     * required/pattern run unconditionally; the active-employee call runs only
+     * when triggered AND the employee-service bean is present.
+     */
+    private fun validatePersonFields(
+        entity: ComponentEntity,
+        runActiveCheck: Boolean,
+    ) {
+        PersonFieldValidator.validate(
+            owner = entity.componentOwner,
+            releaseManagers = entity.releaseManagerUsernames(),
+            securityChampions = entity.securityChampionUsernames(),
+            explicit = entity.distributionExplicit,
+            external = entity.distributionExternal,
+            // Active check only meaningful when a client bean is wired; the
+            // validator itself also fail-opens on DISABLED, but skipping the
+            // per-username calls when the directory is off avoids needless work.
+            runActiveCheck = runActiveCheck && employeeDirectory.isEnabled(),
+            isHidden = fieldConfigService::isHidden,
+            directory = employeeDirectory,
+        )
     }
 
     private fun validateBuildSystem(value: String) {
