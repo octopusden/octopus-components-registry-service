@@ -343,16 +343,55 @@ class ComponentCodeRendererTest {
     }
 
     @Test
-    @DisplayName("FULL: synthetic base with overrides suppresses base row aspects but keeps range blocks")
-    fun fullSyntheticBaseSuppression() {
+    @DisplayName("FULL: synthetic base still renders its base row aspects (they are the fallback for all versions)")
+    fun fullSyntheticBaseRendersBaseAspects() {
+        // A "synthetic" base (no explicit all-versions DSL block) still carries the
+        // real shared values the Groovy loader merged in from top-level fields, and
+        // those values resolve as the fallback for every version — so they MUST show
+        // at the top level, not be hidden behind the overriding ranges.
         val c = component()
-        base(c, synthetic = true) { buildSystem = "MAVEN" }
+        base(c, synthetic = true) {
+            buildSystem = "MAVEN"
+            jiraProjectKey = "BASE"
+        }
         scalarOverride(c, "[1,2)", "jira.projectKey") { jiraProjectKey = "AAA" }
 
         val out = renderer.renderFull(c)
-        assertFalse(out.contains("buildSystem"), "synthetic base row aspects must be suppressed:\n$out")
+        assertTrue(out.contains("buildSystem = MAVEN"), "base build aspect must render:\n$out")
+        assertTrue(out.contains("projectKey = \"BASE\""), "base jira aspect must render:\n$out")
         assertTrue(out.contains("\"[1,2)\" {"), out)
         assertTrue(out.contains("projectKey = \"AAA\""), out)
+    }
+
+    @Test
+    @DisplayName("FULL: synthetic-base VCS renders at top level, not only in the overriding range")
+    fun fullSyntheticBaseVcsRendersAtTopLevel() {
+        // Repro of the reported bug: a component whose top-level vcsUrl/tag is merged
+        // onto a synthetic base, with a later range overriding the VCS (e.g. a new
+        // tag). The base VCS applies to the earlier versions and must render at the
+        // top level — previously it was suppressed and looked range-only.
+        val c = component()
+        val b = base(c, synthetic = true) {}
+        b.vcsEntries.add(vcs(b, name = "main", path = "ssh://git/repo.git", branch = "master"))
+        val m = marker(c, "[1.0.107,)", MarkerAttributes.VCS_SETTINGS) {}
+        m.vcsEntries.add(vcs(m, name = "main", path = "ssh://git/repo.git", branch = "release"))
+
+        val out = renderer.renderFull(c)
+        val rangeHeaderIdx = out.indexOf("\"[1.0.107,)\" {")
+        val baseVcsIdx = out.indexOf("vcsSettings {")
+        val baseBranchIdx = out.indexOf("branch = \"master\"")
+        assertTrue(rangeHeaderIdx >= 0, out)
+        // A top-level vcsSettings block opens before the range block (structural)…
+        assertTrue(
+            baseVcsIdx in 0 until rangeHeaderIdx,
+            "a top-level vcsSettings block must open before the range block:\n$out",
+        )
+        // …and it carries the base branch (the override's branch lives in the range block).
+        assertTrue(
+            baseBranchIdx in 0 until rangeHeaderIdx,
+            "base vcsSettings must render at the top level, before the range block:\n$out",
+        )
+        assertTrue(out.contains("branch = \"release\""), "range vcs override must still render:\n$out")
     }
 
     // ----------------------------------------------------------------------

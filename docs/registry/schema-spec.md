@@ -65,7 +65,12 @@ This document is the canonical reference for the v2 schema. ADR-014 records the 
 ### 3.1 Base row
 - `row_type = 'BASE'`, `overridden_attribute IS NULL`
 - All typed columns may carry values (defaults for that component)
-- `is_synthetic_base = true` when populated from `Defaults.groovy` only (DSL has no top-level fields); otherwise `false`
+- `is_synthetic_base` is a **structural** flag, not a "base has no content" flag: the import
+  (`ImportServiceImpl`) sets it `true` when the DSL has no explicit all-versions block AND ≥2
+  version-range blocks. Because the Groovy loader merges a component's top-level fields into every
+  range config, a synthetic base **still carries the real shared values** (vcsUrl/jira/build/…) the
+  component declared at top level — it is NOT necessarily a Defaults-only placeholder. Consumers
+  must therefore NOT treat `is_synthetic_base = true` as "the base row is empty/ignorable".
 
 ### 3.2 Scalar override row
 - `row_type = 'SCALAR_OVERRIDE'`, `overridden_attribute = '<aspect.field>'` (e.g., `build.javaVersion`, `escrow.generation`, `jira.projectKey`)
@@ -162,7 +167,7 @@ Per-(component, version_range) typed rows; the spine of Model A'.
 | `version_range` | VARCHAR(255) | NOT NULL | DSL range string, e.g., `(,0),[0,)`, `[1.0,2.0)` |
 | `overridden_attribute` | VARCHAR(50) | nullable | NULL for BASE/RANGE_PRESENCE; non-NULL for SCALAR_OVERRIDE/MARKER |
 | `row_type` | VARCHAR(32) | NOT NULL | `BASE` / `SCALAR_OVERRIDE` / `MARKER` / `RANGE_PRESENCE` — source-of-truth row classifier |
-| `is_synthetic_base` | BOOLEAN | NOT NULL DEFAULT false | true only on base rows synthesised from Defaults.groovy |
+| `is_synthetic_base` | BOOLEAN | NOT NULL DEFAULT false | structural flag: no all-versions block + ≥2 ranges (see §3.1); base may still carry real merged values |
 | Build aspect | | | |
 | `build_system` | VARCHAR(50) | | MAVEN/GRADLE/ESCROW_PROVIDED_MANUALLY/PROVIDED/etc. |
 | `build_system_version` | VARCHAR(50) | | |
@@ -385,7 +390,7 @@ string builder — no GroovyShell). `ComponentCodeRenderer` walks the entity:
 
 | Mode | Source | Shape |
 |---|---|---|
-| **FULL** (no `version`) | `ComponentEntity` + its `configurations` rows | Delta-style: top-level block (per-component fields + BASE-row aspects) + one `"<range>" { … }` block per distinct override range. Reuses the §3 row taxonomy — SCALAR_OVERRIDE rows become `field = value` (or `field = null` for the import-only null-clear, §3.2), MARKER rows become the replaced child block. RANGE_PRESENCE-only ranges (§3.4) and the synthetic-base row aspects (§3.4, when overrides exist) are suppressed. |
+| **FULL** (no `version`) | `ComponentEntity` + its `configurations` rows | Delta-style: top-level block (per-component fields + BASE-row aspects) + one `"<range>" { … }` block per distinct override range. Reuses the §3 row taxonomy — SCALAR_OVERRIDE rows become `field = value` (or `field = null` for the import-only null-clear, §3.2), MARKER rows become the replaced child block. RANGE_PRESENCE-only ranges (§3.4) are skipped. The BASE row's aspects are **always rendered** — even for a synthetic base (§3.1, §6.4) they hold the values the loader merged from the component's top-level fields and are the resolver's fallback for every version, so they belong at the top level, NOT hidden behind the overriding ranges. |
 | **RESOLVED** (`?version=X`) | merged single view | Reuses the §3.5 resolve primitives (`ComponentConfigurationView.applyScalarOverride` for scalars, marker-pick for child collections) — values match the v2 version-resolution endpoints. Single block, no range sub-blocks. **Difference vs the v2 resolver:** distribution `$version` substitution (§6.8, a runtime concern) is intentionally not applied, so distribution patterns render as the stored templates — consistent with the FULL view. |
 
 Null-clear (§3.2) is preserved in FULL: a SCALAR_OVERRIDE row is rendered by *presence* of the
@@ -458,9 +463,14 @@ Grouping is keyed off the loader's `EscrowConfiguration.aggregatorSubComponents`
 
 ### 6.4 Base row determination
 
-For each component:
-- If DSL has any top-level fields (vcsUrl, jira, build, escrow, distribution, etc.) → base row from those values, `is_synthetic_base = false`.
-- If DSL has only version-range blocks (no top-level fields) → base row populated purely from `Defaults.groovy` resolved values, `is_synthetic_base = true`.
+For each component, the base config is the `(,0),[0,)` (ALL_VERSIONS) config if the loader emitted
+one, else `configs.first()`. The base row always carries that config's resolved values (top-level
+DSL fields merged in by the loader, plus `Defaults.groovy`).
+
+`is_synthetic_base` is then set **structurally**: `true` when there is no ALL_VERSIONS config AND
+`configs.size > 1` (i.e. the DSL declared only version-range blocks, with no explicit all-versions
+block). Note this fires even when the component HAS top-level fields — those get merged onto the
+first range, which becomes the base — so a synthetic base is not necessarily Defaults-only (see §3.1).
 
 ### 6.5 Override row generation
 
