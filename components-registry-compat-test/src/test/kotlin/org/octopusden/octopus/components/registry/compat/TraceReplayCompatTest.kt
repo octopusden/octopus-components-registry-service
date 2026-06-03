@@ -72,13 +72,12 @@ internal fun endpointTemplate(method: String, rawPath: String): String {
  */
 internal fun <T> ensureEndpointCoverage(capped: List<T>, all: List<T>, keyOf: (T) -> String): List<T> {
     if (capped.size >= all.size) return capped
-    val cappedKeys = capped.mapTo(HashSet(), keyOf)
-    val reps =
-        all.asSequence()
-            .filterNot { keyOf(it) in cappedKeys }
-            .groupBy(keyOf)
-            .values
-            .map { it.first() }
+    // Seed with the capped keys; `seen.add` is true only on the FIRST occurrence of a
+    // not-yet-covered key. `all` is rank-ordered (desc count), so that first occurrence is
+    // the busiest representative. Single pass, `keyOf` evaluated once per element, original
+    // order preserved — no intermediate per-key lists.
+    val seen = capped.mapTo(HashSet(), keyOf)
+    val reps = all.filter { seen.add(keyOf(it)) }
     return if (reps.isEmpty()) capped else capped + reps
 }
 
@@ -320,9 +319,10 @@ class TraceReplayCompatTest : CompatibilityTestBase() {
         // Guarantee every business endpoint PRESENT IN THE TRACE is replayed, even if the
         // frequency cap ranked it below the cut — adds the busiest representative of each
         // such endpoint template on top of the cap. NOTE: endpoints with ZERO hits in the
-        // capture window are not in `entries`, so this cannot synthesise them; they rely on
-        // a dedicated *CompatTest (see TD-008 "Replay tiers & endpoint coverage" for the
-        // currently-uncovered ones: copyright, component-level distribution, the v1 list).
+        // capture window are not in `entries`, so this cannot synthesise them; they are
+        // covered by dedicated *CompatTest classes that run in the same [1.7]/[1.8] task
+        // (copyright -> CopyrightCompatTest, component distribution -> DistributionCompatTest,
+        // v1 list -> ComponentsListV1CompatTest; see TD-008 "Replay tiers & endpoint coverage").
         val replaySet = ensureEndpointCoverage(capped, entries) { endpointTemplate(it.method, it.path) }
         val coverageAdded = replaySet.size - capped.size
 
