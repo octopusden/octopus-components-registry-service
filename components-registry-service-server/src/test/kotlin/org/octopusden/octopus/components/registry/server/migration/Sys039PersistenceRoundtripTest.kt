@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
+import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.octopusden.octopus.components.registry.server.support.editorJwt
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
@@ -122,7 +123,10 @@ class Sys039PersistenceRoundtripTest {
         mvc
             .perform(
                 patch("/rest/api/4/components/$id")
-                    .with(editorJwt())
+                    // admin: the ft-db seed component has no owner/RM/SC, so a plain
+                    // editor is 403'd by the per-component edit gate. This test pins
+                    // column round-trips, not authorization.
+                    .with(adminJwt())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(payload)),
             ).andExpect(status().is2xxSuccessful)
@@ -156,7 +160,10 @@ class Sys039PersistenceRoundtripTest {
         mvc
             .perform(
                 patch("/rest/api/4/components/$id")
-                    .with(editorJwt())
+                    // admin: the ft-db seed component has no owner/RM/SC, so a plain
+                    // editor is 403'd by the per-component edit gate. This test pins
+                    // column round-trips, not authorization.
+                    .with(adminJwt())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(
                         objectMapper.writeValueAsBytes(
@@ -172,7 +179,10 @@ class Sys039PersistenceRoundtripTest {
         mvc
             .perform(
                 patch("/rest/api/4/components/$id")
-                    .with(editorJwt())
+                    // admin: the ft-db seed component has no owner/RM/SC, so a plain
+                    // editor is 403'd by the per-component edit gate. This test pins
+                    // column round-trips, not authorization.
+                    .with(adminJwt())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(
                         objectMapper.writeValueAsBytes(
