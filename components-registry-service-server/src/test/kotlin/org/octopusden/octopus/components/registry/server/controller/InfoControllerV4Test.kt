@@ -2,6 +2,7 @@ package org.octopusden.octopus.components.registry.server.controller
 
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
@@ -41,6 +42,7 @@ import java.util.Properties
 )
 @Import(InfoControllerV4Test.TestBuildPropertiesConfig::class)
 @ActiveProfiles("common", "test")
+@Tag("integration")
 class InfoControllerV4Test {
     @MockBean
     @Suppress("UnusedPrivateProperty")

@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.migration
 
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.DisplayName
@@ -59,6 +60,7 @@ import java.nio.file.Paths
 )
 @ActiveProfiles("common", "test-db-validate")
 @Timeout(120)
+@Tag("integration")
 class MIG047SchemaConstraintIntegrationTest {
 
     @MockBean

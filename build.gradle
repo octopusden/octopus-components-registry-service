@@ -190,13 +190,13 @@ configure(subprojects) {
         }
     }
 
-    test {
-        useJUnitPlatform()
-        systemProperties = [
-            //NOTE: when parallel.enabled = true EscrowConfigurationLoaderTest + BuildToolResolverTest
-            // can fail sporadically on GH
-            'junit.jupiter.execution.parallel.enabled': false
-        ]
+    // Common config for EVERY Test task (test, dbTest, integrationTest). Additive
+    // (systemProperty/environment/jvmArgs) so it never clobbers per-task properties
+    // such as integrationTest's fatJar.path.
+    tasks.withType(Test).configureEach {
+        //NOTE: parallel.enabled = true makes EscrowConfigurationLoaderTest + BuildToolResolverTest
+        // fail sporadically on GH, so keep it off.
+        systemProperty 'junit.jupiter.execution.parallel.enabled', false
         // Forward the MIG-029 reproduction toggle to the test JVM. Default off;
         // enable with -Pcompat.mig029.enabled=true to reproduce the bug or verify a fix.
         // See MigrationIntegrationTest.MIG-029 + docs/registry/requirements-migration.md.
@@ -215,6 +215,32 @@ configure(subprojects) {
         }
         jvmArgs('--add-opens=java.base/java.lang=ALL-UNNAMED')
         jvmArgs('--add-opens=java.base/java.util=ALL-UNNAMED')
+    }
+
+    // [1.0] Compile&UT fast gate runs unit + smoke only; heavy @Tag("integration")
+    // tests (Postgres/Testcontainers/full Spring context) are excluded from `test`
+    // (hence from `check`/`build`) and run in `dbTest` — CI [1.2] / GH qualityCoverage.
+    test {
+        useJUnitPlatform {
+            excludeTags 'integration'
+        }
+    }
+
+    // Heavy integration/DB tests live in `dbTest`, NOT in `check`. Registered only
+    // for the modules that carry @Tag("integration") tests.
+    if (project.name in ['components-registry-service-server',
+                         'components-registry-service-client',
+                         'components-registry-service-light-client']) {
+        tasks.register('dbTest', Test) {
+            description = 'Runs @Tag("integration") tests (Postgres/Testcontainers/Spring); excluded from check.'
+            group = 'verification'
+            testClassesDirs = sourceSets.test.output.classesDirs
+            classpath = sourceSets.test.runtimeClasspath
+            shouldRunAfter tasks.named('test')
+            useJUnitPlatform {
+                includeTags 'integration'
+            }
+        }
     }
 
     java {
@@ -365,13 +391,31 @@ gradle.projectsEvaluated {
     }
     def testTargets = coverageProjects.findAll { it.tasks.findByName('test') != null }
 
+    // Heavy @Tag("integration") tests run in `dbTest`/`integrationTest` (excluded from
+    // `check`), but their coverage must still count toward the gate and they must run
+    // as part of `qualityCoverage` (the command the GH quality job invokes).
+    def heavyTestTaskPaths = []
+    subprojects.each { sp ->
+        ['dbTest', 'integrationTest'].each { tn ->
+            if (sp.tasks.findByName(tn) != null) heavyTestTaskPaths << "${sp.path}:${tn}"
+        }
+    }
+    // Coverage exec data for a set of projects: unit (`test`) + heavy (`dbTest`,
+    // `integrationTest`) so the split does not lose coverage. Missing files are ignored.
+    def coverageExecData = { Collection projs ->
+        files(projs.collect { p ->
+            p.fileTree(p.layout.buildDirectory) {
+                include 'jacoco/test.exec', 'jacoco/dbTest.exec', 'jacoco/integrationTest.exec'
+            }
+        })
+    }
+
     tasks.register('jacocoOverallCoverageReport', org.gradle.testing.jacoco.tasks.JacocoReport) {
         group = 'verification'
-        description = 'Aggregated JaCoCo report across all coverage modules'
+        description = 'Aggregated JaCoCo report across all coverage modules (test + dbTest + integrationTest)'
         dependsOn(testTargets.collect { "${it.path}:test" })
-        executionData.from(files(testTargets.collect { p ->
-            p.fileTree(p.layout.buildDirectory) { include 'jacoco/test.exec' }
-        }))
+        dependsOn(heavyTestTaskPaths)
+        executionData.from(coverageExecData(testTargets))
         sourceDirectories.from(files(testTargets.collectMany { p -> p.sourceSets.main.allSource.srcDirs }))
         classDirectories.from(files(testTargets.collect { p -> p.sourceSets.main.output }))
         reports {
@@ -384,11 +428,10 @@ gradle.projectsEvaluated {
 
     tasks.register('jacocoOverallCoverageVerification', org.gradle.testing.jacoco.tasks.JacocoCoverageVerification) {
         group = 'verification'
-        description = 'Verifies aggregated JaCoCo line coverage >= 70% across all coverage modules'
+        description = 'Verifies aggregated JaCoCo line coverage >= 70% across all coverage modules (test + dbTest + integrationTest)'
         dependsOn(testTargets.collect { "${it.path}:test" })
-        executionData.from(files(testTargets.collect { p ->
-            p.fileTree(p.layout.buildDirectory) { include 'jacoco/test.exec' }
-        }))
+        dependsOn(heavyTestTaskPaths)
+        executionData.from(coverageExecData(testTargets))
         sourceDirectories.from(files(testTargets.collectMany { p -> p.sourceSets.main.allSource.srcDirs }))
         classDirectories.from(files(testTargets.collect { p -> p.sourceSets.main.output }))
         violationRules {
@@ -403,11 +446,53 @@ gradle.projectsEvaluated {
         }
     }
 
+    // Per-module jacoco (registered by octopus-quality off the `test` task) must also
+    // see the heavy exec data for the split modules, or their per-module coverage would
+    // drop now that DB/Spring tests moved to `dbTest`. Use mustRunAfter (ORDER only) — NOT
+    // dependsOn: `test` is finalizedBy jacocoTestReport, so a dependsOn(dbTest) here would
+    // drag the heavy Postgres suite into every `test`/[1.0] run. mustRunAfter only orders
+    // when dbTest is already scheduled (i.e. under `qualityCoverage`, which dependsOn it).
+    ['components-registry-service-server',
+     'components-registry-service-client',
+     'components-registry-service-light-client'].each { name ->
+        def p = project(":$name")
+        p.tasks.matching { it.name in ['jacocoTestReport', 'jacocoTestCoverageVerification'] }.configureEach {
+            mustRunAfter(p.tasks.matching { it.name in ['dbTest', 'integrationTest'] })
+            // `test.exec` is already wired by the octopus-quality plugin; add ONLY the heavy
+            // exec files so inputs stay clean (JaCoCo would OR-merge a duplicate harmlessly).
+            executionData.from(files(p.fileTree(p.layout.buildDirectory) {
+                include 'jacoco/dbTest.exec', 'jacoco/integrationTest.exec'
+            }))
+        }
+    }
+
     tasks.named('qualityCoverage').configure {
         dependsOn(coverageProjects.collect { "${it.path}:jacocoTestReport" })
         dependsOn(coverageProjects.collect { "${it.path}:jacocoTestCoverageVerification" })
+        // Heavy tests run once here — the GH `quality` job runs `./gradlew qualityCoverage`,
+        // gating both correctness and coverage without a duplicate CI job.
+        dependsOn(heavyTestTaskPaths)
         dependsOn('jacocoOverallCoverageReport')
         dependsOn('jacocoOverallCoverageVerification')
+    }
+
+    // Part A.7: gate publish + image push on the server fat-jar FT. dockerPushImage HARD-depends
+    // on the FT — an image is never pushed without a validated boot jar. Maven publish is only
+    // ORDERED after the FT (mustRunAfter): when the FT is part of the same invocation — as in
+    // CI [1.1] (`assemble :…server:integrationTest publish dockerPushImage`) — default fail-fast
+    // aborts before any publish. A standalone `publish`/`publishToMavenLocal` elsewhere is
+    // deliberately NOT forced to run the (slow) fat-jar FT.
+    def serverFt = project(':components-registry-service-server').tasks.named('integrationTest')
+    project(':components-registry-service-server').tasks.named('dockerPushImage').configure {
+        dependsOn serverFt
+    }
+    subprojects.each { sp ->
+        sp.tasks.withType(org.gradle.api.publish.maven.tasks.PublishToMavenRepository).configureEach {
+            mustRunAfter serverFt
+        }
+        sp.tasks.matching { it.name == 'publish' }.configureEach {
+            mustRunAfter serverFt
+        }
     }
 }
 

@@ -9,6 +9,7 @@ import com.github.tomakehurst.wiremock.core.WireMockConfiguration
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.springframework.beans.factory.annotation.Autowired
@@ -51,6 +52,7 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get a
 @ActiveProfiles("common", "test")
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Timeout(120)
+@Tag("integration")
 class UserInfoConverterIntegrationTest {
     init {
         val testResourcesPath =

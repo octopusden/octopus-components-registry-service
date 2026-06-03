@@ -2,6 +2,7 @@ package org.octopusden.octopus.components.registry.server.migration
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -51,6 +52,7 @@ import java.nio.file.Paths
 )
 @ActiveProfiles("common", "ft-db")
 @Timeout(120)
+@Tag("integration")
 class FtDbProfileWriteTest {
     @MockBean
     @Suppress("UnusedPrivateProperty")

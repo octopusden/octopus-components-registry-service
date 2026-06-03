@@ -1,6 +1,7 @@
 package org.octopusden.octopus.components.registry.server.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
@@ -48,6 +49,7 @@ import java.nio.file.Paths
 )
 @ActiveProfiles("common", "ft-db")
 @Timeout(120)
+@Tag("integration")
 class EscrowBuildTaskV4Test {
     @MockBean
     @Suppress("UnusedPrivateProperty")

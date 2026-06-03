@@ -2,6 +2,7 @@ package org.octopusden.octopus.components.registry.server.migration
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assertions.fail
@@ -48,6 +49,7 @@ import java.nio.file.Paths
 )
 @ActiveProfiles("common", "test-db", "test-db-prod")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@Tag("integration")
 class GitVsDbValidationTest {
     @MockBean
     @Suppress("UnusedPrivateProperty")

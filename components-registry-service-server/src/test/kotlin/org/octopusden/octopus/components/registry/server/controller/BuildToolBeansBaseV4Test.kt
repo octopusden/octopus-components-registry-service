@@ -1,6 +1,7 @@
 package org.octopusden.octopus.components.registry.server.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
@@ -45,6 +46,7 @@ import java.nio.file.Paths
 @ActiveProfiles("common", "ft-db")
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Timeout(120)
+@Tag("integration")
 class BuildToolBeansBaseV4Test {
 
     @MockBean

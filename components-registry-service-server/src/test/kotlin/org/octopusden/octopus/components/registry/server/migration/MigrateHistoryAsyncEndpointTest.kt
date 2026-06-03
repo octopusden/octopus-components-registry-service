@@ -2,6 +2,7 @@ package org.octopusden.octopus.components.registry.server.migration
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
@@ -57,6 +58,7 @@ import java.util.concurrent.atomic.AtomicReference
 )
 @Import(MigrateHistoryAsyncEndpointTest.AsyncEndpointTestConfig::class)
 @ActiveProfiles("common", "test-db")
+@Tag("integration")
 class MigrateHistoryAsyncEndpointTest {
     @MockBean
     @Suppress("UnusedPrivateProperty")
