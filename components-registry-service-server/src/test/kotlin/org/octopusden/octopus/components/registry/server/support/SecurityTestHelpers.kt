@@ -33,6 +33,9 @@ fun editorJwt(username: String): RequestPostProcessor =
         .authorities(SimpleGrantedAuthority("ROLE_COMPONENTS_REGISTRY_EDITOR"))
 
 fun viewerJwt(): RequestPostProcessor =
+    viewerJwt("carol")
+
+fun viewerJwt(username: String): RequestPostProcessor =
     jwt()
-        .jwt { it.claim("preferred_username", "carol") }
+        .jwt { it.claim("preferred_username", username) }
         .authorities(SimpleGrantedAuthority("ROLE_COMPONENTS_REGISTRY_VIEWER"))

@@ -31,8 +31,8 @@ class PermissionEvaluator(
      * a future name-based caller resolves correctly instead of getting a silent 403.
      *
      * Resolution order:
-     *  1. no `EDIT_COMPONENTS` permission           → deny (also short-circuits the DB
-     *     lookup for viewers / anonymous reads computing `canEdit`).
+     *  1. no `ACCESS_COMPONENTS` permission         → deny (also protects future
+     *     call sites that might forget the explicit read gate).
      *  2. `EDIT_ANY_COMPONENT` (admin)              → allow.
      *  3. blank / anonymous username                → deny.
      *  4. unresolvable id-or-key, or a component with
@@ -47,7 +47,7 @@ class PermissionEvaluator(
      * session (see the repository's edit-ownership projections).
      */
     fun canEditComponent(componentIdOrName: String): Boolean {
-        if (!hasPermission(EDIT_COMPONENTS)) return false
+        if (!hasPermission(ACCESS_COMPONENTS)) return false
         if (hasPermission(EDIT_ANY_COMPONENT)) return true
 
         val username = securityService.getCurrentUser().username.trim()
@@ -111,9 +111,9 @@ class PermissionEvaluator(
 
         /**
          * Bypass for the per-component ownership check in [canEditComponent]:
-         * a holder may edit ANY component regardless of owner/RM/SC. Mapped to
-         * ROLE_ADMIN in octopus-security.roles (so admins can e.g. reassign a
-         * departed owner). EDIT_COMPONENTS remains a prerequisite.
+         * together with ACCESS_COMPONENTS, a holder may edit ANY component regardless
+         * of owner/RM/SC. Mapped to ROLE_ADMIN in octopus-security.roles (so admins can
+         * e.g. reassign a departed owner).
          */
         const val EDIT_ANY_COMPONENT = "EDIT_ANY_COMPONENT"
         const val ARCHIVE_COMPONENTS = "ARCHIVE_COMPONENTS"

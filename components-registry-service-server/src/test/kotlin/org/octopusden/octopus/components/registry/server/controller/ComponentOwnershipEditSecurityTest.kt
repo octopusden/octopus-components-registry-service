@@ -40,8 +40,8 @@ import java.util.UUID
  * the per-user `canEdit` flag on the GET / create / update detail responses.
  *
  * `adminJwt()` = alice/ROLE_ADMIN (has EDIT_ANY_COMPONENT), `editorJwt(name)` =
- * name/ROLE_COMPONENTS_REGISTRY_EDITOR (has EDIT_COMPONENTS only), `viewerJwt()`
- * = carol/ROLE_..._VIEWER (no EDIT_COMPONENTS).
+ * name/ROLE_COMPONENTS_REGISTRY_EDITOR, `viewerJwt(name)` =
+ * name/ROLE_COMPONENTS_REGISTRY_VIEWER (ACCESS_COMPONENTS only, no EDIT_COMPONENTS).
  */
 @AutoConfigureMockMvc
 @SpringBootTest(
@@ -156,7 +156,7 @@ class ComponentOwnershipEditSecurityTest {
     @DisplayName("componentOwner can PATCH their component")
     fun `owner can patch`() {
         val c = create(uniqueName("owner"), owner = "bob")
-        performPatch(c.id(), c.version(), bumpDisplayName(), editorJwt("bob"))
+        performPatch(c.id(), c.version(), bumpDisplayName(), viewerJwt("bob"))
             .andExpect(status().isOk)
     }
 
@@ -164,7 +164,7 @@ class ComponentOwnershipEditSecurityTest {
     @DisplayName("releaseManager can PATCH the component")
     fun `release manager can patch`() {
         val c = create(uniqueName("rm"), owner = "alice-owner", releaseManager = listOf("dave"))
-        performPatch(c.id(), c.version(), bumpDisplayName(), editorJwt("dave"))
+        performPatch(c.id(), c.version(), bumpDisplayName(), viewerJwt("dave"))
             .andExpect(status().isOk)
     }
 
@@ -172,7 +172,7 @@ class ComponentOwnershipEditSecurityTest {
     @DisplayName("securityChampion can PATCH the component")
     fun `security champion can patch`() {
         val c = create(uniqueName("sc"), owner = "alice-owner", securityChampion = listOf("erin"))
-        performPatch(c.id(), c.version(), bumpDisplayName(), editorJwt("erin"))
+        performPatch(c.id(), c.version(), bumpDisplayName(), viewerJwt("erin"))
             .andExpect(status().isOk)
     }
 
@@ -180,7 +180,7 @@ class ComponentOwnershipEditSecurityTest {
     @DisplayName("username match is case-insensitive (stored 'Bob' vs token 'bob')")
     fun `case insensitive match`() {
         val c = create(uniqueName("case"), owner = "Bob")
-        performPatch(c.id(), c.version(), bumpDisplayName(), editorJwt("bob"))
+        performPatch(c.id(), c.version(), bumpDisplayName(), viewerJwt("bob"))
             .andExpect(status().isOk)
     }
 
@@ -195,13 +195,13 @@ class ComponentOwnershipEditSecurityTest {
     }
 
     @Test
-    @DisplayName("being owner does not help without EDIT_COMPONENTS (viewer) → 403")
-    fun `viewer owner forbidden`() {
-        // carol is both the stored owner AND the viewer principal, but a viewer
-        // lacks EDIT_COMPONENTS so the gate's fast-fail denies before ownership.
+    @DisplayName("ACCESS-only user may PATCH when they are the owner")
+    fun `viewer owner allowed`() {
+        // carol is both the stored owner AND the viewer principal. The component-scoped
+        // edit gate depends on assignment, not on the coarse EDIT_COMPONENTS role.
         val c = create(uniqueName("viewerowner"), owner = "carol")
         performPatch(c.id(), c.version(), bumpDisplayName(), viewerJwt())
-            .andExpect(status().isForbidden)
+            .andExpect(status().isOk)
     }
 
     @Test
@@ -239,21 +239,21 @@ class ComponentOwnershipEditSecurityTest {
         val c = create(uniqueName("fo"), owner = "bob")
         performFieldOverridePost(c.id(), editorJwt("frank"))
             .andExpect(status().isForbidden)
-        performFieldOverridePost(c.id(), editorJwt("bob"))
+        performFieldOverridePost(c.id(), viewerJwt("bob"))
             .andExpect(status().isCreated)
     }
 
     // --- canEdit affordance on the detail response -----------------------------
 
     @Test
-    @DisplayName("GET canEdit reflects the caller: owner/admin true, unrelated false, viewer false")
+    @DisplayName("GET canEdit reflects the caller: owner/admin true, unrelated false")
     fun `canEdit on get`() {
         val c = create(uniqueName("canedit_get"), owner = "bob")
         val id = c.id()
-        assertTrue(objectMapper.readTree(getBody(id, editorJwt("bob"))).canEdit(), "owner")
+        assertTrue(objectMapper.readTree(getBody(id, viewerJwt("bob"))).canEdit(), "owner with ACCESS only")
         assertTrue(objectMapper.readTree(getBody(id, adminJwt())).canEdit(), "admin")
         assertFalse(objectMapper.readTree(getBody(id, editorJwt("frank"))).canEdit(), "unrelated editor")
-        assertFalse(objectMapper.readTree(getBody(id, viewerJwt())).canEdit(), "viewer")
+        assertFalse(objectMapper.readTree(getBody(id, viewerJwt())).canEdit(), "unrelated viewer")
     }
 
     @Test
@@ -291,7 +291,7 @@ class ComponentOwnershipEditSecurityTest {
         ).andExpect(status().isForbidden)
         mvc.perform(
             patch("/rest/api/4/components/${c.id()}/field-overrides/$overrideId")
-                .with(editorJwt("bob"))
+                .with(viewerJwt("bob"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(patchBody),
         ).andExpect(status().isOk)
@@ -304,14 +304,14 @@ class ComponentOwnershipEditSecurityTest {
         val overrideId = createOverrideAsOwner(c.id())
         mvc.perform(delete("/rest/api/4/components/${c.id()}/field-overrides/$overrideId").with(editorJwt("frank")))
             .andExpect(status().isForbidden)
-        mvc.perform(delete("/rest/api/4/components/${c.id()}/field-overrides/$overrideId").with(editorJwt("bob")))
+        mvc.perform(delete("/rest/api/4/components/${c.id()}/field-overrides/$overrideId").with(viewerJwt("bob")))
             .andExpect(status().isNoContent)
     }
 
     private fun createOverrideAsOwner(componentId: String): String =
         objectMapper
             .readTree(
-                performFieldOverridePost(componentId, editorJwt("bob"))
+                performFieldOverridePost(componentId, viewerJwt("bob"))
                     .andExpect(status().isCreated)
                     .andReturn().response.contentAsString,
             )["id"].asText()

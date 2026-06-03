@@ -320,11 +320,11 @@ class ComponentControllerV4(
             .body(rendered.body)
     }
 
-    // Field-level gating: a plain edit passes on EDIT_COMPONENTS alone, but switching
-    // `archived` additionally requires ARCHIVE_COMPONENTS, and changing `name`
-    // (rename) additionally requires RENAME_COMPONENTS. These latter two permissions
-    // are currently granted only to ROLE_ADMIN — EDITOR can't archive or rename via
-    // this endpoint. When we split archive/rename into dedicated endpoints, this SpEL
+    // Field-level gating: a plain edit requires component ownership (owner/RM/SC)
+    // or EDIT_ANY_COMPONENT; switching `archived` additionally requires
+    // ARCHIVE_COMPONENTS, and changing `name` (rename) additionally requires
+    // RENAME_COMPONENTS. These latter two permissions are currently granted only to
+    // ROLE_ADMIN. When we split archive/rename into dedicated endpoints, this SpEL
     // collapses back to the simple edit guard.
     @PatchMapping("/{id}")
     @PreAuthorize(
