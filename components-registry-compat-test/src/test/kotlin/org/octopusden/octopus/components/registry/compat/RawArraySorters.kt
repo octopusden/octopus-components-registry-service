@@ -52,12 +52,12 @@ object RawArraySorters {
         // (observed in production: several entries share it but differ in distribution /
         // vcsSettings / component.displayName). A colliding key lets the stable sort keep
         // each stand's arbitrary Set-iteration order → positional misalignment → false
-        // STRUCTURAL_DIFFs. Append a canonical (recursively field-name-sorted) serialization
-        // of the WHOLE element as a tie-breaker: collision-free and deterministic on both
-        // stands. It never masks a real diff — two elements differing in any field get
-        // different keys, so a genuine divergence still surfaces as that element, not as
-        // positional noise.
-        componentName + KEY_SEP + versionRange + KEY_SEP + canonicalJson(node)
+        // STRUCTURAL_DIFFs. Append a canonical (recursively field-name-sorted) KEY STRING of
+        // the WHOLE element as a tie-breaker — collision-free and deterministic on both
+        // stands (it is a stable sort key, NOT a JSON document). It never masks a real diff:
+        // two elements differing in any field get different keys, so a genuine divergence
+        // still surfaces as that element, not as positional noise.
+        componentName + KEY_SEP + versionRange + KEY_SEP + canonicalSortKey(node)
     }
 
     /**
@@ -168,14 +168,15 @@ object RawArraySorters {
     }
 
     /**
-     * Deterministic, field-order-independent serialization of [node]: object field
-     * names are sorted recursively, so two structurally-equal elements that differ
-     * only in JSON field ORDER (Jackson preserves wire order, which can differ between
-     * the two stands) produce the SAME string. Used only as a Set-sort tie-breaker —
-     * inner-array order is left as-is, since a size/content difference inside an element
-     * is a real per-element difference and SHOULD change the key.
+     * Deterministic, field-order-independent KEY STRING for [node]: object field names are
+     * sorted recursively (and quoted), so two structurally-equal elements that differ only
+     * in JSON field ORDER (Jackson preserves wire order, which can differ between the two
+     * stands) produce the SAME string. This is a stable SORT KEY, not a JSON document —
+     * field names are quoted so the concatenation is unambiguous. Used only as a Set-sort
+     * tie-breaker; inner-array order is left as-is, since a size/content difference inside
+     * an element is a real per-element difference and SHOULD change the key.
      */
-    private fun canonicalJson(node: JsonNode): String {
+    private fun canonicalSortKey(node: JsonNode): String {
         val sb = StringBuilder()
         appendCanonical(node, sb)
         return sb.toString()
@@ -189,7 +190,7 @@ object RawArraySorters {
                 node.fieldNames().asSequence().sorted().forEach { name ->
                     if (!first) sb.append(',')
                     first = false
-                    sb.append(name).append(':')
+                    sb.append('"').append(name).append('"').append(':')
                     appendCanonical(node.get(name), sb)
                 }
                 sb.append('}')
