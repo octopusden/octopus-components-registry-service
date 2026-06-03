@@ -643,6 +643,17 @@ object id17CompatLocalStandManual : BuildType({
             // so there is no port / Postgres collision between them.
             scriptContent = """
                 set -euo pipefail
+                # Green-skip when the compat-test infra isn't in this checkout. [1.7]/[1.8]
+                # auto-fire on [1.0] success for ANY branch; if a build resolves to `main`
+                # (the legacy V1 trunk) — or a deleted feature branch falls back to the
+                # default branch — `scripts/local-stands/` is absent and the wrapper below
+                # would exit 127. Mirror id15/id16: succeed with a clear status, not a red 127.
+                if [ ! -f scripts/local-stands/teamcity-run.sh ]; then
+                    echo "::: scripts/local-stands/teamcity-run.sh not present in this checkout."
+                    echo "::: [1.7] is only meaningful on v3-family branches that carry the compat-test infra."
+                    echo "##teamcity[buildStatus status='SUCCESS' text='Skipped: compat-test infra absent on this branch (likely main); run from v3 family instead.']"
+                    exit 0
+                fi
                 WORK_DIR="/tmp/crs-id17-%teamcity.build.id%"
                 TRACE_DATA_DIR="%teamcity.build.checkoutDir%/trace-data"
 
@@ -936,6 +947,17 @@ object id18CompatLocalStandGitModeAuto : BuildType({
             // Runs on a separate agent from id17 so the shared default ports don't collide.
             scriptContent = """
                 set -euo pipefail
+                # Green-skip when the compat-test infra isn't in this checkout. [1.7]/[1.8]
+                # auto-fire on [1.0] success for ANY branch; if a build resolves to `main`
+                # (the legacy V1 trunk) — or a deleted feature branch falls back to the
+                # default branch — `scripts/local-stands/` is absent and the wrapper below
+                # would exit 127. Mirror id15/id16: succeed with a clear status, not a red 127.
+                if [ ! -f scripts/local-stands/teamcity-run.sh ]; then
+                    echo "::: scripts/local-stands/teamcity-run.sh not present in this checkout."
+                    echo "::: [1.8] is only meaningful on v3-family branches that carry the compat-test infra."
+                    echo "##teamcity[buildStatus status='SUCCESS' text='Skipped: compat-test infra absent on this branch (likely main); run from v3 family instead.']"
+                    exit 0
+                fi
                 WORK_DIR="/tmp/crs-id18-%teamcity.build.id%"
                 TRACE_DATA_DIR="%teamcity.build.checkoutDir%/trace-data"
 
