@@ -38,12 +38,12 @@ class PermissionEvaluatorTest {
     private fun loginAs(user: User) = whenMock(sec.getCurrentUser()).thenReturn(user)
 
     private fun editor(username: String) =
-        User(username, setOf(Role("ROLE_EDITOR", setOf("ACCESS_COMPONENTS", "EDIT_COMPONENTS"))), emptySet())
+        User(username, setOf(Role("ROLE_EDITOR", setOf("ACCESS_COMPONENTS", "CREATE_COMPONENTS"))), emptySet())
 
     private fun admin(username: String) =
         User(
             username,
-            setOf(Role("ROLE_ADMIN", setOf("ACCESS_COMPONENTS", "EDIT_COMPONENTS", "EDIT_ANY_COMPONENT"))),
+            setOf(Role("ROLE_ADMIN", setOf("ACCESS_COMPONENTS", "CREATE_COMPONENTS", "EDIT_ANY_COMPONENT"))),
             emptySet(),
         )
 
@@ -83,7 +83,7 @@ class PermissionEvaluatorTest {
     }
 
     @Test
-    @DisplayName("owner matches → allow, even without EDIT_COMPONENTS")
+    @DisplayName("owner matches → allow, even without CREATE_COMPONENTS")
     fun `owner allowed`() {
         loginAs(viewer("bob"))
         val id = UUID.randomUUID()
@@ -101,7 +101,7 @@ class PermissionEvaluatorTest {
     }
 
     @Test
-    @DisplayName("release manager membership → allow, even without EDIT_COMPONENTS")
+    @DisplayName("release manager membership → allow, even without CREATE_COMPONENTS")
     fun `release manager allowed`() {
         loginAs(viewer("dave"))
         val id = UUID.randomUUID()
@@ -110,7 +110,7 @@ class PermissionEvaluatorTest {
     }
 
     @Test
-    @DisplayName("security champion membership → allow, even without EDIT_COMPONENTS")
+    @DisplayName("security champion membership → allow, even without CREATE_COMPONENTS")
     fun `security champion allowed`() {
         loginAs(viewer("erin"))
         val id = UUID.randomUUID()

@@ -41,7 +41,7 @@ import java.util.UUID
  *
  * `adminJwt()` = alice/ROLE_ADMIN (has EDIT_ANY_COMPONENT), `editorJwt(name)` =
  * name/ROLE_COMPONENTS_REGISTRY_EDITOR, `viewerJwt(name)` =
- * name/ROLE_COMPONENTS_REGISTRY_VIEWER (ACCESS_COMPONENTS only, no EDIT_COMPONENTS).
+ * name/ROLE_COMPONENTS_REGISTRY_VIEWER (ACCESS_COMPONENTS only, no CREATE_COMPONENTS).
  */
 @AutoConfigureMockMvc
 @SpringBootTest(
@@ -71,7 +71,7 @@ class ComponentOwnershipEditSecurityTest {
 
     private fun uniqueName(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(8)}"
 
-    /** Create a component (admin by default — create is gated on raw EDIT_COMPONENTS, not ownership). */
+    /** Create a component (admin by default — create is gated on raw CREATE_COMPONENTS, not ownership). */
     private fun create(
         name: String,
         owner: String? = null,
@@ -198,7 +198,7 @@ class ComponentOwnershipEditSecurityTest {
     @DisplayName("ACCESS-only user may PATCH when they are the owner")
     fun `viewer owner allowed`() {
         // carol is both the stored owner AND the viewer principal. The component-scoped
-        // edit gate depends on assignment, not on the coarse EDIT_COMPONENTS role.
+        // edit gate depends on assignment, not on the coarse CREATE_COMPONENTS role.
         val c = create(uniqueName("viewerowner"), owner = "carol")
         performPatch(c.id(), c.version(), bumpDisplayName(), viewerJwt())
             .andExpect(status().isOk)

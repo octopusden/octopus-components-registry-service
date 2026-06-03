@@ -200,7 +200,7 @@ Permissions (9):
 | Permission | Endpoint / Operation |
 |---|---|
 | `ACCESS_COMPONENTS` | read v1–v4 (public; `ROLE_ANONYMOUS` gets it so `@PreAuthorize` on GET methods also passes without auth) |
-| `EDIT_COMPONENTS` | `POST /rest/api/4/components` (create — no owner exists yet, so this is the sole gate). Not required for component-scoped edit after creation; `PATCH /{id}` and field-overrides CRUD use `canEditComponent` instead |
+| `CREATE_COMPONENTS` | `POST /rest/api/4/components` (create — no owner exists yet, so this is the sole gate). Not required for component-scoped edit after creation; `PATCH /{id}` and field-overrides CRUD use `canEditComponent` instead |
 | `EDIT_ANY_COMPONENT` | bypass the per-component owner/RM/SC edit check — edit ANY component when combined with `ACCESS_COMPONENTS` (e.g. to reassign a departed owner). `ROLE_ADMIN` only |
 | `ARCHIVE_COMPONENTS` | set `archived` via `PATCH /{id}` (future: dedicated `POST /{id}/archive`). Reserved — may move to per-component check (componentOwner, releaseManager) |
 | `RENAME_COMPONENTS` | change `name` via `PATCH /{id}` (future: dedicated `POST /{id}/rename`). Impactful — breaks legacy-resolve consumers |
@@ -227,7 +227,7 @@ octopus-security:
       - ACCESS_AUDIT
     ROLE_COMPONENTS_REGISTRY_EDITOR:
       - ACCESS_COMPONENTS
-      - EDIT_COMPONENTS
+      - CREATE_COMPONENTS
       - ACCESS_AUDIT
     # Super-admin — reuses whatever platform-wide admin realm-role already
     # exists in your Keycloak realm (commonly literally named `ADMIN`; the
@@ -236,7 +236,7 @@ octopus-security:
     # admin-access through a role nobody currently carries.
     ROLE_ADMIN:
       - ACCESS_COMPONENTS
-      - EDIT_COMPONENTS
+      - CREATE_COMPONENTS
       - EDIT_ANY_COMPONENT
       - ARCHIVE_COMPONENTS
       - RENAME_COMPONENTS
@@ -248,7 +248,7 @@ octopus-security:
 
 Notes on the model:
 
-- **Per-component edit ownership (implemented).** `PATCH /{id}` and all field-override CRUD (`POST`/`PATCH`/`DELETE /{id}/field-overrides`) are gated by `canEditComponent`: the effective predicate is `ACCESS_COMPONENTS && (componentOwner || releaseManager || securityChampion || EDIT_ANY_COMPONENT)`. Matching is trimmed + case-insensitive against the JWT `preferred_username`. A component with no owner AND empty RM AND empty SC is editable only by `EDIT_ANY_COMPONENT` holders; an unresolvable id/key denies, so a `PATCH` of a non-existent component returns **403, not 404** (the `@PreAuthorize` gate runs before the controller). `createComponent` stays on bare `EDIT_COMPONENTS` (no owner exists at create time). The detail response (`GET`/create/`PATCH`) carries a per-caller `canEdit` boolean computed from the same predicate so the Portal can hide the edit affordances.
+- **Per-component edit ownership (implemented).** `PATCH /{id}` and all field-override CRUD (`POST`/`PATCH`/`DELETE /{id}/field-overrides`) are gated by `canEditComponent`: the effective predicate is `ACCESS_COMPONENTS && (componentOwner || releaseManager || securityChampion || EDIT_ANY_COMPONENT)`. Matching is trimmed + case-insensitive against the JWT `preferred_username`. A component with no owner AND empty RM AND empty SC is editable only by `EDIT_ANY_COMPONENT` holders; an unresolvable id/key denies, so a `PATCH` of a non-existent component returns **403, not 404** (the `@PreAuthorize` gate runs before the controller). `createComponent` stays on bare `CREATE_COMPONENTS` (no owner exists at create time). The detail response (`GET`/create/`PATCH`) carries a per-caller `canEdit` boolean computed from the same predicate so the Portal can hide the edit affordances.
 - `ROLE_COMPONENTS_REGISTRY_EDITOR` deliberately does **not** carry `ARCHIVE_COMPONENTS` or `RENAME_COMPONENTS`. Archive/rename are reserved for ADMIN (or, longer-term, for a per-component check against `componentOwner` / `releaseManager` — the permission name is kept stable so that check can be added without re-wiring the role map).
 - The `PATCH /{id}` SpEL guard enforces this field-by-field: `... canEditComponent(...) and (#request.archived == null or canArchiveComponent(...)) and (#request.name == null or canRenameComponent(...))`. Plain edits use the ownership/admin predicate; archive/rename payloads fail closed with 403 for anyone without the extra permission.
 - Super-admin role is `ROLE_ADMIN`, reusing whatever existing platform-wide admin realm-role your Keycloak instance already carries (commonly literally named `ADMIN`). This diverges from an earlier draft that proposed a dedicated `ROLE_<PRODUCT>_ADMIN`; reusing the platform admin avoids wiring admin-access through a role nobody currently carries.

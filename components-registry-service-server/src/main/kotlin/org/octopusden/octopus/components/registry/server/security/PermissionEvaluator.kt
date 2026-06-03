@@ -100,14 +100,14 @@ class PermissionEvaluator(
     /**
      * Edit component-configuration metadata — gates the raw Field-Overrides edit
      * surface (add/edit/delete, incl. marker editing); a power-user / escape-hatch
-     * capability. Distinct from EDIT_COMPONENTS (inline per-field scalar edits) and
+     * capability. Distinct from CREATE_COMPONENTS (new component creation) and
      * IMPORT_DATA (bulk import). Mapped to ROLE_ADMIN in octopus-security.roles today.
      */
     fun canEditMetadata(): Boolean = hasPermission(EDIT_METADATA)
 
     companion object {
         const val ACCESS_COMPONENTS = "ACCESS_COMPONENTS"
-        const val EDIT_COMPONENTS = "EDIT_COMPONENTS"
+        const val CREATE_COMPONENTS = "CREATE_COMPONENTS"
 
         /**
          * Bypass for the per-component ownership check in [canEditComponent]:

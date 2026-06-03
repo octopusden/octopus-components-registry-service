@@ -26,7 +26,7 @@ import org.springframework.security.web.SecurityFilterChain
  *     anonymous traffic. With it active, `ROLE_ANONYMOUS` carries `ACCESS_COMPONENTS`
  *     via the `octopus-security.roles` map and v4 reads pass; v4 writes return 403
  *     because `ROLE_ANONYMOUS` lacks write-only permissions such as
- *     `EDIT_COMPONENTS` / `DELETE_COMPONENTS`, and component-scoped edits deny the
+ *     `CREATE_COMPONENTS` / `DELETE_COMPONENTS`, and component-scoped edits deny the
  *     anonymous principal before ownership lookup.
  *
  * The HTTP filter chain itself is permissive (`anyRequest().permitAll()`); method

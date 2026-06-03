@@ -109,7 +109,7 @@ All non-kill-listed v1/v2/v3 endpoints preserve response shape; the backing `Com
 POST   /rest/api/4/components
   Request:  ComponentCreateRequest { name, displayName, productType, ... }
   Response: ComponentDetailResponse { id, name, ..., versions[], build, escrow, ... }
-  Auth:     EDIT_COMPONENTS
+  Auth:     CREATE_COMPONENTS
 
 GET    /rest/api/4/components/{id}
   Response: ComponentDetailResponse (full tree with all nested configs; incl. per-caller `canEdit`)
@@ -319,7 +319,7 @@ Implemented in `WebSecurityConfig.kt` (extends `CloudCommonWebSecurityConfig` fr
 
 | Method | Required permission | Used on |
 |---|---|---|
-| `canEditComponent(idOrName)` | `ACCESS_COMPONENTS` **and** (owner/RM/SC membership **or** `EDIT_ANY_COMPONENT`) | `PATCH /components/{id}` (plain edit) and all field-override CRUD (`POST`/`PATCH`/`DELETE /{id}/field-overrides`). `POST /components` (create) uses `hasPermission('EDIT_COMPONENTS')` directly because no owner exists yet |
+| `canEditComponent(idOrName)` | `ACCESS_COMPONENTS` **and** (owner/RM/SC membership **or** `EDIT_ANY_COMPONENT`) | `PATCH /components/{id}` (plain edit) and all field-override CRUD (`POST`/`PATCH`/`DELETE /{id}/field-overrides`). `POST /components` (create) uses `hasPermission('CREATE_COMPONENTS')` directly because no owner exists yet |
 | `canArchiveComponent(name)` | `ARCHIVE_COMPONENTS` | `PATCH /components/{id}` when `archived` is in payload |
 | `canRenameComponent(name)` | `RENAME_COMPONENTS` | `PATCH /components/{id}` when `name` is in payload |
 | `canDeleteComponent(name)` | `DELETE_COMPONENTS` | `DELETE /components/{id}` |
@@ -332,7 +332,7 @@ The `PATCH /components/{id}` SpEL guard combines these (the path variable is a `
 ```
 Plain edits use the ownership/admin predicate; archive/rename payloads fail closed with 403 for anyone without the extra permission.
 
-**Per-component edit ownership (implemented).** `canEditComponent(idOrName)` resolves the component (UUID, or component key as a fallback) and allows the edit only when the caller satisfies `ACCESS_COMPONENTS && (componentOwner || releaseManager || securityChampion || EDIT_ANY_COMPONENT)`. Owner/RM/SC matching uses the JWT `preferred_username`, trimmed + case-insensitive; `EDIT_ANY_COMPONENT` is mapped to `ROLE_ADMIN` and bypasses the membership check. `EDIT_COMPONENTS` is not required after creation; assignment to the component is the edit grant. A component with no owner AND empty RM AND empty SC is editable only by `EDIT_ANY_COMPONENT` holders; an unresolvable id/key denies — so `PATCH` of a non-existent component is **403, not 404** (the gate runs before the controller). Owner/RM/SC are read via scalar projection queries on `ComponentRepository` (never the LAZY child collections, since `@PreAuthorize` runs outside a Hibernate session). The same predicate stamps the per-caller `canEdit` flag on the `GET`/create/`PATCH` detail responses for the Portal. This mirrors the entity-scoped evaluator pattern already used in `octopus-dms-service` (`hasPermissionByComponent`).
+**Per-component edit ownership (implemented).** `canEditComponent(idOrName)` resolves the component (UUID, or component key as a fallback) and allows the edit only when the caller satisfies `ACCESS_COMPONENTS && (componentOwner || releaseManager || securityChampion || EDIT_ANY_COMPONENT)`. Owner/RM/SC matching uses the JWT `preferred_username`, trimmed + case-insensitive; `EDIT_ANY_COMPONENT` is mapped to `ROLE_ADMIN` and bypasses the membership check. `CREATE_COMPONENTS` is not required after creation; assignment to the component is the edit grant. A component with no owner AND empty RM AND empty SC is editable only by `EDIT_ANY_COMPONENT` holders; an unresolvable id/key denies — so `PATCH` of a non-existent component is **403, not 404** (the gate runs before the controller). Owner/RM/SC are read via scalar projection queries on `ComponentRepository` (never the LAZY child collections, since `@PreAuthorize` runs outside a Hibernate session). The same predicate stamps the per-caller `canEdit` flag on the `GET`/create/`PATCH` detail responses for the Portal. This mirrors the entity-scoped evaluator pattern already used in `octopus-dms-service` (`hasPermissionByComponent`).
 
 ### 6.4 Audit `changedBy` wiring
 

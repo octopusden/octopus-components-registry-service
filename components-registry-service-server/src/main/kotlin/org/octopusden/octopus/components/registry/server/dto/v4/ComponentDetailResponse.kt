@@ -57,7 +57,7 @@ data class ComponentDetailResponse(
     // (componentOwner / releaseManager / securityChampion OR EDIT_ANY_COMPONENT).
     // Stamped on every detail-returning endpoint (GET, create, update) so the Portal
     // can hide the Edit affordances. Null when not evaluated (e.g. produced outside
-    // a request context); the Portal then falls back to its global EDIT_COMPONENTS
+    // a request context); the Portal then falls back to its global CREATE_COMPONENTS
     // check for legacy backend compatibility.
     val canEdit: Boolean? = null,
 )
