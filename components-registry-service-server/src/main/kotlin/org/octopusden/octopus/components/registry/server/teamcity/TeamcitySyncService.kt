@@ -4,7 +4,6 @@ import mu.KotlinLogging
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentTeamcityProjectEntity
-import org.octopusden.octopus.components.registry.server.event.AuditEvent
 import org.octopusden.octopus.components.registry.server.mapper.composeTeamcityProjectUrl
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentTeamcityProjectRepository
@@ -51,12 +50,12 @@ import java.util.UUID
  * `sortOrder = 0` slot). Multi-project support is still future work; for
  * now sync collapses to one row to preserve v1–v3 wire compatibility.
  *
- * Idempotent: only writes when the matched project id actually changes. Audit
- * log emitted via existing [AuditEvent] flow when fields change so admins can
- * trace the source of writes. Audit field names — `teamcityProjectId` and
- * `teamcityProjectUrl` — are kept on the wire even though the underlying
- * `components` columns are gone; consumers (Portal audit timeline,
- * downstream log indexers) still key off those names.
+ * Idempotent: only writes when the matched project id actually changes. The
+ * change is traced via an INFO log line (so admins can find the source of a
+ * write) but deliberately does NOT write an `audit_log` row: TeamCity sync is
+ * an automated background reconciliation (`changedBy = system`), and one such
+ * row per re-linked component was noise in the component history (SYS-051).
+ * If per-sync auditing is ever wanted, re-publish an `AuditEvent` here.
  *
  * Error handling: a fetcher failure (TC unreachable, auth refused, malformed
  * response) propagates out of [resync] — for the admin endpoint that surfaces
@@ -70,6 +69,11 @@ class TeamcitySyncService(
     private val componentRepository: ComponentRepository,
     private val componentTeamcityProjectRepository: ComponentTeamcityProjectRepository,
     private val tcProjectFetcher: TcProjectFetcher,
+    // Retained as the audit seam even though TeamCity sync is deliberately NOT
+    // audited (SYS-051): TeamcitySyncServiceTest injects a recording publisher
+    // and asserts no AuditEvent is published, guarding against an accidental
+    // re-introduction. Re-publish here if per-sync auditing is ever wanted.
+    @Suppress("UnusedPrivateProperty")
     private val applicationEventPublisher: ApplicationEventPublisher,
     private val currentUserResolver: CurrentUserResolver,
     private val transactionTemplate: TransactionTemplate,
@@ -318,24 +322,13 @@ class TeamcitySyncService(
             ),
         )
 
-        applicationEventPublisher.publishEvent(
-            AuditEvent(
-                entityType = "Component",
-                entityId = component.id.toString(),
-                action = "UPDATE",
-                changedBy = changedBy,
-                oldValue =
-                    mapOf(
-                        "teamcityProjectId" to oldId,
-                        "teamcityProjectUrl" to oldUrl,
-                    ),
-                newValue =
-                    mapOf(
-                        "teamcityProjectId" to newId,
-                        "teamcityProjectUrl" to newUrl,
-                    ),
-            ),
-        )
+        // SYS-051: trace the re-link in the log (NOT the audit_log). TeamCity
+        // sync is an automated reconciliation (changedBy = system); a per-link
+        // audit row was noise in the component history.
+        log.info {
+            "TeamCity sync re-linked component ${component.id}: " +
+                "'$oldId' ($oldUrl) -> '$newId' ($newUrl) (by $changedBy)"
+        }
         return true
     }
 }

@@ -348,6 +348,7 @@ The fallback path is exercised by code paths that don't carry a request context.
 - **Actions:** `CREATE | UPDATE | DELETE | RENAME | MIGRATED`. `MIGRATED` (`AuditLogEntity.ACTION_MIGRATED`) is written by `/admin/migrate-history` for a component's first appearance instead of `CREATE`; both read endpoints hide it by default behind `includeMigrated` (SYS-049). See ADR-005 "Refinements".
 - **No-op suppression:** `AuditEventListener` drops any event whose `oldValue` and `newValue` are both present but produce an empty `change_diff`, so a Save that changes nothing leaves no row. CREATE/DELETE are unaffected (SYS-048).
 - **Field-override coverage:** `createFieldOverride` / `updateFieldOverride` / `deleteFieldOverride` publish a Component `UPDATE` event keyed by `fieldOverride[<attr>]`, so version-range edits are auditable like top-level attribute edits (SYS-050).
+- **TeamCity sync not audited:** the automated `changedBy=system` reconciliation in `TeamcitySyncService` writes no `audit_log` row (it was noise); the re-link is logged at INFO instead (SYS-051).
 
 ### 6.5 Backward Compatibility
 - v1/v2/v3 endpoints: **permit all** (existing 7+ Feign client consumers don't send JWT).

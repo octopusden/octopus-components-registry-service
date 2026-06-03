@@ -124,6 +124,13 @@ Component `UPDATE` event keyed by the overridden attribute, so version-range edi
 appear in the component history alongside top-level attribute edits — closing the
 "all write paths go through audited service methods" risk for these paths. (SYS-050)
 
+### Not audited: TeamCity sync
+The automated TeamCity sync (`changedBy = system`) deliberately does NOT write an
+audit row — a per-component re-link row is operational noise, not a user change.
+The re-link is traced via an INFO log line instead. This is a deliberate
+exception to "all write paths are audited"; re-publish an `AuditEvent` in
+`TeamcitySyncService` if per-sync auditing is ever wanted. (SYS-051)
+
 ## References
 - [DMS Event pattern](https://github.com/octopusden/octopus-dms-service) — `server/.../event/`
 - [PostgreSQL JSONB operators](https://www.postgresql.org/docs/current/functions-json.html)

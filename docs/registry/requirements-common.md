@@ -59,6 +59,7 @@
 | SYS-048 | A no-op write (component or field-override save whose old/new snapshots carry no field-level diff) writes no audit row; CREATE/DELETE keep theirs | High | unit-test | ✅ Tested |
 | SYS-049 | Git-history backfill records a component's first appearance with action `MIGRATED` (not `CREATE`); both audit read endpoints hide `MIGRATED` by default, opt back in via `includeMigrated=true`, and always honour an explicit `action=MIGRATED` filter | High | unit + integration-test | ✅ Tested |
 | SYS-050 | Field-override (version-range) create/update/delete each publish a Component `UPDATE` audit event with an attribute-keyed diff | High | integration-test | ✅ Tested |
+| SYS-051 | TeamCity sync (automated `changedBy=system` reconciliation) does NOT write an audit row — the re-link is traced via an INFO log instead | Medium | unit-test | ✅ Tested |
 
 ---
 
@@ -1685,3 +1686,35 @@ override PATCH produces an empty diff and is dropped by the SYS-048 guard.
 **Test method:** `FieldOverrideAuditTest` —
 `SYS-050 field-override writes are audited as Component UPDATE`,
 `SYS-050 no-op override PATCH writes no audit row`.
+
+### SYS-051: TeamCity sync writes no audit row
+
+**Priority:** Medium
+**Test layer:** unit-test
+**Status:** ✅ Tested
+
+**Motivation:**
+The TeamCity sync (`/admin/teamcity-resync` and the scheduled cron) is an
+automated reconciliation that links each component to its TeamCity project.
+Every re-link previously published a Component `UPDATE` `AuditEvent`
+(`changedBy = system`, `teamcityProjectId` / `teamcityProjectUrl`). One such row
+per re-linked component is operational noise in the component history — it is
+not a user-initiated change.
+
+**Description:**
+`TeamcitySyncService.applyMatch` no longer publishes an `AuditEvent`; instead it
+emits an INFO log line tracing the re-link (component id, old → new project id +
+url, and the resolving user) so the source of a write is still discoverable. No
+`audit_log` row is written for a TeamCity sync. The `ApplicationEventPublisher`
+seam is retained so the test can assert nothing is published (and as the
+re-wire point if per-sync auditing is ever wanted).
+
+**Acceptance criteria:**
+1. A TeamCity sync that writes/updates a component's TC row publishes **no** `AuditEvent`.
+2. The TC row + sync counts (`updated` / `unchanged` / …) are unaffected.
+3. An unchanged component (idempotent re-run) still publishes nothing (unchanged behaviour).
+
+**Test method:** `TeamcitySyncServiceTest` —
+`SYS-051 happy path: writes TC row; counts updated; NO audit event`, plus the
+`ambiguousAutoResolved` and `mixed batch` cases assert
+`publisher.events.filterIsInstance<AuditEvent>().isEmpty()`.
