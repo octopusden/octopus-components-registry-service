@@ -3,6 +3,7 @@ package org.octopusden.octopus.components.registry.client
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.TestInstance
 import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.parallel.ResourceLock
@@ -37,6 +38,7 @@ import java.util.stream.Stream
 )
 @ActiveProfiles("v3", "test")
 @ResourceLock(value = "SYSTEM_PROPERTIES")
+@Tag("integration")
 class ComponentRegistryServiceClientV3Test {
     // Prevents cloud-commons AuthServerClient from running OIDC discovery at bean init;
     // v3 endpoints are permit-all so no auth is actually exercised.

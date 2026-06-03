@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.client
 
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
@@ -46,6 +47,7 @@ import kotlin.test.assertTrue
 )
 @ActiveProfiles("common", "test")
 @ResourceLock(value = "SYSTEM_PROPERTIES")
+@Tag("integration")
 class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
     // Prevents cloud-commons AuthServerClient from running OIDC discovery at bean init;
     // this test only hits public v1/v2/v3 endpoints through Feign, so no auth is needed.

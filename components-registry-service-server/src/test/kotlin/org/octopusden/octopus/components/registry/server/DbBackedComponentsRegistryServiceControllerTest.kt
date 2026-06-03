@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server
 
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeAll
@@ -37,6 +38,7 @@ import java.nio.file.Paths
 )
 @ActiveProfiles("common", "test-db")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@Tag("integration")
 class DbBackedComponentsRegistryServiceControllerTest : MockMvcRegistryTestSupport() {
     @Autowired
     private lateinit var sourceRegistry: ComponentSourceRegistry

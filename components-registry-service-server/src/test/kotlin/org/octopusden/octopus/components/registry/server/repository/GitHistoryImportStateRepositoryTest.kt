@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.repository
 
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.octopusden.cloud.commons.security.client.AuthServerClient
@@ -15,6 +16,7 @@ import java.nio.file.Paths
 
 @SpringBootTest(classes = [ComponentRegistryServiceApplication::class])
 @ActiveProfiles("common", "test-db")
+@Tag("integration")
 class GitHistoryImportStateRepositoryTest {
     @MockBean
     @Suppress("UnusedPrivateProperty")

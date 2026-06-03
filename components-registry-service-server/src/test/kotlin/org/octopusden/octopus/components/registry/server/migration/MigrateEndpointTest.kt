@@ -2,6 +2,7 @@ package org.octopusden.octopus.components.registry.server.migration
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -49,6 +50,7 @@ import java.nio.file.Paths
 )
 @Import(MigrateEndpointTest.SyncMigrationExecutorConfig::class)
 @ActiveProfiles("common", "test-db")
+@Tag("integration")
 class MigrateEndpointTest {
     @MockBean
     @Suppress("UnusedPrivateProperty")

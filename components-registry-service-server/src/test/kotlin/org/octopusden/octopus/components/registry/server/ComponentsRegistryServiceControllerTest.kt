@@ -1,6 +1,7 @@
 package org.octopusden.octopus.components.registry.server
 
 import org.junit.jupiter.api.Assertions
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.octopusden.octopus.components.registry.core.dto.BuildSystem
@@ -23,6 +24,7 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 @ExtendWith(SpringExtension::class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, classes = [ComponentRegistryServiceApplication::class])
 @ActiveProfiles("common", "test")
+@Tag("integration")
 class ComponentsRegistryServiceControllerTest : MockMvcRegistryTestSupport() {
     private val docker = "test/versions-api"
     private val gav = "org.octopusden.octopus.test:versions-api:jar"

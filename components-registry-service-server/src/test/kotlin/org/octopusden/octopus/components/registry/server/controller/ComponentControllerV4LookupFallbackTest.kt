@@ -1,6 +1,7 @@
 package org.octopusden.octopus.components.registry.server.controller
 
 import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.mockito.Mockito.never
@@ -44,6 +45,7 @@ import java.util.UUID
 @ActiveProfiles("common", "ft-db")
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Timeout(120)
+@Tag("integration")
 class ComponentControllerV4LookupFallbackTest {
     @MockBean
     @Suppress("UnusedPrivateProperty")

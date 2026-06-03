@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -42,6 +43,7 @@ import static org.octopusden.octopus.components.registry.test.BaseComponentsRegi
 )
 @ActiveProfiles({"common", "test"})
 @ResourceLock(value = "SYSTEM_PROPERTIES")
+@Tag("integration")
 class ComponentsRegistryServiceLightClientTest {
 
     ComponentsRegistryServiceLightClientTest() {

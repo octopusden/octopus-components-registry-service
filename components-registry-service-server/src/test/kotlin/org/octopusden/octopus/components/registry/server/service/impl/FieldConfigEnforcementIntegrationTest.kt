@@ -2,6 +2,7 @@ package org.octopusden.octopus.components.registry.server.service.impl
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -51,6 +52,7 @@ import java.nio.file.Paths
 @ActiveProfiles("common", "ft-db")
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Timeout(120)
+@Tag("integration")
 class FieldConfigEnforcementIntegrationTest {
     @MockBean
     @Suppress("UnusedPrivateProperty")

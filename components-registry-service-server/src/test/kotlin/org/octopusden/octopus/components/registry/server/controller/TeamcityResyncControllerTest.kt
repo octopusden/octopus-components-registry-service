@@ -2,6 +2,7 @@ package org.octopusden.octopus.components.registry.server.controller
 
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.never
 import org.mockito.Mockito.times
@@ -57,6 +58,7 @@ import java.time.Instant
     classes = [ComponentRegistryServiceApplication::class],
 )
 @ActiveProfiles("common", "test")
+@Tag("integration")
 class TeamcityResyncControllerTest {
     @MockBean
     @Suppress("UnusedPrivateProperty")

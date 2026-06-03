@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.migration
 
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
@@ -36,6 +37,7 @@ import java.nio.file.Paths
 @ActiveProfiles("common", "ft-db")
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Timeout(60)
+@Tag("integration")
 class BuildToolBeansEntityRoundTripTest {
 
     @MockBean

@@ -2,6 +2,7 @@ package org.octopusden.octopus.components.registry.server.listener
 
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
@@ -37,6 +38,7 @@ import java.nio.file.Paths
 @ActiveProfiles("common", "ft-db")
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Timeout(60)
+@Tag("integration")
 class FieldConfigSeederTest {
     @MockBean
     @Suppress("UnusedPrivateProperty")
