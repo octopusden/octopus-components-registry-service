@@ -162,8 +162,9 @@ GET    /rest/api/4/components/{id}/field-overrides
 #### Audit
 ```
 GET    /rest/api/4/audit/{entityType}/{entityId}?page=0&size=20
-  Response: Page<AuditEntry> { action, changedBy, changedAt, oldValue, newValue, diff, source }
+  Response: Page<AuditEntry> { action, changedBy, changedAt, oldValue, newValue, changeDiff, source }
   Auth:     ACCESS_AUDIT
+  Filters:  includeMigrated — default false; hides action=MIGRATED rows unless true (SYS-049)
 
 GET    /rest/api/4/audit/recent
   Response: Page<AuditEntry>, default sort changedAt DESC
@@ -175,12 +176,19 @@ GET    /rest/api/4/audit/recent
               changedBy    — username from audit_log.changed_by (CurrentUserResolver)
               source       — currently only "api" or "git-history"; other values
                              reserved for future writers
-              action       — "CREATE" | "UPDATE" | "DELETE" | "RENAME" | "ARCHIVE"
+              action       — "CREATE" | "UPDATE" | "DELETE" | "RENAME" | "MIGRATED"
               from, to     — ISO-8601 instants; half-open [from, to) on changed_at
+              includeMigrated — default false; hides action=MIGRATED (migration
+                             baseline noise) unless true, or unless an explicit
+                             action=MIGRATED filter is given (SYS-049)
   Note:     `audit_log.changed_by` is populated from CurrentUserResolver
             (preferred_username from the authenticated JWT, fallback "system" for
             background jobs). Fixes the gap where API-driven audit rows used to
             store NULL.
+            MIGRATED rows are git-history baseline (one per component) and are
+            hidden by default; the empty-diff no-op guard (SYS-048) keeps "saved,
+            changed nothing" writes out of the log; field-override writes are
+            audited as Component UPDATE (SYS-050).
 ```
 
 #### Admin
@@ -334,6 +342,13 @@ Every `applicationEventPublisher.publishEvent(AuditEvent(...))` call site sets `
 - no authenticated context (background jobs, async tasks outside an HTTP thread) → `"system"`.
 
 The fallback path is exercised by code paths that don't carry a request context. `/admin/migrate-history` is a special case: it sets `changedBy` from the git author signature (`"Name <email>"`) rather than from `CurrentUserResolver`, because the historical event was originally authored by that git committer — see `GitHistoryImportServiceImpl`. SYS-036 acceptance criterion 3 (filter by `changedBy`) depends on this wiring being in place; tests live under `AuditLogFilterTest`.
+
+#### 6.4.1 Action semantics, noise suppression, and coverage
+
+- **Actions:** `CREATE | UPDATE | DELETE | RENAME | MIGRATED`. `MIGRATED` (`AuditLogEntity.ACTION_MIGRATED`) is written by `/admin/migrate-history` for a component's first appearance instead of `CREATE`; both read endpoints hide it by default behind `includeMigrated` (SYS-049). See ADR-005 "Refinements".
+- **No-op suppression:** `AuditEventListener` drops any event whose `oldValue` and `newValue` are both present but produce an empty `change_diff`, so a Save that changes nothing leaves no row. CREATE/DELETE are unaffected (SYS-048).
+- **Field-override coverage:** `createFieldOverride` / `updateFieldOverride` / `deleteFieldOverride` publish a Component `UPDATE` event keyed by `fieldOverride[<attr>]`, so version-range edits are auditable like top-level attribute edits (SYS-050).
+- **TeamCity sync not audited:** the automated `changedBy=system` reconciliation in `TeamcitySyncService` writes no `audit_log` row (it was noise); the re-link is logged at INFO instead (SYS-051).
 
 ### 6.5 Backward Compatibility
 - v1/v2/v3 endpoints: **permit all** (existing 7+ Feign client consumers don't send JWT).

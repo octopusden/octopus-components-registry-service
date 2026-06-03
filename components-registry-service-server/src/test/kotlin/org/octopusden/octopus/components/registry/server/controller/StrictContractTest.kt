@@ -541,8 +541,14 @@ class StrictContractTest {
                     .content(fieldConfigPayload),
             ).andExpect(status().is2xxSuccessful)
 
-        // PATCH would write ALFA if the field were not hidden.
-        val patchBody = """{"version": $versionLock, "clearGroup": false, "system": "ALFA"}"""
+        // PATCH would write ALFA if the field were not hidden. We also change a
+        // *visible* field (`displayName`) so the write is not a no-op: under
+        // SYS-048 a PATCH that persists no change writes no audit row at all, so
+        // without a real change there would be no UPDATE entry to inspect for the
+        // ghost-write. The ghost-write guard below still holds — the resulting
+        // row's `newValue.system` must read the persisted CLASSIC, never ALFA.
+        val patchBody =
+            """{"version": $versionLock, "clearGroup": false, "system": "ALFA", "displayName": "$name-edited"}"""
         mvc.perform(
             patch("/rest/api/4/components/$id")
                 .with(adminJwt())

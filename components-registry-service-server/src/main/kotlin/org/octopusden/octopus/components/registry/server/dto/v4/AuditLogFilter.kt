@@ -11,7 +11,12 @@ import java.time.Instant
  * `from` and `to` form a half-open interval `[from, to)` over `audit_log.changed_at`.
  * Either bound is independently optional.
  *
- * Contract: `SYS-036` in `requirements-common.md`.
+ * `includeMigrated` controls visibility of git-history baseline rows
+ * (`action = MIGRATED`). It defaults to `false` so migration noise is hidden;
+ * an explicit `action = MIGRATED` filter always wins regardless of this flag
+ * (SYS-049).
+ *
+ * Contract: `SYS-036`, `SYS-049` in `requirements-common.md`.
  */
 data class AuditLogFilter(
     val entityType: String? = null,
@@ -21,4 +26,5 @@ data class AuditLogFilter(
     val action: String? = null,
     val from: Instant? = null,
     val to: Instant? = null,
+    val includeMigrated: Boolean = false,
 )

@@ -22,16 +22,24 @@ import java.time.Instant
 class AuditControllerV4(
     private val auditService: AuditService,
 ) {
+    /**
+     * `includeMigrated` (default `false`) controls visibility of git-history
+     * baseline rows (`action = MIGRATED`); the Portal "Show migration" toggle
+     * flips it. SYS-049.
+     */
     @GetMapping("/{entityType}/{entityId}")
     fun getEntityHistory(
         @PathVariable entityType: String,
         @PathVariable entityId: String,
+        @RequestParam(required = false, defaultValue = "false") includeMigrated: Boolean,
         pageable: Pageable,
-    ): Page<AuditLogResponse> = auditService.getEntityHistory(entityType, entityId, pageable)
+    ): Page<AuditLogResponse> = auditService.getEntityHistory(entityType, entityId, includeMigrated, pageable)
 
     /**
      * SYS-036 filter params, all independently optional. `from`/`to` are ISO-8601
      * instants forming a half-open `[from, to)` window over `audit_log.changed_at`.
+     * `includeMigrated` (default `false`) surfaces git-history baseline rows
+     * (`action = MIGRATED`), which are hidden otherwise. SYS-049.
      */
     @GetMapping("/recent")
     fun getRecentChanges(
@@ -42,6 +50,7 @@ class AuditControllerV4(
         @RequestParam(required = false) action: String?,
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) from: Instant?,
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) to: Instant?,
+        @RequestParam(required = false, defaultValue = "false") includeMigrated: Boolean,
         pageable: Pageable,
     ): Page<AuditLogResponse> {
         val filter =
@@ -53,6 +62,7 @@ class AuditControllerV4(
                 action = action,
                 from = from,
                 to = to,
+                includeMigrated = includeMigrated,
             )
         return auditService.getRecentChanges(filter, pageable)
     }

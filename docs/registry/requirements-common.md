@@ -56,6 +56,10 @@
 | SYS-045 | GET /components?distributionExplicit= / ?distributionExternal= activate the two scalar distribution boolean filters (mirror `solution`; `=false` excludes NULL rows) | Medium | integration-test | ✅ Tested |
 | SYS-046 | clientCode / jiraProjectKey / parentComponentName / groupKey become multi-value exact-IN filters (CSV / repeatable); 4 companion in-use meta endpoints (/meta/client-codes, /meta/jira-project-keys, /meta/parent-component-names, /meta/group-keys) | High | integration-test | ✅ Tested |
 | SYS-047 | git-only no-DB boot mode: the `no-db` profile excludes the JDBC/JPA/Flyway auto-configs and gates every DB-coupled bean off (`@ConditionalOnDatabaseEnabled`), so the service boots with no database and serves v1/v2/v3 from the Git resolver — the compat git-mode stand (id18) needs no Postgres | High | unit / context-load test | ✅ Tested |
+| SYS-048 | A no-op write (component or field-override save whose old/new snapshots carry no field-level diff) writes no audit row; CREATE/DELETE keep theirs | High | unit-test | ✅ Tested |
+| SYS-049 | Git-history backfill records a component's first appearance with action `MIGRATED` (not `CREATE`); both audit read endpoints hide `MIGRATED` by default and opt back in via `includeMigrated=true`. `/audit/recent` additionally honours an explicit `action=MIGRATED` filter (the entity-history endpoint takes only `includeMigrated`) | High | unit + integration-test | ✅ Tested |
+| SYS-050 | Field-override (version-range) create/update/delete each publish a Component `UPDATE` audit event with an attribute-keyed diff | High | integration-test | ✅ Tested |
+| SYS-051 | TeamCity sync (automated `changedBy=system` reconciliation) does NOT write an audit row — the re-link is traced via an INFO log instead | Medium | unit-test | ✅ Tested |
 
 ---
 
@@ -477,8 +481,9 @@ accessible via `GET /rest/api/4/admin/component-defaults`.
 **Status:** ❌ Not tested
 
 **Description:**
-When a component is updated via PATCH, a record is created in `audit_log`
-with action = `UPDATE`, old_value, new_value, and change_diff.
+When a component is updated via PATCH **with an actual change**, a record is
+created in `audit_log` with action = `UPDATE`, old_value, new_value, and
+change_diff. A no-op PATCH (nothing changed) writes no row — see SYS-048.
 
 **Preconditions:**
 - Component exists
@@ -1072,11 +1077,11 @@ The Portal `AuditLogPage` filter sidebar drives a server-side query — without 
 Supported filters:
 | Param | Type | Notes |
 |---|---|---|
-| `entityType` | string | Currently only `Component` is emitted (capitalized — `cb.equal` is case-sensitive). `FieldOverride` and other entity types are reserved for future audit instrumentation; field-override CRUD does not publish `AuditEvent` yet. |
+| `entityType` | string | Currently only `Component` is emitted (capitalized — `cb.equal` is case-sensitive). `FieldOverride` and other entity types are reserved for future audit instrumentation; field-override CRUD is audited as a `Component` `UPDATE` (SYS-050), not under a `FieldOverride` entity type. |
 | `entityId` | string | usually a UUID; combine with `entityType` for entity-scoped history reachable in the same query as user/source filters |
 | `changedBy` | string | username from `audit_log.changed_by`. For runtime API events the value is resolved by `CurrentUserResolver` (see TDD §6.4); for git-history backfill rows it is the git author signature. |
 | `source` | string | Currently only `api` (default for runtime events) and `git-history` (backfill from `/admin/migrate-history`) are emitted. Other values are reserved for future writers. |
-| `action` | string | `CREATE` \| `UPDATE` \| `DELETE` \| `RENAME` \| `ARCHIVE` \| … |
+| `action` | string | `CREATE` \| `UPDATE` \| `DELETE` \| `RENAME` \| `MIGRATED` (hidden by default — see SYS-049) |
 | `from`, `to` | ISO-8601 instant | half-open `[from, to)` over `audit_log.changed_at`; either or both optional |
 
 **Preconditions:**
@@ -1585,3 +1590,133 @@ its name + a `@DisplayName("SYS-047: …")` (test-to-requirement traceability):
 `SYS-047 git resolver is the sole resolver in no-db mode`,
 `SYS-047 db-only beans absent and git read path present in no-db mode`,
 `SYS-047 status reports defaultSource git and zero db components in no-db mode`.
+
+### SYS-048: no-op save writes no audit row
+
+**Priority:** High
+**Test layer:** unit-test
+**Status:** ✅ Tested
+
+**Motivation:**
+Clicking Save on an unmodified edit form (and any other write path that re-saves
+without changing anything) used to append an `UPDATE` audit row whose
+`change_diff` was empty. These "saved, changed nothing" rows are noise that
+hides the real history.
+
+**Description:**
+`AuditEventListener` computes the field-level diff (`AuditDiff.compute`) and, when
+**both** `oldValue` and `newValue` are present but the diff is empty, skips
+persisting the row entirely. This is centralised in the listener, so it applies to
+every publisher: component `UPDATE`, field-override writes (SYS-050), and TeamCity
+sync. `CREATE` (null `oldValue`) and `DELETE` legitimately produce a null diff and
+are always kept.
+
+**Acceptance criteria:**
+1. An `UPDATE` event whose `oldValue` equals `newValue` (empty diff) is not persisted.
+2. A `CREATE` event (null `oldValue`) is persisted even though its diff is null.
+3. A real `UPDATE` (non-empty diff) is persisted with the computed `change_diff`.
+
+**Test method:** `AuditEventListenerTest` — `SYS-048 no-op UPDATE writes no audit row`,
+`SYS-048 real UPDATE is persisted`, `SYS-048 CREATE is always persisted`,
+`SYS-048 DELETE is persisted`.
+
+### SYS-049: git-history baseline recorded as MIGRATED and hidden by default
+
+**Priority:** High
+**Test layer:** unit + integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+The git-history backfill writes one row per component for the commit where it first
+appears. Recording these as `CREATE` floods the audit views with migration noise
+that carries no operational value and misrepresents a migration as a user action.
+
+**Description:**
+- `GitHistoryImportServiceImpl` resolves a component's first appearance
+  (`oldValue == null`) to `AuditLogEntity.ACTION_MIGRATED` (`"MIGRATED"`) instead of
+  `CREATE`. Genuine historical `UPDATE`/`DELETE` rows are unchanged. Runtime API
+  creates (via `ComponentManagementServiceImpl`) remain `CREATE`.
+- Both audit read endpoints hide `MIGRATED` rows by default. `GET /audit/recent`
+  and `GET /audit/{entityType}/{entityId}` accept `includeMigrated` (default
+  `false`); `getEntityHistory` uses a no-`MIGRATED` query on the default path and the
+  recent-filter adds a `action != MIGRATED` predicate. `/audit/recent` (the only
+  endpoint with an `action` query param) additionally returns `MIGRATED` rows when
+  an explicit `action=MIGRATED` filter is given, regardless of `includeMigrated`;
+  the entity-history endpoint has no `action` param, so `includeMigrated` is its
+  sole opt-in. Either way the Portal "Show migration" toggle surfaces them.
+
+**Acceptance criteria:**
+1. A first-appearance snapshot resolves to `MIGRATED`; disappearance → `DELETE`;
+   changed → `UPDATE`; unchanged → null (no row).
+2. `GET /audit/recent` and `GET /audit/Component/{id}` exclude `MIGRATED` rows by default.
+3. `includeMigrated=true` surfaces `MIGRATED` rows on both endpoints.
+4. On `GET /audit/recent`, an explicit `action=MIGRATED` filter returns `MIGRATED` rows even without `includeMigrated` (the entity-history endpoint has no `action` param).
+
+**Test method:** `GitHistoryImportActionResolutionTest` (`SYS-049 first appearance
+resolves to MIGRATED` and the DELETE/UPDATE/null cases) +
+`AuditMigratedVisibilityTest` (`SYS-049 recent hides MIGRATED by default`,
+`SYS-049 recent includeMigrated returns MIGRATED`,
+`SYS-049 explicit action MIGRATED wins over default hide`,
+`SYS-049 entity history honours includeMigrated`).
+
+### SYS-050: field-override writes are audited as Component UPDATE
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+Adding, changing or removing a version-ranged attribute override is a real change to
+the component, but the field-override write paths only bumped the parent version —
+they published no audit event, so version-range edits were invisible in the
+component history (inconsistent with top-level attribute edits, which are audited).
+
+**Description:**
+`createFieldOverride` / `updateFieldOverride` / `deleteFieldOverride` publish a
+Component `UPDATE` `AuditEvent` (`entityId` = the parent component id) with an
+old/new snapshot keyed by the overridden attribute (`fieldOverride[<attr>]`),
+carrying the version range and the resolved scalar value / marker children. A no-op
+override PATCH produces an empty diff and is dropped by the SYS-048 guard.
+
+**Acceptance criteria:**
+1. `createFieldOverride` writes one Component `UPDATE` audit row whose diff names the
+   overridden attribute.
+2. `updateFieldOverride` (real change) and `deleteFieldOverride` each write a
+   Component `UPDATE` audit row.
+3. A no-op override PATCH (unchanged value) writes no audit row.
+
+**Test method:** `FieldOverrideAuditTest` —
+`SYS-050 field-override writes are audited as Component UPDATE`,
+`SYS-050 no-op override PATCH writes no audit row`.
+
+### SYS-051: TeamCity sync writes no audit row
+
+**Priority:** Medium
+**Test layer:** unit-test
+**Status:** ✅ Tested
+
+**Motivation:**
+The TeamCity sync (`/admin/teamcity-resync` and the scheduled cron) is an
+automated reconciliation that links each component to its TeamCity project.
+Every re-link previously published a Component `UPDATE` `AuditEvent`
+(`changedBy = system`, `teamcityProjectId` / `teamcityProjectUrl`). One such row
+per re-linked component is operational noise in the component history — it is
+not a user-initiated change.
+
+**Description:**
+`TeamcitySyncService.applyMatch` no longer publishes an `AuditEvent`; instead it
+emits an INFO log line tracing the re-link (component id, old → new project id +
+url, and the resolving user) so the source of a write is still discoverable. No
+`audit_log` row is written for a TeamCity sync. The `ApplicationEventPublisher`
+seam is retained so the test can assert nothing is published (and as the
+re-wire point if per-sync auditing is ever wanted).
+
+**Acceptance criteria:**
+1. A TeamCity sync that writes/updates a component's TC row publishes **no** `AuditEvent`.
+2. The TC row + sync counts (`updated` / `unchanged` / …) are unaffected.
+3. An unchanged component (idempotent re-run) still publishes nothing (unchanged behaviour).
+
+**Test method:** `TeamcitySyncServiceTest` —
+`SYS-051 happy path: writes TC row; counts updated; NO audit event`, plus the
+`ambiguousAutoResolved` and `mixed batch` cases assert
+`publisher.events.filterIsInstance<AuditEvent>().isEmpty()`.

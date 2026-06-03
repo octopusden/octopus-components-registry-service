@@ -155,9 +155,11 @@ All existing search/lookup operations must return identical results from DB:
 ## 4. Audit Log
 
 ### 4.1 View Entity History
-- **Input**: Entity type (component, version, etc.) + entity ID
+- **Input**: Entity type (component, version, etc.) + entity ID; optional `includeMigrated` (default `false`)
 - **Output**: Paginated list of changes, newest first
 - **Each entry**: action, changedBy, changedAt, oldValue (JSONB), newValue (JSONB), changeDiff (JSONB)
+- **Migration baseline hidden**: `action = MIGRATED` rows (git-history first-appearance, one per component) are hidden unless `includeMigrated=true` — the Portal "Show migration" toggle (`SYS-049`).
+- **No empty rows**: a save that changes nothing writes no entry (`SYS-048`); field-override (version-range) edits are recorded as Component `UPDATE` (`SYS-050`).
 
 ### 4.2 Global Recent Changes
 - **Endpoint**: `GET /rest/api/4/audit/recent`
@@ -166,8 +168,9 @@ All existing search/lookup operations must return identical results from DB:
   - `entityId` — UUID of a specific entity (combine with `entityType` for entity-scoped history reachable via the same query as user/source filters)
   - `changedBy` — username from `audit_log.changed_by`
   - `source` — currently only `api` and `git-history` are emitted. Other values are reserved for future writers.
-  - `action` — `CREATE` \| `UPDATE` \| `DELETE` \| `RENAME` \| `ARCHIVE`
+  - `action` — `CREATE` \| `UPDATE` \| `DELETE` \| `RENAME` \| `MIGRATED`
   - `from`, `to` — ISO-8601 instants forming a half-open `[from, to)` window over `audit_log.changed_at`
+  - `includeMigrated` — default `false`; `MIGRATED` (migration baseline) rows are hidden unless this is `true` or an explicit `action=MIGRATED` filter is supplied (`SYS-049`)
 - **Output**: Paginated feed of audit rows newest-first (default sort `changedAt DESC`; caller-supplied `sort=` overrides)
 - **Page size**: Spring Data `Pageable`; defaults to the global `spring.data.web.pageable.default-page-size`
 
@@ -224,6 +227,7 @@ All admin endpoints below live under `POST /rest/api/4/admin/**` and require `IM
 - **Purpose**: Replay git commit history of the legacy DSL repo into `audit_log` so the UI's history view shows changes that pre-date the DB migration.
 - **Idempotency**: One-row state in `git_history_import_state` (PK `import_key`, status `IN_PROGRESS` / `COMPLETED` / `FAILED` — see `GitHistoryImportStatus`). A second call with `reset=false` against an already-completed import is a no-op; `reset=true` clears state and re-runs.
 - **Audit source marker**: rows written by this endpoint carry `audit_log.source = 'git-history'`; runtime API events carry `'api'`. See V5 schema migration.
+- **First-appearance action**: a component's first appearance is recorded with `action = MIGRATED` (not `CREATE`); subsequent historical changes stay `UPDATE`/`DELETE`. `MIGRATED` rows are hidden from the audit views by default (`SYS-049`).
 - **Output**: `HistoryImportResult` — `{ targetRef, targetSha, processedCommits, skippedNoGroovy, skippedParseError, skippedUnknownNames, auditRecords, durationMs }`.
 - **Contract**: `MIG-026` in [requirements-migration.md](requirements-migration.md).
 

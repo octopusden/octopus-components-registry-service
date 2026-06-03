@@ -44,7 +44,7 @@ import java.util.UUID
  *   - `changedBy`         — username from `audit_log.changed_by`
  *   - `source`            — currently only `api` and `git-history`; other values are
  *                           reserved for future writers
- *   - `action`            — `CREATE` | `UPDATE` | `DELETE` | `RENAME` | `ARCHIVE` | …
+ *   - `action`            — `CREATE` | `UPDATE` | `DELETE` | `RENAME` | `MIGRATED` | …
  *   - `from`, `to`        — ISO-8601 instants; either or both, half-open `[from, to)`
  *
  * Test layer: integration. The `ft-db` profile gives us H2 + auto-migrate; each test
