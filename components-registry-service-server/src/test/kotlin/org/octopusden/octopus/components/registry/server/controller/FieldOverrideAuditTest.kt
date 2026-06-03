@@ -77,7 +77,7 @@ class FieldOverrideAuditTest {
             )
         assertEquals(1, updateRowCount(id), "createFieldOverride must write 1 UPDATE row, got ${historyActions(id)}")
         assertTrue(
-            latestUpdateMentions(id, "build.buildFilePath"),
+            anyUpdateMentions(id, "build.buildFilePath"),
             "override audit diff must mention the overridden attribute",
         )
 
@@ -188,7 +188,7 @@ class FieldOverrideAuditTest {
 
     private fun updateRowCount(componentId: String): Int = historyActions(componentId).count { it == "UPDATE" }
 
-    private fun latestUpdateMentions(
+    private fun anyUpdateMentions(
         componentId: String,
         needle: String,
     ): Boolean =

@@ -57,7 +57,7 @@
 | SYS-046 | clientCode / jiraProjectKey / parentComponentName / groupKey become multi-value exact-IN filters (CSV / repeatable); 4 companion in-use meta endpoints (/meta/client-codes, /meta/jira-project-keys, /meta/parent-component-names, /meta/group-keys) | High | integration-test | ✅ Tested |
 | SYS-047 | git-only no-DB boot mode: the `no-db` profile excludes the JDBC/JPA/Flyway auto-configs and gates every DB-coupled bean off (`@ConditionalOnDatabaseEnabled`), so the service boots with no database and serves v1/v2/v3 from the Git resolver — the compat git-mode stand (id18) needs no Postgres | High | unit / context-load test | ✅ Tested |
 | SYS-048 | A no-op write (component or field-override save whose old/new snapshots carry no field-level diff) writes no audit row; CREATE/DELETE keep theirs | High | unit-test | ✅ Tested |
-| SYS-049 | Git-history backfill records a component's first appearance with action `MIGRATED` (not `CREATE`); both audit read endpoints hide `MIGRATED` by default, opt back in via `includeMigrated=true`, and always honour an explicit `action=MIGRATED` filter | High | unit + integration-test | ✅ Tested |
+| SYS-049 | Git-history backfill records a component's first appearance with action `MIGRATED` (not `CREATE`); both audit read endpoints hide `MIGRATED` by default and opt back in via `includeMigrated=true`. `/audit/recent` additionally honours an explicit `action=MIGRATED` filter (the entity-history endpoint takes only `includeMigrated`) | High | unit + integration-test | ✅ Tested |
 | SYS-050 | Field-override (version-range) create/update/delete each publish a Component `UPDATE` audit event with an attribute-keyed diff | High | integration-test | ✅ Tested |
 | SYS-051 | TeamCity sync (automated `changedBy=system` reconciliation) does NOT write an audit row — the re-link is traced via an INFO log instead | Medium | unit-test | ✅ Tested |
 
@@ -1639,16 +1639,18 @@ that carries no operational value and misrepresents a migration as a user action
 - Both audit read endpoints hide `MIGRATED` rows by default. `GET /audit/recent`
   and `GET /audit/{entityType}/{entityId}` accept `includeMigrated` (default
   `false`); `getEntityHistory` uses a no-`MIGRATED` query on the default path and the
-  recent-filter adds a `action != MIGRATED` predicate. An explicit `action=MIGRATED`
-  filter always returns them regardless of `includeMigrated`, so the Portal
-  "Show migration" toggle can surface them on demand.
+  recent-filter adds a `action != MIGRATED` predicate. `/audit/recent` (the only
+  endpoint with an `action` query param) additionally returns `MIGRATED` rows when
+  an explicit `action=MIGRATED` filter is given, regardless of `includeMigrated`;
+  the entity-history endpoint has no `action` param, so `includeMigrated` is its
+  sole opt-in. Either way the Portal "Show migration" toggle surfaces them.
 
 **Acceptance criteria:**
 1. A first-appearance snapshot resolves to `MIGRATED`; disappearance → `DELETE`;
    changed → `UPDATE`; unchanged → null (no row).
 2. `GET /audit/recent` and `GET /audit/Component/{id}` exclude `MIGRATED` rows by default.
 3. `includeMigrated=true` surfaces `MIGRATED` rows on both endpoints.
-4. An explicit `action=MIGRATED` filter returns `MIGRATED` rows even without `includeMigrated`.
+4. On `GET /audit/recent`, an explicit `action=MIGRATED` filter returns `MIGRATED` rows even without `includeMigrated` (the entity-history endpoint has no `action` param).
 
 **Test method:** `GitHistoryImportActionResolutionTest` (`SYS-049 first appearance
 resolves to MIGRATED` and the DELETE/UPDATE/null cases) +

@@ -106,9 +106,11 @@ creates stay `CREATE`. (SYS-049)
 
 ### Migration noise hidden by default
 Both read endpoints (`GET /audit/recent`, `GET /audit/{entityType}/{entityId}`)
-exclude `action = MIGRATED` rows unless the caller passes `includeMigrated=true`,
-or pins them with an explicit `action=MIGRATED` filter. The Portal exposes this as
-a "Show migration" toggle (default off). (SYS-049)
+exclude `action = MIGRATED` rows unless the caller passes `includeMigrated=true`.
+`/audit/recent` also returns them when pinned with an explicit `action=MIGRATED`
+filter — it is the only endpoint with an `action` query param; the entity-history
+endpoint takes `includeMigrated` only. The Portal exposes this as a "Show
+migration" toggle (default off). (SYS-049)
 
 ### No-op suppression
 A write that changes nothing must not leave an audit row. `AuditEventListener`

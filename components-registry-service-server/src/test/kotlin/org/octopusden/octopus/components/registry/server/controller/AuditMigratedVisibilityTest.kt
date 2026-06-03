@@ -28,9 +28,10 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 /**
  * SYS-049 — git-history baseline rows are written with the `MIGRATED` action and
  * are hidden from the audit views by default. Both audit read endpoints accept an
- * `includeMigrated` flag (default `false`) to opt back in, and an explicit
- * `action=MIGRATED` filter always returns them so the Portal "Show migration"
- * toggle can surface them on demand.
+ * `includeMigrated` flag (default `false`) to opt back in. `/audit/recent` also
+ * honours an explicit `action=MIGRATED` filter (it is the only endpoint with an
+ * `action` param; entity-history takes `includeMigrated` only), so the Portal
+ * "Show migration" toggle can surface them on demand.
  *
  * Integration test (ft-db = H2 + auto-migrate). Rows are seeded directly through
  * the repository so action/source can be pinned without running a real Git import.
