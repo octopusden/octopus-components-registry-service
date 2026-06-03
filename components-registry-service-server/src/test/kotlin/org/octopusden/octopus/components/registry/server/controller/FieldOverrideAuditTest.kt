@@ -188,11 +188,17 @@ class FieldOverrideAuditTest {
 
     private fun updateRowCount(componentId: String): Int = historyActions(componentId).count { it == "UPDATE" }
 
+    // True iff some UPDATE entry's structured changeDiff has a key naming the
+    // attribute (field-override diffs are keyed `fieldOverride[<attr>]`). Asserts
+    // on the structured diff rather than a brittle whole-node toString match.
     private fun anyUpdateMentions(
         componentId: String,
-        needle: String,
+        attribute: String,
     ): Boolean =
         history(componentId)
             .filter { it["action"].asText() == "UPDATE" }
-            .any { it.toString().contains(needle) }
+            .any { entry ->
+                val diff = entry.path("changeDiff")
+                diff.isObject && diff.fieldNames().asSequence().any { it.contains(attribute) }
+            }
 }

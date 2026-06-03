@@ -162,7 +162,7 @@ GET    /rest/api/4/components/{id}/field-overrides
 #### Audit
 ```
 GET    /rest/api/4/audit/{entityType}/{entityId}?page=0&size=20
-  Response: Page<AuditEntry> { action, changedBy, changedAt, oldValue, newValue, diff, source }
+  Response: Page<AuditEntry> { action, changedBy, changedAt, oldValue, newValue, changeDiff, source }
   Auth:     ACCESS_AUDIT
   Filters:  includeMigrated — default false; hides action=MIGRATED rows unless true (SYS-049)
 

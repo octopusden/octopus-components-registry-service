@@ -27,18 +27,22 @@ class AuditServiceImpl(
         entityId: String,
         includeMigrated: Boolean,
         pageable: Pageable,
-    ): Page<AuditLogResponse> =
-        if (includeMigrated) {
-            auditLogRepository.findByEntityTypeAndEntityId(entityType, entityId, pageable)
+    ): Page<AuditLogResponse> {
+        // Apply the same "newest first" default as getRecentChanges when the
+        // caller supplies no explicit sort — entity history is a timeline.
+        val sorted = withDefaultSort(pageable)
+        return if (includeMigrated) {
+            auditLogRepository.findByEntityTypeAndEntityId(entityType, entityId, sorted)
         } else {
             // Default: hide git-history baseline noise (action = MIGRATED). SYS-049.
             auditLogRepository.findByEntityTypeAndEntityIdAndActionNot(
                 entityType,
                 entityId,
                 AuditLogEntity.ACTION_MIGRATED,
-                pageable,
+                sorted,
             )
         }.map { it.toResponse() }
+    }
 
     override fun getRecentChanges(
         filter: AuditLogFilter,

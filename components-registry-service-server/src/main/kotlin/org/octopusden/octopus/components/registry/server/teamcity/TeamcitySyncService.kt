@@ -52,10 +52,12 @@ import java.util.UUID
  *
  * Idempotent: only writes when the matched project id actually changes. The
  * change is traced via an INFO log line (so admins can find the source of a
- * write) but deliberately does NOT write an `audit_log` row: TeamCity sync is
- * an automated background reconciliation (`changedBy = system`), and one such
- * row per re-linked component was noise in the component history (SYS-051).
- * If per-sync auditing is ever wanted, re-publish an `AuditEvent` here.
+ * write) but deliberately does NOT write an `audit_log` row: TeamCity sync is an
+ * automated reconciliation, and one such row per re-linked component was noise
+ * in the component history (SYS-051). `changedBy` comes from `CurrentUserResolver`
+ * — `"system"` for the scheduled cron, or the admin's username when the resync is
+ * triggered via an authenticated request. If per-sync auditing is ever wanted,
+ * re-publish an `AuditEvent` here.
  *
  * Error handling: a fetcher failure (TC unreachable, auth refused, malformed
  * response) propagates out of [resync] — for the admin endpoint that surfaces
@@ -323,8 +325,9 @@ class TeamcitySyncService(
         )
 
         // SYS-051: trace the re-link in the log (NOT the audit_log). TeamCity
-        // sync is an automated reconciliation (changedBy = system); a per-link
-        // audit row was noise in the component history.
+        // sync is an automated reconciliation; a per-link audit row was noise in
+        // the component history. `changedBy` is the resolving user — "system" for
+        // the cron, or the admin who triggered an authenticated resync.
         log.info {
             "TeamCity sync re-linked component ${component.id}: " +
                 "'$oldId' ($oldUrl) -> '$newId' ($newUrl) (by $changedBy)"
