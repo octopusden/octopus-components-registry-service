@@ -131,8 +131,13 @@ class WebSecurityConfig(
 @Component
 class PermissionEvaluator(
     securityService: SecurityService,
-    private val componentRepository: ComponentRepository,
+    // Injected as ObjectProvider, NOT a hard dependency: in the `no-db` boot mode
+    // (SYS-047) there is no JPA ComponentRepository bean, yet this evaluator must still
+    // construct because the git read controllers reference `@permissionEvaluator`.
+    componentRepositoryProvider: ObjectProvider<ComponentRepository>,
 ) : BasePermissionEvaluator(securityService) {
+
+    private val componentRepository: ComponentRepository? by lazy { componentRepositoryProvider.getIfAvailable() }
 
     fun hasPermission(permission: String): Boolean =
         super.hasPermission(permission)

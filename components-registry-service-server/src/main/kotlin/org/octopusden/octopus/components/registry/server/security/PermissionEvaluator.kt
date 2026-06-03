@@ -56,16 +56,14 @@ class PermissionEvaluator(
         return try {
             val repository = componentRepository ?: return false // no-db mode: no editable components
             val id = resolveComponentId(repository, componentIdOrName) ?: return false
-            val owner = repository.findComponentOwnerById(id)?.trim()?.takeIf { it.isNotEmpty() }
-            val releaseManagers = repository.findReleaseManagerUsernames(id)
-            val securityChampions = repository.findSecurityChampionUsernames(id)
-            if (owner == null && releaseManagers.isEmpty() && securityChampions.isEmpty()) {
-                false // owner-less component → admin-only (handled by the EDIT_ANY_COMPONENT bypass above)
-            } else {
-                matches(username, owner) ||
-                    releaseManagers.any { matches(username, it) } ||
-                    securityChampions.any { matches(username, it) }
-            }
+            // Short-circuit cheapest-first: an owner match skips the RM and SC queries, an RM
+            // match skips the SC query. Any no-match — including an owner-less component (no
+            // owner, empty RM, empty SC) — falls through to deny (owner-less is then admin-only,
+            // reachable only via the EDIT_ANY_COMPONENT bypass handled above).
+            if (matches(username, repository.findComponentOwnerById(id))) return true
+            if (repository.findReleaseManagerUsernames(id).any { matches(username, it) }) return true
+            if (repository.findSecurityChampionUsernames(id).any { matches(username, it) }) return true
+            false
         } catch (e: RuntimeException) {
             // Fail closed: a lookup failure (e.g. DB unavailable) denies the edit (→ 403)
             // instead of letting the exception escape the @PreAuthorize interceptor as a 500.
