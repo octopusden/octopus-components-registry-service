@@ -67,8 +67,5 @@ sourceSets {
     }
 }
 
-test {
-    // Ryuk (Testcontainers resource reaper) requires mounting /var/run/docker.sock inside itself,
-    // which Podman rootless forbids on CI. Disable Ryuk so PostgreSQLContainer can start normally.
-    environment 'TESTCONTAINERS_RYUK_DISABLED', 'true'
-}
+// Ryuk is disabled for all Test tasks (incl. this module's dbTest) globally in the root
+// build.gradle — no per-task Testcontainers config needed here.
