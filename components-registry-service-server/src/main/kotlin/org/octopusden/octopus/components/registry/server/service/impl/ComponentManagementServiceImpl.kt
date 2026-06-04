@@ -4,6 +4,7 @@ import jakarta.persistence.OptimisticLockException
 import jakarta.persistence.criteria.JoinType
 import org.apache.maven.artifact.versioning.DefaultArtifactVersion
 import org.octopusden.octopus.components.registry.core.exceptions.ComponentNameConflictException
+import org.octopusden.octopus.components.registry.core.exceptions.CrossComponentConflictException
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.dto.v4.BaseConfigurationRequest
@@ -59,6 +60,8 @@ import org.octopusden.octopus.components.registry.server.repository.ComponentCon
 import org.octopusden.octopus.components.registry.server.repository.ComponentLabelRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRequiredToolRepository
+import org.octopusden.octopus.components.registry.server.repository.DistributionDockerImageRepository
+import org.octopusden.octopus.components.registry.server.repository.DistributionMavenArtifactRepository
 import org.octopusden.octopus.components.registry.server.repository.LabelRepository
 import org.octopusden.octopus.components.registry.server.repository.SystemRepository
 import org.octopusden.octopus.components.registry.server.repository.ToolRepository
@@ -98,6 +101,8 @@ class ComponentManagementServiceImpl(
     private val componentLabelRepository: ComponentLabelRepository,
     private val componentRequiredToolRepository: ComponentRequiredToolRepository,
     private val componentBuildToolBeanRepository: ComponentBuildToolBeanRepository,
+    private val mavenArtifactRepository: DistributionMavenArtifactRepository,
+    private val dockerImageRepository: DistributionDockerImageRepository,
     private val labelRepository: LabelRepository,
     private val systemRepository: SystemRepository,
     private val toolRepository: ToolRepository,
@@ -247,12 +252,34 @@ class ComponentManagementServiceImpl(
         applyBaseConfigurationCreate(baseConfig, baseConfigRequest)
         entity.configurations.add(baseConfig)
 
-        // Person fields (componentOwner / releaseManager / securityChampion).
+        // Person fields (componentOwner / releaseManager / securityChampion) FIRST.
         // On create everything is new, so the active-employee check is always
-        // triggered (subject to the flag). Validates the final entity state.
+        // triggered (subject to the flag). Person-field errors take precedence over
+        // the malformed-input rules below: an explicit+external component with no
+        // distribution coordinate AND no releaseManager fails BOTH the person gate
+        // (#3/#4) and the ≥1-coordinate rule (#6); the foundation's contract reports
+        // the person-field error first, so person validation runs ahead of the
+        // malformed-input checks here.
         validatePersonFields(entity, runActiveCheck = true)
 
-        val saved = componentRepository.save(entity)
+        // Malformed-input cross-component / single-field checks (400). These need
+        // no DB lookup beyond the soft doc-ref existence probe and run against the
+        // final in-memory entity state (everything is freshly assigned on create).
+        validateMalformedFieldRules(entity)
+
+        // Flush so the self-excluding 409 collision queries below see the new
+        // component's rows and the entity carries an assigned id.
+        val saved = componentRepository.saveAndFlush(entity)
+
+        // Doc-component existence (#20, 400) — post-flush so a self-documenting
+        // component (docs[] referencing its own key) is not rejected by ordering.
+        validateDocComponentExistence(saved)
+
+        // Cross-component integrity (409): duplicate groupId:artifactId in
+        // overlapping ranges, jira (projectKey, versionPrefix) uniqueness among
+        // non-archived components, docker image-name global uniqueness. Run AFTER
+        // flush so the queries exclude this component by its now-assigned id.
+        validateCrossComponentIntegrity(saved)
 
         // M:N junctions (no cascade — see ComponentEntity kdoc convention) must be
         // persisted via their own repositories AFTER the parent has an assigned id.
@@ -537,8 +564,40 @@ class ComponentManagementServiceImpl(
                 base.takeIf { patch.requiredTools != null }
             }
 
+        // Cross-component / malformed-input checks are GRANDFATHERED on update:
+        // they re-run only when the PATCH actually touches a field they govern
+        // (distribution coordinates / jira / docs / the explicit-external-archived
+        // gate). A PATCH that leaves all of those untouched (e.g. displayName,
+        // people, labels, copyright only) must NOT re-validate the component's
+        // pre-existing configuration — mirrors the person-field active-check
+        // grandfathering above (a label-only PATCH doesn't re-validate people).
+        // This does NOT weaken the rules: every governed field still triggers the
+        // check when it changes; only untouched legacy data is left alone. On
+        // CREATE everything is new, so they always run (see createComponent).
+        val crossComponentRelevantChange =
+            request.name != null || // rename can invalidate soft docs[] references to the old key
+                request.baseConfiguration != null || // maven / docker / packages / jira live on the base config row
+                request.docs != null ||
+                request.distributionExplicit != null ||
+                request.distributionExternal != null ||
+                request.archived != null
+
+        // Malformed-input single-field checks (400) against the PATCHed final
+        // entity state (so a caller need not resend unchanged fields).
+        if (crossComponentRelevantChange) validateMalformedFieldRules(entity)
+
         entity.updatedAt = Instant.now()
         val saved = componentRepository.saveAndFlush(entity)
+
+        if (crossComponentRelevantChange) {
+            // Doc-component existence (#20, 400) — post-flush, consistent with create
+            // (and so a rename that points docs[] at the new own key is accepted).
+            validateDocComponentExistence(saved)
+
+            // Cross-component integrity (409) against the final flushed state — the
+            // self-excluding queries skip this component by its id.
+            validateCrossComponentIntegrity(saved)
+        }
 
         // Junctions — synced via their repositories after the parent flush so the
         // assigned ids (for newly-created rows) are visible. `systemCode` is
@@ -715,6 +774,11 @@ class ComponentManagementServiceImpl(
             refreshConfigRequiredToolsInMemory(saved, pendingTools)
         }
         bumpParentVersion(component)
+        // Review #2: an override row can carry mavenArtifacts/dockerImages/jira
+        // coordinates that collide with another component — re-run the same 409 /
+        // 400 composite checks the create/update component paths run, now that the
+        // override row is flushed.
+        validateFieldOverrideCrossComponent(componentId)
         publishAuditEvent(
             action = "UPDATE",
             entityId = component.id.toString(),
@@ -775,6 +839,10 @@ class ComponentManagementServiceImpl(
             refreshConfigRequiredToolsInMemory(saved, pendingTools)
         }
         bumpParentVersion(row.component)
+        // Review #2: re-run the cross-component composite checks — an UPDATE to a
+        // marker override can introduce a colliding GAV / docker image / jira
+        // coordinate just as a create can.
+        validateFieldOverrideCrossComponent(componentId)
         publishAuditEvent(
             action = "UPDATE",
             entityId = row.component.id.toString(),
@@ -1682,6 +1750,277 @@ class ComponentManagementServiceImpl(
         }
     }
 
+    // ─── Cross-component integrity (Stage 4 — restores OLD-VALIDATOR composite
+    //     checks as runtime rules). Collisions with OTHER components → 409
+    //     (CrossComponentConflictException); malformed-input → 400
+    //     (IllegalArgumentException via require). ───────────────────────────────
+
+    /**
+     * Malformed-input single-/composite-field rules that reject the SUBMITTED
+     * payload itself (not a clash with another component) — all 400.
+     *
+     *  - **explicit-external ≥1 distribution coordinate** (#6): when
+     *    `distributionExplicit && distributionExternal`, at least one of GAV
+     *    (maven artifact), docker image, or DEB/RPM package must be defined on
+     *    some configuration row.
+     *  - **groupId supported prefix** (#10): every maven `groupPattern` element
+     *    must start with one of the env-configured `supportedGroupIds`.
+     *  - **archived ≠ explicit-external** (#28): an archived component cannot be
+     *    explicitly+externally distributed.
+     * Note: doc-component existence (#20) is NOT checked here. It is a soft
+     * string reference whose target may be the component's OWN key (a component
+     * may legitimately document itself), which does not exist in the DB until
+     * after the flush on create. It is therefore validated post-flush in
+     * [validateDocComponentExistence] alongside the 409 cross-component checks,
+     * where the component's own key is already persisted.
+     *
+     * Runs against the final entity state (post-patch / freshly-built on create).
+     */
+    private fun validateMalformedFieldRules(entity: ComponentEntity) {
+        val explicitExternal =
+            (entity.distributionExplicit == true) && (entity.distributionExternal == true)
+
+        // #28 archived ≠ explicit-external — checked before the ≥1-coordinate
+        // rule so an archived component is never asked for a coordinate.
+        if (explicitExternal) {
+            require(!entity.archived) {
+                "distribution: an archived component can't be explicitly+externally " +
+                    "distributed — set distributionExplicit=false (component '${entity.componentKey}')"
+            }
+            require(hasAnyDistributionCoordinate(entity)) {
+                "distribution: an explicit+external component must define at least one " +
+                    "distribution coordinate (maven GAV, docker image, or package) " +
+                    "(component '${entity.componentKey}')"
+            }
+        }
+
+        // #10 groupId supported prefix — applies to every maven artifact regardless
+        // of the distribution gate (matches the old per-config validateGroupId).
+        validateGroupIdPrefixes(entity)
+    }
+
+    /**
+     * #20 doc-component existence (soft string ref, no FK) — 400. Runs POST-flush
+     * so a component that documents ITSELF (a `docs[]` entry pointing at its own
+     * key) passes: on create the component's own row does not exist until the
+     * flush, so a pre-flush check would raise a false 400 for the self-reference.
+     * The component's own key is excluded explicitly as well, so the order of
+     * persistence can never make a self-reference fail.
+     */
+    private fun validateDocComponentExistence(entity: ComponentEntity) {
+        val referencedKeys =
+            entity.docLinks
+                .map { it.docComponentKey }
+                .filterNot { it == entity.componentKey }
+                .toSet()
+        if (referencedKeys.isEmpty()) return
+
+        val existingKeys =
+            componentRepository.findByComponentKeyIn(referencedKeys)
+                .mapTo(HashSet()) { it.componentKey }
+        val missingKey =
+            entity.docLinks
+                .asSequence()
+                .map { it.docComponentKey }
+                .firstOrNull { it != entity.componentKey && it !in existingKeys }
+        require(missingKey == null) {
+            "docs: referenced doc component '$missingKey' does not exist " +
+                "(component '${entity.componentKey}')"
+        }
+    }
+
+    private fun hasAnyDistributionCoordinate(entity: ComponentEntity): Boolean =
+        entity.configurations.any { cfg ->
+            cfg.mavenArtifacts.isNotEmpty() ||
+                cfg.dockerImages.isNotEmpty() ||
+                cfg.packages.isNotEmpty()
+        }
+
+    /**
+     * #10 — every comma/pipe-separated element of every maven `groupPattern`
+     * must start with a configured supported prefix. The supported list is
+     * env-config-driven (`components-registry.supportedGroupIds`, read via the
+     * shared `ConfigHelper`, the same source `CommonControllerV2` and
+     * `FieldConfigSeeder` use). If the list is empty (mis-configured env) the
+     * check is skipped with a WARN rather than rejecting every write — parity
+     * with `FieldConfigSeeder`'s empty-list tolerance.
+     */
+    private fun validateGroupIdPrefixes(entity: ComponentEntity) {
+        val supported = runCatching { configHelper.supportedGroupIds() }.getOrDefault(emptyList())
+        if (supported.isEmpty()) {
+            log.warn(
+                "supportedGroupIds is empty/unavailable; skipping groupId-prefix validation for '{}'",
+                entity.componentKey,
+            )
+            return
+        }
+        entity.configurations.forEach { cfg ->
+            cfg.mavenArtifacts.forEach { artifact ->
+                artifact.groupPattern.split(GROUP_ID_SPLIT).map { it.trim() }.filter { it.isNotEmpty() }
+                    .forEach { groupId ->
+                        require(supported.any { groupId.startsWith(it) }) {
+                            "groupId: '$groupId' does not start with a supported prefix " +
+                                "(${supported.joinToString(", ")}) (component '${entity.componentKey}')"
+                        }
+                    }
+            }
+        }
+    }
+
+    /**
+     * Cross-component collisions with OTHER components → 409. All three rules use
+     * self-excluding indexed queries against the flushed final state:
+     *
+     *  - **#24/#25 duplicate groupId:artifactId in overlapping ranges** — for each
+     *    of this component's maven artifacts, find other components declaring the
+     *    same (group, artifact) and reject if any owning range intersects this
+     *    component's range (Maven `isIntersect`, decided in-memory).
+     *  - **#26 jira (projectKey, versionPrefix) uniqueness among non-archived** —
+     *    an archived component is exempt (matches the old `!archived` filter).
+     *  - **#29 docker image-name global uniqueness** — any other component using
+     *    the same image name is a conflict.
+     */
+    private fun validateCrossComponentIntegrity(entity: ComponentEntity) {
+        val componentId = entity.id ?: return
+        validateMavenArtifactCollisions(entity, componentId)
+        validateJiraProjectKeyVersionPrefixUniqueness(entity, componentId)
+        validateDockerImageUniqueness(entity, componentId)
+    }
+
+    /**
+     * Review #2: a field-override write can introduce a `mavenArtifacts` /
+     * `dockerImages` / jira coordinate on an OVERRIDE row that another component
+     * already claims. The create/update component paths run the cross-component
+     * checks across ALL configuration rows (base + overrides), but the
+     * field-override sub-resource wrote a row WITHOUT re-running them — so a
+     * collision could slip in via an override. After the override row is written
+     * and flushed (via `bumpParentVersion`), reload the owning component and
+     * re-run the SAME composite checks against its full (now-persisted)
+     * configuration set:
+     *
+     *  - [validateMalformedFieldRules] — the #10 groupId-prefix rule applies to a
+     *    GAV introduced on an override row too (the explicit+external / archived
+     *    rules read component scalars, which an override does not change, so they
+     *    are inert here but harmless to re-check).
+     *  - [validateCrossComponentIntegrity] — the #24/#25 maven and #29 docker
+     *    collisions, plus #26 jira uniqueness for a jira-scalar override.
+     *
+     * The owning component already carries an id (the override targets an existing
+     * component), so the self-excluding queries work unchanged. A conflict throws
+     * inside the @Transactional method, rolling back the override write — same
+     * shape as the create/update 409 path. Doc-existence (#20) is component-level,
+     * not configuration-level, so it is intentionally NOT re-run here.
+     */
+    private fun validateFieldOverrideCrossComponent(componentId: UUID) {
+        val reloaded = findComponentOr404(componentId)
+        validateMalformedFieldRules(reloaded)
+        validateCrossComponentIntegrity(reloaded)
+    }
+
+    private fun groupIdMatches(groupId: String, groupIdPattern: String): Boolean {
+        val groupIds = groupId.split(GROUP_ID_SPLIT).map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+        return groupIdPattern.split(GROUP_ID_SPLIT).map { it.trim() }.any { it in groupIds }
+    }
+
+    private fun artifactIdMatches(artifactId: String, artifactPattern: String): Boolean {
+        return artifactPattern == "*" || runCatching {
+            val regexPattern = artifactPattern.replace(",", "|")
+            Regex(regexPattern).matches(artifactId)
+        }.getOrDefault(false)
+    }
+
+    private fun mavenArtifactContainsAnother(
+        group1: String, artifact1: String,
+        group2: String, artifact2: String
+    ): Boolean = groupIdMatches(group1, group2) && artifactIdMatches(artifact1, artifact2)
+
+    private fun mavenArtifactsOverlap(
+        group1: String, artifact1: String,
+        group2: String, artifact2: String
+    ): Boolean = mavenArtifactContainsAnother(group1, artifact1, group2, artifact2) ||
+            mavenArtifactContainsAnother(group2, artifact2, group1, artifact1)
+
+    private fun validateMavenArtifactCollisions(entity: ComponentEntity, componentId: UUID) {
+        val otherArtifacts = mavenArtifactRepository.findOtherComponents(componentId)
+        entity.configurations.forEach { cfg ->
+            val ownRange = runCatching { versionRangeFactory.create(cfg.versionRange) }.getOrNull()
+            cfg.mavenArtifacts.forEach { artifact ->
+                otherArtifacts.forEach { other ->
+                    if (mavenArtifactsOverlap(
+                            artifact.groupPattern, artifact.artifactPattern,
+                            other.groupPattern, other.artifactPattern
+                        )
+                    ) {
+                        val intersects =
+                            if (ownRange == null) {
+                                true // unparseable own range — be conservative and treat as overlapping
+                            } else {
+                                runCatching {
+                                    ownRange.isIntersect(versionRangeFactory.create(other.versionRange))
+                                }.getOrDefault(true)
+                            }
+                        if (intersects) {
+                            throw CrossComponentConflictException(
+                                "distribution: groupId:artifactId " +
+                                    "'${artifact.groupPattern}:${artifact.artifactPattern}' of component " +
+                                    "'${entity.componentKey}' overlaps component '${other.componentKey}' " +
+                                    "in version range '${cfg.versionRange}' ∩ '${other.versionRange}'",
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun validateJiraProjectKeyVersionPrefixUniqueness(entity: ComponentEntity, componentId: UUID) {
+        // An archived component does not claim a jira (projectKey, versionPrefix)
+        // bucket — mirrors the old `!moduleConfiguration.archived` filter.
+        if (entity.archived) return
+        // Distinct (projectKey, versionPrefix) pairs across this component's rows.
+        val pairs =
+            entity.configurations
+                .mapNotNull { cfg ->
+                    cfg.jiraProjectKey?.takeIf { it.isNotBlank() }?.let { it to cfg.jiraVersionPrefix }
+                }.toSet()
+        pairs.forEach { (projectKey, versionPrefix) ->
+            val others =
+                configurationRepository.findOtherNonArchivedComponentKeysByJiraProjectKeyAndVersionPrefix(
+                    projectKey,
+                    versionPrefix,
+                    componentId,
+                )
+            if (others.isNotEmpty()) {
+                val prefixText =
+                    if (versionPrefix == null) "no version prefix" else "version prefix '$versionPrefix'"
+                throw CrossComponentConflictException(
+                    "jira: project '$projectKey' with $prefixText is already used by " +
+                        "non-archived component(s) ${others.joinToString(", ")} " +
+                        "(conflicts with '${entity.componentKey}')",
+                )
+            }
+        }
+    }
+
+    private fun validateDockerImageUniqueness(entity: ComponentEntity, componentId: UUID) {
+        val imageNames =
+            entity.configurations
+                .flatMap { it.dockerImages }
+                .map { it.imageName }
+                .filter { it.isNotBlank() }
+                .toSet()
+        imageNames.forEach { imageName ->
+            val others = dockerImageRepository.findOtherComponentKeysByImageName(imageName, componentId)
+            if (others.isNotEmpty()) {
+                throw CrossComponentConflictException(
+                    "distribution: docker image name '$imageName' of component " +
+                        "'${entity.componentKey}' is already used by component(s) " +
+                        "${others.joinToString(", ")} — image names must be globally unique",
+                )
+            }
+        }
+    }
+
     /**
      * Reject write-time enum-typed values that the resolver would later parse
      * with `Enum.valueOf` and silently drop on mismatch. Without these checks
@@ -2103,5 +2442,12 @@ class ComponentManagementServiceImpl(
                 newValue = newValue,
             ),
         )
+    }
+
+    private companion object {
+        private val log = org.slf4j.LoggerFactory.getLogger(ComponentManagementServiceImpl::class.java)
+
+        /** Split a multi-valued `groupPattern` on comma or pipe (legacy DSL semantics). */
+        private val GROUP_ID_SPLIT = Regex("[,|]")
     }
 }
