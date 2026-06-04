@@ -48,7 +48,7 @@ private const val TEXT_PLAIN_UTF8 = "text/plain;charset=UTF-8"
  * `@PreAuthorize` is applied method-by-method rather than at class level because
  * Spring Security 6's method-level annotation **replaces** a class-level one instead
  * of AND-ing with it. A class-level `ACCESS_COMPONENTS` + method-level
- * `EDIT_COMPONENTS` would silently let a user with only `EDIT_COMPONENTS` bypass the
+ * `CREATE_COMPONENTS` would silently let a user with only `CREATE_COMPONENTS` bypass the
  * read gate, which is the opposite of what "class-level default" suggests. Every
  * endpoint now declares the full set of permissions it requires.
  */
@@ -72,7 +72,7 @@ class ComponentControllerV4(
      * response. Applied to EVERY endpoint that returns a detail (GET, create,
      * update) — not just GET — because the Portal overwrites its cached detail
      * with the create/PATCH response body; an omitted flag would drop the Portal
-     * back to its global EDIT_COMPONENTS heuristic and could disagree with the
+     * back to its global CREATE_COMPONENTS heuristic and could disagree with the
      * next backend 403 (e.g. after an owner removes themselves). Reuses the exact
      * [PermissionEvaluator.canEditComponent] logic so the flag can never
      * contradict the actual gate.
@@ -176,7 +176,7 @@ class ComponentControllerV4(
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize(
         "@permissionEvaluator.hasPermission('ACCESS_COMPONENTS') " +
-            "and @permissionEvaluator.hasPermission('EDIT_COMPONENTS')",
+            "and @permissionEvaluator.hasPermission('CREATE_COMPONENTS')",
     )
     fun createComponent(
         @RequestBody request: ComponentCreateRequest,
@@ -320,11 +320,11 @@ class ComponentControllerV4(
             .body(rendered.body)
     }
 
-    // Field-level gating: a plain edit passes on EDIT_COMPONENTS alone, but switching
-    // `archived` additionally requires ARCHIVE_COMPONENTS, and changing `name`
-    // (rename) additionally requires RENAME_COMPONENTS. These latter two permissions
-    // are currently granted only to ROLE_ADMIN — EDITOR can't archive or rename via
-    // this endpoint. When we split archive/rename into dedicated endpoints, this SpEL
+    // Field-level gating: a plain edit requires component ownership (owner/RM/SC)
+    // or EDIT_ANY_COMPONENT; switching `archived` additionally requires
+    // ARCHIVE_COMPONENTS, and changing `name` (rename) additionally requires
+    // RENAME_COMPONENTS. These latter two permissions are currently granted only to
+    // ROLE_ADMIN. When we split archive/rename into dedicated endpoints, this SpEL
     // collapses back to the simple edit guard.
     @PatchMapping("/{id}")
     @PreAuthorize(
@@ -352,7 +352,7 @@ class ComponentControllerV4(
 
     // Field-overrides are a per-component edit surface, so they are gated by the
     // same component-level ownership check as the scalar PATCH (canEditComponent)
-    // rather than the bare EDIT_COMPONENTS permission — otherwise a non-owner
+    // rather than the bare CREATE_COMPONENTS permission — otherwise a non-owner
     // editor blocked from PATCH could still mutate behaviour via overrides.
     @PostMapping("/{id}/field-overrides")
     @ResponseStatus(HttpStatus.CREATED)
