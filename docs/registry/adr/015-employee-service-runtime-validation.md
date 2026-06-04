@@ -66,7 +66,7 @@ API.
      `securityChampion` required + per-element `^\w+$` only under `explicit &&
      external`. Lists are validated **per canonical element** (an element like
      `"alice,bob"` fails the pattern — it is *not* CSV-split).
-   - **Active-employee** runs only when a person field changed **or** the
+   - **Active-employee** runs only for non-archived components when a person field changed **or** the
      distribution gate flipped (so pre-existing saved values are
      **grandfathered** on unrelated edits), and only when the bean is present.
    - A field whose field-config `visibility` is `hidden` is **skipped** (a
@@ -84,7 +84,7 @@ API.
      suggestions still come from `/meta/owners`).
    - `POST /rest/api/4/components/meta/employees/status` body `[username…]` →
      `{username: active|null}` (`null` = unknown/unavailable/disabled → no
-     badge). Both gated by `ACCESS_COMPONENTS`, both fail-open.
+     badge). Both require authentication plus `ACCESS_COMPONENTS`, both fail-open.
 
 ## Consequences
 

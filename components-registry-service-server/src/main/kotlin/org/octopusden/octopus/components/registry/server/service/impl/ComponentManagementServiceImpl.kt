@@ -1707,7 +1707,8 @@ class ComponentManagementServiceImpl(
      * "validate whole config" model). [runActiveCheck] is true when a person
      * field changed OR the distribution gate flipped (per building-block #4):
      * required/pattern run unconditionally; the active-employee call runs only
-     * when triggered AND the employee-service bean is present.
+     * when triggered, the final component is non-archived, AND the
+     * employee-service bean is present.
      */
     private fun validatePersonFields(
         entity: ComponentEntity,
@@ -1722,7 +1723,7 @@ class ComponentManagementServiceImpl(
             // Active check only meaningful when a client bean is wired; the
             // validator itself also fail-opens on DISABLED, but skipping the
             // per-username calls when the directory is off avoids needless work.
-            runActiveCheck = runActiveCheck && employeeDirectory.isEnabled(),
+            runActiveCheck = runActiveCheck && !entity.archived && employeeDirectory.isEnabled(),
             isHidden = fieldConfigService::isHidden,
             directory = employeeDirectory,
         )

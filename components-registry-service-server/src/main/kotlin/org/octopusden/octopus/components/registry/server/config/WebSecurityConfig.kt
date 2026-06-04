@@ -76,6 +76,13 @@ class WebSecurityConfig(
                     // Legacy read-only APIs — public (Phase 1 from ADR-004).
                     .requestMatchers("/rest/api/1/**", "/rest/api/2/**", "/rest/api/3/**")
                     .permitAll()
+                    // Employee lookup exposes username existence / active status and
+                    // must not inherit the public v4 component-read rule below.
+                    .requestMatchers(
+                        HttpMethod.GET,
+                        "/rest/api/4/components/meta/employees",
+                        "/rest/api/4/components/meta/employees/**",
+                    ).authenticated()
                     // v4 read endpoints — public; @PreAuthorize checks ACCESS_COMPONENTS,
                     // which ROLE_ANONYMOUS is granted in the role-map, so unauthenticated
                     // requests pass method-security too.

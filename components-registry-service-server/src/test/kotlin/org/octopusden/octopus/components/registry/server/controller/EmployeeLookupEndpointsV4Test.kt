@@ -82,6 +82,13 @@ class EmployeeLookupEndpointsV4Test {
     }
 
     @Test
+    @DisplayName("GET /meta/employees rejects anonymous username probing")
+    fun `search requires authentication`() {
+        mvc.perform(get("/rest/api/4/components/meta/employees").param("search", "alice"))
+            .andExpect(status().isUnauthorized)
+    }
+
+    @Test
     @DisplayName("POST /meta/employees/status maps usernames to active|null")
     fun `status maps usernames`() {
         `when`(employeeDirectory.statuses(anyList()))

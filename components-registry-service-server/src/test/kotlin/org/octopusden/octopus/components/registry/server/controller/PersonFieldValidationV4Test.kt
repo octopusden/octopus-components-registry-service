@@ -194,6 +194,20 @@ class PersonFieldValidationV4Test {
         postCreate(validBody("pf_unavailable_${uniqueSuffix()}")).andExpect(status().isCreated)
     }
 
+    @Test
+    @DisplayName("flag on: archived component skips active-employee check")
+    fun `flag on archived component skips active check`() {
+        `when`(employeeDirectory.isEnabled()).thenReturn(true)
+        `when`(employeeDirectory.isActive(anyString())).thenReturn(ActiveStatus.INACTIVE)
+        val name = "pf_archived_${uniqueSuffix()}"
+        val body =
+            """{"name":"$name","componentOwner":"inactive_owner","archived":true,""" +
+                """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}"""
+
+        postCreate(body).andExpect(status().isCreated)
+        verify(employeeDirectory, never()).isActive(anyString())
+    }
+
     // ---------- gate-flip on PATCH re-validates final-state RM/SC ----------
 
     @Test
