@@ -30,7 +30,6 @@ class CommonControllerV2(
         componentRegistryResolver
             .getAllJiraComponentVersionRanges()
             .map { it.toDTO() }
-            .sortedWith(compareBy({ it.componentName }, { it.versionRange }))
 
     @GetMapping("dependency-aliases", produces = [MediaType.APPLICATION_JSON_VALUE])
     fun getDependencyAliasToComponentMapping(): Map<String, String> = componentRegistryResolver.getDependencyMapping()

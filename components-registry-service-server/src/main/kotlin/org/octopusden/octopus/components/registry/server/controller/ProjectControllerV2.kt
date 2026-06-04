@@ -45,7 +45,6 @@ class ProjectControllerV2(
         return componentRegistryResolver
             .getJiraComponentVersionRangesByProject(projectKey)
             .map { it.toDTO() }
-            .sortedWith(compareBy({ it.componentName }, { it.versionRange }))
     }
 
     // todo - consider removing the whole endpoint or just version specific fields, like docker,
