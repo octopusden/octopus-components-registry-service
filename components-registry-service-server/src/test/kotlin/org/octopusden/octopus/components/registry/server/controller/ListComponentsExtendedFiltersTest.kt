@@ -2,6 +2,8 @@ package org.octopusden.octopus.components.registry.server.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
@@ -123,20 +125,20 @@ class ListComponentsExtendedFiltersTest {
         val match = uniqueName("ext_cc_match")
         val other = uniqueName("ext_cc_other")
         val third = uniqueName("ext_cc_third")
-        create(baseBody(match, ""","clientCode":"ACME-PORTAL""""))
-        create(baseBody(other, ""","clientCode":"OTHER-CC""""))
-        create(baseBody(third, ""","clientCode":"THIRD-CC""""))
+        create(baseBody(match, ""","clientCode":"ACME_PORTAL""""))
+        create(baseBody(other, ""","clientCode":"OTHER_CC""""))
+        create(baseBody(third, ""","clientCode":"THIRD_CC""""))
         // Exact: a partial value no longer matches (was a substring LIKE pre-SYS-046).
         val partial = names("clientCode" to "ACME")
-        assert(!partial.contains(match)) { "partial 'ACME' must not match 'ACME-PORTAL' after LIKE→IN; got $partial" }
+        assertFalse(partial.contains(match), "partial 'ACME' must not match 'ACME_PORTAL' after LIKE→IN; got $partial")
         // Exact single value matches only the exact code.
-        val exact = names("clientCode" to "ACME-PORTAL")
-        assert(exact.contains(match)) { "expected $match in $exact" }
-        assert(!exact.contains(other)) { "did not expect $other in $exact" }
-        // Multi-value OR: ACME-PORTAL,OTHER-CC returns both, excludes the third.
-        val multi = names("clientCode" to "ACME-PORTAL,OTHER-CC")
-        assert(multi.contains(match) && multi.contains(other)) { "expected both in $multi" }
-        assert(!multi.contains(third)) { "did not expect $third in $multi" }
+        val exact = names("clientCode" to "ACME_PORTAL")
+        assertTrue(exact.contains(match), "expected $match in $exact")
+        assertFalse(exact.contains(other), "did not expect $other in $exact")
+        // Multi-value OR: ACME_PORTAL,OTHER_CC returns both, excludes the third.
+        val multi = names("clientCode" to "ACME_PORTAL,OTHER_CC")
+        assertTrue(multi.contains(match) && multi.contains(other), "expected both in $multi")
+        assertFalse(multi.contains(third), "did not expect $third in $multi")
     }
 
     @Test

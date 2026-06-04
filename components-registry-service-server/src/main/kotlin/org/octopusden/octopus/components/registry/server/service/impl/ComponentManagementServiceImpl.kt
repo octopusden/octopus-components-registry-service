@@ -82,8 +82,11 @@ import org.springframework.data.domain.Sort
 import org.springframework.data.jpa.domain.Specification
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.nio.file.Files
 import java.time.Instant
 import java.util.UUID
+import java.util.regex.Pattern
+import java.util.regex.PatternSyntaxException
 
 /**
  * v4 CRUD against the v2 schema (Model A'). Top-level scalars and per-component
@@ -163,6 +166,12 @@ class ComponentManagementServiceImpl(
         // sprinkling `!!` or `?.let` at each call site.
         val buildSystemValue: String = buildAspect.buildSystem!!
         request.productType?.let { validateProductType(it) }
+        request.clientCode?.let {
+            if (!fieldConfigService.isHidden("component.clientCode")) validateClientCode(it)
+        }
+        request.copyright?.let {
+            if (!fieldConfigService.isHidden("component.copyright")) validateCopyright(it)
+        }
         baseConfigRequest.versionRange?.let { validateRangeSyntax(it) }
         validateBuildSystem(buildSystemValue)
         baseConfigRequest.escrow?.generation?.let { validateEscrowGenerationMode(it) }
@@ -451,7 +460,12 @@ class ComponentManagementServiceImpl(
         request.displayName?.let { if (!fieldConfigService.isHidden("component.displayName")) entity.displayName = it }
         request.componentOwner?.let { if (!fieldConfigService.isHidden("component.componentOwner")) entity.componentOwner = it }
         request.productType?.let { if (!fieldConfigService.isHidden("component.productType")) entity.productType = it }
-        request.clientCode?.let { if (!fieldConfigService.isHidden("component.clientCode")) entity.clientCode = it }
+        request.clientCode?.let {
+            if (!fieldConfigService.isHidden("component.clientCode")) {
+                validateClientCode(it)
+                entity.clientCode = it
+            }
+        }
         request.solution?.let { if (!fieldConfigService.isHidden("component.solution")) entity.solution = it }
         request.archived?.let { entity.archived = it }
         // canBeParent is structural (not field-config-gated). Invariants are
@@ -465,7 +479,12 @@ class ComponentManagementServiceImpl(
         request.securityChampion?.let {
             if (!fieldConfigService.isHidden("component.securityChampion")) entity.replaceSecurityChampionUsernames(it)
         }
-        request.copyright?.let { if (!fieldConfigService.isHidden("component.copyright")) entity.copyright = it }
+        request.copyright?.let {
+            if (!fieldConfigService.isHidden("component.copyright")) {
+                validateCopyright(it)
+                entity.copyright = it
+            }
+        }
         request.releasesInDefaultBranch?.let {
             if (!fieldConfigService.isHidden("component.releasesInDefaultBranch")) entity.releasesInDefaultBranch = it
         }
@@ -920,6 +939,9 @@ class ComponentManagementServiceImpl(
         component: ComponentEntity,
         requests: List<org.octopusden.octopus.components.registry.server.dto.v4.ArtifactIdRequest>,
     ) {
+        // artifactId patterns must be valid regexes (audit #9). Validated here so
+        // both the create and the PATCH (REPLACE) paths are covered by one call site.
+        requests.forEach { validateArtifactIdPattern(it.artifactPattern) }
         requests.forEachIndexed { index, req ->
             component.artifactIds.add(
                 ComponentArtifactIdEntity(
@@ -1433,6 +1455,13 @@ class ComponentManagementServiceImpl(
 
     private fun validateBuildToolBeans(beans: List<BuildToolBeanRequest>) {
         beans.forEach { bean ->
+            // Build-tool per-field required (audit #19; old
+            // EscrowConfigValidator.validateBuildConfigurationTools required each
+            // tool's identifying fields). In v4 a build-tool is a typed bean whose
+            // identifying field is `beanType`; require it to be specified. The
+            // message is field-name-prefixed so the contract matches the other
+            // cheap field checks (→ 400).
+            require(bean.beanType.isNotBlank()) { "beanType is not specified for a buildToolBean" }
             require(bean.beanType in BEAN_TYPE_NAMES) {
                 "Invalid beanType '${bean.beanType}'; must be one of $BEAN_TYPE_NAMES"
             }
@@ -2096,6 +2125,80 @@ class ComponentManagementServiceImpl(
         }
     }
 
+    // ------------------------------------------------------------------
+    // Cheap field-format checks (Stage 5 / validation-parity audit #9,#16,#19,#21).
+    //
+    // Restores the single-field shape/format validations the old
+    // EscrowConfigValidator ran at config-load time but that the v4 write
+    // path dropped. All four are field-name-prefixed `require(...)` →
+    // IllegalArgumentException → 400 (ControllerExceptionHandler).
+    // ------------------------------------------------------------------
+
+    /**
+     * `clientCode` must match `[A-Z_0-9]+` when present (audit #16; old
+     * `EscrowConfigValidator.validateClientCode`). A blank/whitespace value is
+     * treated as "no client code" and skipped — only a non-blank value that
+     * fails the pattern is rejected.
+     */
+    private fun validateClientCode(value: String) {
+        if (value.isBlank()) return
+        require(CLIENT_CODE_PATTERN.matches(value)) {
+            "clientCode '$value' does not match the required pattern '${CLIENT_CODE_PATTERN.pattern}'"
+        }
+    }
+
+    /**
+     * `copyright` must name a file in the configured copyright directory (audit
+     * #21; old `EscrowConfigValidator.validateCopyright`). The supported list is
+     * the same source the old validator used: the regular files under
+     * `components-registry.copyright-path`. When that path is not configured (or
+     * cannot be listed), the check is a no-op — mirroring the old behaviour of
+     * skipping when `copyrightPath == null`. A blank value is skipped.
+     */
+    private fun validateCopyright(value: String) {
+        if (value.isBlank()) return
+        val supported = supportedCopyrights() ?: return
+        require(value in supported) {
+            "copyright '$value' is not supported. Available values are $supported"
+        }
+    }
+
+    /**
+     * The supported-copyright names, read from the configured copyright
+     * directory (regular files only). Returns null when no path is configured or
+     * the directory cannot be listed, so the caller can skip the check.
+     */
+    private fun supportedCopyrights(): List<String>? {
+        val path = configHelper.copyrightPath() ?: return null
+        return runCatching {
+            Files.list(path).use { stream ->
+                stream.filter { Files.isRegularFile(it) }
+                    .map { it.fileName.toString() }
+                    .sorted()
+                    .toList()
+            }
+        }.onFailure {
+            log.warn("Copyright directory '{}' is unreadable; copyright validation skipped", path, it)
+        }.getOrNull()
+    }
+
+    /**
+     * An `artifactId` pattern must be a compilable regular expression (audit #9;
+     * old `EscrowConfigValidator.validateArtifactId`). Applied per
+     * `artifactIds[].artifactPattern` on the create/update paths.
+     */
+    private fun validateArtifactIdPattern(pattern: String) {
+        require(pattern.isNotBlank()) { "artifactId pattern must not be blank" }
+        try {
+            Pattern.compile(pattern)
+        } catch (e: PatternSyntaxException) {
+            throw IllegalArgumentException(
+                "artifactId pattern '$pattern' is not a valid regular expression",
+                e,
+            )
+        }
+    }
+
     private fun buildSpecification(filter: ComponentFilter): Specification<ComponentEntity> {
         var spec = Specification.where<ComponentEntity>(null)
 
@@ -2449,5 +2552,8 @@ class ComponentManagementServiceImpl(
 
         /** Split a multi-valued `groupPattern` on comma or pipe (legacy DSL semantics). */
         private val GROUP_ID_SPLIT = Regex("[,|]")
+
+        // Same shape as the old EscrowConfigValidator.CLIENT_CODE_PATTERN.
+        private val CLIENT_CODE_PATTERN = Regex("[A-Z_0-9]+")
     }
 }
