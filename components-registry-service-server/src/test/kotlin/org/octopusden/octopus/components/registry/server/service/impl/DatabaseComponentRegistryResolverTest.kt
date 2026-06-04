@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.mockito.Mockito.mock
@@ -666,6 +667,66 @@ class DatabaseComponentRegistryResolverTest {
         assertNotNull(buildParams)
         // No tool marker matched → tools list is empty
         assertEquals(0, buildParams!!.tools.size)
+    }
+
+    // ========================================================================
+    // (9) MIG-042: base versionRange gate — out-of-range version → null
+    // ========================================================================
+
+    @Test
+    @DisplayName("MIG-042: base with bounded range - version inside range resolves non-null")
+    fun `(9a MIG-042) base with bounded range - version inside range resolves`() {
+        val comp = makeComponent("COMP9A")
+        val base = makeBase(comp, versionRange = "[1.0,2.0)", javaVersion = "11")
+        comp.configurations.add(base)
+        stubComponent(comp)
+
+        val cfg = resolver.getResolvedComponentDefinition("COMP9A", "1.5.0")
+        assertNotNull(cfg)
+        assertEquals("11", cfg!!.buildConfiguration?.javaVersion)
+    }
+
+    @Test
+    @DisplayName("MIG-042: base with bounded range - version outside range returns null (mirrors V1 404)")
+    fun `(9b MIG-042) base with bounded range - version outside range returns null`() {
+        val comp = makeComponent("COMP9B")
+        val base = makeBase(comp, versionRange = "[1.0,2.0)", javaVersion = "11")
+        comp.configurations.add(base)
+        stubComponent(comp)
+
+        // 3.0.0 is outside [1.0,2.0) → V1 returns 404 → v3 must return null
+        val cfg = resolver.getResolvedComponentDefinition("COMP9B", "3.0.0")
+        assertNull(cfg)
+    }
+
+    @Test
+    @DisplayName("MIG-042: base with ALL_VERSIONS range - any version still resolves (no regression)")
+    fun `(9c MIG-042) base with ALL_VERSIONS range - any version still resolves`() {
+        val comp = makeComponent("COMP9C")
+        val base = makeBase(comp, javaVersion = "8")
+        comp.configurations.add(base)
+        stubComponent(comp)
+
+        assertNotNull(resolver.getResolvedComponentDefinition("COMP9C", "0.0.1"))
+        assertNotNull(resolver.getResolvedComponentDefinition("COMP9C", "999.0.0"))
+    }
+
+    @Test
+    @DisplayName("MIG-042 + MIG-029: synthetic base with bounded range - version outside range returns null")
+    fun `(9d MIG-042 MIG-029) synthetic base with bounded range - out-of-range returns null`() {
+        val comp = makeComponent("COMP9D")
+        val base = makeBase(comp, versionRange = "[1.0,2.0)", isSyntheticBase = true, javaVersion = "8")
+        val overrideRow = makeScalarOverrideRow(comp, "[1.0,2.0)", "build.javaVersion")
+        overrideRow.javaVersion = "11"
+        comp.configurations.addAll(listOf(base, overrideRow))
+        stubComponent(comp)
+
+        // 0.5.0 is outside [1.0,2.0) → base range gates → null
+        assertNull(resolver.getResolvedComponentDefinition("COMP9D", "0.5.0"))
+        // 1.5.0 is inside → resolves with override
+        val cfg = resolver.getResolvedComponentDefinition("COMP9D", "1.5.0")
+        assertNotNull(cfg)
+        assertEquals("11", cfg!!.buildConfiguration?.javaVersion)
     }
 
     // ========================================================================

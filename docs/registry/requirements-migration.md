@@ -47,6 +47,7 @@ Numbered MIG-NNN contracts registry, peer of `requirements-common.md` (SYS-NNN) 
 | MIG-039 | find-by-artifacts gates by configuration version range | High | unit-test | ✅ Tested |
 | MIG-040 | find-by-docker-images version-substitutes distribution | Low | integration-test | ✅ Fixed |
 | MIG-041 | importer preserves component-level artifactId CSV tokens | Medium | integration-test | ⏳ Follow-up |
+| MIG-042 | toResolvedEscrowModuleConfig gates on base versionRange | High | unit-test | ✅ Tested |
 
 ---
 
@@ -1138,3 +1139,36 @@ BOTH `find-by-artifacts` and `/maven-artifacts`.
 **Acceptance criteria:**
 1. All component-level `artifactId` CSV tokens are matchable by `find-by-artifacts`.
 2. `/maven-artifacts` per-range output is unchanged.
+
+### MIG-042: toResolvedEscrowModuleConfig must gate on base versionRange
+
+**Priority:** High
+**Test layer:** unit-test
+**Status:** ✅ Tested
+**Test method:** `DatabaseComponentRegistryResolverTest.(9b MIG-042) base with bounded range - version outside range returns null`
+
+`GET /rest/api/2/components/{component}/versions/{version}/distribution` (and any endpoint backed by
+`getResolvedComponentDefinition`) returned HTTP 200 on the v3 (DB-mode) candidate for versions that
+fall outside the component's configured version range, while the V1 baseline returned HTTP 404.
+Surfaced by the [1.7] compat gate (build 3779): 50 active diffs, all `STATUS_CODE_DIFF 404 → 200`
+on the per-version distribution endpoint.
+
+**Root cause:** `ComponentEntity.toResolvedEscrowModuleConfig` (in `EntityMappers.kt`) returned null
+only when no BASE row exists. For any parseable version it returned the BASE config unconditionally —
+the override rows were range-gated but the BASE was not. V1's
+`EscrowConfigurationLoader.resolveComponentConfiguration` filters all module configs by
+`versionRange.containsVersion(version)` and returns null when the version is outside every range.
+
+**Fix:** After parsing the request version as a `NumericVersion`, check
+`versionRangeFactory.create(base.versionRange).containsVersion(numericVersion)` and return null
+when the version falls outside the base range. If the range string is unparseable, fall through
+conservatively (do not block).
+
+**Acceptance criteria:**
+1. `getResolvedComponentDefinition(component, version)` returns null when `version` is outside the
+   component's base versionRange (mirrors V1 → 404 at the controller layer).
+2. `getResolvedComponentDefinition` still returns a non-null config when `version` is inside the
+   base versionRange.
+3. Components whose base has `ALL_VERSIONS` (`(,0),[0,)`) continue to resolve for any parseable
+   version.
+4. Synthetic-base components (MIG-029) also gate by the base versionRange.
