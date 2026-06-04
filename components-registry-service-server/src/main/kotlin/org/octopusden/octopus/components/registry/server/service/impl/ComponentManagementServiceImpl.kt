@@ -270,6 +270,7 @@ class ComponentManagementServiceImpl(
         // the person-field error first, so person validation runs ahead of the
         // malformed-input checks here.
         validatePersonFields(entity, runActiveCheck = true)
+        validateRequiredCopyright(entity)
 
         // Malformed-input cross-component / single-field checks (400). These need
         // no DB lookup beyond the soft doc-ref existence probe and run against the
@@ -551,6 +552,7 @@ class ComponentManagementServiceImpl(
             entity.distributionExplicit != oldExplicit ||
                 entity.distributionExternal != oldExternal
         validatePersonFields(entity, runActiveCheck = personFieldChanged || gateFlipped)
+        validateRequiredCopyright(entity)
 
         // Per-component child REPLACE — present collection wipes and refills
         request.artifactIds?.let {
@@ -2160,6 +2162,23 @@ class ComponentManagementServiceImpl(
         val supported = supportedCopyrights() ?: return
         require(value in supported) {
             "copyright '$value' is not supported. Available values are $supported"
+        }
+    }
+
+    /**
+     * Audit #5: when a copyright directory is configured, explicit+external
+     * components must select one of its entries. This requiredness check runs
+     * against the final entity state on every create/update, like the person
+     * requiredness checks, while [validateCopyright] validates a submitted
+     * non-blank value against the supported list.
+     */
+    private fun validateRequiredCopyright(entity: ComponentEntity) {
+        if (fieldConfigService.isHidden("component.copyright")) return
+        if (entity.distributionExplicit != true || entity.distributionExternal != true) return
+        if (configHelper.copyrightPath() == null) return
+
+        require(!entity.copyright.isNullOrBlank()) {
+            "copyright must not be blank for an explicit+external component when copyright-path is configured"
         }
     }
 
