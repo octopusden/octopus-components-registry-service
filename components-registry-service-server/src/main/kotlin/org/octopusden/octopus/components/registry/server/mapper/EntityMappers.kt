@@ -193,10 +193,18 @@ fun ComponentEntity.toResolvedEscrowModuleConfig(
         }
 
     // Gate on base range: mirror V1 — versions outside the component's configured range → null (MIG-042).
-    // ALL_VERSIONS base means the component has no explicit range restriction; skip the gate entirely
-    // because (a) every version is in range by definition and (b) ALL_VERSIONS is a compound expression
-    // "(,0),[0,)" whose union semantics may not be supported by VersionRangeFactory.containsVersion.
-    if (base.versionRange != ALL_VERSIONS) {
+    // Only applies to NON-synthetic, NON-ALL_VERSIONS bases:
+    //   • ALL_VERSIONS base: every version is trivially in-range; the compound range "(,0),[0,)" is
+    //     also not supported as a union by VersionRangeFactory.containsVersion — skip entirely.
+    //   • Synthetic base (isSyntheticBase == true): the base row's versionRange is the DSL's FIRST
+    //     range block (e.g. "(,1.0)"), not the component's full effective range. Versions beyond that
+    //     first bound are handled by override rows (e.g. "[1.0,)"). Gating on the first-block bound
+    //     would incorrectly return null for all those override-covered versions — breaking components
+    //     like 3DSecure, AppserverConsole, etc. (MIG-042 regression).
+    //   • Non-synthetic bounded base (isSyntheticBase == false, versionRange != ALL_VERSIONS):
+    //     e.g. appserver-distribution with versionRange="(,1.7.0)" — V1 returns 404 for
+    //     versions outside this bound, so we must too.
+    if (!base.isSyntheticBase && base.versionRange != ALL_VERSIONS) {
         try {
             if (!versionRangeFactory.create(base.versionRange).containsVersion(numericVersion)) return null
         } catch (_: Exception) {

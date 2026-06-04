@@ -712,21 +712,51 @@ class DatabaseComponentRegistryResolverTest {
     }
 
     @Test
-    @DisplayName("MIG-042 + MIG-029: synthetic base with bounded range - version outside range returns null")
-    fun `(9d MIG-042 MIG-029) synthetic base with bounded range - out-of-range returns null`() {
+    @DisplayName("MIG-042 + MIG-029: non-synthetic single-range base - version outside range returns null")
+    fun `(9d MIG-042 MIG-029) non-synthetic single-range base - out-of-range returns null`() {
+        // A component with exactly ONE explicit range block and no ALL_VERSIONS top-level config is
+        // treated as non-synthetic (isSyntheticBase = false, configs.size == 1). The gate must fire:
+        // a version outside the single defined range has no config in V1 and must return null here.
         val comp = makeComponent("COMP9D")
-        val base = makeBase(comp, versionRange = "[1.0,2.0)", isSyntheticBase = true, javaVersion = "8")
-        val overrideRow = makeScalarOverrideRow(comp, "[1.0,2.0)", "build.javaVersion")
+        val base = makeBase(comp, versionRange = "[1.0,2.0)", isSyntheticBase = false, javaVersion = "11")
+        comp.configurations.add(base)
+        stubComponent(comp)
+
+        // 0.5.0 is outside [1.0,2.0) → non-synthetic gate → null (V1 parity)
+        assertNull(resolver.getResolvedComponentDefinition("COMP9D", "0.5.0"))
+        // 3.0.0 is also outside [1.0,2.0) → null
+        assertNull(resolver.getResolvedComponentDefinition("COMP9D", "3.0.0"))
+        // 1.5.0 is inside [1.0,2.0) → resolves
+        val cfg = resolver.getResolvedComponentDefinition("COMP9D", "1.5.0")
+        assertNotNull(cfg)
+        assertEquals("11", cfg!!.buildConfiguration?.javaVersion)
+    }
+
+    @Test
+    @DisplayName("MIG-042 regression: synthetic-base multi-range component — version in second range resolves (V1 parity)")
+    fun `(9e MIG-042-regression) synthetic-base multi-range - version in second range resolves`() {
+        // Mirrors production components like 3DSecure / AppserverConsole that declare two range
+        // blocks, e.g. "(,1.0)" and "[1.0,)". After the initial MIG-042 gate landed, the gate
+        // was incorrectly applied to the synthetic BASE row's range "(,1.0)", which returned null
+        // for any version >= 1.0 — even though V1 resolves those via the "[1.0,)" override config.
+        // Fix: skip the gate when base.isSyntheticBase == true.
+        val comp = makeComponent("COMP9E")
+        val base = makeBase(comp, versionRange = "(,1.0)", isSyntheticBase = true, javaVersion = "8")
+        val overrideRow = makeScalarOverrideRow(comp, "[1.0,)", "build.javaVersion")
         overrideRow.javaVersion = "11"
         comp.configurations.addAll(listOf(base, overrideRow))
         stubComponent(comp)
 
-        // 0.5.0 is outside [1.0,2.0) → base range gates → null
-        assertNull(resolver.getResolvedComponentDefinition("COMP9D", "0.5.0"))
-        // 1.5.0 is inside → resolves with override
-        val cfg = resolver.getResolvedComponentDefinition("COMP9D", "1.5.0")
-        assertNotNull(cfg)
-        assertEquals("11", cfg!!.buildConfiguration?.javaVersion)
+        // 1.5.0 is in [1.0,) — handled by the override, NOT the base range "(,1.0)".
+        // The gate must NOT reject it because "(,1.0)" does not contain 1.5.0.
+        val cfgOverride = resolver.getResolvedComponentDefinition("COMP9E", "1.5.0")
+        assertNotNull(cfgOverride)
+        assertEquals("11", cfgOverride!!.buildConfiguration?.javaVersion)
+
+        // 0.5.0 is in "(,1.0)" — the base range itself; must also resolve with base config.
+        val cfgBase = resolver.getResolvedComponentDefinition("COMP9E", "0.5.0")
+        assertNotNull(cfgBase)
+        assertEquals("8", cfgBase!!.buildConfiguration?.javaVersion)
     }
 
     // ========================================================================
