@@ -3,6 +3,7 @@ package org.octopusden.octopus.components.registry.server.controller
 import org.octopusden.octopus.components.registry.core.dto.ErrorResponse
 import org.octopusden.octopus.components.registry.core.exceptions.BaseComponentsRegistryException
 import org.octopusden.octopus.components.registry.core.exceptions.ComponentNameConflictException
+import org.octopusden.octopus.components.registry.core.exceptions.CrossComponentConflictException
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.core.exceptions.RepositoryNotPreparedException
 import org.slf4j.Logger
@@ -84,6 +85,22 @@ class ControllerExceptionHandler {
     @ExceptionHandler(ComponentNameConflictException::class)
     @ResponseStatus(HttpStatus.CONFLICT)
     fun componentNameConflictExceptionHandler(e: ComponentNameConflictException): HttpEntity<ErrorResponse> {
+        log.warn(e.localizedMessage)
+        return HttpEntity(ErrorResponse(e.localizedMessage))
+    }
+
+    /**
+     * Cross-component integrity collision (duplicate groupId:artifactId in
+     * overlapping ranges, shared jira project-key+version-prefix among
+     * non-archived components, or duplicate docker image name). The submitted
+     * payload is well-formed but clashes with existing data — 409 Conflict,
+     * mirroring the name-conflict handler above. Malformed-input checks (missing
+     * distribution coordinate, unsupported groupId prefix, archived-explicit
+     * gate, doc-component existence) instead use IllegalArgumentException → 400.
+     */
+    @ExceptionHandler(CrossComponentConflictException::class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    fun crossComponentConflictExceptionHandler(e: CrossComponentConflictException): HttpEntity<ErrorResponse> {
         log.warn(e.localizedMessage)
         return HttpEntity(ErrorResponse(e.localizedMessage))
     }

@@ -1,11 +1,40 @@
 package org.octopusden.octopus.components.registry.server.repository
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Query
+import org.springframework.data.repository.query.Param
 import org.springframework.stereotype.Repository
 import java.util.UUID
 
 @Repository
 interface ComponentConfigurationRepository : JpaRepository<ComponentConfigurationEntity, UUID> {
+    /**
+     * Distinct keys of OTHER, non-archived components (excluding
+     * [excludeComponentId]) that own a configuration row with the same jira
+     * `(projectKey, versionPrefix)` pair. Restores the old
+     * `validateJiraProjectKeyAndVersionPrefixIntersections` rule: each
+     * (projectKey, versionPrefix) maps to at most one non-archived component.
+     *
+     * `versionPrefix` is nullable — the null-safe comparison treats a NULL
+     * prefix on both sides as the same bucket (matching the old
+     * `Tuple2(projectKey, versionPrefix)` map key where versionPrefix could be
+     * null). A non-empty result is a cross-component conflict.
+     */
+    @Query(
+        "SELECT DISTINCT comp.componentKey FROM ComponentConfigurationEntity cfg " +
+            "JOIN cfg.component comp " +
+            "WHERE comp.id <> :excludeComponentId " +
+            "AND comp.archived = false " +
+            "AND cfg.jiraProjectKey = :projectKey " +
+            "AND ((:versionPrefix IS NULL AND cfg.jiraVersionPrefix IS NULL) " +
+            "  OR cfg.jiraVersionPrefix = :versionPrefix)",
+    )
+    fun findOtherNonArchivedComponentKeysByJiraProjectKeyAndVersionPrefix(
+        @Param("projectKey") projectKey: String,
+        @Param("versionPrefix") versionPrefix: String?,
+        @Param("excludeComponentId") excludeComponentId: UUID,
+    ): List<String>
+
     /** All configuration rows (base + overrides) for a component, in arbitrary order. */
     fun findByComponentId(componentId: UUID): List<ComponentConfigurationEntity>
 
