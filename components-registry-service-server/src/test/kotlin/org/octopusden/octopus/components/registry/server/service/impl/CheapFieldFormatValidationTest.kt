@@ -234,6 +234,35 @@ class CheapFieldFormatValidationTest {
     }
 
     @Test
+    @DisplayName("CREATE requires copyright for explicit+external component when copyright path is configured")
+    fun create_requiresCopyrightForExplicitExternal() {
+        val request =
+            minimalCreate().copy(
+                releaseManager = listOf("releaseManager"),
+                securityChampion = listOf("securityChampion"),
+                distributionExplicit = true,
+                distributionExternal = true,
+            )
+
+        assertFieldPrefixed("copyright") {
+            service.createComponent(request)
+        }
+    }
+
+    @Test
+    @DisplayName("PATCH validates final-state copyright requiredness for explicit+external component")
+    fun patch_requiresCopyrightForExplicitExternal() {
+        existing.distributionExplicit = true
+        existing.distributionExternal = true
+        existing.replaceReleaseManagerUsernames(listOf("releaseManager"))
+        existing.replaceSecurityChampionUsernames(listOf("securityChampion"))
+
+        assertFieldPrefixed("copyright") {
+            service.updateComponent(existingId, minimalUpdate(clientCode = "VALID_CODE"))
+        }
+    }
+
+    @Test
     @DisplayName("copyright error lists available values in deterministic order")
     fun copyright_errorListsSupportedValuesSorted() {
         Files.createFile(copyrightDir.resolve("z-license.txt"))

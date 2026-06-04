@@ -43,13 +43,14 @@ Base URLs for links are configurable per deployment via `registry_config` (same 
 
 ### 1.3 Create Component
 - **Required fields**: `name` (unique, alphanumeric + hyphens + underscores, max 255 chars), `componentOwner`
-- **Conditionally required**: `releaseManager`, `securityChampion`, `copyright` — required when `distribution.explicit && distribution.external`
+- **Conditionally required**: `releaseManager`, `securityChampion` — required when `distribution.explicit && distribution.external`; `copyright` — required under the same gate only when `components-registry.copyright-path` is configured
 - **Optional fields**: displayName, productType, system, clientCode, solution, groupId, labels, doc
 
 **Person-field validation (enforced on the v4 write path — see ADR-015).** Restored from the old `EscrowConfigValidator` + the (formerly default-off CI) `ComponentRegistryValidationTask`, and modernised into per-request checks on `POST /rest/api/4/components` and `PATCH /rest/api/4/components/{id}`:
 
 - **`componentOwner`** — required, non-blank, on **every** component. No format pattern.
 - **`releaseManager` / `securityChampion`** — required **only when** `distribution.explicit && distribution.external`, and **each list element** must match `^\w+$` (validated per canonical element, so an element like `"alice,bob"` is rejected — it is *not* CSV-split into two usernames). Lists are already trim/dedupe-canonicalized.
+- **`copyright`** — required when `distribution.explicit && distribution.external` and `components-registry.copyright-path` is configured. Requiredness validates the final entity state on every create/update; a hidden copyright field is skipped.
 - **Active-employee check** — when enabled (`employee-service.enabled=true` + a non-blank `employee-service.url`; off by default), each final-state `componentOwner` / `releaseManager` / `securityChampion` of a **non-archived** component is resolved through employee-service. Archived components skip only the external active lookup; required/pattern checks still run. An **inactive** (`active=false`) or **unknown** (`NotFoundException`) user → **400**. Employee-service **unreachable** (transport/timeout) or the feature **disabled** → the write is **allowed** with a WARN log (**fail-open** — it must not become a hard outage dependency). The required/pattern checks above run regardless of this flag.
 - **Timing / grandfathering.** Required/pattern validate the **final entity state** after the patch is applied (so PATCH callers needn't resend unchanged fields). The active-employee check runs only when the request **touches a person field OR flips** `distribution.explicit` / `distribution.external` — flipping the gate to `explicit && external` newly makes RM/SC required and re-validates them even if the PATCH did not set them. When neither person fields nor the gate change, pre-existing saved values are **grandfathered** (not re-checked).
 - **Hidden fields** (field-config `visibility: hidden`) are **skipped** entirely — a hidden field is stripped on write, so it cannot be required.
@@ -96,12 +97,21 @@ shape/format rules on both `POST /rest/api/4/components` and
 | Field | Rule | Notes |
 |-------|------|-------|
 | `clientCode` | Matches `[A-Z_0-9]+` when present | Blank/whitespace is treated as "no client code" and skipped. |
-| `copyright` | Must name a file under the configured copyright directory | The supported list is read from `components-registry.copyright-path` (same source as the read-side `CopyrightService`). When that path is not configured (or cannot be listed), the check is a no-op — matching the legacy behaviour of skipping when no copyright path is set. Blank is skipped. |
+| `copyright` | Must name a file under the configured copyright directory | The supported list is read from `components-registry.copyright-path` (same source as the read-side `CopyrightService`). When that path is not configured (or cannot be listed), the supported-list check is a no-op. Blank is allowed except when the explicit+external requiredness rule above applies. |
 | `artifactIds[].artifactPattern` | Must be a compilable regular expression (and non-blank) | Validated on both create and the PATCH REPLACE path. |
 | `buildToolBeans[].beanType` | Must be specified (non-blank) | The v4 build-tool is a typed bean whose identifying field is `beanType`; this is the v4 analogue of the legacy build-tool per-field requireds (`name` / `escrowEnvironmentVariable` / `sourceLocation` / `targetLocation`). The legacy `Tool` fields themselves live in the global tools master, which is not writable through the component create/update payload. |
 
 These format checks are skipped for a field whose admin field-config visibility is
 `HIDDEN`. On `PATCH`, the hidden value is also stripped before persistence.
+
+#### Intentional legacy-validation relaxations
+
+- `displayName` remains optional, including for explicit+external components. The
+  v4 contract deliberately uses the component key as the stable identity and does
+  not require a second display label.
+- Legacy hotfix version-format relationship checks are not enforced on v4 writes.
+  Hotfix formats are inherited/read-only in the Portal, while permissive storage
+  preserves imported configurations and resolver compatibility.
 
 ### 1.5 Delete Component
 - **Behavior**: Soft delete — sets `archived = true`
@@ -109,6 +119,9 @@ These format checks are skipped for a field whose admin field-config visibility 
 - **Undo**: Can un-archive by updating `archived = false`
 - **Hard delete**: Admin-only, removes component and all related data (with CASCADE)
 - **Audit**: DELETE event logged
+- **JIRA guard**: No runtime JIRA-existence check. The legacy guard compared two
+  config-repository snapshots during CI; the v4 delete path archives the component
+  in place and intentionally does not make CRS deletion depend on JIRA availability.
 
 ### 1.6 View as Code
 

@@ -2,8 +2,9 @@
 
 ## Status
 
-In progress · tracks the multi-PR effort restoring the pre-publish validations
-the v3 DB / v4-API dropped at runtime.
+Complete. The v3/v4 write-path gaps have either been restored or recorded as
+intentional decisions, and the companion Portal change surfaces field errors,
+employee lookup results, and inactive-person badges.
 
 Source of truth for the gap analysis: `.github/audit/VALIDATION-PARITY-2026-06-03.md`
 (old = `main` @ `3aaeecf0`; new = `v3` @ `478dd287`). This ledger is owned by the
@@ -30,29 +31,29 @@ Legend: ✅ done (this/a merged PR) · ◻ open · ⊘ intentional (to be record
 | #4 | `securityChampion` required + per-element `^\w+$` under `explicit && external` | ✅ Stage 1 |
 | #7 | active-employee check on owner/RM/SC | ✅ Stage 1 — runtime, flag-gated, **fail-open** (ADR-015) |
 | — | employee lookup endpoints for the UI picker + badge | ✅ Stage 2 — `GET /meta/employees`, `POST /meta/employees/status` |
-| #2 | `componentDisplayName` required under `explicit && external` | ◻ open — not in the headline ask; revisit (was conditional) |
-| #5 | `copyright` required if `copyrightPath` set, under `explicit && external` | ◻ open — overlaps Stage 5 (#21 copyright list) |
+| #2 | `componentDisplayName` required under `explicit && external` | ⊘ INTENTIONAL — v4 `displayName` is optional; component key is the stable identity |
+| #5 | `copyright` required if `copyrightPath` set, under `explicit && external` | ✅ final-state requiredness restored; hidden/unconfigured field is skipped |
 
 ### Cross-component integrity — Stage 4 (separate PR, independent)
 
 | Audit # | Rule | Status |
 |---|---|---|
-| #24/#25 | duplicate / intersecting `groupId:artifactId` across components | ◻ open → 409 `CrossComponentConflictException` |
-| #26 | (jira `projectKey`, `versionPrefix`) ≤1 non-archived component | ◻ open → 409 |
-| #29 | docker image-name global uniqueness | ◻ open → 409 |
-| #6 | explicit-external must define ≥1 distribution coordinate | ◻ open → 400 |
-| #10 | `groupId` supported-prefix | ◻ open → 400 |
-| #28 | archived component can't be `explicit && external` | ◻ open → 400 |
-| #20 | doc-component existence (soft ref, no FK) | ◻ open → 400/404 soft lookup |
+| #24/#25 | duplicate / intersecting `groupId:artifactId` across components | ✅ 409 `CrossComponentConflictException` |
+| #26 | (jira `projectKey`, `versionPrefix`) ≤1 non-archived component | ✅ 409 |
+| #29 | docker image-name global uniqueness | ✅ 409 |
+| #6 | explicit-external must define ≥1 distribution coordinate | ✅ 400 |
+| #10 | `groupId` supported-prefix | ✅ 400 |
+| #28 | archived component can't be `explicit && external` | ✅ 400 |
+| #20 | doc-component existence (soft ref, no FK) | ✅ 400 soft lookup |
 
 ### Cheap field-format checks — Stage 5 (separate PR, independent)
 
 | Audit # | Rule | Status |
 |---|---|---|
-| #16 | `clientCode` matches `[A-Z_0-9]+` | ◻ open → 400 |
-| #21 | `copyright` ∈ supported list | ◻ open → 400 |
-| #9 | `artifactId` non-empty + valid regex | ◻ open → 400 |
-| #19 | build-tool per-field requireds (name/env/source/target) | ◻ open → 400 |
+| #16 | `clientCode` matches `[A-Z_0-9]+` | ✅ 400 |
+| #21 | `copyright` ∈ supported list | ✅ 400 |
+| #9 | `artifactId` non-empty + valid regex | ✅ 400 |
+| #19 | build-tool per-field requireds (name/env/source/target) | ✅ v4 analogue: `beanType` required, 400 |
 
 ### Intentional / documented relaxations — Stage 6 (docs-only)
 
@@ -63,8 +64,8 @@ Legend: ✅ done (this/a merged PR) · ◻ open · ⊘ intentional (to be record
 | #15/#17/#18 | `system` / `releasesInDefaultBranch` / `solution` required→optional | ⊘ INTENTIONAL — recorded optional in functional-spec |
 | #22 | `labels` ∈ closed `availableLabels` | ⊘ INTENTIONAL — open vocabulary + auto-create |
 | #30/#31/#32 | double escrow.generation / DSL-range-missing / DSL structural | ⊘ N/A — DSL dual-source removed |
-| #12 | hotfix version-format rules | ◻ decide — mostly mitigated by read-only inherited Defaults |
-| #33 | JIRA-delete guard (block deleting a component still in JIRA) | ◻ decide — was build-time only; re-add as delete-time runtime check or leave to CI |
+| #12 | hotfix version-format rules | ⊘ INTENTIONAL — inherited/read-only in Portal; permissive storage preserves imported configs and resolver compatibility |
+| #33 | JIRA-delete guard (block deleting a component still in JIRA) | ⊘ INTENTIONAL — legacy config-snapshot CI guard; v4 delete archives in place and has no runtime JIRA dependency |
 
 ### Already MIGRATED (context — no action)
 
@@ -98,8 +99,8 @@ Legend: ✅ done (this/a merged PR) · ◻ open · ⊘ intentional (to be record
 
 ## Acceptance (whole TD, closed when all rows resolve)
 
-- [ ] Stage 1 person-field validation landed + green (this PR).
-- [ ] Stage 2 lookup endpoints landed + green (this PR).
-- [ ] Stages 4/5 cross-component + cheap-field checks landed.
-- [ ] Stage 6 intentional relaxations recorded in functional-spec; #12/#33 decided.
-- [ ] Portal Stage 3 surfaces the errors + picker + badge.
+- [x] Stage 1 person-field validation landed + green.
+- [x] Stage 2 lookup endpoints landed + green.
+- [x] Stages 4/5 cross-component + cheap-field checks landed.
+- [x] Stage 6 intentional relaxations recorded in functional-spec; #12/#33 decided.
+- [x] Portal Stage 3 surfaces the errors + picker + badge.
