@@ -111,8 +111,10 @@ class MetaInUseOptionsEndpointsTest {
     @Test
     @DisplayName("SYS-046: GET /meta/client-codes returns sorted distinct in-use client codes")
     fun `SYS-046 meta client-codes returns sorted distinct in-use values`() {
-        val a = uniqueName("ZCC")
-        val b = uniqueName("ACC")
+        // clientCode must match [A-Z_0-9]+ (restored validation); uppercase the
+        // uniqueName suffix (UUID hex is lowercase) so the seed is accepted.
+        val a = uniqueName("ZCC").uppercase()
+        val b = uniqueName("ACC").uppercase()
         create(baseBody(uniqueName("cc_one"), ""","clientCode":"$a""""))
         create(baseBody(uniqueName("cc_two"), ""","clientCode":"$b""""))
         // Duplicate the first code on a separate component to exercise DISTINCT.

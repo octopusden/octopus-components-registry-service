@@ -83,6 +83,26 @@ Base URLs for links are configurable per deployment via `registry_config` (same 
 - **Optimistic locking**: `@Version` field prevents lost updates (409 Conflict on stale version)
 - **Audit**: UPDATE event logged with old_value, new_value, change_diff
 
+#### Field-format validation (create + update)
+
+Beyond the structural/enum checks (name uniqueness, `productType` / `buildSystem` /
+`repositoryType` / `packageType` / `escrow.generation` enums, version-range syntax,
+per-field range non-overlap), the v4 write path enforces the following single-field
+shape/format rules on both `POST /rest/api/4/components` and
+`PATCH /rest/api/4/components/{id}`. Each is a field-name-prefixed `400 Bad Request`
+(`{ "errorMessage": "<field> …" }`). These restore the corresponding checks the legacy
+`EscrowConfigValidator` ran at config-load time.
+
+| Field | Rule | Notes |
+|-------|------|-------|
+| `clientCode` | Matches `[A-Z_0-9]+` when present | Blank/whitespace is treated as "no client code" and skipped. |
+| `copyright` | Must name a file under the configured copyright directory | The supported list is read from `components-registry.copyright-path` (same source as the read-side `CopyrightService`). When that path is not configured (or cannot be listed), the check is a no-op — matching the legacy behaviour of skipping when no copyright path is set. Blank is skipped. |
+| `artifactIds[].artifactPattern` | Must be a compilable regular expression (and non-blank) | Validated on both create and the PATCH REPLACE path. |
+| `buildToolBeans[].beanType` | Must be specified (non-blank) | The v4 build-tool is a typed bean whose identifying field is `beanType`; this is the v4 analogue of the legacy build-tool per-field requireds (`name` / `escrowEnvironmentVariable` / `sourceLocation` / `targetLocation`). The legacy `Tool` fields themselves live in the global tools master, which is not writable through the component create/update payload. |
+
+These format checks are skipped for a field whose admin field-config visibility is
+`HIDDEN`. On `PATCH`, the hidden value is also stripped before persistence.
+
 ### 1.5 Delete Component
 - **Behavior**: Soft delete — sets `archived = true`
 - **Cascading**: Does NOT delete versions or sub-components
