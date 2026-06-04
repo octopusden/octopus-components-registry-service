@@ -141,6 +141,25 @@ Version ranges for the **same field** must not overlap. This is enforced on crea
 - **Behavior**: Removes the version override for a specific field and range
 - **Effect**: The field reverts to the component default for that version range
 
+### 2.5 Cross-Component Integrity Validation
+
+In addition to the per-component overlap rules above (section 2.1), `POST /rest/api/4/components` (create), `PATCH /rest/api/4/components/{id}` (update), **and the field-override sub-resource** (`POST`/`PATCH /rest/api/4/components/{id}/field-overrides[/{overrideId}]`) enforce a set of **cross-component** and malformed-input rules at write time. These restore the composite checks the legacy `EscrowConfigValidator` ran at config-load time (audit `VALIDATION-PARITY-2026-06-03.md`, rows #6/#10/#20/#24/#25/#26/#28/#29). See `tech-debt/012-pre-publish-validation-parity.md` for the parity ledger.
+
+The checks validate the **final persisted state** (after the patch is applied and flushed) using **self-excluding** queries — a component never conflicts with itself, while conflicts with other components are still rejected whenever validation is triggered. A field-override write that introduces a `mavenArtifacts` / `dockerImages` coordinate on an override row is re-validated against all of the owning component's configuration rows (base + overrides), so a collision cannot be slipped in through the sub-resource.
+
+Conflicts with **other** components → **409 Conflict** (`CrossComponentConflictException`):
+- **Duplicate `groupId:artifactId` in overlapping ranges** — two components must not declare the same maven `(groupPattern, artifactPattern)` for intersecting version ranges. Intersection uses the same Maven boundary semantics as section 2.1.
+- **Jira `(projectKey, versionPrefix)` uniqueness among non-archived components** — each `(projectKey, versionPrefix)` pair maps to at most one non-archived component. A `null` version prefix is its own bucket. Archived components are exempt and do not claim a bucket.
+- **Docker image-name global uniqueness** — a docker image name (e.g. `registry.example/app`) may be declared by at most one component across the whole registry.
+
+Malformed-input rules → **400 Bad Request** (`IllegalArgumentException`, field-name-prefixed message):
+- **Explicit+external requires ≥1 distribution coordinate** — when `distributionExplicit && distributionExternal`, the component must define at least one maven artifact, docker image, or package on some configuration row.
+- **`groupId` supported prefix** — every maven `groupPattern` element must start with a configured `components-registry.supportedGroupIds` prefix. When that list is unconfigured/empty the check is skipped (logged), not enforced.
+- **Archived ≠ explicit+external** — an archived component cannot be explicitly+externally distributed.
+- **Doc-component existence** — every `docs[].docComponentKey` must reference an existing component. The reference is a soft string ref (no FK, see `schema-spec.md:288`), so existence is verified in the service layer. This check runs **post-flush** (alongside the 409 checks), so a component may reference its **own** key (self-documenting) without a false 400 — the component's own row exists by then, and the own key is excluded explicitly regardless of persistence order.
+
+**Performance**: Docker image and Jira collision checks use indexed equality queries (`image_name`, `jira_project_key`). Maven collision validation loads projected artifact rows from other components and performs legacy-compatible wildcard/regex/CSV pattern overlap plus Maven range intersection in-memory; exact SQL equality cannot safely narrow those candidates. The docker check is backed by `idx_dist_docker_image_name` on `distribution_docker_images(image_name)`.
+
 ## 3. Search & Lookup (Existing API Behavior)
 
 All existing search/lookup operations must return identical results from DB:
