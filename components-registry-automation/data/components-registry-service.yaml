@@ -46,12 +46,14 @@ octopus-security:
       - ACCESS_AUDIT
     ROLE_COMPONENTS_REGISTRY_EDITOR:
       - ACCESS_COMPONENTS
-      - EDIT_COMPONENTS
+      - CREATE_COMPONENTS
       - ACCESS_AUDIT
     # Super-admin — reuses existing Keycloak realm-role `ADMIN`.
     ROLE_ADMIN:
       - ACCESS_COMPONENTS
-      - EDIT_COMPONENTS
+      - CREATE_COMPONENTS
+      # Bypass the per-component owner/RM/SC edit check (e.g. reassign a departed owner).
+      - EDIT_ANY_COMPONENT
       - ARCHIVE_COMPONENTS
       - RENAME_COMPONENTS
       - DELETE_COMPONENTS

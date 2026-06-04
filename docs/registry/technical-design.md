@@ -109,16 +109,16 @@ All non-kill-listed v1/v2/v3 endpoints preserve response shape; the backing `Com
 POST   /rest/api/4/components
   Request:  ComponentCreateRequest { name, displayName, productType, ... }
   Response: ComponentDetailResponse { id, name, ..., versions[], build, escrow, ... }
-  Auth:     EDIT_COMPONENTS
+  Auth:     CREATE_COMPONENTS
 
 GET    /rest/api/4/components/{id}
-  Response: ComponentDetailResponse (full tree with all nested configs)
+  Response: ComponentDetailResponse (full tree with all nested configs; incl. per-caller `canEdit`)
   Auth:     ACCESS_COMPONENTS
 
 PATCH  /rest/api/4/components/{id}
   Request:  ComponentUpdateRequest { version, displayName, productType, build, escrow, ... }
-  Response: ComponentDetailResponse
-  Auth:     EDIT_COMPONENTS
+  Response: ComponentDetailResponse (incl. per-caller `canEdit`)
+  Auth:     ACCESS_COMPONENTS AND canEditComponent (owner/RM/SC, or EDIT_ANY_COMPONENT for admin)
   Headers:  If-Match (optional, alternative to version field for optimistic locking)
   Validation: Bean Validation (Jakarta @Valid, @NotBlank, @Size, etc.)
   Semantics: JSON Merge Patch (RFC 7396):
@@ -144,15 +144,15 @@ GET    /rest/api/4/components?productType=&archived=&search=&owner=
 POST   /rest/api/4/components/{id}/field-overrides
   Request:  FieldOverrideCreateRequest { fieldPath, versionRange, value }
   Example:  { "fieldPath": "build.buildSystem", "versionRange": "[1.0, 2.0)", "value": "MAVEN" }
-  Auth:     EDIT_COMPONENTS
+  Auth:     ACCESS_COMPONENTS AND canEditComponent (owner/RM/SC, or EDIT_ANY_COMPONENT)
   Validation: No overlap with existing ranges for the same field (409 Conflict)
 
 PATCH  /rest/api/4/components/{id}/field-overrides/{overrideId}
   Request:  FieldOverrideUpdateRequest { versionRange?, value? }
-  Auth:     EDIT_COMPONENTS
+  Auth:     ACCESS_COMPONENTS AND canEditComponent (owner/RM/SC, or EDIT_ANY_COMPONENT)
 
 DELETE /rest/api/4/components/{id}/field-overrides/{overrideId}
-  Auth:     EDIT_COMPONENTS
+  Auth:     ACCESS_COMPONENTS AND canEditComponent (owner/RM/SC, or EDIT_ANY_COMPONENT)
 
 GET    /rest/api/4/components/{id}/field-overrides
   Response: List of all field overrides for the component, grouped by field path
@@ -319,7 +319,7 @@ Implemented in `WebSecurityConfig.kt` (extends `CloudCommonWebSecurityConfig` fr
 
 | Method | Required permission | Used on |
 |---|---|---|
-| `canEditComponent(name)` | `EDIT_COMPONENTS` | `PATCH /components/{id}` (plain edit; `POST /components` uses `hasPermission('EDIT_COMPONENTS')` directly — no `name` arg available) |
+| `canEditComponent(idOrName)` | `ACCESS_COMPONENTS` **and** (owner/RM/SC membership **or** `EDIT_ANY_COMPONENT`) | `PATCH /components/{id}` (plain edit) and all field-override CRUD (`POST`/`PATCH`/`DELETE /{id}/field-overrides`). `POST /components` (create) uses `hasPermission('CREATE_COMPONENTS')` directly because no owner exists yet |
 | `canArchiveComponent(name)` | `ARCHIVE_COMPONENTS` | `PATCH /components/{id}` when `archived` is in payload |
 | `canRenameComponent(name)` | `RENAME_COMPONENTS` | `PATCH /components/{id}` when `name` is in payload |
 | `canDeleteComponent(name)` | `DELETE_COMPONENTS` | `DELETE /components/{id}` |
@@ -330,9 +330,9 @@ The `PATCH /components/{id}` SpEL guard combines these (the path variable is a `
 ```
 @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS') and @permissionEvaluator.canEditComponent(#id.toString()) and (#request.archived == null or @permissionEvaluator.canArchiveComponent(#id.toString())) and (#request.name == null or @permissionEvaluator.canRenameComponent(#id.toString()))")
 ```
-Plain edits stay on `EDIT_COMPONENTS`; archive/rename payloads fail closed with 403 for anyone without the extra permission.
+Plain edits use the ownership/admin predicate; archive/rename payloads fail closed with 403 for anyone without the extra permission.
 
-Per-component ownership (`componentOwner`, `releaseManager`) is a deferred layer — the permission names are stable across that future change so the role map does not need to move.
+**Per-component edit ownership (implemented).** `canEditComponent(idOrName)` resolves the component (UUID, or component key as a fallback) and allows the edit only when the caller satisfies `ACCESS_COMPONENTS && (componentOwner || releaseManager || securityChampion || EDIT_ANY_COMPONENT)`. Owner/RM/SC matching uses the JWT `preferred_username`, trimmed + case-insensitive; `EDIT_ANY_COMPONENT` is mapped to `ROLE_ADMIN` and bypasses the membership check. `CREATE_COMPONENTS` is not required after creation; assignment to the component is the edit grant. A legacy component with no owner AND empty RM AND empty SC passes the security gate only for `EDIT_ANY_COMPONENT` holders, and write validation requires the admin to assign an owner in the PATCH final state. An unresolvable id/key denies — so `PATCH` of a non-existent component is **403, not 404** (the gate runs before the controller). Owner/RM/SC are read via scalar projection queries on `ComponentRepository` (never the LAZY child collections, since `@PreAuthorize` runs outside a Hibernate session). The same predicate stamps the per-caller `canEdit` flag on the `GET`/create/`PATCH` detail responses for the Portal. This mirrors the entity-scoped evaluator pattern already used in `octopus-dms-service` (`hasPermissionByComponent`).
 
 ### 6.4 Audit `changedBy` wiring
 
@@ -428,8 +428,8 @@ class ComponentRoutingResolver(
 
 | Layer | Tool | What | Runs in |
 |-------|------|------|---------|
-| Unit | JUnit 5 + Mockito | Service logic, DSL→Entity mappers, DTO converters | Every PR |
-| Integration | Testcontainers (PostgreSQL) | Repository queries, Flyway migrations, transactions | Every PR |
+| Unit | JUnit 5 + Mockito | Service logic, DSL→Entity mappers, DTO converters | `[1.0]` + every PR |
+| Integration | Testcontainers (PostgreSQL) | Repository queries, Flyway migrations, transactions | `@Tag("integration")` → `[1.2]` / `qualityCoverage` (every PR) |
 | Contract | Spring Cloud Contract / Pact | Feign client compatibility (28 methods) | Every PR |
 | API Snapshot | Custom JSON diff | v1/v2/v3 response structure unchanged | Every PR |
 | Architecture | ArchUnit | Layering, security annotations, no cycles | Every PR |
@@ -464,6 +464,48 @@ fun `DB resolver returns same result as Git resolver`(componentName: String) {
 ```
 
 See [Non-Functional Specification §5](non-functional-spec.md#5-reliability--fitness-functions) for complete fitness function catalog.
+
+### 8.4 Fast gate vs heavy suite (`@Tag("integration")` split)
+
+The build splits tests by JUnit 5 tag so the heavy DB suite runs off the critical path
+(in `[1.2]`, parallel to deploy prep) instead of inside the build, without losing coverage:
+
+- **Unit + smoke** (untagged) — pure unit tests, plus `NoDbModeContextTest` (boots the
+  prod Spring context in git/`no-db` mode) and `BasicFunctionalitySmokeTest` (boots the
+  full DB-backed context on in-memory **H2** — profile `smoke`, no Testcontainers — and
+  exercises the v4 read path + a JPA `@JdbcTypeCode(JSON)`→`TEXT` round-trip). The root
+  `test` task runs `useJUnitPlatform { excludeTags 'integration' }`, so `check`/`build`
+  (the `[1.0]` step) run these only.
+- **Heavy** (`@Tag("integration")`) — anything needing a Postgres Testcontainer or a full
+  Spring context on the `test`/`test-db`/`ft-db`/… profiles, across
+  `server`/`client`/`light-client`. These run in the `dbTest` task
+  (`includeTags 'integration'`) — **not** in `check`/`build` — in CI `[1.2]`, and on
+  GitHub PRs under `qualityCoverage` (the `quality` job), so coverage **and** correctness
+  are still gated on every PR.
+
+JaCoCo aggregates `test` + `dbTest` + `integrationTest` exec data, so the 70% coverage gate
+is unchanged. All `Test` tasks set `TESTCONTAINERS_RYUK_DISABLED=true` (the Ryuk reaper
+can't mount the docker socket on Podman-rootless CI agents). `dockerPushImage` depends on
+the fat-jar `integrationTest` and Maven `publish` is ordered after it, so a broken boot jar
+is never published/pushed.
+
+**TeamCity build chain** (`.teamcity/settings.kts`):
+
+```
+[1.0] Compile & UT [AUTO]   gradle `clean build publish dockerPushImage`
+   │     compile + unit + smoke + static quality + publish + image (~10 min). `build` also
+   │     pulls the fat-jar FT (dockerPushImage depends on it → gates the push) and
+   │     automation:test (depends on ocCreate → dockerPushImage). Heavy @Tag("integration")
+   │     DB tests excluded by tag. The image carries [1.0]'s OWN build number (no cross-
+   │     config version-propagation) — exactly what the downstream configs pull.
+   ├─→ [1.7]/[1.8] Compat, [2.0] Validate, [3.0] Deploy   (consume id10's image/artifacts)
+   └─→ [1.2] Integration & DB Tests [AUTO]   dbTest (server/client/light-client)
+            └─ gates [3.0] Deploy (snapshot, FAIL_TO_START)
+```
+
+> A new heavy `@SpringBootTest` (Postgres / `ft-db` / …) should be tagged `@Tag("integration")`
+> so it runs in `[1.2]`, not inside `[1.0]`. (`[1.0]` has Docker, so an untagged one only
+> slows the step — it won't break.)
 
 ## 9. New Dependencies (build.gradle)
 

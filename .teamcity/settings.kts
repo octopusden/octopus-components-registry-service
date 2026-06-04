@@ -46,6 +46,7 @@ project {
     // unsupported by this server's kotlin-dsl distribution.)
 
     buildType(id10CompileUtAuto)
+    buildType(id12IntegrationDbTestsAuto)
     buildType(id15CompatManual)
     buildType(id16CompatTraceReplayManual)
     buildType(id17CompatLocalStandManual)
@@ -61,6 +62,7 @@ project {
 
     buildTypesOrder = arrayListOf(
         id10CompileUtAuto,
+        id12IntegrationDbTestsAuto,
         id15CompatManual,
         id16CompatTraceReplayManual,
         id17CompatLocalStandManual,
@@ -146,6 +148,12 @@ object id10CompileUtAuto : BuildType({
             -Pokd.cluster-domain=%OKD_APPS_DOMAIN_DEV%
             -Pokd.project=%OKD_F1_TEST_PROJECT%
         """.trimIndent())
+        // [1.0] compiles, runs unit + H2/MOCK smoke + static quality, publishes artifacts and
+        // pushes the image — one step, so the image carries [1.0]'s OWN version (no cross-config
+        // propagation). `build` also runs the fat-jar FT (dockerPushImage depends on it, so it
+        // gates the push) and :…-automation:test (depends on ocCreate -> dockerPushImage, so it
+        // deploys the just-pushed image). Only the heavy @Tag("integration") DB suite is split
+        // out, to [1.2] (excluded from build/check by the gradle tag filter).
         param("GRADLE_TASK", "clean build publish dockerPushImage")
         param("COMPONENTS_REGISTRY_BRANCH", "master")
     }
@@ -223,6 +231,105 @@ object id10CompileUtAuto : BuildType({
 
     requirements {
         doesNotContain("env.OS_TYPE", "WIN", "RQ_2875")
+    }
+})
+
+// [1.2] Integration & DB Tests — runs the heavy @Tag("integration") DB suite (Postgres
+// Testcontainers / full Spring context, across server/client/light-client), triggered off
+// id10 alongside the compat/validate chain. This is the ONLY thing split out of [1.0]
+// (tagged out of `build`/`check`); it gates the deploy via id30's snapshot below.
+// automation:test runs in [1.0] (it transitively triggers dockerPushImage), NOT here.
+object id12IntegrationDbTestsAuto : BuildType({
+    templates(AbsoluteId("Octopus_OctopusGradleBuild"))
+    id("12IntegrationDbTestsAuto")
+    name = "[1.2] Integration & DB Tests [AUTO]"
+
+    buildNumberPattern = "%BUILD_NUMBER%"
+
+    artifactRules = """
+        **/*.log => logs.zip
+        %ARTIFACT_PATH%
+        **/reports
+        **/test-results
+    """.trimIndent()
+
+    params {
+        param("ARTIFACT_PATH", """      **/build/reports/** => reports
+      **/build/test-results/**/*.xml => test-results
+      build/**/logs/** => logs
+      build/**/diagnostics/** => diagnostics""")
+        param("GRADLE_EXTRA_PARAMETERS", """
+            -Pokd.cluster-domain=%OKD_APPS_DOMAIN_DEV%
+            -Pokd.project=%OKD_F1_TEST_PROJECT%
+        """.trimIndent())
+        // Pure DB/Spring heavy suite only. automation:test is intentionally NOT here: its test
+        // task depends on ocCreate -> dockerPushImage, so running it would push the image; it
+        // belongs in [1.0] (where `build`'s subproject sweep already runs it and the push
+        // happens). dbTest itself pulls no docker/publish/ocCreate task.
+        param("GRADLE_TASK", "clean :components-registry-service-server:dbTest :components-registry-service-client:dbTest :components-registry-service-light-client:dbTest")
+        param("COMPONENTS_REGISTRY_BRANCH", "master")
+        param("BUILD_NUMBER", "${id10CompileUtAuto.depParamRefs.buildNumber}")
+    }
+
+    steps {
+        script {
+            name = "Login to the OKD cluster"
+            id = "Login_to_the_OKD_cluster"
+            scriptContent = """
+                oc login --token=%OKD_F1_FT_TOKEN% %OKD_SERVER_DEV_URL%
+                oc project %OKD_F1_TEST_PROJECT%
+            """.trimIndent()
+            param("org.jfrog.artifactory.selectedDeployableServer.useSpecs", "false")
+            param("org.jfrog.artifactory.selectedDeployableServer.uploadSpecSource", "Job configuration")
+            param("org.jfrog.artifactory.selectedDeployableServer.downloadSpecSource", "Job configuration")
+        }
+        gradle {
+            name = "Gradle Integration & DB Tests"
+            id = "RUNNER_1768"
+            tasks = "%GRADLE_TASK%"
+            workingDir = "%WORK_DIR%"
+            gradleParams = """
+                --info
+                %GRADLE_STANDARD_PARAMETERS%
+                %GRADLE_EXTRA_PARAMETERS%
+            """.trimIndent()
+            enableStacktrace = true
+            jdkHome = "%env.JAVA_HOME%"
+            jvmArgs = "%JDK_CMDLINE_PARAMETERS%"
+            dockerRunParameters = "--userns=keep-id -e JAVA_HOME=/opt/java/openjdk -v %env.BUILD_ENV%:/opt/BUILD_ENV -v %teamcity.build.checkoutDir%:/home/tcagent/work -v %teamcity.agent.jvm.user.home%:/home/tcagent -w /home/tcagent/work -e TZ=Europe/Brussels"
+            param("org.jfrog.artifactory.selectedDeployableServer.defaultModuleVersionConfiguration", "GLOBAL")
+        }
+        stepsOrder = arrayListOf("Login_to_the_OKD_cluster", "RUNNER_1720", "RUNNER_1768")
+    }
+
+    failureConditions {
+        executionTimeoutMin = 240
+    }
+
+    features {
+        xmlReport {
+            id = "BUILD_EXT_1815"
+            reportType = XmlReport.XmlReportType.JUNIT
+            rules = "+:**/build/test-results/dbTest/*.xml"
+        }
+    }
+
+    requirements {
+        doesNotContain("env.OS_TYPE", "WIN", "RQ_2875")
+    }
+
+    triggers {
+        finishBuildTrigger {
+            buildType = "${id10CompileUtAuto.id}"
+            successfulOnly = true
+            branchFilter = "+:*"
+        }
+    }
+
+    dependencies {
+        snapshot(id10CompileUtAuto) {
+            onDependencyFailure = FailureAction.FAIL_TO_START
+        }
     }
 })
 
@@ -643,6 +750,17 @@ object id17CompatLocalStandManual : BuildType({
             // so there is no port / Postgres collision between them.
             scriptContent = """
                 set -euo pipefail
+                # Green-skip when the compat-test infra isn't in this checkout. [1.7]/[1.8]
+                # auto-fire on [1.0] success for ANY branch; if a build resolves to `main`
+                # (the legacy V1 trunk) — or a deleted feature branch falls back to the
+                # default branch — `scripts/local-stands/` is absent and the wrapper below
+                # would exit 127. Mirror id15/id16: succeed with a clear status, not a red 127.
+                if [ ! -f scripts/local-stands/teamcity-run.sh ]; then
+                    echo "::: scripts/local-stands/teamcity-run.sh not present in this checkout."
+                    echo "::: [1.7] is only meaningful on v3-family branches that carry the compat-test infra."
+                    echo "##teamcity[buildStatus status='SUCCESS' text='Skipped: compat-test infra absent on this branch (likely main); run from v3 family instead.']"
+                    exit 0
+                fi
                 WORK_DIR="/tmp/crs-id17-%teamcity.build.id%"
                 TRACE_DATA_DIR="%teamcity.build.checkoutDir%/trace-data"
 
@@ -936,6 +1054,17 @@ object id18CompatLocalStandGitModeAuto : BuildType({
             // Runs on a separate agent from id17 so the shared default ports don't collide.
             scriptContent = """
                 set -euo pipefail
+                # Green-skip when the compat-test infra isn't in this checkout. [1.7]/[1.8]
+                # auto-fire on [1.0] success for ANY branch; if a build resolves to `main`
+                # (the legacy V1 trunk) — or a deleted feature branch falls back to the
+                # default branch — `scripts/local-stands/` is absent and the wrapper below
+                # would exit 127. Mirror id15/id16: succeed with a clear status, not a red 127.
+                if [ ! -f scripts/local-stands/teamcity-run.sh ]; then
+                    echo "::: scripts/local-stands/teamcity-run.sh not present in this checkout."
+                    echo "::: [1.8] is only meaningful on v3-family branches that carry the compat-test infra."
+                    echo "##teamcity[buildStatus status='SUCCESS' text='Skipped: compat-test infra absent on this branch (likely main); run from v3 family instead.']"
+                    exit 0
+                fi
                 WORK_DIR="/tmp/crs-id18-%teamcity.build.id%"
                 TRACE_DATA_DIR="%teamcity.build.checkoutDir%/trace-data"
 
@@ -1166,6 +1295,11 @@ object id30DeployToOkdQaDevAuto : BuildType({
 
     dependencies {
         snapshot(id20ValidateComponentsRegistryProductionDataAuto) {
+        }
+        // The heavy DB/integration suite [1.2] must pass before we deploy (it runs in
+        // parallel off [1.0], so by deploy time it's done). The image comes from [1.0].
+        snapshot(id12IntegrationDbTestsAuto) {
+            onDependencyFailure = FailureAction.FAIL_TO_START
         }
     }
 })
