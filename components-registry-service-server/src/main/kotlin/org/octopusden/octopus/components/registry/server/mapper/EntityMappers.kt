@@ -192,11 +192,16 @@ fun ComponentEntity.toResolvedEscrowModuleConfig(
             return null
         }
 
-    // Gate on base range: mirror V1 — versions outside the component's configured range → null (MIG-042)
-    try {
-        if (!versionRangeFactory.create(base.versionRange).containsVersion(numericVersion)) return null
-    } catch (_: Exception) {
-        // unparseable range: fall through conservatively
+    // Gate on base range: mirror V1 — versions outside the component's configured range → null (MIG-042).
+    // ALL_VERSIONS base means the component has no explicit range restriction; skip the gate entirely
+    // because (a) every version is in range by definition and (b) ALL_VERSIONS is a compound expression
+    // "(,0),[0,)" whose union semantics may not be supported by VersionRangeFactory.containsVersion.
+    if (base.versionRange != ALL_VERSIONS) {
+        try {
+            if (!versionRangeFactory.create(base.versionRange).containsVersion(numericVersion)) return null
+        } catch (_: Exception) {
+            // unparseable range: fall through conservatively
+        }
     }
 
     val matchingOverrides =

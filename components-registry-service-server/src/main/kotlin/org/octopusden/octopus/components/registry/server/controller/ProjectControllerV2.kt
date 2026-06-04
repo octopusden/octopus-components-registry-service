@@ -40,12 +40,12 @@ class ProjectControllerV2(
     @GetMapping("{projectKey}/jira-component-version-ranges", produces = [MediaType.APPLICATION_JSON_VALUE])
     fun getJiraComponentVersionRangesByProject(
         @PathVariable("projectKey") projectKey: String,
-    ): Set<JiraComponentVersionRangeDTO> {
+    ): List<JiraComponentVersionRangeDTO> {
         LOG.info("Get Jira Component Version Ranges: '$projectKey'")
         return componentRegistryResolver
             .getJiraComponentVersionRangesByProject(projectKey)
             .map { it.toDTO() }
-            .toSet()
+            .sortedWith(compareBy({ it.componentName }, { it.versionRange }))
     }
 
     // todo - consider removing the whole endpoint or just version specific fields, like docker,

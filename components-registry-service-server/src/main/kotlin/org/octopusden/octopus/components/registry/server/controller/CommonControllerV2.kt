@@ -26,11 +26,11 @@ class CommonControllerV2(
     // todo - consider removing the whole endpoint or just version specific fields, like docker,
     //  because version is not provided in this context
     @GetMapping("jira-component-version-ranges", produces = [MediaType.APPLICATION_JSON_VALUE])
-    fun getAllJiraComponentVersionRanges(): Set<JiraComponentVersionRangeDTO> =
+    fun getAllJiraComponentVersionRanges(): List<JiraComponentVersionRangeDTO> =
         componentRegistryResolver
             .getAllJiraComponentVersionRanges()
             .map { it.toDTO() }
-            .toSet()
+            .sortedWith(compareBy({ it.componentName }, { it.versionRange }))
 
     @GetMapping("dependency-aliases", produces = [MediaType.APPLICATION_JSON_VALUE])
     fun getDependencyAliasToComponentMapping(): Map<String, String> = componentRegistryResolver.getDependencyMapping()

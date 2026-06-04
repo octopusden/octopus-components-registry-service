@@ -1506,12 +1506,20 @@ class ImportServiceImpl(
         // `importModule` (loader merge + common-defaults fallback) so that an
         // override range whose tools match the effective base does NOT produce a
         // redundant marker row.
+        //
+        // VAL-011: only emit a BUILD_REQUIRED_TOOLS marker when the override EXPLICITLY
+        // declares its own requiredTools (non-null, non-empty). An override range that
+        // doesn't set requiredTools in the DSL inherits from the base (including
+        // Defaults-fallback tools on the base row). Emitting an empty marker here would
+        // shadow the base row's tools and return `buildParameters.tools=[]` for versions
+        // in that override range — producing a Git vs DB divergence.
         val effectiveBaseToolNames =
             (base.buildConfiguration?.tools.takeUnless { it.isNullOrEmpty() } ?: commonDefaultsTools)
                 .mapNotNull { it.name }
                 .toSet()
-        val overTools = override.buildConfiguration?.tools?.map { it.name }?.toSet() ?: emptySet()
-        if (effectiveBaseToolNames != overTools) {
+        val overExplicitTools = override.buildConfiguration?.tools.takeUnless { it.isNullOrEmpty() }
+        val overTools = overExplicitTools?.map { it.name }?.toSet() ?: emptySet()
+        if (overExplicitTools != null && effectiveBaseToolNames != overTools) {
             saveMarkerRowWithChildren(component, versionRange, MarkerAttributes.BUILD_REQUIRED_TOOLS) { row ->
                 // Required tool junctions use the config ID explicitly, so we must
                 // persist the marker row first (to get the ID), then attach tools.
