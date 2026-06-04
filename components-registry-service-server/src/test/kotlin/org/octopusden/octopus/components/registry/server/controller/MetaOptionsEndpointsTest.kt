@@ -184,6 +184,7 @@ class MetaOptionsEndpointsTest {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(
                         """{"name":"$name","displayName":"$name","labels":[$labelsJson],""" +
+                            """"componentOwner":"owner1",""" +
                             """"group":{"groupKey":"org.example.test","isFake":false},""" +
                             """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
                     ),
@@ -277,6 +278,7 @@ class MetaOptionsEndpointsTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(
                             """{"name":"$anchorComponentName","displayName":"$anchorComponentName",""" +
+                                """"componentOwner":"owner1",""" +
                                 """"group":{"groupKey":"org.example.test","isFake":false},""" +
                                 """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
                         ),
@@ -341,6 +343,7 @@ class MetaOptionsEndpointsTest {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(
                         """{"name":"$name","displayName":"$name","system":"$system",""" +
+                            """"componentOwner":"owner1",""" +
                             """"group":{"groupKey":"org.example.test","isFake":false},""" +
                             """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
                     ),

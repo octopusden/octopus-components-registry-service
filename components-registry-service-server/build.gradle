@@ -15,6 +15,17 @@ dependencies {
     }
     implementation project(':components-registry-service-core')
 
+    // Employee-service client. It is only a transitive `implementation` of
+    // `component-resolver-core` (which applies `java-library` and declares it
+    // `implementation`, not `api`, at component-resolver-core/build.gradle:22),
+    // so it is on this module's RUNTIME classpath but NOT its COMPILE classpath.
+    // The runtime active-employee validation (EmployeeDirectoryService /
+    // EmployeeServiceConfig) imports `EmployeeServiceClient` directly, so the
+    // dependency must be declared explicitly here for the server to compile.
+    implementation("org.octopusden.octopus.employee:client:${project.properties["octopus-employee-service.version"]}") {
+        exclude group: 'org.jetbrains.kotlin', module: '*'
+    }
+
     implementation platform("org.springframework.boot:spring-boot-dependencies:${project['spring-boot.version']}")
     implementation platform("org.springframework.cloud:spring-cloud-dependencies:${project.properties["spring-cloud.version"]}")
 

@@ -93,6 +93,7 @@ class StrictContractTest {
         """
         {
           "name": "$name",
+          "componentOwner": "owner1",
           "group": {"groupKey": "$groupKey", "isFake": false},
           "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
         }
@@ -108,6 +109,7 @@ class StrictContractTest {
             """
             {
               "name": "${unique("strict-no-group")}",
+              "componentOwner": "owner1",
               "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
             }
             """.trimIndent()
@@ -126,6 +128,7 @@ class StrictContractTest {
             """
             {
               "name": "${unique("strict-ignored-group")}",
+              "componentOwner": "owner1",
               "group": {"groupKey": "org.example.ignored", "isFake": false},
               "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
             }
@@ -259,6 +262,7 @@ class StrictContractTest {
             """
             {
               "name": "$name",
+              "componentOwner": "owner1",
               "group": {"groupKey": "org.example.test", "isFake": false},
               "baseConfiguration": {"build": {"buildSystem": "MAVEN"}},
               "labels": ["lblA_${UUID.randomUUID().toString().take(6)}",
@@ -305,6 +309,7 @@ class StrictContractTest {
             """
             {
               "name": "$name",
+              "componentOwner": "owner1",
               "group": {"groupKey": "org.example.test", "isFake": false},
               "baseConfiguration": {"build": {"buildSystem": "MAVEN"}},
               "labels": ["$labelA", "$labelB"]
@@ -364,6 +369,7 @@ class StrictContractTest {
             """
             {
               "name": "${unique("strict-create-single-system")}",
+              "componentOwner": "owner1",
               "system": "CLASSIC",
               "group": {"groupKey": "org.example.test", "isFake": false},
               "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
@@ -381,6 +387,7 @@ class StrictContractTest {
             """
             {
               "name": "${unique("strict-create-null-system")}",
+              "componentOwner": "owner1",
               "group": {"groupKey": "org.example.test", "isFake": false},
               "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
             }
@@ -417,6 +424,7 @@ class StrictContractTest {
             """
             {
               "name": "$name",
+              "componentOwner": "owner1",
               "system": "CLASSIC",
               "group": {"groupKey": "org.example.test", "isFake": false},
               "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
@@ -450,6 +458,7 @@ class StrictContractTest {
             """
             {
               "name": "$name",
+              "componentOwner": "owner1",
               "system": "CLASSIC",
               "group": {"groupKey": "org.example.test", "isFake": false},
               "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
@@ -490,6 +499,7 @@ class StrictContractTest {
             """
             {
               "name": "${unique("strict-create-system-casing")}",
+              "componentOwner": "owner1",
               "system": "Classic",
               "group": {"groupKey": "org.example.test", "isFake": false},
               "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
@@ -519,6 +529,7 @@ class StrictContractTest {
             """
             {
               "name": "$name",
+              "componentOwner": "owner1",
               "system": "CLASSIC",
               "group": {"groupKey": "org.example.test", "isFake": false},
               "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
@@ -603,6 +614,7 @@ class StrictContractTest {
             """
             {
               "name": "$name",
+              "componentOwner": "owner1",
               "system": "CLASSIC",
               "group": {"groupKey": "org.example.test", "isFake": false},
               "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}

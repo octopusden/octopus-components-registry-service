@@ -92,6 +92,7 @@ class ListComponentsBuildSystemFilterTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(
                             """{"name":"$name","displayName":"$name",""" +
+                                """"componentOwner":"owner1",""" +
                                 """"group":{"groupKey":"org.example.test","isFake":false},""" +
                                 """"baseConfiguration":{"build":{"buildSystem":"$buildSystem"}}}""",
                         ),

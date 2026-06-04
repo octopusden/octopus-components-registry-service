@@ -65,6 +65,7 @@ class BuildToolBeansMarkerV4Test {
     private fun createComponent(name: String): String {
         val body =
             """{"name": "$name",""" +
+                """"componentOwner":"owner1",""" +
                 """"group":{"groupKey":"org.example.test","isFake":false},""" +
                 """"baseConfiguration": {"build": {"buildSystem": "MAVEN"}}}"""
         val response =
