@@ -38,17 +38,20 @@ class PermissionEvaluatorTest {
     private fun loginAs(user: User) = whenMock(sec.getCurrentUser()).thenReturn(user)
 
     private fun editor(username: String) =
-        User(username, setOf(Role("ROLE_EDITOR", setOf("ACCESS_COMPONENTS", "EDIT_COMPONENTS"))), emptySet())
+        User(username, setOf(Role("ROLE_EDITOR", setOf("ACCESS_COMPONENTS", "CREATE_COMPONENTS"))), emptySet())
 
     private fun admin(username: String) =
         User(
             username,
-            setOf(Role("ROLE_ADMIN", setOf("ACCESS_COMPONENTS", "EDIT_COMPONENTS", "EDIT_ANY_COMPONENT"))),
+            setOf(Role("ROLE_ADMIN", setOf("ACCESS_COMPONENTS", "CREATE_COMPONENTS", "EDIT_ANY_COMPONENT"))),
             emptySet(),
         )
 
     private fun viewer(username: String) =
         User(username, setOf(Role("ROLE_VIEWER", setOf("ACCESS_COMPONENTS"))), emptySet())
+
+    private fun noAccess(username: String) =
+        User(username, setOf(Role("ROLE_NO_ACCESS", emptySet())), emptySet())
 
     private fun stub(
         id: UUID,
@@ -62,9 +65,9 @@ class PermissionEvaluatorTest {
     }
 
     @Test
-    @DisplayName("no EDIT_COMPONENTS → deny, without any DB lookup")
-    fun `viewer denied without db hit`() {
-        loginAs(viewer("carol"))
+    @DisplayName("no ACCESS_COMPONENTS → deny, without any DB lookup")
+    fun `no access denied without db hit`() {
+        loginAs(noAccess("bob"))
         val id = UUID.randomUUID()
         assertFalse(evaluator.canEditComponent(id.toString()))
         verify(repo, never()).findComponentOwnerById(id)
@@ -80,9 +83,9 @@ class PermissionEvaluatorTest {
     }
 
     @Test
-    @DisplayName("owner matches → allow")
+    @DisplayName("owner matches → allow, even without CREATE_COMPONENTS")
     fun `owner allowed`() {
-        loginAs(editor("bob"))
+        loginAs(viewer("bob"))
         val id = UUID.randomUUID()
         stub(id, owner = "bob")
         assertTrue(evaluator.canEditComponent(id.toString()))
@@ -91,25 +94,25 @@ class PermissionEvaluatorTest {
     @Test
     @DisplayName("owner match is case-insensitive (stored 'Bob', token 'bob')")
     fun `owner case insensitive`() {
-        loginAs(editor("bob"))
+        loginAs(viewer("bob"))
         val id = UUID.randomUUID()
         stub(id, owner = "Bob")
         assertTrue(evaluator.canEditComponent(id.toString()))
     }
 
     @Test
-    @DisplayName("release manager membership → allow")
+    @DisplayName("release manager membership → allow, even without CREATE_COMPONENTS")
     fun `release manager allowed`() {
-        loginAs(editor("dave"))
+        loginAs(viewer("dave"))
         val id = UUID.randomUUID()
         stub(id, owner = "bob", rm = listOf("dave", "erin"))
         assertTrue(evaluator.canEditComponent(id.toString()))
     }
 
     @Test
-    @DisplayName("security champion membership → allow")
+    @DisplayName("security champion membership → allow, even without CREATE_COMPONENTS")
     fun `security champion allowed`() {
-        loginAs(editor("erin"))
+        loginAs(viewer("erin"))
         val id = UUID.randomUUID()
         stub(id, owner = "bob", sc = listOf("erin"))
         assertTrue(evaluator.canEditComponent(id.toString()))
@@ -181,15 +184,13 @@ class PermissionEvaluatorTest {
     }
 
     @Test
-    @DisplayName("anonymous username → deny even when listed as the component owner")
+    @DisplayName("anonymous username → deny before ownership lookup")
     fun `anonymous username denied`() {
-        // EDIT_COMPONENTS present (passes the fast-fail) and the stored owner literally
-        // equals "anonymous" — without the explicit guard this would wrongly allow.
         loginAs(
-            User("anonymous", setOf(Role("ROLE_EDITOR", setOf("ACCESS_COMPONENTS", "EDIT_COMPONENTS"))), emptySet()),
+            User("anonymous", setOf(Role("ROLE_ANONYMOUS", setOf("ACCESS_COMPONENTS"))), emptySet()),
         )
         val id = UUID.randomUUID()
-        stub(id, owner = "anonymous")
         assertFalse(evaluator.canEditComponent(id.toString()))
+        verify(repo, never()).findComponentOwnerById(id)
     }
 }

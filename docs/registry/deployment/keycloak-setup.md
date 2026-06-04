@@ -31,7 +31,7 @@ out of the box:
 | Role key in CRS config | Permissions | Realm-role you must create in Keycloak |
 |---|---|---|
 | `ROLE_COMPONENTS_REGISTRY_VIEWER` | `ACCESS_COMPONENTS`, `ACCESS_AUDIT` | `COMPONENTS_REGISTRY_VIEWER` |
-| `ROLE_COMPONENTS_REGISTRY_EDITOR` | `+ EDIT_COMPONENTS` | `COMPONENTS_REGISTRY_EDITOR` |
+| `ROLE_COMPONENTS_REGISTRY_EDITOR` | `+ CREATE_COMPONENTS` | `COMPONENTS_REGISTRY_EDITOR` |
 | `ROLE_ADMIN` | all permissions including `ARCHIVE_COMPONENTS`, `RENAME_COMPONENTS`, `DELETE_COMPONENTS`, `IMPORT_DATA`, `EDIT_METADATA` | usually a platform-wide `ADMIN` realm-role you already have |
 | `ROLE_ANONYMOUS` | `ACCESS_COMPONENTS` (public read on v4 GETs) | implicit Spring authority — no Keycloak action needed |
 
@@ -116,14 +116,14 @@ In the impersonated session, open the portal and check:
      "roles": [
        {
          "name": "ROLE_COMPONENTS_REGISTRY_EDITOR",
-         "permissions": ["ACCESS_COMPONENTS", "EDIT_COMPONENTS", "ACCESS_AUDIT"]
+         "permissions": ["ACCESS_COMPONENTS", "CREATE_COMPONENTS", "ACCESS_AUDIT"]
        },
        /* plus any other realm-roles the user already had */
      ]
    }
    ```
 2. The components list page loads (no 403 banner).
-3. The "New Component" button is visible (because `EDIT_COMPONENTS` is
+3. The "New Component" button is visible (because `CREATE_COMPONENTS` is
    present).
 4. Archive / Admin / Audit-restricted actions match the expected
    permission set for the role you assigned.
