@@ -8,6 +8,7 @@ import org.octopusden.octopus.components.registry.server.dto.v4.ComponentDetailR
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentFilter
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentSummaryResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentUpdateRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.EmployeeMatchResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideCreateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideUpdateRequest
@@ -19,7 +20,6 @@ import org.octopusden.octopus.components.registry.server.repository.SystemReposi
 import org.octopusden.octopus.components.registry.server.security.PermissionEvaluator
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
 import org.octopusden.octopus.components.registry.server.service.impl.EmployeeDirectoryService
-import org.octopusden.octopus.components.registry.server.service.impl.EmployeeMatch
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.RepositoryType
 import org.slf4j.LoggerFactory
@@ -97,7 +97,7 @@ class ComponentControllerV4(
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
     fun searchEmployees(
         @RequestParam search: String,
-    ): List<EmployeeMatch> = employeeDirectory.search(search)
+    ): List<EmployeeMatchResponse> = employeeDirectory.search(search).map(EmployeeMatchResponse::from)
 
     // Batch active/inactive status for the component view's "inactive" badge.
     // Body is a list of usernames; response maps each to true (active),

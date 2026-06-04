@@ -6,7 +6,11 @@ import org.octopusden.employee.client.impl.EmployeeServiceClientParametersProvid
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Condition
+import org.springframework.context.annotation.ConditionContext
+import org.springframework.context.annotation.Conditional
 import org.springframework.context.annotation.Configuration
+import org.springframework.core.type.AnnotatedTypeMetadata
 
 /**
  * Registers the optional [EmployeeServiceClient] bean used by the runtime
@@ -17,8 +21,8 @@ import org.springframework.context.annotation.Configuration
  * guard on the TeamCity client):
  *   1. `@ConditionalOnProperty("employee-service.enabled", havingValue="true")`
  *      — the @Bean factory is only considered when the flag is on; and
- *   2. a non-blank `url` guard inside the factory — a half-configured env
- *      (`enabled=true` but no URL) returns `null` so no client is wired.
+ *   2. [EmployeeServiceUrlConfiguredCondition] — a half-configured env
+ *      (`enabled=true` but no URL) does not register the client bean.
  *
  * When no client bean is registered, `EmployeeDirectoryService`'s
  * `ObjectProvider<EmployeeServiceClient>` resolves empty and the active-employee
@@ -33,15 +37,8 @@ import org.springframework.context.annotation.Configuration
 class EmployeeServiceConfig {
     @Bean
     @ConditionalOnProperty("employee-service.enabled", havingValue = "true")
-    fun employeeServiceClient(properties: EmployeeServiceProperties): EmployeeServiceClient? {
-        if (properties.url.isBlank()) {
-            log.warn(
-                "employee-service.enabled=true but employee-service.url is blank — " +
-                    "no EmployeeServiceClient bean wired; active-employee validation stays DISABLED (fail-open). " +
-                    "Set employee-service.url in service-config to enable it.",
-            )
-            return null
-        }
+    @Conditional(EmployeeServiceUrlConfiguredCondition::class)
+    fun employeeServiceClient(properties: EmployeeServiceProperties): EmployeeServiceClient {
         log.info("Wiring EmployeeServiceClient against {}", properties.url)
         return ClassicEmployeeServiceClient(
             object : EmployeeServiceClientParametersProvider {
@@ -61,4 +58,11 @@ class EmployeeServiceConfig {
     private companion object {
         private val log = LoggerFactory.getLogger(EmployeeServiceConfig::class.java)
     }
+}
+
+class EmployeeServiceUrlConfiguredCondition : Condition {
+    override fun matches(
+        context: ConditionContext,
+        metadata: AnnotatedTypeMetadata,
+    ): Boolean = !context.environment.getProperty("employee-service.url").isNullOrBlank()
 }

@@ -69,7 +69,7 @@ class EmployeeDirectoryService(
             ActiveStatus.UNKNOWN
         } catch (e: Exception) {
             // Fail-open hook: transport/timeout/5xx must NOT block the write.
-            log.warn("employee-service: lookup of '$username' failed — treating as UNAVAILABLE (fail-open)", e)
+            log.debug("employee-service: lookup of '$username' failed — treating as UNAVAILABLE (fail-open)", e)
             ActiveStatus.UNAVAILABLE
         }
     }
