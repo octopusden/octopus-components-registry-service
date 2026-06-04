@@ -19,6 +19,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.http.MediaType
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.annotation.DirtiesContext
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.servlet.MockMvc
@@ -62,6 +63,9 @@ class ComponentOwnershipEditSecurityTest {
 
     @Autowired
     private lateinit var objectMapper: ObjectMapper
+
+    @Autowired
+    private lateinit var jdbcTemplate: JdbcTemplate
 
     init {
         val testResourcesPath =
@@ -222,12 +226,13 @@ class ComponentOwnershipEditSecurityTest {
     }
 
     @Test
-    @DisplayName("owner-less component (empty owner+RM+SC) is admin-only")
+    @DisplayName("owner-less legacy component can only be repaired by admin")
     fun `empty roles admin only`() {
-        val c = create(uniqueName("empty"))
+        val c = create(uniqueName("empty"), owner = "legacy-owner")
+        jdbcTemplate.update("UPDATE components SET component_owner = NULL WHERE id = ?", UUID.fromString(c.id()))
         performPatch(c.id(), c.version(), bumpDisplayName(), editorJwt("frank"))
             .andExpect(status().isForbidden)
-        performPatch(c.id(), c.version(), bumpDisplayName(), adminJwt())
+        performPatch(c.id(), c.version(), mapOf("componentOwner" to "repaired-owner"), adminJwt())
             .andExpect(status().isOk)
     }
 

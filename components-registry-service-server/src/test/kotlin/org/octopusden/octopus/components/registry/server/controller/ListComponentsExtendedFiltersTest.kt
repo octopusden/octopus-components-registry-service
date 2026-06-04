@@ -73,13 +73,19 @@ class ListComponentsExtendedFiltersTest {
 
     /** POST a component from a raw JSON body; returns its id. Expects 201. */
     private fun create(bodyJson: String): String {
+        // componentOwner is a required (non-blank) field on every v4 create
+        // (approved contract change). Inject a default into any fixture payload
+        // that omits it, so these filter fixtures keep creating components.
+        val withOwner =
+            if (bodyJson.contains("componentOwner")) bodyJson
+            else bodyJson.replaceFirst("{", """{"componentOwner":"owner1",""")
         val body =
             mvc
                 .perform(
                     post("/rest/api/4/components")
                         .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(bodyJson),
+                        .content(withOwner),
                 ).andExpect(status().isCreated)
                 .andReturn()
                 .response.contentAsString

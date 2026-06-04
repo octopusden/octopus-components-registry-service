@@ -98,6 +98,7 @@ class MIG047FieldOverrideWriteGuardTest {
                         VersionRangeFactory(versionNames),
                         NumericVersionFactory(versionNames),
                     ),
+                employeeDirectory = EmployeeDirectoryService(EmptyObjectProvider()),
             )
 
         component = ComponentEntity(id = componentId, componentKey = "alpha-fixture")

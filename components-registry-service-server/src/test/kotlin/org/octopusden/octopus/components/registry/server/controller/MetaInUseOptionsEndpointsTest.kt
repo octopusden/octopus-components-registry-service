@@ -70,13 +70,19 @@ class MetaInUseOptionsEndpointsTest {
     private fun uniqueName(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(8)}"
 
     private fun create(bodyJson: String): String {
+        // componentOwner is a required (non-blank) field on every v4 create
+        // (approved contract change). Inject a default into any fixture payload
+        // that omits it.
+        val withOwner =
+            if (bodyJson.contains("componentOwner")) bodyJson
+            else bodyJson.replaceFirst("{", """{"componentOwner":"owner1",""")
         val body =
             mvc
                 .perform(
                     post("/rest/api/4/components")
                         .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(bodyJson),
+                        .content(withOwner),
                 ).andExpect(status().isCreated)
                 .andReturn()
                 .response.contentAsString

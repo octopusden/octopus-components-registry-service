@@ -115,6 +115,7 @@ class BuildToolBeansBaseV4Test {
             """
             {
               "name": "btb-base-v4-test-002",
+              "componentOwner": "owner1",
               "group": {"groupKey": "org.example.test", "isFake": false},
               "baseConfiguration": {
                 "build": {"buildSystem": "MAVEN"},
@@ -181,6 +182,7 @@ class BuildToolBeansBaseV4Test {
             """
             {
               "name": "btb-base-v4-test-003",
+              "componentOwner": "owner1",
               "group": {"groupKey": "org.example.test", "isFake": false},
               "baseConfiguration": {
                 "build": {"buildSystem": "MAVEN"},
@@ -256,6 +258,7 @@ class BuildToolBeansBaseV4Test {
             """
             {
               "name": "btb-base-v4-test-004",
+              "componentOwner": "owner1",
               "group": {"groupKey": "org.example.test", "isFake": false},
               "baseConfiguration": {
                 "build": {"buildSystem": "MAVEN"},

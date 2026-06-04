@@ -81,6 +81,8 @@ class TeamcityProjectIdPersistenceRoundtripTest {
             put("name", name)
             // Strict-contract minimum fields (UI-swift-sloth): every component
             // must have a group and a baseConfiguration.build.buildSystem.
+            // componentOwner is a required (non-blank) v4 create field.
+            put("componentOwner", "owner1")
             put("group", mapOf("groupKey" to "org.example.test", "isFake" to false))
             put("baseConfiguration", mapOf("build" to mapOf("buildSystem" to "MAVEN")))
             if (tcProjectId != null) {

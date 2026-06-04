@@ -10,7 +10,11 @@ import java.util.Date
 import java.util.concurrent.ConcurrentHashMap
 
 @Configuration
-@EnableConfigurationProperties(ComponentsRegistryProperties::class, TeamcityProperties::class)
+@EnableConfigurationProperties(
+    ComponentsRegistryProperties::class,
+    TeamcityProperties::class,
+    EmployeeServiceProperties::class,
+)
 class ApplicationConfig(
     val componentsRegistryProperties: ComponentsRegistryProperties,
 ) {

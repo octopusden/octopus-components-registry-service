@@ -90,6 +90,7 @@ class ComponentCanBeParentTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(
                             """{"name":"$name","displayName":"$name",""" +
+                                """"componentOwner":"owner1",""" +
                                 """"canBeParent":$canBeParent$parentJson,""" +
                                 """"group":{"groupKey":"org.example.test","isFake":false},""" +
                                 """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",

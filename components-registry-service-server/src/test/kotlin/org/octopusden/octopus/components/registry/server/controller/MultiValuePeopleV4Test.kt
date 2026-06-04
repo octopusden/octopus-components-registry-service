@@ -75,6 +75,8 @@ class MultiValuePeopleV4Test {
             objectMapper.writeValueAsString(
                 mapOf(
                     "name" to name,
+                    // componentOwner is a required (non-blank) v4 create field.
+                    "componentOwner" to "owner1",
                     "group" to mapOf("groupKey" to "org.example.test", "isFake" to false),
                     "baseConfiguration" to mapOf("build" to mapOf("buildSystem" to "MAVEN")),
                     "releaseManager" to releaseManager,

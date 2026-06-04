@@ -43,8 +43,21 @@ Base URLs for links are configurable per deployment via `registry_config` (same 
 
 ### 1.3 Create Component
 - **Required fields**: `name` (unique, alphanumeric + hyphens + underscores, max 255 chars), `componentOwner`
-- **Conditionally required**: `releaseManager`, `securityChampion`, `copyright` — required when `distribution.explicit && distribution.external` (enforced by current `EscrowConfigValidator`)
+- **Conditionally required**: `releaseManager`, `securityChampion`, `copyright` — required when `distribution.explicit && distribution.external`
 - **Optional fields**: displayName, productType, system, clientCode, solution, groupId, labels, doc
+
+**Person-field validation (enforced on the v4 write path — see ADR-015).** Restored from the old `EscrowConfigValidator` + the (formerly default-off CI) `ComponentRegistryValidationTask`, and modernised into per-request checks on `POST /rest/api/4/components` and `PATCH /rest/api/4/components/{id}`:
+
+- **`componentOwner`** — required, non-blank, on **every** component. No format pattern.
+- **`releaseManager` / `securityChampion`** — required **only when** `distribution.explicit && distribution.external`, and **each list element** must match `^\w+$` (validated per canonical element, so an element like `"alice,bob"` is rejected — it is *not* CSV-split into two usernames). Lists are already trim/dedupe-canonicalized.
+- **Active-employee check** — when enabled (`employee-service.enabled=true` + a non-blank `employee-service.url`; off by default), each final-state `componentOwner` / `releaseManager` / `securityChampion` of a **non-archived** component is resolved through employee-service. Archived components skip only the external active lookup; required/pattern checks still run. An **inactive** (`active=false`) or **unknown** (`NotFoundException`) user → **400**. Employee-service **unreachable** (transport/timeout) or the feature **disabled** → the write is **allowed** with a WARN log (**fail-open** — it must not become a hard outage dependency). The required/pattern checks above run regardless of this flag.
+- **Timing / grandfathering.** Required/pattern validate the **final entity state** after the patch is applied (so PATCH callers needn't resend unchanged fields). The active-employee check runs only when the request **touches a person field OR flips** `distribution.explicit` / `distribution.external` — flipping the gate to `explicit && external` newly makes RM/SC required and re-validates them even if the PATCH did not set them. When neither person fields nor the gate change, pre-existing saved values are **grandfathered** (not re-checked).
+- **Hidden fields** (field-config `visibility: hidden`) are **skipped** entirely — a hidden field is stripped on write, so it cannot be required.
+- **Error shape.** All failures are **400** with an `{errorMessage}` body that **starts with the exact field name** (`componentOwner …` / `releaseManager …` / `securityChampion …`), so the Portal maps the error inline.
+
+**Picker / badge lookups** (consumed by the Portal):
+- `GET /rest/api/4/components/meta/employees?search=<q>` → `[{username, active}]` — an authenticated exact `getEmployee` probe (0/1 result); the employee-service client has no prefix search, so typeahead suggestions come from `/meta/owners` and this annotates the active flag.
+- `POST /rest/api/4/components/meta/employees/status` body `[username…]` → `{username: active|null}` — batch exact lookups; `null` = unknown/unavailable/disabled (the Portal renders no badge). Both are `ACCESS_COMPONENTS`-gated and fail-open.
 - **Nested creation**: Can include build, escrow, VCS, distribution, jira configs in single request
 - **Validation**: Name uniqueness (409 Conflict if exists), field format validation
 - **Default application**: Component defaults (see 7.2) are applied to all absent fields
