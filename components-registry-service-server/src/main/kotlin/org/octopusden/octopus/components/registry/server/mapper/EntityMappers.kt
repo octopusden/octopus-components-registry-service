@@ -472,6 +472,17 @@ internal class ComponentConfigurationView {
 
     /**
      * Tracks presence (not value) of a per-range SCALAR_OVERRIDE for
+     * `jira.displayName`. Set to `true` only when [applyScalarOverride] processes
+     * a row whose `overriddenAttribute == "jira.displayName"`. Required because
+     * this field has a per-component fallback (`components.jira_display_name`)
+     * that the resolver consults when no per-range override is present — without
+     * the presence flag, an explicit null-clear override is silently undone.
+     */
+    var jiraDisplayNameOverridden: Boolean = false
+    var jiraDisplayName: String? = null
+
+    /**
+     * Tracks presence (not value) of a per-range SCALAR_OVERRIDE for
      * `jira.hotfixVersionFormat`. Set to `true` only when
      * [applyScalarOverride] processes a row whose `overriddenAttribute ==
      * "jira.hotfixVersionFormat"`. Required because this field has a
@@ -531,6 +542,10 @@ internal class ComponentConfigurationView {
                 // (NULL on the typed column) is preserved by the resolver
                 // instead of being swallowed by the per-component fallback.
                 jiraHotfixVersionFormatOverridden = true
+            }
+            "jira.displayName" -> {
+                jiraDisplayName = override.jiraDisplayName
+                jiraDisplayNameOverridden = true
             }
 
             else -> Unit // unknown attribute path; ignore for forward-compat
@@ -667,6 +682,7 @@ internal class ComponentConfigurationView {
                 jiraVersionPrefix = base.jiraVersionPrefix
                 jiraVersionFormat = base.jiraVersionFormat
                 jiraHotfixVersionFormat = base.jiraHotfixVersionFormat
+                jiraDisplayName = base.jiraDisplayName
             }
     }
 }
@@ -811,7 +827,11 @@ private fun buildJiraComponent(
 
     return JiraComponent(
         projectKey,
-        component.jiraDisplayName,
+        if (merged.jiraDisplayNameOverridden) {
+            merged.jiraDisplayName
+        } else {
+            merged.jiraDisplayName ?: component.jiraDisplayName
+        },
         format,
         info,
         merged.jiraTechnical ?: false,

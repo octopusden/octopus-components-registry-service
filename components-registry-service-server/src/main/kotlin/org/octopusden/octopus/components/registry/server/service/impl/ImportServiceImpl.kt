@@ -1346,6 +1346,7 @@ class ImportServiceImpl(
         cfg.jiraConfiguration?.let { jira ->
             row.jiraProjectKey = jira.projectKey
             row.jiraTechnical = jira.isTechnical.takeIf { it }
+            jira.displayName?.let { row.jiraDisplayName = it }
             jira.componentVersionFormat?.let { cvf ->
                 row.jiraMajorVersionFormat = cvf.majorVersionFormat
                 row.jiraReleaseVersionFormat = cvf.releaseVersionFormat
@@ -1922,6 +1923,7 @@ class ImportServiceImpl(
         diffScalar("jira.versionPrefix", base.jiraVersionPrefix, override.jiraVersionPrefix)
         diffScalar("jira.versionFormat", base.jiraVersionFormat, override.jiraVersionFormat)
         diffScalar("jira.hotfixVersionFormat", base.jiraHotfixVersionFormat, override.jiraHotfixVersionFormat)
+        diffScalar("jira.displayName", base.jiraDisplayName, override.jiraDisplayName)
 
         return diffs
     }
@@ -1970,6 +1972,7 @@ class ImportServiceImpl(
             "jira.versionPrefix" -> row.jiraVersionPrefix = value?.toString()
             "jira.versionFormat" -> row.jiraVersionFormat = value?.toString()
             "jira.hotfixVersionFormat" -> row.jiraHotfixVersionFormat = value?.toString()
+            "jira.displayName" -> row.jiraDisplayName = value?.toString()
             else -> LOG.warn("Unknown scalar attribute path: '{}'", attrPath)
         }
     }

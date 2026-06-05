@@ -179,6 +179,14 @@ class ComponentConfigurationEntity(
     @Column(name = "jira_hotfix_version_format")
     var jiraHotfixVersionFormat: String? = null,
 
+    /**
+     * Per-range override for `jira.displayName`. The per-component base value
+     * lives on `components.jira_display_name`; the resolver layers this column
+     * when the row applies for the requested version range.
+     */
+    @Column(name = "jira_display_name")
+    var jiraDisplayName: String? = null,
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     var createdAt: Instant? = null,

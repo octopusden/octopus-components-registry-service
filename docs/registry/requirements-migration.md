@@ -47,6 +47,7 @@ Numbered MIG-NNN contracts registry, peer of `requirements-common.md` (SYS-NNN) 
 | MIG-039 | find-by-artifacts gates by configuration version range | High | unit-test | ✅ Tested |
 | MIG-040 | find-by-docker-images version-substitutes distribution | Low | integration-test | ✅ Fixed |
 | MIG-041 | importer preserves component-level artifactId CSV tokens | Medium | integration-test | ⏳ Follow-up |
+| MIG-045 | per-range jira.displayName on jira-component-version-ranges | High | unit-test | ✅ Tested |
 
 ---
 
@@ -1138,3 +1139,28 @@ BOTH `find-by-artifacts` and `/maven-artifacts`.
 **Acceptance criteria:**
 1. All component-level `artifactId` CSV tokens are matchable by `find-by-artifacts`.
 2. `/maven-artifacts` per-range output is unchanged.
+
+---
+
+### MIG-045: per-range `jira.displayName` on jira-component-version-ranges
+
+**Priority:** High
+**Test layer:** unit-test
+**Status:** ✅ Tested
+
+**Description:**
+V1 resolves `component.displayName` inside each `JiraComponentVersionRange` entry from the
+per-range EscrowModuleConfig. Schema-v2 stored only `components.jira_display_name` (component-level)
+and ignored per-range DSL overrides, causing TYPE_MISMATCH NULL↔STRING on
+`GET /rest/api/2/projects/{project}/jira-component-version-ranges` compat (CARDS/ANCS clusters).
+
+**Acceptance criteria:**
+1. A SCALAR_OVERRIDE row with `overriddenAttribute = "jira.displayName"` surfaces its value on
+   `getJiraComponentVersionRangesByProject` for that version range.
+2. A null-clear override row (`jira.displayName` override with NULL column) returns null
+   displayName for that range and does not fall back to `components.jira_display_name`.
+3. Ranges without an override inherit `components.jira_display_name` as today.
+
+**Test method:**
+`MIG045JiraDisplayNamePerRangeTest.MIG-045-001 per-range jira displayName override on jira-component-version-ranges`,
+`MIG045JiraDisplayNamePerRangeTest.MIG-045-002 null jira displayName override clears inherited displayName for range`
