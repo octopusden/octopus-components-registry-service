@@ -760,6 +760,58 @@ class DatabaseComponentRegistryResolverTest {
     }
 
     // ========================================================================
+    // (EXT-001) externalRegistry bleed-through through VCS_SETTINGS marker
+    // ========================================================================
+
+    @Test
+    @DisplayName("EXT-001: component-level vcsExternalRegistry must not bleed through when VCS_SETTINGS marker is active for a range")
+    fun `(EXT-001) vcs-settings marker active - externalRegistry not bled through from component`() {
+        // Scenario: component has vcsExternalRegistry at component level, but one version range
+        // carries a VCS_SETTINGS marker override. V1 DSL semantics: a vcsSettings { ... } block
+        // inside a version range COMPLETELY replaces the parent's vcsSettings, meaning the
+        // externalRegistry (which lives on the parent component) must be null for that range.
+        //
+        // Bug: EntityMappers.buildEscrowModuleConfig always passes component.vcsExternalRegistry
+        // to toVCSSettings(), even when a VCS_SETTINGS marker is active. This causes a wrong
+        // externalRegistry value → wrong JiraComponentVersionRange.hashCode() → wrong iteration
+        // order in HashSet → all 46 STRUCTURAL_DIFF in 1.7 compat (ANCS/CARDS endpoints).
+        val comp = makeComponent("COMPEXT1")
+        comp.vcsExternalRegistry = "ext-registry"
+
+        val base = makeBase(comp, versionRange = ALL_VERSIONS, javaVersion = "8")
+        base.vcsEntries.add(makeVcsEntry(base, "ssh://vcs/base-root"))
+
+        // VCS_SETTINGS marker override for [1.0,): entirely replaces vcsSettings for that range
+        val vcsMarker = makeMarkerRow(comp, "[1.0,)", "vcs.settings")
+        vcsMarker.vcsEntries.add(makeVcsEntry(vcsMarker, "ssh://vcs/override-root"))
+
+        comp.configurations.addAll(listOf(base, vcsMarker))
+        stubComponent(comp)
+
+        // Version 0.5.0 — base range, no marker applies. externalRegistry must be inherited.
+        val baseCfg = resolver.getResolvedComponentDefinition("COMPEXT1", "0.5.0")
+        assertNotNull(baseCfg)
+        assertEquals(
+            "ext-registry",
+            baseCfg!!.vcsSettings?.externalRegistry,
+            "Base range must inherit component-level externalRegistry",
+        )
+
+        // Version 1.5.0 — [1.0,) marker is active. externalRegistry must be null (V1 parity).
+        val overrideCfg = resolver.getResolvedComponentDefinition("COMPEXT1", "1.5.0")
+        assertNotNull(overrideCfg)
+        assertNull(
+            overrideCfg!!.vcsSettings?.externalRegistry,
+            "VCS_SETTINGS marker must null out the component-level externalRegistry",
+        )
+        assertEquals(
+            "ssh://vcs/override-root",
+            overrideCfg.vcsSettings?.versionControlSystemRoots?.firstOrNull()?.vcsPath,
+            "VCS_SETTINGS marker must supply its own VCS roots",
+        )
+    }
+
+    // ========================================================================
     // Companion
     // ========================================================================
 

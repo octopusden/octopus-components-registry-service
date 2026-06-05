@@ -211,7 +211,7 @@ class DatabaseComponentRegistryResolver(
         if (byProject.isEmpty()) {
             throw NotFoundException("Project '$projectKey' is not found")
         }
-        return byProject.toSet()
+        return byProject.toHashSet()
     }
 
     override fun getComponentsDistributionByJiraProject(projectKey: String): Map<String, Distribution> =
@@ -254,7 +254,7 @@ class DatabaseComponentRegistryResolver(
         componentRepository
             .findAll()
             .flatMap { component -> buildJiraVersionRangesForComponent(component) }
-            .toSet()
+            .toHashSet()
 
     override fun findComponentByArtifact(artifact: ArtifactDependency): VersionedComponent =
         findComponentByArtifactOrNull(artifact)
