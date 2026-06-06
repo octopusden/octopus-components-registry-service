@@ -182,10 +182,6 @@ fun ComponentEntity.toResolvedEscrowModuleConfig(
     versionRangeFactory: VersionRangeFactory,
     numericVersionFactory: NumericVersionFactory,
 ): EscrowModuleConfig? {
-    val configs = this.configurations.toList()
-    val base = configs.firstOrNull { it.rowType == "BASE" } ?: return null
-    val overrides = configs.filter { it.rowType == "SCALAR_OVERRIDE" || it.rowType == "MARKER" }
-
     val numericVersion =
         try {
             numericVersionFactory.create(version)
@@ -193,22 +189,53 @@ fun ComponentEntity.toResolvedEscrowModuleConfig(
             return null
         }
 
-    val matchingOverrides =
-        overrides.filter { override ->
-            try {
-                versionRangeFactory.create(override.versionRange).containsVersion(numericVersion)
-            } catch (_: Exception) {
-                false
+    // Mirror EscrowConfigurationLoader.resolveComponentConfiguration: pick the
+    // single enumerated module view whose version range contains `version`.
+    // Building from BASE + point-in-range overrides alone would keep serving the
+    // `(,)` anchor for versions that fall outside every DSL range (e.g.
+    // authmodlib 12.1.155 sits in the gap between `[11,12.1)` and `[12.2,)`).
+    val matching =
+        this.toEscrowModule(versionRangeFactory, numericVersionFactory)
+            .moduleConfigurations
+            .filter { config ->
+                val rangeString = config.versionRangeString ?: return@filter false
+                try {
+                    versionRangeFactory.create(rangeString).containsVersion(numericVersion)
+                } catch (_: Exception) {
+                    false
+                }
             }
-        }
 
-    return buildEscrowModuleConfig(
-        component = this,
-        base = base,
-        scalarOverrides = matchingOverrides.filter { it.rowType == "SCALAR_OVERRIDE" },
-        markerOverrides = matchingOverrides.filter { it.rowType == "MARKER" },
-        versionRange = base.versionRange,
-    )
+    return pickResolvedModuleConfiguration(this.componentKey, version, matching)
+}
+
+/**
+ * When several enumerated views contain [version] (typically `(,)` plus a
+ * narrower override range), prefer the most specific non-default range — same
+ * outcome V1's loader achieves because overlapping matches are rare in
+ * production DSL, but unit fixtures often declare `(,)` plus explicit ranges.
+ */
+internal fun pickResolvedModuleConfiguration(
+    componentKey: String,
+    version: String,
+    matching: List<EscrowModuleConfig>,
+): EscrowModuleConfig? {
+    if (matching.isEmpty()) {
+        return null
+    }
+    if (matching.size == 1) {
+        return matching.first()
+    }
+    val nonDefault =
+        matching.filter { config ->
+            val range = config.versionRangeString ?: return@filter false
+            range != ALL_VERSIONS && range != "(,)"
+        }
+    val pool = nonDefault.ifEmpty { matching }
+    if (pool.size == 1) {
+        return pool.first()
+    }
+    error("Too many component $componentKey:$version module configurations (${pool.size})")
 }
 
 // ============================================================
@@ -339,11 +366,16 @@ private fun buildEscrowModuleConfig(
             markerOverrides = markerOverrides,
             baseChildren = base.vcsEntries.toList(),
         ) { it.vcsEntries.toList() }
+    val vcsMarkerActive =
+        markerOverrides.any { it.overriddenAttribute == MarkerAttributes.VCS_SETTINGS }
     val externalRegistry =
-        if (merged.vcsExternalRegistryOverridden) {
-            merged.vcsExternalRegistry
-        } else {
-            merged.vcsExternalRegistry ?: component.vcsExternalRegistry
+        when {
+            merged.vcsExternalRegistryOverridden -> merged.vcsExternalRegistry
+            // vcs.settings replaces the whole VCS view. Without an explicit
+            // vcs.externalRegistry scalar for this range, registry must not
+            // leak from the BASE row or components.vcs_external_registry.
+            vcsMarkerActive -> null
+            else -> merged.vcsExternalRegistry ?: component.vcsExternalRegistry
         }
     if (vcsEntries.isNotEmpty() || externalRegistry != null) {
         setField(config, "vcsSettings", vcsEntries.toVCSSettings(externalRegistry))
@@ -376,16 +408,33 @@ private fun buildEscrowModuleConfig(
             baseChildren = base.packages.toList(),
         ) { it.packages.toList() }
 
+    val hasDistributionMarker =
+        markerOverrides.any {
+            it.overriddenAttribute == MarkerAttributes.DISTRIBUTION_MAVEN ||
+                it.overriddenAttribute == MarkerAttributes.DISTRIBUTION_FILE_URL ||
+                it.overriddenAttribute == MarkerAttributes.DISTRIBUTION_DOCKER ||
+                it.overriddenAttribute == MarkerAttributes.DISTRIBUTION_PACKAGES
+        }
     val distribution =
-        buildDistribution(
-            explicit = component.distributionExplicit,
-            external = component.distributionExternal,
-            mavenArtifacts = mavenArtifacts,
-            fileUrlArtifacts = fileUrlArtifacts,
-            dockerImages = dockerImages,
-            packages = packages,
-            securityGroups = component.securityGroups.toList(),
-        )
+        if (
+            hasDistributionMarker &&
+            mavenArtifacts.isEmpty() &&
+            fileUrlArtifacts.isEmpty() &&
+            dockerImages.isEmpty() &&
+            packages.isEmpty()
+        ) {
+            null
+        } else {
+            buildDistribution(
+                explicit = if (hasDistributionMarker) null else component.distributionExplicit,
+                external = if (hasDistributionMarker) null else component.distributionExternal,
+                mavenArtifacts = mavenArtifacts,
+                fileUrlArtifacts = fileUrlArtifacts,
+                dockerImages = dockerImages,
+                packages = packages,
+                securityGroups = component.securityGroups.toList(),
+            )
+        }
     if (distribution != null) {
         setField(config, "distribution", distribution)
     }
@@ -769,16 +818,14 @@ internal fun buildDistribution(
             .joinToString(",") { it.groupName }
     val secGroups = if (secReadGroups.isNotEmpty()) SecurityGroups(secReadGroups) else null
 
-    val anyContent =
-        explicit != null ||
-            external != null ||
-            gavStr != null ||
+    val hasArtifacts =
+        gavStr != null ||
             dockerStr != null ||
             debStr != null ||
             rpmStr != null ||
             secGroups != null
 
-    if (!anyContent) return null
+    if (!hasArtifacts) return null
 
     return Distribution(explicit ?: true, external ?: false, gavStr, debStr, rpmStr, dockerStr, secGroups)
 }

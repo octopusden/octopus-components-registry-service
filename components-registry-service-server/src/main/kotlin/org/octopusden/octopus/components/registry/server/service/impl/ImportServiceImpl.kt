@@ -1444,6 +1444,40 @@ class ImportServiceImpl(
     }
 
     /**
+     * Upsert a SCALAR_OVERRIDE row for [attrPath] at [versionRange].
+     * Used when a marker row replaces a whole view and the effective scalar
+     * must be pinned even if it equals the BASE row (e.g. vcs.externalRegistry
+     * alongside vcs.settings).
+     */
+    private fun saveScalarOverrideRow(
+        component: ComponentEntity,
+        versionRange: String,
+        attrPath: String,
+        value: Any?,
+    ): ComponentConfigurationEntity {
+        val existing =
+            configurationRepository.findByComponentIdAndVersionRangeAndOverriddenAttribute(
+                component.id!!,
+                versionRange,
+                attrPath,
+            )
+        if (existing != null) {
+            applyScalarValueToRow(existing, attrPath, value)
+            return configurationRepository.save(existing)
+        }
+        val scalarRow =
+            ComponentConfigurationEntity(
+                component = component,
+                versionRange = versionRange,
+                overriddenAttribute = attrPath,
+                rowType = "SCALAR_OVERRIDE",
+                isSyntheticBase = false,
+            )
+        applyScalarValueToRow(scalarRow, attrPath, value)
+        return configurationRepository.save(scalarRow)
+    }
+
+    /**
      * Emit marker override rows for each child collection that differs
      * between [base] and [override] configs.
      */
@@ -1462,6 +1496,14 @@ class ImportServiceImpl(
             saveMarkerRowWithChildren(component, versionRange, MarkerAttributes.VCS_SETTINGS) { row ->
                 attachVcsEntries(row, override.vcsSettings)
             }?.let { saved += it }
+            // Persist the effective registry for this range so the read-path does
+            // not inherit BASE/components defaults into a replaced vcsSettings view.
+            saved += saveScalarOverrideRow(
+                component = component,
+                versionRange = versionRange,
+                attrPath = "vcs.externalRegistry",
+                value = override.vcsSettings?.externalRegistry,
+            )
         }
 
         // Distribution overrides — check each family
