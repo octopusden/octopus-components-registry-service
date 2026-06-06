@@ -421,6 +421,9 @@ private fun buildEscrowModuleConfig(
             // vcs.externalRegistry scalar for this range, registry must not
             // leak from the BASE row or components.vcs_external_registry.
             vcsMarkerActive -> null
+            // Explicit enumerated ranges must not inherit components.vcs_external_registry
+            // when the BASE row carries no per-range registry (MIG-050 / CARDS compat).
+            versionRange != ALL_VERSIONS -> merged.vcsExternalRegistry
             else -> merged.vcsExternalRegistry ?: component.vcsExternalRegistry
         }
     if (vcsEntries.isNotEmpty() || externalRegistry != null) {

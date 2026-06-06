@@ -2031,8 +2031,13 @@ class ImportServiceImpl(
         base: VCSSettings?,
         override: VCSSettings?,
     ): Boolean {
-        if (base == null && override == null) return false
-        if (base == null || override == null) return true
+        // Null override means the DSL block did not declare `vcs { … }` — inherit
+        // the base view, do not emit a replacement marker (MIG-050 / ANCS `[2,)` pattern).
+        if (override == null) return false
+        if (base == null) {
+            val overRoots = override.versionControlSystemRoots ?: emptyList<Any>()
+            return overRoots.isNotEmpty() || override.externalRegistry != null
+        }
         val baseRoots = base.versionControlSystemRoots ?: emptyList<Any>()
         val overRoots = override.versionControlSystemRoots ?: emptyList<Any>()
         return baseRoots != overRoots || base.externalRegistry != override.externalRegistry
@@ -2041,7 +2046,10 @@ class ImportServiceImpl(
     private fun mavenArtifactsDiffer(
         base: Distribution?,
         override: Distribution?,
-    ): Boolean = extractMavenGavs(base?.GAV()) != extractMavenGavs(override?.GAV())
+    ): Boolean {
+        if (override == null) return false
+        return extractMavenGavs(base?.GAV()) != extractMavenGavs(override.GAV())
+    }
 
     /**
      * MIG-047: returns true when the override range's DSL-level `groupId`/`artifactId`
@@ -2063,17 +2071,26 @@ class ImportServiceImpl(
     private fun fileUrlArtifactsDiffer(
         base: Distribution?,
         override: Distribution?,
-    ): Boolean = extractFileUrls(base?.GAV()) != extractFileUrls(override?.GAV())
+    ): Boolean {
+        if (override == null) return false
+        return extractFileUrls(base?.GAV()) != extractFileUrls(override.GAV())
+    }
 
     private fun dockerImagesDiffer(
         base: Distribution?,
         override: Distribution?,
-    ): Boolean = base?.docker() != override?.docker()
+    ): Boolean {
+        if (override == null) return false
+        return base?.docker() != override.docker()
+    }
 
     private fun packagesDiffer(
         base: Distribution?,
         override: Distribution?,
-    ): Boolean = base?.DEB() != override?.DEB() || base?.RPM() != override?.RPM()
+    ): Boolean {
+        if (override == null) return false
+        return base?.DEB() != override.DEB() || base?.RPM() != override.RPM()
+    }
 
     private fun extractMavenGavs(gavCsv: String?): List<String> {
         gavCsv ?: return emptyList()

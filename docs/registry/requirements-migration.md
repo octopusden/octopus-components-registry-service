@@ -51,6 +51,8 @@ Numbered MIG-NNN contracts registry, peer of `requirements-common.md` (SYS-NNN) 
 | MIG-046 | rangeApplies containment for enumeration endpoints (TD-010) | High | unit-test | ✅ Tested |
 | MIG-047 | compat residual clusters (gap 404, vcs registry, distribution clear) | High | unit-test | ✅ Tested |
 | MIG-048 | RANGE_PRESENCE ranges must not inherit BASE jira.displayName | High | unit-test | ✅ Tested |
+| MIG-049 | restore MIG-029 synthetic-base fallback after MIG-047 enumeration | High | unit-test | ✅ Tested |
+| MIG-050 | import inherit semantics + explicit-range vcs registry isolation | High | unit-test | ✅ Tested |
 
 ---
 
@@ -1254,3 +1256,49 @@ TYPE_MISMATCH on CARDS/ANCS compat.
 **Test method:**
 `MIG048JiraDisplayNameRangePresenceTest.MIG-048-001 RANGE_PRESENCE explicit range does not inherit BASE jira displayName`,
 `MIG048JiraDisplayNameRangePresenceTest.MIG-048-002 broad jira displayName override still applies to contained RANGE_PRESENCE range`
+
+---
+
+### MIG-049: restore MIG-029 synthetic-base fallback after MIG-047 enumeration
+
+**Priority:** High
+**Test layer:** unit-test
+**Status:** ✅ Tested
+
+**Description:**
+MIG-047 switched per-version resolve to enumerated-range matching, which returned
+null for versions outside override ranges on universal synthetic `(,)` bases.
+MIG-029 requires those versions to fall back to BASE scalars (Compile&UT test 5c).
+
+**Acceptance criteria:**
+1. Universal synthetic base + scalar/marker overrides: versions outside every override range resolve from BASE.
+2. Explicit-range synthetic base (authmodlib gap pattern): versions in gaps between RANGE_PRESENCE views still resolve to null.
+
+**Test method:**
+`DatabaseComponentRegistryResolverTest.(5c MIG-029) synthetic base - resolve 0·9·0 falls back to synthetic base values`,
+`MIG047ResidualClustersTest.MIG-047-001 version in gap between explicit DSL ranges resolves to null`
+
+---
+
+### MIG-050: import inherit semantics + explicit-range vcs registry isolation
+
+**Priority:** High
+**Test layer:** unit-test
+**Status:** ✅ Tested
+
+**Description:**
+Close remaining CARDS/ANCS `jira-component-version-ranges` compat residuals:
+import was emitting clearing markers when the DSL override block simply omitted
+`vcs { … }` / `distribution { … }` (null = inherit, not replace). Read path also
+leaked `components.vcs_external_registry` onto explicit enumerated ranges.
+
+**Acceptance criteria:**
+1. `emitMarkerOverrides` does not emit distribution/vcs markers when override config fields are null (inherit semantics).
+2. Explicit RANGE_PRESENCE ranges inherit BASE distribution on jira-ranges when no distribution marker exists.
+3. Explicit enumerated ranges do not fall back to `components.vcs_external_registry` when the BASE row has no per-range registry.
+
+**Test method:**
+`MIG050CompatResidualTest.MIG-050-001 absent override distribution does not emit distribution maven marker`,
+`MIG050CompatResidualTest.MIG-050-002 absent override vcsSettings does not emit vcs settings marker`,
+`MIG050CompatResidualTest.MIG-050-003 explicit RANGE_PRESENCE range inherits base distribution on jira ranges`,
+`MIG050CompatResidualTest.MIG-050-004 explicit range does not inherit components vcs external registry`
