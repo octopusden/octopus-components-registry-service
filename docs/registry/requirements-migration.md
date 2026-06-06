@@ -1160,7 +1160,20 @@ and ignored per-range DSL overrides, causing TYPE_MISMATCH NULL↔STRING on
 2. A null-clear override row (`jira.displayName` override with NULL column) returns null
    displayName for that range and does not fall back to `components.jira_display_name`.
 3. Ranges without an override inherit `components.jira_display_name` as today.
+4. `ImportServiceImpl.populateScalarsFromConfig` writes explicit `jira.displayName = null` from
+   the DSL onto the configuration row (no `?.let` skip).
+5. Synthetic-base explicit ranges with a jira block do not inherit `components.jira_display_name`
+   when the merged row carries null.
+6. DB-backed HTTP `GET /rest/api/2/projects/{projectKey}/jira-component-version-ranges` surfaces
+   per-range displayName values after auto-migrate.
 
 **Test method:**
 `MIG045JiraDisplayNamePerRangeTest.MIG-045-001 per-range jira displayName override on jira-component-version-ranges`,
-`MIG045JiraDisplayNamePerRangeTest.MIG-045-002 null jira displayName override clears inherited displayName for range`
+`MIG045JiraDisplayNamePerRangeTest.MIG-045-002 null jira displayName override clears inherited displayName for range`,
+`MIG045JiraDisplayNamePerRangeTest.MIG-045-003 synthetic base range explicit null displayName does not inherit component default`,
+`MIG045JiraDisplayNameImportTest.MIG-045-004 populateScalarsFromConfig writes null jira displayName from jira block`,
+`MIG045JiraDisplayNameImportTest.MIG-045-005 emitScalarOverrides emits jira displayName scalar override row`,
+`MigrationIntegrationTest.mig045_importPersistsPerRangeJiraDisplayNameScalars`,
+`DbBackedComponentsRegistryServiceControllerTest.testMIG045006_importPersistsPerRangeJiraDisplayNameScalars_dbMode`,
+`DbBackedComponentsRegistryServiceControllerTest.testMIG045007_nullClearSurvivesComponentLevelDefault_dbMode`,
+`DbBackedComponentsRegistryServiceControllerTest.testMIG045008_perRangeJiraDisplayNameOnProjectJiraComponentVersionRanges_dbMode`

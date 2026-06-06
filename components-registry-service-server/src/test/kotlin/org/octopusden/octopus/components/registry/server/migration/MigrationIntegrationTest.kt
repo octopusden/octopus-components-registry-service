@@ -688,6 +688,34 @@ class MigrationIntegrationTest {
     }
 
     // =========================================================================
+    // MIG-045: per-range jira.displayName import + read parity
+    // =========================================================================
+
+    @Test
+    @DisplayName("MIG-045-006: import persists per-range jira.displayName rows for synthetic-base fixture")
+    fun mig045_importPersistsPerRangeJiraDisplayNameScalars() {
+        val component = componentRepository.findByComponentKey("TEST_PER_RANGE_JIRA_DISPLAY_NAME")
+        assertNotNull(component, "fixture component must be auto-migrated")
+
+        val rows = configurationRepository.findByComponentId(component!!.id!!)
+        val baseRow = rows.single { it.rowType == "BASE" }
+        assertEquals("[1.0,2.0)", baseRow.versionRange)
+        assertNull(
+            baseRow.jiraDisplayName,
+            "BASE row for [1.0,2.0) must store explicit jira.displayName=null from DSL",
+        )
+
+        val overrideRow =
+            configurationRepository.findByComponentIdAndVersionRangeAndOverriddenAttribute(
+                component.id!!,
+                "[2.0,)",
+                "jira.displayName",
+            )
+        assertNotNull(overrideRow, "import must emit jira.displayName SCALAR_OVERRIDE for [2.0,)")
+        assertEquals("Range Override Display", overrideRow!!.jiraDisplayName)
+    }
+
+    // =========================================================================
     // Helpers
     // =========================================================================
 

@@ -132,4 +132,24 @@ class MIG045JiraDisplayNamePerRangeTest {
             "null-clear jira.displayName override must not fall back to component.jiraDisplayName",
         )
     }
+
+    @Test
+    @DisplayName("MIG-045-003: synthetic base range with explicit null displayName does not inherit component default")
+    fun `MIG-045-003 synthetic base range explicit null displayName does not inherit component default`() {
+        val comp = makeComponent("gamma-fixture", jiraDisplayName = "Component Default")
+        val base =
+            makeBase(comp, versionRange = "[1.0,2.0)", jiraProjectKey = "SYNTH").apply {
+                jiraDisplayName = null
+            }
+
+        comp.configurations.add(base)
+        stubComponent(comp)
+
+        val ranges = resolver.getJiraComponentVersionRangesByProject("SYNTH")
+
+        assertNull(
+            ranges.first { it.versionRange == "[1.0,2.0)" }.component.displayName,
+            "synthetic base range with null jira.displayName must not fall back to component.jiraDisplayName",
+        )
+    }
 }

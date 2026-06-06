@@ -1346,7 +1346,10 @@ class ImportServiceImpl(
         cfg.jiraConfiguration?.let { jira ->
             row.jiraProjectKey = jira.projectKey
             row.jiraTechnical = jira.isTechnical.takeIf { it }
-            jira.displayName?.let { row.jiraDisplayName = it }
+            // Unconditional assignment: an explicit `displayName = null` in a
+            // per-range jira block must persist as NULL on the row so the
+            // resolver does not fall back to components.jira_display_name.
+            row.jiraDisplayName = jira.displayName
             jira.componentVersionFormat?.let { cvf ->
                 row.jiraMajorVersionFormat = cvf.majorVersionFormat
                 row.jiraReleaseVersionFormat = cvf.releaseVersionFormat

@@ -1204,6 +1204,37 @@ TEST_PER_RANGE_HOTFIX_FORMAT {
     }
 }
 
+// MIG-045 fixture: per-range jira.displayName override + explicit null-clear on
+// the synthetic base range. Pins import (populateScalarsFromConfig) and DB
+// resolver read path for jira-component-version-ranges parity.
+TEST_PER_RANGE_JIRA_DISPLAY_NAME {
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.test.display.range"
+    artifactId = "test-per-range-display"
+    jira {
+        projectKey = "PRDN"
+        majorVersionFormat = '$major'
+        releaseVersionFormat = '$major.$minor.$service'
+        buildVersionFormat = '$major.$minor.$service-$fix'
+        lineVersionFormat = '$major'
+        displayName = "Component Default Display"
+    }
+    distribution {
+        explicit = false
+        external = true
+    }
+    "[1.0,2.0)" {
+        jira {
+            displayName = null
+        }
+    }
+    "[2.0,)" {
+        jira {
+            displayName = "Range Override Display"
+        }
+    }
+}
+
 
 NON_ARCHIVED_TEST_COMPONENT {
     jira {

@@ -1,12 +1,18 @@
 package org.octopusden.octopus.components.registry.server
 
+import com.fasterxml.jackson.core.type.TypeReference
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
+import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionRangeDTO
+import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
+import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
 import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.springframework.beans.factory.annotation.Autowired
@@ -19,6 +25,7 @@ import org.springframework.test.context.DynamicPropertySource
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import org.springframework.transaction.annotation.Transactional
 import org.testcontainers.containers.PostgreSQLContainer
 import java.nio.file.Paths
 
@@ -42,6 +49,12 @@ import java.nio.file.Paths
 class DbBackedComponentsRegistryServiceControllerTest : MockMvcRegistryTestSupport() {
     @Autowired
     private lateinit var sourceRegistry: ComponentSourceRegistry
+
+    @Autowired
+    private lateinit var componentRepository: ComponentRepository
+
+    @Autowired
+    private lateinit var configurationRepository: ComponentConfigurationRepository
 
     /**
      * Post ui-swift-sloth-system-single: DB-source resolver stores TESTONE's
@@ -205,7 +218,116 @@ class DbBackedComponentsRegistryServiceControllerTest : MockMvcRegistryTestSuppo
         )
     }
 
+    /**
+     * Import-path pin: after auto-migrate, per-range jira.displayName scalars must
+     * land on the correct configuration rows (BASE null-clear + SCALAR_OVERRIDE string).
+     */
+    @Test
+    @DisplayName("MIG-045-006: import persists per-range jira.displayName rows for synthetic-base fixture")
+    fun testMIG045006_importPersistsPerRangeJiraDisplayNameScalars_dbMode() {
+        val component = componentRepository.findByComponentKey(MIG045_FIXTURE)
+        assertNotNull(component, "fixture component must be auto-migrated")
+
+        val rows = configurationRepository.findByComponentId(component!!.id!!)
+        val baseRow = rows.single { it.rowType == "BASE" }
+        assertEquals("[1.0,2.0)", baseRow.versionRange)
+        assertNull(
+            baseRow.jiraDisplayName,
+            "BASE row for [1.0,2.0) must store explicit jira.displayName=null from DSL",
+        )
+
+        val overrideRow =
+            configurationRepository.findByComponentIdAndVersionRangeAndOverriddenAttribute(
+                component.id!!,
+                "[2.0,)",
+                "jira.displayName",
+            )
+        assertNotNull(overrideRow, "import must emit jira.displayName SCALAR_OVERRIDE for [2.0,)")
+        assertEquals("Range Override Display", overrideRow!!.jiraDisplayName)
+    }
+
+    /**
+     * Full-stack pin for CARDS-like fallback bug: components.jira_display_name is
+     * populated while the synthetic BASE range carries explicit null. Both resolver
+     * and HTTP must return null for [1.0,2.0), not bleed the component default.
+     */
+    @Test
+    @Transactional
+    @DisplayName(
+        "MIG-045-007: null-clear on synthetic BASE range survives populated components.jira_display_name (DB + HTTP)",
+    )
+    fun testMIG045007_nullClearSurvivesComponentLevelDefault_dbMode() {
+        val component = componentRepository.findByComponentKey(MIG045_FIXTURE)!!
+        component.jiraDisplayName = "Component Default Display"
+        componentRepository.saveAndFlush(component)
+
+        val baseRow =
+            configurationRepository.findByComponentId(component.id!!)
+                .single { it.rowType == "BASE" && it.versionRange == "[1.0,2.0)" }
+        assertNull(baseRow.jiraDisplayName, "precondition: BASE row must keep explicit null")
+
+        val resolverRanges =
+            getJiraComponentVersionRangesByProject(MIG045_PROJECT)
+                .filter { it.componentName == MIG045_FIXTURE }
+        assertNull(
+            resolverRanges.first { it.versionRange == "[1.0,2.0)" }.component.displayName,
+            "resolver must not fall back to components.jira_display_name on synthetic BASE range",
+        )
+        assertEquals(
+            "Range Override Display",
+            resolverRanges.first { it.versionRange == "[2.0,)" }.component.displayName,
+        )
+
+        val httpRanges = fetchProjectJiraComponentVersionRanges(MIG045_PROJECT)
+            .filter { it.componentName == MIG045_FIXTURE }
+        assertNull(
+            httpRanges.first { it.versionRange == "[1.0,2.0)" }.component.displayName,
+            "HTTP must not fall back to components.jira_display_name on synthetic BASE range",
+        )
+        assertEquals(
+            "Range Override Display",
+            httpRanges.first { it.versionRange == "[2.0,)" }.component.displayName,
+        )
+    }
+
+    /**
+     * End-to-end HTTP pin for MIG-045: strict JSON parse (not substring matching).
+     */
+    @Test
+    @DisplayName(
+        "MIG-045-008: GET /projects/{projectKey}/jira-component-version-ranges surfaces per-range jira.displayName (DB resolver)",
+    )
+    fun testMIG045008_perRangeJiraDisplayNameOnProjectJiraComponentVersionRanges_dbMode() {
+        val ranges =
+            fetchProjectJiraComponentVersionRanges(MIG045_PROJECT)
+                .filter { it.componentName == MIG045_FIXTURE }
+
+        assertNull(ranges.first { it.versionRange == "[1.0,2.0)" }.component.displayName)
+        assertEquals(
+            "Range Override Display",
+            ranges.first { it.versionRange == "[2.0,)" }.component.displayName,
+        )
+    }
+
+    private fun fetchProjectJiraComponentVersionRanges(projectKey: String): List<JiraComponentVersionRangeDTO> {
+        val response =
+            mvc
+                .perform(
+                    get("/rest/api/2/projects/$projectKey/jira-component-version-ranges")
+                        .accept(APPLICATION_JSON),
+                ).andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString
+        return objectMapper.readValue(
+            response,
+            object : TypeReference<List<JiraComponentVersionRangeDTO>>() {},
+        )
+    }
+
     companion object {
+        private const val MIG045_FIXTURE = "TEST_PER_RANGE_JIRA_DISPLAY_NAME"
+        private const val MIG045_PROJECT = "PRDN"
+
         @JvmStatic
         val postgres =
             PostgreSQLContainer("postgres:16-alpine")

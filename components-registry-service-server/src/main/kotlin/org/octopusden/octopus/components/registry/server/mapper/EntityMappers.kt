@@ -367,7 +367,11 @@ private fun buildEscrowModuleConfig(
     }
 
     // Jira aspect — composed from merged config scalars + component-level fields
-    val jira = buildJiraComponent(component = component, merged = merged)
+    val jira = buildJiraComponent(
+        component = component,
+        merged = merged,
+        versionRange = versionRange,
+    )
     if (jira != null) {
         setField(config, "jiraConfiguration", jira)
     }
@@ -791,6 +795,7 @@ private fun composeDockerCsv(images: List<DistributionDockerImageEntity>): Strin
 private fun buildJiraComponent(
     component: ComponentEntity,
     merged: ComponentConfigurationView,
+    versionRange: String,
 ): JiraComponent? {
     val projectKey = merged.jiraProjectKey ?: return null
 
@@ -825,13 +830,21 @@ private fun buildJiraComponent(
         null
     }
 
+    // Per-range jira.displayName resolution mirrors hotfixVersionFormat layering:
+    // SCALAR_OVERRIDE rows (including null-clear) win; explicit DSL ranges other
+    // than ALL_VERSIONS use the merged row value without component fallback; the
+    // ALL_VERSIONS default view still inherits components.jira_display_name when
+    // the base row carries no per-range displayName.
+    val displayName =
+        when {
+            merged.jiraDisplayNameOverridden -> merged.jiraDisplayName
+            versionRange != ALL_VERSIONS && merged.jiraProjectKey != null -> merged.jiraDisplayName
+            else -> merged.jiraDisplayName ?: component.jiraDisplayName
+        }
+
     return JiraComponent(
         projectKey,
-        if (merged.jiraDisplayNameOverridden) {
-            merged.jiraDisplayName
-        } else {
-            merged.jiraDisplayName ?: component.jiraDisplayName
-        },
+        displayName,
         format,
         info,
         merged.jiraTechnical ?: false,

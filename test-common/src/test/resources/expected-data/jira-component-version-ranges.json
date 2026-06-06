@@ -2067,5 +2067,65 @@
       "versionControlSystemRoots": [],
       "externalRegistry": null
     }
+  },
+  {
+    "componentName": "TEST_PER_RANGE_JIRA_DISPLAY_NAME",
+    "versionRange": "[1.0,2.0)",
+    "component": {
+      "projectKey": "PRDN",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major",
+        "releaseVersionFormat": "$major.$minor.$service",
+        "buildVersionFormat": "$major.$minor.$service-$fix",
+        "lineVersionFormat": "$major",
+        "hotfixVersionFormat": null
+      },
+      "componentInfo": null,
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "TEST_PER_RANGE_JIRA_DISPLAY_NAME",
+    "versionRange": "[2.0,)",
+    "component": {
+      "projectKey": "PRDN",
+      "displayName": "Range Override Display",
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major",
+        "releaseVersionFormat": "$major.$minor.$service",
+        "buildVersionFormat": "$major.$minor.$service-$fix",
+        "lineVersionFormat": "$major",
+        "hotfixVersionFormat": null
+      },
+      "componentInfo": null,
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [],
+      "externalRegistry": null
+    }
   }
 ]
