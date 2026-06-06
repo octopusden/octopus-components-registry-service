@@ -106,6 +106,20 @@ baseline + current-chain candidate) and runs the compat-test against them,
 see [`TEAMCITY.md`](TEAMCITY.md). The wrapper [`teamcity-run.sh`](teamcity-run.sh)
 chains postgres → baseline JAR → candidate JAR → compat → teardown.
 
+**TC build types:** `[1.9]` (`id19`) runs only `Cluster50CompatTest` (CARDS/ANCS
+jira-ranges + authmodlib distribution, ~50-diff cluster). `[1.7]` (`id17`) runs
+the full matrix + 30k trace replay and auto-fires after `[1.9]` succeeds. Locally,
+run the same cluster gate with stands up:
+
+```bash
+./gradlew :components-registry-compat-test:test \
+  --tests "org.octopusden.octopus.components.registry.compat.Cluster50CompatTest"
+```
+
+For raw-only replay of the bundled fixture (fast triage, no typed layer), use
+[`residual-replay.sh`](residual-replay.sh) with
+`COMPAT_RESIDUAL_FILE=components-registry-compat-test/src/test/resources/compat/cluster-50-fixture.txt`.
+
 ## Tear-down
 
 ```bash

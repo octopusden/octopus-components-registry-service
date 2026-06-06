@@ -162,7 +162,8 @@ test {
      'compat.verbose',
      'compat.allow-non-db-candidate',
      'compat.candidate.mode',
-     'compat.versions.file'].each { name ->
+     'compat.versions.file',
+     'compat.residual.file'].each { name ->
         def value = project.findProperty(name) ?: System.getenv(name.toUpperCase().replace('.', '_').replace('-', '_'))
         if (value != null) {
             systemProperty name, value
@@ -481,7 +482,7 @@ tasks.register('compatibilityReporter') {
         def clusterKeyFor = { Map r ->
             def endpoint = (r.endpoint ?: '').toString()
             def entity = (r.entityKey ?: renderParams(r.pathParams as Map ?: [:] as Map) ?: '-').toString()
-            def field = (r.message ?: '').toString().replaceAll(/\$\[\d+\]/, '$[N]')
+            def field = (r.message ?: '').toString().replaceAll(/\$\[\d+\]/, '\\$[N]')
             "${endpoint} | ${entity} | ${field}"
         }
         def buildClusterDigest = { Map activeCats ->

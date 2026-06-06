@@ -1,0 +1,6 @@
+# Residual-replay fixture for the ~50-diff cluster (TC #3826 / #3834 signature).
+# Format: count<TAB>METHOD<TAB>path  (count is informational for trace-derived fixtures)
+1	GET	/rest/api/2/projects/CARDS/jira-component-version-ranges
+1	GET	/rest/api/2/projects/ANCS/jira-component-version-ranges
+1	GET	/rest/api/2/components/authmodlib/versions/12.1.155/distribution
+1	GET	/rest/api/2/components/authmodlib/versions/12.1.156/distribution
