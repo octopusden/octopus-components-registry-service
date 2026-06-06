@@ -206,8 +206,47 @@ fun ComponentEntity.toResolvedEscrowModuleConfig(
                 }
             }
 
-    return pickResolvedModuleConfiguration(this.componentKey, version, matching)
+    if (matching.isNotEmpty()) {
+        return pickResolvedModuleConfiguration(this.componentKey, version, matching)
+    }
+
+    // MIG-029 synthetic-base fallback: a universal `(,)` placeholder base plus
+    // scalar/marker overrides still resolves from base scalars for versions outside
+    // every override range (DatabaseComponentRegistryResolverTest 3b/4b/5c). Do
+    // not apply when the synthetic base anchors an explicit first DSL range — those
+    // components enumerate RANGE_PRESENCE views only and gaps must stay null
+    // (MIG-047 authmodlib pattern).
+    val configs = this.configurations.toList()
+    val base = configs.firstOrNull { it.rowType == "BASE" } ?: return null
+    val scalarAndMarkerOverrides =
+        configs.filter { it.rowType == "SCALAR_OVERRIDE" || it.rowType == "MARKER" }
+    if (
+        base.isSyntheticBase &&
+        isUniversalVersionRange(base.versionRange) &&
+        scalarAndMarkerOverrides.isNotEmpty()
+    ) {
+        val matchingOverrides =
+            scalarAndMarkerOverrides.filter { override ->
+                try {
+                    versionRangeFactory.create(override.versionRange).containsVersion(numericVersion)
+                } catch (_: Exception) {
+                    false
+                }
+            }
+        return buildEscrowModuleConfig(
+            component = this,
+            base = base,
+            scalarOverrides = matchingOverrides.filter { it.rowType == "SCALAR_OVERRIDE" },
+            markerOverrides = matchingOverrides.filter { it.rowType == "MARKER" },
+            versionRange = base.versionRange,
+        )
+    }
+
+    return null
 }
+
+private fun isUniversalVersionRange(range: String): Boolean =
+    range == ALL_VERSIONS || range == "(,)"
 
 /**
  * When several enumerated views contain [version] (typically `(,)` plus a
