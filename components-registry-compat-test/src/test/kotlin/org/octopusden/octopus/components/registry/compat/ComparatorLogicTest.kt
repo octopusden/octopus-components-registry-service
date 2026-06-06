@@ -517,4 +517,40 @@ class ComparatorLogicTest {
         assertThat(recorded.category).isEqualTo(DiffClassifier.VALUE_DIFF)
         assertThat(recorded.message).contains("id")
     }
+
+    @Test
+    @DisplayName("compareRaw: jira-ranges STRUCTURAL_DIFF records resolved entityKey")
+    fun compareRaw_jiraRangesStructuralDiffRecordsEntityKey() {
+        val baseline =
+            response(
+                body =
+                    """
+                    [
+                      {"componentName":"alpha-fixture","versionRange":"[1.0,2.0)","component":{"displayName":"A"}},
+                      {"componentName":"beta-fixture","versionRange":"[2.0,)","component":{"displayName":"B"}}
+                    ]
+                    """.trimIndent(),
+            )
+        val candidate =
+            response(
+                body =
+                    """
+                    [
+                      {"componentName":"alpha-fixture","versionRange":"[1.0,2.0)","component":{"displayName":"A"}},
+                      {"componentName":"beta-fixture","versionRange":"[2.0,)","component":{}}
+                    ]
+                    """.trimIndent(),
+            )
+
+        Comparators.compareRaw(
+            endpoint = "GET /rest/api/2/projects/{projectKey}/jira-component-version-ranges",
+            pathParams = mapOf("projectKey" to "CARDS"),
+            baseline = baseline,
+            candidate = candidate,
+        )
+
+        val recorded =
+            DiffCollector.snapshot().single { it.category == DiffClassifier.STRUCTURAL_DIFF }
+        assertThat(recorded.entityKey).isEqualTo("CARDS / beta-fixture @ [2.0,)")
+    }
 }

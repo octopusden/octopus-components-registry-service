@@ -72,6 +72,7 @@ Both env categories cause the build to fail. They are **not** suppressible via t
 After a run, two artifacts under `build/reports/compat/`:
 
 1. **`summary.md`** — only divergences, grouped by `DiffClassifier` category. Empty file = no unclassified diffs (clean run).
+2. **`cluster-digest.md`** — active diffs grouped by endpoint + resolved entity (`componentName @ versionRange`) + normalised field path. Use this first for CARDS/ANCS jira-ranges triage instead of decoding raw `$[N]` indices.
 2. **`execution-log.md`** + **`execution-log.ndjson`** — full record of every test case (endpoint × component × params), including clean ones, with status codes and timings. Useful for verifying that a particular component-endpoint-version combination was actually exercised.
 
 ## Running locally
