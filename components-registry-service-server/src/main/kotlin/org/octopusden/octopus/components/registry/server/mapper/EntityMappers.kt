@@ -338,6 +338,13 @@ private fun buildEscrowModuleConfig(
     for (override in scalarOverrides) {
         merged.applyScalarOverride(override)
     }
+    // MIG-048: explicit enumerated ranges (other than the BASE anchor) must not
+    // inherit jira.displayName from the BASE row when no per-range override
+    // (including containment via rangeApplies) is present — V1 empty DSL blocks
+    // surface null displayName on jira-component-version-ranges.
+    if (versionRange != base.versionRange && !merged.jiraDisplayNameOverridden) {
+        merged.jiraDisplayName = null
+    }
 
     // Build aspect
     setField(config, "buildSystem", merged.buildSystem?.let { safeParseBuildSystem(it) })

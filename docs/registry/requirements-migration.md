@@ -48,6 +48,9 @@ Numbered MIG-NNN contracts registry, peer of `requirements-common.md` (SYS-NNN) 
 | MIG-040 | find-by-docker-images version-substitutes distribution | Low | integration-test | ✅ Fixed |
 | MIG-041 | importer preserves component-level artifactId CSV tokens | Medium | integration-test | ⏳ Follow-up |
 | MIG-045 | per-range jira.displayName on jira-component-version-ranges | High | unit-test | ✅ Tested |
+| MIG-046 | rangeApplies containment for enumeration endpoints (TD-010) | High | unit-test | ✅ Tested |
+| MIG-047 | compat residual clusters (gap 404, vcs registry, distribution clear) | High | unit-test | ✅ Tested |
+| MIG-048 | RANGE_PRESENCE ranges must not inherit BASE jira.displayName | High | unit-test | ✅ Tested |
 
 ---
 
@@ -1177,3 +1180,77 @@ and ignored per-range DSL overrides, causing TYPE_MISMATCH NULL↔STRING on
 `DbBackedComponentsRegistryServiceControllerTest.testMIG045006_importPersistsPerRangeJiraDisplayNameScalars_dbMode`,
 `DbBackedComponentsRegistryServiceControllerTest.testMIG045007_nullClearSurvivesComponentLevelDefault_dbMode`,
 `DbBackedComponentsRegistryServiceControllerTest.testMIG045008_perRangeJiraDisplayNameOnProjectJiraComponentVersionRanges_dbMode`
+
+---
+
+### MIG-046: rangeApplies containment for enumeration endpoints (TD-010)
+
+**Priority:** High
+**Test layer:** unit-test
+**Status:** ✅ Tested
+
+**Description:**
+Scalar and marker overrides on a broad DSL range must apply to narrower enumerated
+ranges during `jira-component-version-ranges` resolution. The version-range library
+exposes only point-in-range checks; TD-010 adds a sample-points containment heuristic.
+
+**Acceptance criteria:**
+1. `rangeApplies("[1.0,3.0)", "[1.0,2.0)")` returns true for bounded containment cases pinned by TD-010 matrix.
+2. Broad-range `jira.displayName` and `vcs.externalRegistry` overrides surface on contained enumeration ranges.
+3. Unbounded `ALL_VERSIONS` parent contains bounded child ranges.
+
+**Test method:**
+`RangeAppliesContainmentTest.TD-010 bounded rangeApplies matrix`,
+`RangeAppliesContainmentTest.MIG-046-001 broad range jira displayName override applies to contained enumeration range`,
+`RangeAppliesContainmentTest.MIG-046-002 per-range vcs externalRegistry null-clear does not inherit component default`,
+`RangeAppliesContainmentTest.MIG-046-003 per-range vcs externalRegistry override surfaces on jira-component-version-ranges`
+
+---
+
+### MIG-047: compat residual clusters (gap 404, vcs registry, distribution clear)
+
+**Priority:** High
+**Test layer:** unit-test
+**Status:** ✅ Tested
+
+**Description:**
+Close remaining [1.7] compat clusters after MIG-045/046: versions in gaps between
+DSL ranges must 404 on `/distribution`, `vcs.settings` markers must not inherit
+component/base externalRegistry, and empty distribution markers must clear
+`distribution` on jira-component-version-ranges.
+
+**Acceptance criteria:**
+1. `getResolvedComponentDefinition` returns null for versions outside every enumerated range (e.g. authmodlib 12.1.155).
+2. When `(,)` and a narrower range both match, the narrower enumerated view wins.
+3. `vcs.settings` marker with empty roots yields null `externalRegistry` without component fallback.
+4. Empty `distribution.maven` marker yields null `distribution` for that range.
+5. Import emits a companion `vcs.externalRegistry` scalar when a `vcs.settings` marker is persisted.
+
+**Test method:**
+`MIG047ResidualClustersTest.MIG-047-001 version in gap between explicit DSL ranges resolves to null`,
+`MIG047ResidualClustersTest.MIG-047-002 vcs settings marker does not inherit components vcs external registry`,
+`MIG047ResidualClustersTest.MIG-047-003 empty distribution marker clears distribution on jira ranges`,
+`MIG047VcsRegistryImportTest.MIG-047-004 emitMarkerOverrides pins vcs externalRegistry when vcs settings marker is emitted`
+
+---
+
+### MIG-048: RANGE_PRESENCE ranges must not inherit BASE jira.displayName
+
+**Priority:** High
+**Test layer:** unit-test
+**Status:** ✅ Tested
+
+**Description:**
+V1 empty DSL version blocks produce null `component.displayName` on
+`jira-component-version-ranges`. Schema-v2 enumeration bled the BASE-row
+`jira.displayName` into RANGE_PRESENCE-only explicit ranges, causing NULL↔STRING
+TYPE_MISMATCH on CARDS/ANCS compat.
+
+**Acceptance criteria:**
+1. An explicit RANGE_PRESENCE range without a `jira.displayName` override returns null displayName even when the BASE row carries one.
+2. The ALL_VERSIONS / BASE anchor range still inherits `components.jira_display_name`.
+3. Broad-range `jira.displayName` overrides still apply to contained RANGE_PRESENCE ranges via MIG-046 containment.
+
+**Test method:**
+`MIG048JiraDisplayNameRangePresenceTest.MIG-048-001 RANGE_PRESENCE explicit range does not inherit BASE jira displayName`,
+`MIG048JiraDisplayNameRangePresenceTest.MIG-048-002 broad jira displayName override still applies to contained RANGE_PRESENCE range`

@@ -3,7 +3,6 @@ package org.octopusden.octopus.components.registry.server.mapper
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
@@ -243,107 +242,6 @@ class MIG046JiraComponentVersionRangesParityTest {
         assertEquals(
             "ssh://range-registry",
             ranges.first { it.versionRange == "[2.0,)" }.vcsSettings.externalRegistry,
-        )
-    }
-
-    @Test
-    @DisplayName("MIG-047-001: version in gap between explicit DSL ranges resolves to null")
-    fun `MIG-047-001 version in gap between explicit DSL ranges resolves to null`() {
-        val comp = makeComponent("authmodlib-gap-fixture")
-        val base =
-            makeBase(comp).apply {
-                versionRange = "[10,11)"
-                isSyntheticBase = true
-            }
-        comp.configurations.addAll(
-            listOf(
-                base,
-                ComponentConfigurationEntity(
-                    component = comp,
-                    versionRange = "[10,11)",
-                    rowType = "RANGE_PRESENCE",
-                ),
-                ComponentConfigurationEntity(
-                    component = comp,
-                    versionRange = "[11,12.1)",
-                    rowType = "RANGE_PRESENCE",
-                ),
-                ComponentConfigurationEntity(
-                    component = comp,
-                    versionRange = "[12.2,)",
-                    rowType = "RANGE_PRESENCE",
-                ),
-            ),
-        )
-        stubComponent(comp)
-
-        assertNull(
-            resolver.getResolvedComponentDefinition("authmodlib-gap-fixture", "12.1.155"),
-            "12.1.155 sits in the gap between [11,12.1) and [12.2,) — must not resolve",
-        )
-        assertNotNull(resolver.getResolvedComponentDefinition("authmodlib-gap-fixture", "11.5.0"))
-    }
-
-    @Test
-    @DisplayName("MIG-047-002: vcs.settings marker does not inherit components.vcs_external_registry")
-    fun `MIG-047-002 vcs settings marker does not inherit components vcs external registry`() {
-        val comp = makeComponent("vcs-marker-registry-fixture", vcsExternalRegistry = "ssh://component-default")
-        val base =
-            makeBase(comp).apply {
-                vcsExternalRegistry = "ssh://base-registry"
-                vcsEntries.add(
-                    VcsSettingsEntryEntity(
-                        componentConfiguration = this,
-                        name = "main",
-                        vcsPath = "ssh://base-root",
-                        sortOrder = 0,
-                    ),
-                )
-            }
-        val vcsMarker = makeMarkerRow(comp, "[1.0,2.0)", MarkerAttributes.VCS_SETTINGS)
-
-        comp.configurations.addAll(listOf(base, vcsMarker))
-        stubComponent(comp)
-
-        val ranges = resolver.getJiraComponentVersionRangesByProject("SYNTH")
-        val overrideRange = ranges.first { it.versionRange == "[1.0,2.0)" }
-
-        assertNull(
-            overrideRange.vcsSettings.externalRegistry,
-            "vcs.settings marker must not fall back to components.vcs_external_registry",
-        )
-        assertEquals(0, overrideRange.vcsSettings.versionControlSystemRoots.size)
-    }
-
-    @Test
-    @DisplayName("MIG-047-003: empty distribution marker clears distribution on jira-component-version-ranges")
-    fun `MIG-047-003 empty distribution marker clears distribution on jira ranges`() {
-        val comp = makeComponent("distribution-clear-fixture")
-        comp.distributionExplicit = true
-        comp.distributionExternal = false
-        val base =
-            makeBase(comp).apply {
-                mavenArtifacts.add(
-                    org.octopusden.octopus.components.registry.server.entity.DistributionMavenArtifactEntity(
-                        componentConfiguration = this,
-                        groupPattern = "com.example",
-                        artifactPattern = "artifact",
-                        sortOrder = 0,
-                    ),
-                )
-            }
-        val distMarker =
-            makeMarkerRow(comp, "[1.0,2.0)", MarkerAttributes.DISTRIBUTION_MAVEN)
-
-        comp.configurations.addAll(listOf(base, distMarker))
-        stubComponent(comp)
-
-        val ranges = resolver.getJiraComponentVersionRangesByProject("SYNTH")
-
-        assertNotNull(ranges.first { it.versionRange == ALL_VERSIONS }.distribution?.GAV())
-        assertNull(
-            ranges.first { it.versionRange == "[1.0,2.0)" }.distribution,
-            "distribution.maven marker with no artifacts must clear distribution for the range",
         )
     }
 }
