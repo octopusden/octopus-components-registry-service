@@ -262,6 +262,13 @@ CANDIDATE_WORK_DIR="${CANDIDATE_WORK_DIR:-/tmp/crs-candidate-tc-work}"
 #                          force no-migration + git routing (top of Spring's
 #                          property-source order, so they beat service-config).
 CANDIDATE_ADDITIONAL="file:$CANDIDATE_WORKTREE/components-registry-service-server/dev/"
+# Mirror baseline's service-config layering: application.yml supplies shared
+# placeholders (domain, auth-server, …); application-qa.yml resolves
+# api-gateway.hostname so components-registry-service.yml's employee-service.url
+# can bind when enabled=true. Without these, v3+ candidates fail context init
+# on bootJar/local-stand runs even though TC docker images may bake the values in.
+CANDIDATE_ADDITIONAL="$CANDIDATE_ADDITIONAL,file:$SERVICE_CONFIG_DIR/application.yml"
+CANDIDATE_ADDITIONAL="$CANDIDATE_ADDITIONAL,file:$SERVICE_CONFIG_DIR/application-qa.yml"
 CANDIDATE_ADDITIONAL="$CANDIDATE_ADDITIONAL,file:$SERVICE_CONFIG_DIR/components-registry-service.yml"
 CANDIDATE_AUTOMIGRATE_ARG=""
 CANDIDATE_DEFAULTSOURCE_ARG=""

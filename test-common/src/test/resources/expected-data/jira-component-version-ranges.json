@@ -2079,9 +2079,12 @@
         "releaseVersionFormat": "$major.$minor.$service",
         "buildVersionFormat": "$major.$minor.$service-$fix",
         "lineVersionFormat": "$major",
-        "hotfixVersionFormat": null
+        "hotfixVersionFormat": "$major.$minor.$service-$fix.$build"
       },
-      "componentInfo": null,
+      "componentInfo": {
+        "versionPrefix": "",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
       "technical": false
     },
     "distribution": {
@@ -2109,9 +2112,12 @@
         "releaseVersionFormat": "$major.$minor.$service",
         "buildVersionFormat": "$major.$minor.$service-$fix",
         "lineVersionFormat": "$major",
-        "hotfixVersionFormat": null
+        "hotfixVersionFormat": "$major.$minor.$service-$fix.$build"
       },
-      "componentInfo": null,
+      "componentInfo": {
+        "versionPrefix": "",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
       "technical": false
     },
     "distribution": {

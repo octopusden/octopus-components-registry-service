@@ -60,6 +60,8 @@ done
 }
 
 ADDITIONAL_LOCATION="file:$CANDIDATE_WORKTREE/components-registry-service-server/dev/"
+ADDITIONAL_LOCATION="$ADDITIONAL_LOCATION,file:$SERVICE_CONFIG_DIR/application.yml"
+ADDITIONAL_LOCATION="$ADDITIONAL_LOCATION,file:$SERVICE_CONFIG_DIR/application-qa.yml"
 ADDITIONAL_LOCATION="$ADDITIONAL_LOCATION,file:$SERVICE_CONFIG_DIR/components-registry-service.yml"
 
 WORK_DIR="${WORK_DIR:-/tmp/crs-candidate-work}"

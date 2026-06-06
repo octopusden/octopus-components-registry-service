@@ -94,7 +94,7 @@ internal object MarkerAttributes {
  */
 fun ComponentEntity.toEscrowModule(
     versionRangeFactory: VersionRangeFactory,
-    @Suppress("UNUSED_PARAMETER") numericVersionFactory: NumericVersionFactory,
+    numericVersionFactory: NumericVersionFactory,
 ): EscrowModule {
     val module = EscrowModule()
     module.moduleName = this.componentKey
@@ -156,6 +156,7 @@ fun ComponentEntity.toEscrowModule(
                 base = base,
                 overrides = overrides,
                 versionRangeFactory = versionRangeFactory,
+                numericVersionFactory = numericVersionFactory,
             )
         module.moduleConfigurations.add(resolved)
     }
@@ -219,6 +220,7 @@ private fun ComponentEntity.resolveForRange(
     base: ComponentConfigurationEntity,
     overrides: List<ComponentConfigurationEntity>,
     versionRangeFactory: VersionRangeFactory,
+    numericVersionFactory: NumericVersionFactory,
 ): EscrowModuleConfig {
     // For enumeration purposes, an override applies to `range` when its own
     // range string equals `range` OR fully contains `range`. Equality is the
@@ -228,12 +230,22 @@ private fun ComponentEntity.resolveForRange(
     val scalarOverrides =
         overrides.filter {
             it.rowType == "SCALAR_OVERRIDE" &&
-                rangeApplies(parentRange = it.versionRange, childRange = range, factory = versionRangeFactory)
+                rangeApplies(
+                    parentRange = it.versionRange,
+                    childRange = range,
+                    versionRangeFactory = versionRangeFactory,
+                    numericVersionFactory = numericVersionFactory,
+                )
         }
     val markerOverrides =
         overrides.filter {
             it.rowType == "MARKER" &&
-                rangeApplies(parentRange = it.versionRange, childRange = range, factory = versionRangeFactory)
+                rangeApplies(
+                    parentRange = it.versionRange,
+                    childRange = range,
+                    versionRangeFactory = versionRangeFactory,
+                    numericVersionFactory = numericVersionFactory,
+                )
         }
 
     return buildEscrowModuleConfig(
@@ -259,14 +271,24 @@ private fun ComponentEntity.resolveForRange(
  * dropped during enumeration.
  *
  * See TD-010 (`docs/registry/tech-debt/010-range-applies-containment.md`)
- * for the matrix-tests acceptance + sample-points heuristic spec. Same
- * blocker as the partial-overlap write-side rejection item.
+ * for the matrix-tests acceptance + sample-points heuristic spec.
  */
-private fun rangeApplies(
+internal fun rangeApplies(
     parentRange: String,
     childRange: String,
-    @Suppress("UNUSED_PARAMETER") factory: VersionRangeFactory,
-): Boolean = parentRange == childRange
+    versionRangeFactory: VersionRangeFactory,
+    numericVersionFactory: NumericVersionFactory,
+): Boolean {
+    if (parentRange == childRange) {
+        return true
+    }
+    return rangeAppliesByContainment(
+        parentRange = parentRange,
+        childRange = childRange,
+        versionRangeFactory = versionRangeFactory,
+        numericVersionFactory = numericVersionFactory,
+    )
+}
 
 // ============================================================
 // Internal: build EscrowModuleConfig from base + overrides
@@ -309,20 +331,22 @@ private fun buildEscrowModuleConfig(
     // VCS — child collection. Marker override "vcs.settings" replaces base
     // children; otherwise base.vcsEntries is used.
     //
-    // `externalRegistry` is per-component scalar — a sibling of the VCS roots,
-    // not a child entry. Emit `vcsSettings` whenever either is present so a
-    // component declared in DSL as `vcsSettings { externalRegistry = "..." }`
-    // with no VCS roots round-trips correctly (the Groovy resolver kept the
-    // VCSSettings instance with externalRegistry set and roots empty; v2 was
-    // silently dropping it).
+    // Per-range `vcs.externalRegistry` is stored on configuration rows (BASE +
+    // SCALAR_OVERRIDE); component.vcsExternalRegistry is the Defaults fallback.
     val vcsEntries =
         pickMarkerChildren(
             attribute = MarkerAttributes.VCS_SETTINGS,
             markerOverrides = markerOverrides,
             baseChildren = base.vcsEntries.toList(),
         ) { it.vcsEntries.toList() }
-    if (vcsEntries.isNotEmpty() || component.vcsExternalRegistry != null) {
-        setField(config, "vcsSettings", vcsEntries.toVCSSettings(component.vcsExternalRegistry))
+    val externalRegistry =
+        if (merged.vcsExternalRegistryOverridden) {
+            merged.vcsExternalRegistry
+        } else {
+            merged.vcsExternalRegistry ?: component.vcsExternalRegistry
+        }
+    if (vcsEntries.isNotEmpty() || externalRegistry != null) {
+        setField(config, "vcsSettings", vcsEntries.toVCSSettings(externalRegistry))
     }
 
     // Distribution — composed from four family child collections, each
@@ -486,6 +510,12 @@ internal class ComponentConfigurationView {
     var jiraDisplayName: String? = null
 
     /**
+     * Tracks presence of a per-range SCALAR_OVERRIDE for `vcs.externalRegistry`.
+     */
+    var vcsExternalRegistryOverridden: Boolean = false
+    var vcsExternalRegistry: String? = null
+
+    /**
      * Tracks presence (not value) of a per-range SCALAR_OVERRIDE for
      * `jira.hotfixVersionFormat`. Set to `true` only when
      * [applyScalarOverride] processes a row whose `overriddenAttribute ==
@@ -550,6 +580,10 @@ internal class ComponentConfigurationView {
             "jira.displayName" -> {
                 jiraDisplayName = override.jiraDisplayName
                 jiraDisplayNameOverridden = true
+            }
+            "vcs.externalRegistry" -> {
+                vcsExternalRegistry = override.vcsExternalRegistry
+                vcsExternalRegistryOverridden = true
             }
 
             else -> Unit // unknown attribute path; ignore for forward-compat
@@ -687,6 +721,7 @@ internal class ComponentConfigurationView {
                 jiraVersionFormat = base.jiraVersionFormat
                 jiraHotfixVersionFormat = base.jiraHotfixVersionFormat
                 jiraDisplayName = base.jiraDisplayName
+                vcsExternalRegistry = base.vcsExternalRegistry
             }
     }
 }

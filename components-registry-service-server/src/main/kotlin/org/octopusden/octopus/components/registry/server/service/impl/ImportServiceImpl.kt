@@ -1372,6 +1372,9 @@ class ImportServiceImpl(
                 row.jiraVersionFormat = info.versionFormat
             }
         }
+
+        // vcs aspect — per-range externalRegistry (roots live on vcsEntries)
+        row.vcsExternalRegistry = cfg.vcsSettings?.externalRegistry
     }
 
     // =========================================================================
@@ -1927,6 +1930,7 @@ class ImportServiceImpl(
         diffScalar("jira.versionFormat", base.jiraVersionFormat, override.jiraVersionFormat)
         diffScalar("jira.hotfixVersionFormat", base.jiraHotfixVersionFormat, override.jiraHotfixVersionFormat)
         diffScalar("jira.displayName", base.jiraDisplayName, override.jiraDisplayName)
+        diffScalar("vcs.externalRegistry", base.vcsExternalRegistry, override.vcsExternalRegistry)
 
         return diffs
     }
@@ -1976,6 +1980,7 @@ class ImportServiceImpl(
             "jira.versionFormat" -> row.jiraVersionFormat = value?.toString()
             "jira.hotfixVersionFormat" -> row.jiraHotfixVersionFormat = value?.toString()
             "jira.displayName" -> row.jiraDisplayName = value?.toString()
+            "vcs.externalRegistry" -> row.vcsExternalRegistry = value?.toString()
             else -> LOG.warn("Unknown scalar attribute path: '{}'", attrPath)
         }
     }

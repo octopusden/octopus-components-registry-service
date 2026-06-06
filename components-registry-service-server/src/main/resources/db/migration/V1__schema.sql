@@ -167,6 +167,9 @@ CREATE TABLE component_configurations (
     -- Per-range override for `jira.displayName`. Component-level base lives on
     -- components.jira_display_name; resolver layers this column per range.
     jira_display_name                           VARCHAR(255),
+    -- Per-range override for `vcs.externalRegistry`. Component-level base lives
+    -- on components.vcs_external_registry; resolver layers this column per range.
+    vcs_external_registry                       TEXT,
     created_at                                  TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
     updated_at                                  TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
 
@@ -207,7 +210,7 @@ CREATE TABLE component_configurations (
             ))
     ),
 
-    -- All 28 typed scalar columns must be NULL on MARKER and RANGE_PRESENCE
+    -- All 29 typed scalar columns must be NULL on MARKER and RANGE_PRESENCE
     -- rows (children carry the data on markers; presence rows are pure
     -- enumeration anchors). The full "scalar override = exactly one non-NULL
     -- typed column" rule is enforced in the service layer (too verbose for
@@ -228,6 +231,7 @@ CREATE TABLE component_configurations (
         AND jira_build_version_format IS NULL AND jira_line_version_format IS NULL
         AND jira_version_prefix IS NULL AND jira_version_format IS NULL
         AND jira_hotfix_version_format IS NULL AND jira_display_name IS NULL
+        AND vcs_external_registry IS NULL
     )),
 
     -- UI-swift-sloth: BASE rows must declare a build_system. Column-level

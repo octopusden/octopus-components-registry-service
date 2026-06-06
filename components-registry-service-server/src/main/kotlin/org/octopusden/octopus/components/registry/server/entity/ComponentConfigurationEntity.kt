@@ -187,6 +187,14 @@ class ComponentConfigurationEntity(
     @Column(name = "jira_display_name")
     var jiraDisplayName: String? = null,
 
+    /**
+     * Per-range override for `vcs.externalRegistry`. The per-component base
+     * value lives on `components.vcs_external_registry`; the resolver layers
+     * this column when the row applies for the requested version range.
+     */
+    @Column(name = "vcs_external_registry")
+    var vcsExternalRegistry: String? = null,
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     var createdAt: Instant? = null,
