@@ -16,6 +16,7 @@ import org.mockito.Mockito.mock
 import org.mockito.Mockito.`when`
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
+import org.octopusden.octopus.components.registry.server.entity.DistributionDockerImageEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionMavenArtifactEntity
 import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
 import org.octopusden.octopus.components.registry.server.mapper.ALL_VERSIONS
@@ -313,5 +314,87 @@ class MIG050CompatResidualTest {
             "Explicit range must not fall back to components.vcs_external_registry",
         )
         assertEquals(1, range.vcsSettings.versionControlSystemRoots.size)
+    }
+
+    @Test
+    @DisplayName("MIG-050-005: RANGE_PRESENCE range with jira config inherits component jira.displayName")
+    fun `MIG-050-005 RANGE_PRESENCE range inherits component jira displayName`() {
+        val comp =
+            ComponentEntity(id = UUID.randomUUID(), componentKey = "c-pipes-kernel-fixture").apply {
+                jiraDisplayName = "C-Pipes Kernel"
+            }
+        val base =
+            ComponentConfigurationEntity(
+                component = comp,
+                versionRange = ALL_VERSIONS,
+                rowType = "BASE",
+                buildSystem = "MAVEN",
+                deprecated = false,
+                jiraProjectKey = "CARDS",
+            )
+        comp.configurations.addAll(
+            listOf(
+                base,
+                ComponentConfigurationEntity(
+                    component = comp,
+                    versionRange = "[03.63.00,)",
+                    rowType = "RANGE_PRESENCE",
+                ),
+            ),
+        )
+        stubComponent(comp)
+
+        val range = resolver.getJiraComponentVersionRangesByProject("CARDS")
+            .first { it.versionRange == "[03.63.00,)" }
+
+        assertEquals(
+            "C-Pipes Kernel",
+            range.component.displayName,
+            "Explicit range must inherit components.jira_display_name when BASE row has no per-range displayName",
+        )
+    }
+
+    @Test
+    @DisplayName("MIG-050-006: docker-only distribution marker inherits component explicit/external")
+    fun `MIG-050-006 docker-only distribution marker inherits component explicit external`() {
+        val comp =
+            ComponentEntity(id = UUID.randomUUID(), componentKey = "docker-inherit-fixture").apply {
+                distributionExplicit = false
+                distributionExternal = true
+            }
+        val base =
+            ComponentConfigurationEntity(
+                component = comp,
+                versionRange = ALL_VERSIONS,
+                rowType = "BASE",
+                buildSystem = "MAVEN",
+                deprecated = false,
+                jiraProjectKey = "TEST_DOCKER",
+            )
+        val dockerMarker =
+            ComponentConfigurationEntity(
+                component = comp,
+                versionRange = "(1.0.0, 2.0.0)",
+                overriddenAttribute = MarkerAttributes.DISTRIBUTION_DOCKER,
+                rowType = "MARKER",
+            ).apply {
+                dockerImages.add(
+                    DistributionDockerImageEntity(
+                        componentConfiguration = this,
+                        imageName = "test-docker-4",
+                        flavor = "amd64",
+                        sortOrder = 0,
+                    ),
+                )
+            }
+        comp.configurations.addAll(listOf(base, dockerMarker))
+        stubComponent(comp)
+
+        val range = resolver.getJiraComponentVersionRangesByProject("TEST_DOCKER")
+            .first { it.versionRange == "(1.0.0, 2.0.0)" }
+
+        assertEquals(false, range.distribution?.explicit())
+        assertEquals(true, range.distribution?.external())
+        assertEquals("test-docker-4:amd64", range.distribution?.docker())
     }
 }

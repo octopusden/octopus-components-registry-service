@@ -233,12 +233,22 @@ fun ComponentEntity.toResolvedEscrowModuleConfig(
                     false
                 }
             }
+        val scalarOverrides = matchingOverrides.filter { it.rowType == "SCALAR_OVERRIDE" }
+        val markerOverrides = matchingOverrides.filter { it.rowType == "MARKER" }
         return buildEscrowModuleConfig(
             component = this,
             base = base,
-            scalarOverrides = matchingOverrides.filter { it.rowType == "SCALAR_OVERRIDE" },
-            markerOverrides = matchingOverrides.filter { it.rowType == "MARKER" },
+            scalarOverrides = scalarOverrides,
+            markerOverrides = markerOverrides,
             versionRange = base.versionRange,
+            rangePresenceOnly =
+                isRangePresenceOnlyView(
+                    range = base.versionRange,
+                    base = base,
+                    overrides = configs.filter { it.rowType != "BASE" },
+                    scalarOverrides = scalarOverrides,
+                    markerOverrides = markerOverrides,
+                ),
         )
     }
 
@@ -320,8 +330,34 @@ private fun ComponentEntity.resolveForRange(
         scalarOverrides = scalarOverrides,
         markerOverrides = markerOverrides,
         versionRange = range,
+        rangePresenceOnly =
+            isRangePresenceOnlyView(
+                range = range,
+                base = base,
+                overrides = overrides,
+                scalarOverrides = scalarOverrides,
+                markerOverrides = markerOverrides,
+            ),
     )
 }
+
+/**
+ * True when [range] is enumerated solely via a RANGE_PRESENCE row with no
+ * scalar/marker overrides applying to that view — the MIG-048 empty DSL block
+ * case. Such ranges must not inherit BASE-row or component-level displayName
+ * when the BASE anchor carries a non-null jira.displayName.
+ */
+private fun isRangePresenceOnlyView(
+    range: String,
+    base: ComponentConfigurationEntity,
+    overrides: List<ComponentConfigurationEntity>,
+    scalarOverrides: List<ComponentConfigurationEntity>,
+    markerOverrides: List<ComponentConfigurationEntity>,
+): Boolean =
+    range != base.versionRange &&
+        overrides.any { it.rowType == "RANGE_PRESENCE" && it.versionRange == range } &&
+        scalarOverrides.isEmpty() &&
+        markerOverrides.isEmpty()
 
 /**
  * True when an override row with `parentRange` should apply to the enumeration
@@ -367,6 +403,7 @@ private fun buildEscrowModuleConfig(
     scalarOverrides: List<ComponentConfigurationEntity>,
     markerOverrides: List<ComponentConfigurationEntity>,
     versionRange: String,
+    rangePresenceOnly: Boolean,
 ): EscrowModuleConfig {
     val config = EscrowModuleConfig()
     setField(config, "versionRange", versionRange)
@@ -475,8 +512,8 @@ private fun buildEscrowModuleConfig(
             null
         } else {
             buildDistribution(
-                explicit = if (hasDistributionMarker) null else component.distributionExplicit,
-                external = if (hasDistributionMarker) null else component.distributionExternal,
+                explicit = component.distributionExplicit,
+                external = component.distributionExternal,
                 mavenArtifacts = mavenArtifacts,
                 fileUrlArtifacts = fileUrlArtifacts,
                 dockerImages = dockerImages,
@@ -491,8 +528,10 @@ private fun buildEscrowModuleConfig(
     // Jira aspect — composed from merged config scalars + component-level fields
     val jira = buildJiraComponent(
         component = component,
+        base = base,
         merged = merged,
         versionRange = versionRange,
+        rangePresenceOnly = rangePresenceOnly,
     )
     if (jira != null) {
         setField(config, "jiraConfiguration", jira)
@@ -925,8 +964,10 @@ private fun composeDockerCsv(images: List<DistributionDockerImageEntity>): Strin
 @Suppress("LongMethod")
 private fun buildJiraComponent(
     component: ComponentEntity,
+    base: ComponentConfigurationEntity,
     merged: ComponentConfigurationView,
     versionRange: String,
+    rangePresenceOnly: Boolean,
 ): JiraComponent? {
     val projectKey = merged.jiraProjectKey ?: return null
 
@@ -962,14 +1003,23 @@ private fun buildJiraComponent(
     }
 
     // Per-range jira.displayName resolution mirrors hotfixVersionFormat layering:
-    // SCALAR_OVERRIDE rows (including null-clear) win; explicit DSL ranges other
-    // than ALL_VERSIONS use the merged row value without component fallback; the
-    // ALL_VERSIONS default view still inherits components.jira_display_name when
-    // the base row carries no per-range displayName.
+    // SCALAR_OVERRIDE rows (including null-clear) win; explicit enumerated ranges
+    // inherit components.jira_display_name when the merged row has no per-range
+    // value unless MIG-048 empty-block semantics apply (RANGE_PRESENCE-only with
+    // BASE-row bleed) or a synthetic base row pins an explicit null.
     val displayName =
         when {
             merged.jiraDisplayNameOverridden -> merged.jiraDisplayName
-            versionRange != ALL_VERSIONS && merged.jiraProjectKey != null -> merged.jiraDisplayName
+            versionRange != ALL_VERSIONS && merged.jiraProjectKey != null ->
+                merged.jiraDisplayName
+                    ?: component.jiraDisplayName.takeUnless {
+                        shouldSuppressComponentJiraDisplayNameFallback(
+                            versionRange = versionRange,
+                            base = base,
+                            merged = merged,
+                            rangePresenceOnly = rangePresenceOnly,
+                        )
+                    }
             else -> merged.jiraDisplayName ?: component.jiraDisplayName
         }
 
@@ -981,6 +1031,24 @@ private fun buildJiraComponent(
         merged.jiraTechnical ?: false,
         false,
     )
+}
+
+private fun shouldSuppressComponentJiraDisplayNameFallback(
+    versionRange: String,
+    base: ComponentConfigurationEntity,
+    merged: ComponentConfigurationView,
+    rangePresenceOnly: Boolean,
+): Boolean {
+    if (merged.jiraDisplayNameOverridden) {
+        return false
+    }
+    if (rangePresenceOnly && base.jiraDisplayName != null) {
+        return true
+    }
+    if (versionRange == base.versionRange && merged.jiraDisplayName == null) {
+        return true
+    }
+    return false
 }
 
 private fun pickDocLink(
