@@ -993,6 +993,9 @@ object id19CompatClusterGateAuto : BuildType({
 
     params {
         text("COMPAT_PARALLELISM", "8", allowEmpty = false, display = ParameterDisplay.PROMPT)
+        // Minimal smoke list for teamcity-run.sh env contract. Cluster50CompatTest
+        // hardcodes CARDS/ANCS + authmodlib; authmodlib satisfies the wrapper guard.
+        text("COMPAT_SMOKE_COMPONENTS", "authmodlib", allowEmpty = false, display = ParameterDisplay.PROMPT)
         param("COMPAT_BASELINE_VERSION", "%LAST_RELEASE_VERSION%")
         param("BUILD_NUMBER", "${id10CompileUtAuto.depParamRefs.buildNumber}")
         param("COMPAT_CANDIDATE_VERSION", "%BUILD_NUMBER%")
@@ -1044,6 +1047,7 @@ object id19CompatClusterGateAuto : BuildType({
                 export CANDIDATE_LOG="${'$'}WORK_DIR/candidate.log"
                 export LOCAL_VCS_ROOT="%teamcity.build.checkoutDir%/%COMPONENTS_REGISTRY_CHECKOUT_DIR%"
                 export SERVICE_CONFIG_DIR="%teamcity.build.checkoutDir%/service-config"
+                export COMPAT_SMOKE_COMPONENTS="%COMPAT_SMOKE_COMPONENTS%"
                 export COMPAT_FULL=true
                 export COMPAT_PARALLELISM="%COMPAT_PARALLELISM%"
                 export POSTGRES_IMAGE="%DOCKER_REGISTRY_INTERNAL%/postgres:16"
