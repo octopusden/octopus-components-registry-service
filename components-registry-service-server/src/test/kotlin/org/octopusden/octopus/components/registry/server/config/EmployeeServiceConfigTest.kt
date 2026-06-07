@@ -29,6 +29,27 @@ class EmployeeServiceConfigTest {
     }
 
     @Test
+    @DisplayName("SYS-052: enabled with unresolvable placeholder in url ⇒ context starts without a client bean")
+    fun `SYS-052 unresolvable url placeholder skips bean registration`() {
+        // Mirrors the compat-stand environment: service-config ships
+        // employee-service.url=https://${api-gateway.hostname}/employee-service
+        // while api-gateway.hostname is undefined on the stand. The condition
+        // must treat the unresolvable URL as "not configured" (fail-open, no
+        // client bean) instead of failing the whole context refresh.
+        ApplicationContextRunner()
+            .withUserConfiguration(EmployeeServiceConfig::class.java)
+            .withBean(EmployeeServiceProperties::class.java, { EmployeeServiceProperties(enabled = true, url = "") })
+            .withPropertyValues(
+                "employee-service.enabled=true",
+                "employee-service.url=https://\${api-gateway.hostname}/employee-service",
+            )
+            .run { context ->
+                assertEquals(null, context.startupFailure)
+                assertEquals(false, context.containsBean("employeeServiceClient"))
+            }
+    }
+
+    @Test
     @DisplayName("non-blank url ⇒ a ClassicEmployeeServiceClient is built")
     fun `non-blank url builds client`() {
         val props =
