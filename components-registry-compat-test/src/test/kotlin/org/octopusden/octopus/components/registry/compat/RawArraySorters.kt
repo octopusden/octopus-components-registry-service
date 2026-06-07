@@ -134,7 +134,10 @@ object RawArraySorters {
      */
     fun stableSorted(endpoint: String, root: JsonNode?): JsonNode? {
         if (root == null) return null
-        val transform = transforms[endpoint] ?: return root
+        // Fold the RAW trace-replay spelling onto the templated registry key —
+        // without this the per-project endpoints fell through the exact-match
+        // map and trace replay compared Set-shape arrays positionally.
+        val transform = transforms[CompatEntityContext.canonicalEndpoint(endpoint)] ?: return root
         return transform.apply(root)
     }
 

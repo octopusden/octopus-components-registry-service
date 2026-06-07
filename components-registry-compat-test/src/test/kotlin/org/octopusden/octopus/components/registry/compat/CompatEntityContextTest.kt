@@ -51,6 +51,46 @@ class CompatEntityContextTest {
     }
 
     @Test
+    @DisplayName("resolveEntityKey works for the RAW per-project endpoint (trace-replay form, empty pathParams)")
+    fun resolveEntityKey_rawPerProjectEndpoint() {
+        val baseline =
+            mapper.readTree(
+                """
+                [
+                  {"componentName":"alpha","versionRange":"[1.0,2.0)","component":{"projectKey":"PRJX"}},
+                  {"componentName":"beta","versionRange":"[2.0,)","component":{"projectKey":"PRJX"}}
+                ]
+                """.trimIndent(),
+            )
+
+        val key =
+            CompatEntityContext.resolveEntityKey(
+                endpoint = "GET /rest/api/2/projects/PRJX/jira-component-version-ranges",
+                jsonPath = "\$[1].component.displayName",
+                pathParams = emptyMap(),
+                baselineJson = baseline,
+                candidateJson = null,
+            )
+
+        assertEquals("PRJX / beta @ [2.0,)", key)
+    }
+
+    @Test
+    @DisplayName("resolveEntityKey derives component@version from a RAW per-version path (empty pathParams)")
+    fun resolveEntityKey_rawPerVersionPath() {
+        val key =
+            CompatEntityContext.resolveEntityKey(
+                endpoint = "GET /rest/api/2/components/sample-lib/versions/12.1.155/distribution",
+                jsonPath = "$",
+                pathParams = emptyMap(),
+                baselineJson = null,
+                candidateJson = null,
+            )
+
+        assertEquals("sample-lib @ 12.1.155", key)
+    }
+
+    @Test
     @DisplayName("normalizeFieldPath collapses array indices")
     fun normalizeFieldPath_collapsesIndices() {
         assertEquals(

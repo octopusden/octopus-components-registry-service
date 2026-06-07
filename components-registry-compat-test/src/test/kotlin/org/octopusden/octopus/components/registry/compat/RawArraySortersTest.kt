@@ -206,6 +206,37 @@ class RawArraySortersTest {
 
     @Test
     @DisplayName(
+        "RAW per-project jira-ranges endpoint (trace-replay form, no {projectKey} template) is sorted too",
+    )
+    fun jiraComponentVersionRanges_perProject_rawTraceForm_zeroDiffsAfterAlignment() {
+        // TraceReplayCompatTest passes the RAW path ("…/projects/PRJX/…"), not the
+        // {projectKey} template. Before the canonical-endpoint normalisation this
+        // fell through the exact-match registry → no pre-sort → positional
+        // misalignment surfaced as symmetric TYPE_MISMATCH/ARRAY_SIZE pairs
+        // (the bulk of the 2026-06-07 oracle's per-project cluster).
+        val endpoint = "GET /rest/api/2/projects/PRJX/jira-component-version-ranges"
+
+        val baseline = factory.arrayNode().apply {
+            add(rangeEntry("alpha-fixture", "[1.0,)", displayName = "Alpha A"))
+            add(rangeEntry("beta-fixture", "[1.0,)"))
+        }
+        val candidate = factory.arrayNode().apply {
+            add(rangeEntry("beta-fixture", "[1.0,)"))
+            add(rangeEntry("alpha-fixture", "[1.0,)", displayName = "Alpha A"))
+        }
+
+        val baselineSorted = RawArraySorters.stableSorted(endpoint, baseline)
+        val candidateSorted = RawArraySorters.stableSorted(endpoint, candidate)
+
+        val diffs = JsonShape.diff(baselineSorted, candidateSorted)
+        assertTrue(
+            diffs.isEmpty(),
+            "raw trace-replay form of the per-project endpoint must sort like the template; got: $diffs",
+        )
+    }
+
+    @Test
+    @DisplayName(
         "registered v3 components endpoint: heterogeneous-shape entries produce zero diffs ONLY after alignment by component.id",
     )
     fun v3Components_heterogeneousShape_zeroDiffsOnlyAfterAlignment() {

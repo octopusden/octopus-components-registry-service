@@ -8,15 +8,42 @@ import com.fasterxml.jackson.databind.JsonNode
  * Raw-layer STRUCTURAL_DIFF messages use positional JSON paths (`$[3].field`).
  * After [RawArraySorters] alignment those indices are stable but opaque — this
  * helper maps them back to `(componentName, versionRange)` for cluster triage.
+ *
+ * Endpoint identity comes in TWO spellings: the templated form used by the
+ * endpoint-specific suites (`…/projects/{projectKey}/…`, with `pathParams`)
+ * and the RAW form used by trace/residual replay (`…/projects/PRJX/…`, empty
+ * `pathParams`). [canonicalEndpoint] folds the raw spelling onto the template
+ * so the sorter registry and the entity resolution treat both identically —
+ * before this, the raw spelling fell through both (no pre-sort → positional
+ * false-positives; no entity key → diff-of-diffs keys collapsed).
  */
 object CompatEntityContext {
     private val arrayIndex = Regex("""\$\[(\d+)\]""")
 
+    private val perProjectJiraRangesRaw =
+        Regex("""^GET /rest/api/2/projects/([^/{}]+)/jira-component-version-ranges$""")
+    private val perVersionComponentRaw =
+        Regex("""^[A-Z]+ /rest/api/\d+/components/([^/{}]+)/versions/([^/{}]+)(?:/.*)?$""")
+
+    private const val PER_PROJECT_JIRA_RANGES_TEMPLATE =
+        "GET /rest/api/2/projects/{projectKey}/jira-component-version-ranges"
+
     private val jiraRangesEndpoints =
         setOf(
             "GET /rest/api/2/common/jira-component-version-ranges",
-            "GET /rest/api/2/projects/{projectKey}/jira-component-version-ranges",
+            PER_PROJECT_JIRA_RANGES_TEMPLATE,
         )
+
+    /**
+     * Fold a RAW endpoint spelling (trace/residual replay) onto the templated
+     * form the registries are keyed on. Identity for everything else.
+     */
+    fun canonicalEndpoint(endpoint: String): String =
+        if (perProjectJiraRangesRaw.matches(endpoint)) {
+            PER_PROJECT_JIRA_RANGES_TEMPLATE
+        } else {
+            endpoint
+        }
 
     fun resolveEntityKey(
         endpoint: String,
@@ -25,7 +52,8 @@ object CompatEntityContext {
         baselineJson: JsonNode?,
         candidateJson: JsonNode?,
     ): String? {
-        if (endpoint in jiraRangesEndpoints) {
+        val canonical = canonicalEndpoint(endpoint)
+        if (canonical in jiraRangesEndpoints) {
             val index = arrayIndex.find(jsonPath)?.groupValues?.get(1)?.toIntOrNull() ?: return null
             val element =
                 elementAt(RawArraySorters.stableSorted(endpoint, baselineJson), index)
@@ -33,15 +61,21 @@ object CompatEntityContext {
                     ?: return null
             val componentName = element.path("componentName").asText("").ifBlank { "?" }
             val versionRange = element.path("versionRange").asText("").ifBlank { "?" }
-            val project = pathParams["projectKey"]?.takeIf { it.isNotBlank() }
+            val project =
+                pathParams["projectKey"]?.takeIf { it.isNotBlank() }
+                    ?: perProjectJiraRangesRaw.find(endpoint)?.groupValues?.get(1)
             return if (project == null) {
                 "$componentName @ $versionRange"
             } else {
                 "$project / $componentName @ $versionRange"
             }
         }
-        val component = pathParams["component"]?.takeIf { it.isNotBlank() }
-        val version = pathParams["version"]?.takeIf { it.isNotBlank() }
+        val component =
+            pathParams["component"]?.takeIf { it.isNotBlank() }
+                ?: perVersionComponentRaw.find(endpoint)?.groupValues?.get(1)
+        val version =
+            pathParams["version"]?.takeIf { it.isNotBlank() }
+                ?: perVersionComponentRaw.find(endpoint)?.groupValues?.get(2)
         if (component != null && version != null) {
             return "$component @ $version"
         }
