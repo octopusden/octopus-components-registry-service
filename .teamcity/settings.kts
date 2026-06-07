@@ -50,7 +50,6 @@ project {
     buildType(id15CompatManual)
     buildType(id16CompatTraceReplayManual)
     buildType(id17CompatLocalStandManual)
-    buildType(id19CompatClusterGateAuto)
     buildType(id18CompatLocalStandGitModeAuto)
     buildType(id20ValidateComponentsRegistryProductionDataAuto)
     buildType(id30DeployToOkdQaDevAuto)
@@ -67,7 +66,6 @@ project {
         id15CompatManual,
         id16CompatTraceReplayManual,
         id17CompatLocalStandManual,
-        id19CompatClusterGateAuto,
         id18CompatLocalStandGitModeAuto,
         id20ValidateComponentsRegistryProductionDataAuto,
         id30DeployToOkdQaDevAuto,
@@ -945,150 +943,11 @@ object id17CompatLocalStandManual : BuildType({
     }
 
     triggers {
-        // Auto-fire id17 after the fast [1.9] cluster-50 gate succeeds on id10's
-        // chain. Serializes postgres + port usage on the compat agent and avoids
-        // burning ~120 min on the full matrix when the target cluster still
-        // regresses. Manual Run from any branch still works.
-        finishBuildTrigger {
-            buildType = "${id19CompatClusterGateAuto.id}"
-            successfulOnly = true
-            branchFilter = """
-                +:*
-                -:main
-            """.trimIndent()
-        }
-    }
-
-    dependencies {
-        snapshot(id10CompileUtAuto) {
-            onDependencyFailure = FailureAction.CANCEL
-        }
-    }
-})
-
-// Fast cluster-50 gate: the jira-component-version-ranges + distribution
-// cluster (the ~50 active diffs from TC #3826 / #3834). Runs
-// Cluster50CompatTest only — no 30k trace replay, no components/all.txt sweep.
-// Chains before [1.7] (id17) so the full gate skips when this cluster regresses.
-// Target component/project names are confidential (open-source rule) and live
-// in server-side project parameters (COMPAT_CLUSTER_*) — never in this DSL.
-object id19CompatClusterGateAuto : BuildType({
-    id("19CompatClusterGateAuto")
-    name = "[1.9] Compat — Cluster-50 gate [AUTO]"
-
-    buildNumberPattern = "%BUILD_NUMBER%"
-
-    artifactRules = """
-        **/build/reports/** => reports
-        **/build/test-results/**/*.xml => test-results
-        /tmp/crs-id19-%teamcity.build.id%/baseline.log => logs/baseline.log
-        /tmp/crs-id19-%teamcity.build.id%/candidate.log => logs/candidate.log
-        /tmp/compat-exec-logger-marker-*.txt => diag/
-        /tmp/compat-test-report-dir.txt => diag/
-    """.trimIndent()
-
-    vcs {
-        root(AbsoluteId("Octopus_OctopusComponents_OctopusGithubVcsRoot"))
-        root(ComponentsRegistry, "+:. => %COMPONENTS_REGISTRY_CHECKOUT_DIR%")
-        root(ServiceConfig, "+:. => service-config")
-    }
-
-    params {
-        text("COMPAT_PARALLELISM", "8", allowEmpty = false, display = ParameterDisplay.PROMPT)
-        // Minimal smoke list for the teamcity-run.sh env contract. The real
-        // component names are confidential and come from the server-side
-        // project parameter COMPAT_CLUSTER_SMOKE_COMPONENTS (defined on the
-        // TC server, same pattern as %GIT_SERVER_HOSTNAME%) — never inline.
-        text("COMPAT_SMOKE_COMPONENTS", "%COMPAT_CLUSTER_SMOKE_COMPONENTS%", allowEmpty = false, display = ParameterDisplay.PROMPT)
-        param("COMPAT_BASELINE_VERSION", "%LAST_RELEASE_VERSION%")
-        param("BUILD_NUMBER", "${id10CompileUtAuto.depParamRefs.buildNumber}")
-        param("COMPAT_CANDIDATE_VERSION", "%BUILD_NUMBER%")
-        param("DOCKER_REGISTRY_INTERNAL", "%DOCKER_REGISTRY%")
-    }
-
-    steps {
-        script {
-            name = "Extract JARs from docker images"
-            id = "extract_jars"
-            scriptContent = """
-                set -euo pipefail
-                BASELINE_IMAGE="%DOCKER_REGISTRY_INTERNAL%/octopusden/components-registry-service:%COMPAT_BASELINE_VERSION%"
-                CANDIDATE_IMAGE="%DOCKER_REGISTRY_INTERNAL%/octopusden/components-registry-service:%COMPAT_CANDIDATE_VERSION%"
-                WORK_DIR="/tmp/crs-id19-%teamcity.build.id%"
-                BCID=""
-                CCID=""
-                cleanup() {
-                  [ -n "${'$'}BCID" ] && docker rm "${'$'}BCID" >/dev/null 2>&1 || true
-                  [ -n "${'$'}CCID" ] && docker rm "${'$'}CCID" >/dev/null 2>&1 || true
-                }
-                trap cleanup EXIT
-                mkdir -p "${'$'}WORK_DIR"
-                echo "Pulling baseline: ${'$'}BASELINE_IMAGE"
-                docker pull "${'$'}BASELINE_IMAGE"
-                echo "Pulling candidate: ${'$'}CANDIDATE_IMAGE"
-                docker pull "${'$'}CANDIDATE_IMAGE"
-                BCID=${'$'}(docker create "${'$'}BASELINE_IMAGE")
-                docker cp "${'$'}BCID:/app/app.jar" "${'$'}WORK_DIR/baseline.jar"
-                CCID=${'$'}(docker create "${'$'}CANDIDATE_IMAGE")
-                docker cp "${'$'}CCID:/app/app.jar" "${'$'}WORK_DIR/candidate.jar"
-                ls -lh "${'$'}WORK_DIR/baseline.jar" "${'$'}WORK_DIR/candidate.jar"
-            """.trimIndent()
-        }
-        script {
-            name = "Run cluster-50 compat"
-            id = "run_cluster_compat"
-            scriptContent = """
-                set -euo pipefail
-                if [ ! -f scripts/local-stands/teamcity-run.sh ]; then
-                    echo "::: scripts/local-stands/teamcity-run.sh not present in this checkout."
-                    echo "##teamcity[buildStatus status='SUCCESS' text='Skipped: compat-test infra absent on this branch.']"
-                    exit 0
-                fi
-                WORK_DIR="/tmp/crs-id19-%teamcity.build.id%"
-                export BASELINE_JAR="${'$'}WORK_DIR/baseline.jar"
-                export CANDIDATE_JAR="${'$'}WORK_DIR/candidate.jar"
-                export BASELINE_LOG="${'$'}WORK_DIR/baseline.log"
-                export CANDIDATE_LOG="${'$'}WORK_DIR/candidate.log"
-                export LOCAL_VCS_ROOT="%teamcity.build.checkoutDir%/%COMPONENTS_REGISTRY_CHECKOUT_DIR%"
-                export SERVICE_CONFIG_DIR="%teamcity.build.checkoutDir%/service-config"
-                export COMPAT_SMOKE_COMPONENTS="%COMPAT_SMOKE_COMPONENTS%"
-                # Cluster inputs for Cluster50CompatTest. Values are confidential
-                # server-side project parameters; never echo them to the build log.
-                export COMPAT_CLUSTER_PROJECT_KEYS="%COMPAT_CLUSTER_PROJECT_KEYS%"
-                export COMPAT_CLUSTER_DISTRIBUTION_PAIRS="%COMPAT_CLUSTER_DISTRIBUTION_PAIRS%"
-                export COMPAT_FULL=true
-                export COMPAT_PARALLELISM="%COMPAT_PARALLELISM%"
-                export POSTGRES_IMAGE="%DOCKER_REGISTRY_INTERNAL%/postgres:16"
-                export RESET_DB=1
-                export COMPONENTS_REGISTRY_SERVICE_VERSION="%COMPAT_BASELINE_VERSION%"
-                export BUILD_VERSION="%COMPAT_CANDIDATE_VERSION%"
-                bash scripts/local-stands/teamcity-run.sh --tests "org.octopusden.octopus.components.registry.compat.Cluster50CompatTest"
-            """.trimIndent()
-        }
-    }
-
-    failureConditions {
-        executionTimeoutMin = 45
-    }
-
-    features {
-        xmlReport {
-            reportType = XmlReport.XmlReportType.JUNIT
-            rules = "+:components-registry-compat-test/build/test-results/test/*.xml"
-        }
-        dockerSupport {
-            id = "DockerSupport"
-            loginToRegistry = on {
-                dockerRegistryId = "PROJECT_EXT_177,PROJECT_EXT_350,PROJECT_EXT_351"
-            }
-        }
-    }
-
-    requirements {
-        doesNotContain("env.OS_TYPE", "WIN", "RQ_2875")
-    }
-
-    triggers {
+        // Auto-fire id17 after id10 (Compile&UT) succeeds on non-main branches.
+        // The former [1.9] cluster-50 pre-gate (id19) was removed — the full
+        // matrix here is the authoritative compat gate. Manual Run from any
+        // branch still works; a run from `main` is a tautological V1-vs-V1
+        // measurement and is skipped server-side.
         finishBuildTrigger {
             buildType = "${id10CompileUtAuto.id}"
             successfulOnly = true

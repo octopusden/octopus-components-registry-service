@@ -106,23 +106,11 @@ baseline + current-chain candidate) and runs the compat-test against them,
 see [`TEAMCITY.md`](TEAMCITY.md). The wrapper [`teamcity-run.sh`](teamcity-run.sh)
 chains postgres → baseline JAR → candidate JAR → compat → teardown.
 
-**TC build types:** `[1.9]` (`id19`) runs only `Cluster50CompatTest` (the
-jira-ranges + per-version distribution ~50-diff cluster). `[1.7]` (`id17`) runs
-the full matrix + 30k trace replay and auto-fires after `[1.9]` succeeds.
-
-`Cluster50CompatTest` takes its confidential cluster inputs from
-`COMPAT_CLUSTER_PROJECT_KEYS` (CSV of jira project keys) and
-`COMPAT_CLUSTER_DISTRIBUTION_PAIRS` (`component:version,component:version`) —
-TC server-side project parameters on CI, a private env file locally. Missing
-inputs fail the test fast; values are never committed or logged (counts only).
-Locally, run the same cluster gate with stands up:
-
-```bash
-export COMPAT_CLUSTER_PROJECT_KEYS="<csv of project keys>"
-export COMPAT_CLUSTER_DISTRIBUTION_PAIRS="<component:version,component:version>"
-./gradlew :components-registry-compat-test:test \
-  --tests "org.octopusden.octopus.components.registry.compat.Cluster50CompatTest"
-```
+**TC build types:** `[1.7]` (`id17`) runs the full endpoint matrix + 30k trace
+replay and auto-fires after `[1.0]` (`id10`, Compile&UT) succeeds on non-main
+branches; `[1.8]` (`id18`) is its git-mode (no-DB) sibling. `[1.7]` is the
+authoritative compat gate. (A former `[1.9]` narrow cluster pre-check was
+removed once the full sweep was stably green.)
 
 For raw-only replay of failing tuples (fast triage, no typed layer), use
 [`residual-replay.sh`](residual-replay.sh) with `COMPAT_RESIDUAL_FILE`
