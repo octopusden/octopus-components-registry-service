@@ -266,6 +266,7 @@ CANDIDATE_ADDITIONAL="$CANDIDATE_ADDITIONAL,file:$SERVICE_CONFIG_DIR/components-
 CANDIDATE_AUTOMIGRATE_ARG=""
 CANDIDATE_DEFAULTSOURCE_ARG=""
 CANDIDATE_DATABASE_ARG=""
+CANDIDATE_POOL_ARG=""
 if [ "$CANDIDATE_MODE" = "git" ]; then
   CANDIDATE_PROFILES="dev,dev-vcs-local,no-db,local"
   CANDIDATE_AUTOMIGRATE_ARG="--components-registry.auto-migrate=false"
@@ -278,6 +279,15 @@ if [ "$CANDIDATE_MODE" = "git" ]; then
   CANDIDATE_DATABASE_ARG="--components-registry.database.enabled=false"
 else
   CANDIDATE_PROFILES="dev,dev-vcs-local,dev-db-automigrate,dev-db-only,local"
+  # Hikari default (10 connections) starves under the full-sweep parallel
+  # replay on weaker agents: every request opens a routing transaction
+  # (ComponentSourceRegistryImpl.getSource) and heavy endpoints hold
+  # connections long enough that queued acquisitions time out -> sporadic
+  # one-sided 5xx diffs that poison the run (observed locally 2026-06-07,
+  # five different victims per run; never seen on TC's beefier agents).
+  # The compat gate's job is CONTRACT parity, not load testing — give the
+  # candidate enough headroom for COMPAT_PARALLELISM workers.
+  CANDIDATE_POOL_ARG="--spring.datasource.hikari.maximum-pool-size=${CANDIDATE_DB_POOL_SIZE:-32}"
 fi
 
 # --employee-service.enabled=false (candidate only): the active-employee
@@ -300,6 +310,7 @@ nohup "$JAVA_BIN" -jar "$CANDIDATE_JAR" \
   $CANDIDATE_AUTOMIGRATE_ARG \
   $CANDIDATE_DEFAULTSOURCE_ARG \
   $CANDIDATE_DATABASE_ARG \
+  $CANDIDATE_POOL_ARG \
   >"$CANDIDATE_LOG" 2>&1 &
 CANDIDATE_PID=$!
 echo "    candidate started (PID=$CANDIDATE_PID, log=$CANDIDATE_LOG)"

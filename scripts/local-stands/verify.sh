@@ -91,7 +91,7 @@ check_migration_health() {
   #   "Migration complete: total=X, migrated=Y, failed=Z, skipped=W"
   # and fall back to the outer ComponentsRegistryServiceImpl wrapper
   #   "Auto-migrate complete: X migrated, Y skipped, Z failed".
-  line=$(grep -E 'Migration complete: total=' "$log" 2>/dev/null | tail -n 1 || true)
+  line=$(grep -E 'Migration complete.*total=[0-9]+' "$log" 2>/dev/null | tail -n 1 || true)
   if [ -n "$line" ]; then
     total=$(echo    "$line" | sed -E 's/.*total=([0-9]+).*/\1/')
     migrated=$(echo "$line" | sed -E 's/.*migrated=([0-9]+).*/\1/')

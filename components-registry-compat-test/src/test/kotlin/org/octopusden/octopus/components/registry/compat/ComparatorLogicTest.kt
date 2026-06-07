@@ -517,4 +517,44 @@ class ComparatorLogicTest {
         assertThat(recorded.category).isEqualTo(DiffClassifier.VALUE_DIFF)
         assertThat(recorded.message).contains("id")
     }
+
+    @Test
+    @DisplayName("compareRaw: jira-ranges STRUCTURAL_DIFF records resolved entityKey")
+    fun compareRaw_jiraRangesStructuralDiffRecordsEntityKey() {
+        val baseline =
+            response(
+                body =
+                    """
+                    [
+                      {"componentName":"alpha-fixture","versionRange":"[1.0,2.0)","component":{"displayName":"A"}},
+                      {"componentName":"beta-fixture","versionRange":"[2.0,)","component":{"displayName":"B"}}
+                    ]
+                    """.trimIndent(),
+            )
+        val candidate =
+            response(
+                body =
+                    """
+                    [
+                      {"componentName":"alpha-fixture","versionRange":"[1.0,2.0)","component":{"displayName":"A"}},
+                      {"componentName":"beta-fixture","versionRange":"[2.0,)","component":{}}
+                    ]
+                    """.trimIndent(),
+            )
+
+        Comparators.compareRaw(
+            endpoint = "GET /rest/api/2/projects/{projectKey}/jira-component-version-ranges",
+            pathParams = mapOf("projectKey" to "PRJX"),
+            baseline = baseline,
+            candidate = candidate,
+        )
+
+        val recorded =
+            DiffCollector.snapshot().single { it.category == DiffClassifier.STRUCTURAL_DIFF }
+        assertThat(recorded.entityKey).isEqualTo("PRJX / beta-fixture @ [2.0,)")
+        // Structured path (raw, positional) — diff-of-diffs keys on its
+        // normalized form instead of parsing the free-text message.
+        assertThat(recorded.jsonPath).isEqualTo("\$[1].component.displayName")
+        assertThat(recorded.message).isEqualTo("KEY_MISSING_CANDIDATE at \$[1].component.displayName")
+    }
 }
