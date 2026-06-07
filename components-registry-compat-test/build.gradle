@@ -759,9 +759,19 @@ tasks.register('compatDiffOfDiffs') {
         def normIndices = { String s -> s == null ? '' : s.replaceAll(/\[\d+\]/, '[N]') }
         def keyOf = { Map r ->
             // jsonPath is the structured location (new records); legacy records
-            // fall back to the message (normalised + truncated — typed-layer
-            // AssertJ dumps are long but deterministic for identical payloads).
-            def loc = (r.jsonPath ?: r.message ?: '').toString()
+            // fall back to the message (normalised + truncated). EXCEPTION:
+            // typed-layer VALUE_DIFF messages are full AssertJ dumps whose
+            // leading content is the (unordered) actual collection — the same
+            // real diff produces a DIFFERENT dump head every run, so keying on
+            // it makes a stable diff oscillate FIXED+NEW between runs (observed
+            // on the common jira-ranges typed compare). Key those records on
+            // endpoint+params+category alone — conservative: distinct VALUE_DIFFs
+            // on one endpoint merge into one key, but a NEW one still surfaces
+            // when the endpoint was previously clean.
+            def loc =
+                (r.category ?: '').toString() == 'VALUE_DIFF' && r.jsonPath == null
+                    ? ''
+                    : (r.jsonPath ?: r.message ?: '').toString()
             if (loc.length() > 400) loc = loc.substring(0, 400)
             [
                 (r.endpoint ?: '').toString(),
