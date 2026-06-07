@@ -192,6 +192,33 @@ fun ComponentEntity.toResolvedEscrowModuleConfig(
             return null
         }
 
+    // MIG-042: mirror V1 EscrowConfigurationLoader.resolveComponentConfiguration —
+    // a version outside EVERY configured range resolves to NO configuration (the
+    // controller renders 404). The component's effective range is:
+    //  • ALL_VERSIONS base — everything; skip the gate (the compound "(,0),[0,)"
+    //    union is also not parseable by VersionRangeFactory.containsVersion);
+    //  • non-synthetic base (single DSL range block) — the BASE row's range alone;
+    //  • synthetic base (multiple DSL blocks) — the UNION of the base block and
+    //    every override row's range: a version in a GAP between blocks (e.g.
+    //    [11,12.1) + [12.2,) queried with 12.1.x) is out of range, exactly like
+    //    V1 (compat cluster A: 404→200 over-resolution). Unparseable/blank ranges
+    //    count as containing — conservative, never produce a false 404.
+    if (base.versionRange != ALL_VERSIONS) {
+        val containsVersion = { range: String? ->
+            range.isNullOrBlank() ||
+                range == ALL_VERSIONS ||
+                try {
+                    versionRangeFactory.create(range).containsVersion(numericVersion)
+                } catch (_: Exception) {
+                    true
+                }
+        }
+        val inEffectiveRange =
+            containsVersion(base.versionRange) ||
+                (base.isSyntheticBase && overrides.any { containsVersion(it.versionRange) })
+        if (!inEffectiveRange) return null
+    }
+
     val matchingOverrides =
         overrides.filter { override ->
             try {
