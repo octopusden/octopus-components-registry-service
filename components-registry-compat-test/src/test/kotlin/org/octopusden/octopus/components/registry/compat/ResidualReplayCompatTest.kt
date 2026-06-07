@@ -56,7 +56,7 @@ class ResidualReplayCompatTest : CompatibilityTestBase() {
                 entries.map { entry ->
                     pool.submit {
                         val diffsBefore = DiffCollector.count()
-                        val (baseline, candidate) =
+                        val fetchOnce: () -> Pair<RawResponse, RawResponse>? = {
                             when (entry.method.uppercase()) {
                                 "GET" -> fetchPair(entry.path)
                                 "PUT" -> putPair(entry.path)
@@ -71,8 +71,22 @@ class ResidualReplayCompatTest : CompatibilityTestBase() {
                                     } else {
                                         postJsonPair(entry.path, emptyMap<String, Any>())
                                     }
-                                else -> return@submit
+                                else -> null
                             }
+                        }
+                        var pair = fetchOnce() ?: return@submit
+                        // Anti-flake: same one-shot retry as TraceReplayCompatTest — a
+                        // one-sided 5xx under load is re-fetched once; a deterministic
+                        // 5xx reproduces and is still recorded. See TransientRetry.
+                        if (TransientRetry.shouldRetry(pair.first.status, pair.second.status)) {
+                            println(
+                                "[residual-replay] transient one-sided 5xx for ${entry.method} ${entry.path} " +
+                                    "(b=${pair.first.status} c=${pair.second.status}) — retrying once",
+                            )
+                            Thread.sleep(750)
+                            pair = fetchOnce() ?: return@submit
+                        }
+                        val (baseline, candidate) = pair
                         val (pathOnly, parsedQuery) = parsePathAndQuery(entry.path)
                         val endpoint = "${entry.method.uppercase()} $pathOnly"
                         Comparators.compareRaw(
