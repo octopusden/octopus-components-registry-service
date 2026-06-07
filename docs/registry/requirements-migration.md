@@ -47,6 +47,7 @@ Numbered MIG-NNN contracts registry, peer of `requirements-common.md` (SYS-NNN) 
 | MIG-039 | find-by-artifacts gates by configuration version range | High | unit-test | ✅ Tested |
 | MIG-040 | find-by-docker-images version-substitutes distribution | Low | integration-test | ✅ Fixed |
 | MIG-041 | importer preserves component-level artifactId CSV tokens | Medium | integration-test | ⏳ Follow-up |
+| MIG-042 | version resolution gated on the configured range union (out-of-range / gap versions → null, mirrors V1 404) | High | unit-test | ✅ Tested |
 
 ---
 
@@ -1138,3 +1139,49 @@ BOTH `find-by-artifacts` and `/maven-artifacts`.
 **Acceptance criteria:**
 1. All component-level `artifactId` CSV tokens are matchable by `find-by-artifacts`.
 2. `/maven-artifacts` per-range output is unchanged.
+
+### MIG-042: version resolution is gated on the component's configured range union
+
+**Priority:** High
+**Test layer:** unit-test (mapper/resolver)
+**Status:** ✅ Tested
+
+V1 `EscrowConfigurationLoader.resolveComponentConfiguration` filters module
+configurations by `versionRange.containsVersion(version)` and resolves NOTHING
+when a version is outside every configured range — the per-version endpoints
+answer 404. The v3 DB path's `toResolvedEscrowModuleConfig` returned the BASE
+row's config for any parseable version (only overrides were range-gated),
+over-resolving out-of-range versions to 200 with base/inherited data (compat
+cluster A: six 404→200 keys on the 2026-06-07 oracle; live V1 curl literals
+`{"errorMessage":"Component id <c>:<v> is not found"}`).
+
+**Fix (`EntityMappers.toResolvedEscrowModuleConfig`):** after parsing the
+numeric version, gate on the component's effective range:
+- ALL_VERSIONS base — skip (everything in range; the compound `(,0),[0,)` is
+  also not parseable as a union by `VersionRangeFactory`);
+- otherwise — gate on the UNION of the base block's range and every override
+  row's range, REGARDLESS of the synthetic flag: non-synthetic components
+  (top-level scalars) can still declare many DSL range blocks, with the BASE
+  row carrying only the first block. Versions in a GAP between blocks (e.g.
+  `[11,12.1)` + `[12.2,)` queried with `12.1.x`) return null exactly like V1.
+Unparseable/blank ranges count as containing (conservative — never a false 404).
+
+History: the earlier `fix/mig-042-version-range-gate` branch gated on the base
+range and then SKIPPED synthetic bases entirely (3823-regression fix), which
+left multi-range gap components unfixed; the union gate supersedes both
+iterations.
+
+**Acceptance criteria:**
+1. Version inside the configured range(s) resolves identically to before.
+2. Version outside a bounded non-synthetic base range resolves to null (404).
+3. Version in a gap between a synthetic-base component's range blocks resolves
+   to null (404); versions covered by any block still resolve with that
+   block's overrides.
+4. ALL_VERSIONS components are unaffected.
+
+**Test method:** `DatabaseComponentRegistryResolverTest` —
+`(9a MIG-042)`…`(9h MIG-042)` (9f is the gap case, RED before the fix; 9g is
+the non-synthetic multi-range case caught by the first full-gate iteration —
+59 NEW diffs — fixed by widening the union to all bases; 9h is the
+RANGE_PRESENCE case caught by the second iteration — empty DSL blocks count
+toward the configured range).

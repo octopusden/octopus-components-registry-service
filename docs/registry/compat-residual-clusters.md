@@ -5,6 +5,23 @@
 Open · P1 · captures the **real backward-compat regressions** surfaced by the
 prod-vs-test compat sweep after positional false-positives were removed.
 
+## 2026-06-07 burndown update (fix/compat-burndown)
+
+The "~51 active diffs" [1.7] plateau was burned down to **2** on a frozen
+TC-parity oracle (fat-JAR baseline v2.0.87 + candidate, full 30k-slice trace
+replay, same env contract as id17). Key facts:
+
+| Was | Actually | Resolution |
+|---|---|---|
+| ~44 per-project jira-ranges diffs (displayName/vcs symmetric pairs + distribution keys) | **harness noise** — trace replay passes RAW endpoint spellings; the Set-shape sorter registry and entity resolution matched only the `{projectKey}` template, so per-project responses were compared positionally | `CompatEntityContext.canonicalEndpoint` folding (commit b5a9ae09) |
+| 5 × 200→500 | transient Hikari starvation on a weak local agent (never on TC) | `TransientRetry` one-shot refetch + db-mode candidate pool headroom (`CANDIDATE_DB_POOL_SIZE`, default 32) |
+| 6 × 404→200 distribution (over-resolution) | real MIG-042 defect | configured-range **union** gate in `toResolvedEscrowModuleConfig` (tests 9a–9h; the union spans the BASE block + every non-BASE row incl. RANGE_PRESENCE; ALL_VERSIONS skips) |
+| 2 × one aggregator-parent family (jira-components count 12↔13 + an extra range in common jira-ranges) | **unresolved paradox**: both 2.0.87 and v3 classes include the aggregator parent in jira maps in unit environments, the live V1 jar excludes it (and its own per-component endpoints still serve it) | open; see the burndown session memory for the full investigation state |
+
+Per-commit regression gate: `compatDiffOfDiffs` (this module) compares a run's
+`diff-worker-*.ndjson` against the frozen oracle and fails on any NEW key —
+see `scripts/local-stands/README.md` § Diff-of-diffs gate.
+
 ## Context
 
 After PR #232 extended `RawArraySorters` to cover `/rest/api/{1,2}/components`,

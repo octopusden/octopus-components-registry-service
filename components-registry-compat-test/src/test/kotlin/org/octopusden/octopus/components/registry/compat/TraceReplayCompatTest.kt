@@ -426,28 +426,50 @@ class TraceReplayCompatTest : CompatibilityTestBase() {
                         val diffsBefore = DiffCollector.count()
                         val t0 = System.nanoTime()
                         if (verbose) log.info("→ ${entry.method} ${entry.path}")
-                        val (baseline, candidate) =
-                            try {
-                                when (entry.method.uppercase()) {
-                                    "GET" -> fetchPair(entry.path)
-                                    "POST" -> {
-                                        val body = chooseBody(entry.path, fixtures)
-                                        if (verbose) {
-                                            val bodyPreview = body.toString().take(120)
-                                            log.info("  body[${body::class.simpleName}]: $bodyPreview")
-                                        }
-                                        postJsonPair(entry.path, body)
+                        val fetchOnce: () -> Pair<RawResponse, RawResponse>? = {
+                            when (entry.method.uppercase()) {
+                                "GET" -> fetchPair(entry.path)
+                                "POST" -> {
+                                    val body = chooseBody(entry.path, fixtures)
+                                    if (verbose) {
+                                        val bodyPreview = body.toString().take(120)
+                                        log.info("  body[${body::class.simpleName}]: $bodyPreview")
                                     }
-                                    "PUT" -> putPair(entry.path)
-                                    else -> {
-                                        log.debug("skipping unsupported method ${entry.method} ${entry.path}")
-                                        return@submit
-                                    }
+                                    postJsonPair(entry.path, body)
                                 }
+                                "PUT" -> putPair(entry.path)
+                                else -> {
+                                    log.debug("skipping unsupported method ${entry.method} ${entry.path}")
+                                    null
+                                }
+                            }
+                        }
+                        var pair =
+                            try {
+                                fetchOnce() ?: return@submit
                             } catch (e: Exception) {
                                 log.warn("transport failed for ${entry.method} ${entry.path}: ${e.message}")
                                 return@submit
                             }
+                        // Anti-flake: a one-sided 5xx under load (pool starvation on a
+                        // busy agent) is not a contract divergence — re-fetch ONCE and
+                        // record the second result. A deterministic 5xx reproduces and
+                        // is still recorded. See TransientRetry.
+                        if (TransientRetry.shouldRetry(pair.first.status, pair.second.status)) {
+                            log.warn(
+                                "transient one-sided 5xx for ${entry.method} ${entry.path} " +
+                                    "(b=${pair.first.status} c=${pair.second.status}) — retrying once",
+                            )
+                            Thread.sleep(RETRY_BACKOFF_MS)
+                            pair =
+                                try {
+                                    fetchOnce() ?: return@submit
+                                } catch (e: Exception) {
+                                    log.warn("transport failed on retry for ${entry.method} ${entry.path}: ${e.message}")
+                                    return@submit
+                                }
+                        }
+                        val (baseline, candidate) = pair
                         val dtMs = (System.nanoTime() - t0) / 1_000_000
                         val (pathOnly, parsedQuery) = parsePathAndQuery(entry.path)
                         val endpoint = "${entry.method} $pathOnly"
@@ -616,6 +638,9 @@ class TraceReplayCompatTest : CompatibilityTestBase() {
     }
 
     companion object {
+        /** Backoff before the single anti-flake re-fetch of a one-sided 5xx tuple. */
+        private const val RETRY_BACKOFF_MS = 750L
+
         /**
          * Split a request path of the form `"/foo/bar?k=v&k2=v2"` into:
          *  - `pathOnly`  — everything before the FIRST `?` (or the whole string if no `?`),

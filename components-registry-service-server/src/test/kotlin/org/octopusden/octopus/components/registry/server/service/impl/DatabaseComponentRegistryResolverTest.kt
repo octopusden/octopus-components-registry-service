@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.mockito.Mockito.mock
@@ -666,6 +667,176 @@ class DatabaseComponentRegistryResolverTest {
         assertNotNull(buildParams)
         // No tool marker matched → tools list is empty
         assertEquals(0, buildParams!!.tools.size)
+    }
+
+    // ========================================================================
+    // (9) MIG-042: configured-range gate — version outside EVERY configured
+    // range → null (mirrors V1 EscrowConfigurationLoader.resolveComponentConfiguration
+    // returning no config → HTTP 404). Tests 9a–9e salvaged from the
+    // fix/mig-042-version-range-gate branch (e3d252c8 + 923d6c71); 9f is the
+    // gap case those iterations never covered — the live cluster-A shape.
+    // ========================================================================
+
+    @Test
+    @DisplayName("MIG-042: base with bounded range - version inside range resolves non-null")
+    fun `(9a MIG-042) base with bounded range - version inside range resolves`() {
+        val comp = makeComponent("COMP9A")
+        val base = makeBase(comp, versionRange = "[1.0,2.0)", javaVersion = "11")
+        comp.configurations.add(base)
+        stubComponent(comp)
+
+        val cfg = resolver.getResolvedComponentDefinition("COMP9A", "1.5.0")
+        assertNotNull(cfg)
+        assertEquals("11", cfg!!.buildConfiguration?.javaVersion)
+    }
+
+    @Test
+    @DisplayName("MIG-042: base with bounded range - version outside range returns null (mirrors V1 404)")
+    fun `(9b MIG-042) base with bounded range - version outside range returns null`() {
+        val comp = makeComponent("COMP9B")
+        val base = makeBase(comp, versionRange = "[1.0,2.0)", javaVersion = "11")
+        comp.configurations.add(base)
+        stubComponent(comp)
+
+        // 3.0.0 is outside [1.0,2.0) → V1 returns 404 → v3 must return null
+        assertNull(resolver.getResolvedComponentDefinition("COMP9B", "3.0.0"))
+    }
+
+    @Test
+    @DisplayName("MIG-042: base with ALL_VERSIONS range - any version still resolves (no regression)")
+    fun `(9c MIG-042) base with ALL_VERSIONS range - any version still resolves`() {
+        val comp = makeComponent("COMP9C")
+        val base = makeBase(comp, javaVersion = "8")
+        comp.configurations.add(base)
+        stubComponent(comp)
+
+        assertNotNull(resolver.getResolvedComponentDefinition("COMP9C", "0.0.1"))
+        assertNotNull(resolver.getResolvedComponentDefinition("COMP9C", "999.0.0"))
+    }
+
+    @Test
+    @DisplayName("MIG-042: non-synthetic single-range base - version outside range returns null")
+    fun `(9d MIG-042) non-synthetic single-range base - out-of-range returns null`() {
+        // A component with exactly ONE explicit range block (isSyntheticBase = false):
+        // the BASE row's range IS the component's whole configured range. V1 has no
+        // config for a version outside it → 404 → null here.
+        val comp = makeComponent("COMP9D")
+        val base = makeBase(comp, versionRange = "[1.0,2.0)", isSyntheticBase = false, javaVersion = "11")
+        comp.configurations.add(base)
+        stubComponent(comp)
+
+        assertNull(resolver.getResolvedComponentDefinition("COMP9D", "0.5.0"))
+        assertNull(resolver.getResolvedComponentDefinition("COMP9D", "3.0.0"))
+        val cfg = resolver.getResolvedComponentDefinition("COMP9D", "1.5.0")
+        assertNotNull(cfg)
+        assertEquals("11", cfg!!.buildConfiguration?.javaVersion)
+    }
+
+    @Test
+    @DisplayName("MIG-042: synthetic-base multi-range - version in second range resolves (V1 parity)")
+    fun `(9e MIG-042) synthetic-base multi-range - version in second range resolves`() {
+        // Two adjacent DSL range blocks "(,1.0)" + "[1.0,)": the synthetic BASE row
+        // holds only the FIRST block's range. A version covered by the SECOND block
+        // must still resolve — gating on the base block alone broke whole component
+        // families on compat run 3823 (the original MIG-042 over-reach).
+        val comp = makeComponent("COMP9E")
+        val base = makeBase(comp, versionRange = "(,1.0)", isSyntheticBase = true, javaVersion = "8")
+        val overrideRow = makeScalarOverrideRow(comp, "[1.0,)", "build.javaVersion")
+        overrideRow.javaVersion = "11"
+        comp.configurations.addAll(listOf(base, overrideRow))
+        stubComponent(comp)
+
+        val cfgOverride = resolver.getResolvedComponentDefinition("COMP9E", "1.5.0")
+        assertNotNull(cfgOverride)
+        assertEquals("11", cfgOverride!!.buildConfiguration?.javaVersion)
+
+        val cfgBase = resolver.getResolvedComponentDefinition("COMP9E", "0.5.0")
+        assertNotNull(cfgBase)
+        assertEquals("8", cfgBase!!.buildConfiguration?.javaVersion)
+    }
+
+    @Test
+    @DisplayName("MIG-042: synthetic-base multi-range with a GAP - version in the gap returns null (cluster A)")
+    fun `(9f MIG-042) synthetic-base multi-range with gap - version in gap returns null`() {
+        // The live cluster-A shape (V1 oracle, curl 2026-06-07): a component declares
+        // range blocks [10,11), [11,12.1) and [12.2,) — versions 12.1.x fall in the
+        // GAP between the last two blocks. V1 resolves NO configuration there and the
+        // endpoint answers 404 {"errorMessage":"Component id <comp>:12.1.155 is not
+        // found"}; v3 must return null instead of over-resolving from the base row.
+        // The component's effective range is the UNION of all its blocks.
+        val comp = makeComponent("COMP9F")
+        val base = makeBase(comp, versionRange = "[10,11)", isSyntheticBase = true, javaVersion = "7")
+        val second = makeScalarOverrideRow(comp, "[11,12.1)", "build.javaVersion")
+        second.javaVersion = "8"
+        val third = makeScalarOverrideRow(comp, "[12.2,)", "build.javaVersion")
+        third.javaVersion = "17"
+        comp.configurations.addAll(listOf(base, second, third))
+        stubComponent(comp)
+
+        // 12.1.155 / 12.1.156 are in the gap [12.1,12.2) → V1 404 → null
+        assertNull(resolver.getResolvedComponentDefinition("COMP9F", "12.1.155"))
+        assertNull(resolver.getResolvedComponentDefinition("COMP9F", "12.1.156"))
+        // versions covered by each block still resolve
+        assertEquals("7", resolver.getResolvedComponentDefinition("COMP9F", "10.5")!!.buildConfiguration?.javaVersion)
+        assertEquals("8", resolver.getResolvedComponentDefinition("COMP9F", "11.5")!!.buildConfiguration?.javaVersion)
+        assertEquals("17", resolver.getResolvedComponentDefinition("COMP9F", "12.2.5")!!.buildConfiguration?.javaVersion)
+        // below every block → null as well
+        assertNull(resolver.getResolvedComponentDefinition("COMP9F", "9.0"))
+    }
+
+    @Test
+    @DisplayName("MIG-042: NON-synthetic multi-range - version covered by an override block resolves (gate uses the union)")
+    fun `(9g MIG-042) non-synthetic multi-range - version in override block resolves`() {
+        // Live-victim shape from the first union-gate iteration (59 NEW on the
+        // full gate): a component WITH top-level scalars (isSyntheticBase=false)
+        // AND multiple DSL range blocks. The BASE row carries only the first
+        // block's range; later blocks live on override rows. Gating non-synthetic
+        // bases on the BASE range alone 404'd every version covered by a later
+        // block (V1 answers 200 there). The effective range is ALWAYS the union
+        // of base + override ranges, regardless of the synthetic flag.
+        val comp = makeComponent("COMP9G")
+        val base = makeBase(comp, versionRange = "[1.0,1.1)", isSyntheticBase = false, javaVersion = "8")
+        val later = makeScalarOverrideRow(comp, "[1.1,)", "build.javaVersion")
+        later.javaVersion = "17"
+        comp.configurations.addAll(listOf(base, later))
+        stubComponent(comp)
+
+        // 1.1.759 is outside the BASE block but inside the later block → resolves (V1=200)
+        val cfg = resolver.getResolvedComponentDefinition("COMP9G", "1.1.759")
+        assertNotNull(cfg)
+        assertEquals("17", cfg!!.buildConfiguration?.javaVersion)
+        // base block still resolves
+        assertEquals("8", resolver.getResolvedComponentDefinition("COMP9G", "1.0.5")!!.buildConfiguration?.javaVersion)
+        // below every block → null (V1 404)
+        assertNull(resolver.getResolvedComponentDefinition("COMP9G", "0.5"))
+    }
+
+    @Test
+    @DisplayName("MIG-042: version covered only by an EMPTY DSL block (RANGE_PRESENCE row) resolves — union includes presence rows")
+    fun `(9h MIG-042) version covered by a RANGE_PRESENCE row resolves`() {
+        // Second live-victim shape from the full gate (59 NEW persisted through
+        // iteration 2): components whose covering DSL blocks are EMPTY
+        // ("[1.1,2.0)" {}) — imported as RANGE_PRESENCE rows, not
+        // SCALAR_OVERRIDE/MARKER. The union gate must count EVERY non-BASE
+        // row's range; a presence row contributes no overrides but proves the
+        // version is configured (V1 answers 200 with base-inherited data).
+        val comp = makeComponent("COMP9H")
+        val base = makeBase(comp, versionRange = "[1.0,1.1)", isSyntheticBase = false, javaVersion = "8")
+        val presence =
+            ComponentConfigurationEntity(
+                component = comp,
+                versionRange = "[1.1,2.0)",
+                rowType = "RANGE_PRESENCE",
+            )
+        comp.configurations.addAll(listOf(base, presence))
+        stubComponent(comp)
+
+        // 1.1.759 is covered only by the presence row → must resolve with base config
+        val cfg = resolver.getResolvedComponentDefinition("COMP9H", "1.1.759")
+        assertNotNull(cfg)
+        assertEquals("8", cfg!!.buildConfiguration?.javaVersion)
+        // 2.5 is in the gap above every block → null (V1 404)
+        assertNull(resolver.getResolvedComponentDefinition("COMP9H", "2.5"))
     }
 
     // ========================================================================

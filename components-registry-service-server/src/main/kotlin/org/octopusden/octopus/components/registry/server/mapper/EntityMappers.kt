@@ -192,6 +192,41 @@ fun ComponentEntity.toResolvedEscrowModuleConfig(
             return null
         }
 
+    // MIG-042: mirror V1 EscrowConfigurationLoader.resolveComponentConfiguration —
+    // a version outside EVERY configured range resolves to NO configuration (the
+    // controller renders 404). The component's effective range is:
+    //  • ALL_VERSIONS base — everything; skip the gate (the compound "(,0),[0,)"
+    //    union is also not parseable by VersionRangeFactory.containsVersion);
+    //  • otherwise — the UNION of the base block's range and every override
+    //    row's range, REGARDLESS of the synthetic flag: a NON-synthetic
+    //    component (one with top-level scalars) can still declare many DSL
+    //    range blocks, and the BASE row carries only the FIRST block — gating
+    //    on it alone 404'd every version covered by a later block (59 NEW on
+    //    the first gate iteration). A version in a GAP between blocks (e.g.
+    //    [11,12.1) + [12.2,) queried with 12.1.x) is out of the union, exactly
+    //    like V1 (compat cluster A: 404→200 over-resolution). Unparseable or
+    //    blank ranges count as containing — conservative, never a false 404.
+    if (base.versionRange != ALL_VERSIONS) {
+        val containsVersion = { range: String? ->
+            range.isNullOrBlank() ||
+                range == ALL_VERSIONS ||
+                try {
+                    versionRangeFactory.create(range).containsVersion(numericVersion)
+                } catch (_: Exception) {
+                    true
+                }
+        }
+        // Every non-BASE row participates in the union — including RANGE_PRESENCE
+        // rows: an EMPTY DSL block ("[1.1,2.0)" {}) persists as a presence row
+        // that carries no overrides but still proves the version is configured
+        // (V1 serves base-inherited data there; gating presence-covered versions
+        // out produced the second wave of 59 NEW on the full gate).
+        val inEffectiveRange =
+            containsVersion(base.versionRange) ||
+                configs.any { it.rowType != "BASE" && containsVersion(it.versionRange) }
+        if (!inEffectiveRange) return null
+    }
+
     val matchingOverrides =
         overrides.filter { override ->
             try {
