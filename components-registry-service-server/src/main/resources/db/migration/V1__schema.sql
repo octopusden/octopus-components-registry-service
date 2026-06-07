@@ -131,7 +131,6 @@ CREATE TABLE component_configurations (
     is_synthetic_base                           BOOLEAN NOT NULL DEFAULT false, -- true on base row when DSL had no top-level fields
     -- BUILD aspect:
     build_system                                VARCHAR(50),
-    build_system_version                        VARCHAR(50),
     java_version                                VARCHAR(50),
     maven_version                               VARCHAR(50),
     gradle_version                              VARCHAR(50),
@@ -210,7 +209,7 @@ CREATE TABLE component_configurations (
     -- typed column" rule is enforced in the service layer (too verbose for
     -- CHECK with 28 columns).
     CHECK (row_type NOT IN ('MARKER', 'RANGE_PRESENCE') OR (
-        build_system IS NULL AND build_system_version IS NULL AND java_version IS NULL
+        build_system IS NULL AND java_version IS NULL
         AND maven_version IS NULL AND gradle_version IS NULL AND build_file_path IS NULL
         AND deprecated IS NULL AND required_project IS NULL AND project_version IS NULL
         AND system_properties IS NULL AND build_tasks IS NULL AND escrow_build_task IS NULL
