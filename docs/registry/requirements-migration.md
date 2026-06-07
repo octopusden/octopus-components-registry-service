@@ -1159,9 +1159,10 @@ cluster A: six 404→200 keys on the 2026-06-07 oracle; live V1 curl literals
 numeric version, gate on the component's effective range:
 - ALL_VERSIONS base — skip (everything in range; the compound `(,0),[0,)` is
   also not parseable as a union by `VersionRangeFactory`);
-- non-synthetic base (single DSL range block) — gate on the BASE row's range;
-- synthetic base (multiple DSL blocks) — gate on the UNION of the base block
-  and every override row's range, so versions in a GAP between blocks (e.g.
+- otherwise — gate on the UNION of the base block's range and every override
+  row's range, REGARDLESS of the synthetic flag: non-synthetic components
+  (top-level scalars) can still declare many DSL range blocks, with the BASE
+  row carrying only the first block. Versions in a GAP between blocks (e.g.
   `[11,12.1)` + `[12.2,)` queried with `12.1.x`) return null exactly like V1.
 Unparseable/blank ranges count as containing (conservative — never a false 404).
 
@@ -1179,4 +1180,6 @@ iterations.
 4. ALL_VERSIONS components are unaffected.
 
 **Test method:** `DatabaseComponentRegistryResolverTest` —
-`(9a MIG-042)`…`(9f MIG-042)` (9f is the gap case; RED before the fix).
+`(9a MIG-042)`…`(9g MIG-042)` (9f is the gap case, RED before the fix; 9g is
+the non-synthetic multi-range case caught by the first full-gate iteration —
+59 NEW diffs — and fixed by widening the union to all bases).

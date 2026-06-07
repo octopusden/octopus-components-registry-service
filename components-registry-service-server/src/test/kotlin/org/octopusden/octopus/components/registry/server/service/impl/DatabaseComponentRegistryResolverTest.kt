@@ -784,6 +784,33 @@ class DatabaseComponentRegistryResolverTest {
         assertNull(resolver.getResolvedComponentDefinition("COMP9F", "9.0"))
     }
 
+    @Test
+    @DisplayName("MIG-042: NON-synthetic multi-range - version covered by an override block resolves (gate uses the union)")
+    fun `(9g MIG-042) non-synthetic multi-range - version in override block resolves`() {
+        // Live-victim shape from the first union-gate iteration (59 NEW on the
+        // full gate): a component WITH top-level scalars (isSyntheticBase=false)
+        // AND multiple DSL range blocks. The BASE row carries only the first
+        // block's range; later blocks live on override rows. Gating non-synthetic
+        // bases on the BASE range alone 404'd every version covered by a later
+        // block (V1 answers 200 there). The effective range is ALWAYS the union
+        // of base + override ranges, regardless of the synthetic flag.
+        val comp = makeComponent("COMP9G")
+        val base = makeBase(comp, versionRange = "[1.0,1.1)", isSyntheticBase = false, javaVersion = "8")
+        val later = makeScalarOverrideRow(comp, "[1.1,)", "build.javaVersion")
+        later.javaVersion = "17"
+        comp.configurations.addAll(listOf(base, later))
+        stubComponent(comp)
+
+        // 1.1.759 is outside the BASE block but inside the later block → resolves (V1=200)
+        val cfg = resolver.getResolvedComponentDefinition("COMP9G", "1.1.759")
+        assertNotNull(cfg)
+        assertEquals("17", cfg!!.buildConfiguration?.javaVersion)
+        // base block still resolves
+        assertEquals("8", resolver.getResolvedComponentDefinition("COMP9G", "1.0.5")!!.buildConfiguration?.javaVersion)
+        // below every block → null (V1 404)
+        assertNull(resolver.getResolvedComponentDefinition("COMP9G", "0.5"))
+    }
+
     // ========================================================================
     // Companion
     // ========================================================================

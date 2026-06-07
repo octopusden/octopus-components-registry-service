@@ -197,12 +197,15 @@ fun ComponentEntity.toResolvedEscrowModuleConfig(
     // controller renders 404). The component's effective range is:
     //  • ALL_VERSIONS base — everything; skip the gate (the compound "(,0),[0,)"
     //    union is also not parseable by VersionRangeFactory.containsVersion);
-    //  • non-synthetic base (single DSL range block) — the BASE row's range alone;
-    //  • synthetic base (multiple DSL blocks) — the UNION of the base block and
-    //    every override row's range: a version in a GAP between blocks (e.g.
-    //    [11,12.1) + [12.2,) queried with 12.1.x) is out of range, exactly like
-    //    V1 (compat cluster A: 404→200 over-resolution). Unparseable/blank ranges
-    //    count as containing — conservative, never produce a false 404.
+    //  • otherwise — the UNION of the base block's range and every override
+    //    row's range, REGARDLESS of the synthetic flag: a NON-synthetic
+    //    component (one with top-level scalars) can still declare many DSL
+    //    range blocks, and the BASE row carries only the FIRST block — gating
+    //    on it alone 404'd every version covered by a later block (59 NEW on
+    //    the first gate iteration). A version in a GAP between blocks (e.g.
+    //    [11,12.1) + [12.2,) queried with 12.1.x) is out of the union, exactly
+    //    like V1 (compat cluster A: 404→200 over-resolution). Unparseable or
+    //    blank ranges count as containing — conservative, never a false 404.
     if (base.versionRange != ALL_VERSIONS) {
         val containsVersion = { range: String? ->
             range.isNullOrBlank() ||
@@ -214,8 +217,7 @@ fun ComponentEntity.toResolvedEscrowModuleConfig(
                 }
         }
         val inEffectiveRange =
-            containsVersion(base.versionRange) ||
-                (base.isSyntheticBase && overrides.any { containsVersion(it.versionRange) })
+            containsVersion(base.versionRange) || overrides.any { containsVersion(it.versionRange) }
         if (!inEffectiveRange) return null
     }
 
