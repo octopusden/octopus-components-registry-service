@@ -20,6 +20,8 @@ data class DiffRecord(
     val layer: String,
     val baselineValue: String? = null,
     val candidateValue: String? = null,
+    /** Resolved entity identity for triage (e.g. `PRJX / foo @ [1.0,2.0)` or `some-lib @ 12.1.155`). */
+    val entityKey: String? = null,
     val diagnosticHeaders: Map<String, HeaderPair>? = null,
     val message: String? = null,
 ) {

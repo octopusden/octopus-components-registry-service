@@ -103,6 +103,17 @@ case_clean_inner_marker() {
   return 0
 }
 
+case_clean_inner_marker_with_duration() {
+  local log="$TMPD/log-clean-duration.txt"
+  write_log "$log" \
+    "2026-05-16 10:05 INFO  Migration complete in 12345 ms: total=948, migrated=948, failed=0, skipped=0"
+  local out
+  out=$(check_migration_health "$log")
+  assert_contains "total=948" "$out" "duration-form summary line" || return 1
+  assert_contains "failed=0" "$out" "duration-form summary line" || return 1
+  return 0
+}
+
 case_polluted_inner_marker_exits_4() {
   local log="$TMPD/log-polluted-inner.txt"
   write_log "$log" \
@@ -331,6 +342,7 @@ case_wait_port_free_eventually_becomes_free() {
 
 echo "=== check_migration_health ==="
 run_case "clean run, inner marker → no POLLUTED" case_clean_inner_marker
+run_case "clean run, inner marker with duration → no POLLUTED" case_clean_inner_marker_with_duration
 run_case "polluted run, inner marker → exit 4"   case_polluted_inner_marker_exits_4
 run_case "polluted + ALLOW_PARTIAL=1 → exit 0"   case_polluted_allows_partial
 run_case "outer wrapper only, '10 failed' parsed exactly" case_outer_wrapper_only_polluted

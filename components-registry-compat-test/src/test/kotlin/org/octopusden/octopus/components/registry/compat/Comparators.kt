@@ -57,6 +57,7 @@ object Comparators {
                     layer = "raw",
                     baselineValue = baseline.status.toString(),
                     candidateValue = candidate.status.toString(),
+                    entityKey = CompatEntityContext.resolveEntityKey(endpoint, "", pathParams, null, null),
                     message = "transport failure on " + listOfNotNull(
                         "baseline".takeIf { baselineTransportFailed },
                         "candidate".takeIf { candidateTransportFailed },
@@ -75,6 +76,7 @@ object Comparators {
                     layer = "raw",
                     baselineValue = baseline.status.toString(),
                     candidateValue = candidate.status.toString(),
+                    entityKey = CompatEntityContext.resolveEntityKey(endpoint, "", pathParams, null, null),
                 ),
             )
         }
@@ -114,6 +116,14 @@ object Comparators {
             val shapeDiffs = JsonShape.diff(baselineForShape, candidateForShape)
             for (sd in shapeDiffs) {
                 categories += DiffClassifier.STRUCTURAL_DIFF
+                val entityKey =
+                    CompatEntityContext.resolveEntityKey(
+                        endpoint = endpoint,
+                        jsonPath = sd.path,
+                        pathParams = pathParams,
+                        baselineJson = baselineForShape,
+                        candidateJson = candidateForShape,
+                    )
                 DiffCollector.record(
                     DiffRecord(
                         ts = ts,
@@ -124,6 +134,7 @@ object Comparators {
                         layer = "raw",
                         baselineValue = sd.baseline,
                         candidateValue = sd.candidate,
+                        entityKey = entityKey,
                         message = "${sd.kind} at ${sd.path}",
                     ),
                 )

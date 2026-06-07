@@ -464,11 +464,12 @@ tasks.register('compatibilityReporter') {
             params.collect { k, v -> "${k}=${v}" }.join('; ')
         }
         def renderTable = { List<Map> recs, StringBuilder out ->
-            out << "| Endpoint | Params | Layer | Detail | Baseline | Candidate |\n"
-            out << "|---|---|---|---|---|---|\n"
+            out << "| Endpoint | Entity | Params | Layer | Detail | Baseline | Candidate |\n"
+            out << "|---|---|---|---|---|---|---|\n"
             recs.each { r ->
                 def detail = r.message ?: ''
                 out << '| ' << mdEscape(r.endpoint) <<
+                    ' | ' << mdEscape(r.entityKey ?: '') <<
                     ' | ' << mdEscape(renderParams(r.pathParams as Map ?: [:] as Map)) <<
                     ' | ' << mdEscape(r.layer) <<
                     ' | ' << mdEscape(truncate(detail, 800)) <<
@@ -476,6 +477,21 @@ tasks.register('compatibilityReporter') {
                     ' | ' << mdEscape(truncate(r.candidateValue, 120)) <<
                     ' |\n'
             }
+        }
+        def clusterKeyFor = { Map r ->
+            def endpoint = (r.endpoint ?: '').toString()
+            def entity = (r.entityKey ?: renderParams(r.pathParams as Map ?: [:] as Map) ?: '-').toString()
+            def field = (r.message ?: '').toString().replaceAll(/\$\[\d+\]/, '$[N]')
+            "${endpoint} | ${entity} | ${field}"
+        }
+        def buildClusterDigest = { Map activeCats ->
+            def counts = [:].withDefault { 0 }
+            activeCats.each { cat, recs ->
+                recs.each { rec ->
+                    counts[clusterKeyFor(rec as Map)]++
+                }
+            }
+            counts.sort { -it.value }
         }
         def renderSuppressedTable = { List<Map> recs, StringBuilder out ->
             out << "| Endpoint | Params | Layer | Baseline | Candidate | Reason | Regression Test |\n"
@@ -522,6 +538,18 @@ tasks.register('compatibilityReporter') {
         }
 
         if (!activeByCategory.isEmpty()) {
+            def clusterCounts = buildClusterDigest(activeByCategory)
+            if (!clusterCounts.isEmpty()) {
+                sb << "## Active diff cluster digest\n\n"
+                sb << "Grouped by endpoint + resolved entity + normalised field path (`\$[N]` = any array index). "
+                sb << "Use this to triage jira-ranges residuals without decoding raw indices.\n\n"
+                sb << "| Count | Cluster |\n"
+                sb << "|---:|---|\n"
+                clusterCounts.each { key, count ->
+                    sb << "| ${count} | ${mdEscape(key)} |\n"
+                }
+                sb << "\n"
+            }
             sb << "## Endpoint divergences\n\n"
             activeByCategory.each { cat, recs ->
                 sb << "### ${cat} (${recs.size()})\n\n"
@@ -536,6 +564,28 @@ tasks.register('compatibilityReporter') {
             sb << "_No diffs recorded — clean compat run._\n"
         }
         summary.text = sb.toString()
+
+        def clusterMd = new File(dir, 'cluster-digest.md')
+        if (!activeByCategory.isEmpty()) {
+            def clusterCounts = buildClusterDigest(activeByCategory)
+            def csb = new StringBuilder()
+            csb << "# Compat Cluster Digest\n\n"
+            csb << "Generated: ${new Date().format("yyyy-MM-dd HH:mm:ss Z")}\n\n"
+            csb << "- Active endpoint divergences: ${activeRegularTotal}\n"
+            csb << "- Distinct clusters: ${clusterCounts.size()}\n\n"
+            csb << "| Count | Endpoint | Entity | Field |\n"
+            csb << "|---:|---|---|---|\n"
+            clusterCounts.each { key, count ->
+                def parts = key.toString().split(' \\| ', 3)
+                def endpoint = parts.length > 0 ? parts[0] : key
+                def entity = parts.length > 1 ? parts[1] : ''
+                def field = parts.length > 2 ? parts[2] : ''
+                csb << "| ${count} | ${mdEscape(endpoint)} | ${mdEscape(entity)} | ${mdEscape(field)} |\n"
+            }
+            clusterMd.text = csb.toString()
+        } else {
+            clusterMd.text = "# Compat Cluster Digest\n\n_No active endpoint divergences._\n"
+        }
 
         execNd.withWriter('UTF-8') { w ->
             execFiles.each { f -> f.eachLine('UTF-8') { line -> w.writeLine(line) } }
