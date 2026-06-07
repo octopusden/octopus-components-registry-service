@@ -280,6 +280,10 @@ else
   CANDIDATE_PROFILES="dev,dev-vcs-local,dev-db-automigrate,dev-db-only,local"
 fi
 
+# --employee-service.enabled=false (candidate only): the active-employee
+# validation is not part of the compat comparison (the baseline predates it),
+# and service-config may carry an employee-service.url with an environment
+# placeholder the stand cannot resolve (SYS-052). Deterministically off.
 # shellcheck disable=SC2086  # CANDIDATE_*_ARG are single no-space tokens or empty
 nohup "$JAVA_BIN" -jar "$CANDIDATE_JAR" \
   --server.port="$CANDIDATE_PORT" \
@@ -292,6 +296,7 @@ nohup "$JAVA_BIN" -jar "$CANDIDATE_JAR" \
   --components-registry.version-name.service=serviceCards \
   --components-registry.version-name.minor=minorCards \
   --auth-server.disabled=true \
+  --employee-service.enabled=false \
   $CANDIDATE_AUTOMIGRATE_ARG \
   $CANDIDATE_DEFAULTSOURCE_ARG \
   $CANDIDATE_DATABASE_ARG \

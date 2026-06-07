@@ -22,7 +22,8 @@ import org.springframework.core.type.AnnotatedTypeMetadata
  *   1. `@ConditionalOnProperty("employee-service.enabled", havingValue="true")`
  *      — the @Bean factory is only considered when the flag is on; and
  *   2. [EmployeeServiceUrlConfiguredCondition] — a half-configured env
- *      (`enabled=true` but no URL) does not register the client bean.
+ *      (`enabled=true` but no URL, or a URL whose placeholder does not resolve
+ *      in this environment — SYS-052) does not register the client bean.
  *
  * When no client bean is registered, `EmployeeDirectoryService`'s
  * `ObjectProvider<EmployeeServiceClient>` resolves empty and the active-employee
@@ -64,5 +65,23 @@ class EmployeeServiceUrlConfiguredCondition : Condition {
     override fun matches(
         context: ConditionContext,
         metadata: AnnotatedTypeMetadata,
-    ): Boolean = !context.environment.getProperty("employee-service.url").isNullOrBlank()
+    ): Boolean =
+        try {
+            !context.environment.getProperty("employee-service.url").isNullOrBlank()
+        } catch (e: IllegalArgumentException) {
+            // SYS-052: the configured URL contains a placeholder that does not
+            // resolve in this environment (e.g. an api-gateway hostname absent
+            // on the local compat stands). That is a half-configured env — per
+            // the contract above it must NOT register the client bean, and it
+            // must not fail context refresh either: degrade to fail-open.
+            log.warn(
+                "employee-service.url is not resolvable in this environment — employee-service client disabled: {}",
+                e.message,
+            )
+            false
+        }
+
+    private companion object {
+        private val log = LoggerFactory.getLogger(EmployeeServiceUrlConfiguredCondition::class.java)
+    }
 }

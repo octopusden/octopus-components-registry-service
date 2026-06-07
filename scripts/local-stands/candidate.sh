@@ -87,6 +87,10 @@ else
   echo ">>> port: $CANDIDATE_PORT,  VCS root: $LOCAL_VCS_ROOT  (work-dir: $WORK_DIR),  DB: none (no-db mode)"
 fi
 echo ">>> config: $SERVICE_CONFIG_DIR (overlaid on dev/)"
+# --employee-service.enabled=false: the active-employee validation is not part
+# of the compat comparison, and service-config may carry an employee-service.url
+# with an environment placeholder the stand cannot resolve (SYS-052) — mirrors
+# teamcity-run.sh's candidate boot. Candidate only; baseline.sh stays untouched.
 exec ./gradlew :components-registry-service-server:bootRun --no-daemon --console=plain \
   --args="--server.port=$CANDIDATE_PORT \
           --spring.profiles.active=$PROFILES \
@@ -94,4 +98,5 @@ exec ./gradlew :components-registry-service-server:bootRun --no-daemon --console
           --components-registry.vcs.root=file://$LOCAL_VCS_ROOT \
           --components-registry.work-dir=$WORK_DIR \
           --components-registry.groovy-path=$WORK_DIR/src/main/resources \
-          --auth-server.disabled=true$NODB_OVERRIDE_ARGS"
+          --auth-server.disabled=true \
+          --employee-service.enabled=false$NODB_OVERRIDE_ARGS"

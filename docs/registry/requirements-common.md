@@ -60,6 +60,7 @@
 | SYS-049 | Git-history backfill records a component's first appearance with action `MIGRATED` (not `CREATE`); both audit read endpoints hide `MIGRATED` by default and opt back in via `includeMigrated=true`. `/audit/recent` additionally honours an explicit `action=MIGRATED` filter (the entity-history endpoint takes only `includeMigrated`) | High | unit + integration-test | ✅ Tested |
 | SYS-050 | Field-override (version-range) create/update/delete each publish a Component `UPDATE` audit event with an attribute-keyed diff | High | integration-test | ✅ Tested |
 | SYS-051 | TeamCity sync (automated `changedBy=system` reconciliation) does NOT write an audit row — the re-link is traced via an INFO log instead | Medium | unit-test | ✅ Tested |
+| SYS-052 | An `employee-service.url` whose placeholder does not resolve in the current environment is treated as "not configured": the client bean is not registered and context refresh succeeds (fail-open), instead of failing application boot | High | unit-test | ✅ Tested |
 
 ---
 
@@ -1720,3 +1721,37 @@ re-wire point if per-sync auditing is ever wanted).
 `SYS-051 happy path: writes TC row; counts updated; NO audit event`, plus the
 `ambiguousAutoResolved` and `mixed batch` cases assert
 `publisher.events.filterIsInstance<AuditEvent>().isEmpty()`.
+
+### SYS-052: Unresolvable employee-service.url placeholder must not fail boot
+
+**Priority:** High
+**Test layer:** unit-test
+**Status:** ✅ Tested
+
+**Motivation:**
+The shared service configuration ships `employee-service.url` as a value
+containing an environment-specific placeholder (an api-gateway hostname).
+Environments that do not define that placeholder (notably the local
+compatibility stands, where the candidate boots against a plain
+service-config checkout) previously died during context refresh:
+`EmployeeServiceUrlConfiguredCondition` resolved the property eagerly and the
+unresolvable placeholder threw `IllegalArgumentException` out of
+`Condition.matches`, failing the whole application instead of degrading. This
+took down all compat gates ([1.7]/[1.8]/[1.9]) on 2026-06-07.
+
+**Description:**
+`EmployeeServiceUrlConfiguredCondition` treats a URL whose placeholder cannot
+be resolved in the current environment exactly like a missing/blank URL: the
+condition returns `false` (no `employeeServiceClient` bean is registered, the
+active-employee check degrades to DISABLED — the documented fail-open
+behaviour) and a WARN line records why. Context refresh succeeds.
+
+**Acceptance criteria:**
+1. `employee-service.enabled=true` + `employee-service.url` with an unresolvable placeholder ⇒ application context starts.
+2. No `employeeServiceClient` bean is registered in that case.
+3. A resolvable, non-blank URL still registers the client bean (unchanged behaviour).
+4. A blank/missing URL still skips registration (unchanged behaviour).
+
+**Test method:** `EmployeeServiceConfigTest` —
+`SYS-052 unresolvable url placeholder skips bean registration` (plus the
+pre-existing blank-url and non-blank-url cases covering criteria 3–4).
