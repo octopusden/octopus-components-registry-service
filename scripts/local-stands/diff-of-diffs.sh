@@ -15,9 +15,13 @@
 #     --baseline-dir /path/to/frozen-baseline-reports \
 #     --current-dir  components-registry-compat-test/build/reports/compat
 #
-# Both dirs must contain diff-worker-*.ndjson files (the per-worker output of a
-# compat run). --current-dir defaults to the module's build/reports/compat.
-# The frozen baseline lives OUTSIDE the repo (production-derived data).
+# Both dirs must contain exec-worker-*.ndjson (proof the run executed; the gate
+# aborts without them and when the current run ran <95% of the baseline's
+# cases). diff-worker-*.ndjson is OPTIONAL: DiffCollector only writes it on the
+# first diff, so a fully-clean run (0 active diffs — the burndown's end state)
+# has none, and the gate correctly reads that as an empty diff set.
+# --current-dir defaults to the module's build/reports/compat. The frozen
+# baseline lives OUTSIDE the repo (production-derived data).
 #
 # Implementation lives in the `compatDiffOfDiffs` gradle task
 # (components-registry-compat-test/build.gradle) so it shares the ndjson
