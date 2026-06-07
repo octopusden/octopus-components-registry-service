@@ -724,10 +724,14 @@ tasks.register('compatDiffOfDiffs') {
         }
 
         def loadRecords = { File dir, String label ->
+            // No diff-worker-*.ndjson means ZERO diffs: DiffCollector only
+            // creates a worker file on its first recorded diff, so a fully-clean
+            // run (the burndown's end state — 0 active) legitimately writes none.
+            // The run-DID-execute guarantee comes from the exec-worker
+            // completeness guard run earlier (countExecCases), NOT from the
+            // presence of a diff file — so a missing diff file here is an empty
+            // diff set, not an error.
             def files = dir.listFiles({ f -> f.name.startsWith('diff-worker-') && f.name.endsWith('.ndjson') } as FileFilter) ?: []
-            if (files.size() == 0) {
-                throw new GradleException("[compat-dod] no diff-worker-*.ndjson in ${label} dir ${dir} — refusing to compare against nothing (a clean run still writes zero-or-more worker files; pass the dir of the ACTUAL run)")
-            }
             def records = []
             files.each { f ->
                 f.eachLine('UTF-8') { line ->
