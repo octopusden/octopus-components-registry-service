@@ -947,7 +947,7 @@ object id17CompatLocalStandManual : BuildType({
     triggers {
         // Auto-fire id17 after the fast [1.9] cluster-50 gate succeeds on id10's
         // chain. Serializes postgres + port usage on the compat agent and avoids
-        // burning ~120 min on the full matrix when CARDS/ANCS/distribution still
+        // burning ~120 min on the full matrix when the target cluster still
         // regresses. Manual Run from any branch still works.
         finishBuildTrigger {
             buildType = "${id19CompatClusterGateAuto.id}"
@@ -966,13 +966,15 @@ object id17CompatLocalStandManual : BuildType({
     }
 })
 
-// Fast cluster-50 gate: CARDS/ANCS jira-component-version-ranges + authmodlib
-// distribution (the ~50 active diffs from TC #3826 / #3834). Runs
+// Fast cluster-50 gate: the jira-component-version-ranges + distribution
+// cluster (the ~50 active diffs from TC #3826 / #3834). Runs
 // Cluster50CompatTest only — no 30k trace replay, no components/all.txt sweep.
 // Chains before [1.7] (id17) so the full gate skips when this cluster regresses.
+// Target component/project names are confidential (open-source rule) and live
+// in server-side project parameters (COMPAT_CLUSTER_*) — never in this DSL.
 object id19CompatClusterGateAuto : BuildType({
     id("19CompatClusterGateAuto")
-    name = "[1.9] Compat — Cluster-50 gate (CARDS/ANCS/distribution) [AUTO]"
+    name = "[1.9] Compat — Cluster-50 gate [AUTO]"
 
     buildNumberPattern = "%BUILD_NUMBER%"
 
@@ -993,9 +995,11 @@ object id19CompatClusterGateAuto : BuildType({
 
     params {
         text("COMPAT_PARALLELISM", "8", allowEmpty = false, display = ParameterDisplay.PROMPT)
-        // Minimal smoke list for teamcity-run.sh env contract. Cluster50CompatTest
-        // hardcodes CARDS/ANCS + authmodlib; authmodlib satisfies the wrapper guard.
-        text("COMPAT_SMOKE_COMPONENTS", "authmodlib", allowEmpty = false, display = ParameterDisplay.PROMPT)
+        // Minimal smoke list for the teamcity-run.sh env contract. The real
+        // component names are confidential and come from the server-side
+        // project parameter COMPAT_CLUSTER_SMOKE_COMPONENTS (defined on the
+        // TC server, same pattern as %GIT_SERVER_HOSTNAME%) — never inline.
+        text("COMPAT_SMOKE_COMPONENTS", "%COMPAT_CLUSTER_SMOKE_COMPONENTS%", allowEmpty = false, display = ParameterDisplay.PROMPT)
         param("COMPAT_BASELINE_VERSION", "%LAST_RELEASE_VERSION%")
         param("BUILD_NUMBER", "${id10CompileUtAuto.depParamRefs.buildNumber}")
         param("COMPAT_CANDIDATE_VERSION", "%BUILD_NUMBER%")
@@ -1048,6 +1052,10 @@ object id19CompatClusterGateAuto : BuildType({
                 export LOCAL_VCS_ROOT="%teamcity.build.checkoutDir%/%COMPONENTS_REGISTRY_CHECKOUT_DIR%"
                 export SERVICE_CONFIG_DIR="%teamcity.build.checkoutDir%/service-config"
                 export COMPAT_SMOKE_COMPONENTS="%COMPAT_SMOKE_COMPONENTS%"
+                # Cluster inputs for Cluster50CompatTest. Values are confidential
+                # server-side project parameters; never echo them to the build log.
+                export COMPAT_CLUSTER_PROJECT_KEYS="%COMPAT_CLUSTER_PROJECT_KEYS%"
+                export COMPAT_CLUSTER_DISTRIBUTION_PAIRS="%COMPAT_CLUSTER_DISTRIBUTION_PAIRS%"
                 export COMPAT_FULL=true
                 export COMPAT_PARALLELISM="%COMPAT_PARALLELISM%"
                 export POSTGRES_IMAGE="%DOCKER_REGISTRY_INTERNAL%/postgres:16"
