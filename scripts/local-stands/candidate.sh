@@ -66,6 +66,11 @@ WORK_DIR="${WORK_DIR:-/tmp/crs-candidate-work}"
 NODB_OVERRIDE_ARGS=""
 if [ "$MODE" = "db" ]; then
   PROFILES="dev,dev-vcs-local,dev-db-automigrate,dev-db-only,local"
+  # Same pool headroom as teamcity-run.sh db-mode: the Hikari default (10)
+  # starves under parallel compat replay on weaker hosts -> sporadic one-sided
+  # 5xx. Contract parity, not load testing — give the pool COMPAT_PARALLELISM
+  # headroom.
+  NODB_OVERRIDE_ARGS=" --spring.datasource.hikari.maximum-pool-size=${CANDIDATE_DB_POOL_SIZE:-32}"
 else
   # vcs (no-db) mode: the `no-db` profile excludes the JDBC/JPA/Flyway auto-configs
   # so the candidate boots with no database at all (issue #310); no Postgres needed.
