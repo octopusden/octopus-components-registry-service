@@ -250,7 +250,6 @@ private fun <T> ComponentConfigurationEntity.pickChildRows(
 private fun ComponentConfigurationEntity.buildAspectResponse(): BuildAspectResponse =
     BuildAspectResponse(
         buildSystem = buildSystem,
-        buildSystemVersion = buildSystemVersion,
         javaVersion = javaVersion,
         mavenVersion = mavenVersion,
         gradleVersion = gradleVersion,

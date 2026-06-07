@@ -1895,7 +1895,6 @@ class ImportServiceImpl(
         }
 
         diffScalar("build.buildSystem", base.buildSystem, override.buildSystem)
-        diffScalar("build.buildSystemVersion", base.buildSystemVersion, override.buildSystemVersion)
         diffScalar("build.javaVersion", base.javaVersion, override.javaVersion)
         diffScalar("build.mavenVersion", base.mavenVersion, override.mavenVersion)
         diffScalar("build.gradleVersion", base.gradleVersion, override.gradleVersion)
@@ -1945,7 +1944,6 @@ class ImportServiceImpl(
     ) {
         when (attrPath) {
             "build.buildSystem" -> row.buildSystem = value?.toString()
-            "build.buildSystemVersion" -> row.buildSystemVersion = value?.toString()
             "build.javaVersion" -> row.javaVersion = value?.toString()
             "build.mavenVersion" -> row.mavenVersion = value?.toString()
             "build.gradleVersion" -> row.gradleVersion = value?.toString()

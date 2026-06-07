@@ -32,7 +32,6 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentConfigu
 internal val SCALAR_ATTRIBUTE_PATHS: Set<String> =
     setOf(
         "build.buildSystem",
-        "build.buildSystemVersion",
         "build.javaVersion",
         "build.mavenVersion",
         "build.gradleVersion",
@@ -80,7 +79,6 @@ internal val SCALAR_ATTRIBUTE_PATHS: Set<String> =
 internal fun ComponentConfigurationEntity.extractScalarValue(): Any? =
     when (overriddenAttribute) {
         "build.buildSystem" -> buildSystem
-        "build.buildSystemVersion" -> buildSystemVersion
         "build.javaVersion" -> javaVersion
         "build.mavenVersion" -> mavenVersion
         "build.gradleVersion" -> gradleVersion
@@ -139,7 +137,6 @@ internal fun ComponentConfigurationEntity.applyScalarValue(
 
     when (attributePath) {
         "build.buildSystem" -> buildSystem = requireBuildSystem(attributePath, value)
-        "build.buildSystemVersion" -> buildSystemVersion = requireString(attributePath, value)
         "build.javaVersion" -> javaVersion = requireString(attributePath, value)
         "build.mavenVersion" -> mavenVersion = requireString(attributePath, value)
         "build.gradleVersion" -> gradleVersion = requireString(attributePath, value)
@@ -173,7 +170,6 @@ internal fun ComponentConfigurationEntity.applyScalarValue(
 @Suppress("LongMethod")
 private fun ComponentConfigurationEntity.clearAllScalarColumns() {
     buildSystem = null
-    buildSystemVersion = null
     javaVersion = null
     mavenVersion = null
     gradleVersion = null
