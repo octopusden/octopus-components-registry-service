@@ -414,13 +414,6 @@ private fun buildEscrowModuleConfig(
     for (override in scalarOverrides) {
         merged.applyScalarOverride(override)
     }
-    // MIG-048: explicit enumerated ranges (other than the BASE anchor) must not
-    // inherit jira.displayName from the BASE row when no per-range override
-    // (including containment via rangeApplies) is present — V1 empty DSL blocks
-    // surface null displayName on jira-component-version-ranges.
-    if (versionRange != base.versionRange && !merged.jiraDisplayNameOverridden) {
-        merged.jiraDisplayName = null
-    }
 
     // Build aspect
     setField(config, "buildSystem", merged.buildSystem?.let { safeParseBuildSystem(it) })
@@ -1003,23 +996,17 @@ private fun buildJiraComponent(
     }
 
     // Per-range jira.displayName resolution mirrors hotfixVersionFormat layering:
-    // SCALAR_OVERRIDE rows (including null-clear) win; explicit enumerated ranges
-    // inherit components.jira_display_name when the merged row has no per-range
-    // value unless MIG-048 empty-block semantics apply (RANGE_PRESENCE-only with
-    // BASE-row bleed) or a synthetic base row pins an explicit null.
+    // SCALAR_OVERRIDE rows (including null-clear) win; RANGE_PRESENCE-only empty
+    // blocks stay null; other explicit ranges fall back to components.jira_display_name
+    // instead of inheriting BASE-row bleed; single-range BASE null pins stay null.
     val displayName =
         when {
             merged.jiraDisplayNameOverridden -> merged.jiraDisplayName
-            versionRange != ALL_VERSIONS && merged.jiraProjectKey != null ->
-                merged.jiraDisplayName
-                    ?: component.jiraDisplayName.takeUnless {
-                        shouldSuppressComponentJiraDisplayNameFallback(
-                            versionRange = versionRange,
-                            base = base,
-                            merged = merged,
-                            rangePresenceOnly = rangePresenceOnly,
-                        )
-                    }
+            rangePresenceOnly && base.jiraDisplayName != null -> null
+            versionRange != base.versionRange -> component.jiraDisplayName
+            versionRange == base.versionRange &&
+                merged.jiraDisplayName == null &&
+                hasOnlyBaseConfiguration(component) -> null
             else -> merged.jiraDisplayName ?: component.jiraDisplayName
         }
 
@@ -1033,23 +1020,8 @@ private fun buildJiraComponent(
     )
 }
 
-private fun shouldSuppressComponentJiraDisplayNameFallback(
-    versionRange: String,
-    base: ComponentConfigurationEntity,
-    merged: ComponentConfigurationView,
-    rangePresenceOnly: Boolean,
-): Boolean {
-    if (merged.jiraDisplayNameOverridden) {
-        return false
-    }
-    if (rangePresenceOnly && base.jiraDisplayName != null) {
-        return true
-    }
-    if (versionRange == base.versionRange && merged.jiraDisplayName == null) {
-        return true
-    }
-    return false
-}
+private fun hasOnlyBaseConfiguration(component: ComponentEntity): Boolean =
+    component.configurations.none { it.rowType != "BASE" }
 
 private fun pickDocLink(
     links: List<ComponentDocLinkEntity>,

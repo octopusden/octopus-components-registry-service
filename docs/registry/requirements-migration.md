@@ -53,6 +53,7 @@ Numbered MIG-NNN contracts registry, peer of `requirements-common.md` (SYS-NNN) 
 | MIG-048 | RANGE_PRESENCE ranges must not inherit BASE jira.displayName | High | unit-test | ✅ Tested |
 | MIG-049 | restore MIG-029 synthetic-base fallback after MIG-047 enumeration | High | unit-test | ✅ Tested |
 | MIG-050 | import inherit semantics + explicit-range vcs registry isolation | High | unit-test | ✅ Tested |
+| MIG-051 | unified jira.displayName layering on read path | High | unit-test | ✅ Tested |
 
 ---
 
@@ -1301,4 +1302,38 @@ leaked `components.vcs_external_registry` onto explicit enumerated ranges.
 `MIG050CompatResidualTest.MIG-050-001 absent override distribution does not emit distribution maven marker`,
 `MIG050CompatResidualTest.MIG-050-002 absent override vcsSettings does not emit vcs settings marker`,
 `MIG050CompatResidualTest.MIG-050-003 explicit RANGE_PRESENCE range inherits base distribution on jira ranges`,
-`MIG050CompatResidualTest.MIG-050-004 explicit range does not inherit components vcs external registry`
+`MIG050CompatResidualTest.MIG-050-004 explicit range does not inherit components vcs external registry`,
+`MIG050CompatResidualTest.MIG-050-005 RANGE_PRESENCE range inherits component jira displayName`,
+`MIG050CompatResidualTest.MIG-050-006 docker-only distribution marker inherits component explicit external`
+
+---
+
+### MIG-051: unified jira.displayName layering on read path
+
+**Priority:** High
+**Test layer:** unit-test
+**Status:** ✅ Tested
+
+**Description:**
+Cluster-50 compat work introduced MIG-048 global pre-clear of `merged.jiraDisplayName`
+for every enumerated range plus a blanket BASE-anchor suppress. That fixed CARDS
+`jira-component-version-ranges` empty blocks but regressed trace-replay endpoints
+(`/jira-component`, per-version resolution, common jira-ranges) with ~131 STRING→NULL
+diffs on full [1.7] compat (50 → 211). Read path must layer displayName per view:
+scalar override wins; RANGE_PRESENCE empty blocks with BASE bleed stay null; other
+explicit ranges inherit `components.jira_display_name`; single-range BASE null pins
+stay null.
+
+**Acceptance criteria:**
+1. Explicit enumerated ranges inherit `components.jira_display_name` on jira-ranges, `getJiraComponentVersion`, `getResolvedComponentDefinition`, and `getAllJiraComponentVersionRanges`.
+2. RANGE_PRESENCE-only empty DSL blocks do not inherit BASE-row or component displayName on any of the above paths.
+3. Single-range component with explicit null on the BASE row does not fall back to component default.
+
+**Test method:**
+`MIG051JiraDisplayNameLayeringTest.MIG-051-001 jira ranges explicit range inherits component displayName`,
+`MIG051JiraDisplayNameLayeringTest.MIG-051-002 getJiraComponentVersion inherits component displayName on explicit range`,
+`MIG051JiraDisplayNameLayeringTest.MIG-051-003 getResolvedComponentDefinition inherits component displayName on explicit range`,
+`MIG051JiraDisplayNameLayeringTest.MIG-051-004 getAllJiraComponentVersionRanges inherits component displayName on explicit range`,
+`MIG051JiraDisplayNameLayeringTest.MIG-051-005 RANGE_PRESENCE empty block stays null despite BASE displayName bleed`,
+`MIG051JiraDisplayNameLayeringTest.MIG-051-006 single-range BASE explicit null pin does not inherit component default`,
+`MIG051JiraDisplayNameLayeringTest.MIG-051-007 non-synthetic BASE anchor null row inherits component on per-version path`
