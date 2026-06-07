@@ -216,8 +216,14 @@ fun ComponentEntity.toResolvedEscrowModuleConfig(
                     true
                 }
         }
+        // Every non-BASE row participates in the union — including RANGE_PRESENCE
+        // rows: an EMPTY DSL block ("[1.1,2.0)" {}) persists as a presence row
+        // that carries no overrides but still proves the version is configured
+        // (V1 serves base-inherited data there; gating presence-covered versions
+        // out produced the second wave of 59 NEW on the full gate).
         val inEffectiveRange =
-            containsVersion(base.versionRange) || overrides.any { containsVersion(it.versionRange) }
+            containsVersion(base.versionRange) ||
+                configs.any { it.rowType != "BASE" && containsVersion(it.versionRange) }
         if (!inEffectiveRange) return null
     }
 

@@ -811,6 +811,34 @@ class DatabaseComponentRegistryResolverTest {
         assertNull(resolver.getResolvedComponentDefinition("COMP9G", "0.5"))
     }
 
+    @Test
+    @DisplayName("MIG-042: version covered only by an EMPTY DSL block (RANGE_PRESENCE row) resolves — union includes presence rows")
+    fun `(9h MIG-042) version covered by a RANGE_PRESENCE row resolves`() {
+        // Second live-victim shape from the full gate (59 NEW persisted through
+        // iteration 2): components whose covering DSL blocks are EMPTY
+        // ("[1.1,2.0)" {}) — imported as RANGE_PRESENCE rows, not
+        // SCALAR_OVERRIDE/MARKER. The union gate must count EVERY non-BASE
+        // row's range; a presence row contributes no overrides but proves the
+        // version is configured (V1 answers 200 with base-inherited data).
+        val comp = makeComponent("COMP9H")
+        val base = makeBase(comp, versionRange = "[1.0,1.1)", isSyntheticBase = false, javaVersion = "8")
+        val presence =
+            ComponentConfigurationEntity(
+                component = comp,
+                versionRange = "[1.1,2.0)",
+                rowType = "RANGE_PRESENCE",
+            )
+        comp.configurations.addAll(listOf(base, presence))
+        stubComponent(comp)
+
+        // 1.1.759 is covered only by the presence row → must resolve with base config
+        val cfg = resolver.getResolvedComponentDefinition("COMP9H", "1.1.759")
+        assertNotNull(cfg)
+        assertEquals("8", cfg!!.buildConfiguration?.javaVersion)
+        // 2.5 is in the gap above every block → null (V1 404)
+        assertNull(resolver.getResolvedComponentDefinition("COMP9H", "2.5"))
+    }
+
     // ========================================================================
     // Companion
     // ========================================================================
