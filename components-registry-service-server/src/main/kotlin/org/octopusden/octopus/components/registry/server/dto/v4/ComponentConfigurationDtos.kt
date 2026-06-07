@@ -63,7 +63,6 @@ enum class ConfigurationRowType {
 
 data class BuildAspectResponse(
     val buildSystem: String? = null,
-    val buildSystemVersion: String? = null,
     val javaVersion: String? = null,
     val mavenVersion: String? = null,
     val gradleVersion: String? = null,
@@ -176,7 +175,6 @@ data class BaseConfigurationRequest(
 
 data class BuildAspectRequest(
     val buildSystem: String? = null,
-    val buildSystemVersion: String? = null,
     val javaVersion: String? = null,
     val mavenVersion: String? = null,
     val gradleVersion: String? = null,

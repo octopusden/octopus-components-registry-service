@@ -1237,7 +1237,6 @@ class ComponentManagementServiceImpl(
         request.versionRange?.let { config.versionRange = it }
         request.build?.let { b ->
             config.buildSystem = b.buildSystem
-            config.buildSystemVersion = b.buildSystemVersion
             config.javaVersion = b.javaVersion
             config.mavenVersion = b.mavenVersion
             config.gradleVersion = b.gradleVersion
@@ -1294,7 +1293,6 @@ class ComponentManagementServiceImpl(
         patch.versionRange?.let { config.versionRange = it }
         patch.build?.let { b ->
             b.buildSystem?.let { config.buildSystem = it }
-            b.buildSystemVersion?.let { config.buildSystemVersion = it }
             b.javaVersion?.let { config.javaVersion = it }
             b.mavenVersion?.let { config.mavenVersion = it }
             b.gradleVersion?.let { config.gradleVersion = it }

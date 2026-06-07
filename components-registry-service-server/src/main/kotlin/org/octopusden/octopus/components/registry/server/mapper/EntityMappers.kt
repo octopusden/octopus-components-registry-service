@@ -439,7 +439,6 @@ private fun <T> pickMarkerChildren(
  */
 internal class ComponentConfigurationView {
     var buildSystem: String? = null
-    var buildSystemVersion: String? = null
     var javaVersion: String? = null
     var mavenVersion: String? = null
     var gradleVersion: String? = null
@@ -496,7 +495,6 @@ internal class ComponentConfigurationView {
         // through — that was the root cause of bugs F (bug-F-component.buildFilePath) and G (bug-G-component.versionPrefix).
         when (override.overriddenAttribute) {
             "build.buildSystem" -> buildSystem = override.buildSystem
-            "build.buildSystemVersion" -> buildSystemVersion = override.buildSystemVersion
             "build.javaVersion" -> javaVersion = override.javaVersion
             "build.mavenVersion" -> mavenVersion = override.mavenVersion
             "build.gradleVersion" -> gradleVersion = override.gradleVersion
@@ -637,7 +635,6 @@ internal class ComponentConfigurationView {
         fun from(base: ComponentConfigurationEntity): ComponentConfigurationView =
             ComponentConfigurationView().apply {
                 buildSystem = base.buildSystem
-                buildSystemVersion = base.buildSystemVersion
                 javaVersion = base.javaVersion
                 mavenVersion = base.mavenVersion
                 gradleVersion = base.gradleVersion

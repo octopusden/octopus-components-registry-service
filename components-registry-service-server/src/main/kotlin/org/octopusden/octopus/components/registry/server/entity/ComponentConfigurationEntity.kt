@@ -86,9 +86,6 @@ class ComponentConfigurationEntity(
     @Column(name = "build_system", length = 50)
     var buildSystem: String? = null,
 
-    @Column(name = "build_system_version", length = 50)
-    var buildSystemVersion: String? = null,
-
     @Column(name = "java_version", length = 50)
     var javaVersion: String? = null,
 

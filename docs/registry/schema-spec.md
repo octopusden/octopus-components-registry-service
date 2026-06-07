@@ -170,7 +170,6 @@ Per-(component, version_range) typed rows; the spine of Model A'.
 | `is_synthetic_base` | BOOLEAN | NOT NULL DEFAULT false | structural flag: no all-versions block + ≥2 ranges (see §3.1); base may still carry real merged values |
 | Build aspect | | | |
 | `build_system` | VARCHAR(50) | | MAVEN/GRADLE/ESCROW_PROVIDED_MANUALLY/PROVIDED/etc. |
-| `build_system_version` | VARCHAR(50) | | |
 | `java_version` | VARCHAR(50) | | |
 | `maven_version` | VARCHAR(50) | | |
 | `gradle_version` | VARCHAR(50) | | |
