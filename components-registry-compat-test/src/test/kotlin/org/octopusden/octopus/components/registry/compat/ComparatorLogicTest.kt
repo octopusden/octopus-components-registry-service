@@ -552,5 +552,9 @@ class ComparatorLogicTest {
         val recorded =
             DiffCollector.snapshot().single { it.category == DiffClassifier.STRUCTURAL_DIFF }
         assertThat(recorded.entityKey).isEqualTo("PRJX / beta-fixture @ [2.0,)")
+        // Structured path (raw, positional) — diff-of-diffs keys on its
+        // normalized form instead of parsing the free-text message.
+        assertThat(recorded.jsonPath).isEqualTo("\$[1].component.displayName")
+        assertThat(recorded.message).isEqualTo("KEY_MISSING_CANDIDATE at \$[1].component.displayName")
     }
 }

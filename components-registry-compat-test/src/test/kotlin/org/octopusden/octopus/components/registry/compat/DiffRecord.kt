@@ -22,6 +22,14 @@ data class DiffRecord(
     val candidateValue: String? = null,
     /** Resolved entity identity for triage (e.g. `PRJX / foo @ [1.0,2.0)` or `some-lib @ 12.1.155`). */
     val entityKey: String? = null,
+    /**
+     * Structured JSON path of the diverging node (raw, with positional indices —
+     * e.g. `$[12].component.displayName`). Consumers that need index-stable
+     * identity (cluster digest, diff-of-diffs) normalise via
+     * [CompatEntityContext.normalizeFieldPath]. Null for layers without a
+     * single JSON location (header diffs, typed-layer AssertJ dumps).
+     */
+    val jsonPath: String? = null,
     val diagnosticHeaders: Map<String, HeaderPair>? = null,
     val message: String? = null,
 ) {

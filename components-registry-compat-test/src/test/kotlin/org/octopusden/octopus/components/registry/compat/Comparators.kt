@@ -58,6 +58,7 @@ object Comparators {
                     baselineValue = baseline.status.toString(),
                     candidateValue = candidate.status.toString(),
                     entityKey = CompatEntityContext.resolveEntityKey(endpoint, "", pathParams, null, null),
+                    jsonPath = "$",
                     message = "transport failure on " + listOfNotNull(
                         "baseline".takeIf { baselineTransportFailed },
                         "candidate".takeIf { candidateTransportFailed },
@@ -77,6 +78,7 @@ object Comparators {
                     baselineValue = baseline.status.toString(),
                     candidateValue = candidate.status.toString(),
                     entityKey = CompatEntityContext.resolveEntityKey(endpoint, "", pathParams, null, null),
+                    jsonPath = "$",
                 ),
             )
         }
@@ -135,6 +137,7 @@ object Comparators {
                         baselineValue = sd.baseline,
                         candidateValue = sd.candidate,
                         entityKey = entityKey,
+                        jsonPath = sd.path,
                         message = "${sd.kind} at ${sd.path}",
                     ),
                 )

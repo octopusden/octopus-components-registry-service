@@ -667,3 +667,157 @@ Raw per-line records: `execution-log.ndjson`
         }
     }
 }
+
+// Diff-of-diffs regression gate for the compat burndown: compares the CURRENT
+// run's diff set against a FROZEN baseline diff set (both: dirs of
+// diff-worker-*.ndjson) and classifies every diff key as FIXED / REMAINING /
+// NEW. NEW > 0 fails the task — a fix may only land when it introduces zero
+// new diffs anywhere in the sweep. The frozen baseline lives OUTSIDE the repo
+// (production-derived data); see scripts/local-stands/diff-of-diffs.sh.
+//
+// Key = (endpoint | pathParams | queryParams | category | entityKey |
+//        normalized jsonPath | baselineValue | candidateValue), where the
+// normalized jsonPath collapses positional indices ([12] -> [N]) so array
+// reordering between runs does not break identity. Records matching a
+// known-deltas entry (same selection as compatibilityReporter) are excluded
+// on BOTH sides — an intentional, documented delta is not a regression.
+// Env-warning records (SNAPSHOT_MISMATCH / CANDIDATE_NOT_DB_MODE) on EITHER
+// side abort the comparison: the underlying run is unsound and must not be
+// used as evidence.
+tasks.register('compatDiffOfDiffs') {
+    group = 'verification'
+    description = 'Compares a current compat run against a frozen baseline diff set; fails on NEW diffs.'
+    doLast {
+        def slurper = new groovy.json.JsonSlurper()
+        def envCategories = ['SNAPSHOT_MISMATCH', 'CANDIDATE_NOT_DB_MODE'] as Set
+
+        def baselineDirProp = project.findProperty('compat.dod.baseline-dir') ?: System.getenv('COMPAT_DOD_BASELINE_DIR')
+        def currentDirProp = project.findProperty('compat.dod.current-dir') ?: System.getenv('COMPAT_DOD_CURRENT_DIR') ?: layout.buildDirectory.dir('reports/compat').get().asFile.absolutePath
+        if (baselineDirProp == null || baselineDirProp.toString().isBlank()) {
+            throw new GradleException("compat.dod.baseline-dir (or COMPAT_DOD_BASELINE_DIR) must point at the frozen baseline report dir")
+        }
+        def baselineDir = new File(baselineDirProp.toString())
+        def currentDir = new File(currentDirProp.toString())
+        if (!baselineDir.isDirectory()) throw new GradleException("baseline dir not found: ${baselineDir}")
+        if (!currentDir.isDirectory()) throw new GradleException("current dir not found: ${currentDir}")
+
+        // Same known-deltas selection as compatibilityReporter.
+        def knownDeltasName = project.findProperty('compat.known-deltas') ?: System.getenv('COMPAT_KNOWN_DELTAS') ?: 'known-deltas-db.json'
+        def knownDeltasFile = file("src/test/resources/${knownDeltasName}")
+        def knownDeltas = []
+        if (knownDeltasFile.exists()) {
+            try {
+                def parsed = slurper.parseText(knownDeltasFile.text)
+                knownDeltas = (parsed?.deltas as List) ?: []
+            } catch (Exception e) {
+                logger.warn("[compat-dod] failed to parse ${knownDeltasName}: ${e.message}; treating as empty")
+            }
+        }
+        def matchesDelta = { Map delta, Map record ->
+            if (delta.endpoint != record.endpoint) return false
+            if (delta.category != record.category) return false
+            if (delta.baselineValue != null && delta.baselineValue.toString() != (record.baselineValue ?: '').toString()) return false
+            if (delta.candidateValue != null && delta.candidateValue.toString() != (record.candidateValue ?: '').toString()) return false
+            if (delta.pathParams != null && delta.pathParams != (record.pathParams ?: [:])) return false
+            if (delta.queryParams != null && delta.queryParams != (record.queryParams ?: [:])) return false
+            return true
+        }
+
+        def loadRecords = { File dir, String label ->
+            def files = dir.listFiles({ f -> f.name.startsWith('diff-worker-') && f.name.endsWith('.ndjson') } as FileFilter) ?: []
+            if (files.size() == 0) {
+                throw new GradleException("[compat-dod] no diff-worker-*.ndjson in ${label} dir ${dir} — refusing to compare against nothing (a clean run still writes zero-or-more worker files; pass the dir of the ACTUAL run)")
+            }
+            def records = []
+            files.each { f ->
+                f.eachLine('UTF-8') { line ->
+                    def trimmed = line.trim()
+                    if (trimmed.isEmpty()) return
+                    def rec = null
+                    try { rec = slurper.parseText(trimmed) } catch (Exception ignored) { }
+                    if (rec != null) records << rec
+                }
+            }
+            def envRecs = records.findAll { envCategories.contains((it.category ?: '').toString()) }
+            if (!envRecs.isEmpty()) {
+                throw new GradleException("[compat-dod] ${label} run carries ${envRecs.size()} env-warning record(s) (${envRecs.collect { it.category }.unique()}) — the run is unsound (snapshot/mode mismatch); re-run it before comparing")
+            }
+            def suppressed = 0
+            def active = records.findAll { rec ->
+                def hit = knownDeltas.find { delta -> matchesDelta(delta as Map, rec as Map) }
+                if (hit != null) suppressed++
+                hit == null
+            }
+            println "[compat-dod] ${label}: ${records.size()} records (${suppressed} suppressed via ${knownDeltasName}) from ${files.size()} worker file(s) in ${dir}"
+            active
+        }
+
+        def renderParams = { Map params ->
+            if (params == null || params.isEmpty()) return ''
+            params.sort().collect { k, v -> "${k}=${v}" }.join('&')
+        }
+        def normIndices = { String s -> s == null ? '' : s.replaceAll(/\[\d+\]/, '[N]') }
+        def keyOf = { Map r ->
+            // jsonPath is the structured location (new records); legacy records
+            // fall back to the message (normalised + truncated — typed-layer
+            // AssertJ dumps are long but deterministic for identical payloads).
+            def loc = (r.jsonPath ?: r.message ?: '').toString()
+            if (loc.length() > 400) loc = loc.substring(0, 400)
+            [
+                (r.endpoint ?: '').toString(),
+                renderParams(r.pathParams as Map),
+                renderParams(r.queryParams as Map),
+                (r.category ?: '').toString(),
+                (r.entityKey ?: '').toString(),
+                normIndices(loc),
+                normIndices((r.baselineValue ?: '').toString()),
+                normIndices((r.candidateValue ?: '').toString()),
+            ].join(' | ')
+        }
+
+        def baselineRecords = loadRecords(baselineDir, 'baseline')
+        def currentRecords = loadRecords(currentDir, 'current')
+        def baselineKeys = baselineRecords.collect { keyOf(it as Map) } as Set
+        def currentByKey = [:]
+        currentRecords.each { rec -> currentByKey[keyOf(rec as Map)] = rec }
+        def currentKeys = currentByKey.keySet()
+
+        def fixed = (baselineKeys - currentKeys).sort()
+        def remaining = baselineKeys.intersect(currentKeys).sort()
+        def newKeys = (currentKeys - baselineKeys).sort()
+
+        def out = new StringBuilder()
+        out << "# Diff-of-diffs\n\n"
+        out << "- Baseline: ${baselineDir} (${baselineKeys.size()} unique keys)\n"
+        out << "- Current:  ${currentDir} (${currentKeys.size()} unique keys)\n\n"
+        out << "| Verdict | Count |\n|---|---:|\n"
+        out << "| FIXED | ${fixed.size()} |\n| REMAINING | ${remaining.size()} |\n| NEW | ${newKeys.size()} |\n\n"
+        def renderKeys = { String title, List keys ->
+            if (keys.isEmpty()) return
+            out << "## ${title} (${keys.size()})\n\n"
+            keys.each { k -> out << "- `${k}`\n" }
+            out << "\n"
+        }
+        renderKeys('FIXED', fixed)
+        renderKeys('REMAINING', remaining)
+        renderKeys('NEW', newKeys)
+        def reportFile = new File(currentDir, 'diff-of-diffs.md')
+        reportFile.setText(out.toString(), 'UTF-8')
+
+        println "[compat-dod] FIXED=${fixed.size()} REMAINING=${remaining.size()} NEW=${newKeys.size()} -> ${reportFile}"
+        if (!newKeys.isEmpty()) {
+            // Group NEW by entityKey (6th key segment is the normalised path;
+            // 5th is entityKey) for fast triage in the console.
+            def byEntity = newKeys.groupBy { k -> k.split(/ \| /, -1)[4] ?: '-' }
+            byEntity.sort { -it.value.size() }.each { entity, ks ->
+                println "[compat-dod] NEW x${ks.size()} entity='${entity ?: '-'}'"
+                ks.take(5).each { println "[compat-dod]    ${it}" }
+                if (ks.size() > 5) println "[compat-dod]    ... and ${ks.size() - 5} more"
+            }
+            throw new GradleException(
+                "diff-of-diffs: ${newKeys.size()} NEW diff key(s) vs the frozen baseline — the change " +
+                "regresses previously-clean entities. Revert/narrow the fix; full list in ${reportFile}."
+            )
+        }
+    }
+}
