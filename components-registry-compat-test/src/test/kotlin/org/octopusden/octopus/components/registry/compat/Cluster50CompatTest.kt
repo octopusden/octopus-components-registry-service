@@ -3,6 +3,7 @@ package org.octopusden.octopus.components.registry.compat
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import org.junit.jupiter.api.AfterAll
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.TestInstance
 import org.junit.jupiter.params.ParameterizedTest
@@ -27,7 +28,15 @@ import java.util.stream.Stream
  * id19 build step); locally from a private env file. Missing/blank inputs are a
  * hard test failure (fail-fast) — a silently empty gate would go green while
  * checking nothing. Only counts are ever logged, never the values.
+ *
+ * DISABLED (2026-06-07): this was a fast narrow pre-check for the historical
+ * ~50-diff cluster; the full [1.7] sweep now covers the same endpoints across
+ * the 30k trace slice and is the authoritative gate. Kept (not deleted) so the
+ * triage tooling and env contract stay documented; re-enable by removing
+ * `@Disabled` if a dedicated cluster gate is wanted again. Once the full sweeps
+ * are stably green this class and the id19 [1.9] config can be removed outright.
  */
+@Disabled("Superseded by the full [1.7] sweep; see class KDoc")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @DisplayName("Cluster-50 compat gate (jira-ranges + per-version distribution)")
 class Cluster50CompatTest : CompatibilityTestBase() {
