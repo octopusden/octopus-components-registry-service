@@ -281,14 +281,13 @@ class ComponentCodeRenderer(
     ) {
         val hasContent =
             listOf(
-                s.buildSystem, s.buildSystemVersion, s.javaVersion, s.mavenVersion, s.gradleVersion,
+                s.buildSystem, s.javaVersion, s.mavenVersion, s.gradleVersion,
                 s.buildFilePath, s.projectVersion, s.systemProperties, s.buildTasks,
             ).any { it != null } || s.deprecated != null || s.requiredProject != null ||
                 requiredTools.isNotEmpty() || buildToolBeans.isNotEmpty()
         if (!hasContent) return
         cb.open("build")
         cb.bare("buildSystem", s.buildSystem)
-        cb.str("buildSystemVersion", s.buildSystemVersion)
         cb.str("javaVersion", s.javaVersion)
         cb.str("mavenVersion", s.mavenVersion)
         cb.str("gradleVersion", s.gradleVersion)

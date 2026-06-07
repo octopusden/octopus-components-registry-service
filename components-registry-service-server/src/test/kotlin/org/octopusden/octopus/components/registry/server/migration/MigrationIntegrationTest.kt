@@ -427,7 +427,7 @@ class MigrationIntegrationTest {
         assertNull(presence.overriddenAttribute, "RANGE_PRESENCE row must have NULL overridden_attribute")
         assertFalse(presence.isSyntheticBase, "RANGE_PRESENCE row must not be marked synthetic")
         // All 28 typed scalar columns must be NULL on a presence row.
-        assertNull(presence.buildSystem); assertNull(presence.buildSystemVersion)
+        assertNull(presence.buildSystem)
         assertNull(presence.javaVersion); assertNull(presence.mavenVersion)
         assertNull(presence.gradleVersion); assertNull(presence.buildFilePath)
         assertNull(presence.deprecated); assertNull(presence.requiredProject)
