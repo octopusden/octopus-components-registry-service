@@ -785,6 +785,30 @@ tasks.register('compatDiffOfDiffs') {
             ].join(' | ')
         }
 
+        // Completeness guard (adversarial-review SHOULD-FIX): a run that crashed
+        // mid-way still leaves >=1 flushed diff-worker file, and its MISSING diffs
+        // would read as FIXED -> a truncated run fakes a green gate. Compare the
+        // executed-case volume (exec-worker-*.ndjson lines) against the baseline:
+        // a current run below 95% of the baseline's case count is not evidence.
+        def countExecCases = { File dir, String label ->
+            def files = dir.listFiles({ f -> f.name.startsWith('exec-worker-') && f.name.endsWith('.ndjson') } as FileFilter) ?: []
+            if (files.size() == 0) {
+                throw new GradleException("[compat-dod] no exec-worker-*.ndjson in ${label} dir ${dir} — cannot prove the run completed; refusing to compare")
+            }
+            long cases = 0
+            files.each { f -> f.eachLine('UTF-8') { line -> if (!line.trim().isEmpty()) cases++ } }
+            cases
+        }
+        def baselineCases = countExecCases(baselineDir, 'baseline')
+        def currentCases = countExecCases(currentDir, 'current')
+        println "[compat-dod] executed cases: baseline=${baselineCases} current=${currentCases}"
+        if (currentCases < (long) (baselineCases * 0.95)) {
+            throw new GradleException(
+                "[compat-dod] current run executed only ${currentCases} cases vs baseline ${baselineCases} " +
+                "(<95%) — looks truncated/partial; its missing diffs would fake FIXED. Re-run before comparing."
+            )
+        }
+
         def baselineRecords = loadRecords(baselineDir, 'baseline')
         def currentRecords = loadRecords(currentDir, 'current')
         def baselineKeys = baselineRecords.collect { keyOf(it as Map) } as Set

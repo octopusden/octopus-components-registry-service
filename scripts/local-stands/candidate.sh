@@ -63,14 +63,14 @@ ADDITIONAL_LOCATION="file:$CANDIDATE_WORKTREE/components-registry-service-server
 ADDITIONAL_LOCATION="$ADDITIONAL_LOCATION,file:$SERVICE_CONFIG_DIR/components-registry-service.yml"
 
 WORK_DIR="${WORK_DIR:-/tmp/crs-candidate-work}"
-NODB_OVERRIDE_ARGS=""
+MODE_OVERRIDE_ARGS=""
 if [ "$MODE" = "db" ]; then
   PROFILES="dev,dev-vcs-local,dev-db-automigrate,dev-db-only,local"
   # Same pool headroom as teamcity-run.sh db-mode: the Hikari default (10)
   # starves under parallel compat replay on weaker hosts -> sporadic one-sided
   # 5xx. Contract parity, not load testing — give the pool COMPAT_PARALLELISM
   # headroom.
-  NODB_OVERRIDE_ARGS=" --spring.datasource.hikari.maximum-pool-size=${CANDIDATE_DB_POOL_SIZE:-32}"
+  MODE_OVERRIDE_ARGS=" --spring.datasource.hikari.maximum-pool-size=${CANDIDATE_DB_POOL_SIZE:-32}"
 else
   # vcs (no-db) mode: the `no-db` profile excludes the JDBC/JPA/Flyway auto-configs
   # so the candidate boots with no database at all (issue #310); no Postgres needed.
@@ -79,9 +79,9 @@ else
   # in service-config (loaded via additional-location, which outranks the bundled
   # no-db profile YAML) cannot re-enable the DB beans / migration / db routing while
   # JPA autoconfig stays excluded — mirrors teamcity-run.sh's git-mode args exactly.
-  NODB_OVERRIDE_ARGS=" --components-registry.database.enabled=false"
-  NODB_OVERRIDE_ARGS="$NODB_OVERRIDE_ARGS --components-registry.auto-migrate=false"
-  NODB_OVERRIDE_ARGS="$NODB_OVERRIDE_ARGS --components-registry.default-source=git"
+  MODE_OVERRIDE_ARGS=" --components-registry.database.enabled=false"
+  MODE_OVERRIDE_ARGS="$MODE_OVERRIDE_ARGS --components-registry.auto-migrate=false"
+  MODE_OVERRIDE_ARGS="$MODE_OVERRIDE_ARGS --components-registry.default-source=git"
 fi
 cd "$CANDIDATE_WORKTREE"
 echo ">>> candidate: $CANDIDATE_WORKTREE @ $(git rev-parse --short HEAD)"
@@ -104,4 +104,4 @@ exec ./gradlew :components-registry-service-server:bootRun --no-daemon --console
           --components-registry.work-dir=$WORK_DIR \
           --components-registry.groovy-path=$WORK_DIR/src/main/resources \
           --auth-server.disabled=true \
-          --employee-service.enabled=false$NODB_OVERRIDE_ARGS"
+          --employee-service.enabled=false$MODE_OVERRIDE_ARGS"

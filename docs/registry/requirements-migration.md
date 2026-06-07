@@ -1180,6 +1180,8 @@ iterations.
 4. ALL_VERSIONS components are unaffected.
 
 **Test method:** `DatabaseComponentRegistryResolverTest` —
-`(9a MIG-042)`…`(9g MIG-042)` (9f is the gap case, RED before the fix; 9g is
+`(9a MIG-042)`…`(9h MIG-042)` (9f is the gap case, RED before the fix; 9g is
 the non-synthetic multi-range case caught by the first full-gate iteration —
-59 NEW diffs — and fixed by widening the union to all bases).
+59 NEW diffs — fixed by widening the union to all bases; 9h is the
+RANGE_PRESENCE case caught by the second iteration — empty DSL blocks count
+toward the configured range).

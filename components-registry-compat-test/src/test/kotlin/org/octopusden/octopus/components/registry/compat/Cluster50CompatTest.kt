@@ -34,7 +34,9 @@ class Cluster50CompatTest : CompatibilityTestBase() {
 
     private val mapper = jacksonObjectMapper()
 
-    @ParameterizedTest(name = "GET /rest/api/2/projects/{0}/jira-component-version-ranges")
+    // Indexed display name only — the project key is confidential and must not
+    // leak into JUnit XML/HTML report names (counts-only policy of this class).
+    @ParameterizedTest(name = "[{index}] GET /rest/api/2/projects/<key>/jira-component-version-ranges")
     @MethodSource("projectKeyArgs")
     fun `GET v2 jira-component-version-ranges by project must match`(projectKey: String) {
         val endpoint = "GET /rest/api/2/projects/{projectKey}/jira-component-version-ranges"
@@ -64,7 +66,9 @@ class Cluster50CompatTest : CompatibilityTestBase() {
         )
     }
 
-    @ParameterizedTest(name = "GET /rest/api/2/components/{0}/versions/{1}/distribution")
+    // Indexed display name only — component:version pairs are confidential
+    // (same counts-only policy as above).
+    @ParameterizedTest(name = "[{index}] GET /rest/api/2/components/<c>/versions/<v>/distribution")
     @MethodSource("distributionVersionPairs")
     fun `GET v2 per-version distribution must match`(componentName: String, version: String) {
         val endpoint = "GET /rest/api/2/components/{component}/versions/{version}/distribution"
