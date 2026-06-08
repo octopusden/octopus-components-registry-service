@@ -15,6 +15,7 @@ import org.octopusden.octopus.components.registry.server.service.MigrationLifecy
 import org.octopusden.octopus.components.registry.server.service.MigrationResult
 import org.octopusden.octopus.components.registry.server.service.MigrationStatus
 import org.octopusden.octopus.components.registry.server.service.ValidationResult
+import org.octopusden.octopus.components.registry.server.service.impl.ConfigValidationException
 import org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncJobService
 import org.springframework.cloud.context.refresh.ContextRefresher
 import org.springframework.http.HttpStatus
@@ -111,6 +112,17 @@ class AdminControllerV4(
         val changed = contextRefresher.refresh()
         return ResponseEntity.ok(mapOf("status" to "reloaded", "changedKeys" to changed.sorted()))
     }
+
+    /**
+     * A bad service-config value surfaces from `reload-config` (via the refresh →
+     * sync path) as a [ConfigValidationException]. Map it to 422 with the actionable
+     * message instead of an opaque 500; the DB cache is left untouched (no-clobber).
+     */
+    @ExceptionHandler(ConfigValidationException::class)
+    fun handleConfigValidation(e: ConfigValidationException): ResponseEntity<Map<String, Any?>> =
+        ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(
+            mapOf("error" to "config-validation", "message" to (e.message ?: "Invalid configuration")),
+        )
 
     @GetMapping("/export")
     fun exportComponents(): ResponseEntity<Map<String, String>> = ResponseEntity.ok(mapOf("status" to "not_implemented"))

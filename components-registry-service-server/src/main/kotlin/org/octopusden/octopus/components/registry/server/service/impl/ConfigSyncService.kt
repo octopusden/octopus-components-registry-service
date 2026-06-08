@@ -127,7 +127,7 @@ class ConfigSyncService(
             entry.defaultValue?.let { put("defaultValue", it) }
         }
 
-    private fun invalid(path: String, value: String, allowed: Set<String>): String =
+    private fun invalid(path: String, value: String, allowed: Set<String>): Nothing =
         throw ConfigValidationException(
             "Invalid field-config value '$value' at 'components-registry.field-config.$path'; allowed: $allowed",
         )

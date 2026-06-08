@@ -143,6 +143,30 @@ class ConfigSyncServiceTest {
      * `Defaults.groovy` migration data (the system is not yet in prod).
      */
     @Test
+    fun `explicitly-set boolean-false fields are emitted, not omitted`() {
+        // In the code-as-config model the blob is sourced from service-config (not
+        // Java-object defaults): a boolean set to false IS written, so consumers that
+        // read it as false behave correctly. (Unset booleans are absent — consumers
+        // treat absent as false; we do not fabricate library defaults.)
+        val props = AdminConfigProperties().apply {
+            componentDefaults = AdminConfigProperties.ComponentDefaults().apply {
+                solution = false
+                build = AdminConfigProperties.Build().apply { requiredProject = false }
+                jira = AdminConfigProperties.Jira().apply { technical = false }
+                distribution = AdminConfigProperties.Distribution().apply { explicit = false; external = false }
+                escrow = AdminConfigProperties.Escrow().apply { reusable = false }
+            }
+        }
+        val result = service(props).componentDefaultsMap()
+        assertEquals(false, result["solution"])
+        assertEquals(false, (result["build"] as Map<*, *>)["requiredProject"])
+        assertEquals(false, (result["jira"] as Map<*, *>)["technical"])
+        assertEquals(false, (result["distribution"] as Map<*, *>)["explicit"])
+        assertEquals(false, (result["distribution"] as Map<*, *>)["external"])
+        assertEquals(false, (result["escrow"] as Map<*, *>)["reusable"])
+    }
+
+    @Test
     fun `component-defaults golden - every field of every section serializes`() {
         val props = AdminConfigProperties().apply {
             componentDefaults = AdminConfigProperties.ComponentDefaults().apply {
@@ -155,7 +179,7 @@ class ConfigSyncServiceTest {
                 clientCode = "CC"
                 parentComponent = "parent"
                 releasesInDefaultBranch = true
-                solution = "SOL"
+                solution = false
                 archived = false
                 copyright = "Copyright (c) 2026 Example"
                 labels = mutableListOf("core", "lib")
@@ -226,7 +250,7 @@ class ConfigSyncServiceTest {
                 "clientCode" to "CC",
                 "parentComponent" to "parent",
                 "releasesInDefaultBranch" to true,
-                "solution" to "SOL",
+                "solution" to false,
                 "archived" to false,
                 "copyright" to "Copyright (c) 2026 Example",
                 "labels" to listOf("core", "lib"),
