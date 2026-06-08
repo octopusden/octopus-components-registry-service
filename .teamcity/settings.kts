@@ -1238,7 +1238,8 @@ object id20ValidateComponentsRegistryProductionDataAuto : BuildType({
                 -Pcomponents-registry-service.version=%BUILD_NUMBER%
                 -Puse_dev_repository=all
                 -Pemployee-service.url=%EMPLOYEE_SERVICE_URL%
-                -Pemployee-service.token=%EMPLOYEE_SERVICE_TOKEN%
+                -Pemployee-service.username=%EMPLOYEE_SERVICE_USERNAME%
+                -Pemployee-service.password=%EMPLOYEE_SERVICE_PASSWORD%
             """.trimIndent()
             enableStacktrace = true
             jdkHome = "%env.JAVA_HOME%"
