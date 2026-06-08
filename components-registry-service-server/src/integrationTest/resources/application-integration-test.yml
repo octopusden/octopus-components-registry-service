@@ -2,6 +2,13 @@ spring:
   cloud:
     config:
       enabled: false
+  datasource:
+    # H2 treats KEY and VALUE as reserved words, which breaks the generated
+    # `create table registry_config (key ..., value ...)` DDL. NON_KEYWORDS opts
+    # them out — same workaround as application-test.yml. Required now that
+    # ConfigSyncService writes the config-as-code baseline into registry_config
+    # at startup (see ADR-016); without the table the fat jar fails to boot.
+    url: "jdbc:h2:mem:integrationtestdb;DB_CLOSE_DELAY=-1;NON_KEYWORDS=KEY,VALUE"
 
 server:
   port: 0  # Random port
