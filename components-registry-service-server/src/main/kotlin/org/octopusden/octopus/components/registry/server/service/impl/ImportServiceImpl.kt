@@ -27,7 +27,6 @@ import org.octopusden.octopus.components.registry.server.entity.DistributionMave
 import org.octopusden.octopus.components.registry.server.entity.DistributionPackageEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionSecurityGroupEntity
 import org.octopusden.octopus.components.registry.server.entity.LabelEntity
-import org.octopusden.octopus.components.registry.server.entity.RegistryConfigEntity
 import org.octopusden.octopus.components.registry.server.entity.SystemEntity
 import org.octopusden.octopus.components.registry.server.entity.ToolEntity
 import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
@@ -41,7 +40,6 @@ import org.octopusden.octopus.components.registry.server.repository.ComponentRep
 import org.octopusden.octopus.components.registry.server.repository.ComponentRequiredToolRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentSourceRepository
 import org.octopusden.octopus.components.registry.server.repository.LabelRepository
-import org.octopusden.octopus.components.registry.server.repository.RegistryConfigRepository
 import org.octopusden.octopus.components.registry.server.repository.SystemRepository
 import org.octopusden.octopus.components.registry.server.repository.ToolRepository
 import org.octopusden.octopus.components.registry.server.service.BatchMigrationResult
@@ -92,7 +90,7 @@ class ImportServiceImpl(
     private val componentSourceRepository: ComponentSourceRepository,
     private val sourceRegistry: ComponentSourceRegistry,
     private val configurationLoader: EscrowConfigurationLoader,
-    private val registryConfigRepository: RegistryConfigRepository,
+    private val configSyncService: ConfigSyncService,
     private val componentRepository: ComponentRepository,
     private val configurationRepository: ComponentConfigurationRepository,
     private val componentGroupRepository: ComponentGroupRepository,
@@ -604,162 +602,18 @@ class ImportServiceImpl(
         return FullMigrationResult(defaults = defaults, components = components)
     }
 
-    @Suppress("CyclomaticComplexMethod", "TooGenericExceptionCaught")
+    /**
+     * Component defaults are code-as-config (service-config → AdminConfigProperties),
+     * no longer read from the Git DSL. Delegates to [ConfigSyncService] so the
+     * `/admin/migrate-defaults` endpoint and the migration-job DEFAULTS phase produce
+     * the same `registry_config['component-defaults']` blob without the Groovy loader.
+     * (Full `component-resolver-core` removal is a separate follow-up — see plan.)
+     */
     @Transactional
     override fun migrateDefaults(): Map<String, Any?> {
-        LOG.info("Migrating component defaults from Git DSL")
-        val defaults = configurationLoader.loadCommonDefaults(emptyMap())
-        val map =
-            buildMap<String, Any?> {
-                defaults.buildSystem?.let { put("buildSystem", it.name) }
-                defaults.buildFilePath?.let { put("buildFilePath", it) }
-                defaults.artifactIdPattern?.let { put("artifactIdPattern", it) }
-                defaults.groupIdPattern?.let { put("groupIdPattern", it) }
-                defaults.componentDisplayName?.let { put("componentDisplayName", it) }
-                // componentOwner / releaseManager / securityChampion are people
-                // fields that the real Defaults.groovy never sets; they do not
-                // belong in the global component-defaults surface (matches the
-                // portal defaults-form removal). The `?.let` above was dead code.
-                defaults.system?.let { put("system", it) }
-                defaults.clientCode?.let { put("clientCode", it) }
-                defaults.parentComponent?.let { put("parentComponent", it) }
-                defaults.releasesInDefaultBranch?.let { put("releasesInDefaultBranch", it) }
-                defaults.solution?.let { put("solution", it) }
-                defaults.archived?.let { put("archived", it) }
-                defaults.copyright?.let { put("copyright", it) }
-                defaults.labels?.takeIf { it.isNotEmpty() }?.let { put("labels", it.toList()) }
-                defaults.deprecated?.let { put("deprecated", it) }
-                defaults.octopusVersion?.let { put("octopusVersion", it) }
-
-                defaults.buildParameters?.let { bp ->
-                    try {
-                        val buildMap =
-                            buildMap<String, Any?> {
-                                bp.javaVersion?.let { put("javaVersion", it) }
-                                bp.mavenVersion?.let { put("mavenVersion", it) }
-                                bp.gradleVersion?.let { put("gradleVersion", it) }
-                                put("requiredProject", bp.requiredProject)
-                                bp.projectVersion?.let { put("projectVersion", it) }
-                                bp.systemProperties?.let { put("systemProperties", it) }
-                                bp.buildTasks?.let { put("buildTasks", it) }
-                            }
-                        if (buildMap.isNotEmpty()) put("build", buildMap)
-                    } catch (e: Exception) {
-                        LOG.warn("Failed to serialize buildParameters defaults: {}", e.message)
-                    }
-                }
-
-                defaults.jiraComponent?.let { jira ->
-                    try {
-                        val jiraMap =
-                            buildMap<String, Any?> {
-                                jira.projectKey?.let { put("projectKey", it) }
-                                jira.displayName?.let { put("displayName", it) }
-                                put("technical", jira.isTechnical)
-                                jira.componentVersionFormat?.let { cvf ->
-                                    val cvfMap =
-                                        buildMap<String, Any?> {
-                                            cvf.majorVersionFormat?.let { put("majorVersionFormat", it) }
-                                            cvf.releaseVersionFormat?.let { put("releaseVersionFormat", it) }
-                                            cvf.buildVersionFormat?.let { put("buildVersionFormat", it) }
-                                            cvf.lineVersionFormat?.let { put("lineVersionFormat", it) }
-                                            cvf.hotfixVersionFormat?.let { put("hotfixVersionFormat", it) }
-                                        }
-                                    if (cvfMap.isNotEmpty()) put("componentVersionFormat", cvfMap)
-                                }
-                            }
-                        if (jiraMap.isNotEmpty()) put("jira", jiraMap)
-                    } catch (e: Exception) {
-                        LOG.warn("Failed to serialize jiraComponent defaults: {}", e.message)
-                    }
-                }
-
-                defaults.distribution?.let { dist ->
-                    try {
-                        val distMap =
-                            buildMap<String, Any?> {
-                                put("explicit", dist.explicit())
-                                put("external", dist.external())
-                                dist.GAV()?.let { put("GAV", it) }
-                                dist.DEB()?.let { put("DEB", it) }
-                                dist.RPM()?.let { put("RPM", it) }
-                                dist.docker()?.let { put("docker", it) }
-                                dist.securityGroups?.let { sg ->
-                                    val sgMap =
-                                        buildMap<String, Any?> {
-                                            sg.read?.let { put("read", it) }
-                                        }
-                                    if (sgMap.isNotEmpty()) put("securityGroups", sgMap)
-                                }
-                            }
-                        if (distMap.isNotEmpty()) put("distribution", distMap)
-                    } catch (e: Exception) {
-                        LOG.warn("Failed to serialize distribution defaults: {}", e.message)
-                    }
-                }
-
-                defaults.vcsSettingsWrapper?.let { wrapper ->
-                    try {
-                        val vcsMap =
-                            buildMap<String, Any?> {
-                                wrapper.vcsSettings?.let { vcs ->
-                                    vcs.externalRegistry?.let { put("externalRegistry", it) }
-                                }
-                                wrapper.defaultVCSSettings?.let { root ->
-                                    root.vcsPath?.let { put("vcsPath", it) }
-                                    root.repositoryType?.let { put("repositoryType", it.name) }
-                                    root.tag?.let { put("tag", it) }
-                                    root.branch?.let { put("branch", it) }
-                                }
-                            }
-                        if (vcsMap.isNotEmpty()) put("vcs", vcsMap)
-                    } catch (e: Exception) {
-                        LOG.warn("Failed to serialize vcsSettingsWrapper defaults: {}", e.message)
-                    }
-                }
-
-                defaults.escrow?.let { escrow ->
-                    try {
-                        val escrowMap =
-                            buildMap<String, Any?> {
-                                escrow.buildTask?.let { put("buildTask", it) }
-                                escrow.generation.orElse(null)?.let { put("generation", it.name) }
-                                put("reusable", escrow.isReusable)
-                                escrow.diskSpaceRequirement.orElse(null)?.let { put("diskSpace", it) }
-                                escrow.providedDependencies.takeIf { it.isNotEmpty() }?.let {
-                                    put("providedDependencies", it.toList())
-                                }
-                                escrow.additionalSources.takeIf { it.isNotEmpty() }?.let {
-                                    put("additionalSources", it.toList())
-                                }
-                            }
-                        if (escrowMap.isNotEmpty()) put("escrow", escrowMap)
-                    } catch (e: Exception) {
-                        LOG.warn("Failed to serialize escrow defaults: {}", e.message)
-                    }
-                }
-
-                defaults.doc?.let { doc ->
-                    try {
-                        val docMap =
-                            buildMap<String, Any?> {
-                                doc.component()?.let { put("component", it) }
-                                doc.majorVersion()?.let { put("majorVersion", it) }
-                            }
-                        if (docMap.isNotEmpty()) put("doc", docMap)
-                    } catch (e: Exception) {
-                        LOG.warn("Failed to serialize doc defaults: {}", e.message)
-                    }
-                }
-            }
-        val entity =
-            registryConfigRepository.findById("component-defaults").orElse(
-                RegistryConfigEntity(key = "component-defaults"),
-            )
-        entity.value = map
-        entity.updatedAt = Instant.now()
-        registryConfigRepository.save(entity)
-        LOG.info("Migrated component defaults: {} keys", map.size)
+        LOG.info("Syncing component defaults from service-config")
+        val map = configSyncService.syncComponentDefaults()
+        LOG.info("Synced component defaults: {} keys", map.size)
         return map
     }
 

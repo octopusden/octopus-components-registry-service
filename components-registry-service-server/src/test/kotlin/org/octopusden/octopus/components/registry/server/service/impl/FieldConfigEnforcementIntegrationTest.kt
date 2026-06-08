@@ -11,6 +11,8 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
+import org.octopusden.octopus.components.registry.server.entity.RegistryConfigEntity
+import org.octopusden.octopus.components.registry.server.repository.RegistryConfigRepository
 import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.octopusden.octopus.components.registry.server.support.editorJwt
 import org.springframework.beans.factory.annotation.Autowired
@@ -23,7 +25,6 @@ import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
-import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.nio.file.Paths
 
@@ -35,8 +36,10 @@ import java.nio.file.Paths
  * JPA / transaction loop:
  *
  *   1. Pick an existing component from the ft-db seed.
- *   2. As admin, write a field-config row that sets
- *      `component.displayName.visibility = "hidden"`.
+ *   2. Seed a `field-config` cache row directly via [RegistryConfigRepository]
+ *      that sets `component.displayName.visibility = "hidden"`. (The blob is now
+ *      code-as-config; the admin PUT writer is gone — see ConfigSyncService — so
+ *      the test writes the cache the same way the sync would.)
  *   3. PATCH the component with a new `displayName` (as admin — the seed
  *      component has no owner/RM/SC, so a plain editor would be 403'd by the
  *      per-component edit gate; field-config stripping is principal-agnostic).
@@ -65,6 +68,16 @@ class FieldConfigEnforcementIntegrationTest {
 
     @Autowired
     private lateinit var objectMapper: ObjectMapper
+
+    @Autowired
+    private lateinit var registryConfigRepository: RegistryConfigRepository
+
+    /** Seed the `field-config` cache row directly — replaces the removed admin PUT writer. */
+    private fun seedFieldConfig(value: Map<String, Any?>) {
+        val entity = registryConfigRepository.findById("field-config").orElse(RegistryConfigEntity(key = "field-config"))
+        entity.value = value
+        registryConfigRepository.save(entity)
+    }
 
     init {
         val testResourcesPath =
@@ -106,21 +119,15 @@ class FieldConfigEnforcementIntegrationTest {
         val originalDisplayName = originalDetail["displayName"].asText("")
         val version = originalDetail["version"].asLong()
 
-        // Step 1: as admin, configure displayName=hidden via field-config.
-        val fieldConfigPayload =
+        // Step 1: configure displayName=hidden by seeding the field-config cache row.
+        seedFieldConfig(
             mapOf(
                 "component" to
                     mapOf(
                         "displayName" to mapOf("visibility" to "hidden"),
                     ),
-            )
-        mvc
-            .perform(
-                put("/rest/api/4/admin/config/field-config")
-                    .with(adminJwt())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(objectMapper.writeValueAsBytes(fieldConfigPayload)),
-            ).andExpect(status().is2xxSuccessful)
+            ),
+        )
 
         // Step 2: PATCH with a brand-new displayName (as admin — see class doc).
         val attempted = "ATTEMPTED-CHANGE-${System.nanoTime()}"
@@ -162,20 +169,14 @@ class FieldConfigEnforcementIntegrationTest {
         // order, and the `hiddenDisplayName_isStripped` case writes a
         // persistent `field-config` row whose `hidden` value would mask
         // this test's contract if it ran first.
-        val fieldConfigPayload =
+        seedFieldConfig(
             mapOf(
                 "component" to
                     mapOf(
                         "displayName" to mapOf("visibility" to "editable"),
                     ),
-            )
-        mvc
-            .perform(
-                put("/rest/api/4/admin/config/field-config")
-                    .with(adminJwt())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(objectMapper.writeValueAsBytes(fieldConfigPayload)),
-            ).andExpect(status().is2xxSuccessful)
+            ),
+        )
 
         val attempted = "EDITABLE-CHANGE-${System.nanoTime()}"
         val patchPayload =

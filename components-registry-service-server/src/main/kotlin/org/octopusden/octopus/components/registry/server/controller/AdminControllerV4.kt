@@ -16,6 +16,7 @@ import org.octopusden.octopus.components.registry.server.service.MigrationResult
 import org.octopusden.octopus.components.registry.server.service.MigrationStatus
 import org.octopusden.octopus.components.registry.server.service.ValidationResult
 import org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncJobService
+import org.springframework.cloud.context.refresh.ContextRefresher
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
@@ -37,6 +38,7 @@ class AdminControllerV4(
     private val migrationJobService: MigrationJobService,
     private val historyMigrationJobService: HistoryMigrationJobService,
     private val teamcitySyncJobService: TeamcitySyncJobService,
+    private val contextRefresher: ContextRefresher,
 ) {
     @PostMapping("/migrate-component/{name}")
     fun migrateComponent(
@@ -91,6 +93,24 @@ class AdminControllerV4(
 
     @PostMapping("/migrate-defaults")
     fun migrateDefaults(): ResponseEntity<Map<String, Any?>> = ResponseEntity.ok(importService.migrateDefaults())
+
+    /**
+     * Reload the code-as-config admin blobs (`field-config` + `component-defaults`)
+     * from `service-config` WITHOUT a pod restart.
+     *
+     * Triggers `ContextRefresher.refresh()`, which re-fetches the Spring Cloud Config
+     * profile, rebinds [AdminConfigProperties][org.octopusden.octopus.components.registry.server.config.AdminConfigProperties]
+     * (via `EnvironmentChangeEvent`) and publishes `RefreshScopeRefreshedEvent` — the
+     * latter drives
+     * [ConfigRefreshListener][org.octopusden.octopus.components.registry.server.listener.ConfigRefreshListener]
+     * to re-sync both blobs into the `registry_config` cache synchronously. Returns the
+     * set of property keys that changed.
+     */
+    @PostMapping("/reload-config")
+    fun reloadConfig(): ResponseEntity<Map<String, Any?>> {
+        val changed = contextRefresher.refresh()
+        return ResponseEntity.ok(mapOf("status" to "reloaded", "changedKeys" to changed.sorted()))
+    }
 
     @GetMapping("/export")
     fun exportComponents(): ResponseEntity<Map<String, String>> = ResponseEntity.ok(mapOf("status" to "not_implemented"))

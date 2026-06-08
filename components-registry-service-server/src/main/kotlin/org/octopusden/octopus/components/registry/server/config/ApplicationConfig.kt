@@ -12,6 +12,7 @@ import java.util.concurrent.ConcurrentHashMap
 @Configuration
 @EnableConfigurationProperties(
     ComponentsRegistryProperties::class,
+    AdminConfigProperties::class,
     TeamcityProperties::class,
     EmployeeServiceProperties::class,
 )

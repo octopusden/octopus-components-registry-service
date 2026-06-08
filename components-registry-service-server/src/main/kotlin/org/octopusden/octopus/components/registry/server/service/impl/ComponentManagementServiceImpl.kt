@@ -121,7 +121,7 @@ class ComponentManagementServiceImpl(
 ) : ComponentManagementService {
     // ConfigHelper is constructed lazily because it touches the Spring
     // Environment on first access; mirrors the pattern used by
-    // CommonControllerV2 and FieldConfigSeeder. The supported group-id
+    // CommonControllerV2. The supported group-id
     // list is environment-config-driven (read from
     // `components-registry.supportedGroupIds`), so building it once at
     // first access is sufficient — admins re-config via redeploy, not
@@ -1869,10 +1869,9 @@ class ComponentManagementServiceImpl(
      * #10 — every comma/pipe-separated element of every maven `groupPattern`
      * must start with a configured supported prefix. The supported list is
      * env-config-driven (`components-registry.supportedGroupIds`, read via the
-     * shared `ConfigHelper`, the same source `CommonControllerV2` and
-     * `FieldConfigSeeder` use). If the list is empty (mis-configured env) the
-     * check is skipped with a WARN rather than rejecting every write — parity
-     * with `FieldConfigSeeder`'s empty-list tolerance.
+     * shared `ConfigHelper`, the same source `CommonControllerV2` uses). If the
+     * list is empty (mis-configured env) the check is skipped with a WARN rather
+     * than rejecting every write.
      */
     private fun validateGroupIdPrefixes(entity: ComponentEntity) {
         val supported = runCatching { configHelper.supportedGroupIds() }.getOrDefault(emptyList())

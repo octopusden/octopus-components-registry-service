@@ -12,6 +12,7 @@ import org.octopusden.octopus.components.registry.server.service.ComponentsRegis
 import org.octopusden.octopus.components.registry.server.service.ImportService
 import org.octopusden.octopus.components.registry.server.service.impl.ComponentRegistryResolverImpl
 import org.octopusden.octopus.components.registry.server.service.impl.ComponentRoutingResolver
+import org.octopusden.octopus.components.registry.server.service.impl.ConfigSyncService
 import org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncService
 import org.octopusden.octopus.components.registry.test.BaseComponentsRegistryServiceTest
 import org.springframework.beans.factory.annotation.Autowired
@@ -115,6 +116,11 @@ class NoDbModeContextTest {
         Assertions.assertTrue(
             ctx.getBeanNamesForType(ComponentManagementService::class.java).isEmpty(),
             "DB-only ComponentManagementService must be absent in no-db mode",
+        )
+        Assertions.assertTrue(
+            ctx.getBeanNamesForType(ConfigSyncService::class.java).isEmpty(),
+            "DB-only ConfigSyncService must be absent in no-db mode " +
+                "(so ComponentsRegistryServiceImpl's nullable configSyncService is injected null)",
         )
         Assertions.assertEquals(
             1,
