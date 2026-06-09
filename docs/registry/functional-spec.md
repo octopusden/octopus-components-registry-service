@@ -63,7 +63,9 @@ Base URLs for links are configurable per deployment via `registry_config` (same 
 - `GET /rest/api/4/components/meta/employees?search=<q>` → `[{username, active}]` — an authenticated exact `getEmployee` probe (0/1 result); the employee-service client has no prefix search, so typeahead suggestions come from `/meta/owners` and this annotates the active flag.
 - `POST /rest/api/4/components/meta/employees/status` body `[username…]` → `{username: active|null}` — batch exact lookups; `null` = unknown/unavailable/disabled (the Portal renders no badge). Both are `ACCESS_COMPONENTS`-gated and fail-open.
 - **Nested creation**: Can include build, escrow, VCS, distribution, jira configs in single request
-- **Validation**: Name uniqueness (409 Conflict if exists), field format validation
+- **Validation**: Name uniqueness — a duplicate component key on **create** returns **400** with a
+  field-prefixed `name:` message (so the Portal routes it inline); a duplicate on **rename**
+  (`PATCH name`) returns **409 Conflict** (`ComponentNameConflictException`). Plus field format validation.
 - **Default application**: Component defaults (see 7.2) are applied to all absent fields
 - **Audit**: CREATE event logged with full new_value
 
@@ -109,10 +111,13 @@ These format checks are skipped for a field whose admin field-config visibility 
 
 #### Intentional legacy-validation relaxations
 
-- `displayName` is required + unique at the DB layer (NOT NULL, UNIQUE). A create/update that
-  omits or blanks it defaults to the component key; a value already used by another component is
-  rejected with a 400 keyed `displayName`. The import backfills blank / inherited-default values to
-  the key and fails fast on collisions (see schema-spec). The Portal still uses the component key
+- `displayName` is required + unique at the DB layer (NOT NULL, UNIQUE). On **create**, an
+  omitted/blank value defaults to the component key. On **update** (`PATCH`), a present-but-blank
+  value is **rejected with 400** (it is never re-defaulted — clearing a display name is not
+  allowed), and an absent value is "don't touch". In both paths a value already used by another
+  component is rejected with a **400 keyed `displayName`** (a key that collides with another
+  component's display name is keyed `name`). The import backfills blank / inherited-default values
+  to the key and fails fast on collisions (see schema-spec). The Portal still uses the component key
   as the stable identity, so the display label is auto-derived rather than user-mandatory.
 - Legacy hotfix version-format relationship checks are not enforced on v4 writes.
   Hotfix formats are inherited/read-only in the Portal, while permissive storage
@@ -365,7 +370,9 @@ Changes to field configuration and component defaults are recorded in the audit 
 | Scenario | HTTP Status | Response |
 |----------|-------------|----------|
 | Component not found | 404 | `{ "error": "Component not found", "id": "..." }` |
-| Duplicate name | 409 | `{ "error": "Component with name '...' already exists" }` |
+| Duplicate name on **create** | 400 | `{ "errorMessage": "name: a component with name '...' already exists" }` (field-prefixed → Portal routes inline) |
+| Duplicate name on **rename** (PATCH name) | 409 | `{ "errorMessage": "Component with name '...' already exists" }` (`ComponentNameConflictException`) |
+| Duplicate `displayName` (create/update) | 400 | `{ "errorMessage": "displayName: a component with display name '...' already exists" }` |
 | Optimistic lock conflict | 409 | `{ "error": "Component was modified by another user" }` |
 | Validation failure | 400 | `{ "errors": [{ "field": "name", "message": "must not be blank" }] }` |
 | Unauthorized | 401 | Standard Spring Security response |

@@ -124,7 +124,7 @@ Identity + fields that never vary per version range.
 | `id` | UUID | PK | |
 | `component_key` | VARCHAR(255) | NOT NULL, UNIQUE | DSL key; exposed as `name` in v1-v3 API, `componentKey` in v4 |
 | `component_owner` | VARCHAR(255) | nullable | |
-| `display_name` | VARCHAR(255) | NOT NULL, UNIQUE | DSL `componentDisplayName`. Required + unique. Import backfills a blank value — or one equal to the `Defaults.groovy` inherited default — to `component_key`, and fails fast (pre-pass, before any write) if two components would resolve to the same display name. Create/update default a blank value to the key and reject duplicates (400 keyed `displayName`). |
+| `display_name` | VARCHAR(255) | NOT NULL, UNIQUE | DSL `componentDisplayName`. Required + unique. Import backfills a blank value — or one equal to the `Defaults.groovy` inherited default — to `component_key`, and fails fast (pre-pass, before any write) if two components would resolve to the same display name. **Create** defaults a blank value to the key; **update** (PATCH) rejects a present-but-blank value with 400 (clearing is not allowed). Both reject duplicates (400 keyed `displayName`; a key colliding with another component's display name is keyed `name`). |
 | `product_type` | VARCHAR(20) | nullable | App-validated against `ProductTypes` enum (PT_K/PT_C/PT_D_DB/PT_D) |
 | `client_code` | VARCHAR(255) | nullable | |
 | `archived` | BOOLEAN | NOT NULL DEFAULT false | |

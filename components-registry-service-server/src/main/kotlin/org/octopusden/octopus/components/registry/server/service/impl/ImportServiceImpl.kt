@@ -962,12 +962,6 @@ class ImportServiceImpl(
     }
 
     /**
-     * Build a `ComponentEntity` from the given `EscrowModuleConfig`.
-     * Only sets scalar/per-component fields. `parentComponent` and
-     * `componentGroup` are resolved in later passes.
-     */
-    @Suppress("CyclomaticComplexMethod")
-    /**
      * Resolved component display name for the DB (NOT NULL + UNIQUE). The DSL's
      * `componentDisplayName` INHERITS from `Defaults.groovy` for every component that
      * doesn't declare its own (EscrowConfigurationLoader.loadComponentDisplayName), so a
@@ -1019,6 +1013,12 @@ class ImportServiceImpl(
         )
     }
 
+    /**
+     * Build a `ComponentEntity` from the given `EscrowModuleConfig`.
+     * Only sets scalar/per-component fields. `parentComponent` and
+     * `componentGroup` are resolved in later passes.
+     */
+    @Suppress("CyclomaticComplexMethod")
     private fun buildComponentEntity(
         componentKey: String,
         cfg: EscrowModuleConfig,
