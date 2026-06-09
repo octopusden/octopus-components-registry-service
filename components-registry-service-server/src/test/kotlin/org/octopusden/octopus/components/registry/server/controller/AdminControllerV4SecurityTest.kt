@@ -31,19 +31,21 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Instant
 
-// MIG-024: pin both gates that protect POST /rest/api/4/admin/migrate:
+// Pins the two gates that protect AdminControllerV4's endpoints, exercised through
+// the full security stack (a slice @WebMvcTest wouldn't load the real WebSecurityConfig):
 //   - URL-level requestMatchers("/rest/api/4/**").authenticated() in
 //     WebSecurityConfig → 401 for anonymous callers.
 //   - Class-level @PreAuthorize("@permissionEvaluator.canImport()") on
 //     AdminControllerV4 → 403 for authenticated callers without IMPORT_DATA.
 //
-// MigrationJobService is mocked so the positive path doesn't actually
-// kick a background migration in the test context. Slice tests
-// (@WebMvcTest) wouldn't load the real WebSecurityConfig, so the only
-// meaningful regression test is a full @SpringBootTest.
-//
-// The endpoint contract changed in this PR: it now returns 202 Accepted
-// with a JobResponse instead of 200 OK with FullMigrationResult.
+// Two surfaces are covered:
+//   - MIG-024: POST /admin/migrate (returns 202 Accepted with a JobResponse).
+//     MigrationJobService is mocked so the positive path doesn't kick a real
+//     background migration in the test context.
+//   - #250: POST /admin/reload-config — the config-write path since #343 made
+//     field-config/component-defaults code-as-config (the legacy ConfigControllerV4
+//     PUTs are now 410-Gone tombstones). ContextRefresher is mocked so the positive
+//     path doesn't trigger a real Spring Cloud Config refresh.
 @AutoConfigureMockMvc
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
