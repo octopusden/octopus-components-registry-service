@@ -2,9 +2,11 @@ package org.octopusden.octopus.components.registry.server.controller
 
 import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
+import org.octopusden.octopus.components.registry.server.config.ComponentsRegistryProperties
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentCreateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentDetailResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.ComponentEditorsResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentFilter
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentSummaryResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentUpdateRequest
@@ -67,6 +69,7 @@ class ComponentControllerV4(
     private val componentGroupRepository: ComponentGroupRepository,
     private val employeeDirectory: EmployeeDirectoryService,
     private val permissionEvaluator: PermissionEvaluator,
+    private val properties: ComponentsRegistryProperties,
 ) {
     private val log = LoggerFactory.getLogger(ComponentControllerV4::class.java)
 
@@ -196,6 +199,18 @@ class ComponentControllerV4(
     @GetMapping("/meta/escrow-generations")
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
     fun getEscrowGenerations(): List<String> = EscrowGenerationMode.values().map { it.name }
+
+    // Allowed Java / Maven build-tool versions for the Portal's Build-tab dropdowns.
+    // Sourced from `components-registry.build-tool-versions.*` (application.yml default,
+    // per-installation override in service-config). Numeric-aware sort so e.g.
+    // "1.8" < "3.6" < "3.6.3" < "11" rather than lexicographic "1.8" < "11" < "3.6".
+    @GetMapping("/meta/java-versions")
+    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
+    fun getJavaVersions(): List<String> = properties.buildToolVersions.java.sortedWith(VERSION_COMPARATOR)
+
+    @GetMapping("/meta/maven-versions")
+    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
+    fun getMavenVersions(): List<String> = properties.buildToolVersions.maven.sortedWith(VERSION_COMPARATOR)
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -352,6 +367,17 @@ class ComponentControllerV4(
             .body(rendered.body)
     }
 
+    /**
+     * The people who may edit this component (componentOwner + ordered releaseManagers +
+     * securityChampions). Read-only informational projection for the Portal's "who can edit"
+     * surface — administrators (EDIT_ANY_COMPONENT) may also edit but are not enumerated here.
+     */
+    @GetMapping("/{idOrName}/editors")
+    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
+    fun getEditors(
+        @PathVariable idOrName: String,
+    ): ComponentEditorsResponse = componentManagementService.getEditors(idOrName)
+
     // Field-level gating: a plain edit requires component ownership (owner/RM/SC)
     // or EDIT_ANY_COMPONENT; switching `archived` additionally requires
     // ARCHIVE_COMPONENTS, and changing `name` (rename) additionally requires
@@ -426,4 +452,22 @@ class ComponentControllerV4(
     fun listFieldOverrides(
         @PathVariable id: UUID,
     ): List<FieldOverrideResponse> = componentManagementService.listFieldOverrides(id)
+
+    companion object {
+        // Numeric-aware version order: compare dot-separated segments as integers so
+        // "1.8" < "3.6" < "3.6.3" < "11" (a lexicographic sort would put "11" before "3.6").
+        // Non-numeric / missing segments fall back to 0, then a stable string tiebreak.
+        // `internal` so a unit test can exercise the numeric ordering directly.
+        internal val VERSION_COMPARATOR =
+            Comparator<String> { a, b ->
+                val pa = a.split(".")
+                val pb = b.split(".")
+                for (i in 0 until maxOf(pa.size, pb.size)) {
+                    val na = pa.getOrNull(i)?.toIntOrNull() ?: 0
+                    val nb = pb.getOrNull(i)?.toIntOrNull() ?: 0
+                    if (na != nb) return@Comparator na.compareTo(nb)
+                }
+                a.compareTo(b)
+            }
+    }
 }

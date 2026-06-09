@@ -21,6 +21,11 @@ interface ComponentRepository :
 
     fun existsByComponentKey(componentKey: String): Boolean
 
+    // display_name is nullable + UNIQUE; create/update validate uniqueness of a non-null value before write.
+    fun existsByDisplayName(displayName: String): Boolean
+
+    fun existsByDisplayNameAndIdNot(displayName: String, id: UUID): Boolean
+
     @Query(
         "SELECT DISTINCT c.componentOwner FROM ComponentEntity c " +
             "WHERE c.componentOwner IS NOT NULL AND c.componentOwner <> '' " +

@@ -13,6 +13,8 @@
   - **Extended — multi-value (OR, exact `IN`; back the Portal "extended search" multi-select dropdowns, `SYS-046`):** `clientCode`, `jiraProjectKey` (BASE row), `parentComponentName` (the parent's component key — children of any listed parent), `groupKey` (the owning group). CSV or repeatable params, normalised like the Main multi-value filters; the BASE-row join uses `distinct`. (These four were substring/exact single-value before `SYS-046`.)
   - **Extended — single-value:** `solution`, `jiraTechnical`, `distributionExplicit`, `distributionExternal` (booleans; `=false` matches only rows explicitly set false — rows where the column is NULL are excluded — `SYS-045`), `vcsPath` (LIKE on a BASE VCS entry), `productionBranch` (LIKE on a BASE VCS entry's `branch`), `canBeParent`. The VCS-entry joins use `distinct` so a multi-entry component is counted once.
   - **Meta option lists** (populate the filter-bar pickers; each returns sorted distinct values **in use**, gated by `ACCESS_COMPONENTS`): `/meta/owners`, `/meta/labels`, `/meta/systems`, `/meta/client-codes`, `/meta/jira-project-keys`, `/meta/parent-component-names` (only keys actually referenced as a parent), `/meta/group-keys` (only groups with ≥1 member). The full master-dictionary variants `/meta/labels/dictionary` and `/meta/systems/dictionary` back the editor multi-selects.
+  - **Domain option lists** (populate editor dropdowns, gated by `ACCESS_COMPONENTS`): `/meta/build-systems`, `/meta/repository-types`, `/meta/escrow-generations` (enum-sourced), plus `/meta/java-versions` and `/meta/maven-versions` — the allowed build-tool versions sourced from `components-registry.build-tool-versions.{java,maven}` (application.yml default, per-installation override via service-config), returned numeric-sorted.
+  - **Editors** (read-only "who can edit" projection, gated by `ACCESS_COMPONENTS`): `GET /rest/api/4/components/{idOrName}/editors` → `{ componentOwner, releaseManagers[], securityChampions[] }`. Informational only — administrators (`EDIT_ANY_COMPONENT`) may also edit but are not enumerated.
 - **Output**: Paginated list of components with summary info
 - **Sorting**: By name (default), system, productType, updatedAt
 - **Pagination**: Page number + page size (default 20, max 100)
@@ -43,8 +45,9 @@ Base URLs for links are configurable per deployment via `registry_config` (same 
 
 ### 1.3 Create Component
 - **Required fields**: `name` (unique, alphanumeric + hyphens + underscores, max 255 chars), `componentOwner`
-- **Conditionally required**: `releaseManager`, `securityChampion` — required when `distribution.explicit && distribution.external`; `copyright` — required under the same gate only when `components-registry.copyright-path` is configured
-- **Optional fields**: displayName, productType, system, clientCode, solution, groupId, labels, doc
+- **Conditionally required**: `releaseManager`, `securityChampion`, `displayName` — required when `distribution.explicit && distribution.external`; `copyright` — required under the same gate only when `components-registry.copyright-path` is configured
+- **Optional + unique**: `displayName` — nullable (stored verbatim from the DSL; NOT backfilled to the component key, preserving the legacy v1/v2/v3 `$.name` wire). When set it must be unique across components (400 keyed `displayName` on a duplicate)
+- **Optional fields**: productType, system, clientCode, solution, groupId, labels, doc
 
 **Person-field validation (enforced on the v4 write path — see ADR-015).** Restored from the old `EscrowConfigValidator` + the (formerly default-off CI) `ComponentRegistryValidationTask`, and modernised into per-request checks on `POST /rest/api/4/components` and `PATCH /rest/api/4/components/{id}`:
 
@@ -60,14 +63,16 @@ Base URLs for links are configurable per deployment via `registry_config` (same 
 - `GET /rest/api/4/components/meta/employees?search=<q>` → `[{username, active}]` — an authenticated exact `getEmployee` probe (0/1 result); the employee-service client has no prefix search, so typeahead suggestions come from `/meta/owners` and this annotates the active flag.
 - `POST /rest/api/4/components/meta/employees/status` body `[username…]` → `{username: active|null}` — batch exact lookups; `null` = unknown/unavailable/disabled (the Portal renders no badge). Both are `ACCESS_COMPONENTS`-gated and fail-open.
 - **Nested creation**: Can include build, escrow, VCS, distribution, jira configs in single request
-- **Validation**: Name uniqueness (409 Conflict if exists), field format validation
+- **Validation**: Name uniqueness — a duplicate component key on **create** returns **400** with a
+  field-prefixed `name:` message (so the Portal routes it inline); a duplicate on **rename**
+  (`PATCH name`) returns **409 Conflict** (`ComponentNameConflictException`). Plus field format validation.
 - **Default application**: Component defaults (see 7.2) are applied to all absent fields
 - **Audit**: CREATE event logged with full new_value
 
 **UI — Create Component dialog:**
 
 1. **Profile selection** (future feature, out of scope for initial implementation) — admin-defined profiles (e.g., "Gradle Library", "Spring Boot Service", "Kotlin DSL Plugin") that pre-fill build, VCS, and escrow settings. For now, component defaults serve as a single implicit profile.
-2. **Component name** (required) + **display name** (optional, defaults to name)
+2. **Component name** (required) + **display name** (optional; required for explicit+external components)
 3. **Owner** — pre-filled with current user
 4. **TeamCity integration** — optional checkbox "Create TeamCity project". When checked, user selects a parent TeamCity project from a dropdown/search. On component creation, the system calls TeamCity API to create a sub-project. (Out of scope for initial implementation — documented as future integration point.)
 5. **VCS repository URL** — optional, for linking to existing repo
@@ -106,9 +111,16 @@ These format checks are skipped for a field whose admin field-config visibility 
 
 #### Intentional legacy-validation relaxations
 
-- `displayName` remains optional, including for explicit+external components. The
-  v4 contract deliberately uses the component key as the stable identity and does
-  not require a second display label.
+- `displayName` is **nullable** + UNIQUE at the DB layer. It is stored **verbatim** from the DSL —
+  it is NOT backfilled to the component key, because the legacy v1/v2/v3 `$.name` must keep serving
+  `null` for components without a `componentDisplayName` (prod 2.0.87 byte-compat). It is
+  **required only for explicit+external components** (`distribution.explicit && distribution.external`),
+  mirroring the pre-existing `EscrowConfigValidator.validateExplicitExternalComponent` rule. On
+  **create/update**, a value already used by another component is rejected with a **400 keyed
+  `displayName`**; on **update** a blank value clears it to `null` (except for an explicit+external
+  component, where the requiredness check then rejects it). The import stores the DSL value verbatim
+  and fails fast on duplicate non-null names (see schema-spec). The Portal uses the component key as
+  the stable identity, so the display label is optional except under the explicit+external gate.
 - Legacy hotfix version-format relationship checks are not enforced on v4 writes.
   Hotfix formats are inherited/read-only in the Portal, while permissive storage
   preserves imported configurations and resolver compatibility.
@@ -360,7 +372,9 @@ Changes to field configuration and component defaults are recorded in the audit 
 | Scenario | HTTP Status | Response |
 |----------|-------------|----------|
 | Component not found | 404 | `{ "error": "Component not found", "id": "..." }` |
-| Duplicate name | 409 | `{ "error": "Component with name '...' already exists" }` |
+| Duplicate name on **create** | 400 | `{ "errorMessage": "name: a component with name '...' already exists" }` (field-prefixed → Portal routes inline) |
+| Duplicate name on **rename** (PATCH name) | 409 | `{ "errorMessage": "Component with name '...' already exists" }` (`ComponentNameConflictException`) |
+| Duplicate `displayName` (create/update) | 400 | `{ "errorMessage": "displayName: a component with display name '...' already exists" }` |
 | Optimistic lock conflict | 409 | `{ "error": "Component was modified by another user" }` |
 | Validation failure | 400 | `{ "errors": [{ "field": "name", "message": "must not be blank" }] }` |
 | Unauthorized | 401 | Standard Spring Security response |

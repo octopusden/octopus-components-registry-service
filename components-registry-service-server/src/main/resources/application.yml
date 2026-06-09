@@ -3,6 +3,26 @@ pathToConfig: file://${components-registry.groovy-path}
 components-registry:
   auto-migrate: false
 
+  # Allowed Java / Maven build-tool versions offered as Portal dropdown options
+  # (served via /meta/java-versions and /meta/maven-versions, numeric-sorted).
+  # Each installation overrides the whole list in its service-config
+  # (components-registry-service.yml) — Spring relaxed binding REPLACES the list.
+  build-tool-versions:
+    java:
+      - "1.8"
+      - "11"
+      - "17"
+      - "21"
+      - "25"
+    maven:
+      - "2.2.1"
+      - "3"
+      - "3.3.9"
+      - "3.6"
+      - "3.6.3"
+      - "3.8"
+      - "3.9"
+
   # Admin config-as-code BASELINE (product defaults). service-config overrides
   # per installation, merging at the property-leaf level (see ADR-016). Keep
   # only generic/product values here — installation-specific or internal values

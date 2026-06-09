@@ -111,4 +111,47 @@ class MultiValuePeopleLegacyCompatTest {
         assertEquals("user", cfg!!.releaseManager)
         assertEquals("user", cfg.securityChampion)
     }
+
+    @Test
+    @DisplayName("MIG-051: a null displayName stays null on the legacy wire (no key backfill)")
+    fun `MIG-051 null displayName resolves to null componentDisplayName`() {
+        // displayName is nullable and stored verbatim — there is NO key backfill (that would
+        // flip the legacy v1/v2/v3 `$.name` NULL → STRING for every unnamed component and break
+        // wire-compat). A component with no componentDisplayName must keep `$.name` null, exactly
+        // as prod 2.0.87 served it.
+        val comp = makeComponent("NO_DISPLAY_NAME")
+        assertNull(comp.displayName)
+        stub(comp)
+
+        val cfg = resolver.getResolvedComponentDefinition("NO_DISPLAY_NAME", "1.0.0")
+        assertNotNull(cfg)
+        assertNull(cfg!!.componentDisplayName)
+    }
+
+    @Test
+    @DisplayName("MIG-051: a set displayName is preserved verbatim on the legacy wire")
+    fun `MIG-051 set displayName is preserved`() {
+        val comp = makeComponent("HAS_DISPLAY_NAME")
+        comp.displayName = "Human Friendly Name"
+        stub(comp)
+
+        val cfg = resolver.getResolvedComponentDefinition("HAS_DISPLAY_NAME", "1.0.0")
+        assertNotNull(cfg)
+        assertEquals("Human Friendly Name", cfg!!.componentDisplayName)
+    }
+
+    @Test
+    @DisplayName("MIG-051: list path (getComponentById) also passes a null displayName through as null")
+    fun `MIG-051 list path keeps null displayName null`() {
+        // The list endpoint GET /rest/api/2/components serializes `$.components[N].name`
+        // via toEscrowModule → buildEscrowModuleConfig (same join site). Pin that the
+        // passthrough equally covers the list path (the divergences included
+        // `$.components[N].name`).
+        val comp = makeComponent("NO_DISPLAY_NAME_LIST")
+        stub(comp)
+
+        val module = resolver.getComponentById("NO_DISPLAY_NAME_LIST")
+        assertNotNull(module)
+        assertNull(module!!.moduleConfigurations.first().componentDisplayName)
+    }
 }

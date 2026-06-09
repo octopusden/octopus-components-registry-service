@@ -271,7 +271,7 @@ class ComponentsRegistryServiceControllerTest : MockMvcRegistryTestSupport() {
                 .response
                 .toObject(ComponentV2::class.java)
 
-        val expectedComponent = ComponentV2("TEST_COMPONENT_WITH_DOC_AND_VERSIONS", "Test Component with Doc", "user9")
+        val expectedComponent = ComponentV2("TEST_COMPONENT_WITH_DOC_AND_VERSIONS", "Test Component with Doc and Versions", "user9")
         expectedComponent.doc =
             DocDTO(
                 "TEST_COMPONENT_DOC",
@@ -303,7 +303,7 @@ class ComponentsRegistryServiceControllerTest : MockMvcRegistryTestSupport() {
                 .response
                 .toObject(ComponentV2::class.java)
 
-        val expectedComponent = ComponentV2("TEST_COMPONENT_WITH_DOC_AND_VERSIONS", "Test Component with Doc", "user9")
+        val expectedComponent = ComponentV2("TEST_COMPONENT_WITH_DOC_AND_VERSIONS", "Test Component with Doc and Versions", "user9")
         expectedComponent.doc =
             DocDTO(
                 "doc_mycomponent",
