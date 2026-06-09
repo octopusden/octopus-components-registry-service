@@ -22,6 +22,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.mock.mockito.MockBean
+import org.springframework.cloud.context.refresh.ContextRefresher
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
@@ -80,6 +81,15 @@ class AdminControllerV4SecurityTest {
     private lateinit var teamcitySyncJobService:
         org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncJobService
 
+    /**
+     * Mocked so the `/reload-config` positive path does not trigger a real Spring Cloud
+     * Config refresh (which would re-fetch the profile and rebind AdminConfigProperties)
+     * in the test context. The 401/403 cases never reach the controller body — method
+     * security denies first — so `refresh()` must NOT be invoked there.
+     */
+    @MockBean
+    private lateinit var contextRefresher: ContextRefresher
+
     @Autowired
     private lateinit var mvc: MockMvc
 
@@ -115,6 +125,44 @@ class AdminControllerV4SecurityTest {
             .andExpect(status().isAccepted)
 
         verify(migrationJobService, times(1)).startAsync()
+    }
+
+    // #250: config-write guard. Since #343, field-config / component-defaults are
+    // code-as-config — the legacy ConfigControllerV4 PUTs are 410-Gone tombstones and
+    // the real write path is POST /admin/reload-config (re-reads service-config). It
+    // inherits AdminControllerV4's class-level @PreAuthorize("@permissionEvaluator.canImport()").
+    // These cases pin that the config-write capability stays IMPORT_DATA-gated so a
+    // later refactor can't silently move it off the admin gate.
+    @Test
+    @DisplayName("config-write: POST /admin/reload-config without JWT returns 401 and does not refresh")
+    fun `reload-config anonymous returns 401 and does not refresh`() {
+        mvc
+            .perform(post("/rest/api/4/admin/reload-config"))
+            .andExpect(status().isUnauthorized)
+
+        verify(contextRefresher, never()).refresh()
+    }
+
+    @Test
+    @DisplayName("config-write: POST /admin/reload-config with non-IMPORT_DATA JWT returns 403 and does not refresh")
+    fun `reload-config editor JWT returns 403 and does not refresh`() {
+        mvc
+            .perform(post("/rest/api/4/admin/reload-config").with(editorJwt()))
+            .andExpect(status().isForbidden)
+
+        verify(contextRefresher, never()).refresh()
+    }
+
+    @Test
+    @DisplayName("config-write: POST /admin/reload-config with IMPORT_DATA JWT returns 200 and refreshes exactly once")
+    fun `reload-config admin JWT returns 200 and refreshes`() {
+        `when`(contextRefresher.refresh()).thenReturn(emptySet())
+
+        mvc
+            .perform(post("/rest/api/4/admin/reload-config").with(adminJwt()))
+            .andExpect(status().isOk)
+
+        verify(contextRefresher, times(1)).refresh()
     }
 
     companion object {
