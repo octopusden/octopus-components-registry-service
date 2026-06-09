@@ -9,6 +9,8 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
+import org.octopusden.octopus.components.registry.server.entity.RegistryConfigEntity
+import org.octopusden.octopus.components.registry.server.repository.RegistryConfigRepository
 import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
@@ -21,7 +23,6 @@ import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
-import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.nio.file.Paths
@@ -72,6 +73,16 @@ class StrictContractTest {
 
     @Autowired
     private lateinit var objectMapper: ObjectMapper
+
+    @Autowired
+    private lateinit var registryConfigRepository: RegistryConfigRepository
+
+    /** Seed the `field-config` cache row directly — the admin PUT writer is gone (code-as-config). */
+    private fun seedFieldConfig(value: Map<String, Any?>) {
+        val entity = registryConfigRepository.findById("field-config").orElse(RegistryConfigEntity(key = "field-config"))
+        entity.value = value
+        registryConfigRepository.save(entity)
+    }
 
     init {
         val testResourcesPath =
@@ -542,17 +553,9 @@ class StrictContractTest {
         val id = seed["id"].asText()
         val versionLock = seed["version"].asLong()
 
-        // Hide `component.system` via field-config. Same put-endpoint
-        // pattern as `FieldConfigEnforcementIntegrationTest`.
-        val fieldConfigPayload =
-            """{"component": {"system": {"visibility": "hidden"}}}"""
-        mvc
-            .perform(
-                put("/rest/api/4/admin/config/field-config")
-                    .with(adminJwt())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(fieldConfigPayload),
-            ).andExpect(status().is2xxSuccessful)
+        // Hide `component.system` by seeding the field-config cache row directly.
+        // Same fixture pattern as `FieldConfigEnforcementIntegrationTest`.
+        seedFieldConfig(mapOf("component" to mapOf("system" to mapOf("visibility" to "hidden"))))
 
         // PATCH would write ALFA if the field were not hidden. We also change a
         // *visible* field (`displayName`) so the write is not a no-op: under

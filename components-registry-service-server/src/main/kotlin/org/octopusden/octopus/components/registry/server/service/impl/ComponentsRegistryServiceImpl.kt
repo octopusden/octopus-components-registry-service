@@ -20,11 +20,12 @@ class ComponentsRegistryServiceImpl(
     private val componentRegistryResolver: ComponentRegistryResolver,
     private val serviceStatus: ServiceStatus,
     private val properties: ComponentsRegistryProperties,
-    // Nullable: both are part of the database layer (@ConditionalOnDatabaseEnabled /
+    // Nullable: all three are part of the database layer (@ConditionalOnDatabaseEnabled /
     // JPA) and absent in no-db mode. Spring injects null for a Kotlin-nullable
-    // constructor parameter when no candidate bean exists; in db-mode both are wired.
+    // constructor parameter when no candidate bean exists; in db-mode all are wired.
     private val importService: ImportService?,
     private val componentSourceRepository: ComponentSourceRepository?,
+    private val configSyncService: ConfigSyncService?,
 ) : ComponentsRegistryService {
     override fun updateConfigCache(): Long {
         log.info("Start update of Component Registry")
@@ -52,6 +53,11 @@ class ComponentsRegistryServiceImpl(
     @Suppress("UnusedPrivateMember")
     private fun cloneVcsData() {
         updateConfigCache()
+        // Sync code-as-config admin blobs (field-config + component-defaults) from
+        // service-config into the registry_config DB cache BEFORE any auto-migration:
+        // migrate() reads component-defaults, and field-config enforcement must be live
+        // the moment the service serves traffic. No-op in no-db mode (bean absent).
+        configSyncService?.syncToCache()
         if (properties.autoMigrate) {
             log.info("Auto-migrate enabled, migrating all components to database...")
             // auto-migrate is a DB-mode-only operation, so ImportService is always present

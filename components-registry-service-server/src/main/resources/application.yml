@@ -3,6 +3,67 @@ pathToConfig: file://${components-registry.groovy-path}
 components-registry:
   auto-migrate: false
 
+  # Admin config-as-code BASELINE (product defaults). service-config overrides
+  # per installation, merging at the property-leaf level (see ADR-016). Keep
+  # only generic/product values here — installation-specific or internal values
+  # (groupId default, hidden fields, system code, security groups) live in
+  # service-config, NOT in this public repo.
+  #
+  # Field UI policy baseline: every catalog field, all editable, with the
+  # default search placement. Unlisted fields fall back to editable anyway;
+  # listing them makes the policy explicit and lets the Portal drop its
+  # client-side default-searchability map.
+  field-config:
+    component:
+      name:                 { visibility: editable, searchable: Extended, required: true }
+      displayName:          { visibility: editable, searchable: Extended }
+      solution:             { visibility: editable, searchable: Extended }
+      componentOwner:       { visibility: editable, searchable: Main }
+      system:               { visibility: editable, searchable: Main }
+      productType:          { visibility: editable, searchable: Extended }
+      clientCode:           { visibility: editable, searchable: Extended }
+      groupId:              { visibility: editable, searchable: Extended, required: true }
+      parentComponentName:  { visibility: editable, searchable: Extended }
+      canBeParent:          { visibility: editable, searchable: Extended }
+      groupKey:             { visibility: editable, searchable: Extended, required: true }
+      distributionExplicit: { visibility: editable, searchable: Extended }
+      distributionExternal: { visibility: editable, searchable: Extended }
+    build:
+      buildSystem:          { visibility: editable, searchable: Main }
+      javaVersion:          { visibility: editable, searchable: Extended }
+      gradleVersion:        { visibility: editable, searchable: Extended }
+    jira:
+      projectKey:           { visibility: editable, searchable: Extended }
+      technical:            { visibility: editable, searchable: Extended }
+    vcs:
+      vcsPath:              { visibility: editable, searchable: Extended }
+      branch:               { visibility: editable, searchable: Extended }
+
+  # New-component defaults baseline (generic values only). system code and
+  # distribution security groups are installation-specific → service-config.
+  component-defaults:
+    buildSystem: MAVEN
+    artifactIdPattern: '[\w-\.]+'
+    releasesInDefaultBranch: true
+    solution: false
+    build:
+      javaVersion: "17"
+      mavenVersion: "3.9"
+      gradleVersion: LATEST
+    jira:
+      technical: false
+      componentVersionFormat:
+        majorVersionFormat: '$major.$minor'
+        releaseVersionFormat: '$major.$minor.$service'
+        hotfixVersionFormat: '$major.$minor.$service-$fix'
+    distribution:
+      explicit: false
+      external: true
+    vcs:
+      tag: '$module-$version'
+    escrow:
+      generation: AUTO
+
 # TeamCity sync engine. Defaults are inert: with `base-url` blank and
 # `sync.enabled` false, the client makes no HTTP calls and the weekly cron
 # bean does not register. Production values come from `service-config`

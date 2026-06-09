@@ -22,7 +22,6 @@ import org.octopusden.octopus.components.registry.server.repository.ComponentRep
 import org.octopusden.octopus.components.registry.server.repository.ComponentRequiredToolRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentSourceRepository
 import org.octopusden.octopus.components.registry.server.repository.LabelRepository
-import org.octopusden.octopus.components.registry.server.repository.RegistryConfigRepository
 import org.octopusden.octopus.components.registry.server.repository.SystemRepository
 import org.octopusden.octopus.components.registry.server.repository.ToolRepository
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
@@ -87,7 +86,7 @@ class MIG047PerRangeGroupIdImportTest {
             componentSourceRepository = mock(ComponentSourceRepository::class.java),
             sourceRegistry = mock(ComponentSourceRegistry::class.java),
             configurationLoader = configurationLoader,
-            registryConfigRepository = mock(RegistryConfigRepository::class.java),
+            configSyncService = mock(ConfigSyncService::class.java),
             componentRepository = mock(ComponentRepository::class.java),
             configurationRepository = configurationRepository,
             componentGroupRepository = mock(ComponentGroupRepository::class.java),

@@ -4,12 +4,12 @@ spring:
     # words by default, which breaks generated SELECTs against
     # `registry_config.key` / `registry_config.value`. The entity columns
     # were previously only read by paths that never fired during
-    # `test`-profile boot, but the new FieldConfigSeeder runs on every
-    # ApplicationReadyEvent — including the light-client's @SpringBootTest
-    # context — and `findById` issues `SELECT key, ..., value FROM
-    # registry_config WHERE key = ?`. Postgres is unaffected (`key` and
-    # `value` are not reserved there); this opt-out is scoped to the H2
-    # test profile only.
+    # `test`-profile boot, but ConfigSyncService now upserts the
+    # field-config / component-defaults blobs on startup — including the
+    # light-client's @SpringBootTest context — and `findById` issues
+    # `SELECT key, ..., value FROM registry_config WHERE key = ?`. Postgres
+    # is unaffected (`key` and `value` are not reserved there); this opt-out
+    # is scoped to the H2 test profile only.
     url: "jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;NON_KEYWORDS=KEY,VALUE"
   jpa:
     hibernate:
