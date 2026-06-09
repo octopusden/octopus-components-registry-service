@@ -137,6 +137,7 @@ object id10CompileUtAuto : BuildType({
         %ARTIFACT_PATH%
         **/reports
         **/test-results
+        components-registry-service-server/build/openapi/v4.json => openapi
     """.trimIndent()
 
     params {

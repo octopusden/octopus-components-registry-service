@@ -110,6 +110,12 @@ auth-server:
 # either forces eager OIDC discovery (issuer-uri) or skips issuer validation
 # (jwk-set-uri alone). Instead WebSecurityConfig provides a custom JwtDecoder
 # that is lazy on JWKS fetch AND explicitly enforces the issuer claim.
+# springdoc-openapi: sort keys on serialization so the swagger-ui / api-docs output is
+# stable. The TD-003 drift gate (OpenApiV4SpecTest) additionally re-sorts recursively, but
+# this keeps the live /v3/api-docs/v4 deterministic too. See OpenApiV4Config.
+springdoc:
+  writer-with-order-by-keys: true
+
 spring:
   jpa:
     open-in-view: false
