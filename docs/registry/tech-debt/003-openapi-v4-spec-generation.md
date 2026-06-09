@@ -2,15 +2,13 @@
 
 ## Status
 
-Open. Mirror of Portal `TD-002` ("Replace hand-written `frontend/src/lib/types.ts` with OpenAPI-generated types"). Either side can drive — the practical work needs both.
+**CRS side: done** (generation + drift gate + CI artifact — see "CRS side" below). **Portal side: open**, tracked as Portal `TD-002` / issue #82 ("Replace hand-written `frontend/src/lib/types.ts` with OpenAPI-generated types"). The CRS build now publishes `v4.json`; the Portal vendors it and regenerates `schema.d.ts`.
 
 ## Context
 
 When the UI was extracted from this repo into `octopus-components-management-portal` (PR #147, [ADR-012](../adr/012-portal-architecture.md), reversed [ADR-009](../adr/009-ui-repository-strategy.md)), we accepted that API + UI changes are no longer atomic across a single PR. The mitigation we agreed to in ADR-012 §"Negative — and how mitigated" is OpenAPI generation, so the SPA can derive its TypeScript types from a machine-readable contract instead of hand-coding them.
 
-That generation is not yet wired. As of `v3` HEAD:
-- The CRS server has no OpenAPI generator dependency in `components-registry-service-server/build.gradle`.
-- The Portal SPA hand-maintains `frontend/src/lib/types.ts` against the Kotlin DTOs in this repo.
+The `springdoc-openapi-starter-webmvc-ui` dependency was already present in `components-registry-service-server/build.gradle`; what was missing — and is now added — is the v4 grouping, the generation/drift task, and the CI artifact. The Portal SPA still hand-maintains `frontend/src/lib/types.ts` against the Kotlin DTOs in this repo; migrating it to the generated `schema.d.ts` is the remaining Portal-side work.
 
 This is fine while a single team owns both repos and the API surface is small. It will not scale.
 
@@ -22,12 +20,12 @@ This is fine while a single team owns both repos and the API surface is small. I
 
 ## Scope
 
-### CRS side (this repo)
+### CRS side (this repo) — DONE
 
-1. Add `springdoc-openapi-starter-webmvc-ui` (or equivalent) to `components-registry-service-server/build.gradle`.
-2. Configure springdoc to scan v4 controllers (and `AuthController` at `/auth/me`, which is outside `/rest/api/4`). Exclude legacy v1/v2/v3 — they are stable Feign-client contracts; not worth re-deriving.
-3. Add a Gradle task `:components-registry-service-server:generateOpenApiDocs` that emits `build/openapi/v4.json`. Wire it to run as part of `./gradlew build` so a hand-edited spec drift fails CI.
-4. Publish `v4.json` as a CI build artifact (TeamCity / GitHub Actions) so the Portal CI can pull it.
+1. `springdoc-openapi-starter-webmvc-ui` was already a dependency in `components-registry-service-server/build.gradle`.
+2. `OpenApiV4Config` registers a `GroupedOpenApi("v4")` matching the v4 controllers + `AuthController` at `/auth/me`; v1/v2/v3 never match the path list. springdoc serves it at `GET /v3/api-docs/v4`. `info.version` is the constant `"4"` (NOT the build version) so the committed spec only changes when the v4 surface changes.
+3. Generation is a `@SpringBootTest`+MockMvc capture (`OpenApiV4SpecTest`, reusing the `BasicFunctionalitySmokeTest` H2/`smoke` context) rather than a `bootRun` plugin — no Keycloak/Postgres needed. The UNtagged test runs under `./gradlew build`, writes `build/openapi/v4.json`, and asserts byte-equality against the committed `components-registry-service-server/src/main/resources/openapi/v4.json` (canonicalized via recursive key-sort). `:components-registry-service-server:generateOpenApiDocs` refreshes the committed copy after an intended change.
+4. The TeamCity `[1.0] Compile & UT [AUTO]` build publishes `components-registry-service-server/build/openapi/v4.json` under the `openapi` artifact path, so Portal CI can pull `openapi/v4.json`.
 
 ### Portal side (mirrors Portal TD-002)
 
@@ -46,7 +44,7 @@ This is fine while a single team owns both repos and the API surface is small. I
 
 1. `./gradlew build` produces `build/openapi/v4.json` covering at least:
    - `/rest/api/4/components/**`
-   - `/rest/api/4/audit-log/**`
+   - `/rest/api/4/audit/**` (the audit controller is mapped at `/audit`, not `/audit-log`)
    - `/rest/api/4/admin/**`
    - `/rest/api/4/config/**`
    - `/rest/api/4/info`
