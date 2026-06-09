@@ -443,7 +443,9 @@ class ComponentRoutingResolverStaleAndNotFoundTest {
             .`when`(dbResolver).getJiraComponentByProjectAndVersion(projectKey, version)
         doReturn(mockJiraComponentVersion(migratedComponent))
             .`when`(gitResolver).getJiraComponentByProjectAndVersion(projectKey, version)
-        // pre-fix bleed-through path: db throws, git would hand back a stale VCSSettings
+        // pre-fix bleed-through path (db throws → git serves a stale VCSSettings as 200): these
+        // stubs reproduce the OLD behaviour and are never reached post-fix — the stale-guard in
+        // getJiraComponentByProjectAndVersion throws before any VCSSettings fetch.
         doThrow(NotFoundException("not in db"))
             .`when`(dbResolver).getVCSSettingForProject(projectKey, version)
         doReturn(mock(VCSSettings::class.java))
@@ -497,6 +499,30 @@ class ComponentRoutingResolverStaleAndNotFoundTest {
 
     @Test
     @DisplayName(
+        "#256 VCS pre-existing edge: name discovery yields a null componentVersion → routes to " +
+            "gitResolver (guard only as strong as getJiraComponentByProjectAndVersion's null-degradation)",
+    )
+    fun issue256_getVCSSettingForProject_nullComponentVersion_fallsBackToGit() {
+        val projectKey = "malformed-proj"
+        val version = "1.0.0"
+        val gitVcs = mock(VCSSettings::class.java)
+        // db NotFound → git returns a malformed/cached JCV whose inner componentVersion is null;
+        // getJiraComponentByProjectAndVersion's null-safe guard returns it as-is (see 1.1 P1-B).
+        val nullInnerJcv = mock(JiraComponentVersion::class.java)
+        doReturn(null).`when`(nullInnerJcv).componentVersion
+        doThrow(NotFoundException("not in db"))
+            .`when`(dbResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+        doReturn(nullInnerJcv)
+            .`when`(gitResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+        doReturn(gitVcs).`when`(gitResolver).getVCSSettingForProject(projectKey, version)
+
+        // null name → resolverForProject falls back to gitResolver (inherited edge, documented in TD-013)
+        val result = routing.getVCSSettingForProject(projectKey, version)
+        assertEquals(gitVcs, result)
+    }
+
+    @Test
+    @DisplayName(
         "#256 VCS transient db error (db-sourced): error propagates, stale git VCSSettings never " +
             "served — owner-routed fetch (correctness > availability)",
     )
@@ -538,6 +564,8 @@ class ComponentRoutingResolverStaleAndNotFoundTest {
             .`when`(dbResolver).getJiraComponentByProjectAndVersion(projectKey, version)
         doReturn(mockJiraComponentVersion(migratedComponent))
             .`when`(gitResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+        // pre-fix bleed-through path (never reached post-fix — guard throws first); see the
+        // VCS counterpart above.
         doThrow(NotFoundException("not in db"))
             .`when`(dbResolver).getDistributionForProject(projectKey, version)
         doReturn(mock(Distribution::class.java))
