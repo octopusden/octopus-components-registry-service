@@ -111,4 +111,50 @@ class MultiValuePeopleLegacyCompatTest {
         assertEquals("user", cfg!!.releaseManager)
         assertEquals("user", cfg.securityChampion)
     }
+
+    @Test
+    @DisplayName("MIG-051: backfilled displayName (== componentKey) collapses to null on the legacy wire")
+    fun `MIG-051 displayName equal to componentKey resolves to null componentDisplayName`() {
+        // displayName is now NOT NULL in the DB and defaults to componentKey when the
+        // DSL declares no componentDisplayName (see ComponentEntity.displayName). Prod
+        // 2.0.87 served v1/v2/v3 `$.name` as null in that case, so the legacy resolver
+        // must collapse the backfill sentinel (displayName == componentKey) back to null
+        // — otherwise every previously-unnamed component flips `$.name` NULL → STRING
+        // and breaks wire-compat (compat gate [1.7], 6399 divergences).
+        val comp = makeComponent("NO_DISPLAY_NAME")
+        // makeComponent leaves displayName at its default (== componentKey)
+        assertEquals("NO_DISPLAY_NAME", comp.displayName)
+        stub(comp)
+
+        val cfg = resolver.getResolvedComponentDefinition("NO_DISPLAY_NAME", "1.0.0")
+        assertNotNull(cfg)
+        assertNull(cfg!!.componentDisplayName)
+    }
+
+    @Test
+    @DisplayName("MIG-051: a real displayName (!= componentKey) is preserved on the legacy wire")
+    fun `MIG-051 displayName differing from componentKey is preserved`() {
+        val comp = makeComponent("HAS_DISPLAY_NAME")
+        comp.displayName = "Human Friendly Name"
+        stub(comp)
+
+        val cfg = resolver.getResolvedComponentDefinition("HAS_DISPLAY_NAME", "1.0.0")
+        assertNotNull(cfg)
+        assertEquals("Human Friendly Name", cfg!!.componentDisplayName)
+    }
+
+    @Test
+    @DisplayName("MIG-051: list path (getComponentById) also collapses a backfilled displayName to null")
+    fun `MIG-051 list path collapses backfilled displayName to null`() {
+        // The list endpoint GET /rest/api/2/components serializes `$.components[N].name`
+        // via toEscrowModule → buildEscrowModuleConfig (same join site). Pin that the
+        // per-component fix equally covers the list path (the 6399 divergences included
+        // `$.components[N].name`).
+        val comp = makeComponent("NO_DISPLAY_NAME_LIST")
+        stub(comp)
+
+        val module = resolver.getComponentById("NO_DISPLAY_NAME_LIST")
+        assertNotNull(module)
+        assertNull(module!!.moduleConfigurations.first().componentDisplayName)
+    }
 }
