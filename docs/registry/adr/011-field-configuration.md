@@ -1,7 +1,12 @@
 # ADR-011: Configurable Field Visibility, Editability, and Defaults
 
 ## Status
-Proposed
+Proposed — **amended by [ADR-016](016-admin-config-as-code.md)**: the field-config and
+component-defaults blobs are now code-as-config (sourced from `service-config`,
+read-only in the Portal, reloadable without redeploy). The schema and visibility
+semantics below still hold; the "edited at runtime via admin UI/PUT" mechanism is
+superseded — `registry_config` is now a cache, the admin PUT writers return 410, and
+the source of truth is `service-config`.
 
 ## Context
 
