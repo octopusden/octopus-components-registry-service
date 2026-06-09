@@ -14,6 +14,20 @@
       "candidateValue": "application/json",
       "reason": "Symptom of the STATUS_CODE_DIFF entry above — when the V1 baseline transport-fails the heavy /updateCache call under parallel load, no response headers come back and only candidate (which answers 410 with a JSON ErrorResponse body) reports a content-type. Suppressed together with the status-code deprecation delta.",
       "regressionTest": "ComponentsRegistryServiceControllerUpdateCacheTest.git equal to zero retires the endpoint with 410 and does not re-read"
+    },
+    {
+      "endpoint": "GET /rest/api/2/projects/{projectKey}/versions/{version}/vcs-settings",
+      "category": "STATUS_CODE_DIFF",
+      "candidateValue": "404",
+      "reason": "#256 stale-git bleed-through fix. For a DB-sourced project whose requested version is absent from the DB, the V1/git baseline can still serve a STALE VCSSettings as 200 from legacy DSL, while the v3 candidate routes by resolved component source (ComponentRoutingResolver.resolverForProject) and correctly returns 404. This delta only materialises when the smoke/trace set happens to probe a db-sourced project at a version git still stale-matches; baselineValue omitted because the baseline value is the stale 200 we are intentionally diverging from. The authoritative regression guard is the unit test (this entry is defensive documentation, same convention as the updateCache deltas above).",
+      "regressionTest": "ComponentRoutingResolverStaleAndNotFoundTest.issue256_getVCSSettingForProject_dbSourcedMissingVersion_throwsNotFound_noGitBleed"
+    },
+    {
+      "endpoint": "GET /rest/api/2/projects/{projectKey}/versions/{version}/distribution",
+      "category": "STATUS_CODE_DIFF",
+      "candidateValue": "404",
+      "reason": "#256 stale-git bleed-through fix (Distribution counterpart of the vcs-settings entry above). DB-sourced project + version absent from DB: git baseline may serve a stale Distribution as 200; v3 candidate routes by resolved component source and returns 404. Authoritative guard is the unit test; this entry is defensive documentation.",
+      "regressionTest": "ComponentRoutingResolverStaleAndNotFoundTest.issue256_getDistributionForProject_dbSourcedMissingVersion_throwsNotFound_noGitBleed"
     }
   ]
 }

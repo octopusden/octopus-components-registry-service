@@ -19,6 +19,8 @@ import org.octopusden.octopus.components.registry.core.dto.Image
 import org.octopusden.octopus.components.registry.core.dto.VersionedComponent
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
+import org.octopusden.octopus.escrow.model.Distribution
+import org.octopusden.octopus.escrow.model.VCSSettings
 import org.octopusden.octopus.releng.dto.ComponentVersion
 import org.octopusden.octopus.releng.dto.JiraComponentVersion
 
@@ -34,9 +36,8 @@ import org.octopusden.octopus.releng.dto.JiraComponentVersion
  * payload" instead of "404 / empty".
  *
  * Items covered here: 1.1, 1.4, 1.4b, 1.6 (see
- * ~/.claude/plans/pr-192-review-fixup-plan.md). Items deferred:
- *   - 1.2/1.3 (Group 6-H): return types lack a `componentName` accessor for
- *     stale-guard, needs source-precedence-by-project-key design.
+ * ~/.claude/plans/pr-192-review-fixup-plan.md), plus 1.2/1.3 (issue #256, see
+ * below). Items still deferred:
  *   - 1.5 (Group 6-I): `getComponentsCountByBuildSystem` double-count of
  *     migrated components — fix requires refactoring private
  *     `EscrowModule.getBuildSystem()` / `isArchived()` extensions to a shared
@@ -403,5 +404,240 @@ class ComponentRoutingResolverStaleAndNotFoundTest {
 
         val result = routing.findComponentsByDockerImages(images)
         assertEquals(setOf(gitMatch), result)
+    }
+
+    // =========================================================================
+    // #256 (1.2/1.3): getVCSSettingForProject / getDistributionForProject —
+    // source-precedence-by-project-key. These return types (VCSSettings,
+    // Distribution) carry NO componentName accessor, so the PR #245 stale-guard
+    // (check returned-object id ∈ getDbComponentNames()) cannot apply to the
+    // return value. Instead routing discovers the authoritative component for
+    // (projectKey, version) via the already-stale-guarded
+    // getJiraComponentByProjectAndVersion, then routes the VCS/Distribution
+    // fetch to that component's owning resolver (resolverFor → getSource).
+    //
+    // Trade-off — correctness > availability during cutover: the route lookup
+    // hits the DB via sourceRegistry.getSource(), so a db-sourced component
+    // never serves stale git data even on a transient db error — the fetch is
+    // routed to dbResolver and the error propagates instead of bleeding git
+    // (pinned by the *Transient* tests below).
+    //
+    // Pre-existing edge (out of scope, inherited from PR #245): a git JCV with
+    // componentVersion == null yields a null name → falls back to gitResolver,
+    // so the guard is only as strong as getJiraComponentByProjectAndVersion's
+    // null-degradation (see the 1.1 P1-B test above).
+    // =========================================================================
+
+    @Test
+    @DisplayName(
+        "#256 VCS bleed-through guard: db-sourced project + missing version → throws NotFound; " +
+            "stale git VCSSettings never served",
+    )
+    fun issue256_getVCSSettingForProject_dbSourcedMissingVersion_throwsNotFound_noGitBleed() {
+        val projectKey = "stale-proj"
+        val version = "9.9.9"
+        val migratedComponent = "migrated-widget"
+        doReturn(setOf(migratedComponent)).`when`(sourceRegistry).getDbComponentNames()
+        // name discovery: db NotFound, git stale-matches the db-sourced component
+        doThrow(NotFoundException("not in db"))
+            .`when`(dbResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+        doReturn(mockJiraComponentVersion(migratedComponent))
+            .`when`(gitResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+        // pre-fix bleed-through path (db throws → git serves a stale VCSSettings as 200): these
+        // stubs reproduce the OLD behaviour and are never reached post-fix — the stale-guard in
+        // getJiraComponentByProjectAndVersion throws before any VCSSettings fetch.
+        doThrow(NotFoundException("not in db"))
+            .`when`(dbResolver).getVCSSettingForProject(projectKey, version)
+        doReturn(mock(VCSSettings::class.java))
+            .`when`(gitResolver).getVCSSettingForProject(projectKey, version)
+
+        assertThrows(NotFoundException::class.java) {
+            routing.getVCSSettingForProject(projectKey, version)
+        }
+        verify(gitResolver, never()).getVCSSettingForProject(projectKey, version)
+    }
+
+    @Test
+    @DisplayName(
+        "#256 VCS db-sourced happy path: version present → routes to dbResolver, git not called",
+    )
+    fun issue256_getVCSSettingForProject_dbSourced_routesToDb() {
+        val projectKey = "db-proj"
+        val version = "1.0.0"
+        val dbComponent = "db-widget"
+        val dbVcs = mock(VCSSettings::class.java)
+        doReturn(mockJiraComponentVersion(dbComponent))
+            .`when`(dbResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+        doReturn("db").`when`(sourceRegistry).getSource(dbComponent)
+        doReturn(dbVcs).`when`(dbResolver).getVCSSettingForProject(projectKey, version)
+
+        val result = routing.getVCSSettingForProject(projectKey, version)
+        assertEquals(dbVcs, result)
+        verify(gitResolver, never()).getVCSSettingForProject(projectKey, version)
+    }
+
+    @Test
+    @DisplayName(
+        "#256 VCS git-sourced project: resolves a git component → routes to gitResolver",
+    )
+    fun issue256_getVCSSettingForProject_gitSourced_routesToGit() {
+        val projectKey = "git-proj"
+        val version = "1.0.0"
+        val gitComponent = "legacy-widget"
+        val gitVcs = mock(VCSSettings::class.java)
+        // name discovery: db NotFound, git returns a fresh non-db-sourced match
+        doThrow(NotFoundException("not in db"))
+            .`when`(dbResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+        doReturn(mockJiraComponentVersion(gitComponent))
+            .`when`(gitResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+        // getSource(gitComponent) is unstubbed → null (≠ "db") → routes to gitResolver
+        doReturn(gitVcs).`when`(gitResolver).getVCSSettingForProject(projectKey, version)
+
+        val result = routing.getVCSSettingForProject(projectKey, version)
+        assertEquals(gitVcs, result)
+    }
+
+    @Test
+    @DisplayName(
+        "#256 VCS pre-existing edge: name discovery yields a null componentVersion → routes to " +
+            "gitResolver (guard only as strong as getJiraComponentByProjectAndVersion's null-degradation)",
+    )
+    fun issue256_getVCSSettingForProject_nullComponentVersion_fallsBackToGit() {
+        val projectKey = "malformed-proj"
+        val version = "1.0.0"
+        val gitVcs = mock(VCSSettings::class.java)
+        // db NotFound → git returns a malformed/cached JCV whose inner componentVersion is null;
+        // getJiraComponentByProjectAndVersion's null-safe guard returns it as-is (see 1.1 P1-B).
+        val nullInnerJcv = mock(JiraComponentVersion::class.java)
+        doReturn(null).`when`(nullInnerJcv).componentVersion
+        doThrow(NotFoundException("not in db"))
+            .`when`(dbResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+        doReturn(nullInnerJcv)
+            .`when`(gitResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+        doReturn(gitVcs).`when`(gitResolver).getVCSSettingForProject(projectKey, version)
+
+        // null name → resolverForProject falls back to gitResolver (inherited edge, documented in TD-013)
+        val result = routing.getVCSSettingForProject(projectKey, version)
+        assertEquals(gitVcs, result)
+    }
+
+    @Test
+    @DisplayName(
+        "#256 VCS transient db error (db-sourced): error propagates, stale git VCSSettings never " +
+            "served — owner-routed fetch (correctness > availability)",
+    )
+    fun issue256_getVCSSettingForProject_dbSourcedTransient_propagatesError_noGitBleed() {
+        val projectKey = "outage-proj"
+        val version = "1.0.0"
+        val migratedComponent = "migrated-widget"
+        doReturn(setOf(migratedComponent)).`when`(sourceRegistry).getDbComponentNames()
+        // name discovery: transient (non-NotFound) db error → falls back to git for the NAME (per #245)
+        doThrow(RuntimeException("transient db error"))
+            .`when`(dbResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+        doReturn(mockJiraComponentVersion(migratedComponent))
+            .`when`(gitResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+        // component is db-sourced → fetch routed to dbResolver, which is down → error propagates
+        doReturn("db").`when`(sourceRegistry).getSource(migratedComponent)
+        doThrow(RuntimeException("db down"))
+            .`when`(dbResolver).getVCSSettingForProject(projectKey, version)
+        // git would serve stale data, but must never be reached for a db-sourced component
+        doReturn(mock(VCSSettings::class.java))
+            .`when`(gitResolver).getVCSSettingForProject(projectKey, version)
+
+        assertThrows(RuntimeException::class.java) {
+            routing.getVCSSettingForProject(projectKey, version)
+        }
+        verify(gitResolver, never()).getVCSSettingForProject(projectKey, version)
+    }
+
+    @Test
+    @DisplayName(
+        "#256 Distribution bleed-through guard: db-sourced project + missing version → throws " +
+            "NotFound; stale git Distribution never served",
+    )
+    fun issue256_getDistributionForProject_dbSourcedMissingVersion_throwsNotFound_noGitBleed() {
+        val projectKey = "stale-proj"
+        val version = "9.9.9"
+        val migratedComponent = "migrated-widget"
+        doReturn(setOf(migratedComponent)).`when`(sourceRegistry).getDbComponentNames()
+        doThrow(NotFoundException("not in db"))
+            .`when`(dbResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+        doReturn(mockJiraComponentVersion(migratedComponent))
+            .`when`(gitResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+        // pre-fix bleed-through path (never reached post-fix — guard throws first); see the
+        // VCS counterpart above.
+        doThrow(NotFoundException("not in db"))
+            .`when`(dbResolver).getDistributionForProject(projectKey, version)
+        doReturn(mock(Distribution::class.java))
+            .`when`(gitResolver).getDistributionForProject(projectKey, version)
+
+        assertThrows(NotFoundException::class.java) {
+            routing.getDistributionForProject(projectKey, version)
+        }
+        verify(gitResolver, never()).getDistributionForProject(projectKey, version)
+    }
+
+    @Test
+    @DisplayName(
+        "#256 Distribution db-sourced happy path: version present → routes to dbResolver, git not called",
+    )
+    fun issue256_getDistributionForProject_dbSourced_routesToDb() {
+        val projectKey = "db-proj"
+        val version = "1.0.0"
+        val dbComponent = "db-widget"
+        val dbDist = mock(Distribution::class.java)
+        doReturn(mockJiraComponentVersion(dbComponent))
+            .`when`(dbResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+        doReturn("db").`when`(sourceRegistry).getSource(dbComponent)
+        doReturn(dbDist).`when`(dbResolver).getDistributionForProject(projectKey, version)
+
+        val result = routing.getDistributionForProject(projectKey, version)
+        assertEquals(dbDist, result)
+        verify(gitResolver, never()).getDistributionForProject(projectKey, version)
+    }
+
+    @Test
+    @DisplayName(
+        "#256 Distribution git-sourced project: resolves a git component → routes to gitResolver",
+    )
+    fun issue256_getDistributionForProject_gitSourced_routesToGit() {
+        val projectKey = "git-proj"
+        val version = "1.0.0"
+        val gitComponent = "legacy-widget"
+        val gitDist = mock(Distribution::class.java)
+        doThrow(NotFoundException("not in db"))
+            .`when`(dbResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+        doReturn(mockJiraComponentVersion(gitComponent))
+            .`when`(gitResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+        doReturn(gitDist).`when`(gitResolver).getDistributionForProject(projectKey, version)
+
+        val result = routing.getDistributionForProject(projectKey, version)
+        assertEquals(gitDist, result)
+    }
+
+    @Test
+    @DisplayName(
+        "#256 Distribution transient db error (db-sourced): error propagates, stale git Distribution " +
+            "never served — owner-routed fetch (correctness > availability)",
+    )
+    fun issue256_getDistributionForProject_dbSourcedTransient_propagatesError_noGitBleed() {
+        val projectKey = "outage-proj"
+        val version = "1.0.0"
+        val migratedComponent = "migrated-widget"
+        doReturn(setOf(migratedComponent)).`when`(sourceRegistry).getDbComponentNames()
+        doThrow(RuntimeException("transient db error"))
+            .`when`(dbResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+        doReturn(mockJiraComponentVersion(migratedComponent))
+            .`when`(gitResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+        doReturn("db").`when`(sourceRegistry).getSource(migratedComponent)
+        doThrow(RuntimeException("db down"))
+            .`when`(dbResolver).getDistributionForProject(projectKey, version)
+        doReturn(mock(Distribution::class.java))
+            .`when`(gitResolver).getDistributionForProject(projectKey, version)
+
+        assertThrows(RuntimeException::class.java) {
+            routing.getDistributionForProject(projectKey, version)
+        }
+        verify(gitResolver, never()).getDistributionForProject(projectKey, version)
     }
 }
