@@ -165,8 +165,11 @@ processIntegrationTestResources {
 def openApiGateDir = layout.buildDirectory.dir('openapi').get().asFile
 def openApiRefreshDir = layout.buildDirectory.dir('openapi-refresh').get().asFile
 test {
+    // Only set the output dir — the gating `test` run must ALWAYS assert (never refresh), so
+    // `openapi.refresh` is deliberately NOT wired from a -P here. `-Popenapi.refresh=true` would
+    // otherwise make `./gradlew build` silently skip the drift assertion. Refresh is the dedicated
+    // `generateOpenApiDocs`/`generateOpenApiDocsTest` path only.
     systemProperty 'openapi.outputDir', openApiGateDir.absolutePath
-    systemProperty 'openapi.refresh', project.findProperty('openapi.refresh') ?: 'false'
 }
 
 // `./gradlew :components-registry-service-server:generateOpenApiDocs` refreshes the committed

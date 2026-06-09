@@ -91,11 +91,14 @@ class OpenApiV4SpecTest {
     @Test
     @DisplayName("v4 OpenAPI spec is generated, covers the v4 surface, and matches the committed v4.json")
     fun `v4 openapi spec is generated and matches committed`() {
+        // Decode the response bytes as UTF-8 explicitly rather than via contentAsString (which uses
+        // the response's charset) so the gate is not host/charset-sensitive.
         val raw = mvc.perform(get("/v3/api-docs/v4"))
             .andExpect(status().isOk)
             .andReturn()
             .response
-            .contentAsString
+            .contentAsByteArray
+            .toString(Charsets.UTF_8)
         val regenerated = canonicalize(raw)
 
         // AC-1: always emit build/openapi/v4.json.
