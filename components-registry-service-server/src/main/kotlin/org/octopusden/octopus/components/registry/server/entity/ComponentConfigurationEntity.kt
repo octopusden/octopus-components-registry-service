@@ -11,6 +11,7 @@ import jakarta.persistence.ManyToOne
 import jakarta.persistence.OneToMany
 import jakarta.persistence.Table
 import jakarta.persistence.UniqueConstraint
+import org.hibernate.annotations.BatchSize
 import org.hibernate.annotations.CreationTimestamp
 import org.hibernate.annotations.UpdateTimestamp
 import java.time.Instant
@@ -188,23 +189,30 @@ class ComponentConfigurationEntity(
     //     populated when overridden_attribute is a marker, or part of base) ---
 
     @OneToMany(mappedBy = "componentConfiguration", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
+    @BatchSize(size = BATCH_FETCH_SIZE)
     var vcsEntries: MutableList<VcsSettingsEntryEntity> = mutableListOf(),
 
     @OneToMany(mappedBy = "componentConfiguration", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
+    @BatchSize(size = BATCH_FETCH_SIZE)
     var mavenArtifacts: MutableList<DistributionMavenArtifactEntity> = mutableListOf(),
 
     @OneToMany(mappedBy = "componentConfiguration", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
+    @BatchSize(size = BATCH_FETCH_SIZE)
     var fileUrlArtifacts: MutableList<DistributionFileUrlArtifactEntity> = mutableListOf(),
 
     @OneToMany(mappedBy = "componentConfiguration", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
+    @BatchSize(size = BATCH_FETCH_SIZE)
     var dockerImages: MutableList<DistributionDockerImageEntity> = mutableListOf(),
 
     @OneToMany(mappedBy = "componentConfiguration", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
+    @BatchSize(size = BATCH_FETCH_SIZE)
     var packages: MutableList<DistributionPackageEntity> = mutableListOf(),
 
     @OneToMany(mappedBy = "componentConfiguration", fetch = FetchType.LAZY)
+    @BatchSize(size = BATCH_FETCH_SIZE)
     var requiredToolJunctions: MutableList<ComponentRequiredToolEntity> = mutableListOf(),
 
     @OneToMany(mappedBy = "componentConfiguration", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
+    @BatchSize(size = BATCH_FETCH_SIZE)
     var buildToolBeans: MutableList<ComponentBuildToolBeanEntity> = mutableListOf(),
 )

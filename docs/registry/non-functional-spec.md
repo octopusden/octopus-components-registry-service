@@ -22,6 +22,35 @@
 - TTL: 5 minutes for list queries, 1 minute for individual component lookups
 - Cache-aside pattern: check cache → miss → query DB → populate cache
 
+### Read-path query efficiency (schema-v2 DB resolver)
+
+The batch read endpoints (`find-by-artifacts`, `find-by-docker-images`) and other
+aggregate reads in `DatabaseComponentRegistryResolver` load every component via one
+`findAll()` and then walk each component's child collections through the entity
+mapper. To keep this bounded rather than N+1:
+
+- **IN-clause batch loading via `@BatchSize`.** Every LAZY association on
+  `ComponentEntity` / `ComponentConfigurationEntity` carries `@BatchSize(size = 100)`.
+  After the initial `findAll()` loads all components into the session, the first access
+  to a collection role batch-loads that role for *all* resident components in a single
+  `WHERE parent_id IN (…)` select. A single multi-collection `@EntityGraph`/fetch-join
+  is **not** usable here: the collections are `List` bags and Hibernate rejects
+  fetch-joining more than one bag at once (`MultipleBagFetchException`). Net effect:
+  the per-request statement count is independent of the component count (a bounded set
+  of batched selects — roughly `findAll` + one IN select per collection role).
+- **No redundant per-image reloads.** `find-by-docker-images` threads the
+  already-loaded `ComponentEntity` from the image→component map straight into version
+  and definition resolution (entity-accepting private resolver variants), instead of
+  re-issuing `findByComponentKey` per matched image.
+- **Source-routing projection.** `getDbComponentNames()` / `getGitComponentNames()`
+  use a JPQL projection (`findComponentKeysBySource`) returning only the component-key
+  strings rather than hydrating full `component_source` entity rows on every aggregate
+  request.
+- **Regression guard.** `DatabaseComponentRegistryResolverQueryCountTest` (integration,
+  `dbTest`) asserts via Hibernate statistics that the statement count of these endpoints
+  stays constant as the component / matched-image count grows, failing if an N+1 is
+  reintroduced.
+
 ## 2. Availability
 
 | Metric | Target |
