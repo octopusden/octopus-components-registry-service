@@ -289,10 +289,15 @@ class ComponentControllerV4(
             ?.distinct()
             ?.takeIf { it.isNotEmpty() }
 
-    @GetMapping("/{idOrName}")
+    // The path template variable is `{id}` — the SAME name PATCH/DELETE use — so the OpenAPI
+    // generator merges every item-level operation under one `/components/{id}` path. OpenAPI path
+    // identity ignores the variable name, so `{idOrName}` here vs `{id}` on PATCH would emit two
+    // colliding path items. The binding keeps the descriptive `idOrName` name (this GET resolves
+    // by UUID *or* name — SYS-028) via the explicit @PathVariable("id").
+    @GetMapping("/{id}")
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
     fun getComponent(
-        @PathVariable idOrName: String,
+        @PathVariable("id") idOrName: String,
     ): ComponentDetailResponse {
         // Prefer UUID lookup when the path parses as one, but fall through to the
         // name lookup ONLY for NotFoundException — the sentinel for "no row with
@@ -321,10 +326,12 @@ class ComponentControllerV4(
      * the view RESOLVED/merged for that concrete version. The component is
      * resolved by UUID or name, identical to [getComponent].
      */
-    @GetMapping("/{idOrName}/as-code", produces = [TEXT_PLAIN_UTF8])
+    // `{id}` (bound to `idOrName`) for the same reason as [getComponent] — keeps the component
+    // identifier path variable consistently named `id` across all item-level paths.
+    @GetMapping("/{id}/as-code", produces = [TEXT_PLAIN_UTF8])
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
     fun getComponentAsCode(
-        @PathVariable idOrName: String,
+        @PathVariable("id") idOrName: String,
         @RequestParam(required = false) version: String?,
     ): ResponseEntity<String> {
         val rendered =

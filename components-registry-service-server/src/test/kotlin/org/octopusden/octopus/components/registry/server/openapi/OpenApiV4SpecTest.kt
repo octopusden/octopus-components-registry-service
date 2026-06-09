@@ -127,6 +127,17 @@ class OpenApiV4SpecTest {
                 "v4 spec must not include legacy `$legacy` paths (got: $pathKeys)",
             )
         }
+        // OpenAPI path identity ignores the parameter NAME, so `/components/{id}` and
+        // `/components/{idOrName}` are the SAME path — emitting both is invalid and breaks
+        // generators (openapi-typescript). Assert no two templates collide after normalizing
+        // every `{param}` to `{}`.
+        val normalizedToOriginals = pathKeys.groupBy { it.replace(Regex("\\{[^}]+}"), "{}") }
+        val collisions = normalizedToOriginals.filterValues { it.size > 1 }
+        Assertions.assertTrue(
+            collisions.isEmpty(),
+            "v4 spec has path templates that collide after parameter-name normalization " +
+                "(same path, different param name): ${collisions.values}",
+        )
 
         if (System.getProperty("openapi.refresh") == "true") return
 
