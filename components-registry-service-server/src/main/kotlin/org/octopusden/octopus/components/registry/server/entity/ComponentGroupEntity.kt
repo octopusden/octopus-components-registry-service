@@ -5,6 +5,7 @@ import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
 import jakarta.persistence.Table
+import org.hibernate.annotations.BatchSize
 import org.hibernate.annotations.CreationTimestamp
 import org.hibernate.annotations.UpdateTimestamp
 import java.time.Instant
@@ -12,6 +13,9 @@ import java.util.UUID
 
 @Entity
 @Table(name = "component_groups")
+// Class-level @BatchSize so the LAZY `ComponentEntity.componentGroup` to-one is batch-loaded
+// (to-one batch size is read from the target class, not the referencing field).
+@BatchSize(size = BATCH_FETCH_SIZE)
 class ComponentGroupEntity(
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

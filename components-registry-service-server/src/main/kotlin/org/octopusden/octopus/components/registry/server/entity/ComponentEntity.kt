@@ -11,10 +11,20 @@ import jakarta.persistence.ManyToOne
 import jakarta.persistence.OneToMany
 import jakarta.persistence.Table
 import jakarta.persistence.Version
+import org.hibernate.annotations.BatchSize
 import org.hibernate.annotations.CreationTimestamp
 import org.hibernate.annotations.UpdateTimestamp
 import java.time.Instant
 import java.util.UUID
+
+/**
+ * IN-clause batch size for the LAZY associations on the schema-v2 entities. Sized
+ * comfortably above the production component count so the resolver read paths load each
+ * collection role (and lazy to-one proxy) in a single `… IN (…)` select. See the
+ * `@BatchSize` rationale in [ComponentEntity]'s kdoc. File-scoped so both the class-level
+ * (`@ManyToOne` target) and field-level (`@OneToMany`) annotations can reference it.
+ */
+internal const val BATCH_FETCH_SIZE = 100
 
 /**
  * Schema v2 — top-level component entity.
@@ -27,8 +37,15 @@ import java.util.UUID
  *     M:N junctions — those are managed independently of the parent lifecycle.
  *
  *   - **Fetch default:** `FetchType.LAZY` everywhere (both `@ManyToOne` and
- *     `@OneToMany`). Hot-path repository methods opt in to eager loading via
- *     `@EntityGraph` rather than annotating the field.
+ *     `@OneToMany`). A hot-path read that needs a *single* collection eager can
+ *     opt in via `@EntityGraph` on the repository method. But the resolver read
+ *     paths (`find-by-artifacts`, `find-by-docker-images`) walk *several* bag
+ *     (`List`) collections per component, and a single `@EntityGraph`/fetch-join
+ *     cannot eager-fetch more than one bag at once — Hibernate throws
+ *     `MultipleBagFetchException`. Those collections therefore opt into IN-clause
+ *     batch loading via `@BatchSize` instead, which loads each role in its own
+ *     `WHERE parent_id IN (…)` select (immune to the multi-bag restriction) and
+ *     turns the per-component N+1 into a bounded number of batched selects.
  *
  *   - **`@Version`:** only on the top-level aggregate root (`ComponentEntity`).
  *     Sub-entities (`ComponentConfigurationEntity`, child rows, dictionary
@@ -58,6 +75,12 @@ import java.util.UUID
  */
 @Entity
 @Table(name = "components")
+// Class-level @BatchSize governs batched initialization of LAZY `@ManyToOne` proxies that
+// TARGET this entity (e.g. the self-referential `parentComponent`) — Hibernate reads the
+// to-one batch size from the target class, NOT from the referencing field, so a field-level
+// @BatchSize on `parentComponent` would be silently ignored. The `@OneToMany` bags below
+// carry their own field-level @BatchSize (that placement IS honoured for collections).
+@BatchSize(size = BATCH_FETCH_SIZE)
 class ComponentEntity(
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -84,6 +107,9 @@ class ComponentEntity(
     @Column(name = "solution")
     var solution: Boolean? = null,
 
+    // Batched via the class-level @BatchSize on the TARGET entities (ComponentEntity for
+    // parentComponent, ComponentGroupEntity for componentGroup) — to-one batch size is read
+    // from the target class, not the field, so no field-level @BatchSize here.
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_component_id")
     var parentComponent: ComponentEntity? = null,
@@ -150,29 +176,37 @@ class ComponentEntity(
     // --- Bidirectional collections (parent-owned children) ---
 
     @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
+    @BatchSize(size = BATCH_FETCH_SIZE)
     var configurations: MutableList<ComponentConfigurationEntity> = mutableListOf(),
 
     @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
+    @BatchSize(size = BATCH_FETCH_SIZE)
     var artifactIds: MutableList<ComponentArtifactIdEntity> = mutableListOf(),
 
     @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
+    @BatchSize(size = BATCH_FETCH_SIZE)
     var securityGroups: MutableList<DistributionSecurityGroupEntity> = mutableListOf(),
 
     @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
+    @BatchSize(size = BATCH_FETCH_SIZE)
     var teamcityProjects: MutableList<ComponentTeamcityProjectEntity> = mutableListOf(),
 
     @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
+    @BatchSize(size = BATCH_FETCH_SIZE)
     var docLinks: MutableList<ComponentDocLinkEntity> = mutableListOf(),
 
     // Ordered multi-value people. No `@OrderBy` — sort by `sortOrder` in the
     // accessors / mappers (matching the artifactIds / docLinks convention).
     @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
+    @BatchSize(size = BATCH_FETCH_SIZE)
     var releaseManagers: MutableList<ComponentReleaseManagerEntity> = mutableListOf(),
 
     @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
+    @BatchSize(size = BATCH_FETCH_SIZE)
     var securityChampions: MutableList<ComponentSecurityChampionEntity> = mutableListOf(),
 
     @OneToMany(mappedBy = "component", fetch = FetchType.LAZY)
+    @BatchSize(size = BATCH_FETCH_SIZE)
     var labelJunctions: MutableList<ComponentLabelEntity> = mutableListOf(),
 ) {
     /** Ordered release-manager usernames (first = primary). */

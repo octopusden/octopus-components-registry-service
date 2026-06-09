@@ -422,6 +422,33 @@ class ComponentRoutingResolver(
 }
 ```
 
+### 7.4 DB read-path query efficiency
+
+`DatabaseComponentRegistryResolver`'s aggregate/batch reads load all components via one
+`findAll()` and walk their child collections through `EntityMappers` (`toEscrowModule` /
+`mavenArtifactParametersFor`). Three measures keep that bounded instead of N+1 (GH #321,
+#249):
+
+- **`@BatchSize(100)` on every LAZY association** of `ComponentEntity` /
+  `ComponentConfigurationEntity`. After `findAll()`, the first touch of each collection
+  role batch-loads it for all session-resident components in a single `… IN (…)` select.
+  A single multi-collection `@EntityGraph` is unusable — the collections are `List` bags
+  and Hibernate forbids fetch-joining more than one bag (`MultipleBagFetchException`), so
+  IN-clause batch loading is the chosen mechanism (see the `ComponentEntity` kdoc).
+- **Entity threading on `find-by-docker-images`.** `buildImageToComponentMap` returns the
+  already-loaded `ComponentEntity`; `findConfigurationByDockerImage` resolves the jira
+  version and definition off that entity via private entity-accepting resolver variants,
+  so no `findByComponentKey` reload is issued per matched image.
+- **Source-routing projection.** `ComponentSourceRegistry.getDbComponentNames()` /
+  `getGitComponentNames()` use the `findComponentKeysBySource` JPQL projection (key strings
+  only), avoiding hydration of full `component_source` rows on each aggregate request. The
+  per-request memoization originally proposed in #249 is unnecessary post-#317: each
+  endpoint calls `getDbComponentNames()` at most ~twice and never in a loop.
+
+`DatabaseComponentRegistryResolverQueryCountTest` (integration, `dbTest`) guards this with
+Hibernate statistics: the statement count must stay constant as component / matched-image
+count grows.
+
 ## 8. Testing Strategy & Fitness Functions
 
 ### 8.1 Testing Pyramid
