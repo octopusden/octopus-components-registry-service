@@ -16,8 +16,12 @@ import org.octopusden.octopus.components.registry.server.ComponentRegistryServic
 import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactIdEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
+import org.octopusden.octopus.components.registry.server.entity.ComponentRequiredToolEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionDockerImageEntity
+import org.octopusden.octopus.components.registry.server.entity.ToolEntity
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
+import org.octopusden.octopus.components.registry.server.repository.ComponentRequiredToolRepository
+import org.octopusden.octopus.components.registry.server.repository.ToolRepository
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.mock.mockito.MockBean
@@ -44,11 +48,18 @@ import java.nio.file.Paths
  * `IN` selects and the docker path resolves off the already-loaded entity — so the
  * count is constant across fixture sizes.
  *
+ * Each fixture component carries one BASE config (artifactId + docker image + Jira
+ * project key), a parent reference (index > 0 → index 0), and a distinct required
+ * tool — so every batched role the mapper walks is exercised, including the two
+ * to-one associations whose batch size is read from the TARGET class (`parentComponent`
+ * → ComponentEntity, `tool` → ToolEntity). The docker fixture fully resolves, so the
+ * test reaches `getResolvedComponentDefinition` (the entity-threaded reload Part B
+ * removes), not just the pre-resolve short-circuit.
+ *
  * NOTE on the strict-equality assertion: it holds only while every per-role owner
  * count stays **below the `@BatchSize(100)` threshold** (a single `IN` batch per
- * role). The fixtures here (K = 2 and K = 8, one config + one artifactId + one
- * docker image each) are deliberately well under that bound. If a fixture is ever
- * grown past 100 owners of any role, switch the assertion to the
+ * role). The fixtures here (K = 2 and K = 8) are deliberately well under that bound.
+ * If a fixture is ever grown past 100 owners of any role, switch the assertion to the
  * `ceil(ownerCount / batchSize)`-shaped expectation instead of strict equality.
  *
  * Integration test: real PostgreSQL via Testcontainers, run under the `dbTest`
@@ -72,6 +83,12 @@ class DatabaseComponentRegistryResolverQueryCountTest {
     private lateinit var componentRepository: ComponentRepository
 
     @Autowired
+    private lateinit var toolRepository: ToolRepository
+
+    @Autowired
+    private lateinit var requiredToolRepository: ComponentRequiredToolRepository
+
+    @Autowired
     private lateinit var entityManagerFactory: EntityManagerFactory
 
     init {
@@ -88,28 +105,41 @@ class DatabaseComponentRegistryResolverQueryCountTest {
     fun cleanDatabase() {
         // Both target methods do componentRepository.findAll(); start from an empty
         // table so a later (larger) measurement is not polluted by earlier rows.
-        // The fixture only attaches CASCADE-ALL children (configurations,
-        // artifactIds, dockerImages), so deleteAll() removes the whole graph — no
-        // orphaned non-cascaded junction rows are created.
+        // Order matters: the component_required_tools junction is NOT cascade-deleted
+        // from the component (its @OneToMany has no cascade) and FKs both the config
+        // and the tool, so delete junctions first, then components (CASCADE-ALL removes
+        // configurations/artifactIds/dockerImages), then the now-unreferenced tools.
+        requiredToolRepository.deleteAll()
         componentRepository.deleteAll()
+        toolRepository.deleteAll()
     }
 
     /**
-     * One component with a single BASE configuration carrying an artifactId and a
-     * docker image — enough to exercise every lazy bag the artifact/docker read
-     * paths walk. Optionally references [parent] so the LAZY `@ManyToOne`
-     * `parentComponent` (read by the mapper) is also exercised. Saved via the
-     * aggregate root: CASCADE-ALL persists the children. Returns the managed entity.
+     * One component with a single BASE configuration carrying an artifactId, a docker
+     * image, a Jira project key (so the version resolves and the docker path reaches
+     * `getResolvedComponentDefinition`), and a distinct required tool (so the LAZY
+     * `ComponentRequiredToolEntity.tool` to-one is exercised). Optionally references
+     * [parent] so the LAZY `@ManyToOne` `parentComponent` is also walked.
+     *
+     * The component + its CASCADE-ALL children (config, artifactId, dockerImage) are
+     * saved via the aggregate root; the tool and the non-cascaded required-tool
+     * junction are persisted separately (the junction keyed by the saved config id).
+     * Returns the managed component entity.
      */
     private fun persistComponent(index: Int, parent: ComponentEntity?): ComponentEntity {
         val component = ComponentEntity(componentKey = "qc-comp-$index", archived = false)
         component.parentComponent = parent
         val base = ComponentConfigurationEntity(
             component = component,
-            versionRange = "[1.0.0,2.0.0)",
+            versionRange = VERSION_RANGE,
             overriddenAttribute = null,
             rowType = "BASE",
             buildSystem = "MAVEN",
+            // Jira project key → buildJiraComponent emits a JiraComponent (default version
+            // formats), so getJiraComponentVersion resolves IMAGE_TAG and the docker path
+            // proceeds into getResolvedComponentDefinition (the entity-threaded reload that
+            // Part B optimises) instead of short-circuiting at the NotFound catch.
+            jiraProjectKey = "QCPROJ$index",
         )
         base.dockerImages.add(
             DistributionDockerImageEntity(
@@ -127,7 +157,21 @@ class DatabaseComponentRegistryResolverQueryCountTest {
                 sortOrder = 0,
             ),
         )
-        return componentRepository.save(component)
+        val saved = componentRepository.save(component)
+
+        // Distinct required tool per component → the mapper's `junction.tool` access
+        // (EntityMappers.toBuildParameters) loads a different ToolEntity per component;
+        // without the class-level @BatchSize on ToolEntity that is a per-tool SELECT
+        // (N+1). The tool and the non-cascaded junction are persisted on their own.
+        val toolName = "qc-tool-$index"
+        toolRepository.save(ToolEntity(name = toolName))
+        requiredToolRepository.save(
+            ComponentRequiredToolEntity(
+                componentConfigurationId = saved.configurations.first().id!!,
+                toolName = toolName,
+            ),
+        )
+        return saved
     }
 
     /**
@@ -181,14 +225,24 @@ class DatabaseComponentRegistryResolverQueryCountTest {
     @DisplayName("find-by-docker-images statement count is independent of component / matched-image count")
     fun findByDockerImagesHasNoNPlusOne() {
         persistComponents(SMALL)
-        val smallImages = (0 until SMALL).map { Image("qc-image-$it", "1.0.0") }.toSet()
+        val smallImages = (0 until SMALL).map { Image("qc-image-$it", IMAGE_TAG) }.toSet()
         val small = measure { resolver.findComponentsByDockerImages(smallImages) }
 
         cleanDatabase()
         persistComponents(LARGE)
-        val largeImages = (0 until LARGE).map { Image("qc-image-$it", "1.0.0") }.toSet()
+        val largeImages = (0 until LARGE).map { Image("qc-image-$it", IMAGE_TAG) }.toSet()
         val large = measure { resolver.findComponentsByDockerImages(largeImages) }
 
+        // Every image must actually resolve — otherwise findConfigurationByDockerImage
+        // short-circuits at the NotFound catch and never reaches getResolvedComponentDefinition,
+        // leaving the entity-threaded reload path (Part B) unmeasured. IMAGE_TAG is a fixed point
+        // of the default `$major.$minor` version format, so calculateDistribution rewrites the
+        // docker entry "qc-image-N" → "qc-image-N:$IMAGE_TAG", matching the requested image.
+        assertEquals(
+            LARGE,
+            resolver.findComponentsByDockerImages(largeImages).size,
+            "every requested docker image must resolve (so the resolve path is actually exercised)",
+        )
         assertEquals(
             small,
             large,
@@ -206,13 +260,19 @@ class DatabaseComponentRegistryResolverQueryCountTest {
         private const val SMALL = 2
         private const val LARGE = 8
 
+        // Version range + tag chosen so IMAGE_TAG is a fixed point of the default
+        // `$major.$minor` Jira release format (normalize("1.2") == "1.2"), in range — so the
+        // docker entry resolves to "qc-image-N:1.2" and matches the requested image exactly.
+        private const val VERSION_RANGE = "[1.0,2.0)"
+        private const val IMAGE_TAG = "1.2"
+
         // Secondary backstops (the cross-size equality above is the primary guard).
-        // Both read paths drive `toEscrowModule`, which walks every child role, so the
-        // post-fix constant is "findAll + one batched IN select per collection role"
-        // (observed 15 for find-by-artifacts) — NOT 3. Calibrated from that observed
-        // post-fix baseline with headroom for Hibernate batch-loader drift.
-        private const val ARTIFACT_STATEMENT_BOUND = 20L
-        private const val DOCKER_STATEMENT_BOUND = 25L
+        // Both read paths drive `toEscrowModule`, which walks every child role (incl. the
+        // required-tool junction + tool to-one), so the post-fix constant is "findAll + one
+        // batched IN select per role". Calibrated from the observed post-fix baseline with
+        // headroom for Hibernate batch-loader drift.
+        private const val ARTIFACT_STATEMENT_BOUND = 25L
+        private const val DOCKER_STATEMENT_BOUND = 35L
 
         @JvmStatic
         val postgres = PostgreSQLContainer("postgres:16-alpine").apply { start() }
