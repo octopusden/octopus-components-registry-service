@@ -278,7 +278,7 @@ TEST_COMPONENT_WITH_DOC_AND_VERSIONS {
     componentOwner = "user9"
     groupId = "org.octopusden.octopus.test2"
     artifactId = "test2"
-    componentDisplayName = "Test Component with Doc"
+    componentDisplayName = "Test Component with Doc and Versions"
     doc {
         component = "TEST_COMPONENT_DOC"
         majorVersion = "1.2"

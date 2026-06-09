@@ -8,6 +8,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
+import org.mockito.Mockito
 import org.mockito.Mockito.mock
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.repository.ComponentBuildToolBeanRepository
@@ -22,6 +23,7 @@ import org.octopusden.octopus.components.registry.server.repository.SystemReposi
 import org.octopusden.octopus.components.registry.server.repository.ToolRepository
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
+import org.octopusden.octopus.escrow.configuration.model.DefaultConfigParameters
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
 
 /**
@@ -48,12 +50,19 @@ class ImportServicePeopleCsvSplitTest {
 
     @BeforeEach
     fun setUp() {
+        // The lazy commonDefaultsCache (loadCommonDefaults) is stubbed to a non-null
+        // DefaultConfigParameters so the import's defaults-backed fields resolve. displayName
+        // itself is now stored verbatim from the DSL (nullable, no key backfill), independent
+        // of the common defaults.
+        val configurationLoaderMock = mock(EscrowConfigurationLoader::class.java)
+        Mockito.`when`(configurationLoaderMock.loadCommonDefaults(emptyMap()))
+            .thenReturn(DefaultConfigParameters())
         service = ImportServiceImpl(
             gitResolver = mock(ComponentRegistryResolverImpl::class.java),
             dbResolver = mock(DatabaseComponentRegistryResolver::class.java),
             componentSourceRepository = mock(ComponentSourceRepository::class.java),
             sourceRegistry = mock(ComponentSourceRegistry::class.java),
-            configurationLoader = mock(EscrowConfigurationLoader::class.java),
+            configurationLoader = configurationLoaderMock,
             configSyncService = mock(ConfigSyncService::class.java),
             componentRepository = mock(ComponentRepository::class.java),
             configurationRepository = mock(ComponentConfigurationRepository::class.java),

@@ -542,6 +542,12 @@ class TeamcitySyncServiceTest {
         override fun existsByComponentKey(componentKey: String): Boolean =
             components.any { it.componentKey == componentKey }
 
+        override fun existsByDisplayName(displayName: String): Boolean =
+            components.any { it.displayName == displayName }
+
+        override fun existsByDisplayNameAndIdNot(displayName: String, id: UUID): Boolean =
+            components.any { it.displayName == displayName && it.id != id }
+
         override fun findDistinctOwners(): List<String> =
             components.mapNotNull { it.componentOwner }.distinct().sorted()
 

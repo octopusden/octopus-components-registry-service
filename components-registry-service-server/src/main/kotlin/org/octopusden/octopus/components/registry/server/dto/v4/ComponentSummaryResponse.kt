@@ -16,6 +16,7 @@ import java.util.UUID
 data class ComponentSummaryResponse(
     val id: UUID,
     val name: String,
+    // Nullable + unique. NULL when no componentDisplayName is declared.
     val displayName: String?,
     val componentOwner: String?,
     val system: String?,

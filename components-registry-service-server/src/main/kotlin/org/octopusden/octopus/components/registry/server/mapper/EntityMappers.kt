@@ -407,7 +407,9 @@ private fun buildEscrowModuleConfig(
         setField(config, "jiraConfiguration", jira)
     }
 
-    // Component-level (per-component, never per-version)
+    // Component-level (per-component, never per-version). displayName is nullable and stored
+    // verbatim from the DSL (no key backfill), so a straight passthrough reproduces the legacy
+    // v1/v2/v3 `$.name` byte-for-byte (null stays null).
     setField(config, "componentDisplayName", component.displayName)
     setField(config, "componentOwner", component.componentOwner)
     // Single-value system: write the scalar code (or empty string when null).

@@ -45,7 +45,7 @@ CREATE TABLE components (
     id                          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     component_key               VARCHAR(255) NOT NULL UNIQUE,
     component_owner             VARCHAR(255),
-    display_name                VARCHAR(255),
+    display_name                VARCHAR(255) UNIQUE,                    -- nullable (NULL = no componentDisplayName, preserves legacy $.name) + unique on non-null values
     product_type                VARCHAR(20),                            -- app-validated against ProductTypes enum
     client_code                 VARCHAR(255),
     archived                    BOOLEAN NOT NULL DEFAULT false,

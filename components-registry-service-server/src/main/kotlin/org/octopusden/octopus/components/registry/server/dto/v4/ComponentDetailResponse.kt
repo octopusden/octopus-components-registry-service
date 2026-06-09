@@ -19,6 +19,8 @@ import java.util.UUID
 data class ComponentDetailResponse(
     val id: UUID,
     val name: String,
+    // Nullable + unique. NULL when no componentDisplayName is declared (preserves the
+    // legacy wire; the import stores the DSL value verbatim, no key backfill).
     val displayName: String?,
     val componentOwner: String?,
     val productType: String?,

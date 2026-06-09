@@ -214,7 +214,8 @@ class ComponentCodeRenderer(
         requiredTools: List<String>,
         buildToolBeans: List<ComponentBuildToolBeanEntity>,
     ) {
-        // Identity
+        // Identity. displayName is nullable and stored verbatim from the DSL; render it exactly
+        // when set (cb.str omits a null), so the as-code view faithfully round-trips the source.
         cb.str("displayName", component.displayName)
         cb.str("componentOwner", component.componentOwner)
         cb.str("system", component.systemCode)

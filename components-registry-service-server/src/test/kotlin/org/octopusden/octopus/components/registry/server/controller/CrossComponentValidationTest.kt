@@ -19,6 +19,7 @@ import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.ResultActions
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.nio.file.Paths
 import java.util.UUID
@@ -343,19 +344,64 @@ class CrossComponentValidationTest {
     }
 
     @Test
+    @DisplayName("CREATE: explicit+external WITHOUT a componentDisplayName → 400 (displayName)")
+    fun create_explicitExternal_noDisplayName_badRequest() {
+        val s = sfx()
+        // RM/SC + a coordinate supplied so the person-field gate and the ≥1-coordinate rule
+        // both pass; the 400 under test is the EE displayName requirement (mirrors
+        // EscrowConfigValidator.validateExplicitExternalComponent). displayName itself stays
+        // nullable for non-EE components — this requirement is gated on explicit && external.
+        postCreate(
+            """{"name":"xcc-ext-nodisp-$s","distributionExplicit":true,"distributionExternal":true,""" +
+                """"releaseManager":["rm1"],"securityChampion":["sc1"],""" +
+                """"baseConfiguration":{"build":{"buildSystem":"MAVEN"},""" +
+                """"dockerImages":[{"imageName":"registry.example/nodisp-$s"}]}}""",
+        ).andExpect(status().isBadRequest)
+            .andExpect(
+                jsonPath("$.errorMessage").value(org.hamcrest.Matchers.containsString("displayName")),
+            )
+    }
+
+    @Test
     @DisplayName("CREATE: explicit+external WITH a docker coordinate → 2xx")
     fun create_explicitExternal_withCoordinate_ok() {
         val s = sfx()
         // An explicit+external component also trips the foundation's person-field
-        // gate: releaseManager + securityChampion are required (non-blank, ^\w+$)
-        // under explicit && external. Supply both so the only thing under test
+        // gate (releaseManager + securityChampion required, non-blank, ^\w+$) and the
+        // displayName requirement (componentDisplayName must be set for explicit+external,
+        // mirroring EscrowConfigValidator). Supply all three so the only thing under test
         // here is the ≥1-coordinate rule (docker image present → 2xx).
         postCreate(
-            """{"name":"xcc-ext-coord-$s","distributionExplicit":true,"distributionExternal":true,""" +
+            """{"name":"xcc-ext-coord-$s","displayName":"Ext Coord $s",""" +
+                """"distributionExplicit":true,"distributionExternal":true,""" +
                 """"releaseManager":["rm1"],"securityChampion":["sc1"],""" +
                 """"baseConfiguration":{"build":{"buildSystem":"MAVEN"},""" +
                 """"dockerImages":[{"imageName":"registry.example/ext-$s"}]}}""",
         ).andExpect(status().is2xxSuccessful)
+    }
+
+    @Test
+    @DisplayName("PATCH: clearing displayName on an explicit+external component → 400 (displayName)")
+    fun patch_clearDisplayName_onExplicitExternal_badRequest() {
+        val s = sfx()
+        // displayName-only PATCH that clears the value: must still be rejected for an
+        // explicit+external component (validateRequiredDisplayName runs on every update,
+        // not only on a cross-component-relevant change — otherwise a clear would slip past).
+        val resp =
+            postCreate(
+                """{"name":"xcc-ext-clear-$s","displayName":"Ext Clear $s",""" +
+                    """"distributionExplicit":true,"distributionExternal":true,""" +
+                    """"releaseManager":["rm1"],"securityChampion":["sc1"],""" +
+                    """"baseConfiguration":{"build":{"buildSystem":"MAVEN"},""" +
+                    """"dockerImages":[{"imageName":"registry.example/clear-$s"}]}}""",
+            ).andExpect(status().is2xxSuccessful).andReturn().response.contentAsString
+        val node = objectMapper.readTree(resp)
+        val id = node["id"].asText()
+        val version = node["version"].asLong()
+
+        patchComponent(id, """{"version":$version,"displayName":""}""")
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.errorMessage").value(org.hamcrest.Matchers.containsString("displayName")))
     }
 
     // ───────────────────────── #10 groupId supported prefix (400) ──────────────

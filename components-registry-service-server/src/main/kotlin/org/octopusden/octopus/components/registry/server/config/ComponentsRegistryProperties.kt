@@ -33,9 +33,20 @@ class ComponentsRegistryProperties(
     // auto-configs are excluded, so the service boots with no database and serves
     // v1/v2/v3 purely from the Git resolver. Default true → unchanged db-mode.
     val database: DatabaseSettings = DatabaseSettings(),
+    // Allowed Java / Maven build-tool versions offered as dropdown options in the Portal
+    // (served via /meta/java-versions and /meta/maven-versions). Defaults live in
+    // application.yml; each installation overrides the whole list in its service-config
+    // (Spring relaxed binding replaces — not merges — the list), so different installs can
+    // offer different version sets. Empty list ⇒ the Portal dropdown shows no preset options.
+    val buildToolVersions: BuildToolVersionsSettings = BuildToolVersionsSettings(),
 ) {
     data class DatabaseSettings(
         val enabled: Boolean = true,
+    )
+
+    data class BuildToolVersionsSettings(
+        val java: List<String> = emptyList(),
+        val maven: List<String> = emptyList(),
     )
 
     data class VcsSettings(

@@ -243,6 +243,21 @@ class ImportServiceImpl(
         val allModules = fullConfig.escrowModules
         LOG.info("§6 DSL load: {} ms ({} modules)", (System.nanoTime() - loadStart) / 1_000_000, allModules.size)
 
+        // §6.0 displayName collision pre-pass. display_name is UNIQUE (nullable), so a
+        // duplicate non-null name would abort mid-import and leave partial commits behind (the
+        // per-module loop below catches & continues, and migrate() allows partial commits).
+        // NOTE: displayName is stored VERBATIM (the loader already applied Defaults.groovy
+        // inheritance). The real prod Defaults.groovy declares NO componentDisplayName, so
+        // unnamed components resolve to null and don't collide; were a non-null default ever
+        // added, every component inheriting it would share one name and this pre-pass would
+        // (correctly) abort until the DSL is fixed. Detect
+        // collisions HERE — after the DSL load but BEFORE the §6.1 dictionary pre-upserts
+        // below (which are the first writes in this method) — and throw once up front so a
+        // failed migration leaves zero component/dictionary rows behind and the error names
+        // every offender. (migrate() upserts the idempotent component-defaults config blob
+        // before this method; that is unaffected.)
+        detectDisplayNameCollisions(allModules)
+
         // §6.1 Pre-pass dictionary discovery
         LOG.info("§6.1 Pre-pass: upserting systems, tools, labels")
         val dictStart = System.nanoTime()
@@ -952,6 +967,44 @@ class ImportServiceImpl(
     }
 
     /**
+     * Fail-fast guard for the UNIQUE `display_name` column. Collects each module's (verbatim,
+     * nullable) `componentDisplayName` and aborts the whole import — before any write — if two
+     * or more DISTINCT components declare the same non-null name. Throwing from the per-module
+     * loop would not abort (it's caught & recorded per component, and migrate() permits partial
+     * commits), so this must run as an up-front pre-pass. The error names every offender so the
+     * conflicting `componentDisplayName`s can be fixed in the DSL. Pure logic lives in the
+     * companion's [computeDisplayNameCollisions] so it can be unit-tested without Spring fixtures.
+     */
+    private fun detectDisplayNameCollisions(allModules: Map<String, EscrowModule>) {
+        val modulePairs =
+            allModules.entries
+                // Only modules that Pass 1 actually persists. A module with an empty body
+                // (`"FOO" { }`) has no moduleConfigurations and is skipped by the import (no row),
+                // so it must NOT be modelled here — otherwise a phantom key-derived display name
+                // could spuriously collide with a real component's explicit name and abort the
+                // whole migration. With empties excluded, the base-config selection below mirrors
+                // importModule's `firstOrNull { ALL_VERSIONS } ?: configs.first()` exactly.
+                .filter { (_, escrowModule) -> escrowModule.moduleConfigurations.isNotEmpty() }
+                .map { (componentKey, escrowModule) ->
+                    val baseConfig =
+                        escrowModule.moduleConfigurations.firstOrNull { it.versionRangeString == ALL_VERSIONS }
+                            ?: escrowModule.moduleConfigurations.first()
+                    componentKey to baseConfig.componentDisplayName
+                }
+        val collisions = computeDisplayNameCollisions(modulePairs)
+        if (collisions.isEmpty()) return
+        val report =
+            collisions.entries
+                .sortedBy { it.key }
+                .joinToString("; ") { (name, keys) -> "\"$name\" <- ${keys.sorted()}" }
+        LOG.error("§6.0 display_name collision pre-pass FAILED — duplicate display names: {}", report)
+        throw IllegalStateException(
+            "Cannot migrate: ${collisions.size} display name(s) are shared by multiple components " +
+                "(display_name is unique). Fix the conflicting componentDisplayName in the DSL: $report",
+        )
+    }
+
+    /**
      * Build a `ComponentEntity` from the given `EscrowModuleConfig`.
      * Only sets scalar/per-component fields. `parentComponent` and
      * `componentGroup` are resolved in later passes.
@@ -963,7 +1016,11 @@ class ImportServiceImpl(
     ): ComponentEntity {
         val entity = ComponentEntity(componentKey = componentKey)
         entity.componentOwner = cfg.componentOwner
-        entity.displayName = cfg.componentDisplayName
+        // Stored verbatim (nullable) — NO key backfill: prod 2.0.87 served the legacy `$.name`
+        // as null for components without componentDisplayName, so we must keep it null to stay
+        // wire-compatible. The loader already resolves DSL inheritance, so a blank value maps to
+        // null here. Uniqueness is enforced by the DB + the collision pre-pass on non-null names.
+        entity.displayName = cfg.componentDisplayName?.takeIf { it.isNotBlank() }
         entity.productType = cfg.productType?.name
         entity.clientCode = cfg.clientCode
         entity.archived = cfg.archived
@@ -2118,6 +2175,26 @@ class ImportServiceImpl(
 
         /** Exact-string FAKE-aggregator artifactId markers. */
         private val FAKE_ARTIFACT_ID_LITERALS: Set<String> = setOf("fake", "dummy", "stub")
+
+        /**
+         * Groups (componentKey → cfgDisplayName) module pairs by their verbatim, non-blank display
+         * name and returns only the names claimed by more than one DISTINCT component (name → all
+         * claiming keys, each list deduped-and-sorted). Components with a null/blank
+         * `componentDisplayName` are skipped (they store NULL — many NULLs don't collide under the
+         * UNIQUE constraint). Empty result ⇒ no collisions. Pure — unit-tested.
+         */
+        internal fun computeDisplayNameCollisions(
+            modules: List<Pair<String, String?>>,
+        ): Map<String, List<String>> {
+            val byDisplayName = mutableMapOf<String, MutableSet<String>>()
+            for ((componentKey, cfgDisplayName) in modules) {
+                val name = cfgDisplayName?.takeIf { it.isNotBlank() } ?: continue
+                byDisplayName.getOrPut(name) { mutableSetOf() }.add(componentKey)
+            }
+            return byDisplayName
+                .filterValues { it.size > 1 }
+                .mapValues { (_, keys) -> keys.sorted() }
+        }
 
         /**
          * Token-based FAKE-aggregator artifactId marker: matches `fake`/`dummy`/`stub`
