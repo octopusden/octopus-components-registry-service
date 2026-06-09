@@ -90,6 +90,20 @@ class DatabaseComponentRegistryResolver(
         version: String,
     ): EscrowModuleConfig? {
         val component = componentRepository.findByComponentKey(id) ?: return null
+        return getResolvedComponentDefinition(component, version)
+    }
+
+    /**
+     * Entity-accepting variant of [getResolvedComponentDefinition] — resolves off an
+     * already-loaded [ComponentEntity] so callers that hold the entity (e.g. the
+     * docker-image path) avoid a redundant `findByComponentKey` reload. Semantics are
+     * identical to the `(id, version)` override: null when the version resolves to no
+     * config, distribution-normalisation failures fall back to the raw version string.
+     */
+    private fun getResolvedComponentDefinition(
+        component: ComponentEntity,
+        version: String,
+    ): EscrowModuleConfig? {
         val config =
             component.toResolvedEscrowModuleConfig(
                 version = version,
@@ -107,7 +121,7 @@ class DatabaseComponentRegistryResolver(
         if (config.distribution != null) {
             val normalizedVersion =
                 try {
-                    getJiraComponentVersionToRangeByComponentAndVersion(id, version).first.version
+                    getJiraComponentVersionToRangeByComponentAndVersion(component, version).first.version
                 } catch (_: Exception) {
                     version
                 }
@@ -129,6 +143,27 @@ class DatabaseComponentRegistryResolver(
             1 -> results.first().first
             0 -> throw NotFoundException("Version '$version' for component '$component' is not found")
             else -> error("Found ${results.size} configurations for version '$version' of component '$component'")
+        }
+    }
+
+    /**
+     * Entity-accepting variant of [getJiraComponentVersion] — builds the ranges from an
+     * already-loaded [ComponentEntity] (no `findByComponentKey` reload). Used by the
+     * docker-image path, which holds the entity from [buildImageToComponentMap].
+     */
+    private fun getJiraComponentVersion(
+        component: ComponentEntity,
+        version: String,
+    ): JiraComponentVersion {
+        val jiraVersionRanges = buildJiraVersionRangesForComponent(component)
+        val results = getJiraComponentVersionsToRanges(version, jiraVersionRanges, false)
+        return when (results.size) {
+            1 -> results.first().first
+            0 -> throw NotFoundException("Version '$version' for component '${component.componentKey}' is not found")
+            else ->
+                error(
+                    "Found ${results.size} configurations for version '$version' of component '${component.componentKey}'",
+                )
         }
     }
 
@@ -440,9 +475,9 @@ class DatabaseComponentRegistryResolver(
         val imageNames = images.map { it.name }.toSet()
         return buildImageToComponentMap()
             .filterKeys(imageNames::contains)
-            .mapNotNull { (imgName, compKey) ->
+            .mapNotNull { (imgName, component) ->
                 images.find { it.name == imgName }?.let { requiredImage ->
-                    findConfigurationByDockerImage(imgName, requiredImage.tag, compKey)
+                    findConfigurationByDockerImage(imgName, requiredImage.tag, component)
                 }
             }.toSet()
     }
@@ -530,6 +565,27 @@ class DatabaseComponentRegistryResolver(
             1 -> results.first()
             0 -> throw NotFoundException("Version '$version' for component '$component' is not found")
             else -> error("Found ${results.size} configurations for version '$version' of component '$component'")
+        }
+    }
+
+    /**
+     * Entity-accepting variant of [getJiraComponentVersionToRangeByComponentAndVersion] —
+     * builds the ranges from an already-loaded [ComponentEntity] (no `findByComponentKey`
+     * reload).
+     */
+    private fun getJiraComponentVersionToRangeByComponentAndVersion(
+        component: ComponentEntity,
+        version: String,
+    ): Pair<JiraComponentVersion, JiraComponentVersionRange> {
+        val jiraVersionRanges = buildJiraVersionRangesForComponent(component)
+        val results = getJiraComponentVersionsToRanges(version, jiraVersionRanges, false)
+        return when (results.size) {
+            1 -> results.first()
+            0 -> throw NotFoundException("Version '$version' for component '${component.componentKey}' is not found")
+            else ->
+                error(
+                    "Found ${results.size} configurations for version '$version' of component '${component.componentKey}'",
+                )
         }
     }
 
@@ -635,12 +691,19 @@ class DatabaseComponentRegistryResolver(
                 .containsVersion(numericVersionFactory.create(versionString))
         }.getOrDefault(false)
 
-    private fun buildImageToComponentMap(): Map<String, String> {
-        val result = mutableMapOf<String, String>()
+    /**
+     * Map docker image name → the already-loaded [ComponentEntity] that declares it.
+     * Carrying the entity (not just its key) lets [findConfigurationByDockerImage]
+     * resolve without a per-image `findByComponentKey` reload; with `@BatchSize` on the
+     * walked collections, the single `findAll()` here plus the batched child loads cover
+     * the whole `find-by-docker-images` request in a bounded number of queries.
+     */
+    private fun buildImageToComponentMap(): Map<String, ComponentEntity> {
+        val result = mutableMapOf<String, ComponentEntity>()
         for (component in componentRepository.findAll()) {
             for (configuration in component.configurations) {
                 for (image in configuration.dockerImages) {
-                    result[image.imageName] = component.componentKey
+                    result[image.imageName] = component
                 }
             }
         }
@@ -650,11 +713,11 @@ class DatabaseComponentRegistryResolver(
     private fun findConfigurationByDockerImage(
         imageName: String,
         imageTag: String,
-        componentKey: String,
+        component: ComponentEntity,
     ): ComponentImage? {
         val versionString =
             try {
-                getJiraComponentVersion(componentKey, imageTag).version
+                getJiraComponentVersion(component, imageTag).version
             } catch (_: NotFoundException) {
                 return null
             }
@@ -664,10 +727,10 @@ class DatabaseComponentRegistryResolver(
         // docker() WITHOUT the version tag (e.g. "img" instead of "img:4.0.427"), so the
         // "$imageName:$imageTag" membership check never matched and find-by-docker-images returned
         // empty where the V1 baseline (whose escrow model is version-substituted) returns the image.
-        val config = getResolvedComponentDefinition(componentKey, versionString) ?: return null
+        val config = getResolvedComponentDefinition(component, versionString) ?: return null
         return config.distribution?.let { dist ->
             if (dist.docker()?.split(',')?.contains("$imageName:$imageTag") == true) {
-                ComponentImage(componentKey, versionString, Image(imageName, imageTag))
+                ComponentImage(component.componentKey, versionString, Image(imageName, imageTag))
             } else {
                 null
             }

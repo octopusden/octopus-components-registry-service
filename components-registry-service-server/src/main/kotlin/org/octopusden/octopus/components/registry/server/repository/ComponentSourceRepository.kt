@@ -11,6 +11,17 @@ import org.springframework.transaction.annotation.Transactional
 interface ComponentSourceRepository : JpaRepository<ComponentSourceEntity, String> {
     fun findBySource(source: String): List<ComponentSourceEntity>
 
+    /**
+     * Projection of [findBySource] returning only the component keys. The routing
+     * layer's `getDbComponentNames()` / `getGitComponentNames()` need just the key
+     * set for membership checks, so this avoids hydrating full `ComponentSourceEntity`
+     * objects for every db-sourced row on each aggregate request (GH #249).
+     */
+    @Query("SELECT c.componentKey FROM ComponentSourceEntity c WHERE c.source = :source")
+    fun findComponentKeysBySource(
+        @Param("source") source: String,
+    ): List<String>
+
     fun countBySource(source: String): Long
 
     /**

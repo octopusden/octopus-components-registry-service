@@ -25,7 +25,7 @@ import org.octopusden.octopus.components.registry.server.repository.ComponentSou
  * The Opus adversarial review (P1-C on Group 1 + plan v3 Sonnet review)
  * flagged that the previous implementation persisted any string verbatim.
  * `ComponentRoutingResolver.resolverFor` does an exact `getSource(name) ==
- * "db"` check, and `getDbComponentNames()` calls `findBySource("db")`
+ * "db"` check, and `getDbComponentNames()` calls `findComponentKeysBySource("db")`
  * (case-sensitive query). Storing `"DB"`, `"DB "`, or any whitespace-
  * decorated variant routes the affected component to gitResolver and
  * excludes it from the db-routing set → 404 for any DB-only data.
