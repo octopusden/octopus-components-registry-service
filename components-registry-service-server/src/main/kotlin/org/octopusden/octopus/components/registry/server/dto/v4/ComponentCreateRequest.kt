@@ -1,5 +1,7 @@
 package org.octopusden.octopus.components.registry.server.dto.v4
 
+import io.swagger.v3.oas.annotations.media.Schema
+
 /**
  * Create body for a new component. Mirrors the v2 schema row-for-row — no
  * `metadata: Map` catch-all. Top-level scalars map directly to `components`
@@ -42,14 +44,19 @@ data class ComponentCreateRequest(
     // `components { }` owner that forms a group — see `group`); the two are
     // independent. A component with `canBeParent = true` may not also set
     // `parentComponentName` (single-level: a parent cannot have a parent) — rejected.
+    @field:Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     val canBeParent: Boolean = false,
+    @field:Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     val archived: Boolean = false,
     // Ordered multi-value (first = primary); canonicalized server-side
     // (trim → drop blank → keep-first dedupe).
+    @field:Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     val releaseManager: List<String> = emptyList(),
+    @field:Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     val securityChampion: List<String> = emptyList(),
     val copyright: String? = null,
     val releasesInDefaultBranch: Boolean? = null,
+    @field:Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     val labels: Set<String> = emptySet(),
     val jiraDisplayName: String? = null,
     val jiraHotfixVersionFormat: String? = null,
@@ -59,9 +66,18 @@ data class ComponentCreateRequest(
     // Accepted for backward compatibility but IGNORED: group membership is
     // migration-owned (DSL `components { }` aggregators), never assigned via the API.
     val group: ComponentGroupRequest? = null,
+    @field:Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     val docs: List<DocLinkRequest> = emptyList(),
+    @field:Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     val artifactIds: List<ArtifactIdRequest> = emptyList(),
+    @field:Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     val securityGroups: List<SecurityGroupRequest> = emptyList(),
+    @field:Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     val teamcityProjects: List<TeamcityProjectRequest> = emptyList(),
+    // REQUIRED despite the nullable type: the server rejects a create whose baseConfiguration
+    // (or its build.buildSystem) is missing with 400 (see class KDoc). No `description=` here —
+    // baseConfiguration is a $ref, so OpenAPI 3.0 would hoist the description onto the shared
+    // BaseConfigurationRequest schema, where it would wrongly appear on the (optional) Update use.
+    @field:Schema(requiredMode = Schema.RequiredMode.REQUIRED)
     val baseConfiguration: BaseConfigurationRequest? = null,
 )
