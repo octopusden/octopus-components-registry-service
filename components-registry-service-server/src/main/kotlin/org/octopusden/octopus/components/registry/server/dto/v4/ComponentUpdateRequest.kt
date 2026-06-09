@@ -1,5 +1,7 @@
 package org.octopusden.octopus.components.registry.server.dto.v4
 
+import io.swagger.v3.oas.annotations.media.Schema
+
 /**
  * Patch body (JSON Merge Patch semantics): null scalar = "don't touch";
  * present collection = REPLACE. `version` is the optimistic-lock value held by
@@ -52,11 +54,13 @@ data class ComponentUpdateRequest(
     // Both accepted for backward compatibility but IGNORED (no-op): group membership
     // is migration-owned and never modified via the API (see class KDoc).
     val group: ComponentGroupRequest? = null,
+    @field:Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     val clearGroup: Boolean = false,
     // Explicit "remove the parent" signal. `parentComponentName == null` means
     // "don't touch" (JSON Merge Patch), so clearing a parent needs its own flag.
     // Used to remediate a grandfathered parent-of-parent row: clearing the
     // parent of a `canBeParent` component re-derives its group to its own key.
+    @field:Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     val clearParent: Boolean = false,
     val docs: List<DocLinkRequest>? = null,
     val artifactIds: List<ArtifactIdRequest>? = null,
