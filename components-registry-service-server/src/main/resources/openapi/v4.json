@@ -507,16 +507,8 @@
           }
         },
         "required" : [
-          "archived",
-          "artifactIds",
-          "canBeParent",
-          "docs",
-          "labels",
-          "name",
-          "releaseManager",
-          "securityChampion",
-          "securityGroups",
-          "teamcityProjects"
+          "baseConfiguration",
+          "name"
         ],
         "type" : "object"
       },
@@ -672,8 +664,7 @@
           }
         },
         "required" : [
-          "groupKey",
-          "isFake"
+          "groupKey"
         ],
         "type" : "object"
       },
@@ -876,8 +867,6 @@
           }
         },
         "required" : [
-          "clearGroup",
-          "clearParent",
           "version"
         ],
         "type" : "object"
@@ -1808,12 +1797,12 @@
             "type" : "string"
           },
           "groupType" : {
+            "default" : "read",
             "type" : "string"
           }
         },
         "required" : [
-          "groupName",
-          "groupType"
+          "groupName"
         ],
         "type" : "object"
       },

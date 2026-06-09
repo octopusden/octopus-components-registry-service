@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.dto.v4
 
+import io.swagger.v3.oas.annotations.media.Schema
 import java.util.UUID
 
 /**
@@ -295,6 +296,7 @@ enum class ComponentGroupRole {
 
 data class ComponentGroupRequest(
     val groupKey: String,
+    @field:Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     val isFake: Boolean = false,
 )
 
@@ -328,6 +330,7 @@ data class SecurityGroupResponse(
 )
 
 data class SecurityGroupRequest(
+    @field:Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED, defaultValue = "read")
     val groupType: String = "read",
     val groupName: String,
 )
