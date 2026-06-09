@@ -115,6 +115,28 @@ class ComponentDisplayNameEditorsV4Test {
     }
 
     @Test
+    @DisplayName("create rejects a duplicate component key with 400 keyed name")
+    fun `create rejects duplicate component key`() {
+        val name = unique("dup_key")
+        mvc
+            .perform(
+                post("/rest/api/4/components")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(createBody(name, displayName = unique("Key One Display"))),
+            ).andExpect(status().isCreated)
+
+        mvc
+            .perform(
+                post("/rest/api/4/components")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(createBody(name, displayName = unique("Key Two Display"))),
+            ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.errorMessage").value(org.hamcrest.Matchers.containsString("name")))
+    }
+
+    @Test
     @DisplayName("update rejects changing displayName to one already used by another component")
     fun `update rejects duplicate displayName`() {
         val takenName = unique("Taken Display")

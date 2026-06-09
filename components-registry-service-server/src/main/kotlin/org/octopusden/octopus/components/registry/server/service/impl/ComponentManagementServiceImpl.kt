@@ -136,7 +136,9 @@ class ComponentManagementServiceImpl(
         val normalizedKey = request.name.trim()
         require(normalizedKey.isNotEmpty()) { "name must not be blank" }
         require(!componentRepository.existsByComponentKey(normalizedKey)) {
-            "Component with name '$normalizedKey' already exists"
+            // Field-prefixed so the Portal routes the 400 inline onto the Component Key (`name`)
+            // field (parseServerFieldErrors keys on the leading `name:`), matching displayName.
+            "name: a component with name '$normalizedKey' already exists"
         }
         // displayName is NOT NULL + UNIQUE. Blank/absent → default to the (unique) component key;
         // a non-blank value must not collide with another component. The 400 message is colon-
