@@ -79,7 +79,8 @@ PRD (why?) ──→ FS (what?) ──→ TDD (how?)
 | Document | When to create |
 |----------|----------------|
 | `migration-runbook.md` | Before production migration — step-by-step ops playbook |
-| `api-changelog.md` | On API v4 release — changelog for consumers |
+
+_[api-changelog.md](api-changelog.md) was created with the v4 OpenAPI spec generation (TD-003)._
 
 ## How to Read
 

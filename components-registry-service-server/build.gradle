@@ -156,6 +156,53 @@ processIntegrationTestResources {
     duplicatesStrategy = DuplicatesStrategy.INCLUDE
 }
 
+// TD-003: OpenApiV4SpecTest captures GET /v3/api-docs/v4 into build/openapi/v4.json and gates
+// drift vs the committed src/main/resources/openapi/v4.json. The test is UNtagged, so it already
+// runs under `test` -> `check` -> `build` (the [1.0] gate) — no extra gate task. Feed it the
+// output dir and the refresh flag (default false: gate; true: refresh the committed copy).
+// The gating `test` run and the refresh run write to SEPARATE dirs so a `build generateOpenApiDocs
+// --parallel` invocation can never have the two Test tasks race on the same file.
+def openApiGateDir = layout.buildDirectory.dir('openapi').get().asFile
+def openApiRefreshDir = layout.buildDirectory.dir('openapi-refresh').get().asFile
+test {
+    // Only set the output dir — the gating `test` run must ALWAYS assert (never refresh), so
+    // `openapi.refresh` is deliberately NOT wired from a -P here. `-Popenapi.refresh=true` would
+    // otherwise make `./gradlew build` silently skip the drift assertion. Refresh is the dedicated
+    // `generateOpenApiDocs`/`generateOpenApiDocsTest` path only.
+    systemProperty 'openapi.outputDir', openApiGateDir.absolutePath
+}
+
+// `./gradlew :components-registry-service-server:generateOpenApiDocs` refreshes the committed
+// spec after an intended v4 API change. TWO tasks (not a finalizer): the Copy only runs if the
+// regeneration test SUCCEEDS, so a failing test never copies a stale spec over the committed file.
+tasks.register('generateOpenApiDocsTest', Test) {
+    description = 'Regenerates build/openapi-refresh/v4.json from the live v4 controllers (refresh mode).'
+    group = 'documentation'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    // A custom Test task does NOT inherit the root `test {}` block's excludeTags filter — set
+    // an explicit platform + filter so it runs ONLY the spec test.
+    useJUnitPlatform()
+    filter {
+        includeTestsMatching 'org.octopusden.octopus.components.registry.server.openapi.OpenApiV4SpecTest'
+    }
+    systemProperty 'openapi.outputDir', openApiRefreshDir.absolutePath
+    systemProperty 'openapi.refresh', 'true'
+    // InfoControllerV4 needs BuildProperties from build/resources/main/META-INF/build-info.properties
+    // (springBoot { buildInfo() } -> bootBuildInfo), or the context fails to boot on a clean tree.
+    dependsOn 'processResources', 'bootBuildInfo'
+    outputs.upToDateWhen { false }
+}
+
+tasks.register('generateOpenApiDocs', Copy) {
+    description = 'Refreshes the committed src/main/resources/openapi/v4.json from build/openapi-refresh/v4.json.'
+    group = 'documentation'
+    dependsOn 'generateOpenApiDocsTest'
+    from openApiRefreshDir
+    include 'v4.json'
+    into 'src/main/resources/openapi'
+}
+
 jar {
     archiveBaseName = "${project.name}-it"
     enabled = true
