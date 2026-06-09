@@ -78,11 +78,18 @@ DB**, and the fetch lands on the **owning** resolver. Consequences:
   fetch is routed to `dbResolver`, which fails closed; the error propagates (no `200` bleed).
 - It is therefore **not** true that these endpoints "stay fully available via git" during a
   DB outage. The trade-off is **correctness over availability** for the migration window.
+- The availability reduction is **not limited to db-sourced projects**: `getSource()`
+  (`ComponentSourceRegistryImpl`) reads the `component_source` table uncached on every call,
+  so during a *full* DB outage the route lookup itself fails and **even a git-sourced
+  project's** `vcs-settings` / `distribution` endpoint now errors (previously it would have
+  been served from git). The db-sourced case is the one that closes a *correctness* hole;
+  the git-sourced case is an availability side-effect of routing through the DB.
 
 This is **not a new systemic dependency**: every single-component method already routes via
-`resolverFor → getSource → DB`, so the service already requires the DB to be up to route.
-The change is *local* to these two endpoints (was "works via git", now "errors") and brings
-them in line with the rest of the resolver.
+`resolverFor → getSource → DB`, so the service already requires the DB to be up to route
+*any* per-component read. The change is *local* to these two project endpoints (was "works
+via git", now "errors" when the DB is down) and brings them in line with the rest of the
+resolver.
 
 ### Acknowledged edge — null-inner JCV (pre-existing, out of scope)
 
@@ -90,12 +97,14 @@ A git `JiraComponentVersion` with `componentVersion == null` yields a null name 
 to `gitResolver`. The guard is only as strong as `getJiraComponentByProjectAndVersion`'s
 null-degradation (PR #245 P1-B). This edge is inherited, not introduced, and left as-is.
 
-### Acknowledged cost — double resolution
+### Acknowledged cost — ~3 DB round-trips per request
 
-Name discovery resolves `(projectKey, version)` and the owning resolver re-resolves it on
-the fetch (≈2× work on these cold endpoints). Acceptable for `vcs-settings` /
-`distribution`; a follow-up lever should they ever become hot (e.g. thread the
-already-resolved component through the fetch), noted alongside the #249/#321 perf work.
+Each request now does roughly three DB touches where the old code did one:
+`getJiraComponentByProjectAndVersion` (name discovery) + `getSource` (route selection) +
+the owning resolver's actual fetch (which re-resolves `(projectKey, version)`). Acceptable
+for the cold `vcs-settings` / `distribution` endpoints; a follow-up lever should they ever
+become hot (e.g. thread the already-resolved component through the fetch and/or cache
+`getSource`), noted alongside the #249/#321 perf work.
 
 ## Acceptance criteria
 
@@ -105,7 +114,9 @@ already-resolved component through the fetch), noted alongside the #249/#321 per
 - [x] Transient DB error on a DB-sourced project → error propagates; git never called
   (correctness > availability).
 - [x] Pure in-memory regression tests (no global fixtures) in
-  `ComponentRoutingResolverStaleAndNotFoundTest` (`issue256_*`, 8 cases; RED→GREEN).
+  `ComponentRoutingResolverStaleAndNotFoundTest` (`issue256_*`, 9 cases: 4 routing branches
+  — bleed-through guard, db-sourced happy path, git-sourced, transient-error-propagates —
+  × {VCS, Distribution}, plus the null-inner-JCV → git fallback edge; RED→GREEN).
 - [x] Compat known-delta entries documenting the intended `200`-stale → `404` divergence.
 
 ## Risk classification
