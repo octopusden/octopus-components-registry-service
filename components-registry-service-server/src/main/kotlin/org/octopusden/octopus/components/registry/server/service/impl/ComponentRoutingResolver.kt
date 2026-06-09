@@ -222,27 +222,33 @@ class ComponentRoutingResolver(
         return filteredGit + dbResults
     }
 
-    @Suppress("TooGenericExceptionCaught", "SwallowedException")
+    // #256: VCSSettings / Distribution carry no componentName accessor, so the PR #245
+    // stale-guard (reject a git result whose id ∈ getDbComponentNames()) cannot be applied
+    // to the return value. Instead, discover the authoritative component for
+    // (projectKey, version) via the already-stale-guarded getJiraComponentByProjectAndVersion
+    // — which throws NotFoundException for a db-sourced project whose version is absent,
+    // closing the git bleed-through — then route the fetch to that component's owning
+    // resolver. resolverFor() hits the DB via getSource(), so a db-sourced component never
+    // serves stale git data even on a transient db error: the fetch lands on dbResolver and
+    // the error propagates rather than bleeding git (correctness > availability during
+    // cutover). A null component name (malformed/cached JCV — see :117) falls back to git.
+    private fun resolverForProject(
+        projectKey: String,
+        version: String,
+    ): ComponentRegistryResolver {
+        val componentName = getJiraComponentByProjectAndVersion(projectKey, version).componentVersion?.componentName
+        return if (componentName != null) resolverFor(componentName) else gitResolver
+    }
+
     override fun getVCSSettingForProject(
         projectKey: String,
         version: String,
-    ): VCSSettings =
-        try {
-            dbResolver.getVCSSettingForProject(projectKey, version)
-        } catch (e: Exception) {
-            gitResolver.getVCSSettingForProject(projectKey, version)
-        }
+    ): VCSSettings = resolverForProject(projectKey, version).getVCSSettingForProject(projectKey, version)
 
-    @Suppress("TooGenericExceptionCaught", "SwallowedException")
     override fun getDistributionForProject(
         projectKey: String,
         version: String,
-    ): Distribution =
-        try {
-            dbResolver.getDistributionForProject(projectKey, version)
-        } catch (e: Exception) {
-            gitResolver.getDistributionForProject(projectKey, version)
-        }
+    ): Distribution = resolverForProject(projectKey, version).getDistributionForProject(projectKey, version)
 
     // --- Artifact resolution: try both ---
 
