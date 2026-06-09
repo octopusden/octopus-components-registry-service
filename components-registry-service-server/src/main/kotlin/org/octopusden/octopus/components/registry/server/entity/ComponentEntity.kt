@@ -92,8 +92,13 @@ class ComponentEntity(
     @Column(name = "component_owner")
     var componentOwner: String? = null,
 
-    @Column(name = "display_name")
-    var displayName: String? = null,
+    // Required + unique (schema-spec): every component has a human-readable name.
+    // Default = componentKey so fixtures/callers that omit it still get a non-null,
+    // unique value (componentKey is itself unique). The import pipeline backfills
+    // blank/inherited-default DSL values to the key and fails fast on collisions;
+    // the create/update API enforces non-blank + uniqueness (400 keyed displayName).
+    @Column(name = "display_name", nullable = false, unique = true)
+    var displayName: String = componentKey,
 
     @Column(name = "product_type", length = 20)
     var productType: String? = null,

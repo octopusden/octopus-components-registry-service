@@ -16,7 +16,8 @@ import java.util.UUID
 data class ComponentSummaryResponse(
     val id: UUID,
     val name: String,
-    val displayName: String?,
+    // Required + unique (DB NOT NULL UNIQUE); always present on read.
+    val displayName: String,
     val componentOwner: String?,
     val system: String?,
     val productType: String?,

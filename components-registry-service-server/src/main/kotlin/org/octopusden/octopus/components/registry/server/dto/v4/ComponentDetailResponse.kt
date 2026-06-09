@@ -19,7 +19,9 @@ import java.util.UUID
 data class ComponentDetailResponse(
     val id: UUID,
     val name: String,
-    val displayName: String?,
+    // Required + unique (DB NOT NULL UNIQUE). Always present on read; the import
+    // backfills blank/inherited-default DSL values to the component key.
+    val displayName: String,
     val componentOwner: String?,
     val productType: String?,
     val system: String?,

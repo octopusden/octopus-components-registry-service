@@ -2,6 +2,7 @@ package org.octopusden.octopus.components.registry.server.service
 
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentCreateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentDetailResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.ComponentEditorsResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentFilter
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentSummaryResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentUpdateRequest
@@ -66,6 +67,13 @@ interface ComponentManagementService {
         idOrName: String,
         version: String,
     ): RenderedComponentCode
+
+    /**
+     * The component's editors (componentOwner + ordered releaseManagers + securityChampions)
+     * for the Portal's read-only "who can edit" surface. Informational only — see
+     * [ComponentEditorsResponse].
+     */
+    fun getEditors(idOrName: String): ComponentEditorsResponse
 }
 
 /** A rendered as-code document plus the canonical component key (for the filename). */

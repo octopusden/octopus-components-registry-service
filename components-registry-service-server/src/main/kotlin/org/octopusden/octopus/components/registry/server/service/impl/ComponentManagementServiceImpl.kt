@@ -11,6 +11,7 @@ import org.octopusden.octopus.components.registry.server.dto.v4.BaseConfiguratio
 import org.octopusden.octopus.components.registry.server.dto.v4.BuildToolBeanRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentCreateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentDetailResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.ComponentEditorsResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentFilter
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentSummaryResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentUpdateRequest
@@ -137,6 +138,23 @@ class ComponentManagementServiceImpl(
         require(!componentRepository.existsByComponentKey(normalizedKey)) {
             "Component with name '$normalizedKey' already exists"
         }
+        // displayName is NOT NULL + UNIQUE. Blank/absent → default to the (unique) component key;
+        // a non-blank value must not collide with another component. The 400 message is colon-
+        // prefixed so the Portal routes it inline — but keyed to the field the user actually
+        // controlled: `displayName` when they supplied one, `name` when it defaulted to the key
+        // (then the real conflict is that the chosen component name is already another's display
+        // name, not anything the user typed in the displayName field).
+        val explicitDisplayName = request.displayName?.trim()?.takeIf { it.isNotEmpty() }
+        val normalizedDisplayName = explicitDisplayName ?: normalizedKey
+        if (explicitDisplayName != null) {
+            require(!componentRepository.existsByDisplayName(normalizedDisplayName)) {
+                "displayName: a component with display name '$normalizedDisplayName' already exists"
+            }
+        } else {
+            require(!componentRepository.existsByDisplayName(normalizedDisplayName)) {
+                "name: component name '$normalizedKey' is already used as another component's display name"
+            }
+        }
         // Strict contract (UI-swift-sloth): a component cannot legitimately exist
         // without a build system on its BASE configuration row. The Portal's Create
         // dialog enforces it at the UX layer; the server is the source of truth and
@@ -226,7 +244,7 @@ class ComponentManagementServiceImpl(
         val entity =
             ComponentEntity(
                 componentKey = normalizedKey,
-                displayName = request.displayName,
+                displayName = normalizedDisplayName,
                 componentOwner = request.componentOwner,
                 productType = request.productType,
                 clientCode = request.clientCode,
@@ -360,6 +378,18 @@ class ComponentManagementServiceImpl(
         return RenderedComponentCode(entity.componentKey, body)
     }
 
+    // Reads LAZY child collections (releaseManagers / securityChampions), so it must run
+    // inside this readOnly transaction (the session that loaded the entity).
+    @Transactional(readOnly = true)
+    override fun getEditors(idOrName: String): ComponentEditorsResponse {
+        val entity = findByIdOrName(idOrName)
+        return ComponentEditorsResponse(
+            componentOwner = entity.componentOwner,
+            releaseManagers = entity.releaseManagerUsernames(),
+            securityChampions = entity.securityChampionUsernames(),
+        )
+    }
+
     // ============================================================
     // Update
     // ============================================================
@@ -458,7 +488,18 @@ class ComponentManagementServiceImpl(
         if (isRename) entity.componentKey = normalizedNewKey!!
 
         // FC-gated scalar patches (null = "don't touch"; hidden = silently stripped) ——
-        request.displayName?.let { if (!fieldConfigService.isHidden("component.displayName")) entity.displayName = it }
+        // displayName is NOT NULL + UNIQUE: reject a blank value and a value already used by
+        // another component (exclude self). Colon-prefixed message → 400 routed inline.
+        request.displayName?.let {
+            if (!fieldConfigService.isHidden("component.displayName")) {
+                val newDisplayName = it.trim()
+                require(newDisplayName.isNotEmpty()) { "displayName: must not be blank" }
+                require(!componentRepository.existsByDisplayNameAndIdNot(newDisplayName, entity.id!!)) {
+                    "displayName: a component with display name '$newDisplayName' already exists"
+                }
+                entity.displayName = newDisplayName
+            }
+        }
         request.componentOwner?.let { if (!fieldConfigService.isHidden("component.componentOwner")) entity.componentOwner = it }
         request.productType?.let { if (!fieldConfigService.isHidden("component.productType")) entity.productType = it }
         request.clientCode?.let {

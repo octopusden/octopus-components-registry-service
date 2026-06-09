@@ -13,6 +13,8 @@
   - **Extended — multi-value (OR, exact `IN`; back the Portal "extended search" multi-select dropdowns, `SYS-046`):** `clientCode`, `jiraProjectKey` (BASE row), `parentComponentName` (the parent's component key — children of any listed parent), `groupKey` (the owning group). CSV or repeatable params, normalised like the Main multi-value filters; the BASE-row join uses `distinct`. (These four were substring/exact single-value before `SYS-046`.)
   - **Extended — single-value:** `solution`, `jiraTechnical`, `distributionExplicit`, `distributionExternal` (booleans; `=false` matches only rows explicitly set false — rows where the column is NULL are excluded — `SYS-045`), `vcsPath` (LIKE on a BASE VCS entry), `productionBranch` (LIKE on a BASE VCS entry's `branch`), `canBeParent`. The VCS-entry joins use `distinct` so a multi-entry component is counted once.
   - **Meta option lists** (populate the filter-bar pickers; each returns sorted distinct values **in use**, gated by `ACCESS_COMPONENTS`): `/meta/owners`, `/meta/labels`, `/meta/systems`, `/meta/client-codes`, `/meta/jira-project-keys`, `/meta/parent-component-names` (only keys actually referenced as a parent), `/meta/group-keys` (only groups with ≥1 member). The full master-dictionary variants `/meta/labels/dictionary` and `/meta/systems/dictionary` back the editor multi-selects.
+  - **Domain option lists** (populate editor dropdowns, gated by `ACCESS_COMPONENTS`): `/meta/build-systems`, `/meta/repository-types`, `/meta/escrow-generations` (enum-sourced), plus `/meta/java-versions` and `/meta/maven-versions` — the allowed build-tool versions sourced from `components-registry.build-tool-versions.{java,maven}` (application.yml default, per-installation override via service-config), returned numeric-sorted.
+  - **Editors** (read-only "who can edit" projection, gated by `ACCESS_COMPONENTS`): `GET /rest/api/4/components/{idOrName}/editors` → `{ componentOwner, releaseManagers[], securityChampions[] }`. Informational only — administrators (`EDIT_ANY_COMPONENT`) may also edit but are not enumerated.
 - **Output**: Paginated list of components with summary info
 - **Sorting**: By name (default), system, productType, updatedAt
 - **Pagination**: Page number + page size (default 20, max 100)
@@ -44,7 +46,8 @@ Base URLs for links are configurable per deployment via `registry_config` (same 
 ### 1.3 Create Component
 - **Required fields**: `name` (unique, alphanumeric + hyphens + underscores, max 255 chars), `componentOwner`
 - **Conditionally required**: `releaseManager`, `securityChampion` — required when `distribution.explicit && distribution.external`; `copyright` — required under the same gate only when `components-registry.copyright-path` is configured
-- **Optional fields**: displayName, productType, system, clientCode, solution, groupId, labels, doc
+- **Auto-defaulted + unique**: `displayName` — defaults to the component key when omitted/blank; must be unique across components (400 keyed `displayName` on a duplicate)
+- **Optional fields**: productType, system, clientCode, solution, groupId, labels, doc
 
 **Person-field validation (enforced on the v4 write path — see ADR-015).** Restored from the old `EscrowConfigValidator` + the (formerly default-off CI) `ComponentRegistryValidationTask`, and modernised into per-request checks on `POST /rest/api/4/components` and `PATCH /rest/api/4/components/{id}`:
 
@@ -106,9 +109,11 @@ These format checks are skipped for a field whose admin field-config visibility 
 
 #### Intentional legacy-validation relaxations
 
-- `displayName` remains optional, including for explicit+external components. The
-  v4 contract deliberately uses the component key as the stable identity and does
-  not require a second display label.
+- `displayName` is required + unique at the DB layer (NOT NULL, UNIQUE). A create/update that
+  omits or blanks it defaults to the component key; a value already used by another component is
+  rejected with a 400 keyed `displayName`. The import backfills blank / inherited-default values to
+  the key and fails fast on collisions (see schema-spec). The Portal still uses the component key
+  as the stable identity, so the display label is auto-derived rather than user-mandatory.
 - Legacy hotfix version-format relationship checks are not enforced on v4 writes.
   Hotfix formats are inherited/read-only in the Portal, while permissive storage
   preserves imported configurations and resolver compatibility.

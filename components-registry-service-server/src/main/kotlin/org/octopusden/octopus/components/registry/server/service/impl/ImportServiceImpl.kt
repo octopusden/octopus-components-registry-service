@@ -243,6 +243,16 @@ class ImportServiceImpl(
         val allModules = fullConfig.escrowModules
         LOG.info("§6 DSL load: {} ms ({} modules)", (System.nanoTime() - loadStart) / 1_000_000, allModules.size)
 
+        // §6.0 displayName collision pre-pass. display_name is NOT NULL + UNIQUE, so a
+        // duplicate would abort mid-import and leave partial commits behind (the per-module
+        // loop below catches & continues, and migrate() allows partial commits). Detect
+        // collisions HERE — after the DSL load but BEFORE the §6.1 dictionary pre-upserts
+        // below (which are the first writes in this method) — and throw once up front so a
+        // failed migration leaves zero component/dictionary rows behind and the error names
+        // every offender. (migrate() upserts the idempotent component-defaults config blob
+        // before this method; that is unaffected.)
+        detectDisplayNameCollisions(allModules)
+
         // §6.1 Pre-pass dictionary discovery
         LOG.info("§6.1 Pre-pass: upserting systems, tools, labels")
         val dictStart = System.nanoTime()
@@ -957,13 +967,65 @@ class ImportServiceImpl(
      * `componentGroup` are resolved in later passes.
      */
     @Suppress("CyclomaticComplexMethod")
+    /**
+     * Resolved component display name for the DB (NOT NULL + UNIQUE). The DSL's
+     * `componentDisplayName` INHERITS from `Defaults.groovy` for every component that
+     * doesn't declare its own (EscrowConfigurationLoader.loadComponentDisplayName), so a
+     * raw copy would assign the same shared default to hundreds of components and break
+     * the UNIQUE constraint. We therefore treat a blank value OR a value equal to the
+     * common default as "not explicitly set" and fall back to the (unique) component key.
+     */
+    private fun resolveDisplayName(
+        componentKey: String,
+        cfgDisplayName: String?,
+    ): String = resolveDisplayName(componentKey, cfgDisplayName, commonDefaultsCache.componentDisplayName)
+
+    /**
+     * Fail-fast guard for the NOT NULL + UNIQUE `display_name` column. Computes the
+     * resolved display name for every module (same base-config selection + defaults-equality
+     * rule as [buildComponentEntity]) and aborts the whole import — before any write — if two
+     * or more components resolve to the same name. Throwing from the per-module loop would not
+     * abort (it's caught & recorded per component, and migrate() permits partial commits), so
+     * this must run as an up-front pre-pass. The error names every offender so the conflicting
+     * `componentDisplayName`s can be fixed in the DSL. Pure logic lives in the companion's
+     * [computeDisplayNameCollisions] so it can be unit-tested without Spring or DSL fixtures.
+     */
+    private fun detectDisplayNameCollisions(allModules: Map<String, EscrowModule>) {
+        val modulePairs =
+            allModules.entries
+                // Only modules that Pass 1 actually persists. A module with an empty body
+                // (`"FOO" { }`) has no moduleConfigurations and is skipped by the import (no row),
+                // so it must NOT be modelled here — otherwise a phantom key-derived display name
+                // could spuriously collide with a real component's explicit name and abort the
+                // whole migration. With empties excluded, the base-config selection below mirrors
+                // importModule's `firstOrNull { ALL_VERSIONS } ?: configs.first()` exactly.
+                .filter { (_, escrowModule) -> escrowModule.moduleConfigurations.isNotEmpty() }
+                .map { (componentKey, escrowModule) ->
+                    val baseConfig =
+                        escrowModule.moduleConfigurations.firstOrNull { it.versionRangeString == ALL_VERSIONS }
+                            ?: escrowModule.moduleConfigurations.first()
+                    componentKey to baseConfig.componentDisplayName
+                }
+        val collisions = computeDisplayNameCollisions(modulePairs, commonDefaultsCache.componentDisplayName)
+        if (collisions.isEmpty()) return
+        val report =
+            collisions.entries
+                .sortedBy { it.key }
+                .joinToString("; ") { (name, keys) -> "\"$name\" <- ${keys.sorted()}" }
+        LOG.error("§6.0 display_name collision pre-pass FAILED — duplicate display names: {}", report)
+        throw IllegalStateException(
+            "Cannot migrate: ${collisions.size} display name(s) are shared by multiple components " +
+                "(display_name is unique). Fix the conflicting componentDisplayName in the DSL: $report",
+        )
+    }
+
     private fun buildComponentEntity(
         componentKey: String,
         cfg: EscrowModuleConfig,
     ): ComponentEntity {
         val entity = ComponentEntity(componentKey = componentKey)
         entity.componentOwner = cfg.componentOwner
-        entity.displayName = cfg.componentDisplayName
+        entity.displayName = resolveDisplayName(componentKey, cfg.componentDisplayName)
         entity.productType = cfg.productType?.name
         entity.clientCode = cfg.clientCode
         entity.archived = cfg.archived
@@ -2118,6 +2180,38 @@ class ImportServiceImpl(
 
         /** Exact-string FAKE-aggregator artifactId markers. */
         private val FAKE_ARTIFACT_ID_LITERALS: Set<String> = setOf("fake", "dummy", "stub")
+
+        /**
+         * Resolved component display name for the DB (NOT NULL + UNIQUE). The DSL's
+         * `componentDisplayName` inherits from `Defaults.groovy` for components that don't declare
+         * their own, so a value that is blank OR equal to [defaultDisplayName] is treated as
+         * "not explicitly set" and falls back to the (unique) component key. Pure — unit-tested.
+         */
+        internal fun resolveDisplayName(
+            componentKey: String,
+            cfgDisplayName: String?,
+            defaultDisplayName: String?,
+        ): String =
+            cfgDisplayName?.takeIf { it.isNotBlank() && it != defaultDisplayName } ?: componentKey
+
+        /**
+         * Groups (componentKey → cfgDisplayName) module pairs by their resolved display name and
+         * returns only the names claimed by more than one component (resolved-name → all claiming
+         * keys, each list deduped-and-sorted). Empty result ⇒ no collisions. Pure — unit-tested.
+         */
+        internal fun computeDisplayNameCollisions(
+            modules: List<Pair<String, String?>>,
+            defaultDisplayName: String?,
+        ): Map<String, List<String>> {
+            val byDisplayName = mutableMapOf<String, MutableList<String>>()
+            for ((componentKey, cfgDisplayName) in modules) {
+                val resolved = resolveDisplayName(componentKey, cfgDisplayName, defaultDisplayName)
+                byDisplayName.getOrPut(resolved) { mutableListOf() }.add(componentKey)
+            }
+            return byDisplayName
+                .filterValues { it.size > 1 }
+                .mapValues { (_, keys) -> keys.distinct().sorted() }
+        }
 
         /**
          * Token-based FAKE-aggregator artifactId marker: matches `fake`/`dummy`/`stub`

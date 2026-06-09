@@ -152,7 +152,9 @@ class ComponentOwnershipEditSecurityTest {
     private fun JsonNode.canEdit(): Boolean =
         (this["canEdit"] ?: error("canEdit field missing from response")).asBoolean()
 
-    private fun bumpDisplayName() = mapOf("displayName" to "edited")
+    // Unique per call: displayName is now UNIQUE, so a shared literal would 400 on the
+    // second edit. The value is never asserted — only used as a non-trivial PATCH body.
+    private fun bumpDisplayName() = mapOf("displayName" to "edited-${UUID.randomUUID()}")
 
     // --- ownership grants edit -------------------------------------------------
 
