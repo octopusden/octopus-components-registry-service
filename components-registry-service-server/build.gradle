@@ -84,6 +84,24 @@ tasks.withType(Test).configureEach {
     if (registry) environment 'DOCKER_REGISTRY', registry
 }
 
+// CI OOM mitigation. The heavy @Tag("integration") suite runs in `dbTest`: it boots many full
+// Spring Boot contexts (Tomcat + JPA/Hibernate) that the Spring TestContext cache keeps resident,
+// on top of the JaCoCo coverage agent (under `qualityCoverage`) and the Testcontainers client.
+// On the 7 GB GitHub-hosted runner the forked test JVM's default heap (JVM ergonomics ≈ 25% of
+// RAM ≈ 1.75 GB) is exhausted intermittently — the failure surfaced as an OutOfMemoryError in
+// Tomcat `http-nio-*-Poller` threads plus a dropped Postgres connection in
+// MigrateHistoryIntegrationTest (`Connection to localhost:<port> refused`), failing dbTest with
+// no real assertion error. Give this one fork a larger explicit ceiling. `-Xmx` is a CEILING,
+// not a reservation, so this does not by itself raise RAM use: the Gradle daemon (-Xmx2g, see
+// gradle.properties) and the lighter module forks keep their live sets well under 7 GB, and the
+// runner caps concurrency at its 2 vCPUs. Scoped to this module's dbTest (the only heavy one);
+// `test` (fast unit + smoke) and `integrationTest` (offloads to a separate fat-jar process) are
+// left at the default. If this proves insufficient, the next lever is bounding the Spring
+// TestContext cache via `-Dspring.test.context.cache.maxSize`.
+tasks.matching { it.name == 'dbTest' }.configureEach {
+    maxHeapSize = '3g'
+}
+
 sourceSets {
     test {
         resources {
