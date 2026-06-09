@@ -140,21 +140,17 @@ class ComponentManagementServiceImpl(
             // field (parseServerFieldErrors keys on the leading `name:`), matching displayName.
             "name: a component with name '$normalizedKey' already exists"
         }
-        // displayName is NOT NULL + UNIQUE. Blank/absent → default to the (unique) component key;
-        // a non-blank value must not collide with another component. The 400 message is colon-
-        // prefixed so the Portal routes it inline — but keyed to the field the user actually
-        // controlled: `displayName` when they supplied one, `name` when it defaulted to the key
-        // (then the real conflict is that the chosen component name is already another's display
-        // name, not anything the user typed in the displayName field).
-        val explicitDisplayName = request.displayName?.trim()?.takeIf { it.isNotEmpty() }
-        val normalizedDisplayName = explicitDisplayName ?: normalizedKey
-        if (explicitDisplayName != null) {
+        // displayName is nullable + UNIQUE. Blank/absent → stored as null (this preserves the
+        // legacy v1/v2/v3 wire `$.name`: prod 2.0.87 served null for unnamed components, so we do
+        // NOT backfill the component key). A non-blank value must not collide with another
+        // component's display name (UNIQUE; nullable ⇒ many NULLs allowed). Required-ness for
+        // explicit+external components is enforced downstream by validateMalformedFieldRules
+        // (mirrors EscrowConfigValidator.validateExplicitExternalComponent). The 400 is
+        // colon-prefixed so the Portal routes it inline onto the displayName field.
+        val normalizedDisplayName = request.displayName?.trim()?.takeIf { it.isNotEmpty() }
+        if (normalizedDisplayName != null) {
             require(!componentRepository.existsByDisplayName(normalizedDisplayName)) {
                 "displayName: a component with display name '$normalizedDisplayName' already exists"
-            }
-        } else {
-            require(!componentRepository.existsByDisplayName(normalizedDisplayName)) {
-                "name: component name '$normalizedKey' is already used as another component's display name"
             }
         }
         // Strict contract (UI-swift-sloth): a component cannot legitimately exist
@@ -291,6 +287,7 @@ class ComponentManagementServiceImpl(
         // malformed-input checks here.
         validatePersonFields(entity, runActiveCheck = true)
         validateRequiredCopyright(entity)
+        validateRequiredDisplayName(entity)
 
         // Malformed-input cross-component / single-field checks (400). These need
         // no DB lookup beyond the soft doc-ref existence probe and run against the
@@ -490,14 +487,17 @@ class ComponentManagementServiceImpl(
         if (isRename) entity.componentKey = normalizedNewKey!!
 
         // FC-gated scalar patches (null = "don't touch"; hidden = silently stripped) ——
-        // displayName is NOT NULL + UNIQUE: reject a blank value and a value already used by
-        // another component (exclude self). Colon-prefixed message → 400 routed inline.
+        // displayName is nullable + UNIQUE: a blank value clears it (→ null), a non-blank value
+        // must not collide with another component (exclude self). Required-ness for
+        // explicit+external components is enforced by validateMalformedFieldRules below, so a
+        // clear on such a component is rejected there (not here). Colon-prefixed → 400 inline.
         request.displayName?.let {
             if (!fieldConfigService.isHidden("component.displayName")) {
-                val newDisplayName = it.trim()
-                require(newDisplayName.isNotEmpty()) { "displayName: must not be blank" }
-                require(!componentRepository.existsByDisplayNameAndIdNot(newDisplayName, entity.id!!)) {
-                    "displayName: a component with display name '$newDisplayName' already exists"
+                val newDisplayName = it.trim().takeIf { v -> v.isNotEmpty() }
+                if (newDisplayName != null) {
+                    require(!componentRepository.existsByDisplayNameAndIdNot(newDisplayName, entity.id!!)) {
+                        "displayName: a component with display name '$newDisplayName' already exists"
+                    }
                 }
                 entity.displayName = newDisplayName
             }
@@ -596,6 +596,7 @@ class ComponentManagementServiceImpl(
                 entity.distributionExternal != oldExternal
         validatePersonFields(entity, runActiveCheck = personFieldChanged || gateFlipped)
         validateRequiredCopyright(entity)
+        validateRequiredDisplayName(entity)
 
         // Per-component child REPLACE — present collection wipes and refills
         request.artifactIds?.let {
@@ -2219,6 +2220,23 @@ class ComponentManagementServiceImpl(
 
         require(!entity.copyright.isNullOrBlank()) {
             "copyright must not be blank for an explicit+external component when copyright-path is configured"
+        }
+    }
+
+    /**
+     * #2 componentDisplayName required for explicit+external components — mirrors the
+     * pre-existing DSL rule `EscrowConfigValidator.validateExplicitExternalComponent`.
+     * displayName itself stays nullable for all other components (preserving the legacy
+     * v1/v2/v3 `$.name` wire). Runs against the final entity state on every create/update
+     * (like [validateRequiredCopyright]), so it also catches a displayName-only PATCH that
+     * clears the value on an explicit+external component. Colon-prefixed → the Portal routes
+     * the 400 inline onto the displayName field.
+     */
+    private fun validateRequiredDisplayName(entity: ComponentEntity) {
+        if (entity.distributionExplicit != true || entity.distributionExternal != true) return
+        require(!entity.displayName.isNullOrBlank()) {
+            "displayName: componentDisplayName is required for an explicit+external " +
+                "component (component '${entity.componentKey}')"
         }
     }
 

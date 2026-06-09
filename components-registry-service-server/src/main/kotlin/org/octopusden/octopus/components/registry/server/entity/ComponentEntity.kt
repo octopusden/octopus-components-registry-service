@@ -92,13 +92,14 @@ class ComponentEntity(
     @Column(name = "component_owner")
     var componentOwner: String? = null,
 
-    // Required + unique (schema-spec): every component has a human-readable name.
-    // Default = componentKey so fixtures/callers that omit it still get a non-null,
-    // unique value (componentKey is itself unique). The import pipeline backfills
-    // blank/inherited-default DSL values to the key and fails fast on collisions;
-    // the create/update API enforces non-blank + uniqueness (400 keyed displayName).
-    @Column(name = "display_name", nullable = false, unique = true)
-    var displayName: String = componentKey,
+    // Nullable + unique (schema-spec). NULL when no componentDisplayName is declared —
+    // this preserves the legacy v1/v2/v3 wire `$.name` (prod 2.0.87 served null for unnamed
+    // components, so we do NOT backfill the key). UNIQUE applies to non-null values only
+    // (Postgres allows multiple NULLs). The import stores the DSL value verbatim and fails
+    // fast on duplicate non-null names; the create/update API enforces uniqueness and (for
+    // explicit+external components only) requiredness, mirroring the DSL validator.
+    @Column(name = "display_name", unique = true)
+    var displayName: String? = null,
 
     @Column(name = "product_type", length = 20)
     var productType: String? = null,

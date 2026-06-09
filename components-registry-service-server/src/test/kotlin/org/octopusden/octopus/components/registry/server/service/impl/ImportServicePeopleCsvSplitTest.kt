@@ -50,9 +50,10 @@ class ImportServicePeopleCsvSplitTest {
 
     @BeforeEach
     fun setUp() {
-        // buildComponentEntity now resolves displayName via commonDefaultsCache (the lazy
-        // loadCommonDefaults). Stub it so the lazy yields a non-null DefaultConfigParameters
-        // (componentDisplayName=null) → resolveDisplayName falls back to the component key.
+        // The lazy commonDefaultsCache (loadCommonDefaults) is stubbed to a non-null
+        // DefaultConfigParameters so the import's defaults-backed fields resolve. displayName
+        // itself is now stored verbatim from the DSL (nullable, no key backfill), independent
+        // of the common defaults.
         val configurationLoaderMock = mock(EscrowConfigurationLoader::class.java)
         Mockito.`when`(configurationLoaderMock.loadCommonDefaults(emptyMap()))
             .thenReturn(DefaultConfigParameters())

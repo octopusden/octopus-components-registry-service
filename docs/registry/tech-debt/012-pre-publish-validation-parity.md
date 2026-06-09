@@ -31,7 +31,7 @@ Legend: ✅ done (this/a merged PR) · ◻ open · ⊘ intentional (to be record
 | #4 | `securityChampion` required + per-element `^\w+$` under `explicit && external` | ✅ Stage 1 |
 | #7 | active-employee check on owner/RM/SC | ✅ Stage 1 — runtime, flag-gated, **fail-open** (ADR-015) |
 | — | employee lookup endpoints for the UI picker + badge | ✅ Stage 2 — `GET /meta/employees`, `POST /meta/employees/status` |
-| #2 | `componentDisplayName` required under `explicit && external` | ⊘ INTENTIONAL — v4 `displayName` is optional; component key is the stable identity |
+| #2 | `componentDisplayName` required under `explicit && external` | ✅ restored — `validateMalformedFieldRules` (gated on `explicit && external`); `displayName` stays nullable for all other components (preserving the legacy `$.name` wire) |
 | #5 | `copyright` required if `copyrightPath` set, under `explicit && external` | ✅ final-state requiredness restored; hidden/unconfigured field is skipped |
 
 ### Cross-component integrity — Stage 4 (separate PR, independent)

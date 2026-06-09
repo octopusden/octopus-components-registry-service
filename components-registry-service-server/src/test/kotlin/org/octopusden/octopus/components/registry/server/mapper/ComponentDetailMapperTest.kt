@@ -73,8 +73,8 @@ class ComponentDetailMapperTest {
         val response = component.toDetailResponse()
 
         assertEquals(component.id, response.id)
-        // displayName is NOT NULL + defaults to the component key when unset.
-        assertEquals("alpha", response.displayName)
+        // displayName is nullable and stored verbatim — null when unset (no key backfill).
+        assertNull(response.displayName)
         assertNull(response.componentOwner)
         assertNull(response.productType)
         assertNull(response.system)

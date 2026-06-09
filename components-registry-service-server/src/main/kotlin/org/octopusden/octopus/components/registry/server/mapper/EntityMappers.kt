@@ -407,14 +407,10 @@ private fun buildEscrowModuleConfig(
         setField(config, "jiraConfiguration", jira)
     }
 
-    // Component-level (per-component, never per-version)
-    // displayName is NOT NULL in the DB and defaults to componentKey when the DSL declares
-    // no componentDisplayName (see ComponentEntity.displayName). Prod 2.0.87 served v1/v2/v3
-    // `$.name` as null in that case, so collapse the backfill sentinel (displayName ==
-    // componentKey) back to null here to keep the legacy wire byte-compatible — otherwise
-    // every previously-unnamed component flips `$.name` NULL → STRING (compat gate [1.7]).
-    // The v4 API keeps the non-null displayName; this null-collapse is legacy-path only.
-    setField(config, "componentDisplayName", component.displayName.takeIf { it != component.componentKey })
+    // Component-level (per-component, never per-version). displayName is nullable and stored
+    // verbatim from the DSL (no key backfill), so a straight passthrough reproduces the legacy
+    // v1/v2/v3 `$.name` byte-for-byte (null stays null).
+    setField(config, "componentDisplayName", component.displayName)
     setField(config, "componentOwner", component.componentOwner)
     // Single-value system: write the scalar code (or empty string when null).
     // The legacy DSL field was a CSV; keeping the field name shape but

@@ -7,48 +7,40 @@ import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 
 /**
- * Focused in-memory unit tests for the import display-name backfill + collision pre-pass
- * (the data-sensitive NOT NULL + UNIQUE logic). No Spring context / DSL fixtures — the pure
- * logic is exposed as `internal` companion functions on [ImportServiceImpl].
+ * Focused in-memory unit tests for the import display-name collision pre-pass (the UNIQUE-column
+ * guard). displayName is stored VERBATIM and nullable — there is no key backfill (that would
+ * break the legacy v1/v2/v3 `$.name` wire), so the pre-pass only flags duplicate non-null names
+ * across DISTINCT components. No Spring context / DSL fixtures — the pure logic is exposed as an
+ * `internal` companion function on [ImportServiceImpl].
  */
 @Tag("unit")
 class DisplayNameResolutionTest {
-    private val default = "Common Default Name"
-
     @Test
-    @DisplayName("resolveDisplayName: blank or null falls back to the component key")
-    fun `blank or null falls back to key`() {
-        assertEquals("COMP", ImportServiceImpl.resolveDisplayName("COMP", null, default))
-        assertEquals("COMP", ImportServiceImpl.resolveDisplayName("COMP", "", default))
-        assertEquals("COMP", ImportServiceImpl.resolveDisplayName("COMP", "   ", default))
-    }
-
-    @Test
-    @DisplayName("resolveDisplayName: a value equal to the inherited default falls back to the key")
-    fun `inherited default falls back to key`() {
-        assertEquals("COMP", ImportServiceImpl.resolveDisplayName("COMP", default, default))
-    }
-
-    @Test
-    @DisplayName("resolveDisplayName: an explicit, distinct value is kept verbatim")
-    fun `explicit distinct value kept`() {
-        assertEquals("My Component", ImportServiceImpl.resolveDisplayName("COMP", "My Component", default))
-    }
-
-    @Test
-    @DisplayName("computeDisplayNameCollisions: inherited-default + blank components collapse to keys without colliding")
-    fun `inherited and blank do not collide`() {
+    @DisplayName("computeDisplayNameCollisions: null/blank names are skipped (multiple NULLs never collide)")
+    fun `null and blank are skipped`() {
         val modules =
             listOf(
-                "COMP_A" to null, // inherits → "COMP_A"
-                "COMP_B" to default, // equals default → "COMP_B"
-                "COMP_C" to "Explicit C", // distinct → kept
+                "COMP_A" to null,
+                "COMP_B" to "",
+                "COMP_C" to "   ",
+                "COMP_D" to "Explicit D",
             )
-        assertTrue(ImportServiceImpl.computeDisplayNameCollisions(modules, default).isEmpty())
+        assertTrue(ImportServiceImpl.computeDisplayNameCollisions(modules).isEmpty())
     }
 
     @Test
-    @DisplayName("computeDisplayNameCollisions: two explicit equal display names are reported with both keys")
+    @DisplayName("computeDisplayNameCollisions: distinct names do not collide")
+    fun `distinct names do not collide`() {
+        val modules =
+            listOf(
+                "COMP_X" to "Name X",
+                "COMP_Y" to "Name Y",
+            )
+        assertTrue(ImportServiceImpl.computeDisplayNameCollisions(modules).isEmpty())
+    }
+
+    @Test
+    @DisplayName("computeDisplayNameCollisions: two distinct components with the same name are reported with both keys")
     fun `explicit duplicates reported`() {
         val modules =
             listOf(
@@ -56,21 +48,21 @@ class DisplayNameResolutionTest {
                 "COMP_Y" to "Same Name",
                 "COMP_Z" to "Unique",
             )
-        val collisions = ImportServiceImpl.computeDisplayNameCollisions(modules, default)
+        val collisions = ImportServiceImpl.computeDisplayNameCollisions(modules)
         assertEquals(setOf("Same Name"), collisions.keys)
         assertEquals(listOf("COMP_X", "COMP_Y"), collisions["Same Name"])
     }
 
     @Test
-    @DisplayName("computeDisplayNameCollisions: an explicit value equal to ANOTHER component's key collides")
-    fun `explicit value matching another key collides`() {
-        // COMP_B's key resolves to "COMP_B"; COMP_A explicitly names itself "COMP_B" → collision.
+    @DisplayName("computeDisplayNameCollisions: the SAME component key declared twice (dup DSL block) is NOT a collision")
+    fun `same key declared twice is not a collision`() {
+        // Mirrors the real DSL hygiene case (e.g. a component block copy-pasted in Archived.groovy):
+        // one logical component, so it must not trip the unique pre-pass.
         val modules =
             listOf(
-                "COMP_A" to "COMP_B",
-                "COMP_B" to null,
+                "w4w_reports_server" to "w4w_reports_server (archived)",
+                "w4w_reports_server" to "w4w_reports_server (archived)",
             )
-        val collisions = ImportServiceImpl.computeDisplayNameCollisions(modules, default)
-        assertEquals(listOf("COMP_A", "COMP_B"), collisions["COMP_B"])
+        assertTrue(ImportServiceImpl.computeDisplayNameCollisions(modules).isEmpty())
     }
 }

@@ -214,10 +214,9 @@ class ComponentCodeRenderer(
         requiredTools: List<String>,
         buildToolBeans: List<ComponentBuildToolBeanEntity>,
     ) {
-        // Identity. displayName is NOT NULL and defaults to the component key; render it only
-        // when it carries a meaningful (non-key) value so the as-code view isn't noisy with a
-        // redundant echo of the key (mirrors the import's key-equal-means-unset rule).
-        cb.str("displayName", component.displayName.takeIf { it != component.componentKey })
+        // Identity. displayName is nullable and stored verbatim from the DSL; render it exactly
+        // when set (cb.str omits a null), so the as-code view faithfully round-trips the source.
+        cb.str("displayName", component.displayName)
         cb.str("componentOwner", component.componentOwner)
         cb.str("system", component.systemCode)
         cb.str("productType", component.productType)

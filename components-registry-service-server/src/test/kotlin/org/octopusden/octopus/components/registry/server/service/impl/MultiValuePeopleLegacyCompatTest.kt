@@ -113,17 +113,14 @@ class MultiValuePeopleLegacyCompatTest {
     }
 
     @Test
-    @DisplayName("MIG-051: backfilled displayName (== componentKey) collapses to null on the legacy wire")
-    fun `MIG-051 displayName equal to componentKey resolves to null componentDisplayName`() {
-        // displayName is now NOT NULL in the DB and defaults to componentKey when the
-        // DSL declares no componentDisplayName (see ComponentEntity.displayName). Prod
-        // 2.0.87 served v1/v2/v3 `$.name` as null in that case, so the legacy resolver
-        // must collapse the backfill sentinel (displayName == componentKey) back to null
-        // — otherwise every previously-unnamed component flips `$.name` NULL → STRING
-        // and breaks wire-compat (compat gate [1.7], 6399 divergences).
+    @DisplayName("MIG-051: a null displayName stays null on the legacy wire (no key backfill)")
+    fun `MIG-051 null displayName resolves to null componentDisplayName`() {
+        // displayName is nullable and stored verbatim — there is NO key backfill (that would
+        // flip the legacy v1/v2/v3 `$.name` NULL → STRING for every unnamed component and break
+        // wire-compat). A component with no componentDisplayName must keep `$.name` null, exactly
+        // as prod 2.0.87 served it.
         val comp = makeComponent("NO_DISPLAY_NAME")
-        // makeComponent leaves displayName at its default (== componentKey)
-        assertEquals("NO_DISPLAY_NAME", comp.displayName)
+        assertNull(comp.displayName)
         stub(comp)
 
         val cfg = resolver.getResolvedComponentDefinition("NO_DISPLAY_NAME", "1.0.0")
@@ -132,8 +129,8 @@ class MultiValuePeopleLegacyCompatTest {
     }
 
     @Test
-    @DisplayName("MIG-051: a real displayName (!= componentKey) is preserved on the legacy wire")
-    fun `MIG-051 displayName differing from componentKey is preserved`() {
+    @DisplayName("MIG-051: a set displayName is preserved verbatim on the legacy wire")
+    fun `MIG-051 set displayName is preserved`() {
         val comp = makeComponent("HAS_DISPLAY_NAME")
         comp.displayName = "Human Friendly Name"
         stub(comp)
@@ -144,11 +141,11 @@ class MultiValuePeopleLegacyCompatTest {
     }
 
     @Test
-    @DisplayName("MIG-051: list path (getComponentById) also collapses a backfilled displayName to null")
-    fun `MIG-051 list path collapses backfilled displayName to null`() {
+    @DisplayName("MIG-051: list path (getComponentById) also passes a null displayName through as null")
+    fun `MIG-051 list path keeps null displayName null`() {
         // The list endpoint GET /rest/api/2/components serializes `$.components[N].name`
         // via toEscrowModule → buildEscrowModuleConfig (same join site). Pin that the
-        // per-component fix equally covers the list path (the 6399 divergences included
+        // passthrough equally covers the list path (the divergences included
         // `$.components[N].name`).
         val comp = makeComponent("NO_DISPLAY_NAME_LIST")
         stub(comp)

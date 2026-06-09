@@ -45,8 +45,8 @@ Base URLs for links are configurable per deployment via `registry_config` (same 
 
 ### 1.3 Create Component
 - **Required fields**: `name` (unique, alphanumeric + hyphens + underscores, max 255 chars), `componentOwner`
-- **Conditionally required**: `releaseManager`, `securityChampion` — required when `distribution.explicit && distribution.external`; `copyright` — required under the same gate only when `components-registry.copyright-path` is configured
-- **Auto-defaulted + unique**: `displayName` — defaults to the component key when omitted/blank; must be unique across components (400 keyed `displayName` on a duplicate)
+- **Conditionally required**: `releaseManager`, `securityChampion`, `displayName` — required when `distribution.explicit && distribution.external`; `copyright` — required under the same gate only when `components-registry.copyright-path` is configured
+- **Optional + unique**: `displayName` — nullable (stored verbatim from the DSL; NOT backfilled to the component key, preserving the legacy v1/v2/v3 `$.name` wire). When set it must be unique across components (400 keyed `displayName` on a duplicate)
 - **Optional fields**: productType, system, clientCode, solution, groupId, labels, doc
 
 **Person-field validation (enforced on the v4 write path — see ADR-015).** Restored from the old `EscrowConfigValidator` + the (formerly default-off CI) `ComponentRegistryValidationTask`, and modernised into per-request checks on `POST /rest/api/4/components` and `PATCH /rest/api/4/components/{id}`:
@@ -72,7 +72,7 @@ Base URLs for links are configurable per deployment via `registry_config` (same 
 **UI — Create Component dialog:**
 
 1. **Profile selection** (future feature, out of scope for initial implementation) — admin-defined profiles (e.g., "Gradle Library", "Spring Boot Service", "Kotlin DSL Plugin") that pre-fill build, VCS, and escrow settings. For now, component defaults serve as a single implicit profile.
-2. **Component name** (required) + **display name** (optional, defaults to name)
+2. **Component name** (required) + **display name** (optional; required for explicit+external components)
 3. **Owner** — pre-filled with current user
 4. **TeamCity integration** — optional checkbox "Create TeamCity project". When checked, user selects a parent TeamCity project from a dropdown/search. On component creation, the system calls TeamCity API to create a sub-project. (Out of scope for initial implementation — documented as future integration point.)
 5. **VCS repository URL** — optional, for linking to existing repo
@@ -111,14 +111,16 @@ These format checks are skipped for a field whose admin field-config visibility 
 
 #### Intentional legacy-validation relaxations
 
-- `displayName` is required + unique at the DB layer (NOT NULL, UNIQUE). On **create**, an
-  omitted/blank value defaults to the component key. On **update** (`PATCH`), a present-but-blank
-  value is **rejected with 400** (it is never re-defaulted — clearing a display name is not
-  allowed), and an absent value is "don't touch". In both paths a value already used by another
-  component is rejected with a **400 keyed `displayName`** (a key that collides with another
-  component's display name is keyed `name`). The import backfills blank / inherited-default values
-  to the key and fails fast on collisions (see schema-spec). The Portal still uses the component key
-  as the stable identity, so the display label is auto-derived rather than user-mandatory.
+- `displayName` is **nullable** + UNIQUE at the DB layer. It is stored **verbatim** from the DSL —
+  it is NOT backfilled to the component key, because the legacy v1/v2/v3 `$.name` must keep serving
+  `null` for components without a `componentDisplayName` (prod 2.0.87 byte-compat). It is
+  **required only for explicit+external components** (`distribution.explicit && distribution.external`),
+  mirroring the pre-existing `EscrowConfigValidator.validateExplicitExternalComponent` rule. On
+  **create/update**, a value already used by another component is rejected with a **400 keyed
+  `displayName`**; on **update** a blank value clears it to `null` (except for an explicit+external
+  component, where the requiredness check then rejects it). The import stores the DSL value verbatim
+  and fails fast on duplicate non-null names (see schema-spec). The Portal uses the component key as
+  the stable identity, so the display label is optional except under the explicit+external gate.
 - Legacy hotfix version-format relationship checks are not enforced on v4 writes.
   Hotfix formats are inherited/read-only in the Portal, while permissive storage
   preserves imported configurations and resolver compatibility.

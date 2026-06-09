@@ -21,7 +21,7 @@ interface ComponentRepository :
 
     fun existsByComponentKey(componentKey: String): Boolean
 
-    // display_name is NOT NULL + UNIQUE; create/update validate uniqueness before write.
+    // display_name is nullable + UNIQUE; create/update validate uniqueness of a non-null value before write.
     fun existsByDisplayName(displayName: String): Boolean
 
     fun existsByDisplayNameAndIdNot(displayName: String, id: UUID): Boolean

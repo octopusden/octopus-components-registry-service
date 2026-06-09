@@ -27,9 +27,9 @@ import java.util.UUID
 
 /**
  * Covers the component-form-improvements v4 surface:
- *  - displayName is required + unique (blank/absent → defaults to the component key;
- *    a duplicate display name is a 400 keyed `displayName`, distinct from the 409 for a
- *    duplicate component key);
+ *  - displayName is nullable + unique: stored verbatim (absent → null, NO key backfill, so the
+ *    legacy `$.name` stays byte-compatible); a duplicate non-null display name is a 400 keyed
+ *    `displayName`, distinct from the 400 keyed `name` for a duplicate component key;
  *  - /meta/java-versions + /meta/maven-versions return the configured option lists,
  *    numeric-sorted;
  *  - /{idOrName}/editors returns the component's owner + release managers + security
@@ -79,8 +79,8 @@ class ComponentDisplayNameEditorsV4Test {
     }
 
     @Test
-    @DisplayName("create with a blank/absent displayName defaults it to the component key")
-    fun `create defaults displayName to component key when absent`() {
+    @DisplayName("create with an absent displayName stores null (no key backfill — preserves legacy wire)")
+    fun `create leaves displayName null when absent`() {
         val name = unique("disp_default")
         mvc
             .perform(
@@ -89,7 +89,7 @@ class ComponentDisplayNameEditorsV4Test {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(createBody(name, displayName = null)),
             ).andExpect(status().isCreated)
-            .andExpect(jsonPath("$.displayName").value(name))
+            .andExpect(jsonPath("$.displayName").value(org.hamcrest.Matchers.nullValue()))
     }
 
     @Test
