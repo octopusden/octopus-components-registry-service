@@ -408,7 +408,13 @@ private fun buildEscrowModuleConfig(
     }
 
     // Component-level (per-component, never per-version)
-    setField(config, "componentDisplayName", component.displayName)
+    // displayName is NOT NULL in the DB and defaults to componentKey when the DSL declares
+    // no componentDisplayName (see ComponentEntity.displayName). Prod 2.0.87 served v1/v2/v3
+    // `$.name` as null in that case, so collapse the backfill sentinel (displayName ==
+    // componentKey) back to null here to keep the legacy wire byte-compatible — otherwise
+    // every previously-unnamed component flips `$.name` NULL → STRING (compat gate [1.7]).
+    // The v4 API keeps the non-null displayName; this null-collapse is legacy-path only.
+    setField(config, "componentDisplayName", component.displayName.takeIf { it != component.componentKey })
     setField(config, "componentOwner", component.componentOwner)
     // Single-value system: write the scalar code (or empty string when null).
     // The legacy DSL field was a CSV; keeping the field name shape but
