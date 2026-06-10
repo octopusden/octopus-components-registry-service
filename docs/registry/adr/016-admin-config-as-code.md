@@ -68,6 +68,17 @@ components-registry:
   independent of the policy keys — an entry may carry only `label`/`description`
   (visibility then defaults to `editable` as usual). When absent, the Portal falls
   back to its hardcoded label and tooltip.
+- **Dotted field keys need bracket notation.** A field key that itself contains a
+  dot (the `distribution` section uses keys like `maven.groupPattern` — the Portal
+  resolver splits the path on the FIRST dot only) must be quoted in brackets, or
+  the Spring binder treats the dot as a path separator and silently drops the leaf
+  (pinned by `AdminConfigPropertiesBindingTest`):
+
+  ```yaml
+  field-config:
+    distribution:
+      "[maven.groupPattern]": { label: Example Label }
+  ```
 
 ### Per-environment (QA vs Prod)
 
