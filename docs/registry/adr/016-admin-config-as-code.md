@@ -45,6 +45,9 @@ components-registry:
       clientCode:  { visibility: hidden }     # feature this org does not use
     build:
       javaVersion: { visibility: readonly, searchable: Extended }
+      projectVersion:                       # display-rename override: policy keys may be absent
+        label: Example Label
+        description: Example tooltip text shown next to the field in the Portal.
   component-defaults:
     buildSystem: MAVEN
     build: { javaVersion: "17", requiredProject: true }
@@ -58,6 +61,13 @@ components-registry:
 - `defaultValue` for `component.groupId` replaces the old `FieldConfigSeeder`
   (which derived it from `supportedGroupIds`); it is now an explicit per-installation
   value in the base profile.
+- `label` / `description` are free-text **display overrides**: `label` replaces the
+  Portal's hardcoded field label everywhere in the component editor, `description`
+  replaces the tooltip text from the Portal's `fieldDescriptions` registry. Values are
+  trimmed; blank values are dropped from the cache blob. Both are optional and
+  independent of the policy keys — an entry may carry only `label`/`description`
+  (visibility then defaults to `editable` as usual). When absent, the Portal falls
+  back to its hardcoded label and tooltip.
 
 ### Per-environment (QA vs Prod)
 
