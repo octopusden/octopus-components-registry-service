@@ -25,7 +25,7 @@ import org.springframework.context.annotation.Configuration
  * unnoticed.
  */
 class AdminConfigPropertiesBindingTest {
-    @Configuration
+    @Configuration(proxyBeanMethods = false)
     @EnableConfigurationProperties(AdminConfigProperties::class)
     open class BindingConfig
 
