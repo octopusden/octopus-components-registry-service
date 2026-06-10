@@ -334,7 +334,7 @@ class ComponentManagementServiceImpl(
                 scalarAuditMap(
                     saved,
                     overrideLabels = canonicalizedLabels,
-                ),
+                ) + sectionAuditMap(saved),
         )
 
         return saved.toDetailResponse(teamcityProperties.baseUrl)
@@ -468,7 +468,7 @@ class ComponentManagementServiceImpl(
         // post-write read in `scalarAuditMap` reflects the actual persisted
         // value including the FC-hidden no-op case.
         val originalLabels = entity.labelJunctions.map { it.labelCode }.toSet()
-        val oldValue = scalarAuditMap(entity, originalLabels)
+        val oldValue = scalarAuditMap(entity, originalLabels) + sectionAuditMap(entity)
         // Snapshot parent + canBeParent BEFORE applying the patch — the group is
         // rederived only when one of these actually changes (a no-op update
         // preserves the existing group, incl. grandfathered parent-of-parent rows).
@@ -691,7 +691,7 @@ class ComponentManagementServiceImpl(
                 scalarAuditMap(
                     saved,
                     overrideLabels = canonicalizedLabels ?: originalLabels,
-                ),
+                ) + sectionAuditMap(saved),
         )
 
         return saved.toDetailResponse(teamcityProperties.baseUrl)
@@ -2579,6 +2579,152 @@ class ComponentManagementServiceImpl(
             "distributionExternal" to entity.distributionExternal,
             "labels" to (overrideLabels ?: entity.labelJunctions.map { it.labelCode }.toSet()),
             "system" to entity.systemCode,
+        )
+
+    /**
+     * Snapshot of the component's section fields for the audit trail: the BASE
+     * configuration row's build/escrow/jira scalars + versionRange, its child
+     * collections, and the per-component child collections (artifactIds,
+     * securityGroups, teamcityProjects, docs). SYS-053: these keys must be part
+     * of both audit snapshots — without them a section-only PATCH produces
+     * identical old/new maps and the SYS-048 no-op guard drops the row, so the
+     * save persists but History stays empty.
+     *
+     * Collection entries are content-only — no row ids: a PATCH REPLACE
+     * recreates the child rows, so an id-bearing snapshot would diff on id
+     * churn and turn every re-save of an unchanged form into a fake history
+     * entry. Lists are ordered by sortOrder (requiredTools by tool name,
+     * securityGroups by content — neither carries a sortOrder) so load order
+     * can't leak into the old/new comparison either.
+     *
+     * Version-ranged rows (SCALAR_OVERRIDE / MARKER) are intentionally NOT
+     * captured here — field-override writes publish their own attribute-keyed
+     * audit events (SYS-050).
+     */
+    private fun sectionAuditMap(entity: ComponentEntity): Map<String, Any?> {
+        val base = entity.configurations.firstOrNull { it.rowType == "BASE" }
+        return baseConfigScalarAuditEntries(base) +
+            baseConfigCollectionAuditEntries(base) +
+            componentCollectionAuditEntries(entity)
+    }
+
+    private fun baseConfigScalarAuditEntries(base: ComponentConfigurationEntity?): Map<String, Any?> =
+        mapOf(
+            // Namespaced so the BASE row's range can't be misread as the
+            // range of a version-ranged override row (those audit under
+            // their own fieldOverride[<attr>] key — SYS-050).
+            "baseConfiguration.versionRange" to base?.versionRange,
+            "build.buildSystem" to base?.buildSystem,
+            "build.javaVersion" to base?.javaVersion,
+            "build.mavenVersion" to base?.mavenVersion,
+            "build.gradleVersion" to base?.gradleVersion,
+            "build.buildFilePath" to base?.buildFilePath,
+            "build.deprecated" to base?.deprecated,
+            "build.requiredProject" to base?.requiredProject,
+            "build.projectVersion" to base?.projectVersion,
+            "build.systemProperties" to base?.systemProperties,
+            "build.buildTasks" to base?.buildTasks,
+            "escrow.providedDependencies" to base?.escrowProvidedDependencies,
+            "escrow.reusable" to base?.escrowReusable,
+            "escrow.generation" to base?.escrowGeneration,
+            "escrow.diskSpace" to base?.escrowDiskSpace,
+            "escrow.additionalSources" to base?.escrowAdditionalSources,
+            "escrow.gradleIncludeConfigurations" to base?.escrowGradleIncludeConfigurations,
+            "escrow.gradleExcludeConfigurations" to base?.escrowGradleExcludeConfigurations,
+            "escrow.gradleIncludeTestConfigurations" to base?.escrowGradleIncludeTestConfigurations,
+            "escrow.buildTask" to base?.escrowBuildTask,
+            "jira.projectKey" to base?.jiraProjectKey,
+            "jira.technical" to base?.jiraTechnical,
+            "jira.majorVersionFormat" to base?.jiraMajorVersionFormat,
+            "jira.releaseVersionFormat" to base?.jiraReleaseVersionFormat,
+            "jira.buildVersionFormat" to base?.jiraBuildVersionFormat,
+            "jira.lineVersionFormat" to base?.jiraLineVersionFormat,
+            "jira.versionPrefix" to base?.jiraVersionPrefix,
+            "jira.versionFormat" to base?.jiraVersionFormat,
+            "jira.hotfixVersionFormat" to base?.jiraHotfixVersionFormat,
+        )
+
+    private fun baseConfigCollectionAuditEntries(base: ComponentConfigurationEntity?): Map<String, Any?> =
+        mapOf(
+            "vcsEntries" to
+                base?.vcsEntries.orEmpty().sortedBy { it.sortOrder }.map {
+                    mapOf(
+                        "name" to it.name,
+                        "vcsPath" to it.vcsPath,
+                        "branch" to it.branch,
+                        "tag" to it.tag,
+                        "hotfixBranch" to it.hotfixBranch,
+                        "repositoryType" to it.repositoryType,
+                    )
+                },
+            "mavenArtifacts" to
+                base?.mavenArtifacts.orEmpty().sortedBy { it.sortOrder }.map {
+                    mapOf(
+                        "groupPattern" to it.groupPattern,
+                        "artifactPattern" to it.artifactPattern,
+                        "extension" to it.extension,
+                        "classifier" to it.classifier,
+                    )
+                },
+            "fileUrlArtifacts" to
+                base?.fileUrlArtifacts.orEmpty().sortedBy { it.sortOrder }.map {
+                    mapOf(
+                        "url" to it.url,
+                        "artifactId" to it.artifactId,
+                        "classifier" to it.classifier,
+                    )
+                },
+            "dockerImages" to
+                base?.dockerImages.orEmpty().sortedBy { it.sortOrder }.map {
+                    mapOf(
+                        "imageName" to it.imageName,
+                        "flavor" to it.flavor,
+                    )
+                },
+            "packages" to
+                base?.packages.orEmpty().sortedBy { it.sortOrder }.map {
+                    mapOf(
+                        "packageType" to it.packageType,
+                        "packageName" to it.packageName,
+                    )
+                },
+            "buildToolBeans" to
+                base?.buildToolBeans.orEmpty().sortedBy { it.sortOrder }.map {
+                    mapOf(
+                        "beanType" to it.beanType,
+                        "toolType" to it.toolType,
+                        "settingsProperty" to it.settingsProperty,
+                        "versionPattern" to it.versionPattern,
+                        "edition" to it.edition,
+                    )
+                },
+            "requiredTools" to base?.requiredToolJunctions.orEmpty().map { it.toolName }.sorted(),
+        )
+
+    private fun componentCollectionAuditEntries(entity: ComponentEntity): Map<String, Any?> =
+        mapOf(
+            "artifactIds" to
+                entity.artifactIds.sortedBy { it.sortOrder }.map {
+                    mapOf(
+                        "groupPattern" to it.groupPattern,
+                        "artifactPattern" to it.artifactPattern,
+                    )
+                },
+            "securityGroups" to
+                entity.securityGroups.sortedWith(compareBy({ it.groupType }, { it.groupName })).map {
+                    mapOf(
+                        "groupType" to it.groupType,
+                        "groupName" to it.groupName,
+                    )
+                },
+            "teamcityProjects" to entity.teamcityProjects.sortedBy { it.sortOrder }.map { it.projectId },
+            "docs" to
+                entity.docLinks.sortedBy { it.sortOrder }.map {
+                    mapOf(
+                        "docComponentKey" to it.docComponentKey,
+                        "majorVersion" to it.majorVersion,
+                    )
+                },
         )
 
     /**
