@@ -95,4 +95,37 @@ class EmployeeDirectoryServiceTest {
         assertEquals(emptyList<EmployeeMatch>(), disabledDirectory().search("alice"))
         assertEquals(emptyList<EmployeeMatch>(), directoryWith(client).search("   "))
     }
+
+    @Test
+    @DisplayName("probe(): NotFound for the synthetic username proves the chain end-to-end → UP")
+    fun `probe notfound is UP`() {
+        val client = mock(EmployeeServiceClient::class.java)
+        `when`(client.getEmployee(EmployeeDirectoryService.PROBE_USERNAME))
+            .thenThrow(NotFoundException("no such employee"))
+        assertEquals(IntegrationHealth.UP, directoryWith(client).probe())
+    }
+
+    @Test
+    @DisplayName("probe(): a real answer (active or not) also proves the chain → UP")
+    fun `probe real answer is UP`() {
+        val client = mock(EmployeeServiceClient::class.java)
+        `when`(client.getEmployee(EmployeeDirectoryService.PROBE_USERNAME))
+            .thenReturn(Employee(EmployeeDirectoryService.PROBE_USERNAME, false))
+        assertEquals(IntegrationHealth.UP, directoryWith(client).probe())
+    }
+
+    @Test
+    @DisplayName("probe(): transport / auth / runtime error → DOWN")
+    fun `probe transport error is DOWN`() {
+        val client = mock(EmployeeServiceClient::class.java)
+        `when`(client.getEmployee(EmployeeDirectoryService.PROBE_USERNAME))
+            .thenThrow(IllegalArgumentException("Bearer token or basic credentials must be provided"))
+        assertEquals(IntegrationHealth.DOWN, directoryWith(client).probe())
+    }
+
+    @Test
+    @DisplayName("probe(): no client bean → DISABLED")
+    fun `probe disabled`() {
+        assertEquals(IntegrationHealth.DISABLED, disabledDirectory().probe())
+    }
 }

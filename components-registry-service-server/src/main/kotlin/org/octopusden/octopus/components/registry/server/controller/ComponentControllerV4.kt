@@ -10,6 +10,7 @@ import org.octopusden.octopus.components.registry.server.dto.v4.ComponentEditors
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentFilter
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentSummaryResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentUpdateRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.EmployeeIntegrationHealthResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.EmployeeMatchResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideCreateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideResponse
@@ -101,6 +102,15 @@ class ComponentControllerV4(
     fun searchEmployees(
         @RequestParam search: String,
     ): List<EmployeeMatchResponse> = employeeDirectory.search(search).map(EmployeeMatchResponse::from)
+
+    // Integration health for the Portal admin banner (and any other consumer
+    // that wants a cheap end-to-end check). Always HTTP 200 — UP/DOWN/DISABLED
+    // lives in the body, so a DOWN integration is distinguishable from a failed
+    // request. The same probe backs the `employeeService` actuator indicator.
+    @GetMapping("/meta/employees/health")
+    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
+    fun employeeIntegrationHealth(): EmployeeIntegrationHealthResponse =
+        EmployeeIntegrationHealthResponse(employeeDirectory.probe())
 
     // Batch active/inactive status for the component view's "inactive" badge.
     // Body is a list of usernames; response maps each to true (active),
