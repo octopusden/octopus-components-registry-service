@@ -125,6 +125,9 @@ class ConfigSyncService(
             }
             entry.required?.let { put("required", it) }
             entry.defaultValue?.let { put("defaultValue", it) }
+            // Free-text display overrides — no validation beyond blank-dropping.
+            entry.label?.takeIf { it.isNotBlank() }?.let { put("label", it.trim()) }
+            entry.description?.takeIf { it.isNotBlank() }?.let { put("description", it.trim()) }
         }
 
     private fun invalid(path: String, value: String, allowed: Set<String>): Nothing =
