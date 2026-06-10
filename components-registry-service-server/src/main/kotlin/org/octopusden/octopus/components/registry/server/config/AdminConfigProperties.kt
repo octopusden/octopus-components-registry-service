@@ -9,7 +9,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties
  *
  * Both subtrees are now declared in `service-config` (Spring Cloud Config) and
  * bound here:
- *  - `components-registry.field-config.<section>.<field>.{visibility,searchable,required,defaultValue}`
+ *  - `components-registry.field-config.<section>.<field>.{visibility,searchable,required,defaultValue,label,description}`
  *  - `components-registry.component-defaults.*`
  *
  * The class is intentionally **mutable** (no constructor binding): Spring Cloud's
@@ -42,6 +42,12 @@ class AdminConfigProperties {
         var searchable: String? = null
         var required: Boolean? = null
         var defaultValue: String? = null
+
+        /** UI display-label override; the Portal falls back to its hardcoded label when absent. */
+        var label: String? = null
+
+        /** Tooltip-description override; the Portal falls back to its hardcoded registry when absent. */
+        var description: String? = null
     }
 
     /**

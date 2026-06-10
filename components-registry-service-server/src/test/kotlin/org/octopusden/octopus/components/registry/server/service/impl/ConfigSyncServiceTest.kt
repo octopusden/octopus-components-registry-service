@@ -27,11 +27,15 @@ class ConfigSyncServiceTest {
         searchable: String? = null,
         required: Boolean? = null,
         defaultValue: String? = null,
+        label: String? = null,
+        description: String? = null,
     ) = AdminConfigProperties.FieldEntry().apply {
         this.visibility = visibility
         this.searchable = searchable
         this.required = required
         this.defaultValue = defaultValue
+        this.label = label
+        this.description = description
     }
 
     @Test
@@ -52,6 +56,84 @@ class ConfigSyncServiceTest {
                 "component" to mapOf(
                     "displayName" to mapOf("visibility" to "hidden", "searchable" to "Main", "required" to false),
                     "groupId" to mapOf("visibility" to "editable", "defaultValue" to "com.acme"),
+                ),
+            ),
+            result.fieldConfig,
+        )
+    }
+
+    @Test
+    fun `label and description pass through trimmed`() {
+        val props = AdminConfigProperties().apply {
+            fieldConfig = mutableMapOf(
+                "build" to mutableMapOf(
+                    "javaVersion" to fieldEntry(
+                        visibility = "editable",
+                        label = " Example Label ",
+                        description = " Example description. ",
+                    ),
+                ),
+            )
+        }
+
+        val result = service(props).syncToCache()
+
+        assertEquals(
+            mapOf(
+                "build" to mapOf(
+                    "javaVersion" to mapOf(
+                        "visibility" to "editable",
+                        "label" to "Example Label",
+                        "description" to "Example description.",
+                    ),
+                ),
+            ),
+            result.fieldConfig,
+        )
+    }
+
+    @Test
+    fun `blank label and description are omitted`() {
+        val props = AdminConfigProperties().apply {
+            fieldConfig = mutableMapOf(
+                "build" to mutableMapOf(
+                    "javaVersion" to fieldEntry(visibility = "editable", label = "  ", description = ""),
+                ),
+            )
+        }
+
+        val result = service(props).syncToCache()
+
+        assertEquals(
+            mapOf("build" to mapOf("javaVersion" to mapOf("visibility" to "editable"))),
+            result.fieldConfig,
+        )
+    }
+
+    @Test
+    fun `label-only entry serializes without visibility or searchable keys`() {
+        // The production shape for a pure display-rename override: service-config
+        // sets only label/description, leaving the UI policy keys absent.
+        val props = AdminConfigProperties().apply {
+            fieldConfig = mutableMapOf(
+                "build" to mutableMapOf(
+                    "projectVersion" to fieldEntry(
+                        label = "Example Label",
+                        description = "Example description.",
+                    ),
+                ),
+            )
+        }
+
+        val result = service(props).syncToCache()
+
+        assertEquals(
+            mapOf(
+                "build" to mapOf(
+                    "projectVersion" to mapOf(
+                        "label" to "Example Label",
+                        "description" to "Example description.",
+                    ),
                 ),
             ),
             result.fieldConfig,
