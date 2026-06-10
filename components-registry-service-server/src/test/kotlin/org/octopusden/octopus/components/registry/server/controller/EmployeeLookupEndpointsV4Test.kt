@@ -10,6 +10,7 @@ import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
 import org.octopusden.octopus.components.registry.server.service.impl.EmployeeDirectoryService
 import org.octopusden.octopus.components.registry.server.service.impl.EmployeeMatch
+import org.octopusden.octopus.components.registry.server.service.impl.IntegrationHealth
 import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.octopusden.octopus.components.registry.server.support.viewerJwt
 import org.springframework.beans.factory.annotation.Autowired
@@ -111,5 +112,35 @@ class EmployeeLookupEndpointsV4Test {
         `when`(employeeDirectory.search(anyString())).thenReturn(emptyList())
         mvc.perform(get("/rest/api/4/components/meta/employees").param("search", "x").with(adminJwt()))
             .andExpect(status().isOk)
+    }
+
+    @Test
+    @DisplayName("GET /meta/employees/health reports the probe status (UP / DOWN / DISABLED)")
+    fun `health reports probe status`() {
+        `when`(employeeDirectory.probe()).thenReturn(IntegrationHealth.DOWN)
+        mvc.perform(get("/rest/api/4/components/meta/employees/health").with(viewerJwt()))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value("DOWN"))
+
+        `when`(employeeDirectory.probe()).thenReturn(IntegrationHealth.UP)
+        mvc.perform(get("/rest/api/4/components/meta/employees/health").with(viewerJwt()))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value("UP"))
+    }
+
+    @Test
+    @DisplayName("GET /meta/employees/health is 200 even when DOWN (status lives in the body, not the code)")
+    fun `health never errors`() {
+        `when`(employeeDirectory.probe()).thenReturn(IntegrationHealth.DISABLED)
+        mvc.perform(get("/rest/api/4/components/meta/employees/health").with(viewerJwt()))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value("DISABLED"))
+    }
+
+    @Test
+    @DisplayName("GET /meta/employees/health rejects anonymous access (sits under /meta/employees/**)")
+    fun `health requires authentication`() {
+        mvc.perform(get("/rest/api/4/components/meta/employees/health"))
+            .andExpect(status().isUnauthorized)
     }
 }

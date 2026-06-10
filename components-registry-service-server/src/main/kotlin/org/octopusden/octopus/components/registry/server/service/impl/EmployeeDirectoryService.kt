@@ -111,7 +111,36 @@ class EmployeeDirectoryService(
         }
     }
 
-    private companion object {
+    /**
+     * Transport-chain health probe for monitoring surfaces (actuator indicator
+     * and the Portal admin banner). Reuses [isActive] on a synthetic username
+     * that must not exist in the directory: a NOT-FOUND answer proves the whole
+     * CRS → api-gateway → employee-service → directory chain end-to-end, while
+     * [ActiveStatus.UNAVAILABLE] (missing/bad credentials, unreachable service)
+     * is the only state reported as [IntegrationHealth.DOWN].
+     *
+     * Unlike the lookup paths this is NOT fail-open — its whole purpose is to
+     * surface the failure — but it still never throws.
+     *
+     * Calls [isActive] directly (same instance, not through the Spring proxy):
+     * if [isActive] ever grows proxy-bound behavior (caching, retry), probe()
+     * will bypass it — route through a self-injection then.
+     */
+    fun probe(): IntegrationHealth =
+        when (isActive(PROBE_USERNAME)) {
+            ActiveStatus.ACTIVE, ActiveStatus.INACTIVE, ActiveStatus.UNKNOWN -> IntegrationHealth.UP
+            ActiveStatus.UNAVAILABLE -> IntegrationHealth.DOWN
+            ActiveStatus.DISABLED -> IntegrationHealth.DISABLED
+        }
+
+    companion object {
+        /**
+         * Synthetic username for [probe]. Deliberately implausible so the
+         * expected directory answer is NOT FOUND (mapped to UP); if someone
+         * ever registers it, ACTIVE/INACTIVE still map to UP.
+         */
+        const val PROBE_USERNAME = "octopus-integration-health-probe"
+
         private val log = LoggerFactory.getLogger(EmployeeDirectoryService::class.java)
     }
 }
@@ -121,3 +150,20 @@ data class EmployeeMatch(
     val username: String,
     val active: Boolean,
 )
+
+/**
+ * Coarse integration health for monitoring surfaces. Unlike [ActiveStatus]
+ * this is about the transport chain, not a particular employee:
+ *
+ * - [UP] — the directory answered (any answer, including "no such employee",
+ *   proves the chain end-to-end);
+ * - [DOWN] — the lookup failed before producing an answer (missing/bad
+ *   credentials, gateway/service unreachable, directory backend down);
+ * - [DISABLED] — no client wired (flag off / blank URL): intentional, not a
+ *   failure.
+ */
+enum class IntegrationHealth {
+    UP,
+    DOWN,
+    DISABLED,
+}

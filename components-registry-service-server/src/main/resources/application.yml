@@ -109,6 +109,22 @@ employee-service:
   password:
   retry-time-millis: 5000
 
+# The Portal's employeeServiceIntegration indicator mirrors the per-component
+# path /actuator/health/employeeService, which Spring serves only when
+# show-components allows it (default `never` → 404 → the mirror silently
+# degrades to UNKNOWN). Pinned here so the wire contract does not depend on a
+# stand's external service-config. Unlike show-details this exposes only
+# component names and statuses to the (anonymous) health endpoint, no details.
+# The TTL caps real employee-service/directory lookups under scrape
+# amplification: CRS aggregate scrapes + the Portal mirror + admin-tab polling
+# all funnel into EmployeeDirectoryService.probe().
+management:
+  endpoint:
+    health:
+      show-components: always
+      cache:
+        time-to-live: 10s
+
 # auth-server.url and auth-server.realm bind from AUTH_SERVER_URL / AUTH_SERVER_REALM
 # env vars via Spring Boot's relaxed binding. Production and dev profiles must
 # supply them; WebSecurityConfig.jwtDecoder() fails fast if either is missing.
