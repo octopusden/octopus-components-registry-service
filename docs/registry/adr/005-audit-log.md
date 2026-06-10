@@ -126,6 +126,21 @@ Component `UPDATE` event keyed by the overridden attribute, so version-range edi
 appear in the component history alongside top-level attribute edits — closing the
 "all write paths go through audited service methods" risk for these paths. (SYS-050)
 
+### Coverage: section fields of the component PATCH
+The audit snapshots originally captured only the component's top-level scalars,
+so a PATCH that changed only section data — BASE-configuration build/escrow/jira
+scalars, `versionRange`, section child collections (`vcsEntries`,
+`mavenArtifacts`, `fileUrlArtifacts`, `dockerImages`, `packages`,
+`buildToolBeans`, `requiredTools`) or per-component child collections
+(`artifactIds`, `securityGroups`, `teamcityProjects`, `docs`) — produced
+identical old/new snapshots and was dropped by the SYS-048 no-op guard: the
+value persisted, but History stayed empty. The snapshots now include these
+fields (flat dotted keys for aspect scalars, e.g. `build.mavenVersion`;
+content-only ordered lists for collections — **no row ids**, because a PATCH
+REPLACE recreates child rows and id churn would turn a no-op re-save into a
+fake history entry). Version-ranged rows stay out of this snapshot — they are
+audited by their own field-override events (SYS-050). (SYS-053)
+
 ### Not audited: TeamCity sync
 The automated TeamCity sync (`changedBy = system`) deliberately does NOT write an
 audit row — a per-component re-link row is operational noise, not a user change.
