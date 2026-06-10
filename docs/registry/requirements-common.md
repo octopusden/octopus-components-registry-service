@@ -61,6 +61,7 @@
 | SYS-050 | Field-override (version-range) create/update/delete each publish a Component `UPDATE` audit event with an attribute-keyed diff | High | integration-test | ✅ Tested |
 | SYS-051 | TeamCity sync (automated `changedBy=system` reconciliation) does NOT write an audit row — the re-link is traced via an INFO log instead | Medium | unit-test | ✅ Tested |
 | SYS-052 | An `employee-service.url` whose placeholder does not resolve in the current environment is treated as "not configured": the client bean is not registered and context refresh succeeds (fail-open), instead of failing application boot | High | unit-test | ✅ Tested |
+| SYS-053 | Component audit snapshots include section fields (BASE-configuration build/escrow/jira scalars, versionRange, section + per-component child collections), so a section-only PATCH writes an UPDATE audit row with a field-level diff instead of being dropped by the SYS-048 no-op guard; collection snapshots are content-only (no row ids) so an identical re-save stays a no-op | High | integration-test | ✅ Tested |
 
 ---
 
@@ -1755,3 +1756,54 @@ behaviour) and a WARN line records why. Context refresh succeeds.
 **Test method:** `EmployeeServiceConfigTest` —
 `SYS-052 unresolvable url placeholder skips bean registration` (plus the
 pre-existing blank-url and non-blank-url cases covering criteria 3–4).
+
+### SYS-053: Section-field PATCH writes an audit row (History no longer empty)
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+Saving a section of the component form (e.g. Build tab → Maven Version 3.9 →
+"Save Build") persisted the value but left the History tab empty. The audit
+snapshots passed to `publishAuditEvent` captured only the component's top-level
+scalars (`scalarAuditMap`), so a PATCH that changed only section data produced
+identical `old_value` / `new_value` maps, `AuditDiff.compute` returned `null`,
+and the SYS-048 no-op guard dropped the row. Component CREATE was unaffected
+(a CREATE row is persisted without a diff), which made the bug read as
+"creation shows in History, edits don't".
+
+**Description:**
+Both audit snapshots of the component CREATE / UPDATE (RENAME) events now
+additionally include (`sectionAuditMap`):
+- BASE-configuration aspect scalars under flat dotted keys — `build.*`
+  (buildSystem, javaVersion, mavenVersion, gradleVersion, buildFilePath,
+  deprecated, requiredProject, projectVersion, systemProperties, buildTasks),
+  `escrow.*`, `jira.*`, plus `baseConfiguration.versionRange`;
+- BASE-configuration child collections — `vcsEntries`, `mavenArtifacts`,
+  `fileUrlArtifacts`, `dockerImages`, `packages`, `buildToolBeans`,
+  `requiredTools`;
+- per-component child collections — `artifactIds`, `securityGroups`,
+  `teamcityProjects`, `docs`.
+
+Collection snapshots are **content-only and deterministically ordered**
+(`sortOrder`, or content where no `sortOrder` exists): a PATCH REPLACE
+recreates child rows, so row ids in the snapshot would diff on id churn and
+turn every re-save of an unchanged form into a fake history entry, violating
+SYS-048. Version-ranged rows (SCALAR_OVERRIDE / MARKER) stay out of this
+snapshot — their writes publish their own attribute-keyed events (SYS-050).
+
+**Acceptance criteria:**
+1. `PATCH /rest/api/4/components/{id}` changing only `baseConfiguration.build.mavenVersion` writes an `UPDATE` audit row whose `change_diff` carries `build.mavenVersion` with the correct old/new values.
+2. A PATCH changing only `baseConfiguration.jira.projectKey` writes an `UPDATE` row keyed `jira.projectKey`.
+3. A PATCH replacing `baseConfiguration.vcsEntries` writes an `UPDATE` row keyed `vcsEntries`.
+4. A no-op section PATCH (same scalar value, or a byte-identical collection REPLACE) writes no audit row (SYS-048 holds — row-id churn must not leak into the diff).
+5. The CREATE audit row's `new_value` includes the section keys.
+
+**Test method:** `ComponentSectionAuditTest` —
+`SYS-053 build scalar PATCH writes an UPDATE audit row with field-level diff`,
+`SYS-053 jira scalar PATCH writes an UPDATE audit row`,
+`SYS-053 vcsEntries PATCH writes an UPDATE audit row`,
+`SYS-053 requiredTools PATCH writes an UPDATE audit row and identical re-send does not`,
+`SYS-053 securityGroups PATCH writes an UPDATE audit row and identical re-send does not`,
+`SYS-053 no-op section PATCH writes no audit row`.
