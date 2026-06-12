@@ -84,6 +84,82 @@ class UniquenessPrePassTest {
         assertEquals(1, violations.size)
     }
 
+    // ── legacy MavenArtifactMatcher group semantics (prod-DSL shapes) ─────────
+    // Legacy groupIdMatches(groupId, pattern) tests the WHOLE first string
+    // against the pattern's comma-split items — a CSV group never matches
+    // another CSV's items, so the production model/api component-family pairs
+    // (a Defaults-inherited catch-all artifact regex vs literal placeholder
+    // artifacts under shared CSV group elements) are LEGAL and pass the daily
+    // legacy validation. The pre-pass must not be stricter than the contract
+    // the DSL was authored against.
+
+    @Test
+    @DisplayName("GAV legacy parity: single-group wildcard vs CSV-group literal is NOT a collision")
+    fun gav_legacyParity_singleGroupWildcardVsCsvLiteral_noCollision() {
+        // model side: single group, no artifactId in DSL → catch-all wildcard.
+        val model = gav("model-comp", group = "org.example.model2", artifact = "[\\w-\\.]+")
+        // api side: CSV group containing the model group, literal placeholder artifact.
+        val api = gav(
+            "model-api-comp",
+            group = "org.example.model2,org.example.extra.model,org.example.model_x",
+            artifact = "placeholder_artifact_a",
+        )
+        assertTrue(computeDistributionGavCollisions(listOf(api), listOf(model), alwaysIntersect).isEmpty())
+        assertTrue(computeDistributionGavCollisions(listOf(model), listOf(api), alwaysIntersect).isEmpty())
+    }
+
+    @Test
+    @DisplayName("GAV legacy parity: CSV-group wildcard vs CSV-group literal is NOT a collision")
+    fun gav_legacyParity_csvGroupWildcardVsCsvLiteral_noCollision() {
+        val model = gav(
+            "model-comp-b",
+            group = "org.example.model2,org.example.model1",
+            artifact = "[\\w-\\.]+",
+        )
+        val api = gav(
+            "packages-api-comp",
+            group = "org.example.model_x,org.example.extra.packages,org.example.model1,org.example.model2",
+            artifact = "placeholder_artifact_b",
+        )
+        assertTrue(computeDistributionGavCollisions(listOf(api), listOf(model), alwaysIntersect).isEmpty())
+        assertTrue(computeDistributionGavCollisions(listOf(model), listOf(api), alwaysIntersect).isEmpty())
+    }
+
+    @Test
+    @DisplayName("GAV legacy parity: single group ∈ rival's CSV with matching artifact IS still a collision")
+    fun gav_legacyParity_singleInCsv_collision() {
+        val violations = computeDistributionGavCollisions(
+            listOf(gav("comp-a", group = "org.example.shared", artifact = "lib")),
+            listOf(gav("comp-b", group = "org.example.shared,org.example.other", artifact = "lib")),
+            alwaysIntersect,
+        )
+        assertEquals(1, violations.size)
+    }
+
+    @Test
+    @DisplayName("GAV legacy #24: identical CSV groups with the same artifact token ARE a collision (exact token-pair)")
+    fun gav_legacy24_identicalCsv_sameArtifact_collision() {
+        // #25 whole-vs-items never matches CSV-vs-CSV, but legacy #24 keys exact
+        // (groupItem, artifactToken) pairs — identical CSVs share every item.
+        val violations = computeDistributionGavCollisions(
+            listOf(gav("comp-a", group = "org.example.x,org.example.y", artifact = "lib")),
+            listOf(gav("comp-b", group = "org.example.x,org.example.y", artifact = "lib")),
+            alwaysIntersect,
+        )
+        assertEquals(1, violations.size)
+    }
+
+    @Test
+    @DisplayName("GAV legacy #24: CSVs sharing ONE group element with the same artifact token ARE a collision")
+    fun gav_legacy24_csvSharedElement_sameArtifact_collision() {
+        val violations = computeDistributionGavCollisions(
+            listOf(gav("comp-a", group = "org.example.x,org.example.y", artifact = "lib")),
+            listOf(gav("comp-b", group = "org.example.y,org.example.z", artifact = "other,lib")),
+            alwaysIntersect,
+        )
+        assertEquals(1, violations.size)
+    }
+
     @Test
     @DisplayName("GAV: same componentKey never collides (idempotent rerun / multi-range component)")
     fun gav_sameComponent_noCollision() {
@@ -145,6 +221,19 @@ class UniquenessPrePassTest {
     }
 
     @Test
+    @DisplayName("jira (prod shape): no-prefix owner + prefixed claimants of the same project do not collide")
+    fun jira_sharedProjectDistinctPrefixBuckets_noCollision() {
+        val violations = computeJiraPairCollisions(
+            listOf(
+                UniquenessJiraPair("editor-model-comp", "PROJW", "EditorModel"),
+                UniquenessJiraPair("editor-comp", "PROJW", "Editor"),
+            ),
+            listOf(UniquenessJiraPair("web-comp", "PROJW", null)),
+        )
+        assertTrue(violations.isEmpty(), "$violations")
+    }
+
+    @Test
     @DisplayName("jira: same component claiming one bucket from several ranges does not self-collide")
     fun jira_multiOccurrenceInNewPairs_noSelfCollision() {
         val violations = computeJiraPairCollisions(
@@ -187,6 +276,54 @@ class UniquenessPrePassTest {
                 listOf(UniquenessDockerRow("comp-a", "registry/image")),
                 listOf(UniquenessDockerRow("comp-a", "registry/image")),
             ).isEmpty(),
+        )
+    }
+
+    // ───────────────────────── effective jira pairs from persisted rows ──────
+
+    @Test
+    @DisplayName("effective jira: projectKey-only override range claims (overrideKey, INHERITED base prefix)")
+    fun effectiveJira_projectKeyOnlyOverride_inheritsBasePrefix() {
+        val pairs = org.octopusden.octopus.components.registry.server.util.computeEffectiveJiraPairs(
+            listOf(
+                org.octopusden.octopus.components.registry.server.util.JiraRowView(
+                    "editor-model-comp", "(,0),[0,)", "BASE", null, "PROJM", "EditorModel",
+                ),
+                org.octopusden.octopus.components.registry.server.util.JiraRowView(
+                    "editor-model-comp", "(52.0.1-6,52.0.1-21]", "SCALAR_OVERRIDE", "jira.projectKey", "PROJW", null,
+                ),
+            ),
+        )
+        assertEquals(
+            setOf("PROJM" to "EditorModel", "PROJW" to "EditorModel"),
+            pairs["editor-model-comp"],
+        )
+    }
+
+    @Test
+    @DisplayName("effective jira: same-range projectKey + prefix override rows merge into one claim; prefix-clear override claims (basePk, null)")
+    fun effectiveJira_sameRangeRowsMerge_andNullClear() {
+        val pairs = org.octopusden.octopus.components.registry.server.util.computeEffectiveJiraPairs(
+            listOf(
+                org.octopusden.octopus.components.registry.server.util.JiraRowView(
+                    "comp", "(,0),[0,)", "BASE", null, "PROJ", "base",
+                ),
+                // one range overriding BOTH scalars → single merged claim
+                org.octopusden.octopus.components.registry.server.util.JiraRowView(
+                    "comp", "[2,3)", "SCALAR_OVERRIDE", "jira.projectKey", "OTHER", null,
+                ),
+                org.octopusden.octopus.components.registry.server.util.JiraRowView(
+                    "comp", "[2,3)", "SCALAR_OVERRIDE", "jira.versionPrefix", null, "ov",
+                ),
+                // a range CLEARING the prefix (override row with null value) → (PROJ, null)
+                org.octopusden.octopus.components.registry.server.util.JiraRowView(
+                    "comp", "[3,)", "SCALAR_OVERRIDE", "jira.versionPrefix", null, null,
+                ),
+            ),
+        )
+        assertEquals(
+            setOf("PROJ" to "base", "OTHER" to "ov", "PROJ" to null),
+            pairs["comp"],
         )
     }
 

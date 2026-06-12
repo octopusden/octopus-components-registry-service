@@ -9,48 +9,26 @@ import java.util.UUID
 @Repository
 interface ComponentConfigurationRepository : JpaRepository<ComponentConfigurationEntity, UUID> {
     /**
-     * Distinct keys of OTHER, non-archived components (excluding
-     * [excludeComponentId]) that own a configuration row with the same jira
-     * `(projectKey, versionPrefix)` pair. Restores the old
-     * `validateJiraProjectKeyAndVersionPrefixIntersections` rule: each
-     * (projectKey, versionPrefix) maps to at most one non-archived component.
-     *
-     * `versionPrefix` is nullable — the null-safe comparison treats a NULL
-     * prefix on both sides as the same bucket (matching the old
-     * `Tuple2(projectKey, versionPrefix)` map key where versionPrefix could be
-     * null). A non-empty result is a cross-component conflict.
+     * Jira-relevant rows of every non-archived component: every BASE row (it
+     * carries the defaults the per-range overrides layer over) plus every
+     * SCALAR_OVERRIDE row for `jira.projectKey` / `jira.versionPrefix`. The
+     * uniqueness invariant compares EFFECTIVE per-range claims — see
+     * `computeEffectiveJiraPairs` — not raw rows: a projectKey-only override
+     * row carries a NULL prefix that means "inherited from base", not
+     * "no prefix". Used by both the API-side cross-component check and the
+     * migration uniqueness pre-pass.
      */
     @Query(
-        "SELECT DISTINCT comp.componentKey FROM ComponentConfigurationEntity cfg " +
-            "JOIN cfg.component comp " +
-            "WHERE comp.id <> :excludeComponentId " +
-            "AND comp.archived = false " +
-            "AND cfg.jiraProjectKey = :projectKey " +
-            "AND ((:versionPrefix IS NULL AND cfg.jiraVersionPrefix IS NULL) " +
-            "  OR cfg.jiraVersionPrefix = :versionPrefix)",
-    )
-    fun findOtherNonArchivedComponentKeysByJiraProjectKeyAndVersionPrefix(
-        @Param("projectKey") projectKey: String,
-        @Param("versionPrefix") versionPrefix: String?,
-        @Param("excludeComponentId") excludeComponentId: UUID,
-    ): List<String>
-
-    /**
-     * Every distinct jira `(projectKey, versionPrefix)` pair of every
-     * non-archived component, with the owning component key. Used by the
-     * migration uniqueness pre-pass to check incoming DSL pairs against the
-     * already-persisted state (same invariant as
-     * [findOtherNonArchivedComponentKeysByJiraProjectKeyAndVersionPrefix],
-     * fetched wholesale because the pre-pass compares many candidates at once).
-     */
-    @Query(
-        "SELECT DISTINCT comp.componentKey AS componentKey, " +
+        "SELECT comp.componentKey AS componentKey, cfg.versionRange AS versionRange, " +
+            "cfg.rowType AS rowType, cfg.overriddenAttribute AS overriddenAttribute, " +
             "cfg.jiraProjectKey AS projectKey, cfg.jiraVersionPrefix AS versionPrefix " +
             "FROM ComponentConfigurationEntity cfg " +
             "JOIN cfg.component comp " +
-            "WHERE comp.archived = false AND cfg.jiraProjectKey IS NOT NULL",
+            "WHERE comp.archived = false " +
+            "AND (cfg.rowType = 'BASE' " +
+            "  OR cfg.overriddenAttribute IN ('jira.projectKey', 'jira.versionPrefix'))",
     )
-    fun findAllNonArchivedJiraPairs(): List<JiraPairRow>
+    fun findAllNonArchivedJiraRows(): List<JiraRowProjection>
 
     /** All configuration rows (base + overrides) for a component, in arbitrary order. */
     fun findByComponentId(componentId: UUID): List<ComponentConfigurationEntity>
@@ -88,9 +66,12 @@ interface ComponentConfigurationRepository : JpaRepository<ComponentConfiguratio
     ): ComponentConfigurationEntity?
 }
 
-/** Projection for the migration jira-uniqueness pre-pass. */
-interface JiraPairRow {
+/** Row projection for effective jira-pair computation (see `computeEffectiveJiraPairs`). */
+interface JiraRowProjection {
     val componentKey: String
-    val projectKey: String
+    val versionRange: String
+    val rowType: String
+    val overriddenAttribute: String?
+    val projectKey: String?
     val versionPrefix: String?
 }

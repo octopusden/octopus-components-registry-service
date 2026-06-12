@@ -72,7 +72,9 @@ import org.octopusden.octopus.components.registry.server.service.ComponentSource
 import org.octopusden.octopus.components.registry.server.service.RenderedComponentCode
 import org.octopusden.octopus.components.registry.server.teamcity.TeamcityProperties
 import org.octopusden.octopus.components.registry.server.util.ComponentCodeRenderer
+import org.octopusden.octopus.components.registry.server.util.JiraRowView
 import org.octopusden.octopus.components.registry.server.util.MavenGavCollision
+import org.octopusden.octopus.components.registry.server.util.computeEffectiveJiraPairs
 import org.octopusden.octopus.escrow.config.ConfigHelper
 import org.octopusden.releng.versions.VersionRangeFactory
 import org.springframework.context.ApplicationEventPublisher
@@ -1946,12 +1948,16 @@ class ComponentManagementServiceImpl(
      * Cross-component collisions with OTHER components → 409. All three rules use
      * self-excluding indexed queries against the flushed final state:
      *
-     *  - **#24/#25 duplicate distribution GAV in overlapping ranges** — for each
-     *    of this component's maven artifacts, find other components declaring the
-     *    same FULL identity (group, artifact, extension, classifier — see
-     *    `MavenGavCollision`) and reject if any owning range intersects this
-     *    component's range (Maven `isIntersect`, decided in-memory). Differing
-     *    extension or classifier (`g:a:zip` vs `g:a:apk`) is NOT a collision.
+     *  - **duplicate maven artifact rows in overlapping ranges** — for each of this
+     *    component's maven artifact rows (explicit distribution GAVs AND the
+     *    group-artifact-pattern mapping rows), find other components whose rows
+     *    share the FULL identity (group, artifact, extension, classifier) under
+     *    the union of legacy rule #25 pattern containment and rule #24 exact
+     *    token-pair sharing (see `MavenGavCollision`), and reject if any owning
+     *    range intersects this component's range (Maven `isIntersect`, decided
+     *    in-memory). Differing extension or classifier (`g:a:zip` vs `g:a:apk`)
+     *    is NOT a collision; legacy has NO distribution-GAV uniqueness of its own
+     *    — the 4-attribute identity is the v3-added strictness on explicit GAVs.
      *  - **#26 jira (projectKey, versionPrefix) uniqueness among non-archived** —
      *    an archived component is exempt (matches the old `!archived` filter).
      *  - **#29 docker image-name global uniqueness** — any other component using
@@ -1960,7 +1966,7 @@ class ComponentManagementServiceImpl(
     private fun validateCrossComponentIntegrity(entity: ComponentEntity) {
         val componentId = entity.id ?: return
         validateMavenArtifactCollisions(entity, componentId)
-        validateJiraProjectKeyVersionPrefixUniqueness(entity, componentId)
+        validateJiraProjectKeyVersionPrefixUniqueness(entity)
         validateDockerImageUniqueness(entity, componentId)
     }
 
@@ -2022,9 +2028,16 @@ class ComponentManagementServiceImpl(
                                 artifact.groupPattern, artifact.artifactPattern,
                                 artifact.extension, artifact.classifier,
                             )
+                            // Name the REAL source: group-artifact-pattern marker rows come from
+                            // the component-level groupId/artifactId mapping, not a distribution{}
+                            // block — "distribution GAV" sent operators hunting for a section that
+                            // does not exist in the DSL.
+                            val ownOrigin = MavenGavCollision.originLabel(cfg.overriddenAttribute)
+                            val rivalOrigin = MavenGavCollision.originLabel(other.overriddenAttribute)
                             throw CrossComponentConflictException(
-                                "uniqueness violation: distribution GAV '$gav' of component " +
-                                    "'${entity.componentKey}' duplicates component '${other.componentKey}' " +
+                                "uniqueness violation: $ownOrigin '$gav' of component " +
+                                    "'${entity.componentKey}' duplicates the $rivalOrigin of component " +
+                                    "'${other.componentKey}' " +
                                     "in intersecting version ranges '${cfg.versionRange}' ∩ '${other.versionRange}'",
                             )
                         }
@@ -2034,29 +2047,45 @@ class ComponentManagementServiceImpl(
         }
     }
 
-    private fun validateJiraProjectKeyVersionPrefixUniqueness(entity: ComponentEntity, componentId: UUID) {
+    private fun validateJiraProjectKeyVersionPrefixUniqueness(entity: ComponentEntity) {
         // An archived component does not claim a jira (projectKey, versionPrefix)
         // bucket — mirrors the old `!moduleConfiguration.archived` filter.
         if (entity.archived) return
-        // Distinct (projectKey, versionPrefix) pairs across this component's rows.
-        val pairs =
-            entity.configurations
-                .mapNotNull { cfg ->
-                    cfg.jiraProjectKey?.takeIf { it.isNotBlank() }?.let { it to cfg.jiraVersionPrefix }
-                }.toSet()
-        pairs.forEach { (projectKey, versionPrefix) ->
-            val others =
-                configurationRepository.findOtherNonArchivedComponentKeysByJiraProjectKeyAndVersionPrefix(
-                    projectKey,
-                    versionPrefix,
-                    componentId,
+        // EFFECTIVE per-range claims, not raw rows: a projectKey-only override row
+        // carries a NULL prefix meaning "inherited from base" — bucketing it as
+        // (key, null) falsely conflicted with components that legitimately own the
+        // no-prefix bucket (a real prod shape). See computeEffectiveJiraPairs.
+        val ownRows =
+            entity.configurations.map { cfg ->
+                JiraRowView(
+                    entity.componentKey, cfg.versionRange, cfg.rowType,
+                    cfg.overriddenAttribute, cfg.jiraProjectKey, cfg.jiraVersionPrefix,
                 )
+            }
+        val ownPairs = computeEffectiveJiraPairs(ownRows)[entity.componentKey].orEmpty()
+        if (ownPairs.isEmpty()) return
+        val rivalRows =
+            configurationRepository.findAllNonArchivedJiraRows()
+                .filter { it.componentKey != entity.componentKey }
+                .map {
+                    JiraRowView(
+                        it.componentKey, it.versionRange, it.rowType,
+                        it.overriddenAttribute, it.projectKey, it.versionPrefix,
+                    )
+                }
+        val rivalsByPair = mutableMapOf<Pair<String, String?>, MutableSet<String>>()
+        computeEffectiveJiraPairs(rivalRows).forEach { (rivalKey, rivalPairs) ->
+            rivalPairs.forEach { pair -> rivalsByPair.getOrPut(pair) { mutableSetOf() }.add(rivalKey) }
+        }
+        ownPairs.forEach { pair ->
+            val others = rivalsByPair[pair].orEmpty()
             if (others.isNotEmpty()) {
+                val (projectKey, versionPrefix) = pair
                 val prefixText =
                     if (versionPrefix == null) "no version prefix" else "version prefix '$versionPrefix'"
                 throw CrossComponentConflictException(
                     "uniqueness violation: jira project '$projectKey' with $prefixText is already used by " +
-                        "non-archived component(s) ${others.joinToString(", ")} " +
+                        "non-archived component(s) ${others.sorted().joinToString(", ")} " +
                         "(conflicts with '${entity.componentKey}')",
                 )
             }
