@@ -28,4 +28,24 @@ interface DistributionDockerImageRepository : JpaRepository<DistributionDockerIm
         @Param("imageName") imageName: String,
         @Param("excludeComponentId") excludeComponentId: UUID,
     ): List<String>
+
+    /**
+     * Every distinct (imageName, componentKey) pair in the DB. Used by the
+     * migration uniqueness pre-pass to check incoming DSL image names against
+     * the already-persisted state (same global-uniqueness invariant as
+     * [findOtherComponentKeysByImageName], fetched wholesale).
+     */
+    @Query(
+        "SELECT DISTINCT d.imageName AS imageName, comp.componentKey AS componentKey " +
+            "FROM DistributionDockerImageEntity d " +
+            "JOIN d.componentConfiguration cfg " +
+            "JOIN cfg.component comp",
+    )
+    fun findAllImageRows(): List<DockerImageRow>
+}
+
+/** Projection for the migration docker-uniqueness pre-pass. */
+interface DockerImageRow {
+    val imageName: String
+    val componentKey: String
 }

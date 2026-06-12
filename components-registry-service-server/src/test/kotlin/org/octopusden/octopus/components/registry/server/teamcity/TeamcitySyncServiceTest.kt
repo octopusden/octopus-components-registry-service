@@ -548,6 +548,16 @@ class TeamcitySyncServiceTest {
         override fun existsByDisplayNameAndIdNot(displayName: String, id: UUID): Boolean =
             components.any { it.displayName == displayName && it.id != id }
 
+        override fun findAllDisplayNamePairs(): List<org.octopusden.octopus.components.registry.server.repository.DisplayNamePairRow> =
+            components.mapNotNull { c ->
+                c.displayName?.let { name ->
+                    object : org.octopusden.octopus.components.registry.server.repository.DisplayNamePairRow {
+                        override val componentKey: String = c.componentKey
+                        override val displayName: String = name
+                    }
+                }
+            }
+
         override fun findDistinctOwners(): List<String> =
             components.mapNotNull { it.componentOwner }.distinct().sorted()
 

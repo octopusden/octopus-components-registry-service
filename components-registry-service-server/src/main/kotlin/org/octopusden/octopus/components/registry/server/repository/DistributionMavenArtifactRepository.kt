@@ -18,6 +18,7 @@ interface DistributionMavenArtifactRepository : JpaRepository<DistributionMavenA
      */
     @Query(
         "SELECT m.groupPattern AS groupPattern, m.artifactPattern AS artifactPattern, " +
+            "m.extension AS extension, m.classifier AS classifier, " +
             "cfg.versionRange AS versionRange, comp.componentKey AS componentKey " +
             "FROM DistributionMavenArtifactEntity m " +
             "JOIN m.componentConfiguration cfg " +
@@ -27,16 +28,35 @@ interface DistributionMavenArtifactRepository : JpaRepository<DistributionMavenA
     fun findOtherComponents(
         @Param("excludeComponentId") excludeComponentId: UUID,
     ): List<CrossComponentMavenRow>
+
+    /**
+     * Every maven-artifact row in the DB with its owning component key. Used by
+     * the migration uniqueness pre-pass to check incoming DSL rows against the
+     * already-persisted state (the migrated-or-API-born components a new import
+     * must not collide with).
+     */
+    @Query(
+        "SELECT m.groupPattern AS groupPattern, m.artifactPattern AS artifactPattern, " +
+            "m.extension AS extension, m.classifier AS classifier, " +
+            "cfg.versionRange AS versionRange, comp.componentKey AS componentKey " +
+            "FROM DistributionMavenArtifactEntity m " +
+            "JOIN m.componentConfiguration cfg " +
+            "JOIN cfg.component comp",
+    )
+    fun findAllRows(): List<CrossComponentMavenRow>
 }
 
 /**
- * Projection for cross-component maven-artifact collision detection. `versionRange`
- * is the owning configuration row's range; `componentKey` identifies the rival
- * component for the conflict message.
+ * Projection for cross-component maven-artifact collision detection. The full
+ * artifact identity is `(groupPattern, artifactPattern, extension, classifier)`
+ * — see `MavenGavCollision`. `versionRange` is the owning configuration row's
+ * range; `componentKey` identifies the rival component for the conflict message.
  */
 interface CrossComponentMavenRow {
     val groupPattern: String
     val artifactPattern: String
+    val extension: String?
+    val classifier: String?
     val versionRange: String
     val componentKey: String
 }

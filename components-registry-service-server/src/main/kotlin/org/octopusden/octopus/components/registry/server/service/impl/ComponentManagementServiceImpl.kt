@@ -72,6 +72,7 @@ import org.octopusden.octopus.components.registry.server.service.ComponentSource
 import org.octopusden.octopus.components.registry.server.service.RenderedComponentCode
 import org.octopusden.octopus.components.registry.server.teamcity.TeamcityProperties
 import org.octopusden.octopus.components.registry.server.util.ComponentCodeRenderer
+import org.octopusden.octopus.components.registry.server.util.MavenGavCollision
 import org.octopusden.octopus.escrow.config.ConfigHelper
 import org.octopusden.releng.versions.VersionRangeFactory
 import org.springframework.context.ApplicationEventPublisher
@@ -423,7 +424,9 @@ class ComponentManagementServiceImpl(
         if (request.name != null) {
             require(!normalizedNewKey.isNullOrEmpty()) { "name must not be blank" }
             if (normalizedNewKey != oldKey && componentRepository.existsByComponentKey(normalizedNewKey)) {
-                throw ComponentNameConflictException("Component with name '$normalizedNewKey' already exists")
+                throw ComponentNameConflictException(
+                    "uniqueness violation: component name '$normalizedNewKey' is already used by another component",
+                )
             }
         }
         val isRename = normalizedNewKey != null && normalizedNewKey != oldKey
@@ -1943,10 +1946,12 @@ class ComponentManagementServiceImpl(
      * Cross-component collisions with OTHER components → 409. All three rules use
      * self-excluding indexed queries against the flushed final state:
      *
-     *  - **#24/#25 duplicate groupId:artifactId in overlapping ranges** — for each
+     *  - **#24/#25 duplicate distribution GAV in overlapping ranges** — for each
      *    of this component's maven artifacts, find other components declaring the
-     *    same (group, artifact) and reject if any owning range intersects this
-     *    component's range (Maven `isIntersect`, decided in-memory).
+     *    same FULL identity (group, artifact, extension, classifier — see
+     *    `MavenGavCollision`) and reject if any owning range intersects this
+     *    component's range (Maven `isIntersect`, decided in-memory). Differing
+     *    extension or classifier (`g:a:zip` vs `g:a:apk`) is NOT a collision.
      *  - **#26 jira (projectKey, versionPrefix) uniqueness among non-archived** —
      *    an archived component is exempt (matches the old `!archived` filter).
      *  - **#29 docker image-name global uniqueness** — any other component using
@@ -1989,38 +1994,19 @@ class ComponentManagementServiceImpl(
         validateCrossComponentIntegrity(reloaded)
     }
 
-    private fun groupIdMatches(groupId: String, groupIdPattern: String): Boolean {
-        val groupIds = groupId.split(GROUP_ID_SPLIT).map { it.trim() }.filter { it.isNotEmpty() }.toSet()
-        return groupIdPattern.split(GROUP_ID_SPLIT).map { it.trim() }.any { it in groupIds }
-    }
-
-    private fun artifactIdMatches(artifactId: String, artifactPattern: String): Boolean {
-        return artifactPattern == "*" || runCatching {
-            val regexPattern = artifactPattern.replace(",", "|")
-            Regex(regexPattern).matches(artifactId)
-        }.getOrDefault(false)
-    }
-
-    private fun mavenArtifactContainsAnother(
-        group1: String, artifact1: String,
-        group2: String, artifact2: String
-    ): Boolean = groupIdMatches(group1, group2) && artifactIdMatches(artifact1, artifact2)
-
-    private fun mavenArtifactsOverlap(
-        group1: String, artifact1: String,
-        group2: String, artifact2: String
-    ): Boolean = mavenArtifactContainsAnother(group1, artifact1, group2, artifact2) ||
-            mavenArtifactContainsAnother(group2, artifact2, group1, artifact1)
-
     private fun validateMavenArtifactCollisions(entity: ComponentEntity, componentId: UUID) {
         val otherArtifacts = mavenArtifactRepository.findOtherComponents(componentId)
         entity.configurations.forEach { cfg ->
             val ownRange = runCatching { versionRangeFactory.create(cfg.versionRange) }.getOrNull()
             cfg.mavenArtifacts.forEach { artifact ->
                 otherArtifacts.forEach { other ->
-                    if (mavenArtifactsOverlap(
+                    // Identity is the FULL coordinate (group, artifact, extension,
+                    // classifier) — `g:a:zip` vs `g:a:apk` are distinct artifacts.
+                    if (MavenGavCollision.identityCollides(
                             artifact.groupPattern, artifact.artifactPattern,
-                            other.groupPattern, other.artifactPattern
+                            artifact.extension, artifact.classifier,
+                            other.groupPattern, other.artifactPattern,
+                            other.extension, other.classifier,
                         )
                     ) {
                         val intersects =
@@ -2032,11 +2018,14 @@ class ComponentManagementServiceImpl(
                                 }.getOrDefault(true)
                             }
                         if (intersects) {
+                            val gav = MavenGavCollision.gavLabel(
+                                artifact.groupPattern, artifact.artifactPattern,
+                                artifact.extension, artifact.classifier,
+                            )
                             throw CrossComponentConflictException(
-                                "distribution: groupId:artifactId " +
-                                    "'${artifact.groupPattern}:${artifact.artifactPattern}' of component " +
-                                    "'${entity.componentKey}' overlaps component '${other.componentKey}' " +
-                                    "in version range '${cfg.versionRange}' ∩ '${other.versionRange}'",
+                                "uniqueness violation: distribution GAV '$gav' of component " +
+                                    "'${entity.componentKey}' duplicates component '${other.componentKey}' " +
+                                    "in intersecting version ranges '${cfg.versionRange}' ∩ '${other.versionRange}'",
                             )
                         }
                     }
@@ -2066,7 +2055,7 @@ class ComponentManagementServiceImpl(
                 val prefixText =
                     if (versionPrefix == null) "no version prefix" else "version prefix '$versionPrefix'"
                 throw CrossComponentConflictException(
-                    "jira: project '$projectKey' with $prefixText is already used by " +
+                    "uniqueness violation: jira project '$projectKey' with $prefixText is already used by " +
                         "non-archived component(s) ${others.joinToString(", ")} " +
                         "(conflicts with '${entity.componentKey}')",
                 )
@@ -2085,7 +2074,7 @@ class ComponentManagementServiceImpl(
             val others = dockerImageRepository.findOtherComponentKeysByImageName(imageName, componentId)
             if (others.isNotEmpty()) {
                 throw CrossComponentConflictException(
-                    "distribution: docker image name '$imageName' of component " +
+                    "uniqueness violation: docker image name '$imageName' of component " +
                         "'${entity.componentKey}' is already used by component(s) " +
                         "${others.joinToString(", ")} — image names must be globally unique",
                 )

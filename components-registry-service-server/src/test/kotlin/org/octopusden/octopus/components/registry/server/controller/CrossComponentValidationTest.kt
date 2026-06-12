@@ -287,6 +287,27 @@ class CrossComponentValidationTest {
     }
 
     @Test
+    @DisplayName("PATCH: rename to an existing component name → 409 'uniqueness violation' + errorCode")
+    fun patch_renameToExistingName_conflict_withUniquenessMessageAndErrorCode() {
+        val s = sfx()
+        createOk(
+            """{"name":"xcc-rename-taken-$s",""" +
+                """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
+        )
+        val resp = postCreate(
+            """{"name":"xcc-rename-src-$s",""" +
+                """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
+        ).andExpect(status().is2xxSuccessful).andReturn().response.contentAsString
+        val created = objectMapper.readTree(resp)
+        patchComponent(
+            created["id"].asText(),
+            """{"version":${created["version"].asInt()},"name":"xcc-rename-taken-$s"}""",
+        ).andExpect(status().isConflict)
+            .andExpect(jsonPath("$.errorMessage").value(org.hamcrest.Matchers.containsString("uniqueness violation")))
+            .andExpect(jsonPath("$.errorCode").value("UNIQUENESS_VIOLATION"))
+    }
+
+    @Test
     @DisplayName("PATCH: stale optimistic-lock version → 409 with errorCode OPTIMISTIC_LOCK")
     fun patch_staleVersion_conflict_withOptimisticLockErrorCode() {
         val s = sfx()
