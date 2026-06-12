@@ -144,7 +144,33 @@ class UniquenessPrePassTest {
         assertTrue(violations.isEmpty(), "$violations")
     }
 
+    @Test
+    @DisplayName("jira: same component claiming one bucket from several ranges does not self-collide")
+    fun jira_multiOccurrenceInNewPairs_noSelfCollision() {
+        val violations = computeJiraPairCollisions(
+            listOf(
+                UniquenessJiraPair("comp-a", "PROJ", "p1"),
+                UniquenessJiraPair("comp-a", "PROJ", "p1"),
+            ),
+            emptyList(),
+        )
+        assertTrue(violations.isEmpty(), "$violations")
+    }
+
     // ───────────────────────── docker image names ─────────────────────────
+
+    @Test
+    @DisplayName("docker: same component claiming one image from several ranges does not self-collide")
+    fun docker_multiOccurrenceInNewRows_noSelfCollision() {
+        val violations = computeDockerImageCollisions(
+            listOf(
+                UniquenessDockerRow("comp-a", "registry/image"),
+                UniquenessDockerRow("comp-a", "registry/image"),
+            ),
+            emptyList(),
+        )
+        assertTrue(violations.isEmpty(), "$violations")
+    }
 
     @Test
     @DisplayName("docker: same image name on two components is a collision; self/rerun is not")

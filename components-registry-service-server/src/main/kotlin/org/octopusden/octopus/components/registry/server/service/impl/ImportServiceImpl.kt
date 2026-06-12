@@ -1003,6 +1003,13 @@ class ImportServiceImpl(
      * displayName DSL-vs-DSL keeps the original §6.0 semantics (ALL non-empty modules —
      * the DSL itself must not declare one name twice, importable or not).
      *
+     * Best-effort, not a durable invariant: the DB-side rows are read once at the top of
+     * the migration transaction, and (except display_name and docker image, which are
+     * DB-UNIQUE) there are no DB constraints behind the GAV/jira rules — a concurrent v4
+     * API write during a running migration can still slip a duplicate past both this
+     * pre-pass and the API's own read-before-flush check. Same window as the API check;
+     * migration is normally startup-exclusive.
+     *
      * Pure logic lives in top-level `compute*` functions (and the companion's
      * [computeDisplayNameCollisions]) so it is unit-testable without Spring fixtures.
      * Empty-body modules (`"FOO" { }`, no moduleConfigurations) are excluded — Pass 1 skips
@@ -1018,8 +1025,13 @@ class ImportServiceImpl(
 
         val violations = mutableListOf<String>()
 
+        // DSL-vs-DSL display names compare TO-IMPORT modules only: an already-imported
+        // component's authoritative name lives in the DB (it may have been renamed via the
+        // API since import), so pairing its DSL name against a new module would false-positive
+        // on partial-migration reruns. New-vs-DB conflicts are covered by
+        // computeDisplayNameDbCollisions below.
         val displayPairs =
-            nonEmpty.map { (key, m) -> key to baseConfigOf(m.moduleConfigurations)?.componentDisplayName }
+            toImport.map { (key, m) -> key to baseConfigOf(m.moduleConfigurations)?.componentDisplayName }
         violations +=
             computeDisplayNameCollisions(displayPairs).entries
                 .sortedBy { it.key }
@@ -1176,10 +1188,21 @@ class ImportServiceImpl(
     }
 
     /**
-     * Distinct jira (projectKey, versionPrefix) pairs across this module's configs — base
-     * scalars and SCALAR_OVERRIDE values collapse to the same distinct set, which is exactly
-     * what the API-side `validateJiraProjectKeyVersionPrefixUniqueness` reads back from the
-     * persisted rows. An archived component claims no pair (same exemption as the API check).
+     * Jira (projectKey, versionPrefix) pairs this module would PERSIST with a non-null
+     * `jiraProjectKey` — i.e. exactly the pairs the API-side
+     * `validateJiraProjectKeyVersionPrefixUniqueness` and `findAllNonArchivedJiraPairs`
+     * (`WHERE jiraProjectKey IS NOT NULL`) later see:
+     *  - the BASE row carries the base config's `(projectKey, versionPrefix)`;
+     *  - a per-range override that changes ONLY `versionPrefix` is persisted as a
+     *    SCALAR_OVERRIDE row whose `jiraProjectKey` is null — it claims NO pair, so it must
+     *    NOT be collected here (the DSL loader inherits `projectKey` onto every range, and
+     *    naively reading the merged per-range config would fabricate phantom
+     *    `(projectKey, overridePrefix)` claims the API never enforces — a migration-blocking
+     *    false positive);
+     *  - a per-range override that changes `projectKey` itself is persisted as a
+     *    SCALAR_OVERRIDE row carrying only `jiraProjectKey` (its `jiraVersionPrefix` is
+     *    null), so it claims `(overrideProjectKey, null)`.
+     * An archived component claims no pair (same exemption as the API check).
      */
     private fun collectDslJiraPairs(
         componentKey: String,
@@ -1187,14 +1210,18 @@ class ImportServiceImpl(
     ): List<UniquenessJiraPair> {
         val baseConfig = baseConfigOf(configs) ?: return emptyList()
         if (baseConfig.archived) return emptyList()
-        return configs
-            .mapNotNull { cfg ->
-                cfg.jiraConfiguration?.let { jira ->
-                    jira.projectKey?.takeIf { it.isNotBlank() }?.let { projectKey ->
-                        UniquenessJiraPair(componentKey, projectKey, jira.componentInfo?.versionPrefix)
-                    }
-                }
-            }.distinct()
+        val basePk = baseConfig.jiraConfiguration?.projectKey?.takeIf { it.isNotBlank() }
+        val pairs = mutableListOf<UniquenessJiraPair>()
+        basePk?.let { pk ->
+            pairs += UniquenessJiraPair(componentKey, pk, baseConfig.jiraConfiguration?.componentInfo?.versionPrefix)
+        }
+        for (override in configs.filter { it !== baseConfig }) {
+            val overridePk = override.jiraConfiguration?.projectKey?.takeIf { it.isNotBlank() } ?: continue
+            if (overridePk != basePk) {
+                pairs += UniquenessJiraPair(componentKey, overridePk, null)
+            }
+        }
+        return pairs.distinct()
     }
 
     /**
@@ -2494,7 +2521,10 @@ internal fun computeDistributionGavCollisions(
  * Jira (projectKey, versionPrefix) buckets claimed by more than one distinct component,
  * where at least one claimant is incoming — same invariant as the API-side
  * `validateJiraProjectKeyVersionPrefixUniqueness` (null prefix is its own bucket;
- * callers already excluded archived components). Pure — unit-tested without Spring.
+ * callers already excluded archived components). Self-collision safety: claimants are
+ * collected into a SET of componentKeys, so the same component appearing multiple times
+ * in `newPairs` (multi-range module) or on both sides (idempotent rerun against its own
+ * persisted rows) never trips the `size >= 2` threshold. Pure — unit-tested without Spring.
  */
 internal fun computeJiraPairCollisions(
     newPairs: List<UniquenessJiraPair>,
@@ -2516,7 +2546,9 @@ internal fun computeJiraPairCollisions(
 /**
  * Docker image names claimed by more than one distinct component, where at least one
  * claimant is incoming — same global-uniqueness invariant as the API-side
- * `validateDockerImageUniqueness`. Pure — unit-tested without Spring.
+ * `validateDockerImageUniqueness`. Claimants dedupe into a componentKey SET, so
+ * multi-range modules and idempotent reruns never self-collide. Pure — unit-tested
+ * without Spring.
  */
 internal fun computeDockerImageCollisions(
     newRows: List<UniquenessDockerRow>,

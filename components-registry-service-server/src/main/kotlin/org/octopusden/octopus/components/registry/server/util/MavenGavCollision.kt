@@ -17,16 +17,36 @@ package org.octopusden.octopus.components.registry.server.util
 internal object MavenGavCollision {
     private val GROUP_ID_SPLIT = Regex("[,|]")
 
+    /**
+     * Compiled-artifact-pattern cache: the migration pre-pass calls
+     * [artifactIdMatches] inside an O(new×(new+existing)) pairwise loop, and the
+     * pattern population is tiny (one per distribution row) — without the cache
+     * each pair recompiles the regex. Unbounded by design: keys come from the
+     * finite DSL/DB pattern set, not user input.
+     */
+    private val compiledArtifactPatterns = java.util.concurrent.ConcurrentHashMap<String, Any>()
+
+    /** Cache sentinel for unparseable patterns (ConcurrentHashMap cannot hold null values). */
+    private val INVALID_PATTERN = Any()
+
+    /**
+     * NOTE the asymmetry (legacy `MavenArtifactMatcher` parity): the FIRST argument
+     * is this row's (possibly CSV/pipe) group value whose elements form the candidate
+     * set; the SECOND is the rival's pattern whose elements are tested for membership
+     * in that set. [patternsOverlap] calls it in both directions, so callers of that
+     * entry point need not care — but do not swap the arguments here.
+     */
     fun groupIdMatches(groupId: String, groupIdPattern: String): Boolean {
         val groupIds = groupId.split(GROUP_ID_SPLIT).map { it.trim() }.filter { it.isNotEmpty() }.toSet()
         return groupIdPattern.split(GROUP_ID_SPLIT).map { it.trim() }.any { it in groupIds }
     }
 
     fun artifactIdMatches(artifactId: String, artifactPattern: String): Boolean {
-        return artifactPattern == "*" || runCatching {
-            val regexPattern = artifactPattern.replace(",", "|")
-            Regex(regexPattern).matches(artifactId)
-        }.getOrDefault(false)
+        if (artifactPattern == "*") return true
+        val cached = compiledArtifactPatterns.computeIfAbsent(artifactPattern) { pattern ->
+            runCatching { Regex(pattern.replace(",", "|")) }.getOrNull() ?: INVALID_PATTERN
+        }
+        return (cached as? Regex)?.matches(artifactId) ?: false
     }
 
     private fun patternContainsAnother(
