@@ -53,8 +53,10 @@ import org.octopusden.octopus.components.registry.server.service.MigrationProgre
 import org.octopusden.octopus.components.registry.server.service.MigrationResult
 import org.octopusden.octopus.components.registry.server.service.MigrationStatus
 import org.octopusden.octopus.components.registry.server.service.ValidationResult
+import org.octopusden.octopus.components.registry.server.util.JiraRowView
 import org.octopusden.octopus.components.registry.server.util.MavenCoords
 import org.octopusden.octopus.components.registry.server.util.MavenGavCollision
+import org.octopusden.octopus.components.registry.server.util.computeEffectiveJiraPairs
 import org.octopusden.octopus.components.registry.server.util.parseMavenGavEntry
 import org.octopusden.octopus.components.registry.server.util.splitCsv
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
@@ -1053,6 +1055,7 @@ class ImportServiceImpl(
                         UniquenessGavRow(
                             it.componentKey, it.versionRange,
                             it.groupPattern, it.artifactPattern, it.extension, it.classifier,
+                            origin = MavenGavCollision.originLabel(it.overriddenAttribute),
                         )
                     }
                 violations += computeDistributionGavCollisions(newGavRows, dbRows, ::versionRangesIntersect)
@@ -1060,11 +1063,7 @@ class ImportServiceImpl(
 
             val newJiraPairs = toImport.flatMap { (key, m) -> collectDslJiraPairs(key, m.moduleConfigurations) }
             if (newJiraPairs.isNotEmpty()) {
-                val dbPairs =
-                    configurationRepository.findAllNonArchivedJiraPairs().map {
-                        UniquenessJiraPair(it.componentKey, it.projectKey, it.versionPrefix)
-                    }
-                violations += computeJiraPairCollisions(newJiraPairs, dbPairs)
+                violations += computeJiraPairCollisions(newJiraPairs, persistedEffectiveJiraPairs())
             }
 
             val newDockerRows = toImport.flatMap { (key, m) -> collectDslDockerRows(key, m.moduleConfigurations) }
@@ -1109,17 +1108,14 @@ class ImportServiceImpl(
                     UniquenessGavRow(
                         it.componentKey, it.versionRange,
                         it.groupPattern, it.artifactPattern, it.extension, it.classifier,
+                        origin = MavenGavCollision.originLabel(it.overriddenAttribute),
                     )
                 }
             violations += computeDistributionGavCollisions(gavCandidates, dbRows, ::versionRangesIntersect)
         }
         val jiraCandidates = collectDslJiraPairs(componentKey, configs)
         if (jiraCandidates.isNotEmpty()) {
-            val dbPairs =
-                configurationRepository.findAllNonArchivedJiraPairs().map {
-                    UniquenessJiraPair(it.componentKey, it.projectKey, it.versionPrefix)
-                }
-            violations += computeJiraPairCollisions(jiraCandidates, dbPairs)
+            violations += computeJiraPairCollisions(jiraCandidates, persistedEffectiveJiraPairs())
         }
         val dockerCandidates = collectDslDockerRows(componentKey, configs)
         if (dockerCandidates.isNotEmpty()) {
@@ -1133,6 +1129,24 @@ class ImportServiceImpl(
     /** importModule's base-config selection: the ALL_VERSIONS row, else the first one. */
     private fun baseConfigOf(configs: List<EscrowModuleConfig>): EscrowModuleConfig? =
         configs.firstOrNull { it.versionRangeString == ALL_VERSIONS } ?: configs.firstOrNull()
+
+    /**
+     * EFFECTIVE jira claims of every non-archived persisted component — per-range
+     * scalar overrides layered over the BASE row ([computeEffectiveJiraPairs]),
+     * matching both the legacy merged-config bucketing and the API-side check.
+     */
+    private fun persistedEffectiveJiraPairs(): List<UniquenessJiraPair> {
+        val rows =
+            configurationRepository.findAllNonArchivedJiraRows().map {
+                JiraRowView(
+                    it.componentKey, it.versionRange, it.rowType,
+                    it.overriddenAttribute, it.projectKey, it.versionPrefix,
+                )
+            }
+        return computeEffectiveJiraPairs(rows).flatMap { (key, pairs) ->
+            pairs.map { (pk, prefix) -> UniquenessJiraPair(key, pk, prefix) }
+        }
+    }
 
     /** Conservative range intersection: unparseable ranges count as overlapping (same as the API check). */
     private fun versionRangesIntersect(range1: String, range2: String): Boolean =
@@ -1164,6 +1178,7 @@ class ImportServiceImpl(
                     UniquenessGavRow(
                         componentKey, versionRange,
                         coords.groupId, coords.artifactId, coords.extension, coords.classifier,
+                        origin = "distribution GAV",
                     )
             }
         }
@@ -1179,7 +1194,10 @@ class ImportServiceImpl(
                 val artifactCsv = override.artifactIdPattern
                 if (group != null && artifactCsv != null) {
                     for (token in splitCsv(artifactCsv)) {
-                        rows += UniquenessGavRow(componentKey, overrideRange, group, token, null, null)
+                        rows += UniquenessGavRow(
+                            componentKey, overrideRange, group, token, null, null,
+                            origin = MavenGavCollision.originLabel("group-artifact-pattern"),
+                        )
                     }
                 }
             }
@@ -1188,20 +1206,17 @@ class ImportServiceImpl(
     }
 
     /**
-     * Jira (projectKey, versionPrefix) pairs this module would PERSIST with a non-null
-     * `jiraProjectKey` — i.e. exactly the pairs the API-side
-     * `validateJiraProjectKeyVersionPrefixUniqueness` and `findAllNonArchivedJiraPairs`
-     * (`WHERE jiraProjectKey IS NOT NULL`) later see:
-     *  - the BASE row carries the base config's `(projectKey, versionPrefix)`;
-     *  - a per-range override that changes ONLY `versionPrefix` is persisted as a
-     *    SCALAR_OVERRIDE row whose `jiraProjectKey` is null — it claims NO pair, so it must
-     *    NOT be collected here (the DSL loader inherits `projectKey` onto every range, and
-     *    naively reading the merged per-range config would fabricate phantom
-     *    `(projectKey, overridePrefix)` claims the API never enforces — a migration-blocking
-     *    false positive);
-     *  - a per-range override that changes `projectKey` itself is persisted as a
-     *    SCALAR_OVERRIDE row carrying only `jiraProjectKey` (its `jiraVersionPrefix` is
-     *    null), so it claims `(overrideProjectKey, null)`.
+     * EFFECTIVE jira (projectKey, versionPrefix) claims of this module — one pair per
+     * MERGED per-range config (the Groovy loader has already layered each range's jira
+     * block over the base, including the inherited `component{versionPrefix}`). This is
+     * exactly what the legacy `validateJiraProjectKeyAndVersionPrefixIntersections`
+     * bucketed and what the resolver serves: the prod shape where one component
+     * legitimately owns `(project, null)` while others claim that project only
+     * WITH their explicit/inherited prefixes via projectKey-only range overrides
+     * is LEGAL.
+     * Bucketing raw SCALAR_OVERRIDE rows instead fabricated `(key, null)` claims and
+     * bricked the migration on legacy-valid data. The API-side check mirrors this via
+     * [computeEffectiveJiraPairs] over the persisted rows.
      * An archived component claims no pair (same exemption as the API check).
      */
     private fun collectDslJiraPairs(
@@ -1210,18 +1225,14 @@ class ImportServiceImpl(
     ): List<UniquenessJiraPair> {
         val baseConfig = baseConfigOf(configs) ?: return emptyList()
         if (baseConfig.archived) return emptyList()
-        val basePk = baseConfig.jiraConfiguration?.projectKey?.takeIf { it.isNotBlank() }
-        val pairs = mutableListOf<UniquenessJiraPair>()
-        basePk?.let { pk ->
-            pairs += UniquenessJiraPair(componentKey, pk, baseConfig.jiraConfiguration?.componentInfo?.versionPrefix)
-        }
-        for (override in configs.filter { it !== baseConfig }) {
-            val overridePk = override.jiraConfiguration?.projectKey?.takeIf { it.isNotBlank() } ?: continue
-            if (overridePk != basePk) {
-                pairs += UniquenessJiraPair(componentKey, overridePk, null)
-            }
-        }
-        return pairs.distinct()
+        return configs
+            .mapNotNull { cfg ->
+                cfg.jiraConfiguration?.let { jira ->
+                    jira.projectKey?.takeIf { it.isNotBlank() }?.let { pk ->
+                        UniquenessJiraPair(componentKey, pk, jira.componentInfo?.versionPrefix)
+                    }
+                }
+            }.distinct()
     }
 
     /**
@@ -2453,7 +2464,12 @@ class ImportServiceImpl(
  * `settingsProperty` bleeds into the override range. `edition` is meaningful only for
  * Oracle (always null for the others).
  */
-/** One would-be `distribution_maven_artifacts` row derived from the DSL, for the §6.0 uniqueness pre-pass. */
+/**
+ * One would-be `distribution_maven_artifacts` row derived from the DSL, for the §6.0
+ * uniqueness pre-pass. [origin] names the DSL source for the conflict message:
+ * an explicit `distribution { GAV }` coordinate vs the component-level
+ * `groupId`/`artifactId` mapping (MIG-047 synthetic rows) — see [MavenGavCollision.originLabel].
+ */
 internal data class UniquenessGavRow(
     val componentKey: String,
     val versionRange: String,
@@ -2461,6 +2477,7 @@ internal data class UniquenessGavRow(
     val artifactPattern: String,
     val extension: String?,
     val classifier: String?,
+    val origin: String = "distribution GAV",
 )
 
 /** One jira (projectKey, versionPrefix) claim, for the §6.0 uniqueness pre-pass. */
@@ -2505,8 +2522,8 @@ internal fun computeDistributionGavCollisions(
         if (!rangesIntersect(row.versionRange, rival.versionRange)) return
         val gav = MavenGavCollision.gavLabel(row.groupPattern, row.artifactPattern, row.extension, row.classifier)
         violations +=
-            "uniqueness violation: distribution GAV '$gav' of component '${row.componentKey}' duplicates " +
-                "component '${rival.componentKey}' in intersecting version ranges " +
+            "uniqueness violation: ${row.origin} '$gav' of component '${row.componentKey}' duplicates " +
+                "the ${rival.origin} of component '${rival.componentKey}' in intersecting version ranges " +
                 "'${row.versionRange}' ∩ '${rival.versionRange}'"
     }
 
