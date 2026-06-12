@@ -174,7 +174,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     buildSystem = GRADLE
 
     jira {
-        projectKey = "PROJ_C"
+        projectKey = "PROJ_C2"
         majorVersionFormat = '$major'
         releaseVersionFormat = '$major.$minor.$service'
     }
@@ -255,7 +255,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     buildSystem = GRADLE
 
     jira {
-        projectKey = "PROJ_B"
+        projectKey = "PROJ_B4"
     }
 
     build {
@@ -329,7 +329,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     artifactId = "db-kernel"
 
     jira {
-        projectKey = "PROJ_D"
+        projectKey = "PROJ_D4"
         majorVersionFormat = '$major.$minor'
         releaseVersionFormat = '$major.$minor.$service'
     }
@@ -379,7 +379,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     tag = 'adapter-$version'
 
     jira {
-        projectKey = "PROJ_D"
+        projectKey = "PROJ_D9"
         majorVersionFormat = '$major'
         releaseVersionFormat = '$major.$minor.$service'
     }
@@ -403,7 +403,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     tag = 'platform-commons-$version'
 
     jira {
-        projectKey = "PROJ_E"
+        projectKey = "PROJ_E5"
     }
 
     vcsSettings {
@@ -432,7 +432,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     artifactId = "xml-parser"
 
     jira {
-        projectKey = "PROJ_D"
+        projectKey = "PROJ_D13"
         majorVersionFormat = '$major.$minor'
     }
 
@@ -494,7 +494,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     artifactId = "schema-validator"
 
     jira {
-        projectKey = "PROJ_D"
+        projectKey = "PROJ_D10"
     }
 
     build {
@@ -597,7 +597,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     buildSystem = IN_CONTAINER
 
     jira {
-        projectKey = "PROJ_E"
+        projectKey = "PROJ_E4"
     }
 
     vcsSettings {
@@ -618,7 +618,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     buildSystem = IN_CONTAINER
 
     jira {
-        projectKey = "PROJ_E"
+        projectKey = "PROJ_E2"
     }
 
     "(,1.0)" {
@@ -926,7 +926,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     artifactId = "tools-aggregator-stub"
 
     jira {
-        projectKey = "PROJ_E"
+        projectKey = "PROJ_E6"
     }
 
     "[99999,100000]" {}
@@ -971,7 +971,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     artifactId = "legacy-wrapper"
 
     jira {
-        projectKey = "PROJ_D"
+        projectKey = "PROJ_D7"
     }
 
     buildSystem = ESCROW_NOT_SUPPORTED
@@ -1001,7 +1001,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     buildSystem = GRADLE
 
     jira {
-        projectKey = "PROJ_H"
+        projectKey = "PROJ_H4"
         majorVersionFormat = '$major'
         releaseVersionFormat = '$major.$minor.$service'
     }
@@ -1070,7 +1070,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     artifactId = "web-banking-core"
 
     jira {
-        projectKey = "PROJ_H"
+        projectKey = "PROJ_H7"
         majorVersionFormat = '$major.$minor'
         releaseVersionFormat = '$major.$minor.$service-$fix'
     }
@@ -1191,7 +1191,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     buildSystem = GRADLE
 
     jira {
-        projectKey = "PROJ_I"
+        projectKey = "PROJ_I8"
     }
 
     vcsSettings {
@@ -1278,7 +1278,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     buildSystem = GRADLE
 
     jira {
-        projectKey = "PROJ_I"
+        projectKey = "PROJ_I2"
     }
 
     "(,2.0)" {
@@ -1344,7 +1344,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     buildSystem = GRADLE
 
     jira {
-        projectKey = "PROJ_I"
+        projectKey = "PROJ_I6"
     }
 
     vcsSettings {
@@ -1405,7 +1405,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     buildSystem = GRADLE
 
     jira {
-        projectKey = "PROJ_I"
+        projectKey = "PROJ_I4"
     }
 
     "(,2.0)" {
@@ -1479,7 +1479,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     buildSystem = GRADLE
 
     jira {
-        projectKey = "PROJ_I"
+        projectKey = "PROJ_I5"
     }
 
     vcsSettings {
@@ -1513,7 +1513,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     buildSystem = GRADLE
 
     jira {
-        projectKey = "PROJ_I"
+        projectKey = "PROJ_I7"
     }
 
     vcsSettings {
@@ -1550,7 +1550,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     buildSystem = GRADLE
 
     jira {
-        projectKey = "PROJ_B"
+        projectKey = "PROJ_B6"
     }
 
     build {
@@ -1683,7 +1683,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     buildSystem = GRADLE
 
     jira {
-        projectKey = "PROJ_B"
+        projectKey = "PROJ_B5"
     }
 
     build {
@@ -1712,7 +1712,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     artifactId = "desktop-client"
 
     jira {
-        projectKey = "PROJ_H"
+        projectKey = "PROJ_H2"
     }
 
     vcsSettings {
@@ -1759,7 +1759,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     buildSystem = GRADLE
 
     jira {
-        projectKey = "PROJ_H"
+        projectKey = "PROJ_H6"
     }
 
     vcsSettings {
@@ -1780,7 +1780,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     artifactId = "firmware-update"
 
     jira {
-        projectKey = "PROJ_D"
+        projectKey = "PROJ_D5"
     }
 
     vcsSettings {
@@ -1893,7 +1893,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     buildSystem = GRADLE
 
     jira {
-        projectKey = "PROJ_E"
+        projectKey = "PROJ_E3"
         technical = true
         displayName = "DevOps Toolchain"
         majorVersionFormat = '$major.$minor'
@@ -1972,7 +1972,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     artifactId = "utility-common"
 
     jira {
-        projectKey = "PROJ_D"
+        projectKey = "PROJ_D12"
     }
 
     vcsSettings {
@@ -1991,7 +1991,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     artifactId = "string-utils"
 
     jira {
-        projectKey = "PROJ_D"
+        projectKey = "PROJ_D11"
     }
 
     distribution {
@@ -2006,7 +2006,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     artifactId = "date-utils"
 
     jira {
-        projectKey = "PROJ_D"
+        projectKey = "PROJ_D3"
     }
 
     distribution {
@@ -2021,7 +2021,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     artifactId = "io-helper"
 
     jira {
-        projectKey = "PROJ_D"
+        projectKey = "PROJ_D6"
     }
 
     distribution {
@@ -2036,7 +2036,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     artifactId = "network-utils"
 
     jira {
-        projectKey = "PROJ_D"
+        projectKey = "PROJ_D8"
     }
 
     distribution {
@@ -2103,7 +2103,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     buildSystem = GRADLE
 
     jira {
-        projectKey = "PROJ_H"
+        projectKey = "PROJ_H3"
         majorVersionFormat = '$major'
         releaseVersionFormat = '$major.$minor'
         buildVersionFormat = '$major.$minor.$service'
@@ -2241,7 +2241,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     buildSystem = GRADLE
 
     jira {
-        projectKey = "PROJ_C"
+        projectKey = "PROJ_C3"
     }
 
     vcsSettings {
@@ -2293,7 +2293,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     buildSystem = GRADLE
 
     jira {
-        projectKey = "PROJ_B"
+        projectKey = "PROJ_B3"
         majorVersionFormat = '$major'
         releaseVersionFormat = '$major.$minor.$service'
     }
@@ -2322,7 +2322,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     buildSystem = GRADLE
 
     jira {
-        projectKey = "PROJ_B"
+        projectKey = "PROJ_B2"
     }
 
     build {
@@ -2348,7 +2348,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     buildSystem = GRADLE
 
     jira {
-        projectKey = "PROJ_D"
+        projectKey = "PROJ_D2"
     }
 
     buildFilePath = "data-sync-module"
@@ -2375,7 +2375,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     buildSystem = GRADLE
 
     jira {
-        projectKey = "PROJ_H"
+        projectKey = "PROJ_H5"
     }
 
     vcsSettings {
@@ -2408,7 +2408,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     artifactId = "legacy-multi-range-tool"
     buildSystem = MAVEN
     jira {
-        projectKey = "PROJ_I"
+        projectKey = "PROJ_I3"
     }
     build {
         javaVersion = "1.8"

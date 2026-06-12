@@ -1587,7 +1587,7 @@
     "componentName": "test-simple",
     "versionRange": "(,0),[0,)",
     "component": {
-      "projectKey": "TEST",
+      "projectKey": "TEST_SIMPLE",
       "displayName": null,
       "componentVersionFormat": {
         "majorVersionFormat": "$major.$minor",
@@ -1620,7 +1620,7 @@
     "componentName": "TEST_COMPONENT_WITH_DOC_AND_VERSIONS",
     "versionRange": "[1.0,1.3)",
     "component": {
-      "projectKey": "DOC",
+      "projectKey": "DOCV",
       "displayName": null,
       "componentVersionFormat": {
         "majorVersionFormat": "$major.$minor",
@@ -1643,7 +1643,7 @@
           "vfiler1-default#group"
         ]
       },
-      "docker": "test-doc"
+      "docker": "test-doc-versions"
     },
     "vcsSettings": {
       "versionControlSystemRoots": [],
@@ -1654,7 +1654,7 @@
     "componentName": "TEST_COMPONENT_WITH_DOC_AND_VERSIONS",
     "versionRange": "[1.3,)",
     "component": {
-      "projectKey": "DOC",
+      "projectKey": "DOCV",
       "displayName": null,
       "componentVersionFormat": {
         "majorVersionFormat": "$major.$minor",
@@ -1677,7 +1677,7 @@
           "vfiler1-default#group"
         ]
       },
-        "docker": "test-doc"
+        "docker": "test-doc-versions"
     },
     "vcsSettings": {
       "versionControlSystemRoots": [],
@@ -1722,7 +1722,7 @@
     "componentName": "TEST_COMPONENT_WITH_DOCKER_1_1",
     "versionRange": "(,0),[0,)",
     "component": {
-      "projectKey": "TEST_DOCKER",
+      "projectKey": "TEST_DOCKER_1_1",
       "displayName": null,
       "componentVersionFormat": {
         "majorVersionFormat": "$major.$minor",
@@ -1788,7 +1788,7 @@
     "componentName": "TEST_COMPONENT_WITH_DOCKER_4",
     "versionRange": "(,1.0.0]",
     "component": {
-      "projectKey": "TEST_DOCKER",
+      "projectKey": "TEST_DOCKER_4",
       "displayName": null,
       "componentVersionFormat": {
         "majorVersionFormat": "$major.$minor",
@@ -1822,7 +1822,7 @@
     "componentName": "TEST_COMPONENT_WITH_DOCKER_4",
     "versionRange": "(1.0.0, 2.0.0)",
     "component": {
-      "projectKey": "TEST_DOCKER",
+      "projectKey": "TEST_DOCKER_4",
       "displayName": null,
       "componentVersionFormat": {
         "majorVersionFormat": "$major.$minor",
@@ -1856,7 +1856,7 @@
     "componentName": "TEST_COMPONENT_WITH_DOCKER_4",
     "versionRange": "(2.0.0,)",
     "component": {
-      "projectKey": "TEST_DOCKER",
+      "projectKey": "TEST_DOCKER_4",
       "displayName": null,
       "componentVersionFormat": {
         "majorVersionFormat": "$major.$minor",
@@ -1890,7 +1890,7 @@
     "componentName": "TEST_COMPONENT_WITH_ESCROW",
     "versionRange": "(,0),[0,)",
     "component": {
-      "projectKey": "PROJ",
+      "projectKey": "PROJESC",
       "displayName": null,
       "componentVersionFormat": {
         "majorVersionFormat": "$major.$minor",
@@ -2062,6 +2062,210 @@
           "vfiler1-default#group"
         ]
       }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "TEST_COMPONENT_WITH_DOCKER_1",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "TEST_DOCKER",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major.$minor",
+        "releaseVersionFormat": "$major.$minor.$service",
+        "buildVersionFormat": "$major.$minor.$service-$fix",
+        "lineVersionFormat": "$major",
+        "hotfixVersionFormat": "$major.$minor.$service-$fix.$build"
+      },
+      "componentInfo": {
+        "versionPrefix": "",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      },
+      "docker": "test-docker-1"
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "TEST_COMPONENT_WITH_DOCKER_2",
+    "versionRange": "(,1.0.0]",
+    "component": {
+      "projectKey": "TEST_DOCKER_2",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major.$minor",
+        "releaseVersionFormat": "$major.$minor.$service",
+        "buildVersionFormat": "$major.$minor.$service-$fix",
+        "lineVersionFormat": "$major",
+        "hotfixVersionFormat": "$major.$minor.$service-$fix.$build"
+      },
+      "componentInfo": {
+        "versionPrefix": "",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      },
+      "docker": "test-docker-first"
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "TEST_COMPONENT_WITH_DOCKER_2",
+    "versionRange": "(1.0.0, 2.0.0)",
+    "component": {
+      "projectKey": "TEST_DOCKER_2",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major.$minor",
+        "releaseVersionFormat": "$major.$minor.$service",
+        "buildVersionFormat": "$major.$minor.$service-$fix",
+        "lineVersionFormat": "$major",
+        "hotfixVersionFormat": "$major.$minor.$service-$fix.$build"
+      },
+      "componentInfo": {
+        "versionPrefix": "",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      },
+      "docker": "test-docker-second:amd64"
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "TEST_COMPONENT_WITH_DOCKER_2",
+    "versionRange": "(2.0.0,)",
+    "component": {
+      "projectKey": "TEST_DOCKER_2",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major.$minor",
+        "releaseVersionFormat": "$major.$minor.$service",
+        "buildVersionFormat": "$major.$minor.$service-$fix",
+        "lineVersionFormat": "$major",
+        "hotfixVersionFormat": "$major.$minor.$service-$fix.$build"
+      },
+      "componentInfo": {
+        "versionPrefix": "",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      },
+      "docker": "test-docker-third:arm64"
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "TEST_COMPONENT_WITH_DOCKER_3",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "TEST_DOCKER_3",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major.$minor",
+        "releaseVersionFormat": "$major.$minor.$service",
+        "buildVersionFormat": "$major.$minor.$service-$fix",
+        "lineVersionFormat": "$major",
+        "hotfixVersionFormat": "$major.$minor.$service-$fix.$build"
+      },
+      "componentInfo": {
+        "versionPrefix": "",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      },
+      "docker": "test-docker-3:amd64"
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [],
+      "externalRegistry": null
+    }
+  },
+  {
+    "componentName": "TEST_COMPONENT_WITH_DOCKER_5",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "TEST_DOCKER_5",
+      "displayName": null,
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major.$minor",
+        "releaseVersionFormat": "$major.$minor.$service",
+        "buildVersionFormat": "$major.$minor.$service-$fix",
+        "lineVersionFormat": "$major",
+        "hotfixVersionFormat": "$major.$minor.$service-$fix.$build"
+      },
+      "componentInfo": {
+        "versionPrefix": "",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      },
+      "docker": "test-docker-5:amd64,test-docker-5:arm64"
     },
     "vcsSettings": {
       "versionControlSystemRoots": [],
