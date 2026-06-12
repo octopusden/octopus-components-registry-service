@@ -193,8 +193,32 @@ class CrossComponentValidationTest {
     }
 
     @Test
-    @DisplayName("CREATE: whitespace and pipe-separated groupPattern overlap → 409")
-    fun create_pipeSeparatedGroup_overlappingRange_conflict() {
+    @DisplayName("CREATE: CSV groups sharing an element + the SAME artifact token → 409 (legacy #24 exact pair)")
+    fun create_csvVsCsvGroup_sharedElementSameArtifact_conflict() {
+        // Legacy #25 whole-string containment never matches CSV-vs-CSV, but legacy
+        // #24 keys exact (groupItem, artifactToken) pairs — the shared element with
+        // an identical artifact token is a violation.
+        val s = sfx()
+        val sharedGroup = "io.bcomponent.$s"
+        val artifact = "csvdup-artifact-$s"
+        createOk(
+            """{"name":"xcc-maven-csvdup-a-$s",""" +
+                """"baseConfiguration":{"build":{"buildSystem":"MAVEN"},""" +
+                """"mavenArtifacts":[{"groupPattern":"org.octopusden.octopus.$s,$sharedGroup","artifactPattern":"$artifact"}]}}""",
+        )
+        postCreate(
+            """{"name":"xcc-maven-csvdup-b-$s",""" +
+                """"baseConfiguration":{"build":{"buildSystem":"MAVEN"},""" +
+                """"mavenArtifacts":[{"groupPattern":"org.example.$s,$sharedGroup","artifactPattern":"$artifact"}]}}""",
+        ).andExpect(status().isConflict)
+    }
+
+    @Test
+    @DisplayName("CREATE: pipe-separated group is ONE token (legacy: '|' is not a group separator) → 2xx")
+    fun create_pipeSeparatedGroup_noConflict() {
+        // Legacy splits groups by ',' only — 'a | b' is a single (weird) token that
+        // matches nothing. The earlier 409 expectation codified the invented
+        // [,|]-split-both-sides semantics that falsely flagged prod data.
         val s = sfx()
         val sharedGroup = "io.bcomponent.$s"
         val artifact = "pipe-artifact-$s"
@@ -206,8 +230,25 @@ class CrossComponentValidationTest {
         postCreate(
             """{"name":"xcc-maven-pipe-b-$s",""" +
                 """"baseConfiguration":{"build":{"buildSystem":"MAVEN"},""" +
-                """"mavenArtifacts":[{"groupPattern":"org.example.$s, $sharedGroup","artifactPattern":"$artifact"}]}}""",
-        ).andExpect(status().isConflict)
+                """"mavenArtifacts":[{"groupPattern":"org.example.$s,io.bcomponent.other$s","artifactPattern":"$artifact"}]}}""",
+        ).andExpect(status().is2xxSuccessful)
+    }
+
+    @Test
+    @DisplayName("CREATE: prod model/api shape — single-group wildcard vs CSV-group literal artifact → no conflict (2xx)")
+    fun create_modelApiShape_wildcardVsCsvLiteral_noConflict() {
+        val s = sfx()
+        val modelGroup = "org.octopusden.octopus.kmodel$s"
+        createOk(
+            """{"name":"xcc-model-comp-$s",""" +
+                """"baseConfiguration":{"build":{"buildSystem":"MAVEN"},""" +
+                """"mavenArtifacts":[{"groupPattern":"$modelGroup","artifactPattern":"[\\w-\\.]+"}]}}""",
+        )
+        postCreate(
+            """{"name":"xcc-model-api-$s",""" +
+                """"baseConfiguration":{"build":{"buildSystem":"MAVEN"},""" +
+                """"mavenArtifacts":[{"groupPattern":"$modelGroup,org.octopusden.octopus.kdb$s","artifactPattern":"placeholder-$s"}]}}""",
+        ).andExpect(status().is2xxSuccessful)
     }
 
     // ───────────── distribution GAV identity = (group, artifact, extension, classifier) ──
@@ -320,6 +361,39 @@ class CrossComponentValidationTest {
             """{"version":999,"baseConfiguration":{"build":{"buildSystem":"GRADLE"}}}""",
         ).andExpect(status().isConflict)
             .andExpect(jsonPath("$.errorCode").value("OPTIMISTIC_LOCK"))
+    }
+
+    @Test
+    @DisplayName("jira effective semantics (prod shape): projectKey-only range override claims (key, INHERITED prefix), not (key, null)")
+    fun jira_projectKeyOnlyOverride_effectivePrefixInherited_noFalseConflict() {
+        val s = sfx()
+        // Component A: base (PROJA, prefix 'wwem') + a range override changing ONLY the
+        // projectKey to PROJW. Effective claim of that range = (PROJW, 'wwem') — the
+        // prefix layers from the base, exactly as the resolver serves it and as the
+        // legacy validator bucketed merged configs.
+        val idA = createOk(
+            """{"name":"xcc-jira-eff-a-$s",""" +
+                """"baseConfiguration":{"build":{"buildSystem":"MAVEN"},""" +
+                """"jira":{"projectKey":"PRA${s.take(4).uppercase()}","versionPrefix":"wwem"}}}""",
+        )
+        mvc.perform(
+            post("/rest/api/4/components/$idA/field-overrides")
+                .with(adminJwt())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """{"overriddenAttribute":"jira.projectKey","versionRange":"[2,)",""" +
+                        """"value":"PRW${s.take(4).uppercase()}"}""",
+                ),
+        ).andExpect(status().is2xxSuccessful)
+
+        // Component B legitimately owns (PROJW, no prefix) — the prod shape where one
+        // component owns (project, null) while another claims the same project only
+        // with its inherited prefix.
+        postCreate(
+            """{"name":"xcc-jira-eff-b-$s",""" +
+                """"baseConfiguration":{"build":{"buildSystem":"MAVEN"},""" +
+                """"jira":{"projectKey":"PRW${s.take(4).uppercase()}"}}}""",
+        ).andExpect(status().is2xxSuccessful)
     }
 
     // ───────────────────────── #26 jira projectKey + versionPrefix uniqueness ──

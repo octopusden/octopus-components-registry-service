@@ -99,41 +99,59 @@ class CollectDslJiraPairsTest {
         assertEquals(listOf(UniquenessJiraPair("comp", "PROJ", "pfx")), pairs)
     }
 
-    @Test
-    @DisplayName("range overriding ONLY versionPrefix claims NO extra pair (loader-inherited projectKey)")
-    fun prefixOnlyOverride_noPhantomPair() {
-        val pairs = collect(
-            "comp",
-            listOf(
-                config("(,0),[0,)", "PROJ", "base"),
-                // DSL loader merges base projectKey onto the range config; only the prefix differs.
-                config("[2,)", "PROJ", "other"),
-            ),
-        )
-        assertEquals(listOf(UniquenessJiraPair("comp", "PROJ", "base")), pairs)
-    }
+    // The collector receives MERGED per-range configs (the Groovy loader has already
+    // layered range jira blocks over the base, including the inherited
+    // component{versionPrefix}). The effective claim of a range is therefore the
+    // merged (projectKey, versionPrefix) — exactly what legacy
+    // validateJiraProjectKeyAndVersionPrefixIntersections bucketed, and what the
+    // resolver serves. Bucketing raw SCALAR_OVERRIDE rows instead (a projectKey-only
+    // override row carries NULL prefix) fabricates (key, null) claims the legacy
+    // contract never made — prod shape: one component legitimately owns
+    // (project, null) while others claim that project only WITH their
+    // inherited/explicit prefixes via projectKey-only range overrides.
 
     @Test
-    @DisplayName("range overriding projectKey itself claims (overrideKey, null) — the SCALAR_OVERRIDE row shape")
-    fun projectKeyOverride_claimsKeyWithNullPrefix() {
+    @DisplayName("range overriding ONLY versionPrefix claims the merged (projectKey, newPrefix) pair")
+    fun prefixOnlyOverride_claimsMergedPair() {
         val pairs = collect(
             "comp",
             listOf(
                 config("(,0),[0,)", "PROJ", "base"),
-                config("[2,)", "OTHER", "other"),
+                // Loader-merged range config: inherited projectKey + overridden prefix.
+                config("[2,)", "PROJ", "other"),
             ),
         )
         assertEquals(
             listOf(
                 UniquenessJiraPair("comp", "PROJ", "base"),
-                UniquenessJiraPair("comp", "OTHER", null),
+                UniquenessJiraPair("comp", "PROJ", "other"),
             ),
             pairs,
         )
     }
 
     @Test
-    @DisplayName("base WITHOUT jira + range introducing a projectKey claims (overrideKey, null)")
+    @DisplayName("prod shape: projectKey-only override claims (overrideKey, INHERITED prefix), not (overrideKey, null)")
+    fun projectKeyOverride_claimsMergedInheritedPrefix() {
+        val pairs = collect(
+            "comp",
+            listOf(
+                config("(,0),[0,)", "PROJM", "EditorModel"),
+                // Loader-merged: override sets projectKey only, componentInfo inherited.
+                config("(52.0.1-6,52.0.1-21]", "PROJW", "EditorModel"),
+            ),
+        )
+        assertEquals(
+            listOf(
+                UniquenessJiraPair("comp", "PROJM", "EditorModel"),
+                UniquenessJiraPair("comp", "PROJW", "EditorModel"),
+            ),
+            pairs,
+        )
+    }
+
+    @Test
+    @DisplayName("base WITHOUT jira + range introducing a projectKey claims the merged (overrideKey, overridePrefix)")
     fun noBaseJira_overrideIntroducesProjectKey() {
         val pairs = collect(
             "comp",
@@ -142,7 +160,7 @@ class CollectDslJiraPairsTest {
                 config("[2,)", "INTRO", "pfx"),
             ),
         )
-        assertEquals(listOf(UniquenessJiraPair("comp", "INTRO", null)), pairs)
+        assertEquals(listOf(UniquenessJiraPair("comp", "INTRO", "pfx")), pairs)
     }
 
     @Test
