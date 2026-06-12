@@ -18,6 +18,15 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
 
 ## Unreleased
 
+- **`ErrorResponse.errorCode` added (nullable) + uniqueness-violation wording.** Error bodies now
+  carry a machine-readable `errorCode` alongside `errorMessage`: `OPTIMISTIC_LOCK` (stale `version`
+  on PATCH — reload and re-apply), `UNIQUENESS_VIOLATION` (cross-component uniqueness: distribution
+  GAV, jira projectKey+versionPrefix, docker image name, component rename to a taken name),
+  `DATA_INTEGRITY` (DB constraint). Absent/null on other errors and on older servers; clients must
+  tolerate unknown values. All uniqueness 409 messages now start with `uniqueness violation:`.
+  Consumers should branch the 409 UX on `errorCode`, not on the message text. Additionally the
+  distribution-GAV collision identity now includes `extension` and `classifier` — `g:a:zip` and
+  `g:a:apk` on two components no longer 409 (this previously blocked ANY save of such components).
 - **OpenAPI spec generation wired (TD-003).** The v4 surface is now published as a machine-readable
   `v4.json` (OpenAPI 3.0.1) and gated for drift. No behavioural API change — this baselines the
   contract. `info.version` is the constant `"4"`.

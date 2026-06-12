@@ -19,6 +19,8 @@ import org.octopusden.octopus.components.registry.server.repository.ComponentLab
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRequiredToolRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentSourceRepository
+import org.octopusden.octopus.components.registry.server.repository.DistributionDockerImageRepository
+import org.octopusden.octopus.components.registry.server.repository.DistributionMavenArtifactRepository
 import org.octopusden.octopus.components.registry.server.repository.LabelRepository
 import org.octopusden.octopus.components.registry.server.repository.SystemRepository
 import org.octopusden.octopus.components.registry.server.repository.ToolRepository
@@ -27,6 +29,8 @@ import org.octopusden.octopus.escrow.RepositoryType
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
 import org.octopusden.octopus.escrow.model.VCSSettings
 import org.octopusden.octopus.escrow.model.VersionControlSystemRoot
+import org.octopusden.releng.versions.VersionNames
+import org.octopusden.releng.versions.VersionRangeFactory
 
 /**
  * Unit tests for `ImportServiceImpl.attachVcsEntries` — verifies that VCS root
@@ -69,6 +73,9 @@ class ImportServiceImplVcsNameTest {
             componentLabelRepository = mock(ComponentLabelRepository::class.java),
             componentRequiredToolRepository = mock(ComponentRequiredToolRepository::class.java),
             componentBuildToolBeanRepository = mock(ComponentBuildToolBeanRepository::class.java),
+            mavenArtifactRepository = mock(DistributionMavenArtifactRepository::class.java),
+            dockerImageRepository = mock(DistributionDockerImageRepository::class.java),
+            versionRangeFactory = VersionRangeFactory(VersionNames("serviceCBranch", "serviceC", "minorC")),
         )
 
         attachVcsEntriesMethod = ImportServiceImpl::class.java

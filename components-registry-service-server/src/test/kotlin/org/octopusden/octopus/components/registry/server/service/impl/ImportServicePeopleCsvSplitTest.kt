@@ -18,6 +18,8 @@ import org.octopusden.octopus.components.registry.server.repository.ComponentLab
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRequiredToolRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentSourceRepository
+import org.octopusden.octopus.components.registry.server.repository.DistributionDockerImageRepository
+import org.octopusden.octopus.components.registry.server.repository.DistributionMavenArtifactRepository
 import org.octopusden.octopus.components.registry.server.repository.LabelRepository
 import org.octopusden.octopus.components.registry.server.repository.SystemRepository
 import org.octopusden.octopus.components.registry.server.repository.ToolRepository
@@ -25,6 +27,8 @@ import org.octopusden.octopus.components.registry.server.service.ComponentSource
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
 import org.octopusden.octopus.escrow.configuration.model.DefaultConfigParameters
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
+import org.octopusden.releng.versions.VersionNames
+import org.octopusden.releng.versions.VersionRangeFactory
 
 /**
  * Unit tests for the import-side CSV → ordered-list split. This is a
@@ -73,6 +77,9 @@ class ImportServicePeopleCsvSplitTest {
             componentLabelRepository = mock(ComponentLabelRepository::class.java),
             componentRequiredToolRepository = mock(ComponentRequiredToolRepository::class.java),
             componentBuildToolBeanRepository = mock(ComponentBuildToolBeanRepository::class.java),
+            mavenArtifactRepository = mock(DistributionMavenArtifactRepository::class.java),
+            dockerImageRepository = mock(DistributionDockerImageRepository::class.java),
+            versionRangeFactory = VersionRangeFactory(VersionNames("serviceCBranch", "serviceC", "minorC")),
         )
 
         buildComponentEntityMethod = ImportServiceImpl::class.java

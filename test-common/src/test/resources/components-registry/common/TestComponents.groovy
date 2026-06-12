@@ -248,7 +248,7 @@ TEST_COMPONENT_WITH_ESCROW {
         generation = EscrowGenerationMode.MANUAL
     }
     jira {
-        projectKey = "PROJ"
+        projectKey = "PROJESC"
         majorVersionFormat = '$major.$minor'
         releaseVersionFormat = '$major.$minor.$service'
         lineVersionFormat = '$major.$minor'
@@ -284,7 +284,7 @@ TEST_COMPONENT_WITH_DOC_AND_VERSIONS {
         majorVersion = "1.2"
     }
     jira {
-        projectKey = "DOC"
+        projectKey = "DOCV"
         majorVersionFormat = '$major.$minor'
         releaseVersionFormat = '$major.$minor.$service'
         lineVersionFormat = '$major.$minor'
@@ -293,7 +293,7 @@ TEST_COMPONENT_WITH_DOC_AND_VERSIONS {
     distribution {
         explicit = false
         external = true
-        docker = 'test-doc'
+        docker = 'test-doc-versions'
     }
     buildSystem = GRADLE
     "[1.0,1.3)" {
@@ -390,7 +390,7 @@ TEST_COMPONENT_WITHOUT_VCS {
         versionRange = "[1.2,)"
     }
     jira {
-        projectKey = "TEST"
+        projectKey = "TEST_SIMPLE"
     }
 }
 
@@ -1025,7 +1025,7 @@ TEST_COMPONENT4 {
     componentOwner = "user9"
     groupId = "org.octopusden.octopus.test.docker"
     jira {
-        projectKey = "TEST_DOCKER"
+        projectKey = "TEST_DOCKER_1_1"
     }
     distribution {
         explicit = false
@@ -1052,7 +1052,7 @@ TEST_COMPONENT4 {
     groupId = "org.octopusden.octopus.test.docker"
 
     jira {
-        projectKey = "TEST_DOCKER"
+        projectKey = "TEST_DOCKER_2"
     }
 
     distribution {
@@ -1082,7 +1082,7 @@ TEST_COMPONENT4 {
     componentOwner = "user9"
     groupId = "org.octopusden.octopus.test.docker"
     jira {
-        projectKey = "TEST"
+        projectKey = "TEST_DOCKER_3"
     }
     distribution {
         explicit = false
@@ -1096,7 +1096,7 @@ TEST_COMPONENT4 {
     groupId = "org.octopusden.octopus.test.docker"
 
     jira {
-        projectKey = "TEST_DOCKER"
+        projectKey = "TEST_DOCKER_4"
     }
 
     distribution {
@@ -1125,7 +1125,7 @@ TEST_COMPONENT4 {
 "TEST_COMPONENT_WITH_DOCKER_5" {
 
     jira {
-        projectKey = "TEST_DOCKER"
+        projectKey = "TEST_DOCKER_5"
     }
 
     componentOwner = "user9"

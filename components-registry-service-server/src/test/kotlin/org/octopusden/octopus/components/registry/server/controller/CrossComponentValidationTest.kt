@@ -210,6 +210,118 @@ class CrossComponentValidationTest {
         ).andExpect(status().isConflict)
     }
 
+    // ───────────── distribution GAV identity = (group, artifact, extension, classifier) ──
+
+    @Test
+    @DisplayName("CREATE: same groupId:artifactId but DIFFERENT extension (zip vs apk) → no conflict (2xx)")
+    fun create_sameGA_differentExtension_noConflict() {
+        val s = sfx()
+        val group = "org.octopusden.octopus"
+        val artifact = "multi-ext-artifact-$s"
+        createOk(
+            """{"name":"xcc-ext-a-$s",""" +
+                """"baseConfiguration":{"build":{"buildSystem":"MAVEN"},""" +
+                """"mavenArtifacts":[{"groupPattern":"$group","artifactPattern":"$artifact","extension":"zip"}]}}""",
+        )
+        postCreate(
+            """{"name":"xcc-ext-b-$s",""" +
+                """"baseConfiguration":{"build":{"buildSystem":"MAVEN"},""" +
+                """"mavenArtifacts":[{"groupPattern":"$group","artifactPattern":"$artifact","extension":"apk"}]}}""",
+        ).andExpect(status().is2xxSuccessful)
+    }
+
+    @Test
+    @DisplayName("CREATE: same groupId:artifactId, one WITHOUT extension vs one WITH → no conflict (2xx)")
+    fun create_sameGA_nullVsExplicitExtension_noConflict() {
+        val s = sfx()
+        val group = "org.octopusden.octopus"
+        val artifact = "null-ext-artifact-$s"
+        createOk(
+            """{"name":"xcc-nullext-a-$s",""" +
+                """"baseConfiguration":{"build":{"buildSystem":"MAVEN"},""" +
+                """"mavenArtifacts":[{"groupPattern":"$group","artifactPattern":"$artifact"}]}}""",
+        )
+        postCreate(
+            """{"name":"xcc-nullext-b-$s",""" +
+                """"baseConfiguration":{"build":{"buildSystem":"MAVEN"},""" +
+                """"mavenArtifacts":[{"groupPattern":"$group","artifactPattern":"$artifact","extension":"zip"}]}}""",
+        ).andExpect(status().is2xxSuccessful)
+    }
+
+    @Test
+    @DisplayName("CREATE: same groupId:artifactId:extension but DIFFERENT classifier → no conflict (2xx)")
+    fun create_sameGAE_differentClassifier_noConflict() {
+        val s = sfx()
+        val group = "org.octopusden.octopus"
+        val artifact = "classifier-artifact-$s"
+        createOk(
+            """{"name":"xcc-cls-a-$s",""" +
+                """"baseConfiguration":{"build":{"buildSystem":"MAVEN"},""" +
+                """"mavenArtifacts":[{"groupPattern":"$group","artifactPattern":"$artifact","extension":"zip","classifier":"sources"}]}}""",
+        )
+        postCreate(
+            """{"name":"xcc-cls-b-$s",""" +
+                """"baseConfiguration":{"build":{"buildSystem":"MAVEN"},""" +
+                """"mavenArtifacts":[{"groupPattern":"$group","artifactPattern":"$artifact","extension":"zip","classifier":"javadoc"}]}}""",
+        ).andExpect(status().is2xxSuccessful)
+    }
+
+    @Test
+    @DisplayName("CREATE: identical (group, artifact, extension, classifier) in overlapping ranges → 409 'uniqueness violation' + errorCode")
+    fun create_fullGavDuplicate_conflict_withUniquenessMessageAndErrorCode() {
+        val s = sfx()
+        val group = "org.octopusden.octopus"
+        val artifact = "full-dup-artifact-$s"
+        createOk(
+            """{"name":"xcc-fulldup-a-$s",""" +
+                """"baseConfiguration":{"build":{"buildSystem":"MAVEN"},""" +
+                """"mavenArtifacts":[{"groupPattern":"$group","artifactPattern":"$artifact","extension":"zip","classifier":"bin"}]}}""",
+        )
+        postCreate(
+            """{"name":"xcc-fulldup-b-$s",""" +
+                """"baseConfiguration":{"build":{"buildSystem":"MAVEN"},""" +
+                """"mavenArtifacts":[{"groupPattern":"$group","artifactPattern":"$artifact","extension":"zip","classifier":"bin"}]}}""",
+        ).andExpect(status().isConflict)
+            .andExpect(jsonPath("$.errorMessage").value(org.hamcrest.Matchers.containsString("uniqueness violation")))
+            .andExpect(jsonPath("$.errorCode").value("UNIQUENESS_VIOLATION"))
+    }
+
+    @Test
+    @DisplayName("PATCH: rename to an existing component name → 409 'uniqueness violation' + errorCode")
+    fun patch_renameToExistingName_conflict_withUniquenessMessageAndErrorCode() {
+        val s = sfx()
+        createOk(
+            """{"name":"xcc-rename-taken-$s",""" +
+                """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
+        )
+        val resp = postCreate(
+            """{"name":"xcc-rename-src-$s",""" +
+                """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
+        ).andExpect(status().is2xxSuccessful).andReturn().response.contentAsString
+        val created = objectMapper.readTree(resp)
+        patchComponent(
+            created["id"].asText(),
+            """{"version":${created["version"].asInt()},"name":"xcc-rename-taken-$s"}""",
+        ).andExpect(status().isConflict)
+            .andExpect(jsonPath("$.errorMessage").value(org.hamcrest.Matchers.containsString("uniqueness violation")))
+            .andExpect(jsonPath("$.errorCode").value("UNIQUENESS_VIOLATION"))
+    }
+
+    @Test
+    @DisplayName("PATCH: stale optimistic-lock version → 409 with errorCode OPTIMISTIC_LOCK")
+    fun patch_staleVersion_conflict_withOptimisticLockErrorCode() {
+        val s = sfx()
+        val id = createOk(
+            """{"name":"xcc-optlock-$s",""" +
+                """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
+        )
+        patchComponent(
+            id,
+            """{"version":999,"baseConfiguration":{"build":{"buildSystem":"GRADLE"}}}""",
+        ).andExpect(status().isConflict)
+            .andExpect(jsonPath("$.errorCode").value("OPTIMISTIC_LOCK"))
+    }
+
     // ───────────────────────── #26 jira projectKey + versionPrefix uniqueness ──
 
     @Test

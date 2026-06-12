@@ -21,6 +21,8 @@ import org.octopusden.octopus.components.registry.server.repository.ComponentLab
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRequiredToolRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentSourceRepository
+import org.octopusden.octopus.components.registry.server.repository.DistributionDockerImageRepository
+import org.octopusden.octopus.components.registry.server.repository.DistributionMavenArtifactRepository
 import org.octopusden.octopus.components.registry.server.repository.LabelRepository
 import org.octopusden.octopus.components.registry.server.repository.SystemRepository
 import org.octopusden.octopus.components.registry.server.repository.ToolRepository
@@ -28,6 +30,8 @@ import org.octopusden.octopus.components.registry.server.service.ComponentSource
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
 import org.octopusden.octopus.escrow.configuration.model.DefaultConfigParameters
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
+import org.octopusden.releng.versions.VersionNames
+import org.octopusden.releng.versions.VersionRangeFactory
 
 /**
  * MIG-047 RED test: `emitMarkerOverrides` must create a GROUP_ARTIFACT_PATTERN MARKER
@@ -96,6 +100,9 @@ class MIG047PerRangeGroupIdImportTest {
             componentLabelRepository = mock(ComponentLabelRepository::class.java),
             componentRequiredToolRepository = mock(ComponentRequiredToolRepository::class.java),
             componentBuildToolBeanRepository = mock(ComponentBuildToolBeanRepository::class.java),
+            mavenArtifactRepository = mock(DistributionMavenArtifactRepository::class.java),
+            dockerImageRepository = mock(DistributionDockerImageRepository::class.java),
+            versionRangeFactory = VersionRangeFactory(VersionNames("serviceCBranch", "serviceC", "minorC")),
         )
 
         emitMarkerOverridesMethod = ImportServiceImpl::class.java.getDeclaredMethod(
