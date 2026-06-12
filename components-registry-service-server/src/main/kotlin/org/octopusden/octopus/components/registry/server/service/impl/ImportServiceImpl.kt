@@ -1000,8 +1000,10 @@ class ImportServiceImpl(
      * skips the rest), and same-componentKey pairs never collide — so a rerun over an
      * already-imported DSL reports nothing. DB-vs-DB pairs are deliberately NOT flagged:
      * pre-existing DB conflicts are fixed via the API and must not brick the migration.
-     * displayName DSL-vs-DSL keeps the original §6.0 semantics (ALL non-empty modules —
-     * the DSL itself must not declare one name twice, importable or not).
+     * That applies to displayName too: DSL-vs-DSL pairs are built from TO-IMPORT modules
+     * only (an already-imported component's authoritative name lives in the DB — it may
+     * have been renamed via the API — so its DSL name must not be paired against new
+     * modules); new-vs-DB is covered by [computeDisplayNameDbCollisions].
      *
      * Best-effort, not a durable invariant: the DB-side rows are read once at the top of
      * the migration transaction, and (except display_name and docker image, which are
@@ -1041,10 +1043,8 @@ class ImportServiceImpl(
                 }
 
         if (toImport.isNotEmpty()) {
-            val newDisplayPairs =
-                toImport.map { (key, m) -> key to baseConfigOf(m.moduleConfigurations)?.componentDisplayName }
             val dbNames = componentRepository.findAllDisplayNamePairs().map { it.componentKey to it.displayName }
-            violations += computeDisplayNameDbCollisions(newDisplayPairs, dbNames)
+            violations += computeDisplayNameDbCollisions(displayPairs, dbNames)
 
             val newGavRows = toImport.flatMap { (key, m) -> collectDslGavRows(key, m.moduleConfigurations) }
             if (newGavRows.isNotEmpty()) {

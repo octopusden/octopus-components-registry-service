@@ -133,6 +133,19 @@ class CollectDslJiraPairsTest {
     }
 
     @Test
+    @DisplayName("base WITHOUT jira + range introducing a projectKey claims (overrideKey, null)")
+    fun noBaseJira_overrideIntroducesProjectKey() {
+        val pairs = collect(
+            "comp",
+            listOf(
+                config("(,0),[0,)", null, null),
+                config("[2,)", "INTRO", "pfx"),
+            ),
+        )
+        assertEquals(listOf(UniquenessJiraPair("comp", "INTRO", null)), pairs)
+    }
+
+    @Test
     @DisplayName("archived component claims no pairs")
     fun archivedClaimsNothing() {
         val pairs = collect("comp", listOf(config("(,0),[0,)", "PROJ", "pfx", archived = true)))
