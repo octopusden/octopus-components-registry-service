@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.controller
 
+import org.octopusden.octopus.components.registry.core.dto.ErrorCodes
 import org.octopusden.octopus.components.registry.core.dto.ErrorResponse
 import org.octopusden.octopus.components.registry.core.exceptions.BaseComponentsRegistryException
 import org.octopusden.octopus.components.registry.core.exceptions.ComponentNameConflictException
@@ -57,14 +58,18 @@ class ControllerExceptionHandler {
     @ResponseStatus(HttpStatus.CONFLICT)
     fun optimisticLockExceptionHandler(e: Exception): HttpEntity<ErrorResponse> {
         log.warn("Optimistic lock conflict: {}", e.localizedMessage)
-        return HttpEntity(ErrorResponse(e.localizedMessage ?: "Concurrent modification conflict"))
+        return HttpEntity(
+            ErrorResponse(e.localizedMessage ?: "Concurrent modification conflict", ErrorCodes.OPTIMISTIC_LOCK),
+        )
     }
 
     @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException::class)
     @ResponseStatus(HttpStatus.CONFLICT)
     fun dataIntegrityViolationExceptionHandler(e: org.springframework.dao.DataIntegrityViolationException): HttpEntity<ErrorResponse> {
         log.warn("Data integrity violation: {}", e.localizedMessage)
-        return HttpEntity(ErrorResponse("Data integrity violation: duplicate or invalid data"))
+        return HttpEntity(
+            ErrorResponse("Data integrity violation: duplicate or invalid data", ErrorCodes.DATA_INTEGRITY),
+        )
     }
 
     @ExceptionHandler(org.springframework.web.bind.MethodArgumentNotValidException::class)
@@ -86,7 +91,7 @@ class ControllerExceptionHandler {
     @ResponseStatus(HttpStatus.CONFLICT)
     fun componentNameConflictExceptionHandler(e: ComponentNameConflictException): HttpEntity<ErrorResponse> {
         log.warn(e.localizedMessage)
-        return HttpEntity(ErrorResponse(e.localizedMessage))
+        return HttpEntity(ErrorResponse(e.localizedMessage, ErrorCodes.UNIQUENESS_VIOLATION))
     }
 
     /**
@@ -102,7 +107,7 @@ class ControllerExceptionHandler {
     @ResponseStatus(HttpStatus.CONFLICT)
     fun crossComponentConflictExceptionHandler(e: CrossComponentConflictException): HttpEntity<ErrorResponse> {
         log.warn(e.localizedMessage)
-        return HttpEntity(ErrorResponse(e.localizedMessage))
+        return HttpEntity(ErrorResponse(e.localizedMessage, ErrorCodes.UNIQUENESS_VIOLATION))
     }
 
     /**

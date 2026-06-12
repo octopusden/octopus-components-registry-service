@@ -35,6 +35,23 @@ interface ComponentConfigurationRepository : JpaRepository<ComponentConfiguratio
         @Param("excludeComponentId") excludeComponentId: UUID,
     ): List<String>
 
+    /**
+     * Every distinct jira `(projectKey, versionPrefix)` pair of every
+     * non-archived component, with the owning component key. Used by the
+     * migration uniqueness pre-pass to check incoming DSL pairs against the
+     * already-persisted state (same invariant as
+     * [findOtherNonArchivedComponentKeysByJiraProjectKeyAndVersionPrefix],
+     * fetched wholesale because the pre-pass compares many candidates at once).
+     */
+    @Query(
+        "SELECT DISTINCT comp.componentKey AS componentKey, " +
+            "cfg.jiraProjectKey AS projectKey, cfg.jiraVersionPrefix AS versionPrefix " +
+            "FROM ComponentConfigurationEntity cfg " +
+            "JOIN cfg.component comp " +
+            "WHERE comp.archived = false AND cfg.jiraProjectKey IS NOT NULL",
+    )
+    fun findAllNonArchivedJiraPairs(): List<JiraPairRow>
+
     /** All configuration rows (base + overrides) for a component, in arbitrary order. */
     fun findByComponentId(componentId: UUID): List<ComponentConfigurationEntity>
 
@@ -69,4 +86,11 @@ interface ComponentConfigurationRepository : JpaRepository<ComponentConfiguratio
         versionRange: String,
         rowType: String,
     ): ComponentConfigurationEntity?
+}
+
+/** Projection for the migration jira-uniqueness pre-pass. */
+interface JiraPairRow {
+    val componentKey: String
+    val projectKey: String
+    val versionPrefix: String?
 }

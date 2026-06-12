@@ -39,6 +39,8 @@ import org.octopusden.octopus.components.registry.server.repository.ComponentLab
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRequiredToolRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentSourceRepository
+import org.octopusden.octopus.components.registry.server.repository.DistributionDockerImageRepository
+import org.octopusden.octopus.components.registry.server.repository.DistributionMavenArtifactRepository
 import org.octopusden.octopus.components.registry.server.repository.LabelRepository
 import org.octopusden.octopus.components.registry.server.repository.SystemRepository
 import org.octopusden.octopus.components.registry.server.repository.ToolRepository
@@ -52,6 +54,7 @@ import org.octopusden.octopus.components.registry.server.service.MigrationResult
 import org.octopusden.octopus.components.registry.server.service.MigrationStatus
 import org.octopusden.octopus.components.registry.server.service.ValidationResult
 import org.octopusden.octopus.components.registry.server.util.MavenCoords
+import org.octopusden.octopus.components.registry.server.util.MavenGavCollision
 import org.octopusden.octopus.components.registry.server.util.parseMavenGavEntry
 import org.octopusden.octopus.components.registry.server.util.splitCsv
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
@@ -59,6 +62,7 @@ import org.octopusden.octopus.escrow.configuration.model.EscrowModule
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
 import org.octopusden.octopus.escrow.model.Distribution
 import org.octopusden.octopus.escrow.model.VCSSettings
+import org.octopusden.releng.versions.VersionRangeFactory
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Service
@@ -100,6 +104,9 @@ class ImportServiceImpl(
     private val componentLabelRepository: ComponentLabelRepository,
     private val componentRequiredToolRepository: ComponentRequiredToolRepository,
     private val componentBuildToolBeanRepository: ComponentBuildToolBeanRepository,
+    private val mavenArtifactRepository: DistributionMavenArtifactRepository,
+    private val dockerImageRepository: DistributionDockerImageRepository,
+    private val versionRangeFactory: VersionRangeFactory,
 ) : ImportService {
 
     @PersistenceContext
@@ -156,12 +163,10 @@ class ImportServiceImpl(
                         message = "Component '$name' not found in DSL",
                     )
             if (!dryRun) {
-                // Pre-pass dictionary discovery for this single component
-                preupsertSystemsForModule(module.moduleConfigurations)
-                preupsertToolsFromLoader(fullConfig)
-                preupsertLabelsFromLoader()
-
-                // Check if already migrated → skip
+                // Order is load-bearing: skip-check → uniqueness pre-pass → dictionary
+                // upserts → importModule. A uniqueness failure must leave ZERO rows
+                // behind, dictionary rows included — so the §6.1-style preupserts may
+                // only run after the pre-pass clears.
                 val existing = componentRepository.findByComponentKey(name)
                 if (existing != null) {
                     return MigrationResult(
@@ -171,6 +176,25 @@ class ImportServiceImpl(
                         message = "Skipped (already in DB)",
                     )
                 }
+
+                // §6.0 single-component uniqueness pre-pass vs the persisted state
+                // (same invariants the v4 API enforces on save).
+                val uniquenessViolations = findUniquenessViolations(name, module.moduleConfigurations)
+                if (uniquenessViolations.isNotEmpty()) {
+                    val msg = uniquenessViolations.joinToString("; ")
+                    LOG.error("Migration of '{}' rejected by uniqueness pre-pass: {}", name, msg)
+                    return MigrationResult(
+                        componentName = name,
+                        success = false,
+                        dryRun = false,
+                        message = msg.take(500),
+                    )
+                }
+
+                // Pre-pass dictionary discovery for this single component
+                preupsertSystemsForModule(module.moduleConfigurations)
+                preupsertToolsFromLoader(fullConfig)
+                preupsertLabelsFromLoader()
 
                 // R1 §4.3/§6.3 — group membership is driven by the DSL `components { }`
                 // aggregator membership (fullConfig.aggregatorSubComponents), NOT the flat
@@ -243,20 +267,16 @@ class ImportServiceImpl(
         val allModules = fullConfig.escrowModules
         LOG.info("§6 DSL load: {} ms ({} modules)", (System.nanoTime() - loadStart) / 1_000_000, allModules.size)
 
-        // §6.0 displayName collision pre-pass. display_name is UNIQUE (nullable), so a
-        // duplicate non-null name would abort mid-import and leave partial commits behind (the
-        // per-module loop below catches & continues, and migrate() allows partial commits).
-        // NOTE: displayName is stored VERBATIM (the loader already applied Defaults.groovy
-        // inheritance). The real prod Defaults.groovy declares NO componentDisplayName, so
-        // unnamed components resolve to null and don't collide; were a non-null default ever
-        // added, every component inheriting it would share one name and this pre-pass would
-        // (correctly) abort until the DSL is fixed. Detect
-        // collisions HERE — after the DSL load but BEFORE the §6.1 dictionary pre-upserts
-        // below (which are the first writes in this method) — and throw once up front so a
-        // failed migration leaves zero component/dictionary rows behind and the error names
-        // every offender. (migrate() upserts the idempotent component-defaults config blob
-        // before this method; that is unaffected.)
-        detectDisplayNameCollisions(allModules)
+        // §6.0 uniqueness pre-pass over EVERY invariant the v4 API enforces (displayName,
+        // distribution GAV, jira projectKey+versionPrefix, docker image name). Violations in
+        // the old CR must fail the migration HERE — after the DSL load but BEFORE the §6.1
+        // dictionary pre-upserts below (the first writes in this method) — so a failed run
+        // leaves zero rows behind, the DB never holds data the API would reject on the next
+        // save, and the error names every offender across all invariants at once. (Throwing
+        // from the per-module loop would not abort: it's caught & recorded per component, and
+        // migrate() permits partial commits. migrate() upserts the idempotent
+        // component-defaults config blob before this method; that is unaffected.)
+        detectUniquenessViolations(allModules)
 
         // §6.1 Pre-pass dictionary discovery
         LOG.info("§6.1 Pre-pass: upserting systems, tools, labels")
@@ -967,42 +987,258 @@ class ImportServiceImpl(
     }
 
     /**
-     * Fail-fast guard for the UNIQUE `display_name` column. Collects each module's (verbatim,
-     * nullable) `componentDisplayName` and aborts the whole import — before any write — if two
-     * or more DISTINCT components declare the same non-null name. Throwing from the per-module
-     * loop would not abort (it's caught & recorded per component, and migrate() permits partial
-     * commits), so this must run as an up-front pre-pass. The error names every offender so the
-     * conflicting `componentDisplayName`s can be fixed in the DSL. Pure logic lives in the
-     * companion's [computeDisplayNameCollisions] so it can be unit-tested without Spring fixtures.
+     * §6.0 aggregated uniqueness pre-pass: every invariant the v4 API enforces at save time
+     * (displayName, distribution GAV with full (group, artifact, extension, classifier)
+     * identity, jira projectKey+versionPrefix, docker image name) is checked up front against
+     * BOTH the incoming DSL and the already-persisted DB state, and the migration fails ONCE
+     * with the complete report — operators fix everything in one round instead of peeling
+     * violations one migration attempt at a time. Throwing from the per-module loop would not
+     * abort (it's caught & recorded per component, and migrate() permits partial commits), so
+     * this must run as an up-front pre-pass before the first write.
+     *
+     * Idempotent reruns: incoming rows are built ONLY from modules NOT yet in the DB (Pass 1
+     * skips the rest), and same-componentKey pairs never collide — so a rerun over an
+     * already-imported DSL reports nothing. DB-vs-DB pairs are deliberately NOT flagged:
+     * pre-existing DB conflicts are fixed via the API and must not brick the migration.
+     * That applies to displayName too: DSL-vs-DSL pairs are built from TO-IMPORT modules
+     * only (an already-imported component's authoritative name lives in the DB — it may
+     * have been renamed via the API — so its DSL name must not be paired against new
+     * modules); new-vs-DB is covered by [computeDisplayNameDbCollisions].
+     *
+     * Best-effort, not a durable invariant: the DB-side rows are read once at the top of
+     * the migration transaction, and (except display_name and docker image, which are
+     * DB-UNIQUE) there are no DB constraints behind the GAV/jira rules — a concurrent v4
+     * API write during a running migration can still slip a duplicate past both this
+     * pre-pass and the API's own read-before-flush check. Same window as the API check;
+     * migration is normally startup-exclusive.
+     *
+     * Pure logic lives in top-level `compute*` functions (and the companion's
+     * [computeDisplayNameCollisions]) so it is unit-testable without Spring fixtures.
+     * Empty-body modules (`"FOO" { }`, no moduleConfigurations) are excluded — Pass 1 skips
+     * them, so they must not contribute phantom rows; the base-config selection mirrors
+     * importModule's `firstOrNull { ALL_VERSIONS } ?: configs.first()` exactly.
      */
-    private fun detectDisplayNameCollisions(allModules: Map<String, EscrowModule>) {
-        val modulePairs =
-            allModules.entries
-                // Only modules that Pass 1 actually persists. A module with an empty body
-                // (`"FOO" { }`) has no moduleConfigurations and is skipped by the import (no row),
-                // so it must NOT be modelled here — otherwise a phantom key-derived display name
-                // could spuriously collide with a real component's explicit name and abort the
-                // whole migration. With empties excluded, the base-config selection below mirrors
-                // importModule's `firstOrNull { ALL_VERSIONS } ?: configs.first()` exactly.
-                .filter { (_, escrowModule) -> escrowModule.moduleConfigurations.isNotEmpty() }
-                .map { (componentKey, escrowModule) ->
-                    val baseConfig =
-                        escrowModule.moduleConfigurations.firstOrNull { it.versionRangeString == ALL_VERSIONS }
-                            ?: escrowModule.moduleConfigurations.first()
-                    componentKey to baseConfig.componentDisplayName
-                }
-        val collisions = computeDisplayNameCollisions(modulePairs)
-        if (collisions.isEmpty()) return
-        val report =
-            collisions.entries
+    private fun detectUniquenessViolations(allModules: Map<String, EscrowModule>) {
+        val nonEmpty = allModules.filterValues { it.moduleConfigurations.isNotEmpty() }
+        if (nonEmpty.isEmpty()) return
+        val existingKeys =
+            componentRepository.findByComponentKeyIn(nonEmpty.keys).mapTo(HashSet()) { it.componentKey }
+        val toImport = nonEmpty.filterKeys { it !in existingKeys }
+
+        val violations = mutableListOf<String>()
+
+        // DSL-vs-DSL display names compare TO-IMPORT modules only: an already-imported
+        // component's authoritative name lives in the DB (it may have been renamed via the
+        // API since import), so pairing its DSL name against a new module would false-positive
+        // on partial-migration reruns. New-vs-DB conflicts are covered by
+        // computeDisplayNameDbCollisions below.
+        val displayPairs =
+            toImport.map { (key, m) -> key to baseConfigOf(m.moduleConfigurations)?.componentDisplayName }
+        violations +=
+            computeDisplayNameCollisions(displayPairs).entries
                 .sortedBy { it.key }
-                .joinToString("; ") { (name, keys) -> "\"$name\" <- ${keys.sorted()}" }
-        LOG.error("§6.0 display_name collision pre-pass FAILED — duplicate display names: {}", report)
+                .map { (name, keys) ->
+                    "uniqueness violation: display name \"$name\" is claimed by multiple components " +
+                        "${keys.joinToString(", ")} (display_name is unique)"
+                }
+
+        if (toImport.isNotEmpty()) {
+            val dbNames = componentRepository.findAllDisplayNamePairs().map { it.componentKey to it.displayName }
+            violations += computeDisplayNameDbCollisions(displayPairs, dbNames)
+
+            val newGavRows = toImport.flatMap { (key, m) -> collectDslGavRows(key, m.moduleConfigurations) }
+            if (newGavRows.isNotEmpty()) {
+                val dbRows =
+                    mavenArtifactRepository.findAllRows().map {
+                        UniquenessGavRow(
+                            it.componentKey, it.versionRange,
+                            it.groupPattern, it.artifactPattern, it.extension, it.classifier,
+                        )
+                    }
+                violations += computeDistributionGavCollisions(newGavRows, dbRows, ::versionRangesIntersect)
+            }
+
+            val newJiraPairs = toImport.flatMap { (key, m) -> collectDslJiraPairs(key, m.moduleConfigurations) }
+            if (newJiraPairs.isNotEmpty()) {
+                val dbPairs =
+                    configurationRepository.findAllNonArchivedJiraPairs().map {
+                        UniquenessJiraPair(it.componentKey, it.projectKey, it.versionPrefix)
+                    }
+                violations += computeJiraPairCollisions(newJiraPairs, dbPairs)
+            }
+
+            val newDockerRows = toImport.flatMap { (key, m) -> collectDslDockerRows(key, m.moduleConfigurations) }
+            if (newDockerRows.isNotEmpty()) {
+                val dbImages =
+                    dockerImageRepository.findAllImageRows().map {
+                        UniquenessDockerRow(it.componentKey, it.imageName)
+                    }
+                violations += computeDockerImageCollisions(newDockerRows, dbImages)
+            }
+        }
+
+        if (violations.isEmpty()) return
+        val report = violations.joinToString("; ")
+        LOG.error("§6.0 uniqueness pre-pass FAILED — {} violation(s): {}", violations.size, report)
         throw IllegalStateException(
-            "Cannot migrate: ${collisions.size} display name(s) are shared by multiple components " +
-                "(display_name is unique). Fix the conflicting componentDisplayName in the DSL: $report",
+            "Cannot migrate: ${violations.size} uniqueness violation(s) found. " +
+                "Fix the conflicting values in the DSL before migrating: $report",
         )
     }
+
+    /**
+     * Single-component flavour of [detectUniquenessViolations]: this component's DSL-derived
+     * rows against the DB rows of OTHER components (same-componentKey pairs are skipped inside
+     * the `compute*` functions, so an already-imported rival named like this component cannot
+     * self-collide). Returns the violation list instead of throwing — `migrateComponent` maps
+     * it to a failed [MigrationResult] BEFORE any write (dictionary upserts included).
+     */
+    private fun findUniquenessViolations(
+        componentKey: String,
+        configs: List<EscrowModuleConfig>,
+    ): List<String> {
+        val violations = mutableListOf<String>()
+        baseConfigOf(configs)?.componentDisplayName?.takeIf { it.isNotBlank() }?.let { name ->
+            val dbNames = componentRepository.findAllDisplayNamePairs().map { it.componentKey to it.displayName }
+            violations += computeDisplayNameDbCollisions(listOf(componentKey to name), dbNames)
+        }
+        val gavCandidates = collectDslGavRows(componentKey, configs)
+        if (gavCandidates.isNotEmpty()) {
+            val dbRows =
+                mavenArtifactRepository.findAllRows().map {
+                    UniquenessGavRow(
+                        it.componentKey, it.versionRange,
+                        it.groupPattern, it.artifactPattern, it.extension, it.classifier,
+                    )
+                }
+            violations += computeDistributionGavCollisions(gavCandidates, dbRows, ::versionRangesIntersect)
+        }
+        val jiraCandidates = collectDslJiraPairs(componentKey, configs)
+        if (jiraCandidates.isNotEmpty()) {
+            val dbPairs =
+                configurationRepository.findAllNonArchivedJiraPairs().map {
+                    UniquenessJiraPair(it.componentKey, it.projectKey, it.versionPrefix)
+                }
+            violations += computeJiraPairCollisions(jiraCandidates, dbPairs)
+        }
+        val dockerCandidates = collectDslDockerRows(componentKey, configs)
+        if (dockerCandidates.isNotEmpty()) {
+            val dbImages =
+                dockerImageRepository.findAllImageRows().map { UniquenessDockerRow(it.componentKey, it.imageName) }
+            violations += computeDockerImageCollisions(dockerCandidates, dbImages)
+        }
+        return violations
+    }
+
+    /** importModule's base-config selection: the ALL_VERSIONS row, else the first one. */
+    private fun baseConfigOf(configs: List<EscrowModuleConfig>): EscrowModuleConfig? =
+        configs.firstOrNull { it.versionRangeString == ALL_VERSIONS } ?: configs.firstOrNull()
+
+    /** Conservative range intersection: unparseable ranges count as overlapping (same as the API check). */
+    private fun versionRangesIntersect(range1: String, range2: String): Boolean =
+        runCatching {
+            versionRangeFactory.create(range1).isIntersect(versionRangeFactory.create(range2))
+        }.getOrDefault(true)
+
+    /**
+     * DSL-derived rows that [importModule] would persist into
+     * `distribution_maven_artifacts` for this module — the SAME row set the API-side
+     * `validateMavenArtifactCollisions` later checks:
+     *  - the base config's explicit `distribution.GAV()` coordinates (URL entries excluded);
+     *  - per override range: its GAV coordinates when [mavenArtifactsDiffer], and the
+     *    MIG-047 synthetic (groupIdPattern × artifactId token, extension=null) rows when
+     *    [groupArtifactPatternsDiffer].
+     */
+    private fun collectDslGavRows(
+        componentKey: String,
+        configs: List<EscrowModuleConfig>,
+    ): List<UniquenessGavRow> {
+        val baseConfig = baseConfigOf(configs) ?: return emptyList()
+        val rows = mutableListOf<UniquenessGavRow>()
+
+        fun addGavRows(versionRange: String, dist: Distribution?) {
+            val gavCsv = dist?.GAV() ?: return
+            for (entry in extractMavenGavs(gavCsv)) {
+                val coords = parseMavenGavEntry(entry) ?: continue
+                rows +=
+                    UniquenessGavRow(
+                        componentKey, versionRange,
+                        coords.groupId, coords.artifactId, coords.extension, coords.classifier,
+                    )
+            }
+        }
+
+        addGavRows(baseConfig.versionRangeString ?: ALL_VERSIONS, baseConfig.distribution)
+        for (override in configs.filter { it !== baseConfig }) {
+            val overrideRange = override.versionRangeString ?: continue
+            if (mavenArtifactsDiffer(baseConfig.distribution, override.distribution)) {
+                addGavRows(overrideRange, override.distribution)
+            }
+            if (groupArtifactPatternsDiffer(baseConfig, override)) {
+                val group = override.groupIdPattern
+                val artifactCsv = override.artifactIdPattern
+                if (group != null && artifactCsv != null) {
+                    for (token in splitCsv(artifactCsv)) {
+                        rows += UniquenessGavRow(componentKey, overrideRange, group, token, null, null)
+                    }
+                }
+            }
+        }
+        return rows
+    }
+
+    /**
+     * Jira (projectKey, versionPrefix) pairs this module would PERSIST with a non-null
+     * `jiraProjectKey` — i.e. exactly the pairs the API-side
+     * `validateJiraProjectKeyVersionPrefixUniqueness` and `findAllNonArchivedJiraPairs`
+     * (`WHERE jiraProjectKey IS NOT NULL`) later see:
+     *  - the BASE row carries the base config's `(projectKey, versionPrefix)`;
+     *  - a per-range override that changes ONLY `versionPrefix` is persisted as a
+     *    SCALAR_OVERRIDE row whose `jiraProjectKey` is null — it claims NO pair, so it must
+     *    NOT be collected here (the DSL loader inherits `projectKey` onto every range, and
+     *    naively reading the merged per-range config would fabricate phantom
+     *    `(projectKey, overridePrefix)` claims the API never enforces — a migration-blocking
+     *    false positive);
+     *  - a per-range override that changes `projectKey` itself is persisted as a
+     *    SCALAR_OVERRIDE row carrying only `jiraProjectKey` (its `jiraVersionPrefix` is
+     *    null), so it claims `(overrideProjectKey, null)`.
+     * An archived component claims no pair (same exemption as the API check).
+     */
+    private fun collectDslJiraPairs(
+        componentKey: String,
+        configs: List<EscrowModuleConfig>,
+    ): List<UniquenessJiraPair> {
+        val baseConfig = baseConfigOf(configs) ?: return emptyList()
+        if (baseConfig.archived) return emptyList()
+        val basePk = baseConfig.jiraConfiguration?.projectKey?.takeIf { it.isNotBlank() }
+        val pairs = mutableListOf<UniquenessJiraPair>()
+        basePk?.let { pk ->
+            pairs += UniquenessJiraPair(componentKey, pk, baseConfig.jiraConfiguration?.componentInfo?.versionPrefix)
+        }
+        for (override in configs.filter { it !== baseConfig }) {
+            val overridePk = override.jiraConfiguration?.projectKey?.takeIf { it.isNotBlank() } ?: continue
+            if (overridePk != basePk) {
+                pairs += UniquenessJiraPair(componentKey, overridePk, null)
+            }
+        }
+        return pairs.distinct()
+    }
+
+    /**
+     * Distinct docker image names across this module's configs (base `attachDockerImages`
+     * rows plus DISTRIBUTION_DOCKER marker rows collapse to the same distinct name set,
+     * which is what the API-side `validateDockerImageUniqueness` reads back).
+     */
+    private fun collectDslDockerRows(
+        componentKey: String,
+        configs: List<EscrowModuleConfig>,
+    ): List<UniquenessDockerRow> =
+        configs
+            .flatMap { cfg ->
+                val dockerCsv = cfg.distribution?.docker() ?: return@flatMap emptyList<String>()
+                splitCsv(dockerCsv).mapNotNull { entry -> parseDockerImage(entry)?.imageName?.takeIf { it.isNotBlank() } }
+            }.distinct()
+            .map { UniquenessDockerRow(componentKey, it) }
 
     /**
      * Build a `ComponentEntity` from the given `EscrowModuleConfig`.
@@ -2217,6 +2453,138 @@ class ImportServiceImpl(
  * `settingsProperty` bleeds into the override range. `edition` is meaningful only for
  * Oracle (always null for the others).
  */
+/** One would-be `distribution_maven_artifacts` row derived from the DSL, for the §6.0 uniqueness pre-pass. */
+internal data class UniquenessGavRow(
+    val componentKey: String,
+    val versionRange: String,
+    val groupPattern: String,
+    val artifactPattern: String,
+    val extension: String?,
+    val classifier: String?,
+)
+
+/** One jira (projectKey, versionPrefix) claim, for the §6.0 uniqueness pre-pass. */
+internal data class UniquenessJiraPair(
+    val componentKey: String,
+    val projectKey: String,
+    val versionPrefix: String?,
+)
+
+/** One docker image-name claim, for the §6.0 uniqueness pre-pass. */
+internal data class UniquenessDockerRow(
+    val componentKey: String,
+    val imageName: String,
+)
+
+/**
+ * Distribution-GAV collisions for the migration pre-pass, with the same FULL identity
+ * the API check uses ([MavenGavCollision]: group/artifact pattern overlap + equal
+ * extension + equal classifier) and the same conservative range handling (the caller's
+ * [rangesIntersect] decides; unparseable → treat as intersecting).
+ *
+ * Only new-vs-new and new-vs-existing pairs are reported; existing-vs-existing is the
+ * API's to fix, and same-componentKey pairs never collide (idempotent reruns, multi-range
+ * components). Pure — unit-tested without Spring.
+ */
+internal fun computeDistributionGavCollisions(
+    newRows: List<UniquenessGavRow>,
+    existingRows: List<UniquenessGavRow>,
+    rangesIntersect: (String, String) -> Boolean,
+): List<String> {
+    val violations = mutableListOf<String>()
+
+    fun check(row: UniquenessGavRow, rival: UniquenessGavRow) {
+        if (row.componentKey == rival.componentKey) return
+        if (!MavenGavCollision.identityCollides(
+                row.groupPattern, row.artifactPattern, row.extension, row.classifier,
+                rival.groupPattern, rival.artifactPattern, rival.extension, rival.classifier,
+            )
+        ) {
+            return
+        }
+        if (!rangesIntersect(row.versionRange, rival.versionRange)) return
+        val gav = MavenGavCollision.gavLabel(row.groupPattern, row.artifactPattern, row.extension, row.classifier)
+        violations +=
+            "uniqueness violation: distribution GAV '$gav' of component '${row.componentKey}' duplicates " +
+                "component '${rival.componentKey}' in intersecting version ranges " +
+                "'${row.versionRange}' ∩ '${rival.versionRange}'"
+    }
+
+    for (i in newRows.indices) {
+        for (j in i + 1 until newRows.size) check(newRows[i], newRows[j])
+        for (existing in existingRows) check(newRows[i], existing)
+    }
+    return violations
+}
+
+/**
+ * Jira (projectKey, versionPrefix) buckets claimed by more than one distinct component,
+ * where at least one claimant is incoming — same invariant as the API-side
+ * `validateJiraProjectKeyVersionPrefixUniqueness` (null prefix is its own bucket;
+ * callers already excluded archived components). Self-collision safety: claimants are
+ * collected into a SET of componentKeys, so the same component appearing multiple times
+ * in `newPairs` (multi-range module) or on both sides (idempotent rerun against its own
+ * persisted rows) never trips the `size >= 2` threshold. Pure — unit-tested without Spring.
+ */
+internal fun computeJiraPairCollisions(
+    newPairs: List<UniquenessJiraPair>,
+    existingPairs: List<UniquenessJiraPair>,
+): List<String> {
+    val newByBucket = newPairs.groupBy({ it.projectKey to it.versionPrefix }, { it.componentKey })
+    val existingByBucket = existingPairs.groupBy({ it.projectKey to it.versionPrefix }, { it.componentKey })
+    return newByBucket.entries
+        .mapNotNull { (bucket, newKeys) ->
+            val claimants = (newKeys + existingByBucket[bucket].orEmpty()).toSortedSet()
+            if (claimants.size < 2) return@mapNotNull null
+            val (projectKey, versionPrefix) = bucket
+            val prefixText = if (versionPrefix == null) "no version prefix" else "version prefix '$versionPrefix'"
+            "uniqueness violation: jira project '$projectKey' with $prefixText is claimed by " +
+                "multiple components: ${claimants.joinToString(", ")}"
+        }.sorted()
+}
+
+/**
+ * Docker image names claimed by more than one distinct component, where at least one
+ * claimant is incoming — same global-uniqueness invariant as the API-side
+ * `validateDockerImageUniqueness`. Claimants dedupe into a componentKey SET, so
+ * multi-range modules and idempotent reruns never self-collide. Pure — unit-tested
+ * without Spring.
+ */
+internal fun computeDockerImageCollisions(
+    newRows: List<UniquenessDockerRow>,
+    existingRows: List<UniquenessDockerRow>,
+): List<String> {
+    val newByImage = newRows.groupBy({ it.imageName }, { it.componentKey })
+    val existingByImage = existingRows.groupBy({ it.imageName }, { it.componentKey })
+    return newByImage.entries
+        .mapNotNull { (imageName, newKeys) ->
+            val claimants = (newKeys + existingByImage[imageName].orEmpty()).toSortedSet()
+            if (claimants.size < 2) return@mapNotNull null
+            "uniqueness violation: docker image name '$imageName' is claimed by " +
+                "multiple components: ${claimants.joinToString(", ")} — image names must be globally unique"
+        }.sorted()
+}
+
+/**
+ * Incoming display names that an ALREADY-PERSISTED different component holds (the DSL-vs-DSL
+ * half stays in [ImportServiceImpl.computeDisplayNameCollisions]). Null/blank incoming names
+ * never collide (display_name is nullable-unique). Pure — unit-tested without Spring.
+ */
+internal fun computeDisplayNameDbCollisions(
+    newPairs: List<Pair<String, String?>>,
+    existingPairs: List<Pair<String, String>>,
+): List<String> {
+    val existingByName = existingPairs.groupBy({ it.second }, { it.first })
+    return newPairs
+        .mapNotNull { (componentKey, rawName) ->
+            val name = rawName?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val holders = existingByName[name].orEmpty().filter { it != componentKey }
+            if (holders.isEmpty()) return@mapNotNull null
+            "uniqueness violation: display name \"$name\" of component '$componentKey' is already " +
+                "used by component(s) ${holders.sorted().joinToString(", ")} (display_name is unique)"
+        }.sorted()
+}
+
 internal fun buildBuildToolKeys(tools: Collection<BuildTool>?): Set<String> =
     tools?.mapNotNull { tool ->
         when (tool) {

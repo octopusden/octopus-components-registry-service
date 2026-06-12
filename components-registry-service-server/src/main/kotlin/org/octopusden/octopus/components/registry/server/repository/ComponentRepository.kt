@@ -26,6 +26,19 @@ interface ComponentRepository :
 
     fun existsByDisplayNameAndIdNot(displayName: String, id: UUID): Boolean
 
+    /**
+     * Every (componentKey, displayName) pair with a non-null display name.
+     * Used by the migration uniqueness pre-pass to check incoming DSL display
+     * names against already-persisted components (DB enforces UNIQUE; the
+     * pre-pass reports the offenders up front instead of aborting mid-import
+     * on the constraint).
+     */
+    @Query(
+        "SELECT c.componentKey AS componentKey, c.displayName AS displayName " +
+            "FROM ComponentEntity c WHERE c.displayName IS NOT NULL",
+    )
+    fun findAllDisplayNamePairs(): List<DisplayNamePairRow>
+
     @Query(
         "SELECT DISTINCT c.componentOwner FROM ComponentEntity c " +
             "WHERE c.componentOwner IS NOT NULL AND c.componentOwner <> '' " +
@@ -137,4 +150,10 @@ interface ComponentRepository :
             "WHERE c.id = :id ORDER BY sc.sortOrder",
     )
     fun findSecurityChampionUsernames(id: UUID): List<String>
+}
+
+/** Projection for the migration displayName-uniqueness pre-pass. */
+interface DisplayNamePairRow {
+    val componentKey: String
+    val displayName: String
 }
