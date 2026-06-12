@@ -2,6 +2,7 @@ package org.octopusden.octopus.components.registry.core.dto
 
 import com.fasterxml.jackson.annotation.JsonCreator
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonProperty
 
 /**
@@ -14,6 +15,7 @@ import com.fasterxml.jackson.annotation.JsonProperty
  * `DATA_INTEGRITY` — clients must tolerate unknown values.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
+@JsonInclude(JsonInclude.Include.NON_NULL)
 data class ErrorResponse @JsonCreator constructor(
         @JsonProperty("errorMessage") val errorMessage: String,
         @JsonProperty("errorCode") val errorCode: String? = null

@@ -1,6 +1,7 @@
 package org.octopusden.octopus.components.registry.server.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -126,13 +127,21 @@ class ErrorHandlingHardeningTest {
     @Test
     @DisplayName("ResponseStatusException(CONFLICT) is preserved as 409, not collapsed to 500 by Throwable catch-all")
     fun responseStatusException_preservesOriginalStatusCode() {
-        mvc
+        val body =
+            mvc
             .perform(
                 get("/test-error-helpers/response-status-conflict")
                     .with(viewerJwt()),
             ).andExpect(status().isConflict)
             .andExpect(jsonPath("$.errorMessage").exists())
             .andExpect(jsonPath("$.errorMessage", containsSubstring("synthetic conflict")))
+            .andReturn()
+            .response.contentAsString
+
+        assertFalse(
+            objectMapper.readTree(body).has("errorCode"),
+            "plain error responses must not serialize errorCode:null; legacy compat expects the field to be absent",
+        )
     }
 
     @Test
