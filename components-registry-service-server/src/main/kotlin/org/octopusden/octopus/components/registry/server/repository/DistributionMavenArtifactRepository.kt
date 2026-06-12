@@ -19,7 +19,8 @@ interface DistributionMavenArtifactRepository : JpaRepository<DistributionMavenA
     @Query(
         "SELECT m.groupPattern AS groupPattern, m.artifactPattern AS artifactPattern, " +
             "m.extension AS extension, m.classifier AS classifier, " +
-            "cfg.versionRange AS versionRange, comp.componentKey AS componentKey " +
+            "cfg.versionRange AS versionRange, cfg.overriddenAttribute AS overriddenAttribute, " +
+            "comp.componentKey AS componentKey " +
             "FROM DistributionMavenArtifactEntity m " +
             "JOIN m.componentConfiguration cfg " +
             "JOIN cfg.component comp " +
@@ -38,7 +39,8 @@ interface DistributionMavenArtifactRepository : JpaRepository<DistributionMavenA
     @Query(
         "SELECT m.groupPattern AS groupPattern, m.artifactPattern AS artifactPattern, " +
             "m.extension AS extension, m.classifier AS classifier, " +
-            "cfg.versionRange AS versionRange, comp.componentKey AS componentKey " +
+            "cfg.versionRange AS versionRange, cfg.overriddenAttribute AS overriddenAttribute, " +
+            "comp.componentKey AS componentKey " +
             "FROM DistributionMavenArtifactEntity m " +
             "JOIN m.componentConfiguration cfg " +
             "JOIN cfg.component comp",
@@ -58,5 +60,13 @@ interface CrossComponentMavenRow {
     val extension: String?
     val classifier: String?
     val versionRange: String
+
+    /**
+     * Owning row's marker attribute — `group-artifact-pattern` rows are synthesized
+     * from the component-level `groupId`/`artifactId` mapping, NOT from a
+     * `distribution { GAV }` block; conflict messages must name the real source
+     * (`MavenGavCollision.originLabel`).
+     */
+    val overriddenAttribute: String?
     val componentKey: String
 }
