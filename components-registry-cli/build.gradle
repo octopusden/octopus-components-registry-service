@@ -1,0 +1,29 @@
+// crsctl — Components Registry Service command-line client.
+// Kotlin/JVM module producing a self-contained executable fat jar via the shadow plugin.
+// Note: kotlin.jvm, java-library, maven-publish, signing, junit5 test deps, jvmTarget 21
+// and withJavadocJar/withSourcesJar are all applied by the root `configure(subprojects)`
+// block, so they are intentionally NOT re-declared here.
+plugins {
+    id 'com.github.johnrengelman.shadow'
+    id 'org.jetbrains.kotlin.plugin.serialization' version '1.9.25'
+}
+
+dependencies {
+    implementation "com.github.ajalt.clikt:clikt:${project['clikt.version']}"
+    implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:${project['kotlinx-serialization.version']}"
+}
+
+test {
+    useJUnitPlatform()
+}
+
+shadowJar {
+    archiveClassifier = ''
+    manifest {
+        attributes 'Main-Class': 'org.octopusden.octopus.components.registry.cli.MainKt'
+    }
+}
+
+jar.enabled = false
+
+build.dependsOn shadowJar
