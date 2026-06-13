@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.cli.client
 
+import org.octopusden.octopus.components.registry.cli.config.ConfigLoadException
 import java.io.IOException
 
 /**
@@ -31,6 +32,7 @@ object ExitCodes {
         is CrsApiException -> fromHttpStatus(t.httpStatus)
         is IOException -> ExitCode.SERVER
         is ConfigResolutionException -> ExitCode.USAGE
+        is ConfigLoadException -> ExitCode.USAGE
         else -> ExitCode.SERVER
     }
 

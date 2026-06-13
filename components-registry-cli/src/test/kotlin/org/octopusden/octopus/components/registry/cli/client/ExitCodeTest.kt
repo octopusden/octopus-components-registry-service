@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.cli.client
 
+import org.octopusden.octopus.components.registry.cli.config.ConfigLoadException
 import java.io.IOException
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -31,6 +32,11 @@ class ExitCodeTest {
     @Test
     fun `config resolution failure maps to USAGE`() {
         assertEquals(ExitCode.USAGE, ExitCodes.fromThrowable(ConfigResolutionException("no url")))
+    }
+
+    @Test
+    fun `malformed config file maps to USAGE`() {
+        assertEquals(ExitCode.USAGE, ExitCodes.fromThrowable(ConfigLoadException("bad json")))
     }
 
     @Test
