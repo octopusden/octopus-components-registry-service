@@ -73,13 +73,13 @@ data class PackageItem(
 )
 
 /**
- * Mirror of v4.json `VcsEntryRequest` (used inside [MarkerChildrenPayload]). No required fields per
- * the request schema; modelled all-nullable.
+ * Mirror of v4.json `VcsEntryRequest` (used inside [MarkerChildrenPayload]). The canon marks
+ * `vcsPath` as required; the rest are optional.
  */
 @Serializable
 data class VcsEntryItem(
     val name: String? = null,
-    val vcsPath: String? = null,
+    val vcsPath: String,
     val repositoryType: String? = null,
     val branch: String? = null,
     val tag: String? = null,
