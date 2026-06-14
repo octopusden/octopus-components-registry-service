@@ -80,6 +80,10 @@ crsctl [GLOBAL OPTS] audit history <ENTITY_TYPE> <ENTITY_ID> [PAGING]   # auth (
 Global opts: `--env <name>` | `--crs-url <url>` | `--token <t>` | `-o json|table` | `-v` |
 `--insecure-token-store`. Env vars: `CRS_URL`, `CRS_TOKEN`.
 
+> **Option order matters:** global options are parsed by the root command, so they must come
+> **before** the subcommand — `crsctl --env dev -o json components list …`, NOT
+> `crsctl components list … -o json` (the latter exits 2 with `no such option -o`).
+
 `components list` filters: `--search`, `--owner`*, `--system`*, `--product-type`, `--build-system`*,
 `--label`*, `--client-code`*, `--solution`, `--jira-project-key`*, `--jira-technical`, `--vcs-path`,
 `--production-branch`, `--parent`*, `--group-key`*, `--archived`, `--can-be-parent`,
@@ -91,19 +95,19 @@ Global opts: `--env <name>` | `--crs-url <url>` | `--token <t>` | `-o json|table
 Find component **names** owned by `alice` in system `FOO` (output is a top-level array):
 
 ```
-crsctl --env dev components list --owner alice --system FOO -o json | jq -r '.[].name'
+crsctl --env dev -o json components list --owner alice --system FOO | jq -r '.[].name'
 ```
 
 All non-archived components, every page, as `id  name`:
 
 ```
-crsctl --env dev components list --archived false --all -o json | jq -r '.[] | "\(.id)\t\(.name)"'
+crsctl --env dev -o json components list --archived false --all | jq -r '.[] | "\(.id)\t\(.name)"'
 ```
 
 Get one component's owner and labels:
 
 ```
-crsctl --env dev component get my-component -o json | jq '{owner: .componentOwner, labels}'
+crsctl --env dev -o json component get my-component | jq '{owner: .componentOwner, labels}'
 ```
 
 View a component as code (raw text — do **not** pipe to jq):
@@ -116,22 +120,22 @@ List a component's field-overrides. The argument may be a UUID (used directly) o
 to its UUID first):
 
 ```
-crsctl --env dev component overrides 123e4567-e89b-12d3-a456-426614174000 -o json \
+crsctl --env dev -o json component overrides 123e4567-e89b-12d3-a456-426614174000 \
   | jq -r '.[] | "\(.overriddenAttribute)\t\(.rowType)\t\(.versionRange)"'
 ```
 
 Meta lookups (each is a JSON array of strings):
 
 ```
-crsctl --env dev meta owners  -o json | jq -r '.[]'
-crsctl --env dev meta systems -o json | jq -r '.[]'
-crsctl --env dev meta labels  -o json | jq -r '.[]'
+crsctl --env dev -o json meta owners  | jq -r '.[]'
+crsctl --env dev -o json meta systems | jq -r '.[]'
+crsctl --env dev -o json meta labels  | jq -r '.[]'
 ```
 
 Who am I (with a token; anonymous prints a static line and makes no call):
 
 ```
-crsctl --env dev --token "$CRS_TOKEN" whoami -o json \
+crsctl --env dev --token "$CRS_TOKEN" -o json whoami \
   | jq '{user: .username, perms: [.roles[].permissions[]] | unique}'
 ```
 
@@ -139,14 +143,14 @@ Recent audit changes for a user — **requires `crsctl login` and the `ACCESS_AU
 (currently gated; expect exit 4 / `AUTH_REQUIRED` until the auth client is provisioned):
 
 ```
-crsctl --env dev audit recent --changed-by alice --action UPDATE -o json \
+crsctl --env dev -o json audit recent --changed-by alice --action UPDATE \
   | jq -r '.[] | "\(.changedAt)\t\(.action)\t\(.entityType)/\(.entityId)"'
 ```
 
 Audit history for a single entity (also auth-gated):
 
 ```
-crsctl --env dev audit history COMPONENT my-component -o json | jq '.[].changeDiff'
+crsctl --env dev -o json audit history COMPONENT my-component | jq '.[].changeDiff'
 ```
 
 ## Branching on results (pseudocode)
@@ -155,7 +159,7 @@ JSON results go to stdout; the structured `{"errorCode","message"}` error goes t
 Capture them separately so you can read the error message on failure:
 
 ```
-out=$(crsctl --env dev component get "$name" -o json 2>/tmp/crsctl.err); rc=$?
+out=$(crsctl --env dev -o json component get "$name" 2>/tmp/crsctl.err); rc=$?
 case $rc in
   0) echo "$out" | jq .name ;;
   3) echo "no such component: $name" ;;     # NOT_FOUND

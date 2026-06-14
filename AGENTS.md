@@ -75,10 +75,12 @@ read commands (`components`, `component`, `meta`, `whoami`) work without a login
 client. With `-o json` it emits stable JSON (a top-level array for list-shaped commands), structured
 JSON errors on stderr, and pinned exit codes (0 OK, 2 USAGE, 3 NOT_FOUND, 4 AUTH_REQUIRED, 5 SERVER).
 
+Global options (`--env`, `--crs-url`, `--token`, `-o`) precede the subcommand:
+
 ```
-crsctl --env dev components list --owner alice --system FOO -o json | jq -r '.[].name'
-crsctl --env dev component get my-component -o json | jq '.componentOwner'
-crsctl --env dev meta owners -o json | jq -r '.[]'
+crsctl --env dev -o json components list --owner alice --system FOO | jq -r '.[].name'
+crsctl --env dev -o json component get my-component | jq '.componentOwner'
+crsctl --env dev -o json meta owners | jq -r '.[]'
 ```
 
 See `components-registry-cli/README.md` for the full command surface and `components-registry-cli/skill/SKILL.md`
