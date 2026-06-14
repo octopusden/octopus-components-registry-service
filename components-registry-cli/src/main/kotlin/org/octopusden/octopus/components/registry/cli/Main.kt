@@ -15,6 +15,8 @@ import org.octopusden.octopus.components.registry.cli.commands.ComponentGetComma
 import org.octopusden.octopus.components.registry.cli.commands.ComponentOverridesCommand
 import org.octopusden.octopus.components.registry.cli.commands.ComponentsCommand
 import org.octopusden.octopus.components.registry.cli.commands.ComponentsListCommand
+import org.octopusden.octopus.components.registry.cli.commands.LoginCommand
+import org.octopusden.octopus.components.registry.cli.commands.LogoutCommand
 import org.octopusden.octopus.components.registry.cli.commands.WhoamiCommand
 import org.octopusden.octopus.components.registry.cli.commands.metaCommand
 import org.octopusden.octopus.components.registry.cli.config.ConfigLoader
@@ -46,6 +48,10 @@ class Crsctl(
         .choice("json", "table", ignoreCase = true)
         .convert { OutputFormat.parse(it) }
     private val verbose by option("-v", "--verbose", help = "Verbose diagnostics.").flag()
+    private val insecureTokenStore by option(
+        "--insecure-token-store",
+        help = "Store the refresh token in a plaintext file (0600) instead of the system keychain.",
+    ).flag()
 
     init {
         versionOption(VERSION)
@@ -59,6 +65,7 @@ class Crsctl(
                 tokenFlag = token,
                 output = output ?: OutputFormat.TABLE,
                 verbose = verbose,
+                insecureTokenStore = insecureTokenStore,
                 configLoader = configLoader,
                 clientFactory = clientFactory,
             )
@@ -90,6 +97,8 @@ fun crsctl(
     ),
     metaCommand(),
     WhoamiCommand(),
+    LoginCommand(),
+    LogoutCommand(),
 )
 
 fun main(args: Array<String>) = crsctl().main(args)

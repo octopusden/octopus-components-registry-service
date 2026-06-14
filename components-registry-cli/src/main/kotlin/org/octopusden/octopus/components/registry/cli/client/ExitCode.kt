@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.cli.client
 
+import org.octopusden.octopus.components.registry.cli.auth.AuthRequiredException
 import org.octopusden.octopus.components.registry.cli.config.ConfigLoadException
 import java.io.IOException
 
@@ -30,6 +31,7 @@ enum class ExitCode(val code: Int) {
 object ExitCodes {
     fun fromThrowable(t: Throwable): ExitCode = when (t) {
         is CrsApiException -> fromHttpStatus(t.httpStatus)
+        is AuthRequiredException -> ExitCode.AUTH_REQUIRED
         is IOException -> ExitCode.SERVER
         is ConfigResolutionException -> ExitCode.USAGE
         is ConfigLoadException -> ExitCode.USAGE

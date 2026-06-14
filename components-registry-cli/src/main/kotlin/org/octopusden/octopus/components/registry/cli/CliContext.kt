@@ -1,9 +1,17 @@
 package org.octopusden.octopus.components.registry.cli
 
+import org.octopusden.octopus.components.registry.cli.auth.CommandRunner
+import org.octopusden.octopus.components.registry.cli.auth.CredentialStore
+import org.octopusden.octopus.components.registry.cli.auth.DeviceFlowClient
+import org.octopusden.octopus.components.registry.cli.auth.ProcessCommandRunner
+import org.octopusden.octopus.components.registry.cli.auth.TokenManager
+import org.octopusden.octopus.components.registry.cli.auth.credentialStore
+import org.octopusden.octopus.components.registry.cli.client.ConfigResolutionException
 import org.octopusden.octopus.components.registry.cli.client.CrsClient
 import org.octopusden.octopus.components.registry.cli.config.ConfigLoader
 import org.octopusden.octopus.components.registry.cli.config.CrsctlConfig
 import org.octopusden.octopus.components.registry.cli.config.EffectiveTarget
+import org.octopusden.octopus.components.registry.cli.config.Profile
 import org.octopusden.octopus.components.registry.cli.config.ResolverInputs
 import org.octopusden.octopus.components.registry.cli.config.TargetResolver
 import org.octopusden.octopus.components.registry.cli.output.OutputFormat
@@ -18,12 +26,22 @@ fun interface CrsClientFactory {
 }
 
 /**
+ * The keycloak issuer + public client id resolved from the active profile, needed by the device-flow
+ * login / logout / refresh paths. Both are SPIKE OUTPUTS (Part C): a profile that predates the auth
+ * layer will not have them.
+ */
+data class OidcConfig(
+    val issuer: String,
+    val clientId: String,
+)
+
+/**
  * Shared state threaded from the root command down to every subcommand via Clikt's
- * `findOrSetObject`. Holds the parsed global options plus the seams (config loader + client factory)
- * that the target-resolution helper needs.
+ * `findOrSetObject`. Holds the parsed global options plus the seams (config loader, client factory,
+ * command runner, device-flow client) that the target-resolution and auth helpers need.
  *
- * The two seams default to production behaviour (load the real config file, build a real
- * [CrsClient]); tests override them so commands can run fully offline.
+ * The seams default to production behaviour (load the real config file, build a real [CrsClient], run
+ * the real `security` CLI, hit the real network); tests override them so commands run fully offline.
  */
 class CliContext(
     val envFlag: String? = null,
@@ -31,10 +49,13 @@ class CliContext(
     val tokenFlag: String? = null,
     val output: OutputFormat = OutputFormat.TABLE,
     val verbose: Boolean = false,
+    val insecureTokenStore: Boolean = false,
     val configLoader: () -> CrsctlConfig = { ConfigLoader.load() },
     val clientFactory: CrsClientFactory = CrsClientFactory { target ->
         CrsClient(baseUrl = target.crsUrl, token = target.token)
     },
+    val commandRunner: CommandRunner = ProcessCommandRunner(),
+    val deviceFlowClient: DeviceFlowClient = DeviceFlowClient(),
     private val getenv: (String) -> String? = System::getenv,
 ) {
     /**
@@ -57,4 +78,50 @@ class CliContext(
 
     /** Resolves the target and builds a [CrsClient] for it. */
     fun client(): CrsClient = clientFactory.create(resolveTarget())
+
+    /** Builds a [CrsClient] for [target] using the configured factory. */
+    fun clientFor(target: EffectiveTarget): CrsClient = clientFactory.create(target)
+
+    /** The selected credential store (keychain by default, plaintext file with `--insecure-token-store`). */
+    fun credentialStore(): CredentialStore = credentialStore(insecureTokenStore, commandRunner)
+
+    /**
+     * Resolves the keycloak issuer + public client id from the active profile, failing clearly when
+     * the profile lacks them. The active profile is the one named by `--env`, else the config
+     * `defaultProfile`. A bare `--crs-url` (no profile) cannot supply OIDC settings.
+     */
+    fun resolveOidcConfig(): OidcConfig {
+        val config = configLoader()
+        val profile = activeProfile(config)
+            ?: throw ConfigResolutionException(
+                "Login requires a configured profile with 'keycloakIssuer' and 'clientId'. " +
+                    "Select one with --env or set a defaultProfile; --crs-url alone cannot provide OIDC settings.",
+            )
+        val issuer = profile.keycloakIssuer
+        val clientId = profile.clientId
+        if (issuer.isNullOrBlank() || clientId.isNullOrBlank()) {
+            throw ConfigResolutionException(
+                "Profile is missing 'keycloakIssuer' and/or 'clientId' (these are outputs of the " +
+                    "Keycloak device-flow client setup). Add them to the profile and retry.",
+            )
+        }
+        return OidcConfig(issuer = issuer, clientId = clientId)
+    }
+
+    /** Builds a [TokenManager] for the active profile's OIDC config + selected credential store. */
+    fun tokenManager(): TokenManager {
+        val oidc = resolveOidcConfig()
+        return TokenManager(
+            issuer = oidc.issuer,
+            clientId = oidc.clientId,
+            store = credentialStore(),
+            deviceFlow = deviceFlowClient,
+        )
+    }
+
+    private fun activeProfile(config: CrsctlConfig): Profile? {
+        val name = sequenceOf(envFlag, config.defaultProfile).firstOrNull { !it.isNullOrBlank() }
+            ?: return null
+        return config.profiles[name]
+    }
 }
