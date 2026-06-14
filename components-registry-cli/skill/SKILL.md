@@ -84,6 +84,9 @@ Global opts: `--env <name>` | `--crs-url <url>` | `--token <t>` | `-o json|table
 > **before** the subcommand — `crsctl --env dev -o json components list …`, NOT
 > `crsctl components list … -o json` (the latter exits 2 with `no such option -o`).
 
+Help: `crsctl --help` (or `crsctl help`) for the top level; `crsctl help <command>` for any
+(possibly nested) command, e.g. `crsctl help components list`. `help <unknown>` exits 2.
+
 `components list` filters: `--search`, `--owner`*, `--system`*, `--product-type`, `--build-system`*,
 `--label`*, `--client-code`*, `--solution`, `--jira-project-key`*, `--jira-technical`, `--vcs-path`,
 `--production-branch`, `--parent`*, `--group-key`*, `--archived`, `--can-be-parent`,

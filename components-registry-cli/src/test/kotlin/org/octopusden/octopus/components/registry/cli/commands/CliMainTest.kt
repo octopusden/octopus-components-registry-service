@@ -5,6 +5,7 @@ import org.octopusden.octopus.components.registry.cli.client.CrsClient
 import org.octopusden.octopus.components.registry.cli.client.HttpExchange
 import org.octopusden.octopus.components.registry.cli.config.CrsctlConfig
 import org.octopusden.octopus.components.registry.cli.crsctl
+import org.octopusden.octopus.components.registry.cli.rewriteHelpArgs
 import org.octopusden.octopus.components.registry.cli.runCli
 import java.io.ByteArrayOutputStream
 import java.io.PrintStream
@@ -90,5 +91,55 @@ class CliMainTest {
     fun `unknown command exits USAGE`() {
         val (code, _) = captureStderr { runCli(arrayOf("totallyunknowncommand"), cli()) }
         assertEquals(2, code)
+    }
+
+    @Test
+    fun `bare help prints root help to stdout exit 0`() {
+        val (code, out) = captureStdout { runCli(arrayOf("help"), cli()) }
+        assertEquals(0, code)
+        assertTrue(out.contains("Commands:") && out.contains("components"), "root help expected: $out")
+    }
+
+    @Test
+    fun `help with a nested command prints that command's help exit 0`() {
+        val (code, out) = captureStdout { runCli(arrayOf("help", "components", "list"), cli()) }
+        assertEquals(0, code)
+        assertTrue(out.contains("components list") && out.contains("--archived"), "list help expected: $out")
+    }
+
+    @Test
+    fun `help preserves preceding global options`() {
+        val (code, out) = captureStdout { runCli(arrayOf("--env", "dev", "help", "meta"), cli()) }
+        assertEquals(0, code)
+        assertTrue(out.contains("employees"), "meta help expected: $out")
+    }
+
+    @Test
+    fun `help for an unknown command exits USAGE`() {
+        val (code, _) = captureStderr { runCli(arrayOf("help", "bogus"), cli()) }
+        assertEquals(2, code)
+    }
+
+    @Test
+    fun `help is listed in root help`() {
+        val (_, out) = captureStdout { runCli(arrayOf("--help"), cli()) }
+        assertTrue(Regex("(?m)^\\s*help\\b").containsMatchIn(out), "help command should be listed: $out")
+    }
+
+    @Test
+    fun `rewriteHelpArgs maps leading help onto --help at each depth`() {
+        assertEquals(listOf("--help"), rewriteHelpArgs(arrayOf("help")).toList())
+        assertEquals(listOf("components", "list", "--help"), rewriteHelpArgs(arrayOf("help", "components", "list")).toList())
+        // global options before the subcommand are preserved (both --opt value and --opt=value forms)
+        assertEquals(listOf("--env", "dev", "meta", "--help"), rewriteHelpArgs(arrayOf("--env", "dev", "help", "meta")).toList())
+        assertEquals(listOf("-o", "json", "--help"), rewriteHelpArgs(arrayOf("-o", "json", "help")).toList())
+        assertEquals(listOf("--crs-url=https://x", "--help"), rewriteHelpArgs(arrayOf("--crs-url=https://x", "help")).toList())
+    }
+
+    @Test
+    fun `rewriteHelpArgs leaves non-leading help untouched`() {
+        // `help` as an argument to a subcommand (not the subcommand slot) must NOT become help mode.
+        val args = arrayOf("component", "get", "help")
+        assertEquals(args.toList(), rewriteHelpArgs(args).toList())
     }
 }

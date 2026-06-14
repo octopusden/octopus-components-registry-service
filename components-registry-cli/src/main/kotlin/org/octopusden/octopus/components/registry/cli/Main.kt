@@ -27,6 +27,7 @@ import org.octopusden.octopus.components.registry.cli.commands.ComponentGetComma
 import org.octopusden.octopus.components.registry.cli.commands.ComponentOverridesCommand
 import org.octopusden.octopus.components.registry.cli.commands.ComponentsCommand
 import org.octopusden.octopus.components.registry.cli.commands.ComponentsListCommand
+import org.octopusden.octopus.components.registry.cli.commands.HelpCommand
 import org.octopusden.octopus.components.registry.cli.commands.LoginCommand
 import org.octopusden.octopus.components.registry.cli.commands.LogoutCommand
 import org.octopusden.octopus.components.registry.cli.commands.WhoamiCommand
@@ -120,7 +121,43 @@ fun crsctl(
     WhoamiCommand(),
     LoginCommand(),
     LogoutCommand(),
+    HelpCommand(),
 )
+
+/** Global options that consume a following value (used to skip their value when scanning args). */
+private val VALUE_OPTIONS = setOf("--env", "--crs-url", "--token", "-o", "--output")
+
+/**
+ * Index of a leading `help` token in the subcommand slot (after any global options), or -1 if the
+ * first positional token is not `help`.
+ */
+private fun helpTokenIndex(args: Array<String>): Int {
+    var i = 0
+    while (i < args.size) {
+        val token = args[i]
+        if (!token.startsWith("-")) {
+            return if (token == "help") i else -1
+        }
+        // Skip an option; also skip its value when given as a separate token (`--env dev`, `-o json`).
+        i += if (token in VALUE_OPTIONS && !token.contains("=")) 2 else 1
+    }
+    return -1
+}
+
+/**
+ * Rewrites a leading `help [<command>...]` invocation into `[<command>...] --help`, so Clikt's own
+ * renderer prints help for the root or the named (possibly nested) subcommand at any depth, with a
+ * clean exit 0. Global options that precede the subcommand are preserved. Returns [args] unchanged
+ * when the first positional token is not `help`.
+ */
+internal fun rewriteHelpArgs(args: Array<String>): Array<String> {
+    val idx = helpTokenIndex(args)
+    if (idx < 0) return args
+    val out = args.toMutableList()
+    out.removeAt(idx)
+    out.add("--help")
+    return out.toTypedArray()
+}
 
 /**
  * Parses and runs [command] over [args], mapping every Clikt outcome onto the crsctl exit-code +
@@ -136,8 +173,21 @@ fun crsctl(
  *     STDERR and exit [ExitCode.USAGE] (2)
  */
 internal fun runCli(args: Array<String>, command: CliktCommand = crsctl()): Int {
+    // `help <unknown-command>` should fail (exit 2) rather than silently show root help (Clikt's
+    // eager --help would otherwise swallow the unknown name). Validate the named top-level command.
+    val helpIdx = helpTokenIndex(args)
+    if (helpIdx >= 0) {
+        val target = args.drop(helpIdx + 1).firstOrNull { !it.startsWith("-") }
+        if (target != null) {
+            val known = command.registeredSubcommands().map { it.commandName }.toSet()
+            if (target !in known) {
+                System.err.println(Renderer.renderError(IllegalArgumentException("no such command: $target")))
+                return ExitCode.USAGE.code
+            }
+        }
+    }
     return try {
-        command.parse(args)
+        command.parse(rewriteHelpArgs(args))
         ExitCode.OK.code
     } catch (e: PrintHelpMessage) {
         if (e.error) {

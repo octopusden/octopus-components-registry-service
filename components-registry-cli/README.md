@@ -201,6 +201,12 @@ Both emit a **JSON array** of audit-log rows under `-o json`.
 
 See "Auth (gated)" below.
 
+### `help`
+
+`crsctl help` prints the top-level help (same as `--help`); `crsctl help <command>` prints help for
+a named, possibly nested command — e.g. `crsctl help components list`, `crsctl help audit recent`.
+`help <unknown>` exits `2` (USAGE). Per-command `--help`/`-h` works everywhere too.
+
 ---
 
 ## Agent contract
