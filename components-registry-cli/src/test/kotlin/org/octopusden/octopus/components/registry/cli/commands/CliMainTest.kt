@@ -121,6 +121,28 @@ class CliMainTest {
     }
 
     @Test
+    fun `help for an unknown nested command exits USAGE`() {
+        val (code, err) = captureStderr { runCli(arrayOf("help", "components", "bogus"), cli()) }
+        assertEquals(2, code)
+        assertTrue(err.contains("no such command: components bogus"), "full path expected in error: $err")
+    }
+
+    @Test
+    fun `unknown global option before help is a usage error not help mode`() {
+        val (code, err) = captureStderr { runCli(arrayOf("--bogus", "help"), cli()) }
+        assertEquals(2, code)
+        assertTrue(err.contains("\"message\""), "structured error JSON expected on stderr: $err")
+    }
+
+    @Test
+    fun `helpTokenIndex ignores unknown options`() {
+        // unknown option before `help` -> not help mode (-1), so Clikt reports the bad option.
+        assertEquals(listOf("--bogus", "help"), rewriteHelpArgs(arrayOf("--bogus", "help")).toList())
+        // known flags/value-opts before `help` are still recognized.
+        assertEquals(listOf("-v", "meta", "--help"), rewriteHelpArgs(arrayOf("-v", "help", "meta")).toList())
+    }
+
+    @Test
     fun `help is listed in root help`() {
         val (_, out) = captureStdout { runCli(arrayOf("--help"), cli()) }
         assertTrue(Regex("(?m)^\\s*help\\b").containsMatchIn(out), "help command should be listed: $out")

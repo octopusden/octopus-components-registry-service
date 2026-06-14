@@ -127,9 +127,14 @@ fun crsctl(
 /** Global options that consume a following value (used to skip their value when scanning args). */
 private val VALUE_OPTIONS = setOf("--env", "--crs-url", "--token", "-o", "--output")
 
+/** Global boolean flags (no value). */
+private val FLAG_OPTIONS = setOf("-v", "--verbose", "--insecure-token-store")
+
 /**
- * Index of a leading `help` token in the subcommand slot (after any global options), or -1 if the
- * first positional token is not `help`.
+ * Index of a leading `help` token in the subcommand slot, after only KNOWN global options. Returns
+ * -1 if the first positional token is not `help`, OR if any UNKNOWN option precedes it — in that
+ * case we do NOT enter help mode, so Clikt parses normally and reports the bad option as a usage
+ * error (e.g. `crsctl --bogus help` must fail, not silently print root help).
  */
 private fun helpTokenIndex(args: Array<String>): Int {
     var i = 0
@@ -138,8 +143,13 @@ private fun helpTokenIndex(args: Array<String>): Int {
         if (!token.startsWith("-")) {
             return if (token == "help") i else -1
         }
-        // Skip an option; also skip its value when given as a separate token (`--env dev`, `-o json`).
-        i += if (token in VALUE_OPTIONS && !token.contains("=")) 2 else 1
+        val name = token.substringBefore("=")
+        i += when {
+            name in VALUE_OPTIONS && token.contains("=") -> 1   // --env=dev
+            name in VALUE_OPTIONS -> 2                          // --env dev / -o json
+            name in FLAG_OPTIONS -> 1
+            else -> return -1                                   // unknown option -> not help mode
+        }
     }
     return -1
 }
@@ -173,17 +183,22 @@ internal fun rewriteHelpArgs(args: Array<String>): Array<String> {
  *     STDERR and exit [ExitCode.USAGE] (2)
  */
 internal fun runCli(args: Array<String>, command: CliktCommand = crsctl()): Int {
-    // `help <unknown-command>` should fail (exit 2) rather than silently show root help (Clikt's
-    // eager --help would otherwise swallow the unknown name). Validate the named top-level command.
+    // `help <command-path>` must fail (exit 2) on ANY invalid token rather than let Clikt's eager
+    // --help swallow it. Walk the FULL path against the command tree before rewriting.
     val helpIdx = helpTokenIndex(args)
     if (helpIdx >= 0) {
-        val target = args.drop(helpIdx + 1).firstOrNull { !it.startsWith("-") }
-        if (target != null) {
-            val known = command.registeredSubcommands().map { it.commandName }.toSet()
-            if (target !in known) {
-                System.err.println(Renderer.renderError(IllegalArgumentException("no such command: $target")))
+        val path = args.drop(helpIdx + 1).takeWhile { !it.startsWith("-") }
+        var level = command.registeredSubcommands()
+        val matched = StringBuilder()
+        for (name in path) {
+            val sub = level.find { it.commandName == name }
+            if (sub == null) {
+                val attempted = (matched.toString() + name).trim()
+                System.err.println(Renderer.renderError(IllegalArgumentException("no such command: $attempted")))
                 return ExitCode.USAGE.code
             }
+            matched.append(name).append(' ')
+            level = sub.registeredSubcommands()
         }
     }
     return try {
