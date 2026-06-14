@@ -78,6 +78,14 @@ class CrsClientTest {
     }
 
     @Test
+    fun `request carries a non-null timeout`() {
+        val exchange = CapturingExchange(200, "{}")
+        CrsClient("https://crs.example", exchange = exchange)
+            .getJson("/x", PageComponentSummaryResponse.serializer())
+        assertTrue(exchange.lastRequest!!.timeout().isPresent, "per-request timeout must be set")
+    }
+
+    @Test
     fun `non-2xx with ErrorResponse body throws CrsApiException with parsed fields`() {
         val errBody = """{"errorCode":"COMPONENT_NOT_FOUND","errorMessage":"No such component: zzz"}"""
         val exchange = CapturingExchange(404, errBody)

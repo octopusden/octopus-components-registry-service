@@ -1,6 +1,8 @@
 package org.octopusden.octopus.components.registry.cli.config
 
 import org.octopusden.octopus.components.registry.cli.client.ConfigResolutionException
+import java.net.URI
+import java.net.URISyntaxException
 
 /**
  * The resolved CRS target a command will talk to. [token] may be null (anonymous read); [envName] is
@@ -40,11 +42,11 @@ object TargetResolver {
         val token = firstNonBlank(inputs.tokenFlag, inputs.tokenEnv)
 
         firstNonBlank(inputs.crsUrlFlag)?.let { url ->
-            return EffectiveTarget(crsUrl = url, token = token, envName = null)
+            return EffectiveTarget(crsUrl = validate(url), token = token, envName = null)
         }
 
         firstNonBlank(inputs.crsUrlEnv)?.let { url ->
-            return EffectiveTarget(crsUrl = url, token = token, envName = null)
+            return EffectiveTarget(crsUrl = validate(url), token = token, envName = null)
         }
 
         // Profile path: explicit --env wins; otherwise fall back to config defaultProfile.
@@ -57,13 +59,40 @@ object TargetResolver {
                     "No profile named '$profileName' in config. Known profiles: " +
                         knownProfiles(config),
                 )
-            return EffectiveTarget(crsUrl = profile.crsUrl, token = token, envName = profileName)
+            return EffectiveTarget(crsUrl = validate(profile.crsUrl), token = token, envName = profileName)
         }
 
         throw ConfigResolutionException(
             "No CRS URL resolved. Provide --crs-url, set CRS_URL, or configure a profile " +
                 "(--env / defaultProfile). Known profiles: ${knownProfiles(config)}",
         )
+    }
+
+    /**
+     * Validates the resolved CRS URL and strips a single trailing slash so base+path joins stay
+     * clean. The URL must be a syntactically valid absolute URI with an http/https scheme and a
+     * non-empty host; anything else is a [ConfigResolutionException] (which maps to USAGE/exit 2)
+     * rather than a confusing transport-level failure later on.
+     */
+    private fun validate(rawUrl: String): String {
+        val trimmed = rawUrl.trim()
+        val uri = try {
+            URI(trimmed)
+        } catch (e: URISyntaxException) {
+            throw ConfigResolutionException("Invalid CRS URL '$rawUrl': ${e.message}")
+        } catch (e: IllegalArgumentException) {
+            throw ConfigResolutionException("Invalid CRS URL '$rawUrl': ${e.message}")
+        }
+        val scheme = uri.scheme?.lowercase()
+        if (scheme != "http" && scheme != "https") {
+            throw ConfigResolutionException(
+                "Invalid CRS URL '$rawUrl': scheme must be http or https.",
+            )
+        }
+        if (uri.host.isNullOrBlank()) {
+            throw ConfigResolutionException("Invalid CRS URL '$rawUrl': missing host.")
+        }
+        return trimmed.trimEnd('/')
     }
 
     private fun knownProfiles(config: CrsctlConfig): String =

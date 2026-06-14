@@ -236,9 +236,30 @@ class CommandsTest {
     @Test
     fun `meta employees 401 maps to AUTH_REQUIRED`() {
         val ex = QueueExchange(listOf(401 to """{"errorMessage":"login required"}"""))
-        val result = cli(ex).test(listOf(URL, "meta", "employees", "--search", "ali"))
+        val result = cli(ex).test(listOf(URL, "--token=tok", "meta", "employees", "--search", "ali"))
         assertEquals(4, result.statusCode, "AUTH_REQUIRED exit code expected")
         assertTrue(ex.requests.single().uri().query.contains("search=ali"))
+    }
+
+    @Test
+    fun `meta employees without any credential exits AUTH_REQUIRED and makes no http call`() {
+        val ex = QueueExchange(listOf(500 to "should not be called"))
+        val result = cli(ex).test(listOf(URL, "meta", "employees", "--search", "x"))
+        assertEquals(4, result.statusCode, "AUTH_REQUIRED exit code expected: ${result.stderr}")
+        assertEquals(0, ex.requests.size, "no HTTP call must be made when there is no credential")
+        assertTrue(
+            result.stderr.contains("this command requires authentication"),
+            "clear no-credential message expected: ${result.stderr}",
+        )
+    }
+
+    @Test
+    fun `meta employees attaches a bearer token on the outgoing request`() {
+        val ex = QueueExchange(listOf(200 to "[]"))
+        val result = cli(ex).test(listOf(URL, "--token=tok", "meta", "employees", "--search", "x"))
+        assertEquals(0, result.statusCode, result.stderr)
+        val auth = ex.requests.single().headers().firstValue("Authorization").orElse("")
+        assertEquals("Bearer tok", auth, "meta employees must send the bearer token")
     }
 
     @Test
@@ -362,7 +383,7 @@ class CommandsTest {
         assertEquals(4, result.statusCode, "AUTH_REQUIRED exit code expected: ${result.stderr}")
         assertEquals(0, ex.requests.size, "no HTTP call must be made when there is no credential")
         assertTrue(
-            result.stderr.contains("audit requires `crsctl login` and the ACCESS_AUDIT permission"),
+            result.stderr.contains("this command requires authentication"),
             "clear no-credential message expected: ${result.stderr}",
         )
     }

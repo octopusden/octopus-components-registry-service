@@ -5,6 +5,7 @@ import kotlinx.serialization.SerializationException
 import org.octopusden.octopus.components.registry.cli.model.ErrorResponse
 import java.net.URI
 import java.net.http.HttpRequest
+import java.time.Duration
 
 /**
  * Thin read-only client over the CRS REST API.
@@ -72,6 +73,7 @@ class CrsClient(
     private fun buildGet(path: String, query: QueryParams?, accept: String): HttpRequest {
         val builder = HttpRequest.newBuilder()
             .uri(buildUri(path, query))
+            .timeout(Duration.ofSeconds(REQUEST_TIMEOUT_SECONDS))
             .GET()
             .header("Accept", accept)
         if (!token.isNullOrBlank()) {
@@ -102,5 +104,10 @@ class CrsClient(
             errorCode = parsed?.errorCode,
             errorMessage = parsed?.errorMessage ?: "HTTP ${response.statusCode()}",
         )
+    }
+
+    companion object {
+        /** Per-request timeout (seconds); a slow/stalled response surfaces as a SERVER exit. */
+        private const val REQUEST_TIMEOUT_SECONDS = 30L
     }
 }

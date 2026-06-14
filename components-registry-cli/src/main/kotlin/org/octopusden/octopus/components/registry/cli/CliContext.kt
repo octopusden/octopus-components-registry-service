@@ -167,6 +167,7 @@ class CliContext(
     companion object {
         /** Surfaced (exit AUTH_REQUIRED) when an auth-required command has no resolvable credential. */
         const val NOT_AUTHENTICATED_MESSAGE =
-            "audit requires `crsctl login` and the ACCESS_AUDIT permission"
+            "this command requires authentication: run `crsctl login` (or pass --token / CRS_TOKEN) " +
+                "and ensure you have the required permission"
     }
 }

@@ -56,7 +56,7 @@ class MetaEmployeesCommand : CliktCommand(
     private val search by option("--search", help = "Required search term (username / name fragment).").required()
 
     override fun run() = runCommand {
-        val client: CrsClient = ctx.client()
+        val client: CrsClient = ctx.authedClient()
         val query = QueryParams.builder().add("search", search).build()
         val matches = client.getJson(
             "/rest/api/4/components/meta/employees",

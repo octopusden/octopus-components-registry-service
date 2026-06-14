@@ -76,4 +76,37 @@ class TargetResolverTest {
             TargetResolver.resolve(ResolverInputs(envFlag = "nope"), config)
         }
     }
+
+    @Test
+    fun `malformed url with a space throws`() {
+        assertFailsWith<ConfigResolutionException> {
+            TargetResolver.resolve(ResolverInputs(crsUrlFlag = "not a url"), config)
+        }
+    }
+
+    @Test
+    fun `non-http scheme throws`() {
+        assertFailsWith<ConfigResolutionException> {
+            TargetResolver.resolve(ResolverInputs(crsUrlFlag = "ftp://x"), config)
+        }
+    }
+
+    @Test
+    fun `url with empty host throws`() {
+        assertFailsWith<ConfigResolutionException> {
+            TargetResolver.resolve(ResolverInputs(crsUrlFlag = "http://"), config)
+        }
+    }
+
+    @Test
+    fun `valid https url passes`() {
+        val target = TargetResolver.resolve(ResolverInputs(crsUrlFlag = "https://crs.example"), config)
+        assertEquals("https://crs.example", target.crsUrl)
+    }
+
+    @Test
+    fun `trailing slash is normalized off the url`() {
+        val target = TargetResolver.resolve(ResolverInputs(crsUrlFlag = "https://crs.example/"), config)
+        assertEquals("https://crs.example", target.crsUrl)
+    }
 }
