@@ -140,7 +140,7 @@ class ComponentsListCommand : CliktCommand(
             }
             // Absolute safety cap: never loop past MAX_PAGES even if the server keeps lying.
             if (current + 1 >= MAX_PAGES) {
-                System.err.println("warning: --all stopped at the $MAX_PAGES-page safety cap")
+                echo("warning: --all stopped at the $MAX_PAGES-page safety cap", err = true)
                 break
             }
             current++

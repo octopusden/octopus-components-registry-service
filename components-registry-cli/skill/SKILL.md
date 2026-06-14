@@ -151,12 +151,15 @@ crsctl --env dev audit history COMPONENT my-component -o json | jq '.[].changeDi
 
 ## Branching on results (pseudocode)
 
+JSON results go to stdout; the structured `{"errorCode","message"}` error goes to stderr.
+Capture them separately so you can read the error message on failure:
+
 ```
-out=$(crsctl --env dev component get "$name" -o json); rc=$?
+out=$(crsctl --env dev component get "$name" -o json 2>/tmp/crsctl.err); rc=$?
 case $rc in
   0) echo "$out" | jq .name ;;
   3) echo "no such component: $name" ;;     # NOT_FOUND
   4) echo "need login / permission" ;;      # AUTH_REQUIRED (auth currently gated)
-  *) echo "error: $(echo "$out" | jq -r .message 2>/dev/null)" ;;  # message is on stderr
+  *) echo "error: $(jq -r .message /tmp/crsctl.err 2>/dev/null)" ;;  # message is on stderr
 esac
 ```
