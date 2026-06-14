@@ -1,0 +1,40 @@
+// crsctl — Components Registry Service command-line client.
+// Kotlin/JVM module producing a self-contained executable fat jar via the shadow plugin.
+// Note: kotlin.jvm, java-library, maven-publish, signing, junit5 test deps, jvmTarget 21
+// and withJavadocJar/withSourcesJar are all applied by the root `configure(subprojects)`
+// block, so they are intentionally NOT re-declared here.
+plugins {
+    id 'com.github.johnrengelman.shadow'
+    id 'org.jetbrains.kotlin.plugin.serialization' version '1.9.25'
+}
+
+dependencies {
+    implementation "com.github.ajalt.clikt:clikt:${project['clikt.version']}"
+    implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:${project['kotlinx-serialization.version']}"
+}
+
+test {
+    useJUnitPlatform()
+}
+
+// Runnable fat jar -> components-registry-cli-<version>-all.jar (use this for `java -jar`).
+shadowJar {
+    archiveClassifier = 'all'
+    manifest {
+        attributes 'Main-Class': 'org.octopusden.octopus.components.registry.cli.MainKt'
+    }
+}
+
+// Keep the thin `jar` ENABLED: the repo's TeamCity release tooling (extractModuleInfo) requires
+// every module to produce the standard components-registry-cli-<version>.jar, and the maven
+// publication (from components.java) needs it too. Mirrors :components-registry-automation, which
+// also ships a shadowJar while leaving the thin jar in place. (Do NOT set jar.enabled = false here —
+// that broke the [1.0] Compile&UT build: "Artifact components-registry-cli-<version>.jar wasn't
+// produced by this build".)
+jar {
+    manifest {
+        attributes 'Main-Class': 'org.octopusden.octopus.components.registry.cli.MainKt'
+    }
+}
+
+build.dependsOn shadowJar
