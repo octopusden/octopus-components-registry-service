@@ -26,16 +26,17 @@ class LogoutCommand : CliktCommand(
             return@runCommand
         }
 
-        val oidc = ctx.resolveOidcConfig()
-        // Revoke FIRST, then clear. Revocation is best-effort: any failure is recoverable — we warn
-        // and still clear the local token (exit 0).
+        // Revoke FIRST (best-effort), then ALWAYS clear. Any failure is recoverable — including a
+        // missing/broken OIDC profile that prevents us from even attempting revocation: we warn and
+        // still clear the local token (exit 0), so a stale server session never strands a token on disk.
         try {
+            val oidc = ctx.resolveOidcConfig()
             val revoked = ctx.deviceFlowClient.revoke(oidc.issuer, oidc.clientId, refreshToken)
             if (!revoked) {
                 echo("warning: provider did not confirm revocation; clearing local credentials anyway.", err = true)
             }
         } catch (e: Exception) {
-            echo("warning: token revocation failed (${e.message}); clearing local credentials anyway.", err = true)
+            echo("warning: could not revoke the token (${e.message}); clearing local credentials anyway.", err = true)
         }
 
         store.clear()

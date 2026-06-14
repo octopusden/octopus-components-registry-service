@@ -16,6 +16,9 @@ import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.versionOption
 import com.github.ajalt.clikt.parameters.types.choice
+import org.octopusden.octopus.components.registry.cli.auth.CommandRunner
+import org.octopusden.octopus.components.registry.cli.auth.DeviceFlowClient
+import org.octopusden.octopus.components.registry.cli.auth.ProcessCommandRunner
 import org.octopusden.octopus.components.registry.cli.client.CrsClient
 import org.octopusden.octopus.components.registry.cli.client.ExitCode
 import org.octopusden.octopus.components.registry.cli.commands.ComponentAsCodeCommand
@@ -47,6 +50,8 @@ class Crsctl(
     private val clientFactory: CrsClientFactory = CrsClientFactory { target ->
         CrsClient(baseUrl = target.crsUrl, token = target.token)
     },
+    private val commandRunner: CommandRunner = ProcessCommandRunner(),
+    private val deviceFlowClient: DeviceFlowClient = DeviceFlowClient(),
 ) : CliktCommand(
     name = "crsctl",
     help = "Command-line client for the Components Registry Service.",
@@ -79,6 +84,8 @@ class Crsctl(
                 insecureTokenStore = insecureTokenStore,
                 configLoader = configLoader,
                 clientFactory = clientFactory,
+                commandRunner = commandRunner,
+                deviceFlowClient = deviceFlowClient,
             )
         }
         if (currentContext.invokedSubcommand == null) {
@@ -97,7 +104,9 @@ fun crsctl(
     clientFactory: CrsClientFactory = CrsClientFactory { target ->
         CrsClient(baseUrl = target.crsUrl, token = target.token)
     },
-): Crsctl = Crsctl(configLoader, clientFactory).subcommands(
+    commandRunner: CommandRunner = ProcessCommandRunner(),
+    deviceFlowClient: DeviceFlowClient = DeviceFlowClient(),
+): Crsctl = Crsctl(configLoader, clientFactory, commandRunner, deviceFlowClient).subcommands(
     ComponentsCommand().subcommands(
         ComponentsListCommand(),
     ),

@@ -3,14 +3,13 @@ package org.octopusden.octopus.components.registry.cli.auth
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
  * Focused coverage of [KeychainCredentialStore]'s `security` CLI wiring: the hard-fail-on-nonzero
- * policy, the "item not found" (exit 44) special-casing, and — critically — that the secret travels
- * via STDIN and never on the argv (no `ps` exposure).
+ * policy, the "item not found" (exit 44) special-casing, and that the secret is written via the
+ * `-w <value>` argument (the only reliable non-interactive path; a bare `-w` would prompt on the tty).
  */
 class CredentialStoreTest {
 
@@ -32,15 +31,18 @@ class CredentialStoreTest {
     private fun fail() = CommandResult(1, "", "boom")
 
     @Test
-    fun `save passes the secret via stdin and never on the argv`() {
+    fun `save writes the secret as the -w argument non-interactively`() {
         val secret = "super-secret-refresh-token"
         val runner = RecordingRunner(listOf(ok()))
         KeychainCredentialStore(runner).save(secret)
 
         val argv = runner.argvs.single()
-        assertFalse(argv.contains(secret), "refresh token must NOT appear on the argv: $argv")
-        assertTrue(argv.contains("-w"), "a bare -w flag is expected so the secret is read from stdin")
-        assertEquals(secret, runner.stdins.single(), "the refresh token must be fed via stdin")
+        // `-w <value>` is required: a bare `-w` would prompt+retype on the tty and store nothing.
+        val wIndex = argv.indexOf("-w")
+        assertTrue(wIndex >= 0, "a -w flag is expected: $argv")
+        assertEquals(secret, argv.getOrNull(wIndex + 1), "the secret must be the value after -w")
+        assertTrue(argv.contains("-U"), "must update-in-place with -U")
+        assertNull(runner.stdins.single(), "no interactive stdin is used")
     }
 
     @Test

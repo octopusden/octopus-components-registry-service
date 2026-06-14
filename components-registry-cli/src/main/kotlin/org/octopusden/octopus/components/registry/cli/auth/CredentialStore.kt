@@ -33,9 +33,13 @@ class CredentialStoreException(message: String, cause: Throwable? = null) : Runt
 
 /**
  * macOS Keychain-backed [CredentialStore] implemented via the system `security` CLI:
- *   - save  -> `security add-generic-password -U` (-U updates an existing item in place); the secret
- *             is fed via STDIN (a bare `-w` with no value), NOT on the argv, so it never appears in
- *             the process table (`ps`) of other users on the machine.
+ *   - save  -> `security add-generic-password -U -w <secret>` (-U updates an existing item in place).
+ *             The secret is passed as the `-w` argument: a BARE `-w` (no value) makes `security`
+ *             prompt interactively on the tty (with a retype confirmation) and does NOT read from a
+ *             piped stdin, so the only reliable non-interactive path is the `-w <value>` argument.
+ *             Trade-off: the secret is briefly visible in `ps` for the lifetime of the subprocess.
+ *             TODO(spike): replace the `security` CLI with a native Keychain API (Security.framework
+ *             via a small helper / JNA) to store the secret without any `ps` exposure.
  *   - load  -> `security find-generic-password -w` (-w prints just the secret to STDOUT)
  *   - clear -> `security delete-generic-password`
  *
@@ -72,18 +76,19 @@ class KeychainCredentialStore(
     }
 
     override fun save(refreshToken: String) {
-        // The secret is passed via STDIN (bare `-w`), never on argv, to avoid `ps` exposure.
-        // TODO(spike): verify 'security add-generic-password -w' consumes the secret from stdin on the
-        // target macOS; fall back to a temp-file -w @path if not.
+        // `-w <value>` is the only reliable NON-INTERACTIVE write: a bare `-w` makes `security`
+        // prompt + retype on the tty (it does not read a piped stdin), which silently fails to store
+        // anything. The secret is therefore briefly `ps`-visible for the subprocess lifetime.
+        // TODO(spike): replace with a native Keychain API to remove that exposure.
         val result = runner.run(
             listOf(
                 "security", "add-generic-password",
                 "-U",
                 "-s", service,
                 "-a", account,
-                "-w",
+                "-w", refreshToken,
             ),
-            refreshToken,
+            null,
         )
         if (result.exitCode != 0) {
             throw CredentialStoreException(
