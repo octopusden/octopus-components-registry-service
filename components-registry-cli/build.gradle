@@ -17,13 +17,24 @@ test {
     useJUnitPlatform()
 }
 
+// Runnable fat jar -> components-registry-cli-<version>-all.jar (use this for `java -jar`).
 shadowJar {
-    archiveClassifier = ''
+    archiveClassifier = 'all'
     manifest {
         attributes 'Main-Class': 'org.octopusden.octopus.components.registry.cli.MainKt'
     }
 }
 
-jar.enabled = false
+// Keep the thin `jar` ENABLED: the repo's TeamCity release tooling (extractModuleInfo) requires
+// every module to produce the standard components-registry-cli-<version>.jar, and the maven
+// publication (from components.java) needs it too. Mirrors :components-registry-automation, which
+// also ships a shadowJar while leaving the thin jar in place. (Do NOT set jar.enabled = false here —
+// that broke the [1.0] Compile&UT build: "Artifact components-registry-cli-<version>.jar wasn't
+// produced by this build".)
+jar {
+    manifest {
+        attributes 'Main-Class': 'org.octopusden.octopus.components.registry.cli.MainKt'
+    }
+}
 
 build.dependsOn shadowJar

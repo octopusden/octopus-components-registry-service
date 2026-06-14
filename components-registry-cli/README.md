@@ -30,16 +30,17 @@ Produce the fat jar:
 ./gradlew :components-registry-cli:shadowJar
 ```
 
-The shadow plugin is configured with an empty archive classifier, so the artifact is:
+The runnable fat jar uses the `all` classifier (the thin `…-<version>.jar` is the plain library
+jar, kept for the repo's release tooling and Maven publication):
 
 ```
-components-registry-cli/build/libs/components-registry-cli-1.0-SNAPSHOT.jar
+components-registry-cli/build/libs/components-registry-cli-1.0-SNAPSHOT-all.jar
 ```
 
 Run it:
 
 ```
-java -jar components-registry-cli/build/libs/components-registry-cli-1.0-SNAPSHOT.jar --help
+java -jar components-registry-cli/build/libs/components-registry-cli-1.0-SNAPSHOT-all.jar --help
 ```
 
 Throughout this document `crsctl` is shorthand for `java -jar <path-to-shadow-jar>`. A wrapper
