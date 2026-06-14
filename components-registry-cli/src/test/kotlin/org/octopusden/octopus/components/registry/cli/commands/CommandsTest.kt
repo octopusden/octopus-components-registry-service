@@ -173,6 +173,67 @@ class CommandsTest {
     }
 
     @Test
+    fun `component get happy path hits the components id path and renders`() {
+        val uuid = "33333333-3333-3333-3333-333333333333"
+        val detail = """{"id":"$uuid","name":"my-comp","archived":false,"canBeParent":false,"version":1,""" +
+            """"labels":[],"artifactIds":[],"configurations":[],"docs":[],"releaseManager":[],""" +
+            """"securityChampion":[],"securityGroups":[],"teamcityProjects":[],"componentOwner":"alice","system":"SYS"}"""
+        // Table render.
+        val tableEx = QueueExchange(listOf(200 to detail))
+        val table = cli(tableEx).test(listOf(URL, "component", "get", uuid))
+        assertEquals(0, table.statusCode, table.stderr)
+        assertEquals("/rest/api/4/components/$uuid", tableEx.requests.single().uri().path)
+        assertTrue(table.stdout.contains("FIELD"), "detail table header expected")
+        assertTrue(table.stdout.contains("my-comp"))
+
+        // JSON render.
+        val jsonEx = QueueExchange(listOf(200 to detail))
+        val json = cli(jsonEx).test(listOf(URL, "-o", "json", "component", "get", uuid))
+        assertEquals(0, json.statusCode, json.stderr)
+        assertTrue(json.stdout.contains("\"id\""))
+        assertTrue(json.stdout.contains(uuid))
+    }
+
+    @Test
+    fun `component as-code uses text-plain Accept and passes the body through verbatim`() {
+        val raw = "component(\"my-comp\") {\n    owner \"alice\"\n}\n"
+        val ex = QueueExchange(listOf(200 to raw))
+        val result = cli(ex).test(listOf(URL, "component", "as-code", "my-comp"))
+        assertEquals(0, result.statusCode, result.stderr)
+        val request = ex.requests.single()
+        assertTrue(request.uri().path.endsWith("/components/my-comp/as-code"))
+        assertEquals("text/plain", request.headers().firstValue("Accept").orElse(""))
+        assertTrue(result.stdout.contains("component(\"my-comp\")"), "raw body must pass through: ${result.stdout}")
+        assertTrue(result.stdout.contains("owner \"alice\""))
+    }
+
+    @Test
+    fun `component get percent-encodes a name with a space in the path`() {
+        val detail = """{"id":"x","name":"my comp","archived":false,"canBeParent":false,"version":1,""" +
+            """"labels":[],"artifactIds":[],"configurations":[],"docs":[],"releaseManager":[],""" +
+            """"securityChampion":[],"securityGroups":[],"teamcityProjects":[]}"""
+        val ex = QueueExchange(listOf(200 to detail))
+        // A raw space would make URI.create throw; if encoding works the call succeeds (exit 0).
+        val result = cli(ex).test(listOf(URL, "component", "get", "my comp"))
+        assertEquals(0, result.statusCode, result.stderr)
+        val uri = ex.requests.single().uri()
+        assertTrue(uri.rawPath.contains("%20"), "space must be percent-encoded in the path: ${uri.rawPath}")
+        assertTrue(uri.rawPath.endsWith("/components/my%20comp"))
+    }
+
+    @Test
+    fun `components list --all stops after totalPages even when last is never true`() {
+        // A misbehaving server: always last=false, but reports totalPages=2. The single reply is
+        // reused for every call, so without the totalPages guard this would loop forever.
+        val page = """{"content":[{"id":"1","name":"A","archived":false,"canBeParent":false,"labels":[]}],""" +
+            """"last":false,"totalPages":2}"""
+        val ex = QueueExchange(listOf(200 to page))
+        val result = cli(ex).test(listOf(URL, "components", "list", "--all"))
+        assertEquals(0, result.statusCode, result.stderr)
+        assertEquals(2, ex.requests.size, "must stop after totalPages=2 fetches")
+    }
+
+    @Test
     fun `meta employees 401 maps to AUTH_REQUIRED`() {
         val ex = QueueExchange(listOf(401 to """{"errorMessage":"login required"}"""))
         val result = cli(ex).test(listOf(URL, "meta", "employees", "--search", "ali"))

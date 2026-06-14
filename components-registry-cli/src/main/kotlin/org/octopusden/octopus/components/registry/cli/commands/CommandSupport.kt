@@ -6,6 +6,19 @@ import org.octopusden.octopus.components.registry.cli.CliContext
 import org.octopusden.octopus.components.registry.cli.client.ExitCodes
 import org.octopusden.octopus.components.registry.cli.output.OutputFormat
 import org.octopusden.octopus.components.registry.cli.output.Renderer
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
+
+/**
+ * Percent-encodes a single URL path segment so user-supplied ids/names/uuids can be safely
+ * interpolated into a request path. A raw name with a space makes `URI.create` throw, and a raw
+ * `/` would mis-route into a different path segment; encoding here prevents both.
+ *
+ * [URLEncoder.encode] is form/application-x-www-form-urlencoded oriented (it emits `+` for a space),
+ * so the result is post-processed to turn `+` into `%20` which is the correct path-segment encoding.
+ */
+internal fun encodePathSegment(s: String): String =
+    URLEncoder.encode(s, StandardCharsets.UTF_8).replace("+", "%20")
 
 /**
  * Runs [block], catching any thrown error, writing a structured error to STDERR via

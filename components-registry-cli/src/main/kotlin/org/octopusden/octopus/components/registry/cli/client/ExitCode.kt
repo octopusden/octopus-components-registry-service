@@ -39,6 +39,7 @@ object ExitCodes {
     }
 
     fun fromHttpStatus(status: Int): ExitCode = when (status) {
+        400 -> ExitCode.USAGE
         404 -> ExitCode.NOT_FOUND
         401, 403 -> ExitCode.AUTH_REQUIRED
         in 500..599 -> ExitCode.SERVER

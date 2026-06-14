@@ -3,6 +3,7 @@ package org.octopusden.octopus.components.registry.cli.auth
 import org.octopusden.octopus.components.registry.cli.config.ConfigLoader
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.StandardOpenOption
 import java.nio.file.attribute.PosixFilePermission
 import java.nio.file.attribute.PosixFilePermissions
 
@@ -32,7 +33,9 @@ class CredentialStoreException(message: String, cause: Throwable? = null) : Runt
 
 /**
  * macOS Keychain-backed [CredentialStore] implemented via the system `security` CLI:
- *   - save  -> `security add-generic-password -U` (-U updates an existing item in place)
+ *   - save  -> `security add-generic-password -U` (-U updates an existing item in place); the secret
+ *             is fed via STDIN (a bare `-w` with no value), NOT on the argv, so it never appears in
+ *             the process table (`ps`) of other users on the machine.
  *   - load  -> `security find-generic-password -w` (-w prints just the secret to STDOUT)
  *   - clear -> `security delete-generic-password`
  *
@@ -69,15 +72,18 @@ class KeychainCredentialStore(
     }
 
     override fun save(refreshToken: String) {
+        // The secret is passed via STDIN (bare `-w`), never on argv, to avoid `ps` exposure.
+        // TODO(spike): verify 'security add-generic-password -w' consumes the secret from stdin on the
+        // target macOS; fall back to a temp-file -w @path if not.
         val result = runner.run(
             listOf(
                 "security", "add-generic-password",
                 "-U",
                 "-s", service,
                 "-a", account,
-                "-w", refreshToken,
+                "-w",
             ),
-            null,
+            refreshToken,
         )
         if (result.exitCode != 0) {
             throw CredentialStoreException(
@@ -141,11 +147,12 @@ class InsecureFileCredentialStore(
             Files.createDirectories(dir)
         }
         if (!Files.exists(file)) {
-            Files.createFile(file)
+            // Create the file owner-only (0600) ATOMICALLY before any secret is written, closing the
+            // TOCTOU window where a world-readable file could briefly hold the token.
+            Files.createFile(file, PosixFilePermissions.asFileAttribute(OWNER_ONLY))
         }
-        setOwnerOnlyPermissions(file)
-        Files.writeString(file, refreshToken)
-        // Re-assert perms after write in case the platform reset them on create.
+        Files.writeString(file, refreshToken, StandardOpenOption.TRUNCATE_EXISTING)
+        // Re-assert perms after write (covers the overwrite path where the file pre-existed).
         setOwnerOnlyPermissions(file)
     }
 

@@ -50,7 +50,7 @@ class ComponentAsCodeCommand : CliktCommand(
     override fun run() = runCommand {
         val client = ctx.client()
         // text/plain endpoint: print exactly what the server returns, no JSON/table shaping.
-        emit(client.getText("/rest/api/4/components/$idOrName/as-code"))
+        emit(client.getText("/rest/api/4/components/${encodePathSegment(idOrName)}/as-code"))
     }
 }
 
@@ -77,7 +77,7 @@ class ComponentOverridesCommand : CliktCommand(
             fetchDetail(client, idOrUuidOrName).id
         }
         val overrides = client.getJson(
-            "/rest/api/4/components/$uuid/field-overrides",
+            "/rest/api/4/components/${encodePathSegment(uuid)}/field-overrides",
             ListSerializer(FieldOverrideResponse.serializer()),
         )
         render(
@@ -90,7 +90,7 @@ class ComponentOverridesCommand : CliktCommand(
 
 /** Shared: GET /rest/api/4/components/{idOrName} (no resolve — server accepts id or name). */
 private fun fetchDetail(client: CrsClient, idOrName: String): ComponentDetailResponse =
-    client.getJson("/rest/api/4/components/$idOrName", ComponentDetailResponse.serializer())
+    client.getJson("/rest/api/4/components/${encodePathSegment(idOrName)}", ComponentDetailResponse.serializer())
 
 /** True when [value] parses as a canonical UUID. */
 private fun isUuid(value: String): Boolean =

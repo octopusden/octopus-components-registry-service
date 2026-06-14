@@ -46,7 +46,8 @@ class TokenManagerTest {
 
         assertEquals(first, second)
         assertEquals(1, ex.requests.size, "second call served from cache, no extra refresh")
-        // Same refresh token -> no save call.
-        assertEquals(listOf("load"), store.calls)
+        // A present refresh token is always persisted (save is idempotent); the cached second call
+        // does not refresh, so exactly one load+save pair is expected.
+        assertEquals(listOf("load", "save"), store.calls)
     }
 }

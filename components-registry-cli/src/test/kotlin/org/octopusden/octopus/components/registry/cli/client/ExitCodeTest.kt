@@ -8,6 +8,11 @@ import kotlin.test.assertEquals
 class ExitCodeTest {
 
     @Test
+    fun `400 maps to USAGE`() {
+        assertEquals(ExitCode.USAGE, ExitCodes.fromHttpStatus(400))
+    }
+
+    @Test
     fun `404 maps to NOT_FOUND`() {
         assertEquals(ExitCode.NOT_FOUND, ExitCodes.fromThrowable(CrsApiException(404, null, "x")))
     }

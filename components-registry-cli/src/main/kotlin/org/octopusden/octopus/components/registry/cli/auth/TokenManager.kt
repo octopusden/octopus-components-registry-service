@@ -40,12 +40,9 @@ class TokenManager(
         val refreshToken = store.load()
             ?: throw AuthRequiredException()
         val response = deviceFlow.refresh(issuer, clientId, refreshToken)
-        // Rotation: persist the new refresh token when the provider returned one.
-        response.refreshToken?.let { rotated ->
-            if (rotated != refreshToken) {
-                store.save(rotated)
-            }
-        }
+        // Rotation: persist the refresh token whenever the provider returned one (save is idempotent).
+        // Never save/wipe when the response omits a refresh token.
+        response.refreshToken?.let { store.save(it) }
         cachedAccessToken = response.accessToken
         expiresAtMillis = nowMillis() + response.expiresIn * 1000L
         return response.accessToken

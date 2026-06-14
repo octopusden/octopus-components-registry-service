@@ -112,7 +112,13 @@ class ComponentsListCommand : CliktCommand(
         return response.content.orEmpty()
     }
 
-    /** Walks pages starting at 0 (or the configured size), accumulating content until `last == true`. */
+    /**
+     * Walks pages starting at 0 (or the configured size), accumulating content until `last == true`.
+     *
+     * A misbehaving server that never sets `last` must not loop forever, so two extra guards apply:
+     *  - if the response carries a non-null `totalPages`, stop once the next index would reach it;
+     *  - an absolute [MAX_PAGES] safety cap, which (if hit) warns on STDERR and breaks.
+     */
     private fun fetchAll(client: CrsClient): List<ComponentSummaryResponse> {
         val accumulated = mutableListOf<ComponentSummaryResponse>()
         var current = 0
@@ -125,6 +131,16 @@ class ComponentsListCommand : CliktCommand(
             }
             // Defensive stop: a server that never reports `last` (or returns an empty page) must not loop forever.
             if (response.content.isNullOrEmpty()) {
+                break
+            }
+            // Page-count bound: stop when the next page index would reach/exceed the reported total.
+            val totalPages = response.totalPages
+            if (totalPages != null && current + 1 >= totalPages) {
+                break
+            }
+            // Absolute safety cap: never loop past MAX_PAGES even if the server keeps lying.
+            if (current + 1 >= MAX_PAGES) {
+                System.err.println("warning: --all stopped at the $MAX_PAGES-page safety cap")
                 break
             }
             current++
@@ -140,5 +156,8 @@ class ComponentsListCommand : CliktCommand(
 
     companion object {
         const val COMPONENTS_PATH = "/rest/api/4/components"
+
+        /** Absolute upper bound on `--all` page fetches, guarding against a server that never sets `last`. */
+        const val MAX_PAGES = 10_000
     }
 }
