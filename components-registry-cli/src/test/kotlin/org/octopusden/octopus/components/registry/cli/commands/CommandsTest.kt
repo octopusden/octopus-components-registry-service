@@ -251,6 +251,15 @@ class CommandsTest {
     }
 
     @Test
+    fun `whoami with no url configured still reports anonymous out of the box`() {
+        val ex = QueueExchange(listOf(500 to "should not be called"))
+        val result = cli(ex).test(listOf("whoami"))
+        assertEquals(0, result.statusCode, result.stderr)
+        assertEquals(0, ex.requests.size, "anonymous whoami must not hit the network")
+        assertTrue(result.stdout.contains("anonymous; for current CRS versions ACCESS_COMPONENTS is implied"))
+    }
+
+    @Test
     fun `audit recent maps filter options to spec query params and pageable`() {
         val page = """{"content":[],"last":true}"""
         val ex = QueueExchange(listOf(200 to page))

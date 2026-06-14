@@ -29,7 +29,16 @@ class WhoamiCommand : CliktCommand(
     private val ctx by requireObject<CliContext>()
 
     override fun run() = runCommand {
-        val target = ctx.resolveTarget()
+        // whoami must answer "anonymous" out of the box, even with no profile/URL configured —
+        // the anonymous branch makes no server call. Only surface a missing-URL error when the
+        // user supplied a token (they clearly intended an authenticated /auth/me lookup).
+        val target = try {
+            ctx.resolveTarget()
+        } catch (e: ConfigResolutionException) {
+            if (!ctx.tokenFlag.isNullOrBlank()) throw e
+            emit("anonymous; for current CRS versions ACCESS_COMPONENTS is implied")
+            return@runCommand
+        }
         val token = resolveToken(target)
         if (token == null) {
             emit("anonymous; for current CRS versions ACCESS_COMPONENTS is implied")
