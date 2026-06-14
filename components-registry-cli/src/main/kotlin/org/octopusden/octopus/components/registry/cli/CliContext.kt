@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.cli
 
+import org.octopusden.octopus.components.registry.cli.auth.AuthRequiredException
 import org.octopusden.octopus.components.registry.cli.auth.CommandRunner
 import org.octopusden.octopus.components.registry.cli.auth.CredentialStore
 import org.octopusden.octopus.components.registry.cli.auth.DeviceFlowClient
@@ -79,6 +80,44 @@ class CliContext(
     /** Resolves the target and builds a [CrsClient] for it. */
     fun client(): CrsClient = clientFactory.create(resolveTarget())
 
+    /**
+     * Builds a [CrsClient] guaranteed to carry a bearer token, for endpoints that REQUIRE an
+     * authenticated identity (e.g. the audit API behind ACCESS_AUDIT).
+     *
+     * Token resolution mirrors `whoami`:
+     *   1. An explicit token (`--token` / `CRS_TOKEN`) — used verbatim.
+     *   2. A stored refresh token exchanged for an access token via the [TokenManager].
+     *
+     * Unlike `whoami` (which treats "no credential" as anonymous), this throws
+     * [AuthRequiredException] when neither path yields a token, so the caller never makes a blind
+     * anonymous request that the server would reject with a generic 401. A missing profile-level
+     * OIDC config ([ConfigResolutionException]) is likewise surfaced as [AuthRequiredException]:
+     * from the user's point of view they simply are not logged in for this operation.
+     */
+    fun authedClient(): CrsClient {
+        val target = resolveTarget()
+        val token = resolveBearerToken(target)
+        return clientFactory.create(target.copy(token = token))
+    }
+
+    /**
+     * Returns a usable bearer token for an auth-required operation, or throws [AuthRequiredException]
+     * when none can be resolved. An explicit token wins; otherwise a stored refresh token is
+     * exchanged via the [TokenManager].
+     */
+    private fun resolveBearerToken(target: EffectiveTarget): String {
+        if (!target.token.isNullOrBlank()) {
+            return target.token
+        }
+        return try {
+            tokenManager().accessToken()
+        } catch (e: AuthRequiredException) {
+            throw AuthRequiredException(NOT_AUTHENTICATED_MESSAGE)
+        } catch (e: ConfigResolutionException) {
+            throw AuthRequiredException(NOT_AUTHENTICATED_MESSAGE)
+        }
+    }
+
     /** Builds a [CrsClient] for [target] using the configured factory. */
     fun clientFor(target: EffectiveTarget): CrsClient = clientFactory.create(target)
 
@@ -123,5 +162,11 @@ class CliContext(
         val name = sequenceOf(envFlag, config.defaultProfile).firstOrNull { !it.isNullOrBlank() }
             ?: return null
         return config.profiles[name]
+    }
+
+    companion object {
+        /** Surfaced (exit AUTH_REQUIRED) when an auth-required command has no resolvable credential. */
+        const val NOT_AUTHENTICATED_MESSAGE =
+            "audit requires `crsctl login` and the ACCESS_AUDIT permission"
     }
 }

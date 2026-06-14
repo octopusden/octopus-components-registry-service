@@ -251,6 +251,122 @@ class CommandsTest {
     }
 
     @Test
+    fun `audit recent maps filter options to spec query params and pageable`() {
+        val page = """{"content":[],"last":true}"""
+        val ex = QueueExchange(listOf(200 to page))
+        val result = cli(ex).test(
+            listOf(
+                URL, "--token=tok", "audit", "recent",
+                "--entity-type", "COMPONENT",
+                "--entity-id", "abc",
+                "--changed-by", "alice",
+                "--action", "UPDATE",
+                "--source", "PORTAL",
+                "--from", "2026-06-01T00:00:00Z",
+                "--to", "2026-06-14T00:00:00Z",
+                "--include-migrated", "true",
+                "--page", "1", "--size", "25", "--sort", "changedAt,desc",
+            ),
+        )
+        assertEquals(0, result.statusCode, result.stderr)
+        val request = ex.requests.single()
+        assertTrue(request.uri().path.endsWith("/rest/api/4/audit/recent"))
+        // rawQuery preserves percent-encoding for the wire-format the server receives.
+        val q = request.uri().rawQuery
+        assertTrue(q.contains("entityType=COMPONENT"), "entity-type must map to spec 'entityType': $q")
+        assertTrue(q.contains("entityId=abc"), "entity-id must map to spec 'entityId': $q")
+        assertTrue(q.contains("changedBy=alice"), "changed-by must map to spec 'changedBy': $q")
+        assertTrue(q.contains("action=UPDATE"))
+        assertTrue(q.contains("source=PORTAL"))
+        assertTrue(q.contains("from=2026-06-01T00%3A00%3A00Z"), "from must be sent percent-encoded: $q")
+        assertTrue(q.contains("to=2026-06-14T00%3A00%3A00Z"))
+        assertTrue(q.contains("includeMigrated=true"), "include-migrated must map to spec 'includeMigrated': $q")
+        assertTrue(q.contains("page=1"))
+        assertTrue(q.contains("size=25"))
+        assertTrue(q.contains("sort=changedAt%2Cdesc"))
+    }
+
+    @Test
+    fun `audit recent omits include-migrated when not given`() {
+        val ex = QueueExchange(listOf(200 to """{"content":[],"last":true}"""))
+        val result = cli(ex).test(listOf(URL, "--token=tok", "audit", "recent"))
+        assertEquals(0, result.statusCode, result.stderr)
+        val q = ex.requests.single().uri().rawQuery ?: ""
+        assertTrue(!q.contains("includeMigrated"), "include-migrated must be omitted when not passed: $q")
+    }
+
+    @Test
+    fun `audit history builds the entityType entityId path with encoded segments and pageable`() {
+        val ex = QueueExchange(listOf(200 to """{"content":[],"last":true}"""))
+        val result = cli(ex).test(
+            listOf(
+                URL, "--token=tok", "audit", "history", "COMPONENT TYPE", "id/with slash",
+                "--include-migrated", "false", "--page", "0", "--size", "10", "--sort", "changedAt,asc",
+            ),
+        )
+        assertEquals(0, result.statusCode, result.stderr)
+        val uri = ex.requests.single().uri()
+        // Both path segments must be percent-encoded (space -> %20, slash -> %2F) so they stay single segments.
+        assertTrue(
+            uri.rawPath.endsWith("/rest/api/4/audit/COMPONENT%20TYPE/id%2Fwith%20slash"),
+            "encoded entity path expected: ${uri.rawPath}",
+        )
+        val q = uri.rawQuery
+        assertTrue(q.contains("includeMigrated=false"))
+        assertTrue(q.contains("page=0"))
+        assertTrue(q.contains("size=10"))
+        assertTrue(q.contains("sort=changedAt%2Casc"))
+    }
+
+    @Test
+    fun `audit recent renders table by default and json on -o json`() {
+        val page = """{"content":[{"id":1,"action":"UPDATE","entityType":"COMPONENT",""" +
+            """"entityId":"abc","changedAt":"2026-06-14T00:00:00Z","source":"PORTAL","changedBy":"alice"}],""" +
+            """"last":true}"""
+        val tableEx = QueueExchange(listOf(200 to page))
+        val table = cli(tableEx).test(listOf(URL, "--token=tok", "audit", "recent"))
+        assertEquals(0, table.statusCode, table.stderr)
+        assertTrue(table.stdout.contains("CHANGED_AT"), "table header expected: ${table.stdout}")
+        assertTrue(table.stdout.contains("UPDATE"))
+        assertTrue(table.stdout.contains("alice"))
+
+        val jsonEx = QueueExchange(listOf(200 to page))
+        val json = cli(jsonEx).test(listOf(URL, "--token=tok", "-o", "json", "audit", "recent"))
+        assertEquals(0, json.statusCode, json.stderr)
+        assertTrue(json.stdout.trimStart().startsWith("["), "json array expected: ${json.stdout}")
+        assertTrue(json.stdout.contains("\"action\""))
+    }
+
+    @Test
+    fun `audit recent attaches a bearer token on the outgoing request`() {
+        val ex = QueueExchange(listOf(200 to """{"content":[],"last":true}"""))
+        val result = cli(ex).test(listOf(URL, "--token=secret-tok", "audit", "recent"))
+        assertEquals(0, result.statusCode, result.stderr)
+        val auth = ex.requests.single().headers().firstValue("Authorization").orElse("")
+        assertEquals("Bearer secret-tok", auth, "audit must send the bearer token")
+    }
+
+    @Test
+    fun `audit recent without any credential exits AUTH_REQUIRED and makes no http call`() {
+        val ex = QueueExchange(listOf(500 to "should not be called"))
+        val result = cli(ex).test(listOf(URL, "audit", "recent"))
+        assertEquals(4, result.statusCode, "AUTH_REQUIRED exit code expected: ${result.stderr}")
+        assertEquals(0, ex.requests.size, "no HTTP call must be made when there is no credential")
+        assertTrue(
+            result.stderr.contains("audit requires `crsctl login` and the ACCESS_AUDIT permission"),
+            "clear no-credential message expected: ${result.stderr}",
+        )
+    }
+
+    @Test
+    fun `audit history without any credential exits AUTH_REQUIRED and makes no http call`() {
+        val ex = QueueExchange(listOf(500 to "should not be called"))
+        val result = cli(ex).test(listOf(URL, "audit", "history", "COMPONENT", "abc"))
+        assertEquals(4, result.statusCode, "AUTH_REQUIRED exit code expected: ${result.stderr}")
+        assertEquals(0, ex.requests.size, "no HTTP call must be made when there is no credential")
+    }
+
+    @Test
     fun `meta owners returns string list as table`() {
         val ex = QueueExchange(listOf(200 to """["alice","bob"]"""))
         val result = cli(ex).test(listOf(URL, "meta", "owners"))
