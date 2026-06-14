@@ -62,7 +62,27 @@ Quality reports index: `build/reports/quality/index.html`
 | `components-registry-service-core` | Core DTOs and exceptions |
 | `components-registry-service-client` | Feign HTTP client |
 | `components-registry-service-server` | Spring Boot REST API (main application) |
+| `components-registry-cli` | `crsctl` — read-only command-line client for the v4 API (Kotlin/JVM fat jar) |
 | `test-common` | Shared test utilities |
+
+### crsctl CLI
+
+`crsctl` (module `components-registry-cli`) is a read-only command-line client for the CRS **v4 API**,
+shipped as a self-contained fat jar (`./gradlew :components-registry-cli:shadowJar`, then
+`java -jar components-registry-cli/build/libs/components-registry-cli-1.0-SNAPSHOT.jar ...`). Anonymous
+read commands (`components`, `component`, `meta`, `whoami`) work without a login; `login` / `audit` /
+`meta employees` need a credential and are currently gated on a pending Keycloak public device-flow
+client. With `-o json` it emits stable JSON (a top-level array for list-shaped commands), structured
+JSON errors on stderr, and pinned exit codes (0 OK, 2 USAGE, 3 NOT_FOUND, 4 AUTH_REQUIRED, 5 SERVER).
+
+```
+crsctl --env dev components list --owner alice --system FOO -o json | jq -r '.[].name'
+crsctl --env dev component get my-component -o json | jq '.componentOwner'
+crsctl --env dev meta owners -o json | jq -r '.[]'
+```
+
+See `components-registry-cli/README.md` for the full command surface and `components-registry-cli/skill/SKILL.md`
+for the agent-facing Skill with copy-pasteable `jq` recipes.
 
 ## Tech Stack
 
