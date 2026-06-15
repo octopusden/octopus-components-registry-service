@@ -273,6 +273,24 @@ object id12IntegrationDbTestsAuto : BuildType({
     }
 
     steps {
+        // Detect branch family from the checked-out source rather than branch
+        // name: any branch descended from v3 will have "task dbTest" in
+        // build.gradle; any branch descended from main will not.
+        // Override GRADLE_TASK for the main family so the same build config
+        // works on both lines. Remove once v3 is merged into main (CREG-485).
+        script {
+            name = "Set Gradle task for branch"
+            id = "SET_GRADLE_TASK"
+            scriptContent = """
+                if grep -q "task dbTest" components-registry-service-server/build.gradle 2>/dev/null; then
+                    # v3 line: dbTest present, keep default GRADLE_TASK
+                    :
+                else
+                    # main line: no dbTest, switch to integrationTest (server only)
+                    echo "##teamcity[setParameter name='GRADLE_TASK' value='clean :components-registry-service-server:integrationTest']"
+                fi
+            """.trimIndent()
+        }
         script {
             name = "Login to the OKD cluster"
             id = "Login_to_the_OKD_cluster"
@@ -283,6 +301,11 @@ object id12IntegrationDbTestsAuto : BuildType({
             param("org.jfrog.artifactory.selectedDeployableServer.useSpecs", "false")
             param("org.jfrog.artifactory.selectedDeployableServer.uploadSpecSource", "Job configuration")
             param("org.jfrog.artifactory.selectedDeployableServer.downloadSpecSource", "Job configuration")
+            // OKD cluster is only needed for dbTest (v3 line). Skip when
+            // SET_GRADLE_TASK has switched to integrationTest (main line).
+            conditions {
+                doesNotContain("GRADLE_TASK", "integrationTest")
+            }
         }
         gradle {
             name = "Gradle Integration & DB Tests"
@@ -300,7 +323,7 @@ object id12IntegrationDbTestsAuto : BuildType({
             dockerRunParameters = "--userns=keep-id -e JAVA_HOME=/opt/java/openjdk -v %env.BUILD_ENV%:/opt/BUILD_ENV -v %teamcity.build.checkoutDir%:/home/tcagent/work -v %teamcity.agent.jvm.user.home%:/home/tcagent -w /home/tcagent/work -e TZ=Europe/Brussels"
             param("org.jfrog.artifactory.selectedDeployableServer.defaultModuleVersionConfiguration", "GLOBAL")
         }
-        stepsOrder = arrayListOf("Login_to_the_OKD_cluster", "RUNNER_1720", "RUNNER_1768")
+        stepsOrder = arrayListOf("SET_GRADLE_TASK", "Login_to_the_OKD_cluster", "RUNNER_1720", "RUNNER_1768")
     }
 
     failureConditions {
@@ -311,7 +334,7 @@ object id12IntegrationDbTestsAuto : BuildType({
         xmlReport {
             id = "BUILD_EXT_1815"
             reportType = XmlReport.XmlReportType.JUNIT
-            rules = "+:**/build/test-results/dbTest/*.xml"
+            rules = "+:**/build/test-results/**/*.xml"
         }
     }
 
@@ -323,7 +346,6 @@ object id12IntegrationDbTestsAuto : BuildType({
         finishBuildTrigger {
             buildType = "${id10CompileUtAuto.id}"
             successfulOnly = true
-            branchFilter = "+:*"
         }
     }
 
