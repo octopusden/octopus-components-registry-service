@@ -33,7 +33,7 @@ import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRangeFactory
 
 /**
- * Range-only parity guard (see plan: mcloud out-of-range resolution).
+ * Range-only parity guard (see #362 for the related migration-time validation).
  *
  * Pins V1 ↔ v3 behavioural parity for the "component-own default + a single
  * `[1.0.700,)` block" DSL shape, where the lowest declared range starts above
