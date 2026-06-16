@@ -461,4 +461,61 @@ class ComponentCodeRendererTest {
         assertTrue(out.contains("buildSystem = MAVEN"), out)
         assertFalse(out.contains("javaVersion = \"11\""), out)
     }
+
+    // ----------------------------------------------------------------------
+    // Bounded base row (versionRange != ALL_VERSIONS)
+    // ----------------------------------------------------------------------
+
+    /** A BASE row scoped to a bounded range instead of the default ALL_VERSIONS. */
+    private fun boundedBase(
+        c: ComponentEntity,
+        range: String,
+        block: ComponentConfigurationEntity.() -> Unit = {},
+    ): ComponentConfigurationEntity {
+        val row =
+            ComponentConfigurationEntity(
+                id = UUID.randomUUID(),
+                component = c,
+                versionRange = range,
+                overriddenAttribute = null,
+                rowType = "BASE",
+                isSyntheticBase = false,
+            ).apply(block)
+        c.configurations.add(row)
+        return row
+    }
+
+    @Test
+    @DisplayName("FULL: bounded base range is surfaced as an explicit (empty) block")
+    fun fullEmitsBoundedBaseRangeBlock() {
+        val c = component()
+        boundedBase(c, "[1.0.700,)") {
+            buildSystem = "MAVEN"
+            javaVersion = "21"
+            jiraProjectKey = "X"
+        }
+        val out = renderer.renderFull(c)
+        // The component-level defaults still render in the top-level body...
+        assertTrue(out.contains("javaVersion = \"21\""), out)
+        // ...and the bounded base range is shown as its own block so it's clear the component
+        // is supported ONLY within it. It is empty (all fields inherited from the body above).
+        assertTrue(out.contains("\"[1.0.700,)\" {"), out)
+    }
+
+    @Test
+    @DisplayName("RESOLVED: version below the bounded base range returns null (range gate, mirrors v2 404)")
+    fun resolvedNullWhenBelowBoundedBaseRange() {
+        val c = component()
+        boundedBase(c, "[1.0.700,)") {
+            buildSystem = "MAVEN"
+            javaVersion = "21"
+            jiraProjectKey = "X"
+        }
+        // 1.0.1 is below the only declared range → no config resolves → null (404), matching
+        // EntityMappers.toResolvedEscrowModuleConfig and the real v2 resolver.
+        assertNull(renderer.renderResolved(c, "1.0.1"))
+        // In-range still resolves.
+        val inRange = renderer.renderResolved(c, "1.0.700")
+        assertTrue(inRange != null && inRange.contains("javaVersion = \"21\""), "$inRange")
+    }
 }
