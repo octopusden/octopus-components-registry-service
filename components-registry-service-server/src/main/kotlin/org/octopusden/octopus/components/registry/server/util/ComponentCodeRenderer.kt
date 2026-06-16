@@ -8,6 +8,7 @@ import org.octopusden.octopus.components.registry.server.entity.DistributionFile
 import org.octopusden.octopus.components.registry.server.entity.DistributionMavenArtifactEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionPackageEntity
 import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
+import org.octopusden.octopus.components.registry.server.mapper.ALL_VERSIONS
 import org.octopusden.octopus.components.registry.server.mapper.ComponentConfigurationView
 import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
 import org.octopusden.octopus.components.registry.server.mapper.extractScalarValue
@@ -113,11 +114,21 @@ class ComponentCodeRenderer(
             buildToolBeans = base.buildToolBeans.toList(),
         )
 
+        val overrideRanges = overrides.map { it.versionRange }.distinct()
+
+        // If the BASE row itself is scoped to a bounded range (not ALL_VERSIONS), surface that
+        // range as an explicit — possibly empty — block so the view makes clear the component is
+        // supported ONLY within it (versions outside resolve to 404; see renderResolved's gate).
+        // The base body above is the component-level default that this range inherits, so the
+        // block carries no fields of its own. Skipped when an override row already declares the
+        // same range (writeRangeBlock renders it with content below).
+        if (base.versionRange != ALL_VERSIONS && base.versionRange !in overrideRanges) {
+            cb.open(doubleQuoted(base.versionRange))
+            cb.close()
+        }
+
         // Distinct override ranges in deterministic (DSL declaration) order.
-        overrides
-            .map { it.versionRange }
-            .distinct()
-            .forEach { range -> writeRangeBlock(cb, range, overrides.filter { it.versionRange == range }) }
+        overrideRanges.forEach { range -> writeRangeBlock(cb, range, overrides.filter { it.versionRange == range }) }
 
         cb.close()
         return cb.toString()
@@ -141,6 +152,28 @@ class ComponentCodeRenderer(
             } catch (_: Exception) {
                 return null
             }
+
+        // Mirror EntityMappers.toResolvedEscrowModuleConfig's version-range gate (MIG-042): a
+        // version outside the component's effective range union resolves to NO config (404).
+        // Without this the as-code resolved view was more lenient than the real resolver and
+        // would render a component for a version the v2 endpoints return 404 for. Canonical
+        // logic lives in EntityMappers.kt; kept in sync by tests on both sides.
+        if (base.versionRange != ALL_VERSIONS) {
+            val containsVersion = { range: String? ->
+                range.isNullOrBlank() ||
+                    range == ALL_VERSIONS ||
+                    try {
+                        versionRangeFactory.create(range).containsVersion(numericVersion)
+                    } catch (_: Exception) {
+                        true
+                    }
+            }
+            val inEffectiveRange =
+                containsVersion(base.versionRange) ||
+                    configs.any { it.rowType != ROW_BASE && containsVersion(it.versionRange) }
+            if (!inEffectiveRange) return null
+        }
+
         val matching =
             configs.filter { it.rowType == ROW_SCALAR_OVERRIDE || it.rowType == ROW_MARKER }
                 .filter { override ->
