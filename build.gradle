@@ -143,23 +143,6 @@ configure(subprojects) {
     apply plugin: 'java-library'
     apply plugin: 'maven-publish'
 
-    // HHH-18551 fix — applied to EVERY module (outside the kotlin/light-client guard
-    // below) so it covers the server bootJar AND the client/light-client modules that
-    // pull the server onto their test classpath via `testImplementation project(...)`.
-    // Spring Boot 3.2.x recommends hibernate-core 6.4.1.Final, where
-    // AbstractArrayJavaType#getRecommendedJdbcType mints a fresh, non-deduplicated
-    // ArrayJdbcType per resolution; our @BatchSize collection batch-fetch binds child
-    // FK keys as PostgreSQL uuid[] arrays (`= ANY(?)`), so each such query leaks a new
-    // ArrayJdbcType into TypeConfiguration.basicTypeRegistry.registryValues → unbounded
-    // growth → OOM under release-notes load (proven in TypeConfigurationArrayLeakReproTest).
-    // Fixed in 6.6.2; we take the latest 6.6.x.Final. A portable dependency *constraint*
-    // (not a server-local resolutionStrategy.force) so consumers inherit the same runtime.
-    dependencies {
-        constraints {
-            implementation("org.hibernate.orm:hibernate-core:6.6.53.Final")
-        }
-    }
-
     if (!project.name.equalsIgnoreCase("components-registry-service-light-client")) {
         apply plugin: 'org.jetbrains.kotlin.jvm'
 

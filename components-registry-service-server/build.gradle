@@ -73,9 +73,27 @@ dependencies {
     testImplementation("org.springframework.security:spring-security-test")
     testImplementation testFixtures(project(":test-common"))
 }
-// NOTE: the Hibernate HHH-18551 fix (force hibernate-core >= 6.6.2) is applied as a
-// portable constraint across ALL modules in the root build.gradle, not here — a
-// server-local override would not propagate to client/light-client server-backed tests.
+
+// HHH-18551 (array-type leak → OOM). Spring Boot 3.2.x recommends hibernate-core
+// 6.4.1.Final, where AbstractArrayJavaType#getRecommendedJdbcType mints a fresh,
+// non-deduplicated ArrayJdbcType per resolution; our @BatchSize collection batch-fetch
+// binds child FK keys as PostgreSQL uuid[] arrays (`= ANY(?)`), leaking a new ArrayJdbcType
+// into TypeConfiguration.basicTypeRegistry.registryValues on every such query → unbounded
+// growth → OOM under release-notes load (proven in TypeConfigurationArrayLeakReproTest).
+// Fixed in 6.6.2; take the latest 6.6.x.Final.
+//
+// Scoped to THIS module — the bootJar that actually runs Hibernate. A dependency
+// *constraint* (not resolutionStrategy.force, which is project-local and wouldn't
+// propagate) travels on the server's runtime variant to the client/light-client
+// server-backed test runtimes (`testImplementation project(":...-server")`), so those
+// tests exercise the real ORM — WITHOUT adding a Hibernate requirement to the client
+// library modules' own published metadata. A future Spring Boot upgrade whose BOM ships
+// Hibernate >= 6.6.2 can drop this.
+dependencies {
+    constraints {
+        implementation("org.hibernate.orm:hibernate-core:6.6.53.Final")
+    }
+}
 
 // Applies to EVERY Test task (test, dbTest, integrationTest) so the heavy DB/Spring tests
 // get the same Docker env no matter which task runs them. (Ryuk is disabled globally for
