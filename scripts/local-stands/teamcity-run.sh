@@ -429,4 +429,25 @@ fi
 # shellcheck disable=SC2086  # GRADLE_*_ARG(S) are space-separated -P tokens or empty
 "$SCRIPT_DIR/compat.sh" $GRADLE_PARALLELISM_ARG $GRADLE_MODE_ARGS "$@"
 COMPAT_EXIT=$?
+
+# Surface the production-trace replay VOLUME on the build status + statistics.
+# TeamCity's "Tests passed: N" counts the (~130k-tuple) trace replay as a SINGLE
+# @Test method, so the real number of replayed requests is otherwise invisible on
+# the build tile. Read the machine-readable summary the replay test already writes
+# (TraceReplayCompatTest.writeSummary -> build/reports/compat/trace-replay-summary.json)
+# and publish TOTALS ONLY — never endpoint paths, which may carry component IDs.
+# Fully guarded (`[ -f ]`, `|| true`, `:-`) so a missing/renamed summary or a
+# no-match grep can never disturb the compat result/exit code.
+TRACE_SUMMARY="$CANDIDATE_WORKTREE/components-registry-compat-test/build/reports/compat/trace-replay-summary.json"
+if [ -f "$TRACE_SUMMARY" ]; then
+  TUPLES=$(grep -oE '"tuplesReplayed"[^0-9-]*[0-9]+' "$TRACE_SUMMARY" | grep -oE '[0-9]+$' | head -1 || true)
+  DIFFS=$(grep -oE '"tuplesWithDiffs"[^0-9-]*[0-9]+' "$TRACE_SUMMARY" | grep -oE '[0-9]+$' | head -1 || true)
+  if [ -n "${TUPLES:-}" ]; then
+    REQS=$(( TUPLES * 2 ))   # each tuple is replayed against BOTH stands (baseline + candidate)
+    echo "##teamcity[buildStatisticValue key='compatTraceTuples' value='$TUPLES']"
+    echo "##teamcity[buildStatisticValue key='compatTraceRequests' value='$REQS']"
+    echo "##teamcity[buildStatus text='{build.status.text}; trace-replay: $TUPLES tuples / $REQS reqs (${DIFFS:-?} diffs)']"
+  fi
+fi
+
 exit $COMPAT_EXIT
