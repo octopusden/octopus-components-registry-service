@@ -63,6 +63,7 @@
 | SYS-052 | An `employee-service.url` whose placeholder does not resolve in the current environment is treated as "not configured": the client bean is not registered and context refresh succeeds (fail-open), instead of failing application boot | High | unit-test | ✅ Tested |
 | SYS-053 | Component audit snapshots include section fields (BASE-configuration build/escrow/jira scalars, versionRange, section + per-component child collections), so a section-only PATCH writes an UPDATE audit row with a field-level diff instead of being dropped by the SYS-048 no-op guard; collection snapshots are content-only (no row ids) so an identical re-save stays a no-op | High | integration-test | ✅ Tested |
 | SYS-054 | Audit read endpoints expose a server-resolved `componentKey` on each Component row: resolved from the `entityId` UUID to the component's current key, batched per page; falls back to the snapshot `name` (CRUD) / `moduleName` (MIGRATED) for components that no longer exist; `null` for non-Component rows or when unresolvable. Covers field-override rows whose value snapshot carries no name | High | integration-test | ✅ Tested |
+| SYS-055 | Anonymous `GET /rest/api/4/migration-status` reports whether a migration/resync job is RUNNING ({running, kind}) so a tokenless caller (the portal validation sweep) can skip while the legacy resolver may serve not-yet-migrated data | Medium | integration-test | ✅ Tested |
 
 ---
 
@@ -1850,3 +1851,46 @@ rows resolve to `null`. On `RENAME` rows the live key is the current
 `SYS-054 blank snapshot name resolves to null` (criterion 3),
 `SYS-054 non-component rows resolve to null` (criterion 4).
 Criterion 5 is covered by `OpenApiV4SpecTest` (componentKey present in `v4.json`, absent from `required`).
+
+### SYS-055: Anonymous migration-status probe for tokenless callers
+
+**Priority:** Medium
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+The portal runs a background validation sweep that calls CRS WITHOUT a JWT (no
+user token on a scheduled sweep) and must skip while a migration is in flight:
+mid Git→DB migration the legacy v2/v3 resolver can serve components with
+not-yet-migrated `archived` flags, which the sweep would otherwise validate and
+cache as spurious problems on already-archived components. The authoritative job
+state is exposed only under the admin-gated `/rest/api/4/admin/**` API, which the
+tokenless sweep cannot read — so there was no signal an unauthenticated caller
+could use to detect an in-flight migration.
+
+**Description:**
+`GET /rest/api/4/migration-status` is an anonymous (permitAll) endpoint returning
+`{ "running": Boolean, "kind": String? }`, derived from
+`MigrationLifecycleGate.current()` — `running` is true iff a COMPONENTS, HISTORY,
+or TC_RESYNC job currently holds the gate; `kind` is that job kind (informational,
+null when idle). The body carries no component data or internal topology. It sits
+on a permitAll path next to `GET /rest/api/4/info`, ordered before the
+`/rest/api/4/**` authenticated catch-all so it does not widen any other route.
+
+This endpoint is **transitional**: it only matters during the DSL→DB migration
+era. Once all components are DB-native and the legacy migration/resync jobs are
+retired, `MigrationStatusControllerV4` and its permitAll rule can be deleted.
+
+Single-pod scope: `MigrationLifecycleGate` is an in-memory AtomicReference (same
+caveat as the admin job endpoints) — with CRS replicas > 1 a probe may hit a
+non-migrating pod. Making the gate DB-backed is the documented follow-up (MIG-028).
+
+**Acceptance criteria:**
+1. An unauthenticated (no JWT) `GET /rest/api/4/migration-status` returns `200 OK` (NOT 401) — the route is permitAll.
+2. When no migration/resync job holds the lifecycle gate, the body is `{ "running": false }` (the `kind` key is omitted/null).
+3. While a job holds the gate, the body is `{ "running": true, "kind": "<COMPONENTS|HISTORY|TC_RESYNC>" }`.
+4. The body never carries component data, credentials, or internal topology.
+
+**Test method:** `MigrationStatusControllerV4Test` —
+`SYS-055 anonymous probe returns running false when gate is free`,
+`SYS-055 anonymous probe returns running true with kind while a migration runs`.
