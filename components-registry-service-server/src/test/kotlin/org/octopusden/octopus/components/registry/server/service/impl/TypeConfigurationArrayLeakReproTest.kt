@@ -188,6 +188,20 @@ class TypeConfigurationArrayLeakReproTest {
 
         val before = snapshotAllMaps(tc)
 
+        // MEASUREMENT-VALIDITY PRECONDITION (fail loud, never silently pass): the gate is
+        // only meaningful if we actually captured the registry that leaks. The walker skips
+        // fields it cannot read, so a Hibernate-internals change could drop the leaking map
+        // from the snapshot and yield maxDelta=0 (false GREEN). Require the expected
+        // `*.basicTypeRegistry.registryValues` path to be present, else FAIL.
+        val registryPath = before.keys.firstOrNull { it.contains("registryValues") }
+        assertTrue(
+            registryPath != null,
+            "MEASUREMENT INVALID — '*registryValues*' map not found in the TypeConfiguration " +
+                "snapshot (captured paths=${before.keys}). Hibernate internals likely changed; " +
+                "this gate cannot be trusted, so it fails loud rather than passing on an " +
+                "unmeasured structure. Update the reflection walker for the new Hibernate version.",
+        )
+
         repeat(ITERATIONS) { exerciseReadPath() }
 
         val after = snapshotAllMaps(tc)
@@ -268,6 +282,18 @@ class TypeConfigurationArrayLeakReproTest {
         // This assertion therefore FAILS on 6.4.1 (RED — the leak) and PASSES on 6.6.x
         // (GREEN — the fix), making it a forward regression guard against re-introducing
         // the leak (e.g. a Spring Boot downgrade that drags Hibernate back below 6.6.2).
+        // Dedicated assert on the precise HHH-18551 signature: the count of array-typed
+        // outer JdbcType keys in registryValues must NOT grow per iteration. (arrayGrowth is
+        // derived from registryValueOuterKeyClasses(), which reads the `registryValues` field
+        // directly and throws — failing the test loud — if that field is gone.)
+        assertTrue(
+            arrayGrowth <= GROWTH_TOLERANCE,
+            "ArrayJdbcType outer-key growth=+$arrayGrowth over $ITERATIONS iterations " +
+                "(tolerance=$GROWTH_TOLERANCE) — the HHH-18551 signature: a fresh, non-deduplicated " +
+                "ArrayJdbcType minted per uuid[] resolution (unfixed on Hibernate < 6.6.2).$newEntriesReport",
+        )
+
+        // Broader guard: NO TypeConfiguration map may keep growing per read iteration.
         assertTrue(
             maxDelta <= GROWTH_TOLERANCE,
             "TypeConfiguration registry grew by maxDelta=$maxDelta over $ITERATIONS iterations " +
