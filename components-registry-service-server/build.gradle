@@ -74,6 +74,28 @@ dependencies {
     testImplementation testFixtures(project(":test-common"))
 }
 
+// Hibernate ORM bump to fix HHH-18551 (array-type memory leak / OOM).
+// Spring Boot 3.2.x recommends hibernate-core 6.4.1.Final, in which
+// AbstractArrayJavaType#getRecommendedJdbcType mints a fresh, non-deduplicated
+// ArrayJdbcType per resolution. Our @BatchSize collection batch-fetch binds child
+// FK keys as PostgreSQL uuid[] arrays (`= ANY(?)`), so every such query leaks a new
+// ArrayJdbcType into TypeConfiguration.basicTypeRegistry.registryValues — unbounded
+// growth that fills the heap and OOM-kills the pod under release-notes generation
+// load. Reproduced and the fix validated in TypeConfigurationArrayLeakReproTest
+// (registryValues growth +9/iter on 6.4.1 -> 0/iter on 6.6.x; full dbTest green; no
+// SQL/dialect drift). HHH-18551 is fixed in 6.6.2; we take the latest 6.6.x.Final.
+//
+// This tree pins versions via a native Gradle `platform(spring-boot-dependencies)`
+// (NOT io.spring.dependency-management), so the `ext['hibernate.version']` BOM-property
+// override does not apply — `resolutionStrategy.force` overrides the platform
+// recommendation unambiguously. Spring Boot stays on its current line; a future
+// Spring Boot upgrade whose BOM ships Hibernate >= 6.6.2 can drop this force.
+configurations.all {
+    resolutionStrategy {
+        force "org.hibernate.orm:hibernate-core:6.6.53.Final"
+    }
+}
+
 // Applies to EVERY Test task (test, dbTest, integrationTest) so the heavy DB/Spring tests
 // get the same Docker env no matter which task runs them. (Ryuk is disabled globally for
 // all modules in the root build.gradle.)
