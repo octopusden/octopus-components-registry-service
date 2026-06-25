@@ -888,21 +888,40 @@ private fun safeParseProductType(value: String): ProductTypes? =
     }
 
 /**
- * Set a private field on `EscrowModuleConfig` via reflection. Unknown fields
- * are silently ignored (forward-compat with domain-model changes).
+ * One-time immutable lookup of `EscrowModuleConfig`'s own declared fields by name, each already
+ * `isAccessible = true`. Built once at class load and reused for every resolve — this replaces the
+ * per-call `getDeclaredField` that [setField] used to make (~22 per resolved config × thousands of
+ * configs per full unpaged-list request ≈ tens of thousands of reflective lookups per request; see
+ * GH #365).
+ *
+ * `declaredFields` is class-only (no inherited fields), matching the previous `getDeclaredField`
+ * semantics for the supported configuration fields. Synthetic (Groovy-injected) fields
+ * (`$staticClassInfo`, etc.) are filtered out — they are never targets of [setField] and forcing
+ * `isAccessible` on them is pointless.
+ */
+private val escrowModuleConfigFields: Map<String, java.lang.reflect.Field> =
+    EscrowModuleConfig::class.java.declaredFields
+        .filter { !it.isSynthetic }
+        .onEach { it.isAccessible = true }
+        .associateBy { it.name }
+
+/**
+ * Memoized declared-field lookup on `EscrowModuleConfig`. Returns `null` for unknown or synthetic
+ * names so callers preserve the silent-ignore (forward-compat) contract. `internal` so the
+ * reflection regression test can assert "discovered once per name".
+ */
+internal fun escrowModuleConfigField(name: String): java.lang.reflect.Field? = escrowModuleConfigFields[name]
+
+/**
+ * Set a private field on `EscrowModuleConfig` via the memoized [escrowModuleConfigField] lookup.
+ * Unknown fields are silently ignored (forward-compat with domain-model changes).
  */
 private fun setField(
     config: EscrowModuleConfig,
     name: String,
     value: Any?,
 ) {
-    try {
-        val field = EscrowModuleConfig::class.java.getDeclaredField(name)
-        field.isAccessible = true
-        field.set(config, value)
-    } catch (_: NoSuchFieldException) {
-        // ignore unknown fields
-    }
+    escrowModuleConfigField(name)?.set(config, value)
 }
 
 /**

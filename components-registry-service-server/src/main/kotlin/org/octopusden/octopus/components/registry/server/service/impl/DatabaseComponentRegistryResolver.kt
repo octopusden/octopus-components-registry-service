@@ -13,6 +13,7 @@ import org.octopusden.octopus.components.registry.server.config.ConditionalOnDat
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
+import org.octopusden.octopus.components.registry.server.mapper.escrowModuleConfigField
 import org.octopusden.octopus.components.registry.server.mapper.toEscrowModule
 import org.octopusden.octopus.components.registry.server.mapper.toResolvedEscrowModuleConfig
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
@@ -126,9 +127,12 @@ class DatabaseComponentRegistryResolver(
                     version
                 }
             val resolved = EscrowConfigurationLoader.calculateDistribution(config.distribution, normalizedVersion)
-            val field = EscrowModuleConfig::class.java.getDeclaredField("distribution")
-            field.isAccessible = true
-            field.set(config, resolved)
+            // Reuse the memoized field lookup (GH #365) instead of a per-call getDeclaredField.
+            // requireNotNull keeps the old fail-loud semantics (getDeclaredField threw
+            // NoSuchFieldException) for this runtime-resolved write, rather than silently no-op'ing.
+            requireNotNull(escrowModuleConfigField("distribution")) {
+                "EscrowModuleConfig.distribution field missing from memoized lookup"
+            }.set(config, resolved)
         }
         return config
     }

@@ -98,7 +98,7 @@ tasks.withType(Test).configureEach {
 // `test` (fast unit + smoke) and `integrationTest` (offloads to a separate fat-jar process) are
 // left at the default. If this proves insufficient, the next lever is bounding the Spring
 // TestContext cache via `-Dspring.test.context.cache.maxSize`.
-tasks.matching { it.name == 'dbTest' }.configureEach {
+tasks.matching { it.name in ['dbTest', 'perfTest'] }.configureEach {
     maxHeapSize = '3g'
 }
 

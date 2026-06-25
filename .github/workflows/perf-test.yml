@@ -1,0 +1,37 @@
+# INTERNAL / NON-GATING — manual + weekly schedule only; never on pull_request, never part of the
+# merge gate. Runs the @Tag("performance") SLA guard (GetComponentsListPerformanceTest, GH #365),
+# which is excluded from `test`/`build`/`dbTest` because its wall-clock ceiling is timing-sensitive.
+# This workflow makes the otherwise-never-executed `perfTest` a real, observable regression signal
+# without ever blocking a merge.
+name: Performance SLA (non-gating)
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Mondays 05:00 UTC. Reports a perf regression; does not gate any branch.
+    - cron: '0 5 * * 1'
+
+jobs:
+  perf-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Run performance SLA guard
+        run: ./gradlew :components-registry-service-server:perfTest --no-daemon
+
+      - name: Publish perf test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-test-report
+          path: |
+            components-registry-service-server/build/reports/tests/perfTest/**
+            components-registry-service-server/build/test-results/perfTest/**
+          if-no-files-found: warn
