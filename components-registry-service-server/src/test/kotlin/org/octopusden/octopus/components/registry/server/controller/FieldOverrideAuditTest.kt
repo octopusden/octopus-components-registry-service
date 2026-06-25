@@ -114,8 +114,8 @@ class FieldOverrideAuditTest {
     }
 
     @Test
-    @DisplayName("field-override audit rows expose the resolved componentKey, not just the UUID entityId")
-    fun `field-override audit rows expose componentKey`() {
+    @DisplayName("SYS-054: field-override audit rows expose the resolved componentKey, not just the UUID entityId")
+    fun `SYS-054 field-override audit rows expose the resolved componentKey, not just the UUID entityId`() {
         val name = "sys050key_${UUID.randomUUID().toString().take(8)}"
         val id = createComponent(name)
         createFieldOverride(
