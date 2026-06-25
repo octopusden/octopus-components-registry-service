@@ -12,6 +12,9 @@ import kotlinx.serialization.json.JsonElement
  * String to avoid pulling a date dependency into the DTO layer).
  *
  * Required per spec: action, changedAt, entityId, entityType, id, source.
+ *
+ * `componentKey` is the server-resolved human-readable key for Component rows
+ * (SYS-054); null for non-Component rows or when unresolvable.
  */
 @Serializable
 data class AuditLogResponse(
@@ -21,6 +24,7 @@ data class AuditLogResponse(
     val entityId: String,
     val changedAt: String,
     val source: String,
+    val componentKey: String? = null,
     val changedBy: String? = null,
     val correlationId: String? = null,
     val changeDiff: Map<String, JsonElement>? = null,

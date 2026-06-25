@@ -351,20 +351,25 @@ class CommandsTest {
     @Test
     fun `audit recent renders table by default and json on -o json`() {
         val page = """{"content":[{"id":1,"action":"UPDATE","entityType":"COMPONENT",""" +
-            """"entityId":"abc","changedAt":"2026-06-14T00:00:00Z","source":"PORTAL","changedBy":"alice"}],""" +
+            """"entityId":"abc","componentKey":"my-component","changedAt":"2026-06-14T00:00:00Z",""" +
+            """"source":"PORTAL","changedBy":"alice"}],""" +
             """"last":true}"""
         val tableEx = QueueExchange(listOf(200 to page))
         val table = cli(tableEx).test(listOf(URL, "--token=tok", "audit", "recent"))
         assertEquals(0, table.statusCode, table.stderr)
         assertTrue(table.stdout.contains("CHANGED_AT"), "table header expected: ${table.stdout}")
+        assertTrue(table.stdout.contains("COMPONENT_KEY"), "componentKey column expected: ${table.stdout}")
         assertTrue(table.stdout.contains("UPDATE"))
         assertTrue(table.stdout.contains("alice"))
+        // SYS-054: the resolved key must survive decode->render, not be dropped.
+        assertTrue(table.stdout.contains("my-component"), "componentKey value expected in table: ${table.stdout}")
 
         val jsonEx = QueueExchange(listOf(200 to page))
         val json = cli(jsonEx).test(listOf(URL, "--token=tok", "-o", "json", "audit", "recent"))
         assertEquals(0, json.statusCode, json.stderr)
         assertTrue(json.stdout.trimStart().startsWith("["), "json array expected: ${json.stdout}")
         assertTrue(json.stdout.contains("\"action\""))
+        assertTrue(json.stdout.contains("my-component"), "componentKey must survive into json output: ${json.stdout}")
     }
 
     @Test
