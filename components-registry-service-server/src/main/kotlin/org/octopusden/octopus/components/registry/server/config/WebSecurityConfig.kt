@@ -93,6 +93,16 @@ class WebSecurityConfig(
                     // gateway does not have to special-case auth for /info.
                     .requestMatchers(HttpMethod.GET, "/rest/api/4/info")
                     .permitAll()
+                    // TRANSITIONAL (DSL→DB migration era): anonymous migration-activity
+                    // probe. The portal's tokenless validation sweep reads this to skip
+                    // while a migration/resync is RUNNING and the legacy v2/v3 resolver
+                    // may serve inconsistent (not-yet-migrated) `archived` flags. The
+                    // authoritative state is admin-gated under /rest/api/4/admin/** and
+                    // unreachable without a JWT, hence this non-sensitive permitAll
+                    // sibling. Remove together with MigrationStatusControllerV4 once the
+                    // migration era is over (no body detail, just a running flag — no leak).
+                    .requestMatchers(HttpMethod.GET, "/rest/api/4/migration-status")
+                    .permitAll()
                     // v4 writes + admin + audit — authenticated + method-level @PreAuthorize.
                     .requestMatchers("/rest/api/4/**")
                     .authenticated()
