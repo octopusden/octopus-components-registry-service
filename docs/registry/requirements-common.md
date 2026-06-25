@@ -64,6 +64,8 @@
 | SYS-053 | Component audit snapshots include section fields (BASE-configuration build/escrow/jira scalars, versionRange, section + per-component child collections), so a section-only PATCH writes an UPDATE audit row with a field-level diff instead of being dropped by the SYS-048 no-op guard; collection snapshots are content-only (no row ids) so an identical re-save stays a no-op | High | integration-test | ✅ Tested |
 | SYS-054 | Audit read endpoints expose a server-resolved `componentKey` on each Component row: resolved from the `entityId` UUID to the component's current key, batched per page; falls back to the snapshot `name` (CRUD) / `moduleName` (MIGRATED) for components that no longer exist; `null` for non-Component rows or when unresolvable. Covers field-override rows whose value snapshot carries no name | High | integration-test | ✅ Tested |
 | SYS-055 | Anonymous `GET /rest/api/4/migration-status` reports whether a migration/resync job is RUNNING ({running, kind}) so a tokenless caller (the portal validation sweep) can skip while the legacy resolver may serve not-yet-migrated data | Medium | integration-test | ✅ Tested |
+| SYS-056 | `GET /components?releaseManager=<u>` / `?securityChampion=<u>` filter the list to components on which the user is a release manager / security champion (JOIN through the ordered child tables, OR across CSV / repeatable values, distinct); the list summary additionally emits `releaseManagers` / `securityChampions` username arrays (batched, emitted-empty-not-null) | High | integration-test | ✅ Tested |
+| SYS-057 | `GET /rest/api/4/health/statistics` returns registry-wide counts (`totalComponents`, `activeComponents`) and people-dimension breakdowns (`componentsByOwner`, `componentsByReleaseManager`, `componentsBySecurityChampion`) computed via SQL GROUP BY (never by loading all components into memory); ACCESS_COMPONENTS-gated; counts + people only (problem/validation aggregation is portal-owned) | High | integration-test | ✅ Tested |
 
 ---
 
@@ -1894,3 +1896,113 @@ non-migrating pod. Making the gate DB-backed is the documented follow-up (MIG-02
 **Test method:** `MigrationStatusControllerV4Test` —
 `SYS-055 anonymous probe returns running false when gate is free`,
 `SYS-055 anonymous probe returns running true with kind while a migration runs`.
+
+---
+
+### SYS-056: releaseManager / securityChampion list filters + summary fields
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+The portal redesign adds a "my components" facet and a registry-health view that
+need to slice the component list by the people responsible for it. componentOwner
+is already filterable (SYS-035 / SYS-043), but release managers and security
+champions are ordered multi-value child rows (component_release_managers /
+component_security_champions) with no list filter and no list-summary projection,
+so the portal could only get RM/SC by fetching each component detail individually.
+
+**Description:**
+Two additions, mirroring the owner filter (SYS-043) and the labels filter
+(SYS-040):
+
+1. `GET /components?releaseManager=<u>` and `GET /components?securityChampion=<u>`
+   each filter the list to components on which the user appears in the respective
+   ordered child collection. Both accept the standard multi-value wire shape (CSV
+   `?releaseManager=a,b` or repeatable `?releaseManager=a&releaseManager=b`),
+   normalised by the controller (split → trim → drop-blank → distinct →
+   null-if-empty). Semantics is OR across the listed usernames (a component
+   matches when ANY listed user is among its RMs / SCs) — implemented as a single
+   JOIN through the child collection + `username IN (...)` + `query.distinct(true)`
+   (mirrors the buildSystem single-join-IN shape; distinct because the join is to
+   a collection). The two filters AND with each other and with every other filter.
+
+2. The list summary (`ComponentSummaryResponse`) additionally emits
+   `releaseManagers: List<String>` and `securityChampions: List<String>` (ordered
+   by sort_order, first = primary), populated from the entity username helpers.
+   Like the existing `labels` list field they are emitted-empty-not-null. The
+   collections are `@BatchSize`-batched (BATCH_FETCH_SIZE = 1000) so the paged list
+   path loads them without an N+1 (≤ page-size proxies pending → one IN per role).
+
+**Acceptance criteria:**
+1. `?releaseManager=u` returns exactly the components having `u` as a release
+   manager and excludes components where `u` is not an RM (incl. where `u` is only
+   an SC or only the owner).
+2. `?securityChampion=u` behaves symmetrically for the security-champion collection.
+3. CSV / repeatable multi-value input is OR across values; blanks and duplicates
+   are normalised away (parity with SYS-043 owner).
+4. `?releaseManager=<unknown>` returns an empty page; absent param = no filter.
+5. The list summary carries `releaseManagers` / `securityChampions` arrays in
+   sort order, `[]` (not null) when none.
+
+**Test method:** `ListComponentsPeopleFilterTest` —
+`SYS-056 releaseManager filter returns only components where user is an RM`,
+`SYS-056 securityChampion filter returns only components where user is an SC`,
+`SYS-056 releaseManager CSV is OR across values`,
+`SYS-056 unknown releaseManager returns empty`,
+`SYS-056 summary emits releaseManagers and securityChampions arrays`.
+
+---
+
+### SYS-057: Registry health statistics endpoint (counts + people)
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+The portal redesign adds an admin "Registry Health" page that needs registry-wide
+aggregate numbers (how many components, how many active, and the distribution
+across owners / release managers / security champions) to surface concentration
+risk (e.g. one owner on 200 components). Computing these portal-side would mean
+downloading the whole list; CRS owns the data and can aggregate in SQL.
+
+**Description:**
+`GET /rest/api/4/health/statistics` (new `HealthControllerV4`, same package and
+`@ConditionalOnDatabaseEnabled` level as `ComponentControllerV4`) returns:
+
+- `totalComponents: Long` — all non-FAKE-aggregator component rows.
+- `activeComponents: Long` — the non-archived subset.
+- `componentsByOwner: Map<String, Long>` — count per `component_owner` (scalar
+  column GROUP BY; null/blank owners excluded).
+- `componentsByReleaseManager: Map<String, Long>` — count per release-manager
+  username (GROUP BY over the component_release_managers child table).
+- `componentsBySecurityChampion: Map<String, Long>` — count per security-champion
+  username (GROUP BY over component_security_champions).
+
+Every figure is computed with a repository aggregation query (COUNT / GROUP BY),
+NOT by loading entities into memory. The endpoint is **counts + people only**:
+problem/validation aggregation is owned by the portal backend, not CRS, and is
+deliberately absent (the response is shaped so a future problem dimension can be
+added by a different owner without colliding here).
+
+Gated by `ACCESS_COMPONENTS` — the same read permission every other v4 list/read
+endpoint uses. "Admin only" is a portal nav-visibility concern; the figures expose
+only aggregates over data already readable via the list, so no new CRS permission
+is invented.
+
+**Acceptance criteria:**
+1. `totalComponents` / `activeComponents` reflect the seeded set (active =
+   non-archived).
+2. `componentsByOwner` / `componentsByReleaseManager` / `componentsBySecurityChampion`
+   carry the correct per-username counts (a user on N components → N); a user who is
+   both RM and SC is counted once in each map.
+3. The counts are produced by GROUP BY aggregation, not entity hydration.
+4. A `viewerJwt` (ACCESS_COMPONENTS) gets `200`; an unauthenticated request gets `401`.
+5. The response carries no problem/validation fields.
+
+**Test method:** `HealthControllerV4Test` —
+`SYS-057 statistics returns total and active component counts`,
+`SYS-057 statistics groups components by owner RM and SC`,
+`SYS-057 statistics is ACCESS_COMPONENTS gated`.

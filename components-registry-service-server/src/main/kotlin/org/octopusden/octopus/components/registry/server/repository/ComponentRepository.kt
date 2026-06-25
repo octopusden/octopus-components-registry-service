@@ -150,6 +150,73 @@ interface ComponentRepository :
             "WHERE c.id = :id ORDER BY sc.sortOrder",
     )
     fun findSecurityChampionUsernames(id: UUID): List<String>
+
+    // --- Health statistics aggregations (SYS-057) ---
+    // Counts for the admin Registry-Health page, computed in SQL (COUNT / GROUP BY) so the
+    // 685+ components are never loaded into memory. All exclude the FAKE-aggregator stub rows
+    // (componentGroup is fake AND its groupKey == the row's own componentKey), matching the
+    // always-on exclusion in `ComponentManagementServiceImpl.buildSpecification`, so the totals
+    // line up with the v4 component list.
+    //
+    // The group condition uses an explicit LEFT JOIN: referencing `c.componentGroup.isFake`
+    // inline would force an INNER join and silently drop every group-less component (the common
+    // API-created case) from the count. With `LEFT JOIN c.componentGroup g`, `g IS NULL` keeps
+    // group-less components and real-aggregator members; only the self-linked fake aggregator
+    // stub is excluded.
+
+    /** Count of regular (non-FAKE-aggregator) components. */
+    @Query(
+        "SELECT COUNT(c) FROM ComponentEntity c LEFT JOIN c.componentGroup g " +
+            "WHERE (g IS NULL OR NOT (g.isFake = true AND g.groupKey = c.componentKey))",
+    )
+    fun countRegularComponents(): Long
+
+    /** Count of regular components by archived flag. */
+    @Query(
+        "SELECT COUNT(c) FROM ComponentEntity c LEFT JOIN c.componentGroup g " +
+            "WHERE c.archived = :archived " +
+            "AND (g IS NULL OR NOT (g.isFake = true AND g.groupKey = c.componentKey))",
+    )
+    fun countRegularComponentsByArchived(archived: Boolean): Long
+
+    /**
+     * Per-owner component counts (regular components only; null/blank owners excluded).
+     * One row per distinct `component_owner`.
+     */
+    @Query(
+        "SELECT c.componentOwner AS name, COUNT(c) AS count FROM ComponentEntity c LEFT JOIN c.componentGroup g " +
+            "WHERE c.componentOwner IS NOT NULL AND TRIM(c.componentOwner) <> '' " +
+            "AND (g IS NULL OR NOT (g.isFake = true AND g.groupKey = c.componentKey)) " +
+            "GROUP BY c.componentOwner",
+    )
+    fun countComponentsByOwner(): List<NameCountRow>
+
+    /**
+     * Per-release-manager component counts (GROUP BY over the component_release_managers
+     * child table; regular components only). A user on N components yields count N.
+     */
+    @Query(
+        "SELECT rm.username AS name, COUNT(c) AS count FROM ComponentEntity c " +
+            "JOIN c.releaseManagers rm LEFT JOIN c.componentGroup g " +
+            "WHERE (g IS NULL OR NOT (g.isFake = true AND g.groupKey = c.componentKey)) " +
+            "GROUP BY rm.username",
+    )
+    fun countComponentsByReleaseManager(): List<NameCountRow>
+
+    /** Per-security-champion component counts (GROUP BY over component_security_champions). */
+    @Query(
+        "SELECT sc.username AS name, COUNT(c) AS count FROM ComponentEntity c " +
+            "JOIN c.securityChampions sc LEFT JOIN c.componentGroup g " +
+            "WHERE (g IS NULL OR NOT (g.isFake = true AND g.groupKey = c.componentKey)) " +
+            "GROUP BY sc.username",
+    )
+    fun countComponentsBySecurityChampion(): List<NameCountRow>
+}
+
+/** Projection for the health-statistics GROUP BY queries: a name (owner / RM / SC username) and its count. */
+interface NameCountRow {
+    val name: String
+    val count: Long
 }
 
 /** Projection for the migration displayName-uniqueness pre-pass. */
