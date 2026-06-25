@@ -1842,5 +1842,11 @@ rows resolve to `null`. On `RENAME` rows the live key is the current
 4. Rows whose `entityType` is not `Component` expose `componentKey = null`.
 5. The field is `null`-not-`required` in the generated OpenAPI `v4.json`.
 
-**Test method:** `FieldOverrideAuditTest` —
-`SYS-054 field-override audit rows expose the resolved componentKey, not just the UUID entityId`.
+**Test method:**
+`FieldOverrideAuditTest` — `SYS-054 field-override audit rows expose the resolved componentKey, not just the UUID entityId`: the override UPDATE rows belong to a live component, so this exercises the live-lookup path (criteria 1 and 2);
+`AuditComponentKeyResolutionTest` —
+`SYS-054 deleted component falls back to snapshot name` (criterion 3),
+`SYS-054 migrated row falls back to snapshot moduleName` (criterion 3),
+`SYS-054 blank snapshot name resolves to null` (criterion 3),
+`SYS-054 non-component rows resolve to null` (criterion 4).
+Criterion 5 is covered by `OpenApiV4SpecTest` (componentKey present in `v4.json`, absent from `required`).
