@@ -867,18 +867,21 @@ object id17CompatLocalStandManual : BuildType({
                 export COMPAT_BODIES_FILE="${'$'}BODIES_FILE_PATH"
                 echo "Bodies file:     ${'$'}BODIES_FILE_PATH"
                 # Deduplicated production trace (latest-top.txt) replayed by
-                # TraceReplayCompatTest. [1.7]/[1.8] are the AUTO gate, so cap the
-                # replay at the top-30000 most-frequent business tuples (the file is
-                # ranked desc; id16 replays it unlimited). Fail-FAST on a missing file,
-                # same rationale as the bodies sidecar above.
+                # TraceReplayCompatTest. Cap the replay at the top-200000 tuples so the
+                # AUTO gate [1.7]/[1.8] exercises the FULL enriched trace — including the
+                # client-release-notes generation surface (per-version jira-component /
+                # vcs-settings + detailed-versions; ~130k tuples as of the 2026-06-25
+                # capture). File is ranked desc; id16 replays it unlimited. NOTE: this is
+                # heavier than the prior 30000 cap — dial down if per-build wall-time
+                # regresses. Fail-FAST on a missing file, as the bodies sidecar above.
                 TRACE_FILE_PATH="${'$'}TRACE_DATA_DIR/latest-top.txt"
                 if [ ! -f "${'$'}TRACE_FILE_PATH" ]; then
                     echo "ERROR: trace file ${'$'}TRACE_FILE_PATH does not exist (CrsCompatTrace checkout failed or top-N trace missing)" >&2
                     exit 2
                 fi
                 export COMPAT_TRACE_FILE="${'$'}TRACE_FILE_PATH"
-                export COMPAT_TRACE_LIMIT=30000
-                echo "Trace file:      ${'$'}TRACE_FILE_PATH (limit 30000)"
+                export COMPAT_TRACE_LIMIT=200000
+                echo "Trace file:      ${'$'}TRACE_FILE_PATH (limit 200000)"
                 # Route the postgres pull through the artifactory mirror so
                 # id17 doesn't hit Docker Hub's anonymous-pull rate limit
                 # (#3636 failed mid-Stage-1 with `toomanyrequests`). The
@@ -1140,18 +1143,21 @@ object id18CompatLocalStandGitModeAuto : BuildType({
                 export COMPAT_BODIES_FILE="${'$'}BODIES_FILE_PATH"
                 echo "Bodies file:     ${'$'}BODIES_FILE_PATH"
                 # Deduplicated production trace (latest-top.txt) replayed by
-                # TraceReplayCompatTest. [1.7]/[1.8] are the AUTO gate, so cap the
-                # replay at the top-30000 most-frequent business tuples (the file is
-                # ranked desc; id16 replays it unlimited). Fail-FAST on a missing file,
-                # same rationale as the bodies sidecar above.
+                # TraceReplayCompatTest. Cap the replay at the top-200000 tuples so the
+                # AUTO gate [1.7]/[1.8] exercises the FULL enriched trace — including the
+                # client-release-notes generation surface (per-version jira-component /
+                # vcs-settings + detailed-versions; ~130k tuples as of the 2026-06-25
+                # capture). File is ranked desc; id16 replays it unlimited. NOTE: this is
+                # heavier than the prior 30000 cap — dial down if per-build wall-time
+                # regresses. Fail-FAST on a missing file, as the bodies sidecar above.
                 TRACE_FILE_PATH="${'$'}TRACE_DATA_DIR/latest-top.txt"
                 if [ ! -f "${'$'}TRACE_FILE_PATH" ]; then
                     echo "ERROR: trace file ${'$'}TRACE_FILE_PATH does not exist (CrsCompatTrace checkout failed or top-N trace missing)" >&2
                     exit 2
                 fi
                 export COMPAT_TRACE_FILE="${'$'}TRACE_FILE_PATH"
-                export COMPAT_TRACE_LIMIT=30000
-                echo "Trace file:      ${'$'}TRACE_FILE_PATH (limit 30000)"
+                export COMPAT_TRACE_LIMIT=200000
+                echo "Trace file:      ${'$'}TRACE_FILE_PATH (limit 200000)"
                 # git-mode (no-db, issue #310) does NOT start Postgres, so no POSTGRES_IMAGE
                 # pull is needed. RESET_DB=1 only drives teamcity-run.sh's pre-run teardown
                 # of any stale Postgres left by a prior db-mode run on this (persistent) agent.
