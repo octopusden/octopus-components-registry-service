@@ -14,4 +14,12 @@ data class AuditLogResponse(
     val changeDiff: Map<String, Any?>?,
     val correlationId: String?,
     val source: String,
+    /**
+     * Human-readable component key for Component rows, resolved server-side from
+     * the entityId UUID. Authoritative for field-override rows (whose value
+     * snapshot carries no name) and stable across the snapshot's name/moduleName
+     * divergence. Null for non-Component entity types or when the component can
+     * no longer be resolved and the snapshot has no usable name.
+     */
+    val componentKey: String?,
 )

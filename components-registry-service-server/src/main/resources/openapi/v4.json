@@ -54,6 +54,9 @@
           "changedBy" : {
             "type" : "string"
           },
+          "componentKey" : {
+            "type" : "string"
+          },
           "correlationId" : {
             "type" : "string"
           },
