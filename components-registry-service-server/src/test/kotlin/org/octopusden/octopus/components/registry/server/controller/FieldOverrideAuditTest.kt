@@ -113,6 +113,31 @@ class FieldOverrideAuditTest {
         )
     }
 
+    @Test
+    @DisplayName("SYS-054: field-override audit rows expose the resolved componentKey, not just the UUID entityId")
+    fun `SYS-054 field-override audit rows expose the resolved componentKey, not just the UUID entityId`() {
+        val name = "sys050key_${UUID.randomUUID().toString().take(8)}"
+        val id = createComponent(name)
+        createFieldOverride(
+            id,
+            """{"overriddenAttribute":"build.buildFilePath","versionRange":"[1.0,2.0)","value":"FileA"}""",
+        )
+
+        // Field-override snapshots carry only the override payload (no "name"),
+        // so a populated componentKey proves it is resolved from the live
+        // component by entityId UUID — the part the value snapshot can't supply.
+        val updateRows = history(id).filter { it["action"].asText() == "UPDATE" }
+        assertTrue(updateRows.isNotEmpty(), "expected at least one override UPDATE row, got ${historyActions(id)}")
+        updateRows.forEach { row ->
+            assertTrue(row.has("componentKey"), "override UPDATE row must carry a componentKey field")
+            assertEquals(
+                name,
+                row["componentKey"].asText(),
+                "override UPDATE row must resolve componentKey to the component key, not the UUID",
+            )
+        }
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private fun createComponent(name: String): String {

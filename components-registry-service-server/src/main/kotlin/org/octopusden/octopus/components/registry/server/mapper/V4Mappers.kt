@@ -202,7 +202,11 @@ fun ComponentConfigurationEntity.toFieldOverrideResponse(): FieldOverrideRespons
     )
 }
 
-fun AuditLogEntity.toResponse(): AuditLogResponse =
+// `componentKey` is resolved by the service layer (which owns the component
+// repository) and threaded in here; the mapper itself stays a pure projection
+// with no DB access. Defaults to null so the few non-audit callers / tests that
+// don't resolve a key still compile.
+fun AuditLogEntity.toResponse(componentKey: String? = null): AuditLogResponse =
     AuditLogResponse(
         id = this.id!!,
         entityType = this.entityType,
@@ -215,6 +219,7 @@ fun AuditLogEntity.toResponse(): AuditLogResponse =
         changeDiff = this.changeDiff,
         correlationId = this.correlationId,
         source = this.source,
+        componentKey = componentKey,
     )
 
 // ============================================================

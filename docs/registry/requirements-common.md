@@ -62,6 +62,7 @@
 | SYS-051 | TeamCity sync (automated `changedBy=system` reconciliation) does NOT write an audit row — the re-link is traced via an INFO log instead | Medium | unit-test | ✅ Tested |
 | SYS-052 | An `employee-service.url` whose placeholder does not resolve in the current environment is treated as "not configured": the client bean is not registered and context refresh succeeds (fail-open), instead of failing application boot | High | unit-test | ✅ Tested |
 | SYS-053 | Component audit snapshots include section fields (BASE-configuration build/escrow/jira scalars, versionRange, section + per-component child collections), so a section-only PATCH writes an UPDATE audit row with a field-level diff instead of being dropped by the SYS-048 no-op guard; collection snapshots are content-only (no row ids) so an identical re-save stays a no-op | High | integration-test | ✅ Tested |
+| SYS-054 | Audit read endpoints expose a server-resolved `componentKey` on each Component row: resolved from the `entityId` UUID to the component's current key, batched per page; falls back to the snapshot `name` (CRUD) / `moduleName` (MIGRATED) for components that no longer exist; `null` for non-Component rows or when unresolvable. Covers field-override rows whose value snapshot carries no name | High | integration-test | ✅ Tested |
 
 ---
 
@@ -1807,3 +1808,45 @@ snapshot — their writes publish their own attribute-keyed events (SYS-050).
 `SYS-053 requiredTools PATCH writes an UPDATE audit row and identical re-send does not`,
 `SYS-053 securityGroups PATCH writes an UPDATE audit row and identical re-send does not`,
 `SYS-053 no-op section PATCH writes no audit row`.
+
+### SYS-054: Audit rows expose a resolved componentKey
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+Audit rows store `entityId` as the component UUID, so the audit read API
+exposed no human-readable key. Consumers (the Portal history table) had to dig
+the key out of the value snapshot, which fails for two row shapes: git-history
+`MIGRATED` snapshots key the component under `moduleName` (not `name`), and
+field-override (SYS-050) snapshots carry only the override payload — no name at
+all — leaving only the UUID. Those rows rendered an opaque UUID instead of a
+component key.
+
+**Description:**
+`AuditLogResponse` gains a nullable `componentKey`. For Component rows the
+service resolves it from the `entityId` UUID to the component's **current**
+`componentKey`, batched once per page (a single `findAllById` over the page's
+distinct UUIDs — no per-row query). When the component no longer exists
+(`DELETE` / `MIGRATED` / hard-deleted) it falls back to the name captured in
+the snapshot — `newValue.name` → `oldValue.name` → `newValue.moduleName` →
+`oldValue.moduleName` — and a blank name normalizes to `null`. Non-Component
+rows resolve to `null`. On `RENAME` rows the live key is the current
+(post-rename) key by design; the prior key remains in `oldValue`.
+
+**Acceptance criteria:**
+1. A Component CREATE/UPDATE row exposes `componentKey` equal to the component's current key.
+2. A field-override `UPDATE` row (snapshot has no `name`) exposes `componentKey` resolved from the live component — i.e. not the UUID.
+3. A row for a deleted/migrated component (absent from the repository) falls back to the snapshot `name` / `moduleName`; a blank name yields `null`.
+4. Rows whose `entityType` is not `Component` expose `componentKey = null`.
+5. The field is `null`-not-`required` in the generated OpenAPI `v4.json`.
+
+**Test method:**
+`FieldOverrideAuditTest` — `SYS-054 field-override audit rows expose the resolved componentKey, not just the UUID entityId`: the override UPDATE rows belong to a live component, so this exercises the live-lookup path (criteria 1 and 2);
+`AuditComponentKeyResolutionTest` —
+`SYS-054 deleted component falls back to snapshot name` (criterion 3),
+`SYS-054 migrated row falls back to snapshot moduleName` (criterion 3),
+`SYS-054 blank snapshot name resolves to null` (criterion 3),
+`SYS-054 non-component rows resolve to null` (criterion 4).
+Criterion 5 is covered by `OpenApiV4SpecTest` (componentKey present in `v4.json`, absent from `required`).

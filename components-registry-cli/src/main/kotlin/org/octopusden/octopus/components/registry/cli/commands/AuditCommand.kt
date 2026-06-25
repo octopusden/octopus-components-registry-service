@@ -133,9 +133,9 @@ private fun CliktCommand.renderAuditPage(ctx: CliContext, response: PageAuditLog
         json = { Renderer.renderJson(rows, ListSerializer(AuditLogResponse.serializer())) },
         table = {
             Renderer.renderTable(
-                headers = listOf("CHANGED_AT", "ACTION", "ENTITY_TYPE", "ENTITY_ID", "CHANGED_BY"),
+                headers = listOf("CHANGED_AT", "ACTION", "ENTITY_TYPE", "COMPONENT_KEY", "ENTITY_ID", "CHANGED_BY"),
                 rows = rows.map {
-                    listOf(it.changedAt, it.action, it.entityType, it.entityId, it.changedBy)
+                    listOf(it.changedAt, it.action, it.entityType, it.componentKey, it.entityId, it.changedBy)
                 },
             )
         },
