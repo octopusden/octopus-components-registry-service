@@ -30,14 +30,33 @@ aggregate reads in `DatabaseComponentRegistryResolver` load every component via 
 mapper. To keep this bounded rather than N+1:
 
 - **IN-clause batch loading via `@BatchSize`.** Every LAZY association on
-  `ComponentEntity` / `ComponentConfigurationEntity` carries `@BatchSize(size = 100)`.
-  After the initial `findAll()` loads all components into the session, the first access
-  to a collection role batch-loads that role for *all* resident components in a single
-  `WHERE parent_id IN (…)` select. A single multi-collection `@EntityGraph`/fetch-join
-  is **not** usable here: the collections are `List` bags and Hibernate rejects
-  fetch-joining more than one bag at once (`MultipleBagFetchException`). Net effect:
-  the per-request statement count is independent of the component count (a bounded set
-  of batched selects — roughly `findAll` + one IN select per collection role).
+  `ComponentEntity` / `ComponentConfigurationEntity` (and the to-one targets
+  `ComponentEntity` / `ComponentGroupEntity` / `ToolEntity`) carries
+  `@BatchSize(size = BATCH_FETCH_SIZE)`. After the initial `findAll()` loads all
+  components into the session, the first access to a collection role batch-loads that
+  role for the resident owners in `WHERE parent_id IN (…)` selects. A single
+  multi-collection `@EntityGraph`/fetch-join is **not** usable here: the collections are
+  `List` bags and Hibernate rejects fetch-joining more than one bag at once
+  (`MultipleBagFetchException`). `BATCH_FETCH_SIZE` must stay **above the production
+  component count** so each component-owned role loads in one IN select; config-owned
+  roles have ~2–3 owners per component, so at full prod scale they take a small constant
+  number of batches (≈3) — still bounded and independent of the component count.
+  - **GH #365.** This was `100` — *below* the ~988 production component count — so the
+    full unpaged list `getComponents()` (`GET /rest/api/3/components`) issued
+    `ceil(owners / 100)` selects per role ≈ ~300 round-trips per request, dominating
+    latency against a remote DB and ballooning past 30 s under concurrent migration/sync
+    load. Raised to `1000`. `hibernate.default_batch_fetch_size` is only the fallback for
+    un-annotated roles; the field/class-level `@BatchSize` takes precedence for every
+    walked role. (Prod 2.0.87, git-backed, served this list from a startup-built in-memory
+    graph in ~15 ms — the DB resolver rebuilds it per request, which is why this endpoint
+    is the most sensitive to the batch sizing.)
+- **Memoized reflective field writes.** The entity→domain mapper
+  (`EntityMappers.setField`) sets `EscrowModuleConfig`'s private fields via reflection.
+  The lookups are memoized once at class load (`escrowModuleConfigField`, Groovy
+  synthetic fields filtered out) instead of `getDeclaredField` per field per config —
+  on the full-list path that was tens of thousands of lookups per request (GH #365).
+  `DatabaseComponentRegistryResolver` reuses the same memoized lookup for its
+  `distribution` write.
 - **No redundant per-image reloads.** `find-by-docker-images` threads the
   already-loaded `ComponentEntity` from the image→component map straight into version
   and definition resolution (entity-accepting private resolver variants), instead of
@@ -46,10 +65,18 @@ mapper. To keep this bounded rather than N+1:
   use a JPQL projection (`findComponentKeysBySource`) returning only the component-key
   strings rather than hydrating full `component_source` entity rows on every aggregate
   request.
-- **Regression guard.** `DatabaseComponentRegistryResolverQueryCountTest` (integration,
-  `dbTest`) asserts via Hibernate statistics that the statement count of these endpoints
-  stays constant as the component / matched-image count grows, failing if an N+1 is
-  reintroduced.
+- **Regression guards.** `DatabaseComponentRegistryResolverQueryCountTest` (integration,
+  `dbTest`) asserts via Hibernate statistics that `find-by-artifacts` /
+  `find-by-docker-images` statement counts stay constant as the component / matched-image
+  count grows. `GetComponentsListQueryCountTest` (integration, `dbTest`) does the same for
+  the full unpaged list at fixture sizes **above** the batch-size threshold (150 vs 450
+  components → equal counts), the deterministic guard against the #365 batch-size storm.
+  `GetComponentsListPerformanceTest` (`@Tag("performance")`, non-gating `perfTest` task)
+  is a ~1k-component wall-time SLA report.
+- **Future option (not yet implemented).** Result-caching the assembled `getComponents()`
+  list for full 2.0.87-style parity (~15 ms) — deferred; see
+  `tech-debt/014-get-components-result-cache.md` for why a naive `updated_at` probe is
+  unsafe and what a correct registry-revision cache requires.
 
 ## 2. Availability
 

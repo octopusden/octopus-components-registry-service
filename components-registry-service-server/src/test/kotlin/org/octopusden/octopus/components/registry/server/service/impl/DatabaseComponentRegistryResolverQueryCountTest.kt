@@ -57,10 +57,12 @@ import java.nio.file.Paths
  * removes), not just the pre-resolve short-circuit.
  *
  * NOTE on the strict-equality assertion: it holds only while every per-role owner
- * count stays **below the `@BatchSize(100)` threshold** (a single `IN` batch per
- * role). The fixtures here (K = 2 and K = 8) are deliberately well under that bound.
- * If a fixture is ever grown past 100 owners of any role, switch the assertion to the
- * `ceil(ownerCount / batchSize)`-shaped expectation instead of strict equality.
+ * count stays **below the `@BatchSize(BATCH_FETCH_SIZE)` threshold** (a single `IN`
+ * batch per role). The fixtures here (K = 2 and K = 8) are deliberately well under that
+ * bound. If a fixture is ever grown past `BATCH_FETCH_SIZE` owners of any role, switch
+ * the assertion to the `ceil(ownerCount / batchSize)`-shaped expectation instead of
+ * strict equality. (The batch-boundary behaviour above that threshold is covered by
+ * `GetComponentsListQueryCountTest`.)
  *
  * Integration test: real PostgreSQL via Testcontainers, run under the `dbTest`
  * gradle task (`@Tag("integration")`). Scaffold mirrors

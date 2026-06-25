@@ -230,7 +230,11 @@ configure(subprojects) {
     // (hence from `check`/`build`) and run in `dbTest` — CI [1.2] / GH qualityCoverage.
     test {
         useJUnitPlatform {
-            excludeTags 'integration'
+            // `performance` (GH #365 perf SLA guard) is heavy (Testcontainers + ~1k-component
+            // fixture) and timing-sensitive — excluded from the fast gate AND from `dbTest`; it
+            // runs only under the dedicated `perfTest` task so a flaky timing ceiling never
+            // blocks normal CI.
+            excludeTags 'integration', 'performance'
         }
     }
 
@@ -247,6 +251,23 @@ configure(subprojects) {
             shouldRunAfter tasks.named('test')
             useJUnitPlatform {
                 includeTags 'integration'
+                excludeTags 'performance'
+            }
+        }
+    }
+
+    // Non-gating performance SLA guard (GH #365). Separate task so a timing-sensitive ceiling
+    // never blocks `check`/`build` or the `dbTest` correctness gate. Run explicitly:
+    //   ./gradlew :components-registry-service-server:perfTest
+    if (project.name == 'components-registry-service-server') {
+        tasks.register('perfTest', Test) {
+            description = 'Runs @Tag("performance") SLA guards (Testcontainers/Spring); NOT in check/dbTest.'
+            group = 'verification'
+            testClassesDirs = sourceSets.test.output.classesDirs
+            classpath = sourceSets.test.runtimeClasspath
+            shouldRunAfter tasks.named('test')
+            useJUnitPlatform {
+                includeTags 'performance'
             }
         }
     }

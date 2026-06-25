@@ -18,13 +18,27 @@ import java.time.Instant
 import java.util.UUID
 
 /**
- * IN-clause batch size for the LAZY associations on the schema-v2 entities. Sized
- * comfortably above the production component count so the resolver read paths load each
- * collection role (and lazy to-one proxy) in a single `… IN (…)` select. See the
- * `@BatchSize` rationale in [ComponentEntity]'s kdoc. File-scoped so both the class-level
- * (`@ManyToOne` target) and field-level (`@OneToMany`) annotations can reference it.
+ * IN-clause batch size for the LAZY associations on the schema-v2 entities. Sized comfortably above
+ * the production component count (~1k) so the unpaged read paths — notably
+ * `DatabaseComponentRegistryResolver.getComponents()` backing `GET /rest/api/3/components` — load
+ * each component-owned role (and lazy to-one proxy) in a single `… IN (…)` select. Config-owned
+ * roles (`ComponentConfigurationEntity` children) have ~2–3 owners per component, so at full prod
+ * scale they take a small constant number of batches (≈3), not one — still bounded and
+ * size-independent.
+ *
+ * History (GH #365): this was `100`, *below* the ~988 production component count, so every role
+ * actually took `ceil(owners / 100)` selects — ~300 round-trips for the full list, which dominated
+ * latency against a remote DB and ballooned past 30 s under concurrent load. The earlier kdoc
+ * claim that 100 was "above the production component count" was simply wrong.
+ *
+ * `@BatchSize` is a MAX: Hibernate only emits an IN-list for the proxies actually pending in the
+ * session, so the paged v4 path (≤ page-size pending) still issues small INs — only the full-list
+ * path produces the large one. A ~1k-element IN is well within Postgres' 65535 bind-param limit.
+ *
+ * File-scoped so both the class-level (`@ManyToOne` target) and field-level (`@OneToMany`)
+ * annotations can reference it.
  */
-internal const val BATCH_FETCH_SIZE = 100
+internal const val BATCH_FETCH_SIZE = 1000
 
 /**
  * Schema v2 — top-level component entity.
