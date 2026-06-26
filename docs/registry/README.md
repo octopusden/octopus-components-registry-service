@@ -78,9 +78,11 @@ PRD (why?) ──→ FS (what?) ──→ TDD (how?)
 
 | Document | When to create |
 |----------|----------------|
-| `migration-runbook.md` | Before production migration — step-by-step ops playbook |
+| _(none currently)_ | |
 
 _[api-changelog.md](api-changelog.md) was created with the v4 OpenAPI spec generation (TD-003)._
+_[deployment/migration-runbook.md](deployment/migration-runbook.md) — the production migration ops
+playbook (git-mode-first → migrate → flip to db) — was created for the prod cutover._
 
 ## How to Read
 
