@@ -19,6 +19,7 @@ import org.octopusden.octopus.components.registry.server.repository.ComponentRep
 import org.octopusden.octopus.components.registry.server.repository.ComponentRequiredToolRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentSourceRepository
 import org.octopusden.octopus.components.registry.server.repository.DistributionDockerImageRepository
+import org.octopusden.octopus.components.registry.server.repository.ComponentArtifactMappingRepository
 import org.octopusden.octopus.components.registry.server.repository.DistributionMavenArtifactRepository
 import org.octopusden.octopus.components.registry.server.repository.LabelRepository
 import org.octopusden.octopus.components.registry.server.repository.SystemRepository
@@ -78,6 +79,7 @@ class ImportServicePeopleCsvSplitTest {
             componentRequiredToolRepository = mock(ComponentRequiredToolRepository::class.java),
             componentBuildToolBeanRepository = mock(ComponentBuildToolBeanRepository::class.java),
             mavenArtifactRepository = mock(DistributionMavenArtifactRepository::class.java),
+            componentArtifactMappingRepository = mock(ComponentArtifactMappingRepository::class.java),
             dockerImageRepository = mock(DistributionDockerImageRepository::class.java),
             versionRangeFactory = VersionRangeFactory(VersionNames("serviceCBranch", "serviceC", "minorC")),
         )

@@ -12,7 +12,10 @@ import org.octopusden.octopus.components.registry.api.beans.PTDProductToolBean
 import org.octopusden.octopus.components.registry.api.beans.PTKProductToolBean
 import org.octopusden.octopus.components.registry.api.build.tools.BuildTool
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
-import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactIdEntity
+import org.octopusden.octopus.components.registry.server.entity.ArtifactIdMode
+import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactMappingEntity
+import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactMappingTokenEntity
+import org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipModeClassifier
 import org.octopusden.octopus.components.registry.server.entity.ComponentBuildToolBeanEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentDocLinkEntity
@@ -40,6 +43,7 @@ import org.octopusden.octopus.components.registry.server.repository.ComponentRep
 import org.octopusden.octopus.components.registry.server.repository.ComponentRequiredToolRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentSourceRepository
 import org.octopusden.octopus.components.registry.server.repository.DistributionDockerImageRepository
+import org.octopusden.octopus.components.registry.server.repository.ComponentArtifactMappingRepository
 import org.octopusden.octopus.components.registry.server.repository.DistributionMavenArtifactRepository
 import org.octopusden.octopus.components.registry.server.repository.LabelRepository
 import org.octopusden.octopus.components.registry.server.repository.SystemRepository
@@ -107,6 +111,7 @@ class ImportServiceImpl(
     private val componentRequiredToolRepository: ComponentRequiredToolRepository,
     private val componentBuildToolBeanRepository: ComponentBuildToolBeanRepository,
     private val mavenArtifactRepository: DistributionMavenArtifactRepository,
+    private val componentArtifactMappingRepository: ComponentArtifactMappingRepository,
     private val dockerImageRepository: DistributionDockerImageRepository,
     private val versionRangeFactory: VersionRangeFactory,
 ) : ImportService {
@@ -1183,23 +1188,18 @@ class ImportServiceImpl(
             }
         }
 
+        // NOTE: only explicit `distribution { GAV }` coordinates feed this distribution-GAV
+        // uniqueness pre-pass. The groupId/artifactId OWNERSHIP mapping is no longer folded in
+        // here — its cross-component uniqueness is the mode-aware matrix
+        // (validateArtifactOwnershipCollisions), enforced on the v4 write path ONLY (create +
+        // update-with-artifactIds), NOT in this migration pre-pass: production is overlap-free by
+        // construction under the legacy single-match resolver, and migration instead enforces
+        // correctness via strict artifactId→mode classification (no escape hatch). See ADR-017.
         addGavRows(baseConfig.versionRangeString ?: ALL_VERSIONS, baseConfig.distribution)
         for (override in configs.filter { it !== baseConfig }) {
             val overrideRange = override.versionRangeString ?: continue
             if (mavenArtifactsDiffer(baseConfig.distribution, override.distribution)) {
                 addGavRows(overrideRange, override.distribution)
-            }
-            if (groupArtifactPatternsDiffer(baseConfig, override)) {
-                val group = override.groupIdPattern
-                val artifactCsv = override.artifactIdPattern
-                if (group != null && artifactCsv != null) {
-                    for (token in splitCsv(artifactCsv)) {
-                        rows += UniquenessGavRow(
-                            componentKey, overrideRange, group, token, null, null,
-                            origin = MavenGavCollision.originLabel("group-artifact-pattern"),
-                        )
-                    }
-                }
             }
         }
         return rows
@@ -1296,28 +1296,13 @@ class ImportServiceImpl(
             entity.distributionExternal = dist.external()
         }
 
-        // Artifact IDs: parse groupId:artifactId pattern from first config.
-        // `sortOrder` records the position of each token in the original CSV so
-        // that `/maven-artifacts` re-joins them in the same order V1 returns — V1
-        // reads `EscrowModuleConfig.artifactIdPattern` (the raw DSL string),
-        // V2 reads these rows and CSV-joins by `sortOrder` ASC.
-        val groupId = cfg.groupIdPattern
-        val artifactIdCsv = cfg.artifactIdPattern
-        if (!groupId.isNullOrBlank() && !artifactIdCsv.isNullOrBlank()) {
-            artifactIdCsv.split(",")
-                .map { it.trim() }
-                .filter { it.isNotEmpty() }
-                .forEachIndexed { index, artId ->
-                    entity.artifactIds.add(
-                        ComponentArtifactIdEntity(
-                            component = entity,
-                            groupPattern = groupId,
-                            artifactPattern = artId,
-                            sortOrder = index,
-                        ),
-                    )
-                }
-        }
+        // Artifact ownership: the base (all-versions) mapping. Classify the DSL
+        // groupId/artifactId into a mode (EXPLICIT / ALL_EXCEPT_CLAIMED / ALL) and
+        // store it as ComponentArtifactMappingEntity rows. Per-range overrides are
+        // added by emitMarkerOverrides with the override's range. sort_order=0 (the
+        // first mapping added) is the PRIMARY mapping rendered into the legacy
+        // v1-v3 single (groupIdPattern, artifactIdPattern) pair.
+        addOwnershipMappings(entity, ALL_VERSIONS, cfg.groupIdPattern, cfg.artifactIdPattern)
 
         // Distribution security groups (never per-version)
         cfg.distribution?.securityGroups?.read?.takeIf { it.isNotBlank() }?.let { readGroups ->
@@ -1342,6 +1327,66 @@ class ImportServiceImpl(
         }
 
         return entity
+    }
+
+    /**
+     * Build artifact-ownership mappings for [versionRange] from a DSL groupId/artifactId
+     * pair. Classifies the artifactId into a mode (EXPLICIT / ALL_EXCEPT_CLAIMED / ALL —
+     * [ArtifactOwnershipModeClassifier]) and returns [ComponentArtifactMappingEntity] rows
+     * (EXPLICIT adds literal token children). ALL_EXCEPT_CLAIMED is single-group, so a
+     * comma group-list is split into one mapping per group; ALL/EXPLICIT keep the
+     * comma-list as one mapping. `sortOrder` runs from [startSortOrder] (0 = primary).
+     * Returns an empty list when there is no group.
+     */
+    private fun buildOwnershipMappings(
+        component: ComponentEntity,
+        versionRange: String,
+        groupIdPattern: String?,
+        artifactIdPattern: String?,
+        startSortOrder: Int,
+    ): List<ComponentArtifactMappingEntity> {
+        val group = groupIdPattern?.trim()
+        if (group.isNullOrBlank()) return emptyList()
+        val mode = ArtifactOwnershipModeClassifier.classify(artifactIdPattern)
+        val groups =
+            if (mode == ArtifactIdMode.ALL_EXCEPT_CLAIMED) {
+                group.split(',').map { it.trim() }.filter { it.isNotEmpty() }
+            } else {
+                listOf(group)
+            }
+        val tokens =
+            if (mode == ArtifactIdMode.EXPLICIT) {
+                ArtifactOwnershipModeClassifier.splitTokens(artifactIdPattern.orEmpty())
+            } else {
+                emptyList()
+            }
+        return groups.mapIndexed { gi, g ->
+            val mapping = ComponentArtifactMappingEntity(
+                component = component,
+                versionRange = versionRange,
+                groupPattern = g,
+                artifactIdMode = mode.name,
+                sortOrder = startSortOrder + gi,
+            )
+            tokens.forEachIndexed { i, tok ->
+                mapping.tokens.add(
+                    ComponentArtifactMappingTokenEntity(mapping = mapping, artifactPattern = tok, sortOrder = i),
+                )
+            }
+            mapping
+        }
+    }
+
+    /** Base-mapping convenience: build + attach to the not-yet-saved component (cascade persists). */
+    private fun addOwnershipMappings(
+        entity: ComponentEntity,
+        versionRange: String,
+        groupIdPattern: String?,
+        artifactIdPattern: String?,
+    ) {
+        entity.artifactMappings.addAll(
+            buildOwnershipMappings(entity, versionRange, groupIdPattern, artifactIdPattern, entity.artifactMappings.size),
+        )
     }
 
     private fun linkSystems(
@@ -1639,9 +1684,19 @@ class ImportServiceImpl(
             }?.let { saved += it }
         }
         if (groupArtifactPatternsDiffer(base, override)) {
-            saveMarkerRowWithChildren(component, versionRange, MarkerAttributes.GROUP_ARTIFACT_PATTERN) { row ->
-                attachMavenArtifactsFromGroupArtifact(row, override.groupIdPattern, override.artifactIdPattern)
-            }?.let { saved += it }
+            // Per-range ownership override: write ComponentArtifactMappingEntity rows with this
+            // range (REPLACES the base mapping for the range). Ownership no longer rides the
+            // GROUP_ARTIFACT_PATTERN marker. `component` is already persisted, so save directly.
+            // sort_order starts at 0: these rows live in their own `versionRange` bucket (distinct
+            // from the base ALL_VERSIONS rows and from every other override range), and both the
+            // UNIQUE(component_id, version_range, sort_order) constraint and the resolver's
+            // per-range primary selection (`minByOrNull { sortOrder }` within a range) only require
+            // ordering WITHIN this range — no global offset is needed.
+            val overrideMappings =
+                buildOwnershipMappings(component, versionRange, override.groupIdPattern, override.artifactIdPattern, 0)
+            componentArtifactMappingRepository.saveAll(overrideMappings)
+            // ownership mappings are persisted directly (not config-row markers), so `saved`
+            // (the marker-config-row list) is unchanged.
         }
         if (fileUrlArtifactsDiffer(baseDist, overDist)) {
             saveMarkerRowWithChildren(component, versionRange, MarkerAttributes.DISTRIBUTION_FILE_URL) { row ->
@@ -1780,37 +1835,6 @@ class ImportServiceImpl(
                     artifactPattern = coords.artifactId,
                     extension = coords.extension,
                     classifier = coords.classifier,
-                    sortOrder = sortOrder++,
-                ),
-            )
-        }
-    }
-
-    /**
-     * MIG-047: populate a GROUP_ARTIFACT_PATTERN MARKER row with synthetic
-     * [DistributionMavenArtifactEntity] rows built from DSL-level `groupId`/`artifactId`
-     * fields when neither range carries an explicit `distribution { gav = … }` block.
-     *
-     * [artifactIdCsv] is treated as a comma-separated list (each token becomes
-     * one [DistributionMavenArtifactEntity] row), matching the V1 behaviour in
-     * `JiraParametersResolver.getMavenArtifactParameters` which uses
-     * `artifactIdPattern` directly.
-     */
-    private fun attachMavenArtifactsFromGroupArtifact(
-        row: ComponentConfigurationEntity,
-        groupId: String?,
-        artifactIdCsv: String?,
-    ) {
-        val group = groupId ?: return
-        var sortOrder = 0
-        for (artifactToken in splitCsv(artifactIdCsv ?: return)) {
-            row.mavenArtifacts.add(
-                DistributionMavenArtifactEntity(
-                    componentConfiguration = row,
-                    groupPattern = group,
-                    artifactPattern = artifactToken,
-                    extension = null,
-                    classifier = null,
                     sortOrder = sortOrder++,
                 ),
             )

@@ -12,7 +12,6 @@ import org.junit.jupiter.api.Timeout
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.`when`
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
-import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactIdEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionMavenArtifactEntity
@@ -76,14 +75,7 @@ class DatabaseComponentRegistryResolverFindByArtifactTest {
     }
 
     private fun addArtifactId(component: ComponentEntity, groupPattern: String, artifactPattern: String) {
-        component.artifactIds.add(
-            ComponentArtifactIdEntity(
-                component = component,
-                groupPattern = groupPattern,
-                artifactPattern = artifactPattern,
-                sortOrder = component.artifactIds.size,
-            ),
-        )
+        component.addOwnershipMapping(groupPattern, artifactPattern)
     }
 
     /** A per-range `GROUP_ARTIFACT_PATTERN` marker carrying an overriding maven coordinate. */
@@ -93,20 +85,9 @@ class DatabaseComponentRegistryResolverFindByArtifactTest {
         groupPattern: String,
         artifactPattern: String,
     ) {
-        val marker = ComponentConfigurationEntity(
-            component = component,
-            versionRange = versionRange,
-            overriddenAttribute = MarkerAttributes.GROUP_ARTIFACT_PATTERN,
-            rowType = "MARKER",
-        )
-        marker.mavenArtifacts.add(
-            DistributionMavenArtifactEntity(
-                componentConfiguration = marker,
-                groupPattern = groupPattern,
-                artifactPattern = artifactPattern,
-            ),
-        )
-        component.configurations.add(marker)
+        // Per-range ownership override (the new model — a mapping with the override range, which
+        // replaces the base mapping for that range; ownership no longer rides a marker row).
+        component.addOwnershipMapping(groupPattern, artifactPattern, versionRange)
     }
 
     @Test

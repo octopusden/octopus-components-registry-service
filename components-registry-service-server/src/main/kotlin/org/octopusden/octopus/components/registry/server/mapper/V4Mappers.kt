@@ -71,7 +71,7 @@ fun ComponentEntity.toDetailResponse(teamcityBaseUrl: String? = null): Component
         distributionExternal = this.distributionExternal,
         group = this.componentGroup?.let { group -> group.toResponse(thisComponentKey = this.componentKey) },
         docs = this.docLinks.sortedBy { it.sortOrder }.map { it.toResponse() },
-        artifactIds = this.artifactIds.map { it.toResponse() },
+        artifactIds = this.artifactMappings.sortedBy { it.sortOrder }.map { it.toResponse() },
         securityGroups = this.securityGroups.map { it.toResponse() },
         teamcityProjects =
             this.teamcityProjects
@@ -434,12 +434,20 @@ private fun org.octopusden.octopus.components.registry.server.entity.ComponentDo
         sortOrder = this.sortOrder,
     )
 
-private fun org.octopusden.octopus.components.registry.server.entity.ComponentArtifactIdEntity.toResponse(): ArtifactIdResponse =
-    ArtifactIdResponse(
+private fun org.octopusden.octopus.components.registry.server.entity.ComponentArtifactMappingEntity.toResponse(): ArtifactIdResponse {
+    val mode = org.octopusden.octopus.components.registry.server.entity.ArtifactIdMode.valueOf(this.artifactIdMode)
+    val tokens = this.tokens.sortedBy { it.sortOrder }.map { it.artifactPattern }
+    return ArtifactIdResponse(
         id = this.id!!,
+        versionRange = this.versionRange,
         groupPattern = this.groupPattern,
-        artifactPattern = this.artifactPattern,
+        mode = this.artifactIdMode,
+        artifactTokens = tokens,
+        legacyArtifactIdPattern =
+            org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipRendering
+                .renderArtifactPattern(mode, tokens),
     )
+}
 
 private fun org.octopusden.octopus.components.registry.server.entity.DistributionSecurityGroupEntity.toResponse(): SecurityGroupResponse =
     SecurityGroupResponse(

@@ -7,7 +7,7 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentGroupRole
 import org.octopusden.octopus.components.registry.server.dto.v4.ConfigurationRowType
-import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactIdEntity
+import org.octopusden.octopus.components.registry.server.service.impl.addOwnershipMapping
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentDocLinkEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
@@ -545,20 +545,17 @@ class ComponentDetailMapperTest {
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("artifactIds mapped to ArtifactIdResponse")
+    @DisplayName("artifactIds mapped to ArtifactIdResponse (EXPLICIT mapping with tokens)")
     fun artifactIds_mapped() {
         val component = minimalComponent()
-        component.artifactIds.add(
-            ComponentArtifactIdEntity(
-                id = UUID.randomUUID(), component = component,
-                groupPattern = "org.example", artifactPattern = "svc",
-            ),
-        )
+        component.addOwnershipMapping("org.example", "svc")
+        component.artifactMappings.first().id = UUID.randomUUID() // toResponse reads id!! (persisted in prod)
 
         val ids = component.toDetailResponse().artifactIds
         assertEquals(1, ids.size)
         assertEquals("org.example", ids[0].groupPattern)
-        assertEquals("svc", ids[0].artifactPattern)
+        assertEquals("EXPLICIT", ids[0].mode)
+        assertEquals(listOf("svc"), ids[0].artifactTokens)
     }
 
     @Test

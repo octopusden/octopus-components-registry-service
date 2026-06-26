@@ -64,6 +64,7 @@
 | SYS-053 | Component audit snapshots include section fields (BASE-configuration build/escrow/jira scalars, versionRange, section + per-component child collections), so a section-only PATCH writes an UPDATE audit row with a field-level diff instead of being dropped by the SYS-048 no-op guard; collection snapshots are content-only (no row ids) so an identical re-save stays a no-op | High | integration-test | ✅ Tested |
 | SYS-054 | Audit read endpoints expose a server-resolved `componentKey` on each Component row: resolved from the `entityId` UUID to the component's current key, batched per page; falls back to the snapshot `name` (CRUD) / `moduleName` (MIGRATED) for components that no longer exist; `null` for non-Component rows or when unresolvable. Covers field-override rows whose value snapshot carries no name | High | integration-test | ✅ Tested |
 | SYS-055 | Anonymous `GET /rest/api/4/migration-status` reports whether a migration/resync job is RUNNING ({running, kind}) so a tokenless caller (the portal validation sweep) can skip while the legacy resolver may serve not-yet-migrated data | Medium | integration-test | ✅ Tested |
+| SYS-056 | Artifact-ID ownership is modelled explicitly as a per-component LIST of `(group-list, mode ∈ {EXPLICIT, ALL_EXCEPT_CLAIMED, ALL}, version range)` mappings (`component_artifact_mappings` + `_tokens`), replacing the opaque regex `component_artifact_ids`. Cross-component uniqueness is decided deterministically from the stored modes (restores legacy validator #24/#25), enforced on v4 create/update (409); per-range overrides REPLACE the base for their range; v1–v3 wire renders the primary mapping; migration classifies DSL patterns into modes strictly (no escape hatch) | High | unit + integration-test | ✅ Tested |
 
 ---
 
@@ -1894,3 +1895,89 @@ non-migrating pod. Making the gate DB-backed is the documented follow-up (MIG-02
 **Test method:** `MigrationStatusControllerV4Test` —
 `SYS-055 anonymous probe returns running false when gate is free`,
 `SYS-055 anonymous probe returns running true with kind while a migration runs`.
+
+### SYS-056: Explicit artifact-ID ownership model (modes) + deterministic cross-component uniqueness
+
+**Priority:** High
+**Test layer:** unit + integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+The base groupId/artifactId ownership mapping was stored as an opaque regex-ish
+string (`component_artifact_ids.artifact_id_pattern`). That had three problems:
+(1) the inherited default surfaced in the UI as a raw catch-all `[\w-\.]+`,
+opaque to users; (2) the per-range override of the ownership pattern was
+import-only / not editable through v4; and (3) the legacy `EscrowConfigValidator`
+cross-component rules #24 (exact token-pair sharing) and #25 (pattern containment)
+— "at most one component matches any artifact" — could not be re-expressed
+precisely while ownership was an opaque pattern, so v3 had silently dropped them.
+
+**Description:**
+Ownership is modelled explicitly. A component owns a LIST of mappings; each mapping
+carries a comma-separated **group list**, an **ownership mode**, an optional
+**version range** (base = ALL_VERSIONS), and — for EXPLICIT — a list of literal
+**artifact tokens**:
+- `EXPLICIT` — owns exactly the listed literal artifacts under its group(s).
+- `ALL_EXCEPT_CLAIMED` — catch-all that yields to other components' EXPLICIT claims
+  in intersecting ranges (maps the legacy `(?!X)` negative-lookahead). Single-group.
+- `ALL` — owns every artifact under its group(s) unconditionally (the legacy/`main`
+  default for a component with no explicit artifactId — preserved on migration).
+
+Storage: `component_artifact_mappings (component_id, version_range, group_pattern,
+artifact_id_mode, sort_order)` + `component_artifact_mapping_tokens (mapping_id,
+artifact_pattern, sort_order)`, replacing `component_artifact_ids` and the
+import-only `GROUP_ARTIFACT_PATTERN` ownership marker. A per-range override is just
+mapping rows with a narrower range and REPLACES the base for that range
+(most-specific wins). `sort_order=0` is the **primary** mapping; v1–v3 forward
+output (`groupIdPattern`/`artifactIdPattern`, `/maven-artifacts`) renders the
+primary mapping per range, while reverse `find-by-artifact` flattens ALL mappings so
+ownership resolution stays complete for multi-mapping components. EXPLICIT tokens
+are stored unescaped and dot-escaped only when rendered to a legacy regex-consumed
+string; the v3 DB resolver matches EXPLICIT tokens by exact equality.
+
+Cross-component uniqueness is decided deterministically from the stored modes (no
+regex probing): for two mappings of different components sharing ≥1 group token in
+intersecting EFFECTIVE-per-range windows — `EXPLICIT × EXPLICIT` conflicts iff their
+token sets intersect; `EXPLICIT × ALL_EXCEPT_CLAIMED` never conflicts;
+`ALL_EXCEPT_CLAIMED × ALL_EXCEPT_CLAIMED` conflicts; `ALL × anything` conflicts.
+
+**Scope note (enforcement boundary):** the cross-component ownership matrix is
+enforced on the v4 write path — `create` (unconditional) and `update` when
+`artifactIds` is present (an unrelated field-override cannot change ownership and
+must not re-trigger the check). It is deliberately NOT wired into the §6.0 migration
+uniqueness pre-pass: production is overlap-free by construction under the legacy
+single-match resolver, and the live API guards new writes. Migration instead
+classifies each DSL artifactId into a mode strictly (`(?!`→ALL_EXCEPT; exact
+catch-all set→ALL; literal enumeration→EXPLICIT; any other regex hard-fails — no
+escape hatch); the real-production-DSL gate (`RealDslUniquenessAcceptanceTest`)
+confirms 0 unclassifiable patterns and 0 §6.0 violations.
+
+**Acceptance criteria:**
+1. CREATE: two components with `EXPLICIT` mappings sharing a group and a token → 409
+   (`UNIQUENESS_VIOLATION`, message names `groupId/artifactId ownership`).
+2. CREATE: two `EXPLICIT` mappings sharing a group but disjoint tokens → 2xx.
+3. CREATE: two `ALL` mappings on the same group → 409.
+4. CREATE: `EXPLICIT` vs `ALL_EXCEPT_CLAIMED` on the same group → 2xx (catch-all yields).
+5. CREATE: `ALL_EXCEPT_CLAIMED` with a comma group → 400 (single-group only).
+6. PATCH with `artifactIds` introducing a colliding mapping → 409; a field-override
+   PATCH (no `artifactIds`) never triggers the ownership check.
+7. Migration classifies the real production DSL with 0 unclassifiable patterns;
+   inherited/blank artifactId → `ALL`; `(?!X)` → `ALL_EXCEPT_CLAIMED`.
+8. A migrated single-mapping component resolves behaviorally as before; a
+   multi-mapping component's legacy forward render returns the `sort_order=0` mapping
+   while `find-by-artifact` resolves an artifact owned by a non-primary mapping.
+
+**Test method:** `OwnershipCollisionMatrixTest` (the 6-cell mode matrix +
+intra-component disjointness + effective-per-range replacement),
+`ArtifactOwnershipModeClassifierTest` (`plain catch-all forms classify as ALL`,
+`null / blank artifactId classifies as ALL`, `negative-lookahead exclusion
+classifies as ALL_EXCEPT_CLAIMED`, `literal single token and comma/pipe enumerations
+classify as EXPLICIT`, `any other regex hard-fails — no escape hatch`),
+`CrossComponentValidationTest` (`ownership_explicitVsExplicit_sameToken_conflict`,
+`ownership_explicitVsExplicit_differentTokens_ok`, `ownership_allVsAll_conflict`,
+`ownership_explicitVsAllExcept_ok`, `ownership_allExcept_commaGroup_badRequest`,
+`ownership_patchArtifactIdsOnly_conflict`), and `RealDslUniquenessAcceptanceTest`
+(prod-DSL gate). Forward/reverse rendering covered by
+`DatabaseComponentRegistryResolverMavenArtifactsRangeTest`,
+`DatabaseComponentRegistryResolverFindByArtifactTest`, `ComponentDetailMapperTest`,
+`MIG047PerRangeGroupIdImportTest`.

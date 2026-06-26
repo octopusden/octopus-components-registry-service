@@ -12,7 +12,6 @@ import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
 import org.octopusden.octopus.components.registry.server.entity.BATCH_FETCH_SIZE
-import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactIdEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentRequiredToolEntity
@@ -170,14 +169,7 @@ class GetComponentsListQueryCountTest {
             )
             component.configurations.add(base)
             component.configurations.add(override)
-            component.artifactIds.add(
-                ComponentArtifactIdEntity(
-                    component = component,
-                    groupPattern = "com.example.gc",
-                    artifactPattern = "lib-$index",
-                    sortOrder = 0,
-                ),
-            )
+            component.addOwnershipMapping("com.example.gc", "lib-$index")
             val saved = componentRepository.save(component)
 
             val toolName = "gc-tool-$index"

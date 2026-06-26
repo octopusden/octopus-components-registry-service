@@ -10,7 +10,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.`when`
-import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactIdEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionMavenArtifactEntity
@@ -116,16 +115,11 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
         component: ComponentEntity,
         groupPattern: String,
         artifactPattern: String,
-        sortOrder: Int = component.artifactIds.size,
+        @Suppress("UNUSED_PARAMETER") sortOrder: Int = 0,
     ) {
-        component.artifactIds.add(
-            ComponentArtifactIdEntity(
-                component = component,
-                groupPattern = groupPattern,
-                artifactPattern = artifactPattern,
-                sortOrder = sortOrder,
-            ),
-        )
+        // Each call adds one ownership mapping. Multi-artifact callers should pass a comma-joined
+        // `artifactPattern` (one EXPLICIT mapping with ordered tokens), matching the new model.
+        component.addOwnershipMapping(groupPattern, artifactPattern)
     }
 
     private fun makeRangePresenceRow(
@@ -177,10 +171,10 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
         val base = makeBase(comp, "[1.1,)")
         addMavenArtifact(base, "com.example.ic", "bug-C-component-A")
 
-        val markerOld = makeMarkerRow(comp, "[1.0,1.1)", MarkerAttributes.GROUP_ARTIFACT_PATTERN)
-        addMavenArtifact(markerOld, "com.example", "bug-C-component-A")
+        // Per-range ownership override (new model: a mapping with the override range).
+        comp.addOwnershipMapping("com.example", "bug-C-component-A", "[1.0,1.1)")
 
-        comp.configurations.addAll(listOf(base, markerOld))
+        comp.configurations.add(base)
         stubComponent(comp)
 
         val result = resolver.getMavenArtifactParameters("bug-C-component-A-like")
@@ -222,11 +216,11 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
         val base = makeBase(comp, "[03.51.29.15,)")
         addMavenArtifact(base, "com.example.cardsmodel2.dummy", "bug-C-component-B", sortOrder = 0)
 
-        val markerOld = makeMarkerRow(comp, "(,03.51.29.15)", MarkerAttributes.GROUP_ARTIFACT_PATTERN)
-        addMavenArtifact(markerOld, "com.example.cardsmodel2", "bug-C-fixture-v2", sortOrder = 0)
-        addMavenArtifact(markerOld, "com.example.cardsmodel", "bug-C-fixture-legacy", sortOrder = 1)
+        // Per-range ownership override: one group + CSV artifacts (the real DSL shape; the old
+        // two-different-group marker never occurred — attachMavenArtifactsFromGroupArtifact used one group).
+        comp.addOwnershipMapping("com.example.cardsmodel2", "bug-C-fixture-v2,bug-C-fixture-legacy", "(,03.51.29.15)")
 
-        comp.configurations.addAll(listOf(base, markerOld))
+        comp.configurations.add(base)
         stubComponent(comp)
 
         val result = resolver.getMavenArtifactParameters("bug-C-fixture-B-shape")
@@ -392,11 +386,8 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
 
         // Add artifacts in NON-alphabetical order to force the test to fail if
         // the resolver falls back to alphabetical (or UUID-random) sorting.
-        addComponentLevelArtifact(comp, "com.example.test", "art-core", sortOrder = 0)
-        addComponentLevelArtifact(comp, "com.example.test", "art-cli", sortOrder = 1)
-        addComponentLevelArtifact(comp, "com.example.test", "art-xml", sortOrder = 2)
-        addComponentLevelArtifact(comp, "com.example.test", "art-zeta", sortOrder = 3)
-        addComponentLevelArtifact(comp, "com.example.test", "art-alpha", sortOrder = 4)
+        // One EXPLICIT mapping with ordered tokens (the new model's multi-artifact shape).
+        addComponentLevelArtifact(comp, "com.example.test", "art-core,art-cli,art-xml,art-zeta,art-alpha")
 
         val base = makeBase(comp, ALL_VERSIONS)
         comp.configurations.add(base)
@@ -434,10 +425,9 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
         val base = makeBase(comp, "(,1.0)")
         addMavenArtifact(base, "com.example.test", "art-x", sortOrder = 0)
 
-        val markerNew = makeMarkerRow(comp, "[1.0,)", MarkerAttributes.GROUP_ARTIFACT_PATTERN)
-        addMavenArtifact(markerNew, "com.example.new", "real-artifact-id", sortOrder = 0)
+        comp.addOwnershipMapping("com.example.new", "real-artifact-id", "[1.0,)")
 
-        comp.configurations.addAll(listOf(base, markerNew))
+        comp.configurations.add(base)
         stubComponent(comp)
 
         val result = resolver.getMavenArtifactParameters("res-c-prime-fixture-mixed")
@@ -506,9 +496,7 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
         val comp = makeComponent("fixture-A-3-token")
         comp.distributionExplicit = true
 
-        addComponentLevelArtifact(comp, "com.example.fx", "art-a", sortOrder = 0)
-        addComponentLevelArtifact(comp, "com.example.fx", "art-b", sortOrder = 1)
-        addComponentLevelArtifact(comp, "com.example.fx", "art-c", sortOrder = 2)
+        addComponentLevelArtifact(comp, "com.example.fx", "art-a,art-b,art-c")
 
         val base = makeBase(comp, "[4,4.9.4-4181)")
         addMavenArtifact(base, "com.example.fx", "art-a", sortOrder = 0)
@@ -627,10 +615,9 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
         val base = makeBase(comp, "[1.0,1.1)")
         addMavenArtifact(base, "com.example", "alpha-fixture")
 
-        val marker = makeMarkerRow(comp, "[1.1,)", MarkerAttributes.GROUP_ARTIFACT_PATTERN)
-        addMavenArtifact(marker, "com.example.ic", "alpha-fixture")
+        comp.addOwnershipMapping("com.example.ic", "alpha-fixture", "[1.1,)")
 
-        comp.configurations.addAll(listOf(base, marker))
+        comp.configurations.add(base)
         stubComponent(comp)
 
         val result = resolver.getMavenArtifactParameters("alpha-fixture-mig047-resolver")
@@ -666,12 +653,9 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
         val base = makeBase(comp, "[1.0,)")
         addMavenArtifact(base, "com.example.widgets", "core-a")
 
-        val marker = makeMarkerRow(comp, "[2.0,)", MarkerAttributes.GROUP_ARTIFACT_PATTERN)
-        addMavenArtifact(marker, "com.example.widgets", "core-a", sortOrder = 0)
-        addMavenArtifact(marker, "com.example.widgets", "core-b", sortOrder = 1)
-        addMavenArtifact(marker, "com.example.widgets", "core-c", sortOrder = 2)
+        comp.addOwnershipMapping("com.example.widgets", "core-a,core-b,core-c", "[2.0,)")
 
-        comp.configurations.addAll(listOf(base, marker))
+        comp.configurations.add(base)
         stubComponent(comp)
 
         val result = resolver.getMavenArtifactParameters("beta-fixture-mig047-csv")
@@ -714,10 +698,11 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
         val distributionMaven = makeMarkerRow(comp, "[1.1,)", MarkerAttributes.DISTRIBUTION_MAVEN)
         addMavenArtifact(distributionMaven, "com.example.user-explicit", "gamma-fixture")
 
-        val groupArtifactPattern = makeMarkerRow(comp, "[1.1,)", MarkerAttributes.GROUP_ARTIFACT_PATTERN)
-        addMavenArtifact(groupArtifactPattern, "com.example.import-internal", "gamma-fixture")
+        // Per-range ownership override (replaces the old GROUP_ARTIFACT_PATTERN marker). The
+        // DISTRIBUTION_MAVEN marker must NOT influence /maven-artifacts.
+        comp.addOwnershipMapping("com.example.import-internal", "gamma-fixture", "[1.1,)")
 
-        comp.configurations.addAll(listOf(base, distributionMaven, groupArtifactPattern))
+        comp.configurations.addAll(listOf(base, distributionMaven))
         stubComponent(comp)
 
         val result = resolver.getMavenArtifactParameters("gamma-fixture-mig047-conflict")

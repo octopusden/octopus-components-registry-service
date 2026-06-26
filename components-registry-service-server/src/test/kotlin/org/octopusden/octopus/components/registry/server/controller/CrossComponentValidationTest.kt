@@ -740,4 +740,99 @@ class CrossComponentValidationTest {
                 ),
         ).andExpect(status().isConflict)
     }
+
+    // ── #357 artifact-ownership mapping uniqueness (mode-aware matrix) ──────────
+
+    @Test
+    @DisplayName("CREATE: two components EXPLICIT-claim the SAME artifact token under one group → 409")
+    fun ownership_explicitVsExplicit_sameToken_conflict() {
+        val s = sfx()
+        val group = "org.octopusden.octopus.own$s"
+        createOk(
+            """{"name":"xcc-own-ex-a-$s","baseConfiguration":{"build":{"buildSystem":"MAVEN"}},""" +
+                """"artifactIds":[{"groupPattern":"$group","mode":"EXPLICIT","artifactTokens":["lib-core","lib-api"]}]}""",
+        )
+        postCreate(
+            """{"name":"xcc-own-ex-b-$s","baseConfiguration":{"build":{"buildSystem":"MAVEN"}},""" +
+                """"artifactIds":[{"groupPattern":"$group","mode":"EXPLICIT","artifactTokens":["lib-api"]}]}""",
+        ).andExpect(status().isConflict)
+            .andExpect(jsonPath("$.errorMessage").value(org.hamcrest.Matchers.containsString("groupId/artifactId ownership")))
+            .andExpect(jsonPath("$.errorCode").value("UNIQUENESS_VIOLATION"))
+    }
+
+    @Test
+    @DisplayName("CREATE: two components EXPLICIT-claim DIFFERENT tokens under one group → 2xx")
+    fun ownership_explicitVsExplicit_differentTokens_ok() {
+        val s = sfx()
+        val group = "org.octopusden.octopus.own$s"
+        createOk(
+            """{"name":"xcc-own-exd-a-$s","baseConfiguration":{"build":{"buildSystem":"MAVEN"}},""" +
+                """"artifactIds":[{"groupPattern":"$group","mode":"EXPLICIT","artifactTokens":["lib-core"]}]}""",
+        )
+        postCreate(
+            """{"name":"xcc-own-exd-b-$s","baseConfiguration":{"build":{"buildSystem":"MAVEN"}},""" +
+                """"artifactIds":[{"groupPattern":"$group","mode":"EXPLICIT","artifactTokens":["lib-other"]}]}""",
+        ).andExpect(status().is2xxSuccessful)
+    }
+
+    @Test
+    @DisplayName("CREATE: two components both ALL on the same group → 409 (ALL claims everything)")
+    fun ownership_allVsAll_conflict() {
+        val s = sfx()
+        val group = "org.octopusden.octopus.own$s"
+        createOk(
+            """{"name":"xcc-own-all-a-$s","baseConfiguration":{"build":{"buildSystem":"MAVEN"}},""" +
+                """"artifactIds":[{"groupPattern":"$group","mode":"ALL"}]}""",
+        )
+        postCreate(
+            """{"name":"xcc-own-all-b-$s","baseConfiguration":{"build":{"buildSystem":"MAVEN"}},""" +
+                """"artifactIds":[{"groupPattern":"$group","mode":"ALL"}]}""",
+        ).andExpect(status().isConflict)
+    }
+
+    @Test
+    @DisplayName("CREATE: EXPLICIT vs ALL_EXCEPT_CLAIMED on the same group → 2xx (catch-all yields)")
+    fun ownership_explicitVsAllExcept_ok() {
+        val s = sfx()
+        val group = "org.octopusden.octopus.own$s"
+        createOk(
+            """{"name":"xcc-own-ae-a-$s","baseConfiguration":{"build":{"buildSystem":"MAVEN"}},""" +
+                """"artifactIds":[{"groupPattern":"$group","mode":"EXPLICIT","artifactTokens":["lib-core"]}]}""",
+        )
+        postCreate(
+            """{"name":"xcc-own-ae-b-$s","baseConfiguration":{"build":{"buildSystem":"MAVEN"}},""" +
+                """"artifactIds":[{"groupPattern":"$group","mode":"ALL_EXCEPT_CLAIMED"}]}""",
+        ).andExpect(status().is2xxSuccessful)
+    }
+
+    @Test
+    @DisplayName("CREATE rejects ALL_EXCEPT_CLAIMED with a comma group (single-group only) → 400")
+    fun ownership_allExcept_commaGroup_badRequest() {
+        val s = sfx()
+        postCreate(
+            """{"name":"xcc-own-aecomma-$s","baseConfiguration":{"build":{"buildSystem":"MAVEN"}},""" +
+                """"artifactIds":[{"groupPattern":"org.octopusden.octopus.a$s,org.octopusden.octopus.b$s",""" +
+                """"mode":"ALL_EXCEPT_CLAIMED"}]}""",
+        ).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    @DisplayName("PATCH artifactIds-only: introducing a colliding ownership mapping → 409 (gate)")
+    fun ownership_patchArtifactIdsOnly_conflict() {
+        val s = sfx()
+        val group = "org.octopusden.octopus.own$s"
+        createOk(
+            """{"name":"xcc-own-patch-owner-$s","baseConfiguration":{"build":{"buildSystem":"MAVEN"}},""" +
+                """"artifactIds":[{"groupPattern":"$group","mode":"EXPLICIT","artifactTokens":["shared-lib"]}]}""",
+        )
+        val resp = postCreate(
+            """{"name":"xcc-own-patch-target-$s","baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
+        ).andExpect(status().is2xxSuccessful).andReturn().response.contentAsString
+        val node = objectMapper.readTree(resp)
+        patchComponent(
+            node["id"].asText(),
+            """{"version":${node["version"].asLong()},""" +
+                """"artifactIds":[{"groupPattern":"$group","mode":"EXPLICIT","artifactTokens":["shared-lib"]}]}""",
+        ).andExpect(status().isConflict).andExpect(jsonPath("$.errorCode").value("UNIQUENESS_VIOLATION"))
+    }
 }

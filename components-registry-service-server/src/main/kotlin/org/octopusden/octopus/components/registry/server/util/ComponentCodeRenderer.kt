@@ -358,13 +358,24 @@ class ComponentCodeRenderer(
         cb: CodeBuilder,
         component: ComponentEntity,
     ) {
-        val artifactIds = component.artifactIds
-        if (artifactIds.isEmpty()) return
+        // Base (all-versions) ownership mappings, rendered to the legacy (groupPattern,
+        // artifactPattern) form. Per-range overrides are shown by the range-block renderer.
+        val baseMappings =
+            component.artifactMappings
+                .filter { it.versionRange == ALL_VERSIONS_RANGE }
+                .sortedBy { it.sortOrder }
+        if (baseMappings.isEmpty()) return
         cb.open("artifactIds")
-        artifactIds.forEach { a ->
+        baseMappings.forEach { m ->
             cb.open("artifact")
-            cb.str("groupPattern", a.groupPattern)
-            cb.str("artifactPattern", a.artifactPattern)
+            cb.str("groupPattern", m.groupPattern)
+            cb.str(
+                "artifactPattern",
+                org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipRendering.renderArtifactPattern(
+                    org.octopusden.octopus.components.registry.server.entity.ArtifactIdMode.valueOf(m.artifactIdMode),
+                    m.tokens.sortedBy { it.sortOrder }.map { it.artifactPattern },
+                ),
+            )
             cb.close()
         }
         cb.close()
@@ -637,6 +648,7 @@ class ComponentCodeRenderer(
         const val ROW_BASE = "BASE"
         const val ROW_SCALAR_OVERRIDE = "SCALAR_OVERRIDE"
         const val ROW_MARKER = "MARKER"
+        const val ALL_VERSIONS_RANGE = "(,0),[0,)"
         val IDENTIFIER_RE = Regex("^[A-Za-z_][A-Za-z0-9_]*$")
     }
 }

@@ -11,7 +11,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
-import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactIdEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionDockerImageEntity
@@ -135,14 +134,7 @@ class TypeConfigurationArrayLeakReproTest {
                 ),
             )
             component.configurations.add(base)
-            component.artifactIds.add(
-                ComponentArtifactIdEntity(
-                    component = component,
-                    groupPattern = "com.example.leak",
-                    artifactPattern = "lib-$index",
-                    sortOrder = 0,
-                ),
-            )
+            component.addOwnershipMapping("com.example.leak", "lib-$index")
             val saved = componentRepository.save(component)
             if (index == 0) parent = saved
         }
@@ -161,7 +153,7 @@ class TypeConfigurationArrayLeakReproTest {
         all.forEach { c ->
             c.parentComponent?.componentKey
             c.configurations.forEach { cfg -> cfg.dockerImages.size }
-            c.artifactIds.size
+            c.artifactMappings.size
             c.securityGroups.size
             c.teamcityProjects.size
             c.docLinks.size

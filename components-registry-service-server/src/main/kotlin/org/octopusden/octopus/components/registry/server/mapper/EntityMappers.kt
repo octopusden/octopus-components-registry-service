@@ -446,11 +446,21 @@ private fun buildEscrowModuleConfig(
                 .Doc(docLink.docComponentKey, docLink.majorVersion)
     }
 
-    // Artifact pattern (group/artifact) — may have multiple artifact patterns for same group
-    val artifactIds = component.artifactIds.toList()
-    if (artifactIds.isNotEmpty()) {
-        setField(config, "groupIdPattern", artifactIds.first().groupPattern)
-        setField(config, "artifactIdPattern", artifactIds.joinToString(",") { it.artifactPattern })
+    // Artifact ownership — the PRIMARY (lowest sortOrder) effective mapping for this range
+    // (override mappings keyed to `versionRange` if present, else the base ALL_VERSIONS
+    // mappings) rendered to the legacy (groupIdPattern, artifactIdPattern) pair.
+    val mappingsByRange = component.artifactMappings.groupBy { it.versionRange }
+    val effectiveMappings = mappingsByRange[versionRange] ?: mappingsByRange[ALL_VERSIONS].orEmpty()
+    effectiveMappings.minByOrNull { it.sortOrder }?.let { primary ->
+        setField(config, "groupIdPattern", primary.groupPattern)
+        setField(
+            config,
+            "artifactIdPattern",
+            org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipRendering.renderArtifactPattern(
+                org.octopusden.octopus.components.registry.server.entity.ArtifactIdMode.valueOf(primary.artifactIdMode),
+                primary.tokens.sortedBy { it.sortOrder }.map { it.artifactPattern },
+            ),
+        )
     }
 
     return config
