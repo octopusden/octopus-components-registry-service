@@ -605,6 +605,9 @@ class TeamcitySyncServiceTest {
 
         private fun regularComponents(): List<ComponentEntity> = components.filterNot(::isFakeAggregator)
 
+        // People breakdowns count ACTIVE (non-archived) regular components only (SYS-057).
+        private fun activeRegularComponents(): List<ComponentEntity> = regularComponents().filterNot { it.archived }
+
         override fun countRegularComponents(): Long = regularComponents().size.toLong()
 
         override fun countRegularComponentsByArchived(archived: Boolean): Long =
@@ -620,7 +623,7 @@ class TeamcitySyncServiceTest {
 
         override fun countComponentsByOwner() =
             nameCounts(
-                regularComponents()
+                activeRegularComponents()
                     .mapNotNull { it.componentOwner?.takeIf { o -> o.isNotBlank() } }
                     .groupingBy { it }
                     .eachCount(),
@@ -628,7 +631,7 @@ class TeamcitySyncServiceTest {
 
         override fun countComponentsByReleaseManager() =
             nameCounts(
-                regularComponents()
+                activeRegularComponents()
                     .flatMap { it.releaseManagerUsernames() }
                     .groupingBy { it }
                     .eachCount(),
@@ -636,7 +639,7 @@ class TeamcitySyncServiceTest {
 
         override fun countComponentsBySecurityChampion() =
             nameCounts(
-                regularComponents()
+                activeRegularComponents()
                     .flatMap { it.securityChampionUsernames() }
                     .groupingBy { it }
                     .eachCount(),

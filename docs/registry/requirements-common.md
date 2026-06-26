@@ -1974,12 +1974,17 @@ downloading the whole list; CRS owns the data and can aggregate in SQL.
 
 - `totalComponents: Long` — all non-FAKE-aggregator component rows.
 - `activeComponents: Long` — the non-archived subset.
-- `componentsByOwner: Map<String, Long>` — count per `component_owner` (scalar
-  column GROUP BY; null/blank owners excluded).
-- `componentsByReleaseManager: Map<String, Long>` — count per release-manager
-  username (GROUP BY over the component_release_managers child table).
-- `componentsBySecurityChampion: Map<String, Long>` — count per security-champion
-  username (GROUP BY over component_security_champions).
+- `componentsByOwner: Map<String, Long>` — count of ACTIVE (non-archived)
+  components per `component_owner` (scalar column GROUP BY; null/blank owners excluded).
+- `componentsByReleaseManager: Map<String, Long>` — count of ACTIVE components per
+  release-manager username (GROUP BY over the component_release_managers child table).
+- `componentsBySecurityChampion: Map<String, Long>` — count of ACTIVE components per
+  security-champion username (GROUP BY over component_security_champions).
+
+The three people maps count ACTIVE (non-archived) components only, so a person's
+breakdown reflects their live workload (consistent with `activeComponents`); a person
+whose only components are archived does not appear in any map. `totalComponents` keeps
+the full count and `activeComponents` the non-archived count.
 
 Every figure is computed with a repository aggregation query (COUNT / GROUP BY),
 NOT by loading entities into memory. The endpoint is **counts + people only**:
@@ -1996,13 +2001,16 @@ is invented.
 1. `totalComponents` / `activeComponents` reflect the seeded set (active =
    non-archived).
 2. `componentsByOwner` / `componentsByReleaseManager` / `componentsBySecurityChampion`
-   carry the correct per-username counts (a user on N components → N); a user who is
+   carry the correct per-username counts (a user on N active components → N); a user who is
    both RM and SC is counted once in each map.
 3. The counts are produced by GROUP BY aggregation, not entity hydration.
 4. A `viewerJwt` (ACCESS_COMPONENTS) gets `200`; an unauthenticated request gets `401`.
 5. The response carries no problem/validation fields.
+6. The three people maps exclude ARCHIVED components: a person's count reflects active
+   components only, and a person whose only components are archived is absent from the map.
 
 **Test method:** `HealthControllerV4Test` —
 `SYS-057 statistics returns total and active component counts`,
 `SYS-057 statistics groups components by owner RM and SC`,
+`SYS-057 statistics people breakdowns count active components only`,
 `SYS-057 statistics is ACCESS_COMPONENTS gated`.

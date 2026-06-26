@@ -173,6 +173,39 @@ class HealthControllerV4Test {
     }
 
     @Test
+    @DisplayName("SYS-057 statistics people breakdowns count active components only")
+    fun `SYS-057 statistics people breakdowns count active components only`() {
+        // `mixed` is owner/RM/SC on one ACTIVE and one ARCHIVED component → must count 1 in each map.
+        val mixed = uniqueName("sys057act_mixed")
+        val activeComp = uniqueName("sys057act_active")
+        val archivedComp = uniqueName("sys057act_archived")
+        createComponent(activeComp, owner = mixed, releaseManagers = listOf(mixed), securityChampions = listOf(mixed))
+        createComponent(archivedComp, owner = mixed, releaseManagers = listOf(mixed), securityChampions = listOf(mixed))
+        archiveComponent(archivedComp)
+
+        // `archivedOnly` has a single component, archived → must NOT appear in any people map.
+        val archivedOnly = uniqueName("sys057act_only")
+        val onlyComp = uniqueName("sys057act_onlycomp")
+        createComponent(onlyComp, owner = archivedOnly, releaseManagers = listOf(archivedOnly), securityChampions = listOf(archivedOnly))
+        archiveComponent(onlyComp)
+
+        val stats = statistics()
+        val byOwner = stats["componentsByOwner"]
+        val byRm = stats["componentsByReleaseManager"]
+        val bySc = stats["componentsBySecurityChampion"]
+
+        // mixed: the archived component is excluded → count 1, not 2.
+        assert(byOwner[mixed].asLong() == 1L) { "expected owner $mixed count 1 (archived excluded), got ${byOwner[mixed]}" }
+        assert(byRm[mixed].asLong() == 1L) { "expected RM $mixed count 1 (archived excluded), got ${byRm[mixed]}" }
+        assert(bySc[mixed].asLong() == 1L) { "expected SC $mixed count 1 (archived excluded), got ${bySc[mixed]}" }
+
+        // archivedOnly: no active components → absent from every map.
+        assert(byOwner[archivedOnly] == null) { "expected owner $archivedOnly absent (only archived), got ${byOwner[archivedOnly]}" }
+        assert(byRm[archivedOnly] == null) { "expected RM $archivedOnly absent (only archived), got ${byRm[archivedOnly]}" }
+        assert(bySc[archivedOnly] == null) { "expected SC $archivedOnly absent (only archived), got ${bySc[archivedOnly]}" }
+    }
+
+    @Test
     @DisplayName("SYS-057 statistics is ACCESS_COMPONENTS gated")
     fun `SYS-057 statistics is ACCESS_COMPONENTS gated`() {
         // viewer (ACCESS_COMPONENTS) → 200

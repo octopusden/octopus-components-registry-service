@@ -180,34 +180,41 @@ interface ComponentRepository :
     fun countRegularComponentsByArchived(archived: Boolean): Long
 
     /**
-     * Per-owner component counts (regular components only; null/blank owners excluded).
-     * One row per distinct `component_owner`.
+     * Per-owner ACTIVE-component counts (regular, non-archived components only; null/blank
+     * owners excluded). One row per distinct `component_owner`. Archived components are
+     * excluded so a person's breakdown reflects their live workload, consistent with
+     * `activeComponents`; `totalComponents` keeps the full count separately.
      */
     @Query(
         "SELECT c.componentOwner AS name, COUNT(c) AS count FROM ComponentEntity c LEFT JOIN c.componentGroup g " +
-            "WHERE c.componentOwner IS NOT NULL AND TRIM(c.componentOwner) <> '' " +
+            "WHERE c.archived = false " +
+            "AND c.componentOwner IS NOT NULL AND TRIM(c.componentOwner) <> '' " +
             "AND (g IS NULL OR NOT (g.isFake = true AND g.groupKey = c.componentKey)) " +
             "GROUP BY c.componentOwner",
     )
     fun countComponentsByOwner(): List<NameCountRow>
 
     /**
-     * Per-release-manager component counts (GROUP BY over the component_release_managers
-     * child table; regular components only). A user on N components yields count N.
+     * Per-release-manager ACTIVE-component counts (GROUP BY over the
+     * component_release_managers child table; regular, non-archived components only). A user
+     * on N active components yields count N; a user whose only components are archived does
+     * not appear in the map at all.
      */
     @Query(
         "SELECT rm.username AS name, COUNT(c) AS count FROM ComponentEntity c " +
             "JOIN c.releaseManagers rm LEFT JOIN c.componentGroup g " +
-            "WHERE (g IS NULL OR NOT (g.isFake = true AND g.groupKey = c.componentKey)) " +
+            "WHERE c.archived = false " +
+            "AND (g IS NULL OR NOT (g.isFake = true AND g.groupKey = c.componentKey)) " +
             "GROUP BY rm.username",
     )
     fun countComponentsByReleaseManager(): List<NameCountRow>
 
-    /** Per-security-champion component counts (GROUP BY over component_security_champions). */
+    /** Per-security-champion ACTIVE-component counts (GROUP BY over component_security_champions; archived excluded). */
     @Query(
         "SELECT sc.username AS name, COUNT(c) AS count FROM ComponentEntity c " +
             "JOIN c.securityChampions sc LEFT JOIN c.componentGroup g " +
-            "WHERE (g IS NULL OR NOT (g.isFake = true AND g.groupKey = c.componentKey)) " +
+            "WHERE c.archived = false " +
+            "AND (g IS NULL OR NOT (g.isFake = true AND g.groupKey = c.componentKey)) " +
             "GROUP BY sc.username",
     )
     fun countComponentsBySecurityChampion(): List<NameCountRow>

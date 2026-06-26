@@ -7,8 +7,11 @@ package org.octopusden.octopus.components.registry.server.dto.v4
  * over the regular (non-FAKE-aggregator) component set — the components never load into
  * memory — so the totals line up with the v4 component list.
  *
- * The `componentsBy*` maps key a username to the number of components on which that user
- * holds the role. A user who is both a release manager and a security champion appears
+ * The `componentsBy*` maps key a username to the number of ACTIVE (non-archived) components
+ * on which that user holds the role — archived components are excluded so a person's
+ * breakdown reflects their live workload (consistent with `activeComponents`, whereas
+ * `totalComponents` keeps the full count). A user whose only components are archived does
+ * not appear in any map. A user who is both a release manager and a security champion appears
  * (with that role's count) in BOTH maps independently.
  *
  * Deliberately carries NO problem/validation dimension: validation problems are owned by
