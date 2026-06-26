@@ -10,6 +10,10 @@ This directory collects the deployment-related inputs and working documents for 
   source patches)
 - `qa-post-deploy-migration.md` — what the `[3.1] Migrate components on QA DEV
   [AUTO]` TC build does, when it skips, and what TC parameters it expects
+- `migration-runbook.md` — production migration ops playbook: git-mode-first →
+  Flyway/validate → `POST /admin/migrate` → verify → flip `default-source` to `db`,
+  with the partial-failure recovery and rollback paths (the reusable, generic
+  form for QA/prod and another organization)
 - `references/teamcity/` — raw TeamCity Kotlin DSL snippets relevant to the current OKD deployment flow
 - `references/platform/okd-platform-patterns.md` — summarized conventions from `service-deployment`, `service-config`, `octopus-dms-ui`, and `octopus-api-gateway`
 
