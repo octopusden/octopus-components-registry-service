@@ -34,7 +34,9 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentGroupEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentLabelEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentBuildToolBeanEntity
+import org.octopusden.octopus.components.registry.server.entity.ComponentReleaseManagerEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentRequiredToolEntity
+import org.octopusden.octopus.components.registry.server.entity.ComponentSecurityChampionEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentTeamcityProjectEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionDockerImageEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionFileUrlArtifactEntity
@@ -2535,6 +2537,35 @@ class ComponentManagementServiceImpl(
                 spec.and(
                     Specification { root, _, _ ->
                         root.get<String>("componentOwner").`in`(filter.owner)
+                    },
+                )
+        }
+        // OR across selected release managers — a component matches when ANY listed
+        // username is among its ordered releaseManagers child rows. Unlike owner
+        // (a scalar column), this JOINs the child collection, so a single join +
+        // username IN(...) gives OR and query.distinct(true) dedupes the row
+        // multiplication a multi-RM component would otherwise produce (mirrors the
+        // buildSystem single-join-IN shape). The controller's normalisation
+        // guarantees a non-empty, blank-free, duplicate-free list.
+        if (!filter.releaseManager.isNullOrEmpty()) {
+            spec =
+                spec.and(
+                    Specification { root, query, _ ->
+                        val join = root.join<ComponentEntity, ComponentReleaseManagerEntity>("releaseManagers")
+                        query?.distinct(true)
+                        join.get<String>("username").`in`(filter.releaseManager)
+                    },
+                )
+        }
+        // OR across selected security champions — identical shape against the
+        // securityChampions child collection.
+        if (!filter.securityChampion.isNullOrEmpty()) {
+            spec =
+                spec.and(
+                    Specification { root, query, _ ->
+                        val join = root.join<ComponentEntity, ComponentSecurityChampionEntity>("securityChampions")
+                        query?.distinct(true)
+                        join.get<String>("username").`in`(filter.securityChampion)
                     },
                 )
         }

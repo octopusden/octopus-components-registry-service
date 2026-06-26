@@ -164,11 +164,11 @@ Resolution (per product decision):
   (base-row mapping changes; per-range override mapping IS covered via GROUP_ARTIFACT_PATTERN
   rows in the distribution table).
 
-## Addendum 2026-06-26 — #24/#25 ownership mapping closed (SYS-056 / ADR-017)
+## Addendum 2026-06-26 — #24/#25 ownership mapping closed (SYS-058 / ADR-017)
 
 The residual gap above is now closed. The `component_artifact_ids` opaque-regex ownership mapping
 was replaced by an explicit mode model (`component_artifact_mappings` + `_tokens`;
-EXPLICIT / ALL_EXCEPT_CLAIMED / ALL) — see ADR-017 and SYS-056. The TRUE legacy #24/#25 subject (the
+EXPLICIT / ALL_EXCEPT_CLAIMED / ALL) — see ADR-017 and SYS-058. The TRUE legacy #24/#25 subject (the
 component groupId/artifactId ownership mapping, OLD-VALIDATOR:217-242, 309-361) is now validated on
 the v4 write path by a deterministic mode-aware matrix (`validateArtifactOwnershipCollisions` /
 `OwnershipUniqueness.computeOwnershipCollisions`), keyed off the stored modes rather than regex

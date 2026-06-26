@@ -182,4 +182,4 @@ from list position. Unspecified mode defaults to `ALL` when tokenless, else `EXP
   `EntityMappers`, `V4Mappers`, `ComponentCodeRenderer`
 - `ComponentManagementServiceImpl#validateArtifactOwnershipIfChanged`,
   `ImportServiceImpl` (classification + mapping persistence)
-- SYS-056 (`requirements-common.md`); functional-spec §2.5; issue #357
+- SYS-058 (`requirements-common.md`); functional-spec §2.5; issue #357

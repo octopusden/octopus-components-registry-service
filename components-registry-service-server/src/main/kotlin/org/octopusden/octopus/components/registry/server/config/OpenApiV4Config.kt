@@ -33,6 +33,8 @@ class OpenApiV4Config {
                 "/rest/api/4/admin/**",
                 // ConfigControllerV4 GETs under /config/**.
                 "/rest/api/4/config/**",
+                // HealthControllerV4 — registry health statistics (SYS-057).
+                "/rest/api/4/health/**",
                 // InfoControllerV4 (not DB-gated).
                 "/rest/api/4/info",
                 // MigrationStatusControllerV4 — anonymous migration-activity probe (SYS-055).
