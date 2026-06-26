@@ -79,7 +79,8 @@ class OwnershipCollisionMatrixTest {
         val v = computeOwnershipCollisions(
             listOf(claim("a", mode = ArtifactIdMode.ALL, range = "[1,2)")),
             listOf(claim("b", mode = ArtifactIdMode.ALL, range = "[2,3)")),
-        ) { r1, r2 -> !(r1 == "[1,2)" && r2 == "[2,3)") }
+            { r1, r2 -> !(r1 == "[1,2)" && r2 == "[2,3)") },
+        )
         assertTrue(v.isEmpty())
     }
 
@@ -87,5 +88,40 @@ class OwnershipCollisionMatrixTest {
     @DisplayName("same componentKey never self-collides (multi-mapping / rerun)")
     fun sameComponent() {
         assertEquals(false, collides(claim("a", mode = ArtifactIdMode.ALL), claim("a", mode = ArtifactIdMode.ALL)))
+    }
+
+    @Test
+    @DisplayName("override REPLACES base (shadow skip): a base claim does not conflict in a range its own component overrides")
+    fun overrideShadowsBase() {
+        // Rival B: base EXPLICIT[old] (all versions) + per-range override [1,2) EXPLICIT[new].
+        // New component A claims [old] only in [1,2) — legitimate, because B gave up [old] there.
+        val newA = listOf(claim("A", mode = ArtifactIdMode.EXPLICIT, tokens = setOf("old"), range = "[1,2)"))
+        val existingB =
+            listOf(
+                claim("B", mode = ArtifactIdMode.EXPLICIT, tokens = setOf("old"), range = base),
+                claim("B", mode = ArtifactIdMode.EXPLICIT, tokens = setOf("new"), range = "[1,2)"),
+            )
+        // ALL_VERSIONS intersects everything; [1,2) intersects only itself here.
+        val intersect: (String, String) -> Boolean = { x, y -> x == base || y == base || x == y }
+
+        // WITHOUT the shadow map the base over-claims and the matrix false-409s.
+        assertTrue(computeOwnershipCollisions(newA, existingB, intersect).isNotEmpty())
+
+        // WITH B's override range shadowing its base, no conflict (B's base [old] is replaced in [1,2)).
+        assertTrue(
+            computeOwnershipCollisions(newA, existingB, intersect, mapOf("B" to setOf("[1,2)"))).isEmpty(),
+        )
+    }
+
+    @Test
+    @DisplayName("shadow skip does NOT mask a real base-vs-override conflict in an un-overridden range")
+    fun shadowDoesNotMaskRealConflict() {
+        // A claims [old] in [2,3); B base owns [old] everywhere and overrides only [1,2) → still meets A in [2,3).
+        val newA = listOf(claim("A", mode = ArtifactIdMode.EXPLICIT, tokens = setOf("old"), range = "[2,3)"))
+        val existingB = listOf(claim("B", mode = ArtifactIdMode.EXPLICIT, tokens = setOf("old"), range = base))
+        val intersect: (String, String) -> Boolean = { x, y -> x == base || y == base || x == y }
+        assertTrue(
+            computeOwnershipCollisions(newA, existingB, intersect, mapOf("B" to setOf("[1,2)"))).isNotEmpty(),
+        )
     }
 }

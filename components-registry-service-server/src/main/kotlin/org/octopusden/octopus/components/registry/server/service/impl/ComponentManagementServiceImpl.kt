@@ -348,7 +348,7 @@ class ComponentManagementServiceImpl(
                 ) + sectionAuditMap(saved),
         )
 
-        return saved.toDetailResponse(teamcityProperties.baseUrl)
+        return toDetail(saved)
     }
 
     // ============================================================
@@ -357,21 +357,24 @@ class ComponentManagementServiceImpl(
 
     @Transactional(readOnly = true)
     override fun getComponent(id: UUID): ComponentDetailResponse =
-        findComponentOr404(id).toDetailResponse(teamcityProperties.baseUrl)
+        toDetail(findComponentOr404(id))
 
     @Transactional(readOnly = true)
     override fun getComponentByName(name: String): ComponentDetailResponse =
-        (
+        toDetail(
             componentRepository.findByComponentKey(name)
-                ?: throw NotFoundException("Component with name '$name' not found")
-        ).toDetailResponse(teamcityProperties.baseUrl)
+                ?: throw NotFoundException("Component with name '$name' not found"),
+        )
 
     // The renderer walks LAZY child collections, so it must run inside this
     // readOnly transaction (the Hibernate session that loaded the entity).
     @Transactional(readOnly = true)
     override fun renderComponentAsCode(idOrName: String): RenderedComponentCode {
         val entity = findByIdOrName(idOrName)
-        return RenderedComponentCode(entity.componentKey, componentCodeRenderer.renderFull(entity))
+        return RenderedComponentCode(
+            entity.componentKey,
+            componentCodeRenderer.renderFull(entity, ownershipExportPatterns(entity)),
+        )
     }
 
     @Transactional(readOnly = true)
@@ -381,7 +384,7 @@ class ComponentManagementServiceImpl(
     ): RenderedComponentCode {
         val entity = findByIdOrName(idOrName)
         val body =
-            componentCodeRenderer.renderResolved(entity, version)
+            componentCodeRenderer.renderResolved(entity, version, ownershipExportPatterns(entity))
                 ?: throw NotFoundException(
                     "No configuration resolves for component '${entity.componentKey}' at version '$version'",
                 )
@@ -711,7 +714,7 @@ class ComponentManagementServiceImpl(
                 ) + sectionAuditMap(saved),
         )
 
-        return saved.toDetailResponse(teamcityProperties.baseUrl)
+        return toDetail(saved)
     }
 
     // ============================================================
@@ -2075,7 +2078,7 @@ class ComponentManagementServiceImpl(
      * #24/#25 deterministically from stored modes. Throws 409 `CrossComponentConflictException`.
      */
     private fun validateArtifactOwnershipCollisions(entity: ComponentEntity, componentId: UUID) {
-        val ownClaims = effectiveOwnClaims(entity)
+        val ownClaims = entity.artifactMappings.map { it.toOwnershipClaim(entity.componentKey) }
         if (ownClaims.isEmpty()) return
         val rivalRows = componentArtifactMappingRepository.findOtherComponents(componentId)
         val explicitTokensByMapping =
@@ -2095,44 +2098,89 @@ class ComponentManagementServiceImpl(
                     tokens = explicitTokensByMapping[row.mappingId]?.toSet().orEmpty(),
                 )
             }
+        // Each component's own override range strings → a base (ALL_VERSIONS) claim is shadowed
+        // (replaced) there and must not conflict. Derived from the already-loaded mappings/rows;
+        // no extra query. Applied symmetrically to the edited component and every rival.
+        val shadowRanges =
+            buildMap<String, Set<String>> {
+                put(
+                    entity.componentKey,
+                    entity.artifactMappings.map { it.versionRange }.filterTo(mutableSetOf()) { it != OWNERSHIP_ALL_VERSIONS },
+                )
+                rivalRows.groupBy { it.componentKey }.forEach { (key, rows) ->
+                    put(key, rows.map { it.versionRange }.filterTo(mutableSetOf()) { it != OWNERSHIP_ALL_VERSIONS })
+                }
+            }
         val intersect: (String, String) -> Boolean = { a, b ->
             runCatching { versionRangeFactory.create(a).isIntersect(versionRangeFactory.create(b)) }.getOrDefault(true)
         }
-        val violations = computeOwnershipCollisions(ownClaims, rivalClaims, intersect)
+        val violations = computeOwnershipCollisions(ownClaims, rivalClaims, intersect, shadowRanges)
         if (violations.isNotEmpty()) throw CrossComponentConflictException(violations.first())
     }
 
+    /** In-memory ownership entity → [OwnershipClaim] (EXPLICIT tokens are already on the loaded entity). */
+    private fun ComponentArtifactMappingEntity.toOwnershipClaim(componentKey: String): OwnershipClaim =
+        OwnershipClaim(
+            componentKey = componentKey,
+            versionRange = this.versionRange,
+            groupTokens = groupTokensOf(this.groupPattern),
+            mode = ArtifactIdMode.valueOf(this.artifactIdMode),
+            tokens = this.tokens.map { it.artifactPattern }.toSet(),
+        )
+
     /**
-     * Effective-per-range ownership claims of the component UNDER VALIDATION (the "self" side of the
-     * matrix), applying the override-REPLACES-base semantics so a base mapping is NOT claimed in a
-     * sub-range that one of this component's own per-range overrides shadows. Mirrors the resolver's
-     * `effectiveMappingsByRange`: every declared configuration range (plus any explicit override range)
-     * maps to its override mappings if present, else the base (`ALL_VERSIONS`) mappings — so the claim's
-     * `versionRange` is the range where it is actually in force, not the raw `ALL_VERSIONS` of the base.
-     *
-     * This removes the false 409 the flat (base + all overrides) shape produced: e.g. base
-     * `EXPLICIT[lib-core]` + override `[1,2) EXPLICIT[lib-platform]` no longer claims `lib-core` in
-     * `[1,2)`, so a rival legitimately owning `lib-core` only in `[1,2)` is not flagged. (Rivals are
-     * still modelled from raw rows — conservative/sound: see [validateArtifactOwnershipCollisions].)
+     * DSL/code-export + UI-preview `artifactIdPattern` per ownership mapping id, sibling-aware for
+     * ALL_EXCEPT_CLAIMED (a negative-lookahead over the EXPLICIT tokens claimed under the same group
+     * in an intersecting range, across ALL components). ALL/EXPLICIT need no siblings and fall back
+     * to the wire render at the renderer, so this map carries ONLY the ALL_EXCEPT_CLAIMED entries —
+     * and is empty (no cross-component query) when the component has none, keeping the common path free.
      */
-    private fun effectiveOwnClaims(entity: ComponentEntity): List<OwnershipClaim> {
-        if (entity.artifactMappings.isEmpty()) return emptyList()
-        val byRange = entity.artifactMappings.groupBy { it.versionRange }
-        val baseMappings = byRange[OWNERSHIP_ALL_VERSIONS].orEmpty()
-        val configRanges = entity.configurations.map { it.versionRange.ifBlank { OWNERSHIP_ALL_VERSIONS } }
-        val overrideRanges = byRange.keys.filter { it != OWNERSHIP_ALL_VERSIONS }
-        val ranges = (configRanges + overrideRanges).distinct().ifEmpty { listOf(OWNERSHIP_ALL_VERSIONS) }
-        return ranges.flatMap { rangeKey ->
-            (byRange[rangeKey] ?: baseMappings).map { mapping ->
-                OwnershipClaim(
-                    componentKey = entity.componentKey,
-                    versionRange = rangeKey,
-                    groupTokens = groupTokensOf(mapping.groupPattern),
-                    mode = ArtifactIdMode.valueOf(mapping.artifactIdMode),
-                    tokens = mapping.tokens.map { it.artifactPattern }.toSet(),
-                )
-            }
+    private fun ownershipExportPatterns(entity: ComponentEntity): Map<UUID, String> {
+        val allExcept =
+            entity.artifactMappings.filter { it.artifactIdMode == ArtifactIdMode.ALL_EXCEPT_CLAIMED.name }
+        if (allExcept.isEmpty()) return emptyMap()
+        val explicitRows =
+            componentArtifactMappingRepository.findAllRows().filter { it.artifactIdMode == ArtifactIdMode.EXPLICIT.name }
+        val tokensByMapping =
+            explicitRows.map { it.mappingId }.takeIf { it.isNotEmpty() }
+                ?.let { ids -> componentArtifactMappingTokenRepository.findTokensByMappingIdIn(ids) }
+                ?.groupBy({ it.mappingId }, { it.artifactPattern })
+                .orEmpty()
+        val intersect: (String, String) -> Boolean = { a, b ->
+            runCatching { versionRangeFactory.create(a).isIntersect(versionRangeFactory.create(b)) }.getOrDefault(true)
         }
+        return allExcept.mapNotNull { m ->
+            val id = m.id ?: return@mapNotNull null
+            val groups = groupTokensOf(m.groupPattern)
+            val siblings =
+                explicitRows
+                    .filter { it.mappingId != id }
+                    .filter { row -> groupTokensOf(row.groupPattern).any { it in groups } }
+                    .filter { intersect(it.versionRange, m.versionRange) }
+                    .flatMap { tokensByMapping[it.mappingId].orEmpty() }
+                    .distinct()
+                    .sorted()
+            id to
+                org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipRendering
+                    .renderExportPattern(ArtifactIdMode.ALL_EXCEPT_CLAIMED, emptyList(), siblings)
+        }.toMap()
+    }
+
+    /**
+     * [toDetailResponse] + sibling-aware `legacyArtifactIdPattern` enrichment for any
+     * ALL_EXCEPT_CLAIMED ownership mapping (the wire mapper renders only the plain catch-all; the UI
+     * preview needs the negative-lookahead, which depends on OTHER components' claims).
+     */
+    private fun toDetail(entity: ComponentEntity): ComponentDetailResponse {
+        val response = entity.toDetailResponse(teamcityProperties.baseUrl)
+        val patterns = ownershipExportPatterns(entity)
+        if (patterns.isEmpty()) return response
+        return response.copy(
+            artifactIds =
+                response.artifactIds.map { ai ->
+                    patterns[ai.id]?.let { ai.copy(legacyArtifactIdPattern = it) } ?: ai
+                },
+        )
     }
 
     /**
@@ -2946,8 +2994,5 @@ class ComponentManagementServiceImpl(
 
         // Same shape as the old EscrowConfigValidator.CLIENT_CODE_PATTERN.
         private val CLIENT_CODE_PATTERN = Regex("[A-Z_0-9]+")
-
-        /** Base ownership/version range; must match EscrowConfigurationLoader.ALL_VERSIONS. */
-        private const val OWNERSHIP_ALL_VERSIONS = "(,0),[0,)"
     }
 }

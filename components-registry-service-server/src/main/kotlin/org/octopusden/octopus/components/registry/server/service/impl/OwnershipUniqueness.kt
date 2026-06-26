@@ -2,6 +2,9 @@ package org.octopusden.octopus.components.registry.server.service.impl
 
 import org.octopusden.octopus.components.registry.server.entity.ArtifactIdMode
 
+/** Base ownership/version range; must match EscrowConfigurationLoader.ALL_VERSIONS. */
+internal const val OWNERSHIP_ALL_VERSIONS = "(,0),[0,)"
+
 /**
  * One artifact-ownership claim for the cross-component uniqueness matrix: a component's mapping at a
  * version range, its group tokens (comma-split, exact match), its [mode], and (EXPLICIT) literal tokens.
@@ -13,6 +16,7 @@ internal data class OwnershipClaim(
     val mode: ArtifactIdMode,
     val tokens: Set<String>,
 )
+
 
 /**
  * Mode-aware cross-component ownership uniqueness (restores legacy #24/#25 for the groupId/artifactId
@@ -28,27 +32,33 @@ internal data class OwnershipClaim(
  * same-componentKey pairs never collide (multi-range/multi-group components, idempotent reruns). Pure —
  * unit-tested without Spring.
  *
- * NOTE (effective-per-range, override REPLACES base): the SELF side (the component under validation) is
- * passed as effective-per-range claims (`ComponentManagementServiceImpl.effectiveOwnClaims`), so a base
- * mapping is not claimed in a sub-range one of its own overrides shadows — no false 409 for the realistic
- * authoring flow (the component being edited owns the override). The RIVAL side is modelled from raw rows
- * (base at ALL_VERSIONS), which is SOUND — it never misses a real conflict; it can only over-report in the
- * doubly-rare symmetric case where a *rival's* per-range override changes the owned tokens AND the edited
- * component claims the rival's base token only within that rival override's range. Production has no such
- * shape (the one prod regex is the single `(?!X)` lookahead). Range-restricting rival base claims by each
- * rival's own override ranges (needs the rivals' configuration ranges) is the tracked follow-up.
+ * NOTE (override REPLACES base — shadow skip): a base (`ALL_VERSIONS`) mapping is NOT in force in any
+ * range the SAME component overrides, so it cannot conflict there. [shadowRangesByComponent] gives each
+ * component's own override range strings; a base claim of component C is skipped against a rival claim
+ * whose range C overrides (exact-range match — the realistic case, since an ownership override range
+ * equals an existing config range by invariant). This removes the false 409 where one component's
+ * per-range override frees a token that another component legitimately claims only in that range —
+ * symmetrically on both sides. It is SOUND: a base is skipped only where it is provably replaced; a
+ * strict-subset override range (different string) is not skipped, which can only over-report, never miss.
  */
 internal fun computeOwnershipCollisions(
     newClaims: List<OwnershipClaim>,
     existingClaims: List<OwnershipClaim>,
     rangesIntersect: (String, String) -> Boolean,
+    shadowRangesByComponent: Map<String, Set<String>> = emptyMap(),
 ): List<String> {
     val violations = mutableListOf<String>()
+
+    fun shadowed(claim: OwnershipClaim, otherRange: String): Boolean =
+        claim.versionRange == OWNERSHIP_ALL_VERSIONS &&
+            otherRange in shadowRangesByComponent[claim.componentKey].orEmpty()
 
     fun check(a: OwnershipClaim, b: OwnershipClaim) {
         if (a.componentKey == b.componentKey) return
         val sharedGroup = a.groupTokens.firstOrNull { it in b.groupTokens } ?: return
         if (!rangesIntersect(a.versionRange, b.versionRange)) return
+        // A base claim is shadowed (replaced) in any range its own component overrides → not in force there.
+        if (shadowed(a, b.versionRange) || shadowed(b, a.versionRange)) return
         val conflict =
             when {
                 a.mode == ArtifactIdMode.ALL || b.mode == ArtifactIdMode.ALL -> true
