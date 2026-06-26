@@ -119,8 +119,10 @@ Required environment/secrets (the pod fails to start without the mandatory ones)
   — do not roll or restart the pod mid-migration.
 - **Collision detection needs a real run.** `dryRun=true` skips uniqueness validation and
   `migration-status` only counts sources — neither detects global collisions (displayName / GAV / Jira
-  / Docker / artifact-id ownership). The pre-flight staging rehearsal with production DSL is what
-  surfaces them.
+  / Docker). The pre-flight staging rehearsal with production DSL is what surfaces them. **Note:**
+  artifact-id ownership overlaps (`component_artifact_ids`) are covered **only after the #357
+  validation lands**; until then the migration pre-pass does not check them, so the rehearsal does not
+  gate that case.
 
 ## Recovery (on partial or failed migration)
 
