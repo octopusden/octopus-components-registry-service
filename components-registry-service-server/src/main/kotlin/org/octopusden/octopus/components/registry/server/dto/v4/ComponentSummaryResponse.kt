@@ -25,6 +25,11 @@ data class ComponentSummaryResponse(
     val canBeParent: Boolean = false,
     val updatedAt: Instant?,
     val labels: List<String> = emptyList(),
+    // Ordered people (first = primary), mirroring the detail view. Emitted-empty-not-null
+    // (same contract as `labels`). Both child collections are @BatchSize-batched
+    // (BATCH_FETCH_SIZE) so the paged list path loads them without an N+1.
+    val releaseManagers: List<String> = emptyList(),
+    val securityChampions: List<String> = emptyList(),
     val buildSystem: String? = null,
     val jiraProjectKey: String? = null,
     val vcsPath: String? = null,

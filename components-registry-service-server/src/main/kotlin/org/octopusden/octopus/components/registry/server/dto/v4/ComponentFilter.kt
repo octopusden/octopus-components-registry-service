@@ -28,6 +28,24 @@ data class ComponentFilter(
      */
     val owner: List<String>? = null,
     /**
+     * Multi-value OR filter over the ordered `component_release_managers` child
+     * collection. A component matches when ANY listed username is among its
+     * release managers. Unlike `owner` (a scalar column), this is a JOIN to a
+     * child collection, so the Specification adds one join + `username IN (...)`
+     * + `query.distinct(true)` (a single join is enough for OR; distinct dedupes
+     * the row multiplication a multi-RM component would otherwise cause). Null or
+     * empty means "no extra filter applied". Same controller normalisation
+     * (split-by-comma, trim, drop-empty, distinct, null-if-empty) as the other
+     * multi-value filters.
+     */
+    val releaseManager: List<String>? = null,
+    /**
+     * Multi-value OR filter over the ordered `component_security_champions` child
+     * collection — identical shape and semantics to [releaseManager], against the
+     * security-champion collection.
+     */
+    val securityChampion: List<String>? = null,
+    /**
      * Multi-value OR filter over the BASE configuration row's buildSystem
      * column. A component matches when its BASE buildSystem equals any of
      * the listed values. A component has exactly one BASE buildSystem at

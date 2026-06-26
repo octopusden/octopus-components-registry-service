@@ -116,6 +116,7 @@ class OpenApiV4SpecTest {
             "/rest/api/4/audit",
             "/rest/api/4/admin",
             "/rest/api/4/config",
+            "/rest/api/4/health",
             "/rest/api/4/info",
             "/auth/me",
         ).forEach { prefix ->
