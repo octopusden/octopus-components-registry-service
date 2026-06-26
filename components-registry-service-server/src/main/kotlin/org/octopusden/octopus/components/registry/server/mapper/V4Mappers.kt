@@ -2,6 +2,7 @@
 
 package org.octopusden.octopus.components.registry.server.mapper
 
+import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactMappingEntity
 import org.octopusden.octopus.components.registry.server.dto.v4.ArtifactIdResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.AuditLogResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.BuildAspectResponse
@@ -71,7 +72,7 @@ fun ComponentEntity.toDetailResponse(teamcityBaseUrl: String? = null): Component
         distributionExternal = this.distributionExternal,
         group = this.componentGroup?.let { group -> group.toResponse(thisComponentKey = this.componentKey) },
         docs = this.docLinks.sortedBy { it.sortOrder }.map { it.toResponse() },
-        artifactIds = this.artifactMappings.sortedBy { it.sortOrder }.map { it.toResponse() },
+        artifactIds = this.artifactMappings.sortedWith(ARTIFACT_MAPPING_ORDER).map { it.toResponse() },
         securityGroups = this.securityGroups.map { it.toResponse() },
         teamcityProjects =
             this.teamcityProjects
@@ -434,6 +435,19 @@ private fun org.octopusden.octopus.components.registry.server.entity.ComponentDo
         docComponentKey = this.docComponentKey,
         majorVersion = this.majorVersion,
         sortOrder = this.sortOrder,
+    )
+
+/**
+ * Deterministic ownership-mapping order for v4 detail + audit snapshots: base (ALL_VERSIONS) first,
+ * then by version range, then sortOrder, then id. Base and per-range buckets both start at
+ * sortOrder=0, so sortOrder alone is load-order-dependent; this comparator is stable regardless.
+ */
+internal val ARTIFACT_MAPPING_ORDER: Comparator<ComponentArtifactMappingEntity> =
+    compareBy(
+        { it.versionRange != ALL_VERSIONS },
+        { it.versionRange },
+        { it.sortOrder },
+        { it.id?.toString() ?: "" },
     )
 
 private fun org.octopusden.octopus.components.registry.server.entity.ComponentArtifactMappingEntity.toResponse(): ArtifactIdResponse {

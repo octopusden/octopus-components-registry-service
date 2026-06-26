@@ -236,12 +236,27 @@ fun ComponentEntity.toResolvedEscrowModuleConfig(
             }
         }
 
+    // Effective ownership range for this version: the narrowest per-range ownership override whose
+    // range contains the version REPLACES the base; else the base ALL_VERSIONS mappings. Without this
+    // the resolved DTO returned base ownership at a version an override owns (disagreeing with
+    // ComponentCodeRenderer.renderResolved). Ranges are disjoint by invariant; sorted for determinism.
+    val ownershipRange =
+        this.artifactMappings.map { it.versionRange }.filter { it != ALL_VERSIONS }.distinct().sorted()
+            .firstOrNull { range ->
+                try {
+                    versionRangeFactory.create(range).containsVersion(numericVersion)
+                } catch (_: Exception) {
+                    false
+                }
+            } ?: base.versionRange
+
     return buildEscrowModuleConfig(
         component = this,
         base = base,
         scalarOverrides = matchingOverrides.filter { it.rowType == "SCALAR_OVERRIDE" },
         markerOverrides = matchingOverrides.filter { it.rowType == "MARKER" },
         versionRange = base.versionRange,
+        ownershipRange = ownershipRange,
     )
 }
 
@@ -314,6 +329,10 @@ private fun buildEscrowModuleConfig(
     scalarOverrides: List<ComponentConfigurationEntity>,
     markerOverrides: List<ComponentConfigurationEntity>,
     versionRange: String,
+    // Range used to select the effective ownership mapping. Equals [versionRange] for the per-range
+    // enumeration path, but the resolved-single-version path passes the override range that CONTAINS
+    // the version (override REPLACES base) — base.versionRange there would ignore an ownership override.
+    ownershipRange: String = versionRange,
 ): EscrowModuleConfig {
     val config = EscrowModuleConfig()
     setField(config, "versionRange", versionRange)
@@ -450,7 +469,7 @@ private fun buildEscrowModuleConfig(
     // (override mappings keyed to `versionRange` if present, else the base ALL_VERSIONS
     // mappings) rendered to the legacy (groupIdPattern, artifactIdPattern) pair.
     val mappingsByRange = component.artifactMappings.groupBy { it.versionRange }
-    val effectiveMappings = mappingsByRange[versionRange] ?: mappingsByRange[ALL_VERSIONS].orEmpty()
+    val effectiveMappings = mappingsByRange[ownershipRange] ?: mappingsByRange[ALL_VERSIONS].orEmpty()
     effectiveMappings.minByOrNull { it.sortOrder }?.let { primary ->
         setField(config, "groupIdPattern", primary.groupPattern)
         setField(

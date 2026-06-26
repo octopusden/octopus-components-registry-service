@@ -58,6 +58,7 @@ import org.octopusden.octopus.components.registry.server.mapper.PRODUCT_TYPE_NAM
 import org.octopusden.octopus.components.registry.server.mapper.REPOSITORY_TYPE_NAMES
 import org.octopusden.octopus.components.registry.server.mapper.SCALAR_ATTRIBUTE_PATHS
 import org.octopusden.octopus.components.registry.server.mapper.applyScalarValue
+import org.octopusden.octopus.components.registry.server.mapper.ARTIFACT_MAPPING_ORDER
 import org.octopusden.octopus.components.registry.server.mapper.toDetailResponse
 import org.octopusden.octopus.components.registry.server.mapper.toFieldOverrideResponse
 import org.octopusden.octopus.components.registry.server.mapper.toSummaryResponse
@@ -2156,7 +2157,10 @@ class ComponentManagementServiceImpl(
             val groups = groupTokensOf(m.groupPattern)
             val siblings =
                 explicitRows
-                    .filter { it.mappingId != id }
+                    // OTHER components only: ALL_EXCEPT_CLAIMED yields to OTHER components' EXPLICIT
+                    // claims. This component's own EXPLICIT mappings live in disjoint ranges that
+                    // REPLACE (not coexist with) this base mapping, so they must not narrow it.
+                    .filter { it.componentKey != entity.componentKey }
                     .filter { row -> groupTokensOf(row.groupPattern).any { it in groups } }
                     .filter { intersect(it.versionRange, m.versionRange) }
                     .flatMap { tokensByMapping[it.mappingId].orEmpty() }
@@ -2949,7 +2953,7 @@ class ComponentManagementServiceImpl(
     private fun componentCollectionAuditEntries(entity: ComponentEntity): Map<String, Any?> =
         mapOf(
             "artifactIds" to
-                entity.artifactMappings.sortedBy { it.sortOrder }.map {
+                entity.artifactMappings.sortedWith(ARTIFACT_MAPPING_ORDER).map {
                     mapOf(
                         "versionRange" to it.versionRange,
                         "groupPattern" to it.groupPattern,

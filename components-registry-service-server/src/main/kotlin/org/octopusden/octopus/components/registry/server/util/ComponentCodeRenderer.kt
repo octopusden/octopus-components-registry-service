@@ -246,7 +246,9 @@ class ComponentCodeRenderer(
         // effectiveMappingsByRange so the resolved code view matches what the v2 endpoints resolve.
         val ownershipByRange = component.artifactMappings.groupBy { it.versionRange }
         val overrideOwnershipRange =
-            ownershipByRange.keys.filter { it != ALL_VERSIONS_RANGE }
+            // sorted for a deterministic pick; per-range ownership ranges are disjoint by invariant,
+            // so at most one contains the version (sort only matters defensively if that ever breaks).
+            ownershipByRange.keys.filter { it != ALL_VERSIONS_RANGE }.sorted()
                 .firstOrNull { range ->
                     try {
                         versionRangeFactory.create(range).containsVersion(numericVersion)

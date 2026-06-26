@@ -1192,9 +1192,13 @@ class ImportServiceImpl(
         // uniqueness pre-pass. The groupId/artifactId OWNERSHIP mapping is no longer folded in
         // here — its cross-component uniqueness is the mode-aware matrix
         // (validateArtifactOwnershipCollisions), enforced on the v4 write path ONLY (create +
-        // update-with-artifactIds), NOT in this migration pre-pass: production is overlap-free by
-        // construction under the legacy single-match resolver, and migration instead enforces
-        // correctness via strict artifactId→mode classification (no escape hatch). See ADR-017.
+        // update-with-artifactIds), NOT in this migration pre-pass. This is sufficient, not a gap:
+        // the migration imports only legacy-VALID DSL (it passed the daily [2.0] validation), and an
+        // ownership collision (two configs owning the same artifact in overlapping ranges) is exactly
+        // what the legacy single-match `ModuleByArtifactResolver` THROWS on — so it cannot exist in
+        // migrated data. A collision can only be introduced by a NEW v4 write, which the matrix guards.
+        // Migration itself enforces correctness via strict artifactId→mode classification (no escape
+        // hatch; unclassifiable patterns hard-fail). See ADR-017 / SYS-058.
         addGavRows(baseConfig.versionRangeString ?: ALL_VERSIONS, baseConfig.distribution)
         for (override in configs.filter { it !== baseConfig }) {
             val overrideRange = override.versionRangeString ?: continue
