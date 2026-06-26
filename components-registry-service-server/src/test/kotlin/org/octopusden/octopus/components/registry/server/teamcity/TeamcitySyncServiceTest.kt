@@ -598,6 +598,53 @@ class TeamcitySyncServiceTest {
         override fun findSecurityChampionUsernames(id: UUID): List<String> =
             components.firstOrNull { it.id == id }?.securityChampionUsernames() ?: emptyList()
 
+        // Health-statistics aggregations (SYS-057). In-memory equivalents of the GROUP BY
+        // queries, applying the same FAKE-aggregator exclusion as production.
+        private fun isFakeAggregator(c: ComponentEntity): Boolean =
+            c.componentGroup?.let { it.isFake && it.groupKey == c.componentKey } ?: false
+
+        private fun regularComponents(): List<ComponentEntity> = components.filterNot(::isFakeAggregator)
+
+        // People breakdowns count ACTIVE (non-archived) regular components only (SYS-057).
+        private fun activeRegularComponents(): List<ComponentEntity> = regularComponents().filterNot { it.archived }
+
+        override fun countRegularComponents(): Long = regularComponents().size.toLong()
+
+        override fun countRegularComponentsByArchived(archived: Boolean): Long =
+            regularComponents().count { it.archived == archived }.toLong()
+
+        private fun nameCounts(counts: Map<String, Int>): List<org.octopusden.octopus.components.registry.server.repository.NameCountRow> =
+            counts.map { (n, c) ->
+                object : org.octopusden.octopus.components.registry.server.repository.NameCountRow {
+                    override val name: String = n
+                    override val count: Long = c.toLong()
+                }
+            }
+
+        override fun countComponentsByOwner() =
+            nameCounts(
+                activeRegularComponents()
+                    .mapNotNull { it.componentOwner?.takeIf { o -> o.isNotBlank() } }
+                    .groupingBy { it }
+                    .eachCount(),
+            )
+
+        override fun countComponentsByReleaseManager() =
+            nameCounts(
+                activeRegularComponents()
+                    .flatMap { it.releaseManagerUsernames() }
+                    .groupingBy { it }
+                    .eachCount(),
+            )
+
+        override fun countComponentsBySecurityChampion() =
+            nameCounts(
+                activeRegularComponents()
+                    .flatMap { it.securityChampionUsernames() }
+                    .groupingBy { it }
+                    .eachCount(),
+            )
+
         override fun <S : ComponentEntity> save(entity: S): S = entity
         override fun <S : ComponentEntity> saveAll(entities: Iterable<S>): List<S> = unsupported()
         override fun <S : ComponentEntity> saveAndFlush(entity: S): S = entity

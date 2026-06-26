@@ -754,6 +754,18 @@
           "productType" : {
             "type" : "string"
           },
+          "releaseManagers" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "securityChampions" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
           "system" : {
             "type" : "string"
           },
@@ -776,7 +788,9 @@
           "canBeParent",
           "id",
           "labels",
-          "name"
+          "name",
+          "releaseManagers",
+          "securityChampions"
         ],
         "type" : "object"
       },
@@ -1221,6 +1235,47 @@
         "required" : [
           "components",
           "defaults"
+        ],
+        "type" : "object"
+      },
+      "HealthStatisticsResponse" : {
+        "properties" : {
+          "activeComponents" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "componentsByOwner" : {
+            "additionalProperties" : {
+              "format" : "int64",
+              "type" : "integer"
+            },
+            "type" : "object"
+          },
+          "componentsByReleaseManager" : {
+            "additionalProperties" : {
+              "format" : "int64",
+              "type" : "integer"
+            },
+            "type" : "object"
+          },
+          "componentsBySecurityChampion" : {
+            "additionalProperties" : {
+              "format" : "int64",
+              "type" : "integer"
+            },
+            "type" : "object"
+          },
+          "totalComponents" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [
+          "activeComponents",
+          "componentsByOwner",
+          "componentsByReleaseManager",
+          "componentsBySecurityChampion",
+          "totalComponents"
         ],
         "type" : "object"
       },
@@ -4190,6 +4245,28 @@
           {
             "in" : "query",
             "name" : "owner",
+            "required" : false,
+            "schema" : {
+              "items" : {
+                "type" : "string"
+              },
+              "type" : "array"
+            }
+          },
+          {
+            "in" : "query",
+            "name" : "releaseManager",
+            "required" : false,
+            "schema" : {
+              "items" : {
+                "type" : "string"
+              },
+              "type" : "array"
+            }
+          },
+          {
+            "in" : "query",
+            "name" : "securityChampion",
             "required" : false,
             "schema" : {
               "items" : {
@@ -7241,6 +7318,96 @@
         },
         "tags" : [
           "config-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/health/statistics" : {
+      "get" : {
+        "operationId" : "statistics",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HealthStatisticsResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          }
+        },
+        "tags" : [
+          "health-controller-v-4"
         ]
       }
     },
