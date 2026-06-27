@@ -3,10 +3,15 @@
 #
 # Designed to be tolerant of "this build does not need / cannot run migration":
 #   - 404 on /admin/migration-status  → pre-v3 build deployed, exit 0 (skip)
-#   - git == 0                        → nothing left to migrate, exit 0 (skip)
-# It exits non-zero only when migration was *attempted* and ended in FAILED
-# state (or pod never became ready). That matches the user contract: "if there
-# is no new code, just skip — don't fail".
+#   - git == 0 AND total > 0          → nothing left to migrate, exit 0 (skip)
+#     (git == 0 with total == 0 is indeterminate — the Git resolver returned no
+#      components, usually a load failure — and fails loudly, never skips)
+# It exits non-zero when migration was *attempted* and ended in FAILED state
+# (or the pod never became ready), AND on an indeterminate migration-status
+# (git == 0 with total == 0, or a non-numeric git/total — a contract break or
+# Git-resolver load failure). It exits 0 (skip) on the "nothing to do" cases
+# above. That matches the user contract: "if there is no new code, just skip —
+# don't fail" — while never silently skipping on an indeterminate status.
 #
 # Required env:
 #   CRS_BASE_URL          e.g. https://components-registry.qa.example/
@@ -174,7 +179,24 @@ case "$status_code" in
         exit 1
         ;;
     esac
+    case "$total" in
+      ''|*[!0-9]*)
+        log "ERROR: /admin/migration-status returned a non-numeric 'total' field: '$total'"
+        log "Response body suppressed (may contain unexpected payload). Investigate the API contract."
+        exit 1
+        ;;
+    esac
     if [ "$git_count" = "0" ]; then
+      # git is now a set difference (DSL keys not yet in the DB), so it is >= 0.
+      # git == 0 with total == 0 is NOT "fully migrated" — it means the Git resolver
+      # enumerated zero components (an empty/failed DSL load), which is indeterminate.
+      # Fail loudly rather than silently skipping the migration on a resolver outage.
+      if [ "$total" = "0" ]; then
+        log "ERROR: git=0 but total=0 — migration status is indeterminate (the Git resolver"
+        log "returned no components, usually a DSL load failure). Refusing to treat this as"
+        log "'fully migrated'. Investigate the CRS Git resolver / DSL load before retrying."
+        exit 1
+      fi
       log "Nothing left to migrate — skip"
       exit 0
     fi
