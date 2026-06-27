@@ -43,14 +43,18 @@ class ComponentsRegistryServiceController(
      *
      * The endpoint is retired with **410 Gone** ONLY when we can positively
      * confirm full migration: the Git resolver parsed components (`total > 0`)
-     * AND none are still git-served (`git == 0`, i.e. `gitResolver.size ==
-     * countBySource("db")`). Two cases deliberately do NOT retire and instead
-     * attempt the refresh (the recovery action):
+     * AND none are still git-only (`git == 0`, where `git` is the set of DSL
+     * component keys NOT present as `source='db'` rows). One case deliberately
+     * does NOT retire and instead attempts the refresh (the recovery action):
      *  - `total == 0` — Git status is indeterminate (the resolver returned empty
      *    or failed to load); falsely returning 410 here would block the very
      *    re-read an operator needs to recover the cache.
-     *  - `git < 0` — stale/extra `source='db'` rows skew the count below zero
-     *    while git-served components may still exist.
+     *
+     * `git` is now a set difference and so is always `>= 0`; extra db-only rows
+     * (e.g. components created via the v4 write API after migration) no longer
+     * push it negative the way the old `gitResolver.size - countBySource("db")`
+     * subtraction did. The controller still treats a (now-unreachable) negative
+     * defensively — `git == 0` is the only retire trigger.
      *
      * Refused with **409** when (a) a COMPONENTS migration is running (it reads
      * from the Git resolver to validate each component, so swapping the in-memory
@@ -78,8 +82,8 @@ class ComponentsRegistryServiceController(
             // re-read and return HTTP 200, exactly like the pre-v3 endpoint.
             val status = importService?.getMigrationStatus()
             // status.total = git-resolver component count (0 if it errored/empty);
-            // status.git = total - countBySource("db"). Retire only on a confirmed
-            // fully-migrated state; otherwise attempt the refresh.
+            // status.git = DSL component keys not yet in the DB (set difference, always >= 0).
+            // Retire only on a confirmed fully-migrated state; otherwise attempt the refresh.
             val fullyMigrated = status != null && status.total > 0 && status.git == 0L
             if (!fullyMigrated) {
                 return ResponseEntity.ok<Any>(componentsRegistryService.updateConfigCache())

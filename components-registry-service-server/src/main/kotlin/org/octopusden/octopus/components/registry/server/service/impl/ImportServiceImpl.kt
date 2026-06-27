@@ -591,17 +591,26 @@ class ImportServiceImpl(
     }
 
     override fun getMigrationStatus(): MigrationStatus {
-        val dbCount = componentSourceRepository.countBySource("db")
-        val totalInGit =
+        // `git` is "how many DSL (git-sourced) components are NOT yet in the DB".
+        // It MUST be a set difference (git keys minus db-sourced keys), not
+        // `gitResolver.size - countBySource("db")`: the subtraction goes negative the
+        // moment the DB holds a component the DSL does not (e.g. one created via the
+        // v4 write API after migration), which showed `Git -1` in the admin panel and
+        // broke every `git == 0` "fully migrated" check (updateCache 410-retirement,
+        // the Portal Run gate). The set difference is >= 0 by construction and still
+        // counts a genuinely-unmigrated git component even when an unrelated db-only
+        // row keeps the totals equal.
+        val dbKeys = componentSourceRepository.findComponentKeysBySource("db").toSet()
+        val gitKeys =
             try {
-                gitResolver.getComponents().size.toLong()
+                gitResolver.getComponents().mapTo(mutableSetOf()) { it.moduleName }
             } catch (_: Exception) {
-                0L
+                emptySet()
             }
         return MigrationStatus(
-            git = totalInGit - dbCount,
-            db = dbCount,
-            total = totalInGit,
+            git = gitKeys.count { it !in dbKeys }.toLong(),
+            db = dbKeys.size.toLong(),
+            total = gitKeys.size.toLong(),
         )
     }
 
