@@ -2142,8 +2142,15 @@ class ComponentManagementServiceImpl(
         val allExcept =
             entity.artifactMappings.filter { it.artifactIdMode == ArtifactIdMode.ALL_EXCEPT_CLAIMED.name }
         if (allExcept.isEmpty()) return emptyMap()
-        val explicitRows =
-            componentArtifactMappingRepository.findAllRows().filter { it.artifactIdMode == ArtifactIdMode.EXPLICIT.name }
+        val allRows = componentArtifactMappingRepository.findAllRows()
+        val explicitRows = allRows.filter { it.artifactIdMode == ArtifactIdMode.EXPLICIT.name }
+        // Each component's own override (non-base) ranges. A rival's BASE EXPLICIT is shadowed (not in
+        // force) in a range that rival itself overrides (override REPLACES base), so it must not be
+        // excluded by this ALL_EXCEPT there — mirrors the shadow skip in [computeOwnershipCollisions].
+        val shadowRangesByComponent =
+            allRows
+                .groupBy { it.componentKey }
+                .mapValues { (_, rows) -> rows.map { it.versionRange }.filterTo(mutableSetOf()) { it != OWNERSHIP_ALL_VERSIONS } }
         val tokensByMapping =
             explicitRows.map { it.mappingId }.takeIf { it.isNotEmpty() }
                 ?.let { ids -> componentArtifactMappingTokenRepository.findTokensByMappingIdIn(ids) }
@@ -2163,6 +2170,10 @@ class ComponentManagementServiceImpl(
                     .filter { it.componentKey != entity.componentKey }
                     .filter { row -> groupTokensOf(row.groupPattern).any { it in groups } }
                     .filter { intersect(it.versionRange, m.versionRange) }
+                    .filterNot { row ->
+                        row.versionRange == OWNERSHIP_ALL_VERSIONS &&
+                            m.versionRange in shadowRangesByComponent[row.componentKey].orEmpty()
+                    }
                     .flatMap { tokensByMapping[it.mappingId].orEmpty() }
                     .distinct()
                     .sorted()

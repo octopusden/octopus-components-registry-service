@@ -831,6 +831,50 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
         )
     }
 
+    @Test
+    @DisplayName(
+        "RES-357-005: a component with config rows but NO ownership mappings yields no /maven-artifacts " +
+            "entries (must not NPE on the empty effective-mapping list → 500)",
+    )
+    fun `RES-357-005 component with no artifact ownership mappings yields an empty map`() {
+        val comp = makeComponent("no-ownership-fixture")
+        // A base config row, but artifactMappings stays empty (create allows an empty artifactIds list).
+        comp.configurations.add(makeBase(comp, ALL_VERSIONS))
+        stubComponent(comp)
+
+        val result = resolver.getMavenArtifactParameters("no-ownership-fixture")
+        assertEquals(0, result.size, "no ownership mappings → no entries (and crucially, no 500)")
+    }
+
+    @Test
+    @DisplayName(
+        "RES-357-006: a rival's BASE EXPLICIT token is NOT excluded in a range the rival itself overrides " +
+            "(override REPLACES base → the base token is not in force there)",
+    )
+    fun `RES-357-006 ALL_EXCEPT skips a rival base token shadowed by the rival's own override`() {
+        // Owner: ALL_EXCEPT on com.example.alpha for the override range [1.0,2.0).
+        val owner = makeComponent("shadow-owner")
+        owner.addAllExceptMapping("com.example.alpha", "[1.0,2.0)")
+        owner.configurations.add(makeBase(owner, "[1.0,2.0)"))
+
+        // Rival: base EXPLICIT[base-art] on the SAME group, AND its OWN override EXPLICIT[override-art]
+        // for [1.0,2.0). In [1.0,2.0) the rival's base is replaced by its override → base-art is not in
+        // force, so the owner's ALL_EXCEPT must exclude only override-art (not base-art).
+        val rival = makeComponent("shadow-rival")
+        rival.addOwnershipMapping("com.example.alpha", "base-art")
+        rival.addOwnershipMapping("com.example.alpha", "override-art", "[1.0,2.0)")
+
+        `when`(componentRepository.findByComponentKey("shadow-owner")).thenReturn(owner)
+        `when`(componentRepository.findAll()).thenReturn(mutableListOf(owner, rival))
+
+        val result = resolver.getMavenArtifactParameters("shadow-owner")
+        assertEquals(
+            "(?!(?:override-art)\$)[\\w-\\.]+",
+            result["[1.0,2.0)"]!!.artifactPattern,
+            "the rival's base token is shadowed by its own [1.0,2.0) override → exclude only override-art",
+        )
+    }
+
     // ========================================================================
     // Coverage gaps (out of scope for this PR, tracked for follow-up)
     // ========================================================================
