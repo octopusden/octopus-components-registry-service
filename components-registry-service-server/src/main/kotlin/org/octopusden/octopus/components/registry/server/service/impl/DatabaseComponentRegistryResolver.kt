@@ -332,10 +332,28 @@ class DatabaseComponentRegistryResolver(
      */
     private fun mavenArtifactParametersFor(
         componentEntity: ComponentEntity,
-    ): Map<String, ComponentArtifactConfiguration> =
-        effectiveMappingsByRange(componentEntity)
-            .mapValues { (_, mappings) -> renderMapping(mappings.minByOrNull { it.sortOrder }!!) }
+    ): Map<String, ComponentArtifactConfiguration> {
+        // #357 Option A: the FORWARD /maven-artifacts wire renders an ALL_EXCEPT_CLAIMED mapping as the
+        // sibling-aware anchored negative-lookahead (mirroring the legacy DSL's exact-token exclusion),
+        // so the v1-v3 wire matches the legacy baseline: byte-identical for a single excluded sibling
+        // (the only ALL_EXCEPT shape in prod today), and order-insensitively equal for multi-sibling
+        // (v3 sorts the siblings; the compat comparator compares the exclusion as a set). Siblings =
+        // the EXPLICIT tokens claimed under the same group in an intersecting range by OTHER components.
+        // Gated on the component actually having an ALL_EXCEPT_CLAIMED mapping so the common path does
+        // NO cross-component scan; the scan itself uses findAll() like the existing reverse path
+        // (loadPerComponentArtifactParameters) and only runs for the rare ALL_EXCEPT read. (Reverse
+        // find-by-artifact keeps the plain catch-all + specificity via [renderMapping] — the resolution
+        // outcome is identical and unchanged.)
+        val explicitSiblings =
+            if (componentEntity.artifactMappings.any { it.artifactIdMode == ArtifactIdMode.ALL_EXCEPT_CLAIMED.name }) {
+                loadExplicitMappings(excludingComponentKey = componentEntity.componentKey)
+            } else {
+                emptyList()
+            }
+        return effectiveMappingsByRange(componentEntity)
+            .mapValues { (_, mappings) -> renderForwardMapping(mappings.minByOrNull { it.sortOrder }!!, explicitSiblings) }
             .filterValues { it.groupPattern.isNotEmpty() || it.artifactPattern.isNotEmpty() }
+    }
 
     /**
      * Reverse `find-by-artifact` view: ALL effective mappings of each config range (not just
@@ -378,6 +396,72 @@ class DatabaseComponentRegistryResolver(
                 mapping.tokens.sortedBy { it.sortOrder }.map { it.artifactPattern },
             ),
         )
+
+    /**
+     * An EXPLICIT ownership mapping of another component, reduced to what the sibling lookup needs:
+     * its group token(s), its version range, and its literal artifact tokens.
+     */
+    private data class ExplicitMappingRef(
+        val groups: List<String>,
+        val versionRange: String,
+        val tokens: List<String>,
+    )
+
+    /** Split a comma-separated group pattern into trimmed, non-empty group tokens. */
+    private fun groupTokensOf(groupPattern: String): List<String> =
+        groupPattern.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+
+    /** Two version ranges intersect (unparseable → treat as intersecting, the conservative choice). */
+    private fun rangesIntersect(a: String, b: String): Boolean =
+        runCatching {
+            versionRangeFactory.create(a).isIntersect(versionRangeFactory.create(b))
+        }.getOrDefault(true)
+
+    /**
+     * Snapshot every OTHER component's EXPLICIT ownership mappings as [ExplicitMappingRef]s — the
+     * candidate siblings an ALL_EXCEPT_CLAIMED mapping yields to. Mirrors the cross-component sibling
+     * scan in `ComponentManagementServiceImpl.ownershipExportPatterns`.
+     */
+    private fun loadExplicitMappings(excludingComponentKey: String): List<ExplicitMappingRef> =
+        componentRepository
+            .findAll()
+            .asSequence()
+            .filter { it.componentKey != excludingComponentKey }
+            .flatMap { it.artifactMappings.asSequence() }
+            .filter { it.artifactIdMode == ArtifactIdMode.EXPLICIT.name }
+            .map { mapping ->
+                ExplicitMappingRef(
+                    groups = groupTokensOf(mapping.groupPattern),
+                    versionRange = mapping.versionRange,
+                    tokens = mapping.tokens.sortedBy { it.sortOrder }.map { it.artifactPattern },
+                )
+            }.toList()
+
+    /**
+     * Forward `/maven-artifacts` render: an ALL_EXCEPT_CLAIMED mapping becomes the anchored
+     * negative-lookahead over its in-force EXPLICIT siblings (other components claiming a shared
+     * group token in an intersecting range); every other mode renders as the plain wire form via
+     * [renderMapping]. With no siblings the lookahead degrades to the plain catch-all.
+     */
+    private fun renderForwardMapping(
+        mapping: ComponentArtifactMappingEntity,
+        explicitSiblings: List<ExplicitMappingRef>,
+    ): ComponentArtifactConfiguration {
+        val mode = ArtifactIdMode.valueOf(mapping.artifactIdMode)
+        if (mode != ArtifactIdMode.ALL_EXCEPT_CLAIMED) return renderMapping(mapping)
+        val groups = groupTokensOf(mapping.groupPattern)
+        val siblings =
+            explicitSiblings
+                .filter { ref -> ref.groups.any { it in groups } }
+                .filter { ref -> rangesIntersect(ref.versionRange, mapping.versionRange) }
+                .flatMap { it.tokens }
+                .distinct()
+                .sorted()
+        return ComponentArtifactConfiguration(
+            mapping.groupPattern,
+            ArtifactOwnershipRendering.renderExportPattern(mode, emptyList(), siblings),
+        )
+    }
 
     override fun getDependencyMapping(): Map<String, String> =
         dependencyMappingRepository.findAll().associate { it.alias to it.componentKey }

@@ -720,6 +720,118 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
     }
 
     // ========================================================================
+    // #357 Option A: forward /maven-artifacts renders ALL_EXCEPT_CLAIMED as the
+    // sibling-aware anchored negative-lookahead (so the v1-v3 wire matches the
+    // legacy DSL's exact-token exclusion byte-for-byte), NOT the bare catch-all.
+    // Reverse find-by-artifact is unaffected (it keeps catch-all + specificity).
+    // ========================================================================
+
+    @Test
+    @DisplayName(
+        "RES-357-001: ALL_EXCEPT_CLAIMED forward render is the anchored lookahead over OTHER " +
+            "components' EXPLICIT siblings on the same group/range",
+    )
+    fun `RES-357-001 getMavenArtifactParameters renders ALL_EXCEPT as anchored lookahead over explicit siblings`() {
+        // owner owns the catch-all of com.example.alpha EXCEPT the artifact explicitly claimed by a
+        // sibling component (claimed-model → EXPLICIT[claimed-model]). The forward /maven-artifacts
+        // pattern must be the exact-token lookahead, mirroring the legacy DSL.
+        val owner = makeComponent("payment-gateway-fixture")
+        owner.addAllExceptMapping("com.example.alpha")
+        owner.configurations.add(makeBase(owner, ALL_VERSIONS))
+
+        val sibling = makeComponent("claimed-model-fixture")
+        sibling.addOwnershipMapping("com.example.alpha", "claimed-model")
+
+        `when`(componentRepository.findByComponentKey("payment-gateway-fixture")).thenReturn(owner)
+        `when`(componentRepository.findAll()).thenReturn(mutableListOf(owner, sibling))
+
+        val result = resolver.getMavenArtifactParameters("payment-gateway-fixture")
+
+        assertEquals(1, result.size, "Expected one range entry for ALL_VERSIONS")
+        val entry = result[ALL_VERSIONS]
+        assertNotNull(entry, "ALL_VERSIONS entry must be present")
+        assertEquals("com.example.alpha", entry!!.groupPattern)
+        assertEquals(
+            "(?!(?:claimed-model)\$)[\\w-\\.]+",
+            entry.artifactPattern,
+            "ALL_EXCEPT forward pattern must be the anchored exact-token lookahead over the sibling",
+        )
+    }
+
+    @Test
+    @DisplayName(
+        "RES-357-002: ALL_EXCEPT_CLAIMED with NO sibling EXPLICIT claim degrades to the plain catch-all",
+    )
+    fun `RES-357-002 ALL_EXCEPT with no siblings renders the plain catch-all`() {
+        val owner = makeComponent("sole-owner-fixture")
+        owner.addAllExceptMapping("com.example.lonely")
+        owner.configurations.add(makeBase(owner, ALL_VERSIONS))
+
+        `when`(componentRepository.findByComponentKey("sole-owner-fixture")).thenReturn(owner)
+        `when`(componentRepository.findAll()).thenReturn(mutableListOf(owner))
+
+        val result = resolver.getMavenArtifactParameters("sole-owner-fixture")
+        val entry = result[ALL_VERSIONS]
+        assertNotNull(entry, "ALL_VERSIONS entry must be present")
+        assertEquals(
+            "[\\w-\\.]+",
+            entry!!.artifactPattern,
+            "with no excluded sibling there is nothing to exclude — degrade to the catch-all",
+        )
+    }
+
+    @Test
+    @DisplayName(
+        "RES-357-003: a sibling EXPLICIT claim in a DIFFERENT group does NOT narrow the ALL_EXCEPT pattern",
+    )
+    fun `RES-357-003 ALL_EXCEPT ignores explicit claims on a different group`() {
+        val owner = makeComponent("group-scoped-owner")
+        owner.addAllExceptMapping("com.example.alpha")
+        owner.configurations.add(makeBase(owner, ALL_VERSIONS))
+
+        // EXPLICIT claim, but on a different group — must not appear in the lookahead.
+        val sibling = makeComponent("other-group-sibling")
+        sibling.addOwnershipMapping("com.example.other", "unrelated-art")
+
+        `when`(componentRepository.findByComponentKey("group-scoped-owner")).thenReturn(owner)
+        `when`(componentRepository.findAll()).thenReturn(mutableListOf(owner, sibling))
+
+        val result = resolver.getMavenArtifactParameters("group-scoped-owner")
+        assertEquals(
+            "[\\w-\\.]+",
+            result[ALL_VERSIONS]!!.artifactPattern,
+            "an EXPLICIT claim on a different group must not narrow this group's ALL_EXCEPT pattern",
+        )
+    }
+
+    @Test
+    @DisplayName(
+        "RES-357-004: a same-group EXPLICIT sibling in a NON-intersecting range does NOT narrow the " +
+            "ALL_EXCEPT pattern (the range gate excludes it) → plain catch-all",
+    )
+    fun `RES-357-004 ALL_EXCEPT ignores explicit siblings in a disjoint version range`() {
+        // Owner's ALL_EXCEPT is an override mapping scoped to [1.0,2.0); the sibling EXPLICIT claims
+        // the SAME group but in the disjoint [5.0,6.0). rangesIntersect is false → the sibling is not
+        // in force for this range → nothing to exclude → catch-all.
+        val owner = makeComponent("range-scoped-owner")
+        owner.addAllExceptMapping("com.example.alpha", "[1.0,2.0)")
+        owner.configurations.add(makeBase(owner, "[1.0,2.0)"))
+
+        val sibling = makeComponent("future-range-sibling")
+        sibling.addOwnershipMapping("com.example.alpha", "claimed-model", "[5.0,6.0)")
+
+        `when`(componentRepository.findByComponentKey("range-scoped-owner")).thenReturn(owner)
+        `when`(componentRepository.findAll()).thenReturn(mutableListOf(owner, sibling))
+
+        val result = resolver.getMavenArtifactParameters("range-scoped-owner")
+        assertEquals(
+            "[\\w-\\.]+",
+            result["[1.0,2.0)"]!!.artifactPattern,
+            "a sibling in a non-intersecting range must not appear in the ALL_EXCEPT lookahead",
+        )
+    }
+
+    // ========================================================================
     // Coverage gaps (out of scope for this PR, tracked for follow-up)
     // ========================================================================
     //

@@ -541,9 +541,35 @@ class ComparatorLogicTest {
     @Test
     @DisplayName("ArtifactPatternComparator: ALL_EXCEPT with the SAME exclusion set is equal across regex syntaxes")
     fun artifactPattern_sameExclusionEqual() {
-        // Prod `((?!x)[\w-\.])+` vs the v4-export `(?!(?:x)$)[\w-\.]+` form — same excluded sibling.
-        assertThat(ArtifactPatternComparator.compare("((?!claimed-sibling)[\\w-\\.])+", "(?!claimed-sibling)[\\w-\\.]+"))
+        // Prod legacy per-char `((?!x)[\w-\.])+` vs the REAL anchored exact-token form that both the
+        // v4 export AND (#357 Option A) the forward /maven-artifacts wire now emit:
+        // `(?!(?:x)$)[\w-\.]+`. Same excluded sibling ⇒ equal.
+        assertThat(ArtifactPatternComparator.compare("((?!claimed-sibling)[\\w-\\.])+", "(?!(?:claimed-sibling)\$)[\\w-\\.]+"))
             .isEqualTo(0)
+    }
+
+    @Test
+    @DisplayName("ArtifactPatternComparator: anchored `(?!(?:x)\$)` form is recognised as catch-all-EXCEPT[x] (not a literal token)")
+    fun artifactPattern_anchoredFormCanonicalised() {
+        // Two identical anchored forms must compare equal (byte-identical is the #357 Option A end state)...
+        assertThat(ArtifactPatternComparator.compare("(?!(?:claimed-sibling)\$)[\\w-\\.]+", "(?!(?:claimed-sibling)\$)[\\w-\\.]+"))
+            .isEqualTo(0)
+        // ...and a DIFFERENT anchored exclusion must still surface (no junk-canonical collapse).
+        assertThat(ArtifactPatternComparator.compare("(?!(?:sib-x)\$)[\\w-\\.]+", "(?!(?:sib-y)\$)[\\w-\\.]+"))
+            .isNotEqualTo(0)
+        // ...and the anchored form is NOT equal to a plain catch-all (the exclusion must not be lost).
+        assertThat(ArtifactPatternComparator.compare("(?!(?:claimed-sibling)\$)[\\w-\\.]+", "[\\w-\\.]+"))
+            .isNotEqualTo(0)
+    }
+
+    @Test
+    @DisplayName("ArtifactPatternComparator: multi-sibling anchored `(?!(?:a|b)\$)` extracts the full excluded set")
+    fun artifactPattern_anchoredMultiSibling() {
+        // Order-insensitive set: a|b == legacy ((?!a)…)+ ((?!b)…) union rendered as the alternation.
+        assertThat(ArtifactPatternComparator.compare("(?!(?:art-a|art-b)\$)[\\w-\\.]+", "(?!(?:art-b|art-a)\$)[\\w-\\.]+"))
+            .isEqualTo(0)
+        assertThat(ArtifactPatternComparator.compare("(?!(?:art-a|art-b)\$)[\\w-\\.]+", "(?!(?:art-a)\$)[\\w-\\.]+"))
+            .isNotEqualTo(0)
     }
 
     @Test
@@ -603,7 +629,7 @@ class ComparatorLogicTest {
             endpoint = MAVEN_ARTIFACTS_EP,
             pathParams = mapOf("component" to "beta-fixture"),
             baseline = mapOf("(,0),[0,)" to TestArtifactCfg("com.example.bar", "((?!claimed-sibling)[\\w-\\.])+")),
-            candidate = mapOf("(,0),[0,)" to TestArtifactCfg("com.example.bar", "(?!claimed-sibling)[\\w-\\.]+")),
+            candidate = mapOf("(,0),[0,)" to TestArtifactCfg("com.example.bar", "(?!(?:claimed-sibling)\$)[\\w-\\.]+")),
         )
         assertThat(DiffCollector.snapshot()).isEmpty()
     }

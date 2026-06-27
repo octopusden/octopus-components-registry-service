@@ -301,9 +301,11 @@ object GavCsvComparator : Comparator<Any?> {
  *  1. **Separator**: `a|b|c` ⇄ `a,b,c` — the matcher replaces `,`→`|`, so the two are identical.
  *  2. **Dot-escaping**: `com.foo` ⇄ `com\.foo` — for the real artifact IDs in the registry these
  *     match the same set (no artifact ID aliases a `.`-as-wildcard match).
- *  3. **ALL_EXCEPT_CLAIMED**: a negative-lookahead `((?!sibling)[\w-\.])+` canonicalises to a
- *     catch-all bucket that PRESERVES its excluded-sibling SET (regardless of regex syntax /
- *     separator / escaping). So the SAME exclusion compared across stands is equal, but a plain
+ *  3. **ALL_EXCEPT_CLAIMED**: a negative-lookahead — legacy per-char `((?!sibling)[\w-\.])+` OR the
+ *     anchored-exact `(?!(?:sibling)$)[\w-\.]+` form (the v4 export and the #357 Option A forward
+ *     wire) — canonicalises to a catch-all bucket that PRESERVES its excluded-sibling SET
+ *     (regardless of regex syntax / separator / escaping). So the SAME exclusion compared across
+ *     stands is equal (incl. legacy-per-char ⇄ anchored-exact), but a plain
  *     catch-all (`ALL`, no exclusion) is NOT equated with `ALL_EXCEPT_CLAIMED[…]`, and two DIFFERENT
  *     exclusion sets are NOT equated. (A blanket catch-all⇄lookahead collapse would mask a real
  *     ownership change — e.g. prod excludes a sibling that a candidate over-claims.)
@@ -329,7 +331,18 @@ object ArtifactPatternComparator : Comparator<Any?> {
     }
 
     private fun canonical(raw: String): String {
-        val noEsc = raw.replace("\\", "") // \. -> .   (escaped == literal for real artifact IDs)
+        // Strip backslashes (\. -> .  escaped == literal for real artifact IDs), then NORMALISE the
+        // anchored-exact-exclusion form `(?!(?:a|b)$)` down to the legacy per-char shape `(?!a|b)`
+        // so the single `(?!…)` regex below extracts the same excluded SET from BOTH:
+        //   legacy per-char:  ((?!sibling)[\w-\.])+
+        //   anchored exact:   (?!(?:sibling)$)[\w-\.]+   ← the v4 export AND (#357 Option A) the
+        //                                                  forward /maven-artifacts wire emit this
+        // A TARGETED rewrite (not a blanket `(?:`/`$` strip): it only collapses the exact anchored
+        // wrapper, so any unexpected pattern is left intact for the catch-all / token-list
+        // canonicalisation below rather than silently mangled.
+        val noEsc =
+            raw.replace("\\", "")
+                .replace(Regex("""\(\?!\(\?:([^)]*)\)\${'$'}\)""")) { "(?!${it.groupValues[1]})" }
         val lookaheadGroup = Regex("\\(\\?!([^)]*)\\)") // (?!…) — captures the exclusion body
         // A catch-all is the pattern reducing to a known catch-all body once its (?!…) exclusion
         // group(s) and wrapping parens are removed. PRESERVE the excluded-sibling SET in the bucket

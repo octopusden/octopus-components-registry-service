@@ -35,3 +35,24 @@ fun ComponentEntity.addOwnershipMapping(
     }
     this.artifactMappings.add(mapping)
 }
+
+/**
+ * Test helper: add an ALL_EXCEPT_CLAIMED ownership mapping (no token rows — the excluded siblings are
+ * derived at render time from OTHER components' EXPLICIT claims on the same group/range). Mirrors what
+ * `ImportServiceImpl` writes for a legacy negative-lookahead `artifactId`. Needed because
+ * [addOwnershipMapping] only produces ALL / EXPLICIT.
+ */
+fun ComponentEntity.addAllExceptMapping(
+    groupPattern: String,
+    versionRange: String = "(,0),[0,)",
+) {
+    this.artifactMappings.add(
+        ComponentArtifactMappingEntity(
+            component = this,
+            versionRange = versionRange,
+            groupPattern = groupPattern,
+            artifactIdMode = ArtifactIdMode.ALL_EXCEPT_CLAIMED.name,
+            sortOrder = this.artifactMappings.size,
+        ),
+    )
+}
