@@ -198,7 +198,7 @@ object Comparators {
             return
         }
         runCatching {
-            val assertion: RecursiveComparisonAssert<*> =
+            var assertion: RecursiveComparisonAssert<*> =
                 org.assertj.core.api.Assertions
                     .assertThat(baseline)
                     .usingRecursiveComparison()
@@ -210,6 +210,17 @@ object Comparators {
                         java.util.function.BiPredicate<Any?, Any?> { a, b -> GavCsvComparator.compare(a, b) == 0 },
                         "^(.+\\.)?gav$",
                     )
+            // #357: on /maven-artifacts the v1–v3 `artifactPattern` is re-rendered from the explicit
+            // ownership model — separator (`,`≡`|`), dot-escaping, and ALL_EXCEPT lookahead-vs-catch-all
+            // differ byte-wise but not behaviourally. Normalise ONLY here (the distribution
+            // `artifactPattern` on other endpoints stays byte-faithful). See ArtifactPatternComparator.
+            if (endpoint.contains("maven-artifacts")) {
+                assertion =
+                    assertion.withEqualsForFieldsMatchingRegexes(
+                        java.util.function.BiPredicate<Any?, Any?> { a, b -> ArtifactPatternComparator.compare(a, b) == 0 },
+                        "^(.+\\.)?artifactPattern$",
+                    )
+            }
             assertion.isEqualTo(candidate)
         }.onFailure { ex ->
             DiffCollector.record(
@@ -275,5 +286,85 @@ object GavCsvComparator : Comparator<Any?> {
     private fun normalize(s: String): String {
         val trimmed = s.trimEnd()
         return if (trimmed.endsWith(',')) trimmed.dropLast(1).trimEnd() else trimmed
+    }
+}
+
+/**
+ * Semantic comparator for the v1–v3 `ComponentArtifactConfigurationDTO.artifactPattern` string on
+ * `GET /…/maven-artifacts` (#357 ownership rework).
+ *
+ * **Why it exists.** The legacy resolver stored each component's groupId/artifactId mapping as an
+ * opaque regex string and emitted it verbatim. The schema-v3 explicit-ownership model
+ * (EXPLICIT / ALL_EXCEPT_CLAIMED / ALL) tokenises that string and re-renders it, producing a
+ * NORMALISED — not byte-identical — form. Three normalisations, each behaviour-preserving against
+ * the legacy `MavenArtifactMatcher` (which does `Pattern.matches(pattern.replace(",", "|"), id)`):
+ *  1. **Separator**: `a|b|c` ⇄ `a,b,c` — the matcher replaces `,`→`|`, so the two are identical.
+ *  2. **Dot-escaping**: `com.foo` ⇄ `com\.foo` — for the real artifact IDs in the registry these
+ *     match the same set (no artifact ID aliases a `.`-as-wildcard match).
+ *  3. **ALL_EXCEPT_CLAIMED**: a negative-lookahead — legacy per-char `((?!sibling)[\w-\.])+` OR the
+ *     anchored-exact `(?!(?:sibling)$)[\w-\.]+` form (the v4 export and the #357 Option A forward
+ *     wire) — canonicalises to a catch-all bucket that PRESERVES its excluded-sibling SET
+ *     (regardless of regex syntax / separator / escaping). So the SAME exclusion compared across
+ *     stands is equal (incl. legacy-per-char ⇄ anchored-exact), but a plain
+ *     catch-all (`ALL`, no exclusion) is NOT equated with `ALL_EXCEPT_CLAIMED[…]`, and two DIFFERENT
+ *     exclusion sets are NOT equated. (A blanket catch-all⇄lookahead collapse would mask a real
+ *     ownership change — e.g. prod excludes a sibling that a candidate over-claims.)
+ *
+ * Net effect: separator / escaping / regex-syntax differences of the SAME ownership do NOT surface,
+ * but any change to the explicit token SET, the excluded-sibling SET, or catch-all-vs-explicit-list
+ * STILL surfaces. Registered ONLY for the `…/maven-artifacts` endpoint (see [Comparators.compareDto])
+ * so the byte-faithful comparison of the distribution `artifactPattern` is unaffected.
+ *
+ * Returns `0` for "equal after normalisation", non-zero otherwise (AssertJ uses only the sign).
+ */
+object ArtifactPatternComparator : Comparator<Any?> {
+    // Catch-all bodies after escape-strip + lookahead-strip + paren-strip (the classifier's
+    // KNOWN_CATCH_ALL forms, backslashes removed). A pattern reducing to one of these is the
+    // "owns everything (modulo explicit siblings)" bucket — ALL or ALL_EXCEPT_CLAIMED.
+    private val CATCH_ALL_CORES = setOf("[w-.]+", "[w-]+", "w+", ".*", "*")
+    private const val CATCH_ALL = " CATCHALL"
+
+    override fun compare(a: Any?, b: Any?): Int {
+        if (a == null && b == null) return 0
+        if (a == null || b == null) return 1
+        return if (canonical(a.toString()) == canonical(b.toString())) 0 else 1
+    }
+
+    private fun canonical(raw: String): String {
+        // Strip backslashes (\. -> .  escaped == literal for real artifact IDs), then NORMALISE the
+        // anchored-exact-exclusion form `(?!(?:a|b)$)` down to the legacy per-char shape `(?!a|b)`
+        // so the single `(?!…)` regex below extracts the same excluded SET from BOTH:
+        //   legacy per-char:  ((?!sibling)[\w-\.])+
+        //   anchored exact:   (?!(?:sibling)$)[\w-\.]+   ← the v4 export AND (#357 Option A) the
+        //                                                  forward /maven-artifacts wire emit this
+        // A TARGETED rewrite (not a blanket `(?:`/`$` strip): it only collapses the exact anchored
+        // wrapper, so any unexpected pattern is left intact for the catch-all / token-list
+        // canonicalisation below rather than silently mangled.
+        val noEsc =
+            raw.replace("\\", "")
+                .replace(Regex("""\(\?!\(\?:([^)]*)\)\${'$'}\)""")) { "(?!${it.groupValues[1]})" }
+        val lookaheadGroup = Regex("\\(\\?!([^)]*)\\)") // (?!…) — captures the exclusion body
+        // A catch-all is the pattern reducing to a known catch-all body once its (?!…) exclusion
+        // group(s) and wrapping parens are removed. PRESERVE the excluded-sibling SET in the bucket
+        // so a plain catch-all (ALL) is NOT equated with ALL_EXCEPT_CLAIMED[…], and two different
+        // exclusion sets are NOT equated (that would mask a real ownership change).
+        val core =
+            noEsc
+                .replace(lookaheadGroup, "")
+                .replace("(", "")
+                .replace(")", "")
+        if (core in CATCH_ALL_CORES) {
+            val excluded =
+                lookaheadGroup
+                    .findAll(noEsc)
+                    .flatMap { it.groupValues[1].split(Regex("[,|]")).asSequence() }
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                    .toSortedSet()
+            return if (excluded.isEmpty()) CATCH_ALL else "$CATCH_ALL EXCEPT[${excluded.joinToString(",")}]"
+        }
+        // Otherwise an explicit token list: separator-agnostic (`,`≡`|`). Order is PRESERVED
+        // (a genuine reordering must still surface — same stance as GavCsvComparator).
+        return noEsc.split(Regex("[,|]")).map { it.trim() }.filter { it.isNotEmpty() }.joinToString(",")
     }
 }

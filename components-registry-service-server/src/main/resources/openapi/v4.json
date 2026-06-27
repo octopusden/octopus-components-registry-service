@@ -3,23 +3,35 @@
     "schemas" : {
       "ArtifactIdRequest" : {
         "properties" : {
-          "artifactPattern" : {
-            "type" : "string"
+          "artifactTokens" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
           },
           "groupPattern" : {
+            "type" : "string"
+          },
+          "mode" : {
+            "type" : "string"
+          },
+          "versionRange" : {
             "type" : "string"
           }
         },
         "required" : [
-          "artifactPattern",
+          "artifactTokens",
           "groupPattern"
         ],
         "type" : "object"
       },
       "ArtifactIdResponse" : {
         "properties" : {
-          "artifactPattern" : {
-            "type" : "string"
+          "artifactTokens" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
           },
           "groupPattern" : {
             "type" : "string"
@@ -27,12 +39,22 @@
           "id" : {
             "format" : "uuid",
             "type" : "string"
+          },
+          "legacyArtifactIdPattern" : {
+            "type" : "string"
+          },
+          "mode" : {
+            "type" : "string"
+          },
+          "versionRange" : {
+            "type" : "string"
           }
         },
         "required" : [
-          "artifactPattern",
+          "artifactTokens",
           "groupPattern",
-          "id"
+          "id",
+          "mode"
         ],
         "type" : "object"
       },

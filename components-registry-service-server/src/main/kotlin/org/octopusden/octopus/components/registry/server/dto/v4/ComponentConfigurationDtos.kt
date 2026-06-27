@@ -312,15 +312,32 @@ data class DocLinkRequest(
     val majorVersion: String? = null,
 )
 
+/**
+ * One artifact-ownership mapping (response). `versionRange` is `null`/ALL_VERSIONS for the base
+ * mapping or the override range; `mode` is EXPLICIT | ALL_EXCEPT_CLAIMED | ALL; `artifactTokens`
+ * holds literal tokens for EXPLICIT (empty otherwise). [legacyArtifactIdPattern] is server-computed
+ * read-only — the rendered legacy v1–v3 pattern for the UI preview (ALL_EXCEPT needs cross-component
+ * siblings the client lacks).
+ */
 data class ArtifactIdResponse(
     val id: UUID,
+    val versionRange: String?,
     val groupPattern: String,
-    val artifactPattern: String,
+    val mode: String,
+    val artifactTokens: List<String> = emptyList(),
+    val legacyArtifactIdPattern: String? = null,
 )
 
+/**
+ * One artifact-ownership mapping (write). `versionRange` null ⇒ base (ALL_VERSIONS). Invariants
+ * (enforced 400): EXPLICIT requires ≥1 token; ALL / ALL_EXCEPT_CLAIMED carry zero tokens;
+ * ALL_EXCEPT_CLAIMED is single-group. No `legacyArtifactIdPattern` on input (server-computed).
+ */
 data class ArtifactIdRequest(
+    val versionRange: String? = null,
     val groupPattern: String,
-    val artifactPattern: String,
+    val mode: String? = null,
+    val artifactTokens: List<String> = emptyList(),
 )
 
 data class SecurityGroupResponse(

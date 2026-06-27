@@ -24,7 +24,10 @@ import org.octopusden.octopus.components.registry.server.dto.v4.MarkerChildrenPa
 import org.octopusden.octopus.components.registry.server.dto.v4.MavenArtifactRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.PackageRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.VcsEntryRequest
-import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactIdEntity
+import org.octopusden.octopus.components.registry.server.entity.ArtifactIdMode
+import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactMappingEntity
+import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactMappingTokenEntity
+import org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipModeClassifier
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentDocLinkEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
@@ -55,9 +58,12 @@ import org.octopusden.octopus.components.registry.server.mapper.PRODUCT_TYPE_NAM
 import org.octopusden.octopus.components.registry.server.mapper.REPOSITORY_TYPE_NAMES
 import org.octopusden.octopus.components.registry.server.mapper.SCALAR_ATTRIBUTE_PATHS
 import org.octopusden.octopus.components.registry.server.mapper.applyScalarValue
+import org.octopusden.octopus.components.registry.server.mapper.ARTIFACT_MAPPING_ORDER
 import org.octopusden.octopus.components.registry.server.mapper.toDetailResponse
 import org.octopusden.octopus.components.registry.server.mapper.toFieldOverrideResponse
 import org.octopusden.octopus.components.registry.server.mapper.toSummaryResponse
+import org.octopusden.octopus.components.registry.server.repository.ComponentArtifactMappingRepository
+import org.octopusden.octopus.components.registry.server.repository.ComponentArtifactMappingTokenRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentBuildToolBeanRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentLabelRepository
@@ -111,6 +117,8 @@ class ComponentManagementServiceImpl(
     private val componentRequiredToolRepository: ComponentRequiredToolRepository,
     private val componentBuildToolBeanRepository: ComponentBuildToolBeanRepository,
     private val mavenArtifactRepository: DistributionMavenArtifactRepository,
+    private val componentArtifactMappingRepository: ComponentArtifactMappingRepository,
+    private val componentArtifactMappingTokenRepository: ComponentArtifactMappingTokenRepository,
     private val dockerImageRepository: DistributionDockerImageRepository,
     private val labelRepository: LabelRepository,
     private val systemRepository: SystemRepository,
@@ -312,6 +320,7 @@ class ComponentManagementServiceImpl(
         // non-archived components, docker image-name global uniqueness. Run AFTER
         // flush so the queries exclude this component by its now-assigned id.
         validateCrossComponentIntegrity(saved)
+        validateArtifactOwnershipIfChanged(saved) // self-skips when the create carried no ownership
 
         // M:N junctions (no cascade — see ComponentEntity kdoc convention) must be
         // persisted via their own repositories AFTER the parent has an assigned id.
@@ -342,7 +351,7 @@ class ComponentManagementServiceImpl(
                 ) + sectionAuditMap(saved),
         )
 
-        return saved.toDetailResponse(teamcityProperties.baseUrl)
+        return toDetail(saved)
     }
 
     // ============================================================
@@ -351,21 +360,24 @@ class ComponentManagementServiceImpl(
 
     @Transactional(readOnly = true)
     override fun getComponent(id: UUID): ComponentDetailResponse =
-        findComponentOr404(id).toDetailResponse(teamcityProperties.baseUrl)
+        toDetail(findComponentOr404(id))
 
     @Transactional(readOnly = true)
     override fun getComponentByName(name: String): ComponentDetailResponse =
-        (
+        toDetail(
             componentRepository.findByComponentKey(name)
-                ?: throw NotFoundException("Component with name '$name' not found")
-        ).toDetailResponse(teamcityProperties.baseUrl)
+                ?: throw NotFoundException("Component with name '$name' not found"),
+        )
 
     // The renderer walks LAZY child collections, so it must run inside this
     // readOnly transaction (the Hibernate session that loaded the entity).
     @Transactional(readOnly = true)
     override fun renderComponentAsCode(idOrName: String): RenderedComponentCode {
         val entity = findByIdOrName(idOrName)
-        return RenderedComponentCode(entity.componentKey, componentCodeRenderer.renderFull(entity))
+        return RenderedComponentCode(
+            entity.componentKey,
+            componentCodeRenderer.renderFull(entity, ownershipExportPatterns(entity)),
+        )
     }
 
     @Transactional(readOnly = true)
@@ -375,7 +387,7 @@ class ComponentManagementServiceImpl(
     ): RenderedComponentCode {
         val entity = findByIdOrName(idOrName)
         val body =
-            componentCodeRenderer.renderResolved(entity, version)
+            componentCodeRenderer.renderResolved(entity, version, ownershipExportPatterns(entity))
                 ?: throw NotFoundException(
                     "No configuration resolves for component '${entity.componentKey}' at version '$version'",
                 )
@@ -605,9 +617,9 @@ class ComponentManagementServiceImpl(
         validateRequiredCopyright(entity)
         validateRequiredDisplayName(entity)
 
-        // Per-component child REPLACE — present collection wipes and refills
+        // Per-component child REPLACE — present collection wipes and refills (full ownership set)
         request.artifactIds?.let {
-            entity.artifactIds.clear()
+            entity.artifactMappings.clear()
             addArtifactIds(entity, it)
         }
         request.securityGroups?.let {
@@ -649,6 +661,7 @@ class ComponentManagementServiceImpl(
         val crossComponentRelevantChange =
             request.name != null || // rename can invalidate soft docs[] references to the old key
                 request.baseConfiguration != null || // maven / docker / packages / jira live on the base config row
+                request.artifactIds != null || // groupId/artifactId ownership mapping (#357 cross-component check)
                 request.docs != null ||
                 request.distributionExplicit != null ||
                 request.distributionExternal != null ||
@@ -669,6 +682,9 @@ class ComponentManagementServiceImpl(
             // Cross-component integrity (409) against the final flushed state — the
             // self-excluding queries skip this component by its id.
             validateCrossComponentIntegrity(saved)
+            // Ownership uniqueness only when the PATCH actually replaced the ownership mappings —
+            // not on an unrelated rename/baseConfig change (which must not 409 on pre-existing data).
+            if (request.artifactIds != null) validateArtifactOwnershipIfChanged(saved)
         }
 
         // Junctions — synced via their repositories after the parent flush so the
@@ -701,7 +717,7 @@ class ComponentManagementServiceImpl(
                 ) + sectionAuditMap(saved),
         )
 
-        return saved.toDetailResponse(teamcityProperties.baseUrl)
+        return toDetail(saved)
     }
 
     // ============================================================
@@ -992,18 +1008,95 @@ class ComponentManagementServiceImpl(
         component: ComponentEntity,
         requests: List<org.octopusden.octopus.components.registry.server.dto.v4.ArtifactIdRequest>,
     ) {
-        // artifactId patterns must be valid regexes (audit #9). Validated here so
-        // both the create and the PATCH (REPLACE) paths are covered by one call site.
-        requests.forEach { validateArtifactIdPattern(it.artifactPattern) }
+        // Each request is one ownership mapping. sort_order = list index (0 = primary).
+        // Validations (all 400 / IllegalArgumentException): group/token allowlist, mode
+        // default + token invariants, ALL_EXCEPT single-group, range alignment, and the
+        // intra-component "a group token belongs to ≤1 mapping per (component, range)" rule.
+        val claimedByRange = mutableSetOf<Pair<String, String>>()
         requests.forEachIndexed { index, req ->
-            component.artifactIds.add(
-                ComponentArtifactIdEntity(
-                    component = component,
-                    groupPattern = req.groupPattern,
-                    artifactPattern = req.artifactPattern,
-                    sortOrder = index,
-                ),
+            val versionRange = req.versionRange?.takeIf { it.isNotBlank() } ?: ALL_VERSIONS
+            val groupRaw = req.groupPattern.trim()
+            require(groupRaw.isNotEmpty()) { "artifactIds: groupPattern must not be blank" }
+            val groupItems = groupRaw.split(',').map { it.trim() }.filter { it.isNotEmpty() }
+            groupItems.forEach { g ->
+                require(ArtifactOwnershipModeClassifier.isLiteralToken(g)) {
+                    "artifactIds: invalid group '$g' — letters, digits, . _ - only (no wildcards or regex)"
+                }
+            }
+            val tokens = req.artifactTokens.map { it.trim() }.filter { it.isNotEmpty() }
+            val mode = resolveArtifactIdMode(req.mode, tokens)
+            when (mode) {
+                ArtifactIdMode.EXPLICIT -> {
+                    require(tokens.isNotEmpty()) {
+                        "artifactIds: 'Specific artifacts' (EXPLICIT) requires at least one artifact token"
+                    }
+                    tokens.forEach { t ->
+                        require(ArtifactOwnershipModeClassifier.isLiteralToken(t)) {
+                            "artifactIds: invalid artifact '$t' — literal IDs only (letters, digits, . _ -)"
+                        }
+                    }
+                }
+                ArtifactIdMode.ALL, ArtifactIdMode.ALL_EXCEPT_CLAIMED ->
+                    require(tokens.isEmpty()) { "artifactIds: ${mode.name} mode must not carry artifact tokens" }
+            }
+            require(!(mode == ArtifactIdMode.ALL_EXCEPT_CLAIMED && groupItems.size > 1)) {
+                "artifactIds: 'All unclaimed' (ALL_EXCEPT_CLAIMED) supports a single group only — " +
+                    "split into one mapping per group"
+            }
+            require(versionRange == ALL_VERSIONS || component.configurations.any { it.versionRange == versionRange }) {
+                "artifactIds: versionRange '$versionRange' must equal an existing configuration range or be the base"
+            }
+            groupItems.forEach { g ->
+                require(claimedByRange.add(versionRange to g)) {
+                    "artifactIds: group '$g' is claimed by more than one mapping in range '$versionRange'"
+                }
+            }
+            val mapping = ComponentArtifactMappingEntity(
+                component = component,
+                versionRange = versionRange,
+                groupPattern = groupRaw,
+                artifactIdMode = mode.name,
+                sortOrder = index,
             )
+            tokens.forEachIndexed { i, t ->
+                mapping.tokens.add(
+                    ComponentArtifactMappingTokenEntity(mapping = mapping, artifactPattern = t, sortOrder = i),
+                )
+            }
+            component.artifactMappings.add(mapping)
+        }
+        validateNonOverlappingOwnershipRanges(component)
+    }
+
+    /**
+     * Mode default (review-fix — no silent downgrade): an unspecified mode defaults to ALL only
+     * when there are no tokens; tokens present + no mode ⇒ EXPLICIT; an explicit mode is honored.
+     */
+    private fun resolveArtifactIdMode(mode: String?, tokens: List<String>): ArtifactIdMode =
+        when {
+            !mode.isNullOrBlank() ->
+                runCatching { ArtifactIdMode.valueOf(mode) }.getOrElse {
+                    throw IllegalArgumentException("artifactIds: unknown mode '$mode'")
+                }
+            tokens.isNotEmpty() -> ArtifactIdMode.EXPLICIT
+            else -> ArtifactIdMode.ALL
+        }
+
+    /** Per-component non-base ownership ranges must be pairwise non-overlapping (most-specific wins). */
+    private fun validateNonOverlappingOwnershipRanges(component: ComponentEntity) {
+        val nonBaseRanges =
+            component.artifactMappings.map { it.versionRange }.filter { it != ALL_VERSIONS }.distinct()
+        for (i in nonBaseRanges.indices) {
+            for (j in i + 1 until nonBaseRanges.size) {
+                val intersects =
+                    runCatching {
+                        versionRangeFactory.create(nonBaseRanges[i]).isIntersect(versionRangeFactory.create(nonBaseRanges[j]))
+                    }.getOrDefault(true)
+                require(!intersects) {
+                    "artifactIds: per-range ownership ranges must be disjoint — " +
+                        "'${nonBaseRanges[i]}' overlaps '${nonBaseRanges[j]}'"
+                }
+            }
         }
     }
 
@@ -1973,6 +2066,141 @@ class ComponentManagementServiceImpl(
     }
 
     /**
+     * Ownership uniqueness runs only where the ownership mappings can CHANGE — the create and
+     * update (artifactIds) paths — NOT on the field-override revalidation (a field-override cannot
+     * touch ownership, and re-checking there would 409 on pre-existing data the override doesn't own).
+     */
+    private fun validateArtifactOwnershipIfChanged(entity: ComponentEntity) {
+        val componentId = entity.id ?: return
+        validateArtifactOwnershipCollisions(entity, componentId)
+    }
+
+    /**
+     * #357 cross-component groupId/artifactId OWNERSHIP uniqueness (mode-aware matrix over the
+     * `component_artifact_mappings` of this component vs every other component). Restores legacy
+     * #24/#25 deterministically from stored modes. Throws 409 `CrossComponentConflictException`.
+     */
+    private fun validateArtifactOwnershipCollisions(entity: ComponentEntity, componentId: UUID) {
+        val ownClaims = entity.artifactMappings.map { it.toOwnershipClaim(entity.componentKey) }
+        if (ownClaims.isEmpty()) return
+        val rivalRows = componentArtifactMappingRepository.findOtherComponents(componentId)
+        val explicitTokensByMapping =
+            rivalRows.filter { it.artifactIdMode == ArtifactIdMode.EXPLICIT.name }
+                .map { it.mappingId }
+                .takeIf { it.isNotEmpty() }
+                ?.let { ids -> componentArtifactMappingTokenRepository.findTokensByMappingIdIn(ids) }
+                ?.groupBy({ it.mappingId }, { it.artifactPattern })
+                .orEmpty()
+        val rivalClaims =
+            rivalRows.map { row ->
+                OwnershipClaim(
+                    componentKey = row.componentKey,
+                    versionRange = row.versionRange,
+                    groupTokens = groupTokensOf(row.groupPattern),
+                    mode = ArtifactIdMode.valueOf(row.artifactIdMode),
+                    tokens = explicitTokensByMapping[row.mappingId]?.toSet().orEmpty(),
+                )
+            }
+        // Each component's own override range strings → a base (ALL_VERSIONS) claim is shadowed
+        // (replaced) there and must not conflict. Derived from the already-loaded mappings/rows;
+        // no extra query. Applied symmetrically to the edited component and every rival.
+        val shadowRanges =
+            buildMap<String, Set<String>> {
+                put(
+                    entity.componentKey,
+                    entity.artifactMappings.map { it.versionRange }.filterTo(mutableSetOf()) { it != OWNERSHIP_ALL_VERSIONS },
+                )
+                rivalRows.groupBy { it.componentKey }.forEach { (key, rows) ->
+                    put(key, rows.map { it.versionRange }.filterTo(mutableSetOf()) { it != OWNERSHIP_ALL_VERSIONS })
+                }
+            }
+        val intersect: (String, String) -> Boolean = { a, b ->
+            runCatching { versionRangeFactory.create(a).isIntersect(versionRangeFactory.create(b)) }.getOrDefault(true)
+        }
+        val violations = computeOwnershipCollisions(ownClaims, rivalClaims, intersect, shadowRanges)
+        if (violations.isNotEmpty()) throw CrossComponentConflictException(violations.first())
+    }
+
+    /** In-memory ownership entity → [OwnershipClaim] (EXPLICIT tokens are already on the loaded entity). */
+    private fun ComponentArtifactMappingEntity.toOwnershipClaim(componentKey: String): OwnershipClaim =
+        OwnershipClaim(
+            componentKey = componentKey,
+            versionRange = this.versionRange,
+            groupTokens = groupTokensOf(this.groupPattern),
+            mode = ArtifactIdMode.valueOf(this.artifactIdMode),
+            tokens = this.tokens.map { it.artifactPattern }.toSet(),
+        )
+
+    /**
+     * DSL/code-export + UI-preview `artifactIdPattern` per ownership mapping id, sibling-aware for
+     * ALL_EXCEPT_CLAIMED (a negative-lookahead over the EXPLICIT tokens claimed under the same group
+     * in an intersecting range, across ALL components). ALL/EXPLICIT need no siblings and fall back
+     * to the wire render at the renderer, so this map carries ONLY the ALL_EXCEPT_CLAIMED entries —
+     * and is empty (no cross-component query) when the component has none, keeping the common path free.
+     */
+    private fun ownershipExportPatterns(entity: ComponentEntity): Map<UUID, String> {
+        val allExcept =
+            entity.artifactMappings.filter { it.artifactIdMode == ArtifactIdMode.ALL_EXCEPT_CLAIMED.name }
+        if (allExcept.isEmpty()) return emptyMap()
+        val allRows = componentArtifactMappingRepository.findAllRows()
+        val explicitRows = allRows.filter { it.artifactIdMode == ArtifactIdMode.EXPLICIT.name }
+        // Each component's own override (non-base) ranges. A rival's BASE EXPLICIT is shadowed (not in
+        // force) in a range that rival itself overrides (override REPLACES base), so it must not be
+        // excluded by this ALL_EXCEPT there — mirrors the shadow skip in [computeOwnershipCollisions].
+        val shadowRangesByComponent =
+            allRows
+                .groupBy { it.componentKey }
+                .mapValues { (_, rows) -> rows.map { it.versionRange }.filterTo(mutableSetOf()) { it != OWNERSHIP_ALL_VERSIONS } }
+        val tokensByMapping =
+            explicitRows.map { it.mappingId }.takeIf { it.isNotEmpty() }
+                ?.let { ids -> componentArtifactMappingTokenRepository.findTokensByMappingIdIn(ids) }
+                ?.groupBy({ it.mappingId }, { it.artifactPattern })
+                .orEmpty()
+        val intersect: (String, String) -> Boolean = { a, b ->
+            runCatching { versionRangeFactory.create(a).isIntersect(versionRangeFactory.create(b)) }.getOrDefault(true)
+        }
+        return allExcept.mapNotNull { m ->
+            val id = m.id ?: return@mapNotNull null
+            val groups = groupTokensOf(m.groupPattern)
+            val siblings =
+                explicitRows
+                    // OTHER components only: ALL_EXCEPT_CLAIMED yields to OTHER components' EXPLICIT
+                    // claims. This component's own EXPLICIT mappings live in disjoint ranges that
+                    // REPLACE (not coexist with) this base mapping, so they must not narrow it.
+                    .filter { it.componentKey != entity.componentKey }
+                    .filter { row -> groupTokensOf(row.groupPattern).any { it in groups } }
+                    .filter { intersect(it.versionRange, m.versionRange) }
+                    .filterNot { row ->
+                        row.versionRange == OWNERSHIP_ALL_VERSIONS &&
+                            m.versionRange in shadowRangesByComponent[row.componentKey].orEmpty()
+                    }
+                    .flatMap { tokensByMapping[it.mappingId].orEmpty() }
+                    .distinct()
+                    .sorted()
+            id to
+                org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipRendering
+                    .renderExportPattern(ArtifactIdMode.ALL_EXCEPT_CLAIMED, emptyList(), siblings)
+        }.toMap()
+    }
+
+    /**
+     * [toDetailResponse] + sibling-aware `legacyArtifactIdPattern` enrichment for any
+     * ALL_EXCEPT_CLAIMED ownership mapping (the wire mapper renders only the plain catch-all; the UI
+     * preview needs the negative-lookahead, which depends on OTHER components' claims).
+     */
+    private fun toDetail(entity: ComponentEntity): ComponentDetailResponse {
+        val response = entity.toDetailResponse(teamcityProperties.baseUrl)
+        val patterns = ownershipExportPatterns(entity)
+        if (patterns.isEmpty()) return response
+        return response.copy(
+            artifactIds =
+                response.artifactIds.map { ai ->
+                    patterns[ai.id]?.let { ai.copy(legacyArtifactIdPattern = it) } ?: ai
+                },
+        )
+    }
+
+    /**
      * Review #2: a field-override write can introduce a `mavenArtifacts` /
      * `dockerImages` / jira coordinate on an OVERRIDE row that another component
      * already claims. The create/update component paths run the cross-component
@@ -2277,23 +2505,6 @@ class ComponentManagementServiceImpl(
         }.onFailure {
             log.warn("Copyright directory '{}' is unreadable; copyright validation skipped", path, it)
         }.getOrNull()
-    }
-
-    /**
-     * An `artifactId` pattern must be a compilable regular expression (audit #9;
-     * old `EscrowConfigValidator.validateArtifactId`). Applied per
-     * `artifactIds[].artifactPattern` on the create/update paths.
-     */
-    private fun validateArtifactIdPattern(pattern: String) {
-        require(pattern.isNotBlank()) { "artifactId pattern must not be blank" }
-        try {
-            Pattern.compile(pattern)
-        } catch (e: PatternSyntaxException) {
-            throw IllegalArgumentException(
-                "artifactId pattern '$pattern' is not a valid regular expression",
-                e,
-            )
-        }
     }
 
     private fun buildSpecification(filter: ComponentFilter): Specification<ComponentEntity> {
@@ -2753,10 +2964,12 @@ class ComponentManagementServiceImpl(
     private fun componentCollectionAuditEntries(entity: ComponentEntity): Map<String, Any?> =
         mapOf(
             "artifactIds" to
-                entity.artifactIds.sortedBy { it.sortOrder }.map {
+                entity.artifactMappings.sortedWith(ARTIFACT_MAPPING_ORDER).map {
                     mapOf(
+                        "versionRange" to it.versionRange,
                         "groupPattern" to it.groupPattern,
-                        "artifactPattern" to it.artifactPattern,
+                        "mode" to it.artifactIdMode,
+                        "artifactTokens" to it.tokens.sortedBy { t -> t.sortOrder }.map { t -> t.artifactPattern },
                     )
                 },
             "securityGroups" to

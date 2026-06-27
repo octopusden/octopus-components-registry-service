@@ -163,3 +163,24 @@ Resolution (per product decision):
   `component_artifact_ids` ownership mapping — is still not validated on the v4 write path
   (base-row mapping changes; per-range override mapping IS covered via GROUP_ARTIFACT_PATTERN
   rows in the distribution table).
+
+## Addendum 2026-06-26 — #24/#25 ownership mapping closed (SYS-058 / ADR-017)
+
+The residual gap above is now closed. The `component_artifact_ids` opaque-regex ownership mapping
+was replaced by an explicit mode model (`component_artifact_mappings` + `_tokens`;
+EXPLICIT / ALL_EXCEPT_CLAIMED / ALL) — see ADR-017 and SYS-058. The TRUE legacy #24/#25 subject (the
+component groupId/artifactId ownership mapping, OLD-VALIDATOR:217-242, 309-361) is now validated on
+the v4 write path by a deterministic mode-aware matrix (`validateArtifactOwnershipCollisions` /
+`OwnershipUniqueness.computeOwnershipCollisions`), keyed off the stored modes rather than regex
+probing — `EXPLICIT×EXPLICIT` conflicts iff tokens intersect, `ALL×anything` and
+`ALL_EXCEPT_CLAIMED×ALL_EXCEPT_CLAIMED` conflict, `EXPLICIT×ALL_EXCEPT_CLAIMED` yields. The per-range
+override is now first-class mapping rows (the `GROUP_ARTIFACT_PATTERN` ownership marker is retired),
+so base and override mappings are validated uniformly.
+
+Enforcement boundary (decision): the ownership matrix runs on the v4 write path (create
+unconditional; update when `artifactIds` is present — a field-override cannot change ownership and
+must not re-trigger it), NOT in the §6.0 migration pre-pass. Production is overlap-free by
+construction under the legacy single-match resolver, and migration enforces correctness via strict
+artifactId→mode classification (no escape hatch), gated by `RealDslUniquenessAcceptanceTest` (0
+unclassifiable patterns). This is distinct from the distribution-GAV / jira / docker invariants,
+which DO run in the migration pre-pass.

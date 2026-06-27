@@ -12,7 +12,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
-import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactIdEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionDockerImageEntity
@@ -157,14 +156,7 @@ class GetComponentsListPerformanceTest {
                 javaVersion = "25",
             ),
         )
-        component.artifactIds.add(
-            ComponentArtifactIdEntity(
-                component = component,
-                groupPattern = "com.example.perf",
-                artifactPattern = "lib-$index",
-                sortOrder = 0,
-            ),
-        )
+        component.addOwnershipMapping("com.example.perf", "lib-$index")
         return component
     }
 

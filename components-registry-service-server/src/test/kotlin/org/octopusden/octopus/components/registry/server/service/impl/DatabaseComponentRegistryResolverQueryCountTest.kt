@@ -13,7 +13,6 @@ import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.core.dto.Image
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
-import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactIdEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentRequiredToolEntity
@@ -151,14 +150,7 @@ class DatabaseComponentRegistryResolverQueryCountTest {
             ),
         )
         component.configurations.add(base)
-        component.artifactIds.add(
-            ComponentArtifactIdEntity(
-                component = component,
-                groupPattern = "com.example.qc",
-                artifactPattern = "lib-$index",
-                sortOrder = 0,
-            ),
-        )
+        component.addOwnershipMapping("com.example.qc", "lib-$index")
         val saved = componentRepository.save(component)
 
         // Distinct required tool per component → the mapper's `junction.tool` access
