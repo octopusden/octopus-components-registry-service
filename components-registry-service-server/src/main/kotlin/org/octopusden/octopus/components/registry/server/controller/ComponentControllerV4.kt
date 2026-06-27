@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.controller
 
+import jakarta.validation.Valid
 import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.server.config.ComponentsRegistryProperties
@@ -229,7 +230,7 @@ class ComponentControllerV4(
             "and @permissionEvaluator.hasPermission('CREATE_COMPONENTS')",
     )
     fun createComponent(
-        @RequestBody request: ComponentCreateRequest,
+        @Valid @RequestBody request: ComponentCreateRequest,
     ): ComponentDetailResponse = withCanEdit(componentManagementService.createComponent(request))
 
     @GetMapping
@@ -407,7 +408,7 @@ class ComponentControllerV4(
     )
     fun updateComponent(
         @PathVariable id: UUID,
-        @RequestBody request: ComponentUpdateRequest,
+        @Valid @RequestBody request: ComponentUpdateRequest,
     ): ComponentDetailResponse = withCanEdit(componentManagementService.updateComponent(id, request))
 
     @DeleteMapping("/{id}")

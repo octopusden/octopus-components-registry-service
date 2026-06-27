@@ -1,6 +1,7 @@
 package org.octopusden.octopus.components.registry.server.dto.v4
 
 import io.swagger.v3.oas.annotations.media.Schema
+import jakarta.validation.constraints.Pattern
 
 /**
  * Patch body (JSON Merge Patch semantics): null scalar = "don't touch";
@@ -67,4 +68,22 @@ data class ComponentUpdateRequest(
     val securityGroups: List<SecurityGroupRequest>? = null,
     val teamcityProjects: List<TeamcityProjectRequest>? = null,
     val baseConfiguration: BaseConfigurationRequest? = null,
+    // Optional change metadata recorded on the audit row (not on the component).
+    // These are change-scoped, not part of the component's patchable state: a
+    // blank/whitespace key is accepted as "no key" (normalized to null), and a
+    // non-blank key must match the Jira key format. See JIRA_TASK_KEY_PATTERN.
+    @field:Pattern(
+        regexp = JIRA_TASK_KEY_PATTERN,
+        message = "must be a Jira task key like ABC-123",
+    )
+    @field:Schema(
+        requiredMode = Schema.RequiredMode.NOT_REQUIRED,
+        description = "Optional Jira task key motivating the change (e.g. ABC-123); recorded on the audit row.",
+    )
+    val jiraTaskKey: String? = null,
+    @field:Schema(
+        requiredMode = Schema.RequiredMode.NOT_REQUIRED,
+        description = "Optional free-text comment describing the change; recorded on the audit row.",
+    )
+    val changeComment: String? = null,
 )

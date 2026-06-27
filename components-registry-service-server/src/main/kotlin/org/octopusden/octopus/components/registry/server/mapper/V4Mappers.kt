@@ -222,6 +222,8 @@ fun AuditLogEntity.toResponse(componentKey: String? = null): AuditLogResponse =
         changeDiff = this.changeDiff,
         correlationId = this.correlationId,
         source = this.source,
+        jiraTaskKey = this.jiraTaskKey,
+        changeComment = this.changeComment,
         componentKey = componentKey,
     )
 
