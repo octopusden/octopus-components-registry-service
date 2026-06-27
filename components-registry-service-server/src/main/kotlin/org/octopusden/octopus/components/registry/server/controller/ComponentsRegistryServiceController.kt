@@ -76,7 +76,7 @@ class ComponentsRegistryServiceController(
                 .body<Any>(ErrorResponse("A cache refresh is already in progress; retry updateCache after it completes"))
         }
         try {
-            // DB-mode only: getMigrationStatus() reads countBySource("db"). In no-db
+            // DB-mode only: getMigrationStatus() reads findComponentKeysBySource("db"). In no-db
             // mode ImportService is absent (importService == null) — there is no
             // migration that can be "fully done", so always fall through to the Git
             // re-read and return HTTP 200, exactly like the pre-v3 endpoint.

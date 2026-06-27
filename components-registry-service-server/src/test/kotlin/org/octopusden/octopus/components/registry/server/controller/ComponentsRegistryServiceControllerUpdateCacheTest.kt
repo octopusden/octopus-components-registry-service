@@ -58,10 +58,11 @@ class ComponentsRegistryServiceControllerUpdateCacheTest {
     }
 
     @Test
-    fun `negative git from stale db rows attempts refresh, not 410`() {
-        // total > 0 (the Git resolver parsed components) but git < 0 from stale/extra
-        // source='db' rows: git-served components may still exist, so re-read rather
-        // than falsely retire.
+    fun `negative git attempts refresh, not 410 (defensive)`() {
+        // Defensive only: `git` is now a set difference (DSL keys not in the DB) and is
+        // always >= 0, so getMigrationStatus no longer emits a negative. This pins that
+        // the controller never falsely retires (410) on an unexpected negative — it
+        // re-reads instead.
         doReturn(MigrationStatus(git = -2, db = 7, total = 5)).`when`(importService).getMigrationStatus()
         doReturn(7L).`when`(componentsRegistryService).updateConfigCache()
 
