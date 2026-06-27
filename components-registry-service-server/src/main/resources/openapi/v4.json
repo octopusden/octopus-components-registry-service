@@ -63,6 +63,9 @@
           "action" : {
             "type" : "string"
           },
+          "changeComment" : {
+            "type" : "string"
+          },
           "changeDiff" : {
             "additionalProperties" : {
               "type" : "object"
@@ -91,6 +94,9 @@
           "id" : {
             "format" : "int64",
             "type" : "integer"
+          },
+          "jiraTaskKey" : {
+            "type" : "string"
           },
           "newValue" : {
             "additionalProperties" : {
@@ -445,6 +451,10 @@
           "canBeParent" : {
             "type" : "boolean"
           },
+          "changeComment" : {
+            "description" : "Optional free-text comment describing the change; recorded on the audit row.",
+            "type" : "string"
+          },
           "clientCode" : {
             "type" : "string"
           },
@@ -476,6 +486,11 @@
             "type" : "string"
           },
           "jiraHotfixVersionFormat" : {
+            "type" : "string"
+          },
+          "jiraTaskKey" : {
+            "description" : "Optional Jira task key motivating the change (e.g. ABC-123); recorded on the audit row.",
+            "pattern" : "^\\s*$|^[A-Z][A-Z0-9]+-\\d+$",
             "type" : "string"
           },
           "labels" : {
@@ -833,6 +848,10 @@
           "canBeParent" : {
             "type" : "boolean"
           },
+          "changeComment" : {
+            "description" : "Optional free-text comment describing the change; recorded on the audit row.",
+            "type" : "string"
+          },
           "clearGroup" : {
             "type" : "boolean"
           },
@@ -870,6 +889,11 @@
             "type" : "string"
           },
           "jiraHotfixVersionFormat" : {
+            "type" : "string"
+          },
+          "jiraTaskKey" : {
+            "description" : "Optional Jira task key motivating the change (e.g. ABC-123); recorded on the audit row.",
+            "pattern" : "^\\s*$|^[A-Z][A-Z0-9]+-\\d+$",
             "type" : "string"
           },
           "labels" : {
@@ -4002,6 +4026,22 @@
             "schema" : {
               "default" : false,
               "type" : "boolean"
+            }
+          },
+          {
+            "in" : "query",
+            "name" : "jiraTaskKey",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "in" : "query",
+            "name" : "changeComment",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
             }
           },
           {
