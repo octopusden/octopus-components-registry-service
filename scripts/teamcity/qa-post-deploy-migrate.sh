@@ -6,9 +6,12 @@
 #   - git == 0 AND total > 0          → nothing left to migrate, exit 0 (skip)
 #     (git == 0 with total == 0 is indeterminate — the Git resolver returned no
 #      components, usually a load failure — and fails loudly, never skips)
-# It exits non-zero only when migration was *attempted* and ended in FAILED
-# state (or pod never became ready). That matches the user contract: "if there
-# is no new code, just skip — don't fail".
+# It exits non-zero when migration was *attempted* and ended in FAILED state
+# (or the pod never became ready), AND on an indeterminate migration-status
+# (git == 0 with total == 0, or a non-numeric git/total — a contract break or
+# Git-resolver load failure). It exits 0 (skip) on the "nothing to do" cases
+# above. That matches the user contract: "if there is no new code, just skip —
+# don't fail" — while never silently skipping on an indeterminate status.
 #
 # Required env:
 #   CRS_BASE_URL          e.g. https://components-registry.qa.example/
