@@ -222,4 +222,42 @@ class AuditChangeMetadataTest {
         assert(ids.contains(idA)) { "expected the matching component $idA in the response" }
         assert(!ids.contains(idB)) { "expected non-matching component $idB to be excluded" }
     }
+
+    @Test
+    @DisplayName("audit/recent jiraTaskKey filter is a case-insensitive substring match")
+    fun filterByJiraTaskKey_substringCaseInsensitive() {
+        val idA = createComponent(uniqueName("meta_sa"), jiraTaskKey = "ABX-7001", changeComment = "a")
+        val idB = createComponent(uniqueName("meta_sb"), jiraTaskKey = "ZZZ-8002", changeComment = "b")
+
+        // Lower-case mid-string fragment of ABX-7001 only.
+        val ids = entityIdsForRecent("jiraTaskKey" to "bx-70")
+        assert(ids.contains(idA)) { "expected substring 'bx-70' to match ABX-7001 ($idA), got $ids" }
+        assert(!ids.contains(idB)) { "expected ZZZ-8002 ($idB) excluded, got $ids" }
+    }
+
+    @Test
+    @DisplayName("audit/recent filtered by changeComment is a case-insensitive substring match")
+    fun filterByChangeComment_substring() {
+        val idA = createComponent(uniqueName("meta_ca"), jiraTaskKey = "ABC-1", changeComment = "Alpha release prep")
+        val idB = createComponent(uniqueName("meta_cb"), jiraTaskKey = "ABC-2", changeComment = "beta cleanup")
+
+        val ids = entityIdsForRecent("changeComment" to "alpha rel")
+        assert(ids.contains(idA)) { "expected comment substring to match '$idA', got $ids" }
+        assert(!ids.contains(idB)) { "expected '$idB' excluded, got $ids" }
+    }
+
+    /** GET /audit/recent with one filter param; returns the set of entityIds in the page. */
+    private fun entityIdsForRecent(param: Pair<String, String>): Set<String> {
+        val body =
+            mvc
+                .perform(
+                    get("/rest/api/4/audit/recent")
+                        .with(adminJwt())
+                        .param(param.first, param.second)
+                        .param("size", "500"),
+                ).andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString
+        return objectMapper.readTree(body)["content"].map { it["entityId"].asText() }.toSet()
+    }
 }

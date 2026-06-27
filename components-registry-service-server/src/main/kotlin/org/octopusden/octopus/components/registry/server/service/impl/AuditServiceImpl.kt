@@ -156,8 +156,25 @@ class AuditServiceImpl(
             spec = spec.and(Specification { root, _, cb -> cb.lessThan(root.get<Instant>("changedAt"), to) })
         }
 
-        filter.jiraTaskKey?.let { jiraTaskKey ->
-            spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<String>("jiraTaskKey"), jiraTaskKey) })
+        // Substring, case-insensitive match — "abc" / "123" both find "ABC-123".
+        // LIKE metacharacters in the term are escaped so they're matched literally.
+        filter.jiraTaskKey?.takeIf { it.isNotBlank() }?.let { term ->
+            spec =
+                spec.and(
+                    Specification { root, _, cb ->
+                        cb.like(cb.lower(root.get<String>("jiraTaskKey")), containsPattern(term), LIKE_ESCAPE)
+                    },
+                )
+        }
+
+        // Free-text comment search — substring, case-insensitive.
+        filter.changeComment?.takeIf { it.isNotBlank() }?.let { term ->
+            spec =
+                spec.and(
+                    Specification { root, _, cb ->
+                        cb.like(cb.lower(root.get<String>("changeComment")), containsPattern(term), LIKE_ESCAPE)
+                    },
+                )
         }
 
         return spec
@@ -167,5 +184,22 @@ class AuditServiceImpl(
         // The entityType audit rows carry for component changes (component CRUD,
         // section edits, field overrides and git-history MIGRATED all share it).
         private const val ENTITY_TYPE_COMPONENT = "Component"
+
+        private const val LIKE_ESCAPE = '\\'
+
+        /**
+         * Build a case-insensitive `%term%` LIKE pattern, escaping the term's own
+         * `\` `%` `_` so they match literally instead of acting as wildcards. Pair
+         * with `cb.lower(column)` and the `LIKE_ESCAPE` escape char.
+         */
+        private fun containsPattern(term: String): String {
+            val escaped =
+                term
+                    .lowercase()
+                    .replace("\\", "\\\\")
+                    .replace("%", "\\%")
+                    .replace("_", "\\_")
+            return "%$escaped%"
+        }
     }
 }
