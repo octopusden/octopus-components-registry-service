@@ -16,6 +16,9 @@ import java.time.Instant
  * an explicit `action = MIGRATED` filter always wins regardless of this flag
  * (SYS-049).
  *
+ * `jiraTaskKey` matches the change-metadata key captured at save time (exact
+ * match on `audit_log.jira_task_key`) — drives the Portal's "search by task key".
+ *
  * Contract: `SYS-036`, `SYS-049` in `requirements-common.md`.
  */
 data class AuditLogFilter(
@@ -27,4 +30,5 @@ data class AuditLogFilter(
     val from: Instant? = null,
     val to: Instant? = null,
     val includeMigrated: Boolean = false,
+    val jiraTaskKey: String? = null,
 )

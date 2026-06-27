@@ -1,6 +1,7 @@
 package org.octopusden.octopus.components.registry.server.dto.v4
 
 import io.swagger.v3.oas.annotations.media.Schema
+import jakarta.validation.constraints.Pattern
 
 /**
  * Create body for a new component. Mirrors the v2 schema row-for-row — no
@@ -80,4 +81,21 @@ data class ComponentCreateRequest(
     // BaseConfigurationRequest schema, where it would wrongly appear on the (optional) Update use.
     @field:Schema(requiredMode = Schema.RequiredMode.REQUIRED)
     val baseConfiguration: BaseConfigurationRequest? = null,
+    // Optional change metadata recorded on the audit row (not on the component).
+    // A blank/whitespace key is accepted as "no key" (normalized to null); a
+    // non-blank key must match the Jira key format. See JIRA_TASK_KEY_PATTERN.
+    @field:Pattern(
+        regexp = JIRA_TASK_KEY_PATTERN,
+        message = "must be a Jira task key like ABC-123",
+    )
+    @field:Schema(
+        requiredMode = Schema.RequiredMode.NOT_REQUIRED,
+        description = "Optional Jira task key motivating the change (e.g. ABC-123); recorded on the audit row.",
+    )
+    val jiraTaskKey: String? = null,
+    @field:Schema(
+        requiredMode = Schema.RequiredMode.NOT_REQUIRED,
+        description = "Optional free-text comment describing the change; recorded on the audit row.",
+    )
+    val changeComment: String? = null,
 )

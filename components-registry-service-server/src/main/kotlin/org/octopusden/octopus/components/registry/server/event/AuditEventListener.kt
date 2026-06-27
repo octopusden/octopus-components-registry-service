@@ -22,6 +22,11 @@ class AuditEventListener(
         // the audit log with meaningless "saved, changed nothing" entries (e.g. a
         // Save click on an unmodified form). CREATE (null oldValue) and DELETE
         // (null newValue) legitimately produce a null diff and must still be kept.
+        //
+        // Note: change metadata (jiraTaskKey/changeComment) is recorded ON the
+        // change, not independently — a PATCH that supplies a key/comment but
+        // alters no field is still a no-op and writes no row. The audit log tracks
+        // field changes, not intent, so there is nothing to attach the metadata to.
         if (event.oldValue != null && event.newValue != null && changeDiff == null) {
             return
         }
@@ -35,6 +40,8 @@ class AuditEventListener(
                 oldValue = event.oldValue,
                 newValue = event.newValue,
                 changeDiff = changeDiff,
+                jiraTaskKey = event.jiraTaskKey,
+                changeComment = event.changeComment,
             )
         auditLogRepository.save(auditLog)
     }

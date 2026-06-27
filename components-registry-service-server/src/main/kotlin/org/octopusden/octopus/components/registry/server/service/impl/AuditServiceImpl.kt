@@ -156,6 +156,10 @@ class AuditServiceImpl(
             spec = spec.and(Specification { root, _, cb -> cb.lessThan(root.get<Instant>("changedAt"), to) })
         }
 
+        filter.jiraTaskKey?.let { jiraTaskKey ->
+            spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<String>("jiraTaskKey"), jiraTaskKey) })
+        }
+
         return spec
     }
 

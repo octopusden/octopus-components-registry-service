@@ -58,6 +58,15 @@ class AuditLogEntity(
 
     @Column(name = "source", nullable = false, length = 20)
     var source: String = "api",
+
+    // Change metadata captured at save time (component create/update). Optional;
+    // a blank Jira key is normalized to null before persisting. The key is
+    // indexed to back `GET /audit/recent?jiraTaskKey=...`.
+    @Column(name = "jira_task_key")
+    var jiraTaskKey: String? = null,
+
+    @Column(name = "change_comment", columnDefinition = "TEXT")
+    var changeComment: String? = null,
 ) {
     companion object {
         /**

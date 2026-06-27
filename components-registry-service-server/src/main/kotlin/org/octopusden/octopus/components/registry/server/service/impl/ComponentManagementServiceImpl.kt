@@ -349,6 +349,8 @@ class ComponentManagementServiceImpl(
                     saved,
                     overrideLabels = canonicalizedLabels,
                 ) + sectionAuditMap(saved),
+            jiraTaskKey = request.jiraTaskKey,
+            changeComment = request.changeComment,
         )
 
         return toDetail(saved)
@@ -715,6 +717,8 @@ class ComponentManagementServiceImpl(
                     saved,
                     overrideLabels = canonicalizedLabels ?: originalLabels,
                 ) + sectionAuditMap(saved),
+            jiraTaskKey = request.jiraTaskKey,
+            changeComment = request.changeComment,
         )
 
         return toDetail(saved)
@@ -3019,6 +3023,8 @@ class ComponentManagementServiceImpl(
         entityId: String,
         oldValue: Map<String, Any?>? = null,
         newValue: Map<String, Any?>? = null,
+        jiraTaskKey: String? = null,
+        changeComment: String? = null,
     ) {
         applicationEventPublisher.publishEvent(
             AuditEvent(
@@ -3028,6 +3034,10 @@ class ComponentManagementServiceImpl(
                 changedBy = currentUserResolver.currentUsername(),
                 oldValue = oldValue,
                 newValue = newValue,
+                // Normalize blank/whitespace → null so a stray "" from the client
+                // is never persisted (the @Pattern accepts blank as "no key").
+                jiraTaskKey = jiraTaskKey?.trim()?.ifBlank { null },
+                changeComment = changeComment?.trim()?.ifBlank { null },
             ),
         )
     }

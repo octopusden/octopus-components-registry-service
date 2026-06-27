@@ -51,6 +51,7 @@ class AuditControllerV4(
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) from: Instant?,
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) to: Instant?,
         @RequestParam(required = false, defaultValue = "false") includeMigrated: Boolean,
+        @RequestParam(required = false) jiraTaskKey: String?,
         pageable: Pageable,
     ): Page<AuditLogResponse> {
         val filter =
@@ -63,6 +64,7 @@ class AuditControllerV4(
                 from = from,
                 to = to,
                 includeMigrated = includeMigrated,
+                jiraTaskKey = jiraTaskKey,
             )
         return auditService.getRecentChanges(filter, pageable)
     }
