@@ -6,6 +6,9 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import org.octopusden.octopus.components.registry.server.entity.ArtifactIdMode
+import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactMappingEntity
+import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactMappingTokenEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentBuildToolBeanEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
@@ -120,6 +123,73 @@ class ComponentCodeRendererTest {
         flavor = flavor,
         sortOrder = order,
     )
+
+    private fun ownership(
+        c: ComponentEntity,
+        group: String,
+        mode: ArtifactIdMode,
+        range: String = "(,0),[0,)",
+        tokens: List<String> = emptyList(),
+        order: Int = 0,
+    ): ComponentArtifactMappingEntity {
+        val m =
+            ComponentArtifactMappingEntity(
+                id = UUID.randomUUID(),
+                component = c,
+                versionRange = range,
+                groupPattern = group,
+                artifactIdMode = mode.name,
+                sortOrder = order,
+            )
+        tokens.forEachIndexed { i, t ->
+            m.tokens.add(ComponentArtifactMappingTokenEntity(id = UUID.randomUUID(), mapping = m, artifactPattern = t, sortOrder = i))
+        }
+        c.artifactMappings.add(m)
+        return m
+    }
+
+    // ----------------------------------------------------------------------
+    // Ownership (artifactIds) rendering — modes, per-range override, ALL_EXCEPT export
+    // ----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("FULL: base ALL ownership renders an artifactIds block with the catch-all pattern")
+    fun fullOwnershipBaseAll() {
+        val c = component()
+        base(c) { buildSystem = "MAVEN" }
+        ownership(c, "com.example.foo", ArtifactIdMode.ALL)
+        val out = renderer.renderFull(c)
+        assertTrue(out.contains("artifactIds {"), out)
+        assertTrue(out.contains("groupPattern = \"com.example.foo\""), out)
+        // CodeBuilder double-escapes backslashes in the Groovy string literal.
+        assertTrue(out.contains("artifactPattern = \"[\\\\w-\\\\.]+\""), out)
+    }
+
+    @Test
+    @DisplayName("FULL: an ownership-only per-range override still emits its range block (P1-C)")
+    fun fullOwnershipOnlyOverrideRangeBlock() {
+        val c = component()
+        base(c) { buildSystem = "MAVEN" }
+        ownership(c, "com.example.foo", ArtifactIdMode.ALL)
+        // A range whose ONLY override is artifact ownership — no scalar/marker config row for it.
+        ownership(c, "com.example.foo", ArtifactIdMode.EXPLICIT, range = "[1.0,2.0)", tokens = listOf("foo-service"))
+        val out = renderer.renderFull(c)
+        assertTrue(out.contains("\"[1.0,2.0)\" {"), out)
+        assertTrue(out.contains("artifactPattern = \"foo-service\""), out)
+    }
+
+    @Test
+    @DisplayName("FULL: ALL_EXCEPT_CLAIMED renders the sibling-aware lookahead from the export-pattern map (P1-B)")
+    fun fullOwnershipAllExceptExportLookahead() {
+        val c = component()
+        base(c) { buildSystem = "MAVEN" }
+        val m = ownership(c, "com.example.foo", ArtifactIdMode.ALL_EXCEPT_CLAIMED)
+        val out = renderer.renderFull(c, mapOf(m.id!! to "(?!(?:foo-legacy)\$)[\\w-\\.]+"))
+        // Contains '$' ⇒ rendered single-quoted; backslashes are doubled.
+        assertTrue(out.contains("artifactPattern = '(?!(?:foo-legacy)\$)[\\\\w-\\\\.]+'"), out)
+        // Without the export map it falls back to the wire catch-all (double-quoted).
+        assertTrue(renderer.renderFull(c).contains("artifactPattern = \"[\\\\w-\\\\.]+\""))
+    }
 
     // ----------------------------------------------------------------------
     // FULL — exact golden for the minimal shape

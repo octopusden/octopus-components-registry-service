@@ -201,7 +201,7 @@ class ComponentEntity(
 
     @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
     @BatchSize(size = BATCH_FETCH_SIZE)
-    var artifactIds: MutableList<ComponentArtifactIdEntity> = mutableListOf(),
+    var artifactMappings: MutableList<ComponentArtifactMappingEntity> = mutableListOf(),
 
     @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
     @BatchSize(size = BATCH_FETCH_SIZE)

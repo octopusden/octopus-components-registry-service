@@ -10,7 +10,10 @@ import org.octopusden.octopus.components.registry.core.dto.Image
 import org.octopusden.octopus.components.registry.core.dto.VersionedComponent
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
+import org.octopusden.octopus.components.registry.server.entity.ArtifactIdMode
+import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactMappingEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
+import org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipRendering
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
 import org.octopusden.octopus.components.registry.server.mapper.escrowModuleConfigField
@@ -315,133 +318,180 @@ class DatabaseComponentRegistryResolver(
     }
 
     /**
-     * Per-range effective `(groupPattern, artifactPattern)` for a component — marker-aware
-     * (`GROUP_ARTIFACT_PATTERN` per-range overrides) with the component-level `artifactIds`
-     * fallback. Shared by `/maven-artifacts` and (MIG-039) `find-by-artifacts` so both use
-     * identical per-range semantics; keyed by version-range string.
+     * Per-range effective ownership `(groupPattern, artifactPattern)` for a component,
+     * keyed by version-range string, rendered for the legacy v1–v3 wire from the
+     * `component_artifact_mappings` model:
+     *  - For each config range R, the EFFECTIVE mappings are the per-range override
+     *    mappings whose `versionRange == R` if any, else the base (`ALL_VERSIONS`)
+     *    mappings (override REPLACES base for that range — most-specific wins).
+     *  - The legacy single pair renders the PRIMARY mapping (lowest `sortOrder`) of R.
+     *  - Mode → pattern: ALL / ALL_EXCEPT_CLAIMED → the catch-all `[\w-\.]+` (the v3 DB
+     *    resolver's specificity makes ALL_EXCEPT yield to a rival's EXPLICIT, and ALL is
+     *    sole-owner-by-validation); EXPLICIT → its literal tokens with regex metacharacters
+     *    escaped (so the legacy regex matcher matches them literally), joined by `,`.
      */
     private fun mavenArtifactParametersFor(
         componentEntity: ComponentEntity,
     ): Map<String, ComponentArtifactConfiguration> {
-
-        // Component-level fallback: the top-level groupId/artifactId rows imported from DSL.
-        // For components whose DSL omits an explicit `artifactId` line, the import path
-        // writes the inherited `Defaults.artifactId = ANY_ARTIFACT (/[\w-\.]+/)` verbatim;
-        // the V1 in-memory resolver returns that wildcard literal as-is (RES-C-prime).
-        //
-        // Sort by `sortOrder` ASC so multi-artifact CSV strings round-trip in their
-        // original DSL declaration order — V1 reads the raw DSL string verbatim, V2 must
-        // re-join in the same order or `GitVsDbValidationTest.VAL-006` fails. The import
-        // writes one row per CSV token with `sortOrder = index in DSL list`. All rows
-        // share the same `groupPattern` (per-component groupId), so `first().groupPattern`
-        // is stable by construction — any row picks the same group.
-        //
-        // Secondary sort by `artifactPattern` gives a deterministic outcome when
-        // multiple rows share the same `sortOrder` (legacy data written before this
-        // column existed, or a future write path that omits the position). Kotlin's
-        // `sortedWith` is stable; the secondary key takes effect only on ties.
-        val artifactIdRows =
-            componentEntity.artifactIds.sortedWith(
-                compareBy({ it.sortOrder }, { it.artifactPattern }),
-            )
-        val componentLevelFallback =
-            if (artifactIdRows.isEmpty()) {
-                null
+        // #357 Option A: the FORWARD /maven-artifacts wire renders an ALL_EXCEPT_CLAIMED mapping as the
+        // sibling-aware anchored negative-lookahead (mirroring the legacy DSL's exact-token exclusion),
+        // so the v1-v3 wire matches the legacy baseline: byte-identical for a single excluded sibling
+        // (the only ALL_EXCEPT shape in prod today), and order-insensitively equal for multi-sibling
+        // (v3 sorts the siblings; the compat comparator compares the exclusion as a set). Siblings =
+        // the EXPLICIT tokens claimed under the same group in an intersecting range by OTHER components.
+        // Gated on the component actually having an ALL_EXCEPT_CLAIMED mapping so the common path does
+        // NO cross-component scan; the scan itself uses findAll() like the existing reverse path
+        // (loadPerComponentArtifactParameters) and only runs for the rare ALL_EXCEPT read. (Reverse
+        // find-by-artifact keeps the plain catch-all + specificity via [renderMapping] — the resolution
+        // outcome is identical and unchanged.)
+        val siblings =
+            if (componentEntity.artifactMappings.any { it.artifactIdMode == ArtifactIdMode.ALL_EXCEPT_CLAIMED.name }) {
+                loadSiblingContext(excludingComponentKey = componentEntity.componentKey)
             } else {
-                ComponentArtifactConfiguration(
-                    artifactIdRows.first().groupPattern,
-                    artifactIdRows.joinToString(",") { it.artifactPattern },
-                )
+                SiblingContext(emptyList(), emptyMap())
             }
+        return effectiveMappingsByRange(componentEntity)
+            .mapValues { (_, mappings) -> renderForwardMapping(mappings.minByOrNull { it.sortOrder }!!, siblings) }
+            .filterValues { it.groupPattern.isNotEmpty() || it.artifactPattern.isNotEmpty() }
+    }
 
-        // Per-range MARKER rows that carry an explicit per-range maven coordinate.
-        //
-        // Only GROUP_ARTIFACT_PATTERN markers participate in /maven-artifacts resolution
-        // per V1 contract (see filter below + commit history). The marker name is MIG-047:
-        // it represents the case where the DSL component sets `groupId`/`artifactId` per
-        // range (with or without an accompanying `distribution { gav = … }` block). A
-        // synthetic marker is emitted at import time with `mavenArtifacts` rows built from
-        // the per-range groupId/artifactId. This marker is intentionally NOT registered in
-        // MarkerAttributes.ALL so `buildEscrowModuleConfig` ignores it and
-        // `getAllJiraComponentVersionRanges` is not affected.
-        //
-        // DISTRIBUTION_MAVEN markers also exist (emitted by the importer for every per-
-        // range `distribution { gav = … }` block) but are **not** consumed here — they
-        // feed V4 distribution endpoints (`getResolvedComponentDefinition`,
-        // `/distribution`). The V1 contract for /maven-artifacts is
-        // (EscrowModuleConfig.groupIdPattern, .artifactIdPattern), not GAV-derived;
-        // see filter at line 348 below.
-        //
-        // We extract the artifact configuration directly from the GROUP_ARTIFACT_PATTERN
-        // marker entity's `mavenArtifacts` child collection (sorted by `sortOrder`),
-        // bypassing `config.distribution.GAV()` to avoid the side-effect described above.
-        // V1 contract (component-resolver-core JiraParametersResolver.groovy:67-68):
-        // /maven-artifacts returns (groupIdPattern, artifactIdPattern) from the
-        // inherited EscrowModuleConfig chain — NEVER derived from distribution.GAV.
-        // Empirically confirmed today (2026-05-24) via curl on prod + QA: every
-        // range emits the inherited top-level (groupId, artifactId), regardless of
-        // whether a version-level `distribution { gav = … }` block exists.
-        //
-        // Per-range override of these fields is meaningful ONLY when the DSL
-        // explicitly redefines groupId/artifactId at the version level — that case
-        // is encoded by the GROUP_ARTIFACT_PATTERN marker (see
-        // EntityMappers.kt:54-65; emitted by ImportServiceImpl.attachMavenArtifacts
-        // FromGroupArtifact). DISTRIBUTION_MAVEN markers, by contrast, carry only
-        // a GAV-token-derived (groupId, artifactId) reconstructed from the per-
-        // range `distribution.GAV()` string — never the V1 contract field. They
-        // are read by V4 distribution endpoints and by `buildEscrowModuleConfig`,
-        // but must NOT influence /maven-artifacts.
-        //
-        // Pre-fix bug (id17 #3640 compat-test diffs for 6 components): the
-        // filter also accepted DISTRIBUTION_MAVEN rows, so any DSL component
-        // with a version-level GAV override silently had its inherited
-        // artifactId discarded in favour of the GAV-derived token list. See
-        // RES-C-007 / RES-C-008 for fixtures pinning the V1 shape.
-        val perRangeMarkerRows: Map<String, ComponentConfigurationEntity> =
-            componentEntity.configurations
-                .asSequence()
-                .filter {
-                    it.rowType == ROW_TYPE_MARKER &&
-                        it.overriddenAttribute == MarkerAttributes.GROUP_ARTIFACT_PATTERN
-                }
-                .groupBy { it.versionRange }
-                .mapValues { (_, rows) -> rows.first() }
-
-        val module = componentEntity.toEscrowModule(versionRangeFactory, numericVersionFactory)
-
-        if (module.moduleConfigurations.isEmpty()) {
-            // No configurations at all — return empty map (preserves previous contract)
-            return emptyMap()
+    /**
+     * Reverse `find-by-artifact` view: ALL effective mappings of each config range (not just
+     * the primary), flattened to `(rangeKey, config)` pairs, so an artifact owned by a
+     * non-primary mapping still resolves.
+     */
+    private fun ownershipConfigsByRange(
+        componentEntity: ComponentEntity,
+    ): List<Pair<String, ComponentArtifactConfiguration>> =
+        effectiveMappingsByRange(componentEntity).flatMap { (rangeKey, mappings) ->
+            mappings.map { rangeKey to renderMapping(it) }
         }
 
-        return module.moduleConfigurations
-            .associate { config ->
-                val rangeKey = config.versionRangeString ?: ALL_VERSIONS
-                val artifact =
-                    if (rangeKey in perRangeMarkerRows) {
-                        // Per-range override: extract directly from the marker entity's child rows.
-                        val markerRow = perRangeMarkerRows[rangeKey]!!
-                        val coords = markerRow.mavenArtifacts.sortedBy { it.sortOrder }
-                        if (coords.isNotEmpty()) {
-                            ComponentArtifactConfiguration(
-                                coords.first().groupPattern,
-                                coords.joinToString(",") { it.artifactPattern },
-                            )
-                        } else {
-                            componentLevelFallback
-                        }
-                    } else {
-                        // No per-range marker: V1 parity — return component-level fallback
-                        // verbatim (wildcard literal when DSL omitted `artifactId`).
-                        componentLevelFallback
-                    }
-                // Empty pair is the "no data" sentinel when both the marker-gated GAV
-                // branch and the component-level fallback returned nothing. The
-                // `filterValues` below drops these so the empty ranges aren't reported
-                // — matches the legacy contract for components with no maven artifacts.
-                rangeKey to (artifact ?: ComponentArtifactConfiguration("", ""))
+    /**
+     * For each of the component's declared config ranges, the in-force ownership mappings:
+     * the override mappings keyed to that exact range if present, else the base mappings.
+     */
+    private fun effectiveMappingsByRange(
+        componentEntity: ComponentEntity,
+    ): Map<String, List<ComponentArtifactMappingEntity>> {
+        val byRange = componentEntity.artifactMappings.groupBy { it.versionRange }
+        val baseMappings = byRange[ALL_VERSIONS].orEmpty()
+        val module = componentEntity.toEscrowModule(versionRangeFactory, numericVersionFactory)
+        val configRanges = module.moduleConfigurations.map { it.versionRangeString ?: ALL_VERSIONS }
+        // Consider every declared config range PLUS every override range (an override range must
+        // equal a config range by invariant, but include it explicitly so a per-range override is
+        // never dropped); each range → its override mappings if any, else the base mappings.
+        val overrideRanges = byRange.keys.filter { it != ALL_VERSIONS }
+        val ranges = (configRanges + overrideRanges).distinct()
+        if (ranges.isEmpty()) return emptyMap()
+        // Drop ranges with NO in-force mappings (e.g. a component created with a config row but an
+        // empty artifactIds list): otherwise an empty list reaches the forward render's
+        // `minByOrNull { … }!!` and NPEs → GET /maven-artifacts 500. An empty list = no ownership.
+        return ranges
+            .associateWith { rangeKey -> byRange[rangeKey] ?: baseMappings }
+            .filterValues { it.isNotEmpty() }
+    }
+
+    /** Render one ownership mapping to the legacy `(groupPattern, artifactPattern)` wire pair. */
+    private fun renderMapping(mapping: ComponentArtifactMappingEntity): ComponentArtifactConfiguration =
+        ComponentArtifactConfiguration(
+            mapping.groupPattern,
+            ArtifactOwnershipRendering.renderArtifactPattern(
+                ArtifactIdMode.valueOf(mapping.artifactIdMode),
+                mapping.tokens.sortedBy { it.sortOrder }.map { it.artifactPattern },
+            ),
+        )
+
+    /**
+     * An EXPLICIT ownership mapping of another component, reduced to what the sibling lookup needs:
+     * the owning [componentKey], its group token(s), its version range, and its literal artifact tokens.
+     */
+    private data class ExplicitMappingRef(
+        val componentKey: String,
+        val groups: List<String>,
+        val versionRange: String,
+        val tokens: List<String>,
+    )
+
+    /**
+     * Cross-component context for ALL_EXCEPT_CLAIMED sibling rendering: every OTHER component's EXPLICIT
+     * mappings, plus [shadowRangesByComponent] = each component's own override (non-base) range strings.
+     * The shadow map lets a rival's BASE EXPLICIT claim be skipped in a range that rival itself overrides
+     * (override REPLACES base → the base token is not in force there), mirroring `computeOwnershipCollisions`.
+     */
+    private data class SiblingContext(
+        val explicit: List<ExplicitMappingRef>,
+        val shadowRangesByComponent: Map<String, Set<String>>,
+    )
+
+    /** Split a comma-separated group pattern into trimmed, non-empty group tokens. */
+    private fun groupTokensOf(groupPattern: String): List<String> =
+        groupPattern.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+
+    /** Two version ranges intersect (unparseable → treat as intersecting, the conservative choice). */
+    private fun rangesIntersect(a: String, b: String): Boolean =
+        runCatching {
+            versionRangeFactory.create(a).isIntersect(versionRangeFactory.create(b))
+        }.getOrDefault(true)
+
+    /**
+     * Snapshot the [SiblingContext] for ALL_EXCEPT sibling rendering: every OTHER component's EXPLICIT
+     * mappings + each component's own override ranges (for the shadow skip). One `findAll()`; mirrors the
+     * cross-component sibling scan in `ComponentManagementServiceImpl.ownershipExportPatterns`.
+     */
+    private fun loadSiblingContext(excludingComponentKey: String): SiblingContext {
+        val all = componentRepository.findAll()
+        val explicit =
+            all.asSequence()
+                .filter { it.componentKey != excludingComponentKey }
+                .flatMap { component -> component.artifactMappings.asSequence().map { component.componentKey to it } }
+                .filter { (_, mapping) -> mapping.artifactIdMode == ArtifactIdMode.EXPLICIT.name }
+                .map { (key, mapping) ->
+                    ExplicitMappingRef(
+                        componentKey = key,
+                        groups = groupTokensOf(mapping.groupPattern),
+                        versionRange = mapping.versionRange,
+                        tokens = mapping.tokens.sortedBy { it.sortOrder }.map { it.artifactPattern },
+                    )
+                }.toList()
+        val shadowRanges =
+            all.associate { component ->
+                component.componentKey to
+                    component.artifactMappings.map { it.versionRange }.filterTo(mutableSetOf()) { it != ALL_VERSIONS }
             }
-            .filterValues { it.groupPattern.isNotEmpty() || it.artifactPattern.isNotEmpty() }
+        return SiblingContext(explicit, shadowRanges)
+    }
+
+    /**
+     * Forward `/maven-artifacts` render: an ALL_EXCEPT_CLAIMED mapping becomes the anchored
+     * negative-lookahead over its in-force EXPLICIT siblings (other components claiming a shared group
+     * token in an intersecting range); every other mode renders as the plain wire form via [renderMapping].
+     * A rival's BASE (ALL_VERSIONS) EXPLICIT claim is SKIPPED in a range that rival itself overrides
+     * (override REPLACES base → not in force there), mirroring the shadow skip in `computeOwnershipCollisions`.
+     * With no in-force siblings the lookahead degrades to the plain catch-all.
+     */
+    private fun renderForwardMapping(
+        mapping: ComponentArtifactMappingEntity,
+        ctx: SiblingContext,
+    ): ComponentArtifactConfiguration {
+        val mode = ArtifactIdMode.valueOf(mapping.artifactIdMode)
+        if (mode != ArtifactIdMode.ALL_EXCEPT_CLAIMED) return renderMapping(mapping)
+        val groups = groupTokensOf(mapping.groupPattern)
+        val siblings =
+            ctx.explicit
+                .filter { ref -> ref.groups.any { it in groups } }
+                .filter { ref -> rangesIntersect(ref.versionRange, mapping.versionRange) }
+                .filterNot { ref ->
+                    ref.versionRange == ALL_VERSIONS &&
+                        mapping.versionRange in ctx.shadowRangesByComponent[ref.componentKey].orEmpty()
+                }
+                .flatMap { it.tokens }
+                .distinct()
+                .sorted()
+        return ComponentArtifactConfiguration(
+            mapping.groupPattern,
+            ArtifactOwnershipRendering.renderExportPattern(mode, emptyList(), siblings),
+        )
     }
 
     override fun getDependencyMapping(): Map<String, String> =
@@ -609,9 +659,9 @@ class DatabaseComponentRegistryResolver(
     private fun findComponentByArtifactOrNull(artifact: ArtifactDependency): VersionedComponent? =
         matchArtifact(artifact, loadPerComponentArtifactParameters())
 
-    /** Snapshot every component's marker-aware per-range (group, artifact) patterns. */
-    private fun loadPerComponentArtifactParameters(): List<Pair<String, Map<String, ComponentArtifactConfiguration>>> =
-        componentRepository.findAll().map { it.componentKey to mavenArtifactParametersFor(it) }
+    /** Snapshot every component's per-range ownership configs (ALL mappings) for reverse lookup. */
+    private fun loadPerComponentArtifactParameters(): List<Pair<String, List<Pair<String, ComponentArtifactConfiguration>>>> =
+        componentRepository.findAll().map { it.componentKey to ownershipConfigsByRange(it) }
 
     /**
      * MIG-039 + MIG-023: resolve an artifact to a component by mirroring V1's
@@ -629,7 +679,7 @@ class DatabaseComponentRegistryResolver(
      */
     private fun matchArtifact(
         artifact: ArtifactDependency,
-        perComponent: List<Pair<String, Map<String, ComponentArtifactConfiguration>>>,
+        perComponent: List<Pair<String, List<Pair<String, ComponentArtifactConfiguration>>>>,
     ): VersionedComponent? {
         val best =
             perComponent

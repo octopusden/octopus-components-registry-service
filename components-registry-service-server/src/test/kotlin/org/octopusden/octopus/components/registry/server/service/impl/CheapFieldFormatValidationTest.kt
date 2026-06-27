@@ -31,6 +31,8 @@ import org.octopusden.octopus.components.registry.server.repository.ComponentLab
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRequiredToolRepository
 import org.octopusden.octopus.components.registry.server.repository.DistributionDockerImageRepository
+import org.octopusden.octopus.components.registry.server.repository.ComponentArtifactMappingRepository
+import org.octopusden.octopus.components.registry.server.repository.ComponentArtifactMappingTokenRepository
 import org.octopusden.octopus.components.registry.server.repository.DistributionMavenArtifactRepository
 import org.octopusden.octopus.components.registry.server.repository.LabelRepository
 import org.octopusden.octopus.components.registry.server.repository.SystemRepository
@@ -96,6 +98,8 @@ class CheapFieldFormatValidationTest {
                 componentRequiredToolRepository = mock(ComponentRequiredToolRepository::class.java),
                 componentBuildToolBeanRepository = mock(ComponentBuildToolBeanRepository::class.java),
                 mavenArtifactRepository = mock(DistributionMavenArtifactRepository::class.java),
+                componentArtifactMappingRepository = mock(ComponentArtifactMappingRepository::class.java),
+                componentArtifactMappingTokenRepository = mock(ComponentArtifactMappingTokenRepository::class.java),
                 dockerImageRepository = mock(DistributionDockerImageRepository::class.java),
                 labelRepository = mock(LabelRepository::class.java),
                 systemRepository = mock(SystemRepository::class.java),
@@ -120,7 +124,10 @@ class CheapFieldFormatValidationTest {
         doAnswer { invocation ->
             (invocation.arguments[0] as ComponentEntity).apply {
                 if (id == null) id = UUID.randomUUID()
-                artifactIds.forEach { if (it.id == null) it.id = UUID.randomUUID() }
+                artifactMappings.forEach { m ->
+                    if (m.id == null) m.id = UUID.randomUUID()
+                    m.tokens.forEach { if (it.id == null) it.id = UUID.randomUUID() }
+                }
                 configurations.forEach { config ->
                     if (config.id == null) config.id = UUID.randomUUID()
                     config.buildToolBeans.forEach { if (it.id == null) it.id = UUID.randomUUID() }
@@ -283,31 +290,35 @@ class CheapFieldFormatValidationTest {
     // ---------------------------------------------------------------------
 
     @Test
-    @DisplayName("CREATE rejects an artifactPattern that is not a valid regex")
-    fun create_rejects_invalidArtifactRegex() {
+    @DisplayName("CREATE rejects an EXPLICIT artifact token with forbidden (regex) characters")
+    fun create_rejects_invalidArtifactToken() {
         val ex =
             assertThrows(IllegalArgumentException::class.java) {
                 service.createComponent(
                     minimalCreate(
-                        artifactIds = listOf(ArtifactIdRequest(groupPattern = "org.example", artifactPattern = "[unclosed")),
+                        artifactIds = listOf(
+                            ArtifactIdRequest(
+                                groupPattern = "org.example",
+                                mode = "EXPLICIT",
+                                artifactTokens = listOf("[unclosed"),
+                            ),
+                        ),
                     ),
                 )
             }
-        assertTrue(ex.message!!.startsWith("artifactId"))
-        assertTrue(
-            ex.cause is PatternSyntaxException,
-            "invalid regex must preserve PatternSyntaxException as the cause; got: ${ex.cause}",
-        )
+        assertTrue(ex.message!!.startsWith("artifactIds"), "got: ${ex.message}")
     }
 
     @Test
-    @DisplayName("PATCH rejects an artifactPattern that is not a valid regex")
-    fun patch_rejects_invalidArtifactRegex() {
-        assertFieldPrefixed("artifactId") {
+    @DisplayName("PATCH rejects an EXPLICIT artifact token with forbidden characters")
+    fun patch_rejects_invalidArtifactToken() {
+        assertFieldPrefixed("artifactIds") {
             service.updateComponent(
                 existingId,
                 minimalUpdate(
-                    artifactIds = listOf(ArtifactIdRequest(groupPattern = "org.example", artifactPattern = "(")),
+                    artifactIds = listOf(
+                        ArtifactIdRequest(groupPattern = "org.example", mode = "EXPLICIT", artifactTokens = listOf("(")),
+                    ),
                 ),
             )
         }
@@ -348,7 +359,9 @@ class CheapFieldFormatValidationTest {
             minimalCreate(
                 clientCode = "VALID_CODE_1",
                 copyright = SUPPORTED_COPYRIGHT,
-                artifactIds = listOf(ArtifactIdRequest(groupPattern = "org.example", artifactPattern = "match-.*")),
+                artifactIds = listOf(
+                    ArtifactIdRequest(groupPattern = "org.example", mode = "EXPLICIT", artifactTokens = listOf("svc-core")),
+                ),
                 buildToolBeans = listOf(BuildToolBeanRequest(beanType = "oracleDatabase")),
             )
         org.junit.jupiter.api.assertDoesNotThrow {
@@ -360,7 +373,9 @@ class CheapFieldFormatValidationTest {
             minimalUpdate(
                 clientCode = "VALID_CODE_2",
                 copyright = SUPPORTED_COPYRIGHT,
-                artifactIds = listOf(ArtifactIdRequest(groupPattern = "org.example", artifactPattern = "another-.*")),
+                artifactIds = listOf(
+                    ArtifactIdRequest(groupPattern = "org.example", mode = "EXPLICIT", artifactTokens = listOf("another-svc")),
+                ),
                 buildToolBeans = listOf(BuildToolBeanRequest(beanType = "odbc")),
             )
         org.junit.jupiter.api.assertDoesNotThrow {

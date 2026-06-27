@@ -1,5 +1,7 @@
 package org.octopusden.octopus.components.registry.server.util
 
+import org.octopusden.octopus.components.registry.server.entity.ArtifactIdMode
+import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactMappingEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentBuildToolBeanEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
@@ -16,6 +18,7 @@ import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionRangeFactory
 import org.springframework.stereotype.Component
 import java.time.Instant
+import java.util.UUID
 
 /**
  * Renders a [ComponentEntity] as a human-readable, Groovy-style "as-code"
@@ -72,8 +75,16 @@ class ComponentCodeRenderer(
     private val versionRangeFactory: VersionRangeFactory,
     private val numericVersionFactory: NumericVersionFactory,
 ) {
-    /** FULL view: base block + one `"<range>" { … }` block per distinct override range. */
-    fun renderFull(component: ComponentEntity): String {
+    /**
+     * FULL view: base block + one `"<range>" { … }` block per distinct override range.
+     * [ownershipExportPatterns] maps an ownership mapping's id → its DSL/export `artifactIdPattern`
+     * (sibling-aware for ALL_EXCEPT_CLAIMED, computed by the service); a mapping absent from the map
+     * falls back to the plain wire render. Empty = legacy/wire rendering everywhere.
+     */
+    fun renderFull(
+        component: ComponentEntity,
+        ownershipExportPatterns: Map<UUID, String> = emptyMap(),
+    ): String {
         val configs =
             component.configurations.sortedWith(
                 compareBy(
@@ -101,6 +112,11 @@ class ComponentCodeRenderer(
         // (The earlier MIG-029 suppression was about not emitting a spurious
         // all-versions *variant* in the v1-v3 map — a different concern that does
         // not apply to this code view.)
+        // Ownership mappings grouped by range; base (all-versions) goes in the top block, per-range
+        // override mappings into their range block (they moved out of the GROUP_ARTIFACT_PATTERN
+        // marker into component_artifact_mappings, so a range whose ONLY override is artifact
+        // ownership must still surface a block — see the ownership-aware overrideRanges union below).
+        val ownershipByRange = component.artifactMappings.groupBy { it.versionRange }
         writeComponentBody(
             cb = cb,
             component = component,
@@ -112,9 +128,13 @@ class ComponentCodeRenderer(
             packages = base.packages.toList(),
             requiredTools = base.requiredToolJunctions.map { it.toolName },
             buildToolBeans = base.buildToolBeans.toList(),
+            ownershipMappings = ownershipByRange[ALL_VERSIONS_RANGE].orEmpty(),
+            ownershipExportPatterns = ownershipExportPatterns,
         )
 
-        val overrideRanges = overrides.map { it.versionRange }.distinct()
+        val configOverrideRanges = overrides.map { it.versionRange }.distinct()
+        val ownershipOverrideRanges = ownershipByRange.keys.filter { it != ALL_VERSIONS_RANGE }
+        val overrideRanges = (configOverrideRanges + ownershipOverrideRanges).distinct()
 
         // If the BASE row itself is scoped to a bounded range (not ALL_VERSIONS), surface that
         // range as an explicit — possibly empty — block so the view makes clear the component is
@@ -128,7 +148,15 @@ class ComponentCodeRenderer(
         }
 
         // Distinct override ranges in deterministic (DSL declaration) order.
-        overrideRanges.forEach { range -> writeRangeBlock(cb, range, overrides.filter { it.versionRange == range }) }
+        overrideRanges.forEach { range ->
+            writeRangeBlock(
+                cb,
+                range,
+                overrides.filter { it.versionRange == range },
+                ownershipByRange[range].orEmpty(),
+                ownershipExportPatterns,
+            )
+        }
 
         cb.close()
         return cb.toString()
@@ -143,6 +171,7 @@ class ComponentCodeRenderer(
     fun renderResolved(
         component: ComponentEntity,
         version: String,
+        ownershipExportPatterns: Map<UUID, String> = emptyMap(),
     ): String? {
         val configs = component.configurations.toList()
         val base = configs.firstOrNull { it.rowType == ROW_BASE } ?: return null
@@ -212,6 +241,24 @@ class ComponentCodeRenderer(
         val beans =
             pickMarkerChildren(MarkerAttributes.BUILD_TOOLS, markerOverrides, base.buildToolBeans.toList()) { it.buildToolBeans.toList() }
 
+        // Effective ownership for this version: the narrowest override range that contains the
+        // version REPLACES the base; else the base (all-versions) mappings. Mirrors the resolver's
+        // effectiveMappingsByRange so the resolved code view matches what the v2 endpoints resolve.
+        val ownershipByRange = component.artifactMappings.groupBy { it.versionRange }
+        val overrideOwnershipRange =
+            // sorted for a deterministic pick; per-range ownership ranges are disjoint by invariant,
+            // so at most one contains the version (sort only matters defensively if that ever breaks).
+            ownershipByRange.keys.filter { it != ALL_VERSIONS_RANGE }.sorted()
+                .firstOrNull { range ->
+                    try {
+                        versionRangeFactory.create(range).containsVersion(numericVersion)
+                    } catch (_: Exception) {
+                        false
+                    }
+                }
+        val effectiveOwnership =
+            overrideOwnershipRange?.let { ownershipByRange[it] } ?: ownershipByRange[ALL_VERSIONS_RANGE].orEmpty()
+
         val cb = CodeBuilder()
         cb.open(blockHeader(component.componentKey))
         writeComponentBody(
@@ -225,6 +272,8 @@ class ComponentCodeRenderer(
             packages = pkgs,
             requiredTools = tools,
             buildToolBeans = beans,
+            ownershipMappings = effectiveOwnership,
+            ownershipExportPatterns = ownershipExportPatterns,
         )
         cb.close()
         return cb.toString()
@@ -246,6 +295,8 @@ class ComponentCodeRenderer(
         packages: List<DistributionPackageEntity>,
         requiredTools: List<String>,
         buildToolBeans: List<ComponentBuildToolBeanEntity>,
+        ownershipMappings: List<ComponentArtifactMappingEntity>,
+        ownershipExportPatterns: Map<UUID, String>,
     ) {
         // Identity. displayName is nullable and stored verbatim from the DSL; render it exactly
         // when set (cb.str omits a null), so the as-code view faithfully round-trips the source.
@@ -266,7 +317,7 @@ class ComponentCodeRenderer(
 
         writeVcs(cb, vcsEntries, component.vcsExternalRegistry)
         writeBuild(cb, scalars, requiredTools, buildToolBeans)
-        writeArtifactIds(cb, component)
+        writeArtifactIds(cb, ownershipMappings, ownershipExportPatterns)
         writeJira(cb, scalars, component)
         writeDistribution(cb, component, mavenArtifacts, fileUrlArtifacts, dockerImages, packages)
         writeEscrow(cb, scalars)
@@ -356,19 +407,35 @@ class ComponentCodeRenderer(
 
     private fun writeArtifactIds(
         cb: CodeBuilder,
-        component: ComponentEntity,
+        mappings: List<ComponentArtifactMappingEntity>,
+        exportPatterns: Map<UUID, String>,
     ) {
-        val artifactIds = component.artifactIds
-        if (artifactIds.isEmpty()) return
+        // Ownership mappings (already scoped to the relevant range by the caller — base for the
+        // top block / effective range for the resolved view / the override's range for a range
+        // block), rendered to the legacy (groupPattern, artifactPattern) form. ALL_EXCEPT_CLAIMED
+        // uses the sibling-aware export pattern from [exportPatterns] when supplied.
+        val sorted = mappings.sortedBy { it.sortOrder }
+        if (sorted.isEmpty()) return
         cb.open("artifactIds")
-        artifactIds.forEach { a ->
+        sorted.forEach { m ->
             cb.open("artifact")
-            cb.str("groupPattern", a.groupPattern)
-            cb.str("artifactPattern", a.artifactPattern)
+            cb.str("groupPattern", m.groupPattern)
+            cb.str("artifactPattern", artifactPatternFor(m, exportPatterns))
             cb.close()
         }
         cb.close()
     }
+
+    /** Export `artifactIdPattern` for one ownership mapping: precomputed sibling-aware value, else wire form. */
+    private fun artifactPatternFor(
+        mapping: ComponentArtifactMappingEntity,
+        exportPatterns: Map<UUID, String>,
+    ): String =
+        mapping.id?.let { exportPatterns[it] }
+            ?: ArtifactOwnershipRendering.renderArtifactPattern(
+                ArtifactIdMode.valueOf(mapping.artifactIdMode),
+                mapping.tokens.sortedBy { it.sortOrder }.map { it.artifactPattern },
+            )
 
     private fun writeJira(
         cb: CodeBuilder,
@@ -506,17 +573,22 @@ class ComponentCodeRenderer(
         cb: CodeBuilder,
         range: String,
         rows: List<ComponentConfigurationEntity>,
+        ownershipMappings: List<ComponentArtifactMappingEntity>,
+        ownershipExportPatterns: Map<UUID, String>,
     ) {
         val scalarOverrides = rows.filter { it.rowType == ROW_SCALAR_OVERRIDE }
         // Only render markers the editor model knows about. Import-internal markers
         // (e.g. MarkerAttributes.GROUP_ARTIFACT_PATTERN, deliberately not in `ALL`)
         // carry no renderable block — including them would emit an empty range block.
         val markers = rows.filter { it.rowType == ROW_MARKER && it.overriddenAttribute in MarkerAttributes.ALL }
-        // RANGE_PRESENCE-only (or import-marker-only) ranges contribute nothing → skip (no empty block).
-        if (scalarOverrides.isEmpty() && markers.isEmpty()) return
+        // RANGE_PRESENCE-only (or import-marker-only) ranges with no ownership override contribute
+        // nothing → skip (no empty block). A range whose ONLY override is artifact ownership still
+        // renders (ownership left the GROUP_ARTIFACT_PATTERN marker for component_artifact_mappings).
+        if (scalarOverrides.isEmpty() && markers.isEmpty() && ownershipMappings.isEmpty()) return
 
         cb.open(doubleQuoted(range))
         writeAspectOverrides(cb, "build", scalarOverrides, markers)
+        writeArtifactIds(cb, ownershipMappings, ownershipExportPatterns)
         writeAspectOverrides(cb, "jira", scalarOverrides, emptyList())
         writeAspectOverrides(cb, "escrow", scalarOverrides, emptyList())
         writeMarkerVcs(cb, markers)
@@ -637,6 +709,7 @@ class ComponentCodeRenderer(
         const val ROW_BASE = "BASE"
         const val ROW_SCALAR_OVERRIDE = "SCALAR_OVERRIDE"
         const val ROW_MARKER = "MARKER"
+        const val ALL_VERSIONS_RANGE = "(,0),[0,)"
         val IDENTIFIER_RE = Regex("^[A-Za-z_][A-Za-z0-9_]*$")
     }
 }

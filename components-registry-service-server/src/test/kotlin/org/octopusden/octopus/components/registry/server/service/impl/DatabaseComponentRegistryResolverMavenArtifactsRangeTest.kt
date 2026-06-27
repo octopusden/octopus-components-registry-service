@@ -10,7 +10,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.`when`
-import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactIdEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionMavenArtifactEntity
@@ -116,16 +115,11 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
         component: ComponentEntity,
         groupPattern: String,
         artifactPattern: String,
-        sortOrder: Int = component.artifactIds.size,
+        @Suppress("UNUSED_PARAMETER") sortOrder: Int = 0,
     ) {
-        component.artifactIds.add(
-            ComponentArtifactIdEntity(
-                component = component,
-                groupPattern = groupPattern,
-                artifactPattern = artifactPattern,
-                sortOrder = sortOrder,
-            ),
-        )
+        // Each call adds one ownership mapping. Multi-artifact callers should pass a comma-joined
+        // `artifactPattern` (one EXPLICIT mapping with ordered tokens), matching the new model.
+        component.addOwnershipMapping(groupPattern, artifactPattern)
     }
 
     private fun makeRangePresenceRow(
@@ -177,10 +171,10 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
         val base = makeBase(comp, "[1.1,)")
         addMavenArtifact(base, "com.example.ic", "bug-C-component-A")
 
-        val markerOld = makeMarkerRow(comp, "[1.0,1.1)", MarkerAttributes.GROUP_ARTIFACT_PATTERN)
-        addMavenArtifact(markerOld, "com.example", "bug-C-component-A")
+        // Per-range ownership override (new model: a mapping with the override range).
+        comp.addOwnershipMapping("com.example", "bug-C-component-A", "[1.0,1.1)")
 
-        comp.configurations.addAll(listOf(base, markerOld))
+        comp.configurations.add(base)
         stubComponent(comp)
 
         val result = resolver.getMavenArtifactParameters("bug-C-component-A-like")
@@ -222,11 +216,11 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
         val base = makeBase(comp, "[03.51.29.15,)")
         addMavenArtifact(base, "com.example.cardsmodel2.dummy", "bug-C-component-B", sortOrder = 0)
 
-        val markerOld = makeMarkerRow(comp, "(,03.51.29.15)", MarkerAttributes.GROUP_ARTIFACT_PATTERN)
-        addMavenArtifact(markerOld, "com.example.cardsmodel2", "bug-C-fixture-v2", sortOrder = 0)
-        addMavenArtifact(markerOld, "com.example.cardsmodel", "bug-C-fixture-legacy", sortOrder = 1)
+        // Per-range ownership override: one group + CSV artifacts (the real DSL shape; the old
+        // two-different-group marker never occurred — attachMavenArtifactsFromGroupArtifact used one group).
+        comp.addOwnershipMapping("com.example.cardsmodel2", "bug-C-fixture-v2,bug-C-fixture-legacy", "(,03.51.29.15)")
 
-        comp.configurations.addAll(listOf(base, markerOld))
+        comp.configurations.add(base)
         stubComponent(comp)
 
         val result = resolver.getMavenArtifactParameters("bug-C-fixture-B-shape")
@@ -392,11 +386,8 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
 
         // Add artifacts in NON-alphabetical order to force the test to fail if
         // the resolver falls back to alphabetical (or UUID-random) sorting.
-        addComponentLevelArtifact(comp, "com.example.test", "art-core", sortOrder = 0)
-        addComponentLevelArtifact(comp, "com.example.test", "art-cli", sortOrder = 1)
-        addComponentLevelArtifact(comp, "com.example.test", "art-xml", sortOrder = 2)
-        addComponentLevelArtifact(comp, "com.example.test", "art-zeta", sortOrder = 3)
-        addComponentLevelArtifact(comp, "com.example.test", "art-alpha", sortOrder = 4)
+        // One EXPLICIT mapping with ordered tokens (the new model's multi-artifact shape).
+        addComponentLevelArtifact(comp, "com.example.test", "art-core,art-cli,art-xml,art-zeta,art-alpha")
 
         val base = makeBase(comp, ALL_VERSIONS)
         comp.configurations.add(base)
@@ -434,10 +425,9 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
         val base = makeBase(comp, "(,1.0)")
         addMavenArtifact(base, "com.example.test", "art-x", sortOrder = 0)
 
-        val markerNew = makeMarkerRow(comp, "[1.0,)", MarkerAttributes.GROUP_ARTIFACT_PATTERN)
-        addMavenArtifact(markerNew, "com.example.new", "real-artifact-id", sortOrder = 0)
+        comp.addOwnershipMapping("com.example.new", "real-artifact-id", "[1.0,)")
 
-        comp.configurations.addAll(listOf(base, markerNew))
+        comp.configurations.add(base)
         stubComponent(comp)
 
         val result = resolver.getMavenArtifactParameters("res-c-prime-fixture-mixed")
@@ -506,9 +496,7 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
         val comp = makeComponent("fixture-A-3-token")
         comp.distributionExplicit = true
 
-        addComponentLevelArtifact(comp, "com.example.fx", "art-a", sortOrder = 0)
-        addComponentLevelArtifact(comp, "com.example.fx", "art-b", sortOrder = 1)
-        addComponentLevelArtifact(comp, "com.example.fx", "art-c", sortOrder = 2)
+        addComponentLevelArtifact(comp, "com.example.fx", "art-a,art-b,art-c")
 
         val base = makeBase(comp, "[4,4.9.4-4181)")
         addMavenArtifact(base, "com.example.fx", "art-a", sortOrder = 0)
@@ -627,10 +615,9 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
         val base = makeBase(comp, "[1.0,1.1)")
         addMavenArtifact(base, "com.example", "alpha-fixture")
 
-        val marker = makeMarkerRow(comp, "[1.1,)", MarkerAttributes.GROUP_ARTIFACT_PATTERN)
-        addMavenArtifact(marker, "com.example.ic", "alpha-fixture")
+        comp.addOwnershipMapping("com.example.ic", "alpha-fixture", "[1.1,)")
 
-        comp.configurations.addAll(listOf(base, marker))
+        comp.configurations.add(base)
         stubComponent(comp)
 
         val result = resolver.getMavenArtifactParameters("alpha-fixture-mig047-resolver")
@@ -666,12 +653,9 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
         val base = makeBase(comp, "[1.0,)")
         addMavenArtifact(base, "com.example.widgets", "core-a")
 
-        val marker = makeMarkerRow(comp, "[2.0,)", MarkerAttributes.GROUP_ARTIFACT_PATTERN)
-        addMavenArtifact(marker, "com.example.widgets", "core-a", sortOrder = 0)
-        addMavenArtifact(marker, "com.example.widgets", "core-b", sortOrder = 1)
-        addMavenArtifact(marker, "com.example.widgets", "core-c", sortOrder = 2)
+        comp.addOwnershipMapping("com.example.widgets", "core-a,core-b,core-c", "[2.0,)")
 
-        comp.configurations.addAll(listOf(base, marker))
+        comp.configurations.add(base)
         stubComponent(comp)
 
         val result = resolver.getMavenArtifactParameters("beta-fixture-mig047-csv")
@@ -714,10 +698,11 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
         val distributionMaven = makeMarkerRow(comp, "[1.1,)", MarkerAttributes.DISTRIBUTION_MAVEN)
         addMavenArtifact(distributionMaven, "com.example.user-explicit", "gamma-fixture")
 
-        val groupArtifactPattern = makeMarkerRow(comp, "[1.1,)", MarkerAttributes.GROUP_ARTIFACT_PATTERN)
-        addMavenArtifact(groupArtifactPattern, "com.example.import-internal", "gamma-fixture")
+        // Per-range ownership override (replaces the old GROUP_ARTIFACT_PATTERN marker). The
+        // DISTRIBUTION_MAVEN marker must NOT influence /maven-artifacts.
+        comp.addOwnershipMapping("com.example.import-internal", "gamma-fixture", "[1.1,)")
 
-        comp.configurations.addAll(listOf(base, distributionMaven, groupArtifactPattern))
+        comp.configurations.addAll(listOf(base, distributionMaven))
         stubComponent(comp)
 
         val result = resolver.getMavenArtifactParameters("gamma-fixture-mig047-conflict")
@@ -732,6 +717,162 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
             "GROUP_ARTIFACT_PATTERN wins per V1 contract; DISTRIBUTION_MAVEN is invisible to /maven-artifacts",
         )
         assertEquals("gamma-fixture", rangeOverride.artifactPattern)
+    }
+
+    // ========================================================================
+    // #357 Option A: forward /maven-artifacts renders ALL_EXCEPT_CLAIMED as the
+    // sibling-aware anchored negative-lookahead (so the v1-v3 wire matches the
+    // legacy DSL's exact-token exclusion byte-for-byte), NOT the bare catch-all.
+    // Reverse find-by-artifact is unaffected (it keeps catch-all + specificity).
+    // ========================================================================
+
+    @Test
+    @DisplayName(
+        "RES-357-001: ALL_EXCEPT_CLAIMED forward render is the anchored lookahead over OTHER " +
+            "components' EXPLICIT siblings on the same group/range",
+    )
+    fun `RES-357-001 getMavenArtifactParameters renders ALL_EXCEPT as anchored lookahead over explicit siblings`() {
+        // owner owns the catch-all of com.example.alpha EXCEPT the artifact explicitly claimed by a
+        // sibling component (claimed-model → EXPLICIT[claimed-model]). The forward /maven-artifacts
+        // pattern must be the exact-token lookahead, mirroring the legacy DSL.
+        val owner = makeComponent("payment-gateway-fixture")
+        owner.addAllExceptMapping("com.example.alpha")
+        owner.configurations.add(makeBase(owner, ALL_VERSIONS))
+
+        val sibling = makeComponent("claimed-model-fixture")
+        sibling.addOwnershipMapping("com.example.alpha", "claimed-model")
+
+        `when`(componentRepository.findByComponentKey("payment-gateway-fixture")).thenReturn(owner)
+        `when`(componentRepository.findAll()).thenReturn(mutableListOf(owner, sibling))
+
+        val result = resolver.getMavenArtifactParameters("payment-gateway-fixture")
+
+        assertEquals(1, result.size, "Expected one range entry for ALL_VERSIONS")
+        val entry = result[ALL_VERSIONS]
+        assertNotNull(entry, "ALL_VERSIONS entry must be present")
+        assertEquals("com.example.alpha", entry!!.groupPattern)
+        assertEquals(
+            "(?!(?:claimed-model)\$)[\\w-\\.]+",
+            entry.artifactPattern,
+            "ALL_EXCEPT forward pattern must be the anchored exact-token lookahead over the sibling",
+        )
+    }
+
+    @Test
+    @DisplayName(
+        "RES-357-002: ALL_EXCEPT_CLAIMED with NO sibling EXPLICIT claim degrades to the plain catch-all",
+    )
+    fun `RES-357-002 ALL_EXCEPT with no siblings renders the plain catch-all`() {
+        val owner = makeComponent("sole-owner-fixture")
+        owner.addAllExceptMapping("com.example.lonely")
+        owner.configurations.add(makeBase(owner, ALL_VERSIONS))
+
+        `when`(componentRepository.findByComponentKey("sole-owner-fixture")).thenReturn(owner)
+        `when`(componentRepository.findAll()).thenReturn(mutableListOf(owner))
+
+        val result = resolver.getMavenArtifactParameters("sole-owner-fixture")
+        val entry = result[ALL_VERSIONS]
+        assertNotNull(entry, "ALL_VERSIONS entry must be present")
+        assertEquals(
+            "[\\w-\\.]+",
+            entry!!.artifactPattern,
+            "with no excluded sibling there is nothing to exclude — degrade to the catch-all",
+        )
+    }
+
+    @Test
+    @DisplayName(
+        "RES-357-003: a sibling EXPLICIT claim in a DIFFERENT group does NOT narrow the ALL_EXCEPT pattern",
+    )
+    fun `RES-357-003 ALL_EXCEPT ignores explicit claims on a different group`() {
+        val owner = makeComponent("group-scoped-owner")
+        owner.addAllExceptMapping("com.example.alpha")
+        owner.configurations.add(makeBase(owner, ALL_VERSIONS))
+
+        // EXPLICIT claim, but on a different group — must not appear in the lookahead.
+        val sibling = makeComponent("other-group-sibling")
+        sibling.addOwnershipMapping("com.example.other", "unrelated-art")
+
+        `when`(componentRepository.findByComponentKey("group-scoped-owner")).thenReturn(owner)
+        `when`(componentRepository.findAll()).thenReturn(mutableListOf(owner, sibling))
+
+        val result = resolver.getMavenArtifactParameters("group-scoped-owner")
+        assertEquals(
+            "[\\w-\\.]+",
+            result[ALL_VERSIONS]!!.artifactPattern,
+            "an EXPLICIT claim on a different group must not narrow this group's ALL_EXCEPT pattern",
+        )
+    }
+
+    @Test
+    @DisplayName(
+        "RES-357-004: a same-group EXPLICIT sibling in a NON-intersecting range does NOT narrow the " +
+            "ALL_EXCEPT pattern (the range gate excludes it) → plain catch-all",
+    )
+    fun `RES-357-004 ALL_EXCEPT ignores explicit siblings in a disjoint version range`() {
+        // Owner's ALL_EXCEPT is an override mapping scoped to [1.0,2.0); the sibling EXPLICIT claims
+        // the SAME group but in the disjoint [5.0,6.0). rangesIntersect is false → the sibling is not
+        // in force for this range → nothing to exclude → catch-all.
+        val owner = makeComponent("range-scoped-owner")
+        owner.addAllExceptMapping("com.example.alpha", "[1.0,2.0)")
+        owner.configurations.add(makeBase(owner, "[1.0,2.0)"))
+
+        val sibling = makeComponent("future-range-sibling")
+        sibling.addOwnershipMapping("com.example.alpha", "claimed-model", "[5.0,6.0)")
+
+        `when`(componentRepository.findByComponentKey("range-scoped-owner")).thenReturn(owner)
+        `when`(componentRepository.findAll()).thenReturn(mutableListOf(owner, sibling))
+
+        val result = resolver.getMavenArtifactParameters("range-scoped-owner")
+        assertEquals(
+            "[\\w-\\.]+",
+            result["[1.0,2.0)"]!!.artifactPattern,
+            "a sibling in a non-intersecting range must not appear in the ALL_EXCEPT lookahead",
+        )
+    }
+
+    @Test
+    @DisplayName(
+        "RES-357-005: a component with config rows but NO ownership mappings yields no /maven-artifacts " +
+            "entries (must not NPE on the empty effective-mapping list → 500)",
+    )
+    fun `RES-357-005 component with no artifact ownership mappings yields an empty map`() {
+        val comp = makeComponent("no-ownership-fixture")
+        // A base config row, but artifactMappings stays empty (create allows an empty artifactIds list).
+        comp.configurations.add(makeBase(comp, ALL_VERSIONS))
+        stubComponent(comp)
+
+        val result = resolver.getMavenArtifactParameters("no-ownership-fixture")
+        assertEquals(0, result.size, "no ownership mappings → no entries (and crucially, no 500)")
+    }
+
+    @Test
+    @DisplayName(
+        "RES-357-006: a rival's BASE EXPLICIT token is NOT excluded in a range the rival itself overrides " +
+            "(override REPLACES base → the base token is not in force there)",
+    )
+    fun `RES-357-006 ALL_EXCEPT skips a rival base token shadowed by the rival's own override`() {
+        // Owner: ALL_EXCEPT on com.example.alpha for the override range [1.0,2.0).
+        val owner = makeComponent("shadow-owner")
+        owner.addAllExceptMapping("com.example.alpha", "[1.0,2.0)")
+        owner.configurations.add(makeBase(owner, "[1.0,2.0)"))
+
+        // Rival: base EXPLICIT[base-art] on the SAME group, AND its OWN override EXPLICIT[override-art]
+        // for [1.0,2.0). In [1.0,2.0) the rival's base is replaced by its override → base-art is not in
+        // force, so the owner's ALL_EXCEPT must exclude only override-art (not base-art).
+        val rival = makeComponent("shadow-rival")
+        rival.addOwnershipMapping("com.example.alpha", "base-art")
+        rival.addOwnershipMapping("com.example.alpha", "override-art", "[1.0,2.0)")
+
+        `when`(componentRepository.findByComponentKey("shadow-owner")).thenReturn(owner)
+        `when`(componentRepository.findAll()).thenReturn(mutableListOf(owner, rival))
+
+        val result = resolver.getMavenArtifactParameters("shadow-owner")
+        assertEquals(
+            "(?!(?:override-art)\$)[\\w-\\.]+",
+            result["[1.0,2.0)"]!!.artifactPattern,
+            "the rival's base token is shadowed by its own [1.0,2.0) override → exclude only override-art",
+        )
     }
 
     // ========================================================================

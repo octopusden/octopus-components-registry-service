@@ -9,8 +9,12 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.mockito.Mockito.anyList
 import org.mockito.Mockito.doReturn
 import org.mockito.Mockito.mock
+import org.mockito.Mockito.verify
+import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactMappingEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
@@ -22,6 +26,7 @@ import org.octopusden.octopus.components.registry.server.repository.ComponentRep
 import org.octopusden.octopus.components.registry.server.repository.ComponentRequiredToolRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentSourceRepository
 import org.octopusden.octopus.components.registry.server.repository.DistributionDockerImageRepository
+import org.octopusden.octopus.components.registry.server.repository.ComponentArtifactMappingRepository
 import org.octopusden.octopus.components.registry.server.repository.DistributionMavenArtifactRepository
 import org.octopusden.octopus.components.registry.server.repository.LabelRepository
 import org.octopusden.octopus.components.registry.server.repository.SystemRepository
@@ -64,11 +69,13 @@ class MIG047PerRangeGroupIdImportTest {
 
     private lateinit var service: ImportServiceImpl
     private lateinit var configurationRepository: ComponentConfigurationRepository
+    private lateinit var componentArtifactMappingRepository: ComponentArtifactMappingRepository
     private lateinit var emitMarkerOverridesMethod: Method
 
     @BeforeEach
     fun setUp() {
         configurationRepository = mock(ComponentConfigurationRepository::class.java)
+        componentArtifactMappingRepository = mock(ComponentArtifactMappingRepository::class.java)
 
         // saveMarkerRowWithChildren uses two repository methods:
         //   1. findByComponentIdAndVersionRangeAndOverriddenAttribute → returns ComponentConfigurationEntity?
@@ -101,6 +108,7 @@ class MIG047PerRangeGroupIdImportTest {
             componentRequiredToolRepository = mock(ComponentRequiredToolRepository::class.java),
             componentBuildToolBeanRepository = mock(ComponentBuildToolBeanRepository::class.java),
             mavenArtifactRepository = mock(DistributionMavenArtifactRepository::class.java),
+            componentArtifactMappingRepository = componentArtifactMappingRepository,
             dockerImageRepository = mock(DistributionDockerImageRepository::class.java),
             versionRangeFactory = VersionRangeFactory(VersionNames("serviceCBranch", "serviceC", "minorC")),
         )
@@ -178,39 +186,16 @@ class MIG047PerRangeGroupIdImportTest {
 
         val result = callEmitMarkerOverrides(component, savedBase, baseConfig, overrideConfig)
 
-        // MIG-047 assertion: a GROUP_ARTIFACT_PATTERN MARKER must be emitted for [1.1,)
-        // even though distribution.GAV() is null on both sides.
-        //
-        // Pre-fix: result is empty (mavenArtifactsDiffer(null, null) = false → no MARKER).
-        // Post-fix: result contains one GROUP_ARTIFACT_PATTERN MARKER with com.example.ic.
-        assertEquals(1, result.size, "Expected exactly one MARKER row for the [1.1,) override range")
-
-        val marker = result[0]
-        assertEquals("MARKER", marker.rowType, "Row type must be MARKER")
-        assertEquals(
-            MarkerAttributes.GROUP_ARTIFACT_PATTERN,
-            marker.overriddenAttribute,
-            "MIG-047 path must emit a GROUP_ARTIFACT_PATTERN marker (not distribution.maven)",
+        // New model: a per-range groupId/artifactId override is persisted as an ownership MAPPING
+        // (component_artifact_mappings), NOT a GROUP_ARTIFACT_PATTERN config-row marker. With no
+        // distribution.GAV diff either, emitMarkerOverrides returns NO config-row markers, and the
+        // ownership mapping is saved via componentArtifactMappingRepository.
+        assertTrue(
+            result.none { it.overriddenAttribute == MarkerAttributes.GROUP_ARTIFACT_PATTERN },
+            "ownership override must NOT be a GROUP_ARTIFACT_PATTERN marker anymore",
         )
-        assertEquals("[1.1,)", marker.versionRange, "Marker must be on the [1.1,) range")
-
-        // The marker must carry a synthetic maven artifact row for the override's group/artifact
-        assertEquals(
-            1,
-            marker.mavenArtifacts.size,
-            "MARKER must have one synthetic maven artifact row for the override groupId/artifactId",
-        )
-        val mavenRow = marker.mavenArtifacts[0]
-        assertEquals(
-            "com.example.ic",
-            mavenRow.groupPattern,
-            "Maven artifact row groupPattern must be override groupIdPattern",
-        )
-        assertEquals(
-            "alpha-fixture",
-            mavenRow.artifactPattern,
-            "Maven artifact row artifactPattern must be override artifactIdPattern",
-        )
+        assertEquals(0, result.size, "no config-row markers expected (ownership is a mapping; no GAV diff)")
+        verify(componentArtifactMappingRepository).saveAll(anyList<ComponentArtifactMappingEntity>())
     }
 
     @Test
@@ -236,18 +221,9 @@ class MIG047PerRangeGroupIdImportTest {
 
         val result = callEmitMarkerOverrides(component, savedBase, baseConfig, overrideConfig)
 
-        assertEquals(1, result.size, "Expected one GROUP_ARTIFACT_PATTERN MARKER for [2.0,)")
-        val marker = result[0]
-        assertEquals(MarkerAttributes.GROUP_ARTIFACT_PATTERN, marker.overriddenAttribute)
-        assertEquals("[2.0,)", marker.versionRange)
-
-        // The marker must carry 4 maven artifact rows (one per CSV token) in sort order
-        assertEquals(4, marker.mavenArtifacts.size, "Marker must have one row per artifactId token")
-        val patterns = marker.mavenArtifacts.sortedBy { it.sortOrder }.map { it.artifactPattern }
-        assertEquals(listOf("core-a", "core-b", "core-c", "core-tcp-client"), patterns)
-        marker.mavenArtifacts.forEach { row ->
-            assertEquals("com.example.widgets", row.groupPattern, "All rows must have the same groupPattern")
-        }
+        // New model: the per-range artifactId override is an ownership mapping, not a marker row.
+        assertEquals(0, result.size, "no config-row markers expected (ownership is a mapping; no GAV diff)")
+        verify(componentArtifactMappingRepository).saveAll(anyList<ComponentArtifactMappingEntity>())
     }
 
     @Test
@@ -292,13 +268,16 @@ class MIG047PerRangeGroupIdImportTest {
 
         val result = callEmitMarkerOverrides(component, savedBase, baseConfig, overrideConfig)
 
-        assertEquals(2, result.size, "Must emit BOTH a DISTRIBUTION_MAVEN and a GROUP_ARTIFACT_PATTERN marker")
-        val attributes = result.map { it.overriddenAttribute }.toSet()
-        assertEquals(
-            setOf(MarkerAttributes.DISTRIBUTION_MAVEN, MarkerAttributes.GROUP_ARTIFACT_PATTERN),
-            attributes,
-            "Both marker kinds must be present (different read-paths consume them)",
+        // New model: the distribution GAV override is still a DISTRIBUTION_MAVEN marker (config row),
+        // while the groupId/artifactId ownership override is now a mapping (saved via the repo). So the
+        // returned config-row markers contain ONLY DISTRIBUTION_MAVEN.
+        assertEquals(1, result.size, "only the DISTRIBUTION_MAVEN marker is a config row now")
+        assertEquals(MarkerAttributes.DISTRIBUTION_MAVEN, result[0].overriddenAttribute)
+        assertTrue(
+            result.none { it.overriddenAttribute == MarkerAttributes.GROUP_ARTIFACT_PATTERN },
+            "ownership override is a mapping, not a GROUP_ARTIFACT_PATTERN marker",
         )
+        verify(componentArtifactMappingRepository).saveAll(anyList<ComponentArtifactMappingEntity>())
     }
 
     @Test
@@ -347,12 +326,10 @@ class MIG047PerRangeGroupIdImportTest {
 
         val result = callEmitMarkerOverrides(component, savedBase, baseConfig, overrideConfig)
 
-        assertEquals(2, result.size, "Both DISTRIBUTION_MAVEN and GROUP_ARTIFACT_PATTERN markers must be emitted")
-        val gap = result.firstOrNull { it.overriddenAttribute == MarkerAttributes.GROUP_ARTIFACT_PATTERN }
-        assertNotNull(gap, "GROUP_ARTIFACT_PATTERN marker missing (V1-contract gap)")
-        assertEquals(1, gap!!.mavenArtifacts.size, "Single-token artifactId override must produce one marker row")
-        val artifact = gap.mavenArtifacts.first()
-        assertEquals("com.example.fixture", artifact.groupPattern)
-        assertEquals("single-dist", artifact.artifactPattern)
+        // New model: only the DISTRIBUTION_MAVEN override is a config-row marker; the per-range
+        // artifactId override is an ownership mapping (saved via the repo).
+        assertEquals(1, result.size, "only the DISTRIBUTION_MAVEN marker is a config row now")
+        assertEquals(MarkerAttributes.DISTRIBUTION_MAVEN, result[0].overriddenAttribute)
+        verify(componentArtifactMappingRepository).saveAll(anyList<ComponentArtifactMappingEntity>())
     }
 }

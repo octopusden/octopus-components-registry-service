@@ -342,30 +342,51 @@ CREATE INDEX idx_required_tools_tool ON component_required_tools(tool_name);
 -- -----------------------------------------------------------------------------
 -- 1:N children of components (never per-version)
 -- -----------------------------------------------------------------------------
--- `sort_order` preserves the DSL declaration order of the CSV-split artifact-id
--- entries. ImportServiceImpl writes one row per CSV token with sort_order = index,
--- so the V2 `/maven-artifacts` CSV reload matches V1's `artifactIdPattern` string
--- byte-for-byte (V1 reads the raw DSL string, V2 reads sorted rows and re-joins).
-CREATE TABLE component_artifact_ids (
+-- Artifact-ownership mappings (replaces the old `component_artifact_ids` table and
+-- the per-range `group-artifact-pattern` marker as ownership carrier). A component
+-- owns a LIST of mappings; each mapping declares a group-list + an ownership MODE
+-- (EXPLICIT | ALL_EXCEPT_CLAIMED | ALL) for a version range. `version_range` =
+-- ALL_VERSIONS for the base mapping, or an existing component-configuration range
+-- for a per-range override (override REPLACES base for that range). `sort_order`
+-- preserves declaration order — sort_order=0 is the PRIMARY mapping rendered into
+-- the legacy v1-v3 single (groupIdPattern, artifactIdPattern) pair. Surrogate UUID
+-- PK with NO composite (component_id,..,sort_order) UNIQUE — the service's
+-- clear/re-add edit pattern INSERTs new rows before deleting orphans, which a
+-- composite unique on sort_order would collide with (same rationale as
+-- component_release_managers); sort_order determinism + the "≤1 mapping per group
+-- token per (component,range)" invariant are enforced in the service layer.
+CREATE TABLE component_artifact_mappings (
     id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     component_id      UUID NOT NULL REFERENCES components(id) ON DELETE CASCADE,
+    version_range     TEXT NOT NULL,
     group_pattern     TEXT NOT NULL,
+    artifact_id_mode  VARCHAR(20) NOT NULL,
+    sort_order        INT NOT NULL DEFAULT 0
+);
+CREATE INDEX idx_artifact_mappings_component   ON component_artifact_mappings(component_id);
+CREATE INDEX idx_artifact_mappings_group       ON component_artifact_mappings(group_pattern);
+
+-- Literal artifact tokens of an EXPLICIT mapping (one token per row, order preserved).
+-- ALL / ALL_EXCEPT_CLAIMED mappings have NO token rows — the catch-all is derived
+-- from the mode at render/resolve time. Tokens are stored UNESCAPED (literal); the
+-- legacy-wire / DSL render escapes regex metacharacters.
+CREATE TABLE component_artifact_mapping_tokens (
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    mapping_id        UUID NOT NULL REFERENCES component_artifact_mappings(id) ON DELETE CASCADE,
     artifact_pattern  TEXT NOT NULL,
     sort_order        INT NOT NULL DEFAULT 0
 );
-CREATE INDEX idx_artifact_ids_component        ON component_artifact_ids(component_id);
-CREATE INDEX idx_artifact_ids_group_artifact   ON component_artifact_ids(group_pattern, artifact_pattern);
+CREATE INDEX idx_artifact_mapping_tokens_mapping ON component_artifact_mapping_tokens(mapping_id);
 
 -- Ordered multi-value people: release managers and security champions. Mirror
--- the `component_artifact_ids` surrogate-UUID-PK shape (NOT a composite
--- (component_id, sort_order) PK). The clear/re-add edit pattern used by the
--- service can INSERT new rows before deleting orphans; a composite PK on
--- sort_order would collide, so the surrogate UUID key is used instead.
--- `sort_order` preserves the ordered list (first = primary). Username
+-- the surrogate-UUID-PK shape (NOT a composite (component_id, sort_order) PK). The
+-- clear/re-add edit pattern used by the service can INSERT new rows before deleting
+-- orphans; a composite PK on sort_order would collide, so the surrogate UUID key is
+-- used instead. `sort_order` preserves the ordered list (first = primary). Username
 -- uniqueness within a component is enforced by the service-layer keep-first
 -- dedupe (ComponentEntity.replace*Usernames), not a DB UNIQUE constraint.
 -- Each table has a `component_id` FK index — Postgres does not auto-index FKs,
--- and lazy-collection loads + cascade deletes need it (matches artifact_ids).
+-- and lazy-collection loads + cascade deletes need it.
 CREATE TABLE component_release_managers (
     id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     component_id UUID NOT NULL REFERENCES components(id) ON DELETE CASCADE,

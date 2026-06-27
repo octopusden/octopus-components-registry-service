@@ -518,6 +518,166 @@ class ComparatorLogicTest {
         assertThat(recorded.message).contains("id")
     }
 
+    // ----- ArtifactPatternComparator: #357 behavior-preserving artifactPattern normalization -----
+
+    // Synthetic mirror of the /maven-artifacts payload: Map<versionRange, ComponentArtifactConfigurationDTO>
+    // where each value carries groupPattern + artifactPattern. com.example.* only (no real identifiers).
+    data class TestArtifactCfg(val groupPattern: String, val artifactPattern: String)
+
+    private val MAVEN_ARTIFACTS_EP = "GET /rest/api/2/components/{component}/maven-artifacts"
+
+    @Test
+    @DisplayName("ArtifactPatternComparator: separator , == | (legacy matcher does replace(\",\",\"|\"))")
+    fun artifactPattern_separatorEquivalent() {
+        assertThat(ArtifactPatternComparator.compare("a-svc,b-svc,c-svc", "a-svc|b-svc|c-svc")).isEqualTo(0)
+    }
+
+    @Test
+    @DisplayName("ArtifactPatternComparator: dot-escaping \\. == . (real artifact IDs match either way)")
+    fun artifactPattern_escapingEquivalent() {
+        assertThat(ArtifactPatternComparator.compare("com\\.example\\.foo", "com.example.foo")).isEqualTo(0)
+    }
+
+    @Test
+    @DisplayName("ArtifactPatternComparator: ALL_EXCEPT with the SAME exclusion set is equal across regex syntaxes")
+    fun artifactPattern_sameExclusionEqual() {
+        // Prod legacy per-char `((?!x)[\w-\.])+` vs the REAL anchored exact-token form that both the
+        // v4 export AND (#357 Option A) the forward /maven-artifacts wire now emit:
+        // `(?!(?:x)$)[\w-\.]+`. Same excluded sibling ⇒ equal.
+        assertThat(ArtifactPatternComparator.compare("((?!claimed-sibling)[\\w-\\.])+", "(?!(?:claimed-sibling)\$)[\\w-\\.]+"))
+            .isEqualTo(0)
+    }
+
+    @Test
+    @DisplayName("ArtifactPatternComparator: anchored `(?!(?:x)\$)` form is recognised as catch-all-EXCEPT[x] (not a literal token)")
+    fun artifactPattern_anchoredFormCanonicalised() {
+        // Two identical anchored forms must compare equal (byte-identical is the #357 Option A end state)...
+        assertThat(ArtifactPatternComparator.compare("(?!(?:claimed-sibling)\$)[\\w-\\.]+", "(?!(?:claimed-sibling)\$)[\\w-\\.]+"))
+            .isEqualTo(0)
+        // ...and a DIFFERENT anchored exclusion must still surface (no junk-canonical collapse).
+        assertThat(ArtifactPatternComparator.compare("(?!(?:sib-x)\$)[\\w-\\.]+", "(?!(?:sib-y)\$)[\\w-\\.]+"))
+            .isNotEqualTo(0)
+        // ...and the anchored form is NOT equal to a plain catch-all (the exclusion must not be lost).
+        assertThat(ArtifactPatternComparator.compare("(?!(?:claimed-sibling)\$)[\\w-\\.]+", "[\\w-\\.]+"))
+            .isNotEqualTo(0)
+    }
+
+    @Test
+    @DisplayName("ArtifactPatternComparator: multi-sibling anchored `(?!(?:a|b)\$)` extracts the full excluded set")
+    fun artifactPattern_anchoredMultiSibling() {
+        // Order-insensitive set: a|b == legacy ((?!a)…)+ ((?!b)…) union rendered as the alternation.
+        assertThat(ArtifactPatternComparator.compare("(?!(?:art-a|art-b)\$)[\\w-\\.]+", "(?!(?:art-b|art-a)\$)[\\w-\\.]+"))
+            .isEqualTo(0)
+        assertThat(ArtifactPatternComparator.compare("(?!(?:art-a|art-b)\$)[\\w-\\.]+", "(?!(?:art-a)\$)[\\w-\\.]+"))
+            .isNotEqualTo(0)
+    }
+
+    @Test
+    @DisplayName("ArtifactPatternComparator: ALL_EXCEPT[x] is NOT equal to a plain catch-all (real ownership change must surface)")
+    fun artifactPattern_lookaheadNotEqualCatchAll() {
+        assertThat(ArtifactPatternComparator.compare("((?!claimed-sibling)[\\w-\\.])+", "[\\w-\\.]+")).isNotEqualTo(0)
+    }
+
+    @Test
+    @DisplayName("ArtifactPatternComparator: ALL_EXCEPT[x] is NOT equal to ALL_EXCEPT[y] (different exclusion set surfaces)")
+    fun artifactPattern_differentExclusionSurvives() {
+        assertThat(ArtifactPatternComparator.compare("((?!sib-x)[\\w-\\.])+", "((?!sib-y)[\\w-\\.])+")).isNotEqualTo(0)
+    }
+
+    @Test
+    @DisplayName("ArtifactPatternComparator anti-regression: a DIFFERENT token set still surfaces")
+    fun artifactPattern_differentTokenSurvives() {
+        assertThat(ArtifactPatternComparator.compare("a-svc,b-svc", "a-svc,c-svc")).isNotEqualTo(0)
+    }
+
+    @Test
+    @DisplayName("ArtifactPatternComparator anti-regression: a MISSING token still surfaces")
+    fun artifactPattern_missingTokenSurvives() {
+        assertThat(ArtifactPatternComparator.compare("a-svc,b-svc,c-svc", "a-svc,b-svc")).isNotEqualTo(0)
+    }
+
+    @Test
+    @DisplayName("ArtifactPatternComparator anti-regression: catch-all vs an explicit list is NOT masked")
+    fun artifactPattern_catchAllVsListSurvives() {
+        assertThat(ArtifactPatternComparator.compare("[\\w-\\.]+", "a-svc,b-svc")).isNotEqualTo(0)
+    }
+
+    @Test
+    @DisplayName("ArtifactPatternComparator: null handling — null,null equal; null,X not")
+    fun artifactPattern_nullHandling() {
+        assertThat(ArtifactPatternComparator.compare(null, null)).isEqualTo(0)
+        assertThat(ArtifactPatternComparator.compare(null, "a-svc")).isNotEqualTo(0)
+        assertThat(ArtifactPatternComparator.compare("a-svc", null)).isNotEqualTo(0)
+    }
+
+    @Test
+    @DisplayName("compareDto: /maven-artifacts separator+escaping-only artifactPattern diff → NO VALUE_DIFF")
+    fun compareDto_mavenArtifactsSeparatorEscaping_isSilenced() {
+        Comparators.compareDto(
+            endpoint = MAVEN_ARTIFACTS_EP,
+            pathParams = mapOf("component" to "alpha-fixture"),
+            baseline = mapOf("(,0),[0,)" to TestArtifactCfg("com.example.foo", "a-svc|b-svc|com\\.example\\.foo")),
+            candidate = mapOf("(,0),[0,)" to TestArtifactCfg("com.example.foo", "a-svc,b-svc,com.example.foo")),
+        )
+        assertThat(DiffCollector.snapshot()).isEmpty()
+    }
+
+    @Test
+    @DisplayName("compareDto: /maven-artifacts ALL_EXCEPT[x] SAME exclusion (regex-syntax/separator only) → NO VALUE_DIFF")
+    fun compareDto_mavenArtifactsSameExclusion_isSilenced() {
+        Comparators.compareDto(
+            endpoint = MAVEN_ARTIFACTS_EP,
+            pathParams = mapOf("component" to "beta-fixture"),
+            baseline = mapOf("(,0),[0,)" to TestArtifactCfg("com.example.bar", "((?!claimed-sibling)[\\w-\\.])+")),
+            candidate = mapOf("(,0),[0,)" to TestArtifactCfg("com.example.bar", "(?!(?:claimed-sibling)\$)[\\w-\\.]+")),
+        )
+        assertThat(DiffCollector.snapshot()).isEmpty()
+    }
+
+    @Test
+    @DisplayName("compareDto: /maven-artifacts ALL_EXCEPT[x] vs a plain catch-all STILL records VALUE_DIFF (no masking)")
+    fun compareDto_mavenArtifactsLookaheadVsCatchAll_surfaces() {
+        Comparators.compareDto(
+            endpoint = MAVEN_ARTIFACTS_EP,
+            pathParams = mapOf("component" to "beta-fixture"),
+            baseline = mapOf("(,0),[0,)" to TestArtifactCfg("com.example.bar", "((?!claimed-sibling)[\\w-\\.])+")),
+            candidate = mapOf("(,0),[0,)" to TestArtifactCfg("com.example.bar", "[\\w-\\.]+")),
+        )
+        val recorded = DiffCollector.snapshot().single()
+        assertThat(recorded.category).isEqualTo(DiffClassifier.VALUE_DIFF)
+        assertThat(recorded.message).contains("artifactPattern")
+    }
+
+    @Test
+    @DisplayName("compareDto: /maven-artifacts a REAL artifactPattern token change STILL records VALUE_DIFF")
+    fun compareDto_mavenArtifactsRealChange_surfaces() {
+        Comparators.compareDto(
+            endpoint = MAVEN_ARTIFACTS_EP,
+            pathParams = mapOf("component" to "gamma-fixture"),
+            baseline = mapOf("(,0),[0,)" to TestArtifactCfg("com.example.foo", "a-svc,b-svc")),
+            candidate = mapOf("(,0),[0,)" to TestArtifactCfg("com.example.foo", "a-svc,c-svc")),
+        )
+        val recorded = DiffCollector.snapshot().single()
+        assertThat(recorded.category).isEqualTo(DiffClassifier.VALUE_DIFF)
+        assertThat(recorded.message).contains("artifactPattern")
+    }
+
+    @Test
+    @DisplayName("compareDto: the artifactPattern normalizer is SCOPED to /maven-artifacts — other endpoints still byte-compare")
+    fun compareDto_artifactPatternScopedToMavenArtifacts() {
+        // A distribution endpoint also has an `artifactPattern` field; a separator change there must
+        // NOT be silenced (the normalizer is maven-artifacts-only).
+        Comparators.compareDto(
+            endpoint = "GET /rest/api/2/projects/{p}/versions/{v}/distribution",
+            pathParams = mapOf("p" to "alpha-project", "v" to "1.0"),
+            baseline = TestArtifactCfg("com.example.foo", "a-svc|b-svc"),
+            candidate = TestArtifactCfg("com.example.foo", "a-svc,b-svc"),
+        )
+        val recorded = DiffCollector.snapshot().single()
+        assertThat(recorded.category).isEqualTo(DiffClassifier.VALUE_DIFF)
+        assertThat(recorded.message).contains("artifactPattern")
+    }
+
     @Test
     @DisplayName("compareRaw: jira-ranges STRUCTURAL_DIFF records resolved entityKey")
     fun compareRaw_jiraRangesStructuralDiffRecordsEntityKey() {
