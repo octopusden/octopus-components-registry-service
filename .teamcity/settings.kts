@@ -1313,10 +1313,12 @@ object id30DeployToOkdQaDevAuto : BuildType({
 // Post-deploy: trigger Git→DB component migration on the freshly-deployed
 // QA pod. Idempotent and tolerant — exits 0 (skip, don't fail) if the
 // /admin/migration-status endpoint is missing (pre-v3 build) or returns
-// git==0 (nothing left to migrate). Fails the build only when migration
-// was attempted and ended in a FAILED state, so the QA-deploy chain
-// surfaces real migration breakage but does not break on routine
-// redeploys of an already-migrated stand.
+// git==0 with total>0 (nothing left to migrate). Fails the build when
+// migration was attempted and ended in a FAILED state, OR when the status is
+// indeterminate (git==0 with total==0 — a Git-resolver load failure), so the
+// QA-deploy chain surfaces real migration breakage and never silently skips on
+// an indeterminate status, while not breaking on routine redeploys of an
+// already-migrated stand.
 //
 // Pure shell-script build (no Gradle template) — VCS root is attached
 // explicitly, same pattern as id17 / id20. Script source lives at

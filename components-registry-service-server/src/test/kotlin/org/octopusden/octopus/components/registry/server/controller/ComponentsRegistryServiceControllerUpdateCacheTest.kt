@@ -19,8 +19,9 @@ import org.springframework.http.HttpStatus
  * Retirement (410) is gated on `status.total > 0 && status.git == 0L`:
  * - `git > 0` (total > 0)  → 200 + the refresh duration; re-reads the Git config (matches 2.0.87).
  * - `git == 0` (total > 0) → 410 Gone (fully migrated — cutover to DB complete).
- * - `git < 0`  → 200 (not 410): `git = gitResolver.size - countBySource("db")`, so stale/extra
- *   `source='db'` rows can push it negative while git-served components may still exist.
+ * - `git < 0`  → 200 (not 410): defensive only. `git` is now a set difference (DSL component keys
+ *   not present as `source='db'` rows) and is always >= 0, so getMigrationStatus no longer emits a
+ *   negative; this case just pins that the controller never mis-retires on an unexpected negative.
  * - `total == 0` → 200 (not 410): the Git resolver returned empty or errored — indeterminate;
  *   attempt the re-read (the recovery action), not a false retirement.
  * - COMPONENTS migration active → 409, without re-reading or even querying status.
@@ -57,10 +58,11 @@ class ComponentsRegistryServiceControllerUpdateCacheTest {
     }
 
     @Test
-    fun `negative git from stale db rows attempts refresh, not 410`() {
-        // total > 0 (the Git resolver parsed components) but git < 0 from stale/extra
-        // source='db' rows: git-served components may still exist, so re-read rather
-        // than falsely retire.
+    fun `negative git attempts refresh, not 410 (defensive)`() {
+        // Defensive only: `git` is now a set difference (DSL keys not in the DB) and is
+        // always >= 0, so getMigrationStatus no longer emits a negative. This pins that
+        // the controller never falsely retires (410) on an unexpected negative — it
+        // re-reads instead.
         doReturn(MigrationStatus(git = -2, db = 7, total = 5)).`when`(importService).getMigrationStatus()
         doReturn(7L).`when`(componentsRegistryService).updateConfigCache()
 
