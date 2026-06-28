@@ -128,4 +128,41 @@ class ComponentControllerAsCodeV4Test {
             .perform(get("/rest/api/4/components/bcomponent/as-code?version=99.0").with(editorJwt()))
             .andExpect(status().isNotFound)
     }
+
+    @Test
+    @DisplayName("Unresolvable version with Accept: text/plain → text/plain 404 (not 500)")
+    fun versionNotResolvableTextPlain404() {
+        // Regression: the endpoint is produces=text/plain and the Portal sends Accept: text/plain.
+        // The global JSON NotFound handler then has no acceptable representation
+        // (HttpMediaTypeNotAcceptableException) and the 404 used to surface as a 500. The endpoint
+        // now handles NotFoundException locally and returns a clean text/plain 404.
+        `when`(componentManagementService.renderResolvedComponentAsCode("bcomponent", "2.1"))
+            .thenThrow(NotFoundException("No configuration resolves for component 'bcomponent' at version '2.1'"))
+
+        mvc
+            .perform(
+                get("/rest/api/4/components/bcomponent/as-code?version=2.1")
+                    .accept(MediaType.TEXT_PLAIN)
+                    .with(editorJwt()),
+            )
+            .andExpect(status().isNotFound)
+            .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_PLAIN))
+            .andExpect(content().string(containsString("No configuration resolves")))
+    }
+
+    @Test
+    @DisplayName("Unknown component with Accept: text/plain → text/plain 404 (not 500)")
+    fun unknownComponentTextPlain404() {
+        `when`(componentManagementService.renderComponentAsCode("ghost"))
+            .thenThrow(NotFoundException("Component 'ghost' not found"))
+
+        mvc
+            .perform(
+                get("/rest/api/4/components/ghost/as-code")
+                    .accept(MediaType.TEXT_PLAIN)
+                    .with(editorJwt()),
+            )
+            .andExpect(status().isNotFound)
+            .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_PLAIN))
+    }
 }
