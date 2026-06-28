@@ -164,5 +164,6 @@ class ComponentControllerAsCodeV4Test {
             )
             .andExpect(status().isNotFound)
             .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_PLAIN))
+            .andExpect(content().string(containsString("not found")))
     }
 }
