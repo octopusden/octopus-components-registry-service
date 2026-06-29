@@ -7,8 +7,9 @@ import org.springframework.boot.actuate.health.HealthIndicator
 import org.springframework.stereotype.Component
 
 /**
- * Actuator surface of [EmployeeDirectoryService.probe]: component
- * `employeeService` under `/actuator/health`.
+ * Actuator surface of [EmployeeDirectoryService.probeHealth]: component
+ * `employeeService` under `/actuator/health`, surfacing the probe's failure
+ * detail (the real downstream cause) in the `reason`.
  *
  * Deployment safety: the OKD probes hit `/actuator/health/liveness` (the
  * liveness GROUP), and Spring only places livenessState/readinessState in the
@@ -30,16 +31,26 @@ import org.springframework.stereotype.Component
 class EmployeeServiceHealthIndicator(
     private val employeeDirectory: EmployeeDirectoryService,
 ) : HealthIndicator {
-    override fun health(): Health =
-        when (employeeDirectory.probe()) {
+    override fun health(): Health {
+        val result = employeeDirectory.probeHealth()
+        return when (result.health) {
             IntegrationHealth.UP -> Health.up().build()
             IntegrationHealth.DOWN ->
                 Health.down()
                     .withDetail(
                         "reason",
-                        "employee-service lookup failed (credentials / gateway route / directory backend — see logs)",
+                        // Carry the real downstream cause (e.g. "...403 Forbidden") so the
+                        // aggregate /actuator/health and the Portal banner name access-denied
+                        // vs unreachable; fall back to the generic hint when none was captured.
+                        result.detail?.let { "employee-service lookup failed — $it" } ?: GENERIC_REASON,
                     )
                     .build()
             IntegrationHealth.DISABLED -> Health.unknown().withDetail("enabled", false).build()
         }
+    }
+
+    private companion object {
+        private const val GENERIC_REASON =
+            "employee-service lookup failed (credentials / gateway route / directory backend — see logs)"
+    }
 }

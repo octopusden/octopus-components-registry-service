@@ -1,6 +1,8 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.mock
@@ -127,5 +129,47 @@ class EmployeeDirectoryServiceTest {
     @DisplayName("probe(): no client bean → DISABLED")
     fun `probe disabled`() {
         assertEquals(IntegrationHealth.DISABLED, disabledDirectory().probe())
+    }
+
+    @Test
+    @DisplayName("probeHealth(): downstream error → DOWN carrying the real cause in the detail")
+    fun `probeHealth surfaces the failure detail`() {
+        val client = mock(EmployeeServiceClient::class.java)
+        `when`(client.getEmployee(EmployeeDirectoryService.PROBE_USERNAME))
+            .thenThrow(RuntimeException("403 Forbidden: [no body]"))
+        val result = directoryWith(client).probeHealth()
+        assertEquals(IntegrationHealth.DOWN, result.health)
+        assertTrue(result.detail!!.contains("403")) { "detail should carry the downstream status: ${result.detail}" }
+        assertTrue(result.detail!!.contains("RuntimeException")) { result.detail!! }
+    }
+
+    @Test
+    @DisplayName("probeHealth(): a real answer (active or not) → UP with no detail")
+    fun `probeHealth real answer is UP`() {
+        val client = mock(EmployeeServiceClient::class.java)
+        `when`(client.getEmployee(EmployeeDirectoryService.PROBE_USERNAME))
+            .thenReturn(Employee(EmployeeDirectoryService.PROBE_USERNAME, false))
+        val result = directoryWith(client).probeHealth()
+        assertEquals(IntegrationHealth.UP, result.health)
+        assertNull(result.detail)
+    }
+
+    @Test
+    @DisplayName("probeHealth(): NotFound → UP with no detail")
+    fun `probeHealth notfound is UP`() {
+        val client = mock(EmployeeServiceClient::class.java)
+        `when`(client.getEmployee(EmployeeDirectoryService.PROBE_USERNAME))
+            .thenThrow(NotFoundException("no such employee"))
+        val result = directoryWith(client).probeHealth()
+        assertEquals(IntegrationHealth.UP, result.health)
+        assertNull(result.detail)
+    }
+
+    @Test
+    @DisplayName("probeHealth(): no client bean → DISABLED with no detail")
+    fun `probeHealth disabled`() {
+        val result = disabledDirectory().probeHealth()
+        assertEquals(IntegrationHealth.DISABLED, result.health)
+        assertNull(result.detail)
     }
 }
