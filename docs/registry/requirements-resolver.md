@@ -38,6 +38,23 @@
 
 ---
 
+## Resolution model (decoupled version model — ADR-018)
+
+All RES-NNN contracts below resolve against the **decoupled version model** (`adr/018-decoupled-version-model.md`). Two independent layers govern every resolve/enumerate:
+
+- **Coverage ("supported versions").** `supported = ∪` of the declared bounded ranges, each stored verbatim as a `RANGE_PRESENCE` row (a composite range stays one string → one row). A component that declares no bounded block (top-level-only DSL, or an explicit `(,)` / `(,0),[0,)` block) has a single `ALL_VERSIONS` base and **no** `RANGE_PRESENCE` rows → `supported = ALL`.
+- **Per-attribute values.** The BASE row is **always** the effective default at `ALL_VERSIONS` (top-level block ⊕ `Defaults.groovy`). There is **no synthetic-bounded base** (`is_synthetic_base` is vestigial / always `false`). Per-attribute overrides apply on ranges **including open-upper** (`[X,)`), selected by **containment** (TD-010), not exact range match.
+
+**`resolve(v)`:**
+1. **Coverage gate.** If the component has a bounded base (legacy/API shape) **or** any `RANGE_PRESENCE` row, and `v ∉ supported`, return **404** ("no configuration"). The gate is **skipped** only when the base is `ALL_VERSIONS` **and** there are no `RANGE_PRESENCE` rows. Implemented in `EntityMappers.toResolvedEscrowModuleConfig` and `ComponentCodeRenderer.renderResolved`.
+2. For each attribute: the **narrowest override whose range contains `v`**, else the `ALL_VERSIONS` base value.
+
+**`enumerate()`** (range-list endpoints — RES-001, RES-018): iterate the declared ranges (`RANGE_PRESENCE` + override rows), resolving each by **containment**. The `ALL_VERSIONS` base is enumerated as its own view **only** when there are no `RANGE_PRESENCE` rows (so a version-range-only component enumerates exactly its declared ranges — no spurious `(,0),[0,)` entry).
+
+Real-version resolve/enumerate output is **byte-identical** to the previous v4 model (audit A1: no overlapping legacy blocks; the ~130k compat baseline is the merge gate). Write-side invariants (V1–V6, write-time auto-split) are **planned for PR-3**, not yet enforced.
+
+---
+
 ## Requirements
 
 ### RES-001: All Jira component version ranges returned correctly

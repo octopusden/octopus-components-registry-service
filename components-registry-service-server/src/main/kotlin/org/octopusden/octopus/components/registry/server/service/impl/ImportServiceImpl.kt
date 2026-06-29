@@ -84,7 +84,8 @@ import java.time.Instant
  *        `parentComponent = null`; Pass 2 resolves `parentComponent` FKs.
  *  §6.3  Aggregator handling: detect REAL vs FAKE per §4.3 rule; upsert
  *        `component_groups` and link `component_group_id`.
- *  §6.4  Base row determination: `isSyntheticBase` flag.
+ *  §6.4  Base row (always ALL_VERSIONS effective default) + coverage layer
+ *        (RANGE_PRESENCE rows per declared bounded block) — ADR-018.
  *  §6.5  Override row generation: scalar override rows + marker rows.
  *  §6.6  Distribution parsing: GAV split into Maven/fileUrl; docker/DEB/RPM.
  *  §6.7  Tools and required tools: junction rows.
@@ -898,10 +899,17 @@ class ImportServiceImpl(
     ) {
         if (configs.isEmpty()) return
 
-        val baseConfig = configs.firstOrNull { it.versionRangeString == ALL_VERSIONS } ?: configs.first()
-        val hasAllVersionsBase = configs.any { it.versionRangeString == ALL_VERSIONS }
-        val hasOnlyVersionRangeBlocks = !hasAllVersionsBase && configs.size > 1
-        val isSyntheticBase = hasOnlyVersionRangeBlocks
+        // Decoupled version model (ADR-018): the base row is ALWAYS the effective
+        // default at ALL_VERSIONS, and coverage is a separate layer expressed as
+        // RANGE_PRESENCE rows. `supported = ALL` exactly when the DSL declares no
+        // bounded blocks — i.e. the loader emitted an all-versions config (a
+        // top-level-only component, or an explicit "(,)" / ALL_VERSIONS block).
+        // Otherwise (only bounded blocks) supported = ∪ of the declared ranges and
+        // the base scalars come from the first declared block's merged config
+        // (top-level ⊕ Defaults for the attributes constant across blocks;
+        // per-block differences are emitted as overrides). No synthetic-bounded base.
+        val baseConfig = configs.firstOrNull { isAllVersionsRange(it.versionRangeString) } ?: configs.first()
+        val supportedIsAll = configs.any { isAllVersionsRange(it.versionRangeString) }
 
         // §6.4 Build the ComponentEntity from the first/base config
         val tEntityStart = System.nanoTime()
@@ -934,7 +942,7 @@ class ImportServiceImpl(
         // `buildParameters.tools` to `[]` for those versions. Per-range tool
         // overrides still get a dedicated marker via `emitMarkerOverrides`.
         val tBaseStart = System.nanoTime()
-        val baseRow = buildBaseConfigRow(saved, baseConfig, isSyntheticBase)
+        val baseRow = buildBaseConfigRow(saved, baseConfig)
         attachVcsEntries(baseRow, baseConfig.vcsSettings)
         attachDistribution(baseRow, baseConfig.distribution)
         val savedBase = configurationRepository.save(baseRow)
@@ -960,35 +968,39 @@ class ImportServiceImpl(
         }
         val tToolsMs = (System.nanoTime() - tToolsStart) / 1_000_000
 
-        // For synthetic-base components, the base row's versionRange is the
-        // DSL's first range (e.g. `(,1.0.107)` for TEST_COMPONENT3) and
-        // `toEscrowModule` suppresses it from enumeration whenever overrides
-        // exist (MIG-029). Emit a RANGE_PRESENCE row at that same range so
-        // the resolver re-enumerates it (RES-001 family). Skip when the base
-        // is a real `(,)`/ALL_VERSIONS placeholder — non-synthetic bases are
-        // enumerated as their own view.
-        if (isSyntheticBase) {
-            val syntheticBaseRange = baseConfig.versionRangeString
-            if (syntheticBaseRange != null) {
-                emitRangePresenceRow(saved, syntheticBaseRange)
+        // §6.4b Coverage layer (ADR-018): when the component declares bounded
+        // blocks (supported != ALL), emit a verbatim RANGE_PRESENCE row for EVERY
+        // declared block — INCLUDING the one chosen as the base scalar source
+        // (configs.first(), whose own range is otherwise not represented now that
+        // the base row sits at ALL_VERSIONS). Composites are kept as one string.
+        // `supported = ALL` (an all-versions config exists) emits no presence rows:
+        // the lone ALL_VERSIONS base stands for everything. emitRangePresenceRow is
+        // idempotent on (component, range), so a duplicate declared range is a no-op.
+        if (!supportedIsAll) {
+            for (cfg in configs) {
+                val range = cfg.versionRangeString
+                if (range != null && !isAllVersionsRange(range)) {
+                    emitRangePresenceRow(saved, range)
+                }
             }
         }
 
-        // §6.5 Override rows: diff all non-base configs against the base.
-        // For ALL_VERSIONS base: nonBaseConfigs = configs with explicit version ranges.
-        // For synthetic base (isSyntheticBase): baseConfig = configs.first(), nonBaseConfigs = rest.
-        // In both cases, `filter { it != baseConfig }` is the correct set.
-        //
-        // If neither scalar nor marker emission produced any row for a given
-        // override config, emit a RANGE_PRESENCE row so the resolver still
-        // enumerates this DSL range (RES-001 family fix).
+        // §6.5 Override rows: diff every non-base config against the base. The base
+        // scalar source (configs.first() when supported != ALL, else the all-versions
+        // config) carries no override of its own — it equals the base by construction.
+        // Coverage/enumeration anchors for empty blocks are the RANGE_PRESENCE rows
+        // emitted above; the legacy RES-001 fallback here is therefore unconditional
+        // for the supported != ALL case and only matters for empty bounded blocks that
+        // coexist with an all-versions config (none in real DSL — Scenario A).
         val tOverridesStart = System.nanoTime()
         val nonBaseConfigs = configs.filter { it !== baseConfig }
         for (override in nonBaseConfigs) {
             val scalarRows = emitScalarOverrides(saved, baseConfig, override)
             val markerRows = emitMarkerOverrides(saved, savedBase, baseConfig, override)
             val overrideRange = override.versionRangeString
-            if (scalarRows.isEmpty() && markerRows.isEmpty() && overrideRange != null) {
+            if (scalarRows.isEmpty() && markerRows.isEmpty() && overrideRange != null &&
+                !isAllVersionsRange(overrideRange)
+            ) {
                 emitRangePresenceRow(saved, overrideRange)
             }
         }
@@ -1140,9 +1152,20 @@ class ImportServiceImpl(
         return violations
     }
 
-    /** importModule's base-config selection: the ALL_VERSIONS row, else the first one. */
+    /** importModule's base-config selection: the all-versions row, else the first one. */
     private fun baseConfigOf(configs: List<EscrowModuleConfig>): EscrowModuleConfig? =
-        configs.firstOrNull { it.versionRangeString == ALL_VERSIONS } ?: configs.firstOrNull()
+        configs.firstOrNull { isAllVersionsRange(it.versionRangeString) } ?: configs.firstOrNull()
+
+    /**
+     * True when [range] denotes the all-versions coverage set: null, the canonical
+     * ALL_VERSIONS sentinel "(,0),[0,)", or the fully-unbounded "(,)" (the loader stores
+     * both bracket forms verbatim, without normalization). Such a config means the DSL
+     * declared no bounded block; per ADR-018 it maps to a single ALL_VERSIONS base with no
+     * RANGE_PRESENCE rows, so the two legacy "all versions" shapes converge to one
+     * stored representation (schema-spec / spec §7).
+     */
+    private fun isAllVersionsRange(range: String?): Boolean =
+        range == null || range == ALL_VERSIONS || range.replace(" ", "") == "(,)"
 
     /**
      * EFFECTIVE jira claims of every non-archived persisted component — per-range
@@ -1462,15 +1485,18 @@ class ImportServiceImpl(
     private fun buildBaseConfigRow(
         component: ComponentEntity,
         cfg: EscrowModuleConfig,
-        isSyntheticBase: Boolean,
     ): ComponentConfigurationEntity {
+        // Decoupled version model (ADR-018): the base row is ALWAYS the effective
+        // default at ALL_VERSIONS — never a synthetic bounded range. Coverage is a
+        // separate layer (RANGE_PRESENCE rows). `is_synthetic_base` is retained on
+        // the schema/DTO for v4-contract stability but is always false now.
         val row =
             ComponentConfigurationEntity(
                 component = component,
-                versionRange = cfg.versionRangeString ?: ALL_VERSIONS,
+                versionRange = ALL_VERSIONS,
                 overriddenAttribute = null,
                 rowType = "BASE",
-                isSyntheticBase = isSyntheticBase,
+                isSyntheticBase = false,
             )
         populateScalarsFromConfig(row, cfg)
         return row

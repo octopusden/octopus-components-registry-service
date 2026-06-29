@@ -88,11 +88,13 @@ internal object MarkerAttributes {
  * session). Produces one `EscrowModuleConfig` per distinct version range that
  * appears across base + override rows.
  *
- * The base row's version range is always emitted first, followed by any override
- * range strings that are not already included. For version-range-only components
- * (`isSyntheticBase = true`), the base row holds the first explicit version range
- * from the DSL — this range must be emitted so that version resolution finds it.
- * Downstream consumers always see at least one `EscrowModuleConfig`.
+ * The base row's version range is emitted first when it is a view of its own,
+ * followed by any override / RANGE_PRESENCE range strings not already included.
+ * Per the decoupled version model (ADR-018) the base is the `ALL_VERSIONS`
+ * default and coverage lives in separate RANGE_PRESENCE rows; the all-versions
+ * base is enumerated as a view only when the component has no bounded coverage
+ * (no RANGE_PRESENCE rows). Downstream consumers always see at least one
+ * `EscrowModuleConfig`.
  */
 fun ComponentEntity.toEscrowModule(
     versionRangeFactory: VersionRangeFactory,
@@ -135,14 +137,18 @@ fun ComponentEntity.toEscrowModule(
     // before applying overrides.
     val overrides = configs.filter { it.rowType != "BASE" }
 
-    // Per schema-spec.md §3.4 (MIG-029): a synthetic-base row exists only as a
-    // schema-required anchor for a version-range-only component (one with no
-    // shared scalars across its ranges). When overrides exist, the base range
-    // (which is `(,)` by convention for synthetic bases) is a placeholder and
-    // must NOT be enumerated as a view of its own. For non-synthetic bases the
-    // base range IS the default view and must be enumerated.
+    // Decoupled version model (ADR-018): coverage is carried by RANGE_PRESENCE
+    // rows, independent of the base. The base is the ALL_VERSIONS default and is
+    // enumerated as a view of its own ONLY when the component has no bounded
+    // coverage (supported = ALL → no RANGE_PRESENCE rows). When RANGE_PRESENCE
+    // rows exist the ALL_VERSIONS base is just the default carrier, never a view;
+    // enumeration iterates the declared ranges (presence + override rows). A
+    // legacy/API bounded base (versionRange != ALL_VERSIONS) is always its own
+    // view — only the all-versions default carrier is suppressed.
+    val hasRangePresence = overrides.any { it.rowType == "RANGE_PRESENCE" }
+    val suppressBaseView = base.versionRange == ALL_VERSIONS && hasRangePresence
     val enumeratedRanges = mutableListOf<String>()
-    if (!(base.isSyntheticBase && overrides.isNotEmpty())) {
+    if (!suppressBaseView) {
         enumeratedRanges += base.versionRange
     }
     overrides
@@ -195,21 +201,24 @@ fun ComponentEntity.toResolvedEscrowModuleConfig(
             return null
         }
 
-    // MIG-042: mirror V1 EscrowConfigurationLoader.resolveComponentConfiguration —
-    // a version outside EVERY configured range resolves to NO configuration (the
-    // controller renders 404). The component's effective range is:
-    //  • ALL_VERSIONS base — everything; skip the gate (the compound "(,0),[0,)"
-    //    union is also not parseable by VersionRangeFactory.containsVersion);
-    //  • otherwise — the UNION of the base block's range and every override
-    //    row's range, REGARDLESS of the synthetic flag: a NON-synthetic
-    //    component (one with top-level scalars) can still declare many DSL
-    //    range blocks, and the BASE row carries only the FIRST block — gating
-    //    on it alone 404'd every version covered by a later block (59 NEW on
-    //    the first gate iteration). A version in a GAP between blocks (e.g.
-    //    [11,12.1) + [12.2,) queried with 12.1.x) is out of the union, exactly
-    //    like V1 (compat cluster A: 404→200 over-resolution). Unparseable or
-    //    blank ranges count as containing — conservative, never a false 404.
-    if (base.versionRange != ALL_VERSIONS) {
+    // MIG-042 / ADR-018 coverage gate: a version outside `supported` resolves to
+    // NO configuration (the controller renders 404), mirroring V1
+    // EscrowConfigurationLoader.resolveComponentConfiguration. In the decoupled
+    // model the base is the ALL_VERSIONS default and coverage is a separate layer:
+    //   • supported = ∪ of the declared ranges, carried as RANGE_PRESENCE rows
+    //     (every declared block emits one) plus any override / marker rows; and
+    //   • for legacy/API components whose base is itself bounded, the base range.
+    // The gate is skipped only when there is no coverage restriction at all
+    // (ALL_VERSIONS base AND no RANGE_PRESENCE rows → supported = ALL). Every
+    // non-BASE row participates in the union — including RANGE_PRESENCE rows: an
+    // EMPTY DSL block ("[1.1,2.0)" {}) carries no overrides but still proves the
+    // version is configured (V1 serves base-inherited data there). A version in a
+    // GAP between blocks ([11,12.1) + [12.2,) queried with 12.1.x) is out of the
+    // union, exactly like V1. Unparseable or blank ranges count as containing —
+    // conservative, never a false 404.
+    val hasBoundedBase = base.versionRange != ALL_VERSIONS
+    val hasRangePresence = configs.any { it.rowType == "RANGE_PRESENCE" }
+    if (hasBoundedBase || hasRangePresence) {
         val containsVersion = { range: String? ->
             range.isNullOrBlank() ||
                 range == ALL_VERSIONS ||
@@ -219,15 +228,10 @@ fun ComponentEntity.toResolvedEscrowModuleConfig(
                     true
                 }
         }
-        // Every non-BASE row participates in the union — including RANGE_PRESENCE
-        // rows: an EMPTY DSL block ("[1.1,2.0)" {}) persists as a presence row
-        // that carries no overrides but still proves the version is configured
-        // (V1 serves base-inherited data there; gating presence-covered versions
-        // out produced the second wave of 59 NEW on the full gate).
-        val inEffectiveRange =
-            containsVersion(base.versionRange) ||
-                configs.any { it.rowType != "BASE" && containsVersion(it.versionRange) }
-        if (!inEffectiveRange) return null
+        val inSupported =
+            configs.any { it.rowType != "BASE" && containsVersion(it.versionRange) } ||
+                (hasBoundedBase && containsVersion(base.versionRange))
+        if (!inSupported) return null
     }
 
     val matchingOverrides =
@@ -258,6 +262,10 @@ fun ComponentEntity.toResolvedEscrowModuleConfig(
         base = base,
         scalarOverrides = matchingOverrides.filter { it.rowType == "SCALAR_OVERRIDE" },
         markerOverrides = matchingOverrides.filter { it.rowType == "MARKER" },
+        // The resolved-single-version config carries the base range (ALL_VERSIONS under ADR-018 —
+        // the default carrier). This is intentional: v2/v3 wire DTOs for the resolved path
+        // (DetailedComponent, distribution) do not surface versionRangeString — the range-keyed
+        // views come from the enumeration path (toEscrowModule), not here.
         versionRange = base.versionRange,
         ownershipRange = ownershipRange,
     )
