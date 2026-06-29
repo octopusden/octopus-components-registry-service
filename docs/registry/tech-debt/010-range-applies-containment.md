@@ -12,7 +12,7 @@ containment contract. Scope is the **range-VIEW enumeration** path only; the sin
 `resolve` path (`toResolvedEscrowModuleConfig` / `ComponentCodeRenderer.renderResolved`) was already
 correct (point `containsVersion`) and is untouched.
 
-Bounded cases 1–9, union cases 10–11, and **open-ended cases OE-1..OE-8** (the everyday
+Bounded cases 1–9, union cases 10–11, and **open-ended cases OE-1..OE-10** (the everyday
 "from version X onward" `[X,)` / "up to version Y" `(,Y)` shapes) ship as a parameterized matrix in
 `RangeAppliesContainmentTest`; the DB-backed `@Tag("integration")`
 `RangeViewBroadOverrideContainmentIntegrationTest` proves a broad `[1.0,3.0)` scalar override is
@@ -68,18 +68,28 @@ For each case, the test asserts the expected `rangeApplies(parent, child)` outco
 
 **Acceptance bar:** all 9 **bounded** cases (1–9) must ship in the TD-010 PR. The 3 **union/unbounded** cases (10–12) may be deferred to a `TD-010-b` follow-up if the underlying `VersionRangeFactory` API doesn't yet support union/unbounded ranges — track explicitly. The "minimum 8" headline above is satisfied by the bounded subset alone.
 
-**As shipped:** cases 1–9, **10–11**, and the **open-ended OE-1..OE-8** cases are green in
+**As shipped:** cases 1–9, **10–11**, and the **open-ended OE-1..OE-10** cases are green in
 `RangeAppliesContainmentTest`. The `VersionRangeFactory` (releng-lib 2.0.8) *does* parse the
 open-left-unbounded union parent `(,0),[1.0,)`, so the heuristic evaluates 10/11 correctly.
 
 **Open-ended child support (review follow-up).** One-sided-unbounded children — the everyday
 `[X,)` "from version X onward" and `(,Y)` "up to version Y" shapes — are supported: `parseSingleInterval`
-accepts one empty bound, and `childRangeSamples` substitutes a sentinel for the open side (`ZERO_VERSION`
-for an unbounded lower, `HUGE_TAIL_VERSION` for an unbounded upper). So `[2.0,)` probes its `2.0` floor
-AND the huge tail — a bounded parent cannot contain the tail (correctly rejected), an open-upper parent
-can (accepted). Acceptance cases: `rangeApplies("[1.0,)","[2.0,)")==true` (OE-1),
+accepts one empty bound. The **open-upper** case is decided **structurally**, not by probing: a child
+that runs to +inf can only be contained in a parent that ALSO runs to +inf, so `rangeApplies` first
+checks `isOpenUpper(parentRange)` and returns `false` for an open-upper child against any
+non-open-upper (i.e. bounded, including closed-or-finite-upper) parent — *regardless* of how high the
+parent's finite upper bound is. Only once the parent is confirmed open-upper does sampling proceed,
+where `childRangeSamples` probes the child's floor plus a high in-tail probe (`HUGE_TAIL_VERSION`)
+against that confirmed-open-upper parent. The high probe is therefore a sample *within a confirmed
+unbounded tail*, **not** a finite stand-in for +inf that a bounded parent could exceed — encoding
+infinity as a finite number was the original flaw (a parent like `[1.0,10000000.0)` would have
+"contained" `[2.0,)`, a false positive). The open-lower side uses `ZERO_VERSION` symmetrically.
+Acceptance cases: `rangeApplies("[1.0,)","[2.0,)")==true` (OE-1),
 `rangeApplies("[2.0,)","[1.0,)")==false` (OE-2), `rangeApplies("(,0),[1.0,)","[2.0,)")==true` (OE-3,
-open-left-union parent). Only the fully-unbounded `(,)` (both sides empty) remains unparseable/deferred.
+open-left-union parent), and the structural-guard guards
+`rangeApplies("[1.0,10000000.0)","[2.0,)")==false` (OE-9, bounded parent above the sentinel) and
+`rangeApplies("[5.0,)","[2.0,)")==false` (OE-10, open-upper parent, child floor below). Only the
+fully-unbounded `(,)` (both sides empty) remains unparseable/deferred.
 
 Two adjustments are recorded:
 

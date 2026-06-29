@@ -351,13 +351,21 @@ internal fun rangeApplies(
             return false
         }
 
-    val samples =
+    val bounds =
         try {
-            childRangeSamples(childRange, numericVersionFactory)
+            parseSingleInterval(childRange)
         } catch (_: Exception) {
-            // Unparseable / unbounded child: cannot enumerate samples, stay conservative.
+            // Unparseable / fully-unbounded child: cannot enumerate samples, stay conservative.
             return false
         }
+
+    // Structural guard: a child that runs to +inf (open upper) can only be contained in a parent that
+    // ALSO runs to +inf. A bounded parent never contains it, however high its finite upper bound is —
+    // so this must be decided structurally, not by probing a finite +inf sentinel against the parent
+    // (a finite sentinel below the parent's finite upper would otherwise yield a false positive).
+    if (bounds.upper == null && !isOpenUpper(parentRange)) return false
+
+    val samples = childRangeSamples(bounds, numericVersionFactory)
     if (samples.isEmpty()) return false
 
     return samples.all { sample ->
@@ -369,6 +377,20 @@ internal fun rangeApplies(
     }
 }
 
+/**
+ * True iff [range]'s trailing segment has an empty (open-ended) upper bound, i.e. the range runs to
+ * +inf — "[1.0,)", "(,0),[1.0,)". False for any finite or closed upper bound ("[1.0,2.0)",
+ * "[1.0,10000000.0)") and for a hard single version ("[1.0]"). Used by [rangeApplies] so an open-upper
+ * child is only ever matched against an open-upper parent.
+ */
+private fun isOpenUpper(range: String): Boolean {
+    val trimmed = range.trim()
+    if (trimmed.isEmpty() || trimmed.last() != ')') return false
+    val lastComma = trimmed.lastIndexOf(',')
+    return lastComma in 0 until trimmed.length - 1 &&
+        trimmed.substring(lastComma + 1, trimmed.length - 1).isBlank()
+}
+
 /** Number of interior probe points sampled strictly inside the child interval. */
 private const val INTERIOR_PROBE_COUNT = 8
 
@@ -376,28 +398,28 @@ private const val INTERIOR_PROBE_COUNT = 8
 private const val ZERO_VERSION = "0.0"
 
 /**
- * A version far above any real registry version, standing in for a child's unbounded UPPER side
- * ("[X,)"): a bounded parent cannot contain it (so the open-ended child is correctly rejected),
- * while an open-upper parent does (so it is accepted). Registry versions are small integer-component
- * numbers, so this is safely beyond every real upper bound.
+ * A high probe version standing in for a point well inside a child's open UPPER tail ("[X,)"). It is
+ * only ever evaluated against a parent that [rangeApplies] has ALREADY confirmed is itself open-upper
+ * (the bounded-parent case is rejected by the structural guard before sampling), so this value never
+ * has to out-rank a finite parent upper bound — it just confirms the open-upper parent's floor sits
+ * at or below the child's tail. It is not an encoding of +inf.
  */
 private const val HUGE_TAIL_VERSION = "9999999.0"
 
 /**
- * Build the set of probe versions for [childRange] used by the containment heuristic: the lower and
- * upper endpoints (closed bound inclusive; open finite bound shifted just inside) plus interior
- * probes across the interval. One-sided-unbounded children are supported by substituting a sentinel
- * for the open-ended side — [ZERO_VERSION] for an unbounded lower, [HUGE_TAIL_VERSION] for an
- * unbounded upper — so a child like "[2.0,)" probes its 2.0 floor AND the huge tail (rejected by a
- * bounded parent, accepted by an open-upper one). A fully-unbounded "(,)" child throws in
- * [parseSingleInterval] and the caller treats it conservatively.
+ * Build the set of probe versions for the already-parsed child [bounds] used by the containment
+ * heuristic: the lower and upper endpoints (closed bound inclusive; open finite bound shifted just
+ * inside) plus interior probes across the interval. One-sided-unbounded children are supported by
+ * substituting a sentinel for the open-ended side — [ZERO_VERSION] for an unbounded lower,
+ * [HUGE_TAIL_VERSION] for an unbounded upper — so a child like "[2.0,)" probes its 2.0 floor AND a
+ * point inside the tail. An open-upper child is only sampled at all once [rangeApplies] has confirmed
+ * the parent is open-upper (see the structural guard there); a bounded parent never reaches here with
+ * an open-upper child.
  */
 private fun childRangeSamples(
-    childRange: String,
+    bounds: IntervalBounds,
     numericVersionFactory: NumericVersionFactory,
 ): List<IVersionInfo> {
-    val bounds = parseSingleInterval(childRange)
-
     val samples = mutableListOf<IVersionInfo>()
 
     // Low edge for interior probing + the lower endpoint sample.
@@ -416,8 +438,10 @@ private fun childRangeSamples(
     // High edge for interior probing + (when in the interval) the upper endpoint sample.
     val upperEdge: IVersionInfo
     if (bounds.upper == null) {
-        // Unbounded above: a huge sentinel stands in for the tail and IS sampled directly — a bounded
-        // parent cannot contain it, an open-upper parent can.
+        // Unbounded above: a high probe stands in for a point inside the tail and IS sampled directly.
+        // We only reach here for an open-upper PARENT (the bounded-parent case is rejected by the
+        // structural guard in rangeApplies), so this probe just confirms the open-upper parent's floor
+        // is at/below the tail — it is not racing a finite parent upper bound.
         upperEdge = numericVersionFactory.create(HUGE_TAIL_VERSION)
         samples += upperEdge
     } else {

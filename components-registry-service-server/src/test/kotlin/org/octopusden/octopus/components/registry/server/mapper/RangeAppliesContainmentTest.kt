@@ -196,6 +196,13 @@ class RangeAppliesContainmentTest {
                 Arguments.of("OE-6", "(,5.0)", "(,3.0)", true, "open-lower child up to 3.0 inside a wider open-lower parent up to 5.0"),
                 Arguments.of("OE-7", "(,3.0)", "(,5.0)", false, "open-lower child up to 5.0 reaches past the narrower parent's 3.0 upper"),
                 Arguments.of("OE-8", "[1.0,)", "[1.0,5.0)", true, "bounded child inside an open-upper parent"),
+                // OE-9 is the reviewer's exact counterexample: a bounded parent whose finite upper
+                // exceeds the open-upper sentinel must STILL reject an open-upper child (the child runs
+                // to +inf past the parent's finite top). The structural guard (open-upper child requires
+                // an open-upper parent) makes this false regardless of how high the parent's finite
+                // upper is — encoding +inf as a finite number is the flaw being fixed.
+                Arguments.of("OE-9", "[1.0,10000000.0)", "[2.0,)", false, "bounded parent above the sentinel must NOT contain an open-upper child"),
+                Arguments.of("OE-10", "[5.0,)", "[2.0,)", false, "open-upper child's floor (2.0) is below the open-upper parent's floor (5.0)"),
             )
     }
 }
