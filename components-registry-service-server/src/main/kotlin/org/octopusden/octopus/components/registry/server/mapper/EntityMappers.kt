@@ -262,6 +262,10 @@ fun ComponentEntity.toResolvedEscrowModuleConfig(
         base = base,
         scalarOverrides = matchingOverrides.filter { it.rowType == "SCALAR_OVERRIDE" },
         markerOverrides = matchingOverrides.filter { it.rowType == "MARKER" },
+        // The resolved-single-version config carries the base range (ALL_VERSIONS under ADR-018 —
+        // the default carrier). This is intentional: v2/v3 wire DTOs for the resolved path
+        // (DetailedComponent, distribution) do not surface versionRangeString — the range-keyed
+        // views come from the enumeration path (toEscrowModule), not here.
         versionRange = base.versionRange,
         ownershipRange = ownershipRange,
     )

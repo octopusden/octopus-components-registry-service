@@ -25,12 +25,13 @@ import java.util.UUID
  * BASE/RANGE_PRESENCE. DB-level CHECKs enforce the row_type ↔ overridden_attribute
  * pairing and the all-typed-cols-NULL rule for MARKER + RANGE_PRESENCE.
  *
- *   1. **BASE** (`rowType = "BASE"`, `overriddenAttribute IS NULL`): typed
- *      columns may carry the component's default values. Partial UNIQUE index
- *      ensures at most one base row per component. `isSyntheticBase = true`
- *      indicates a base populated purely from `Defaults.groovy` — legacy
- *      variants-Map mapping skips synthetic bases (MIG-029 structural fix),
- *      but single-version resolve still uses the base as fallback.
+ *   1. **BASE** (`rowType = "BASE"`, `overriddenAttribute IS NULL`): the
+ *      component's effective default at `ALL_VERSIONS`. Typed columns carry the
+ *      default values; a partial UNIQUE index ensures at most one base row per
+ *      component. Under the decoupled version model (ADR-018) the base is ALWAYS
+ *      at `ALL_VERSIONS` and coverage lives in separate RANGE_PRESENCE rows;
+ *      `isSyntheticBase` is **vestigial — always false** (see the column doc),
+ *      retained only for v4-contract stability.
  *
  *   2. **SCALAR_OVERRIDE** (`rowType = "SCALAR_OVERRIDE"`,
  *      `overriddenAttribute = '<aspect.field>'`, e.g., `build.javaVersion`,
@@ -80,6 +81,11 @@ class ComponentConfigurationEntity(
     @Column(name = "row_type", length = 32, nullable = false)
     var rowType: String,
 
+    // Vestigial under ADR-018 (decoupled version model): always false. The
+    // pre-ADR-018 importer set it true to mark a synthetic-bounded base; that base
+    // no longer exists (the base is always ALL_VERSIONS, coverage lives in
+    // RANGE_PRESENCE rows). Retained as a NOT-NULL column / DTO field for
+    // v4-contract stability only — consumers must not infer coverage from it.
     @Column(name = "is_synthetic_base", nullable = false)
     var isSyntheticBase: Boolean = false,
 

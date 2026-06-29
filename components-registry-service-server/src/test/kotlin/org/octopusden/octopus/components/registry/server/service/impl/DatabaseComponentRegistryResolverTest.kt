@@ -477,16 +477,18 @@ class DatabaseComponentRegistryResolverTest {
     }
 
     @Test
-    fun `(5d MIG-029) synthetic base with no overrides - enumeration still emits the base range`() {
+    fun `(5d MIG-029) ALL_VERSIONS base with no RANGE_PRESENCE - enumeration emits the base range`() {
         val comp = makeComponent("COMP5D")
-        // Synthetic base but NO override rows → the base range must still be enumerated
+        // supported = ALL (no RANGE_PRESENCE rows) → the ALL_VERSIONS base IS a view of its own and
+        // must be enumerated (the M1 / top-level-only shape). isSyntheticBase is vestigial under
+        // ADR-018 (always false in real data); set here only to exercise the mapper's legacy guard.
         val base = makeBase(comp, isSyntheticBase = true, javaVersion = "8")
         comp.configurations.add(base)
         stubComponent(comp)
 
         val module = resolver.getComponentById("COMP5D")
         assertNotNull(module)
-        // overrides.isEmpty() → isSyntheticBase guard does NOT suppress the base range
+        // No RANGE_PRESENCE rows → base view NOT suppressed
         assertEquals(1, module!!.moduleConfigurations.size)
         assertEquals(ALL_VERSIONS, module.moduleConfigurations.first().versionRangeString)
     }
