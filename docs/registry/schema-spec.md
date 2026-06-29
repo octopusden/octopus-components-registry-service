@@ -60,17 +60,27 @@ This document is the canonical reference for the v2 schema. ADR-014 records the 
 
 ## 3. Core model: Model A' override taxonomy
 
+> **Decoupled version model (ADR-018).** Coverage ("supported versions") and per-attribute
+> values are now **two independent layers**. The BASE row is **always** the effective default at
+> `ALL_VERSIONS` (top-level DSL block ⊕ `Defaults.groovy`); the old "synthetic bounded base" (a BASE
+> row whose `version_range` was the first declared block, `is_synthetic_base = true`) is **gone**.
+> Supported versions are a separate layer: `supported = ∪` of the declared bounded ranges, each
+> stored verbatim as a `RANGE_PRESENCE` row. `is_synthetic_base` is retained on the schema/DTO for
+> v4-contract stability but is now **always `false`**. See ADR-018 (`adr/018-decoupled-version-model.md`).
+
 `component_configurations` holds four row shapes per component. `row_type` is the source-of-truth classifier (DB CHECK `IN ('BASE','SCALAR_OVERRIDE','MARKER','RANGE_PRESENCE')`); `overridden_attribute` is the payload discriminator for SCALAR_OVERRIDE / MARKER and MUST be NULL for BASE / RANGE_PRESENCE. Each row is keyed by `(component_id, version_range, overridden_attribute)` with a UNIQUE constraint. Two partial unique indexes complete the picture: one base row per component, and one RANGE_PRESENCE row per (component, version_range).
 
 ### 3.1 Base row
 - `row_type = 'BASE'`, `overridden_attribute IS NULL`
+- `version_range` is **always `ALL_VERSIONS`** (`(,0),[0,)`). The base is the component's effective
+  default — top-level DSL block ⊕ `Defaults.groovy` — applied across the whole version space (ADR-018).
 - All typed columns may carry values (defaults for that component)
-- `is_synthetic_base` is a **structural** flag, not a "base has no content" flag: the import
-  (`ImportServiceImpl`) sets it `true` when the DSL has no explicit all-versions block AND ≥2
-  version-range blocks. Because the Groovy loader merges a component's top-level fields into every
-  range config, a synthetic base **still carries the real shared values** (vcsUrl/jira/build/…) the
-  component declared at top level — it is NOT necessarily a Defaults-only placeholder. Consumers
-  must therefore NOT treat `is_synthetic_base = true` as "the base row is empty/ignorable".
+- `is_synthetic_base` is **vestigial: always `false`** under the decoupled model. It is retained as
+  a NOT-NULL column / DTO field only for v4-contract stability. The pre-ADR-018 importer set it
+  `true` to mark a *synthetic bounded base* (a BASE row whose `version_range` was the first declared
+  block) when the DSL had no all-versions block and ≥2 range blocks; that synthetic-bounded base no
+  longer exists — coverage now lives entirely in `RANGE_PRESENCE` rows (§3.4) and the base is always
+  `ALL_VERSIONS`. Consumers must not infer coverage from this flag.
 
 ### 3.2 Scalar override row
 - `row_type = 'SCALAR_OVERRIDE'`, `overridden_attribute = '<aspect.field>'` (e.g., `build.javaVersion`, `escrow.generation`, `jira.projectKey`)
@@ -98,7 +108,15 @@ This document is the canonical reference for the v2 schema. ADR-014 records the 
 
 ### 3.4 Range-presence row
 - `row_type = 'RANGE_PRESENCE'`, `overridden_attribute IS NULL`, **all typed scalar columns NULL** (same DB CHECK as MARKER)
-- Storage-only enumeration anchor: the DSL declared a `componentVersion("R")` block whose scalars/markers all match base, so neither `emitScalarOverrides` nor `emitMarkerOverrides` produced any row. Without this presence row the range would be invisible to the resolver and disappear from `/jira-component-version-ranges` and `/{component}/maven-artifacts` (RES-001 family symptom).
+- **Coverage layer (ADR-018).** Under the decoupled model these rows are the source of truth for
+  *which versions a component is defined for*: `supported = ∪` of the `version_range` values across
+  all `RANGE_PRESENCE` rows. Each declared bounded DSL block is stored **verbatim** as one
+  `RANGE_PRESENCE` row (a composite range such as `[1,2),[5,)` is kept as a **single string** → one
+  row). A component that declares **no** bounded block — top-level-only DSL, or an explicit `(,)` /
+  `(,0),[0,)` block — produces a single `ALL_VERSIONS` base and **no** `RANGE_PRESENCE` rows
+  (`supported = ALL`). The resolve coverage gate (§3.5) keys off these rows, not off
+  `is_synthetic_base`.
+- Storage-only enumeration anchor: the DSL declared a range block whose scalars/markers all match base, so neither `emitScalarOverrides` nor `emitMarkerOverrides` produced any override row. Without this presence row the range would be invisible to the resolver and disappear from `/jira-component-version-ranges` and `/{component}/maven-artifacts` (RES-001 family symptom).
 - Hidden from V4 editor APIs: filtered out in `V4Mappers.toDetailResponse`'s `configurations[]`, never appears in `GET /components/{id}/field-overrides`, and `createFieldOverride` / `updateFieldOverride` / `deleteFieldOverride` reject these rows.
 - Resolver enumerates them via the `.distinct()` over `versionRange` so the range surfaces in v1-v3 endpoints; `EntityMappers.resolveForRange` filters them out before applying scalar/marker overrides so no all-NULL row overlays base scalars.
 - Partial unique index `uq_component_configurations_one_range_presence` ensures at most one per `(component, version_range)`.
@@ -107,11 +125,22 @@ This document is the canonical reference for the v2 schema. ADR-014 records the 
 
 For request `(component, version V)`:
 
+0. **Coverage gate (ADR-018).** Compute `supported = ∪` of the `RANGE_PRESENCE` ranges. If the
+   component has a bounded base (legacy/API shape) OR any `RANGE_PRESENCE` row, and `V ∉ supported`,
+   resolve returns **404** (no configuration). The gate is **skipped** only when the base is
+   `ALL_VERSIONS` AND there are no `RANGE_PRESENCE` rows (`supported = ALL`). Implemented in
+   `EntityMappers.toResolvedEscrowModuleConfig` and `ComponentCodeRenderer.renderResolved`.
 1. Load base row + all matching override rows: `WHERE component_id = X AND (row_type = 'BASE' OR range_contains(version_range, V))`. RANGE_PRESENCE rows are loaded but discarded before scalar/marker overlay.
 2. Start with base row scalar values; for each scalar override row matching V, set its single non-NULL column on the merged result.
 3. For child collections, pick the most-specific marker override row whose `version_range` contains V; if found, its children REPLACE base children (full replacement). If no marker matches, use base children.
 4. Constraint: version_range of override rows within one component MUST be pairwise **disjoint** per attribute. Any intersection — partial overlap, strict containment, or equality — is rejected at write-time by the service validator (`validateFieldOverrideRange`); the DB UNIQUE on `(component_id, version_range, overridden_attribute)` additionally blocks only *exact-text* duplicates, while *semantic*-equal ranges differing by whitespace or trailing zeros (`[1.0, 2.0)` / `[1,2)` vs `[1.0,2.0)`) are caught by the validator. This guarantees at most one override per attribute matches V, so no runtime tiebreaker is needed. (Stricter than the earlier transitional rule, which allowed strict containment — but that left a version inside the inner range matching *two* overrides, which contradicts the "at most one matches V" guarantee. Enforced client-side in Portal #67 and server-side in `validateFieldOverrideRange`.)
-5. For the legacy variants-Map endpoints, skip emitting the base row entry if `is_synthetic_base = true` (this is the MIG-029 fix). For single-version resolve (hot path), synthetic base is always used as fallback.
+5. **Enumeration (legacy variants-Map / range-list endpoints).** Iterate the declared ranges
+   (`RANGE_PRESENCE` + override rows), resolving each by **containment**. The `ALL_VERSIONS` base is
+   enumerated as its own view **only** when there are no `RANGE_PRESENCE` rows. Under the decoupled
+   model the base is never synthetic-bounded, so the old MIG-029 "skip the synthetic base entry when
+   `is_synthetic_base = true`" rule is moot — enumeration is anchored to the `RANGE_PRESENCE` ranges
+   instead (ADR-018). For single-version resolve (hot path), the `ALL_VERSIONS` base is the fallback
+   for any attribute with no containing override, gated by step 0.
 
 ## 4. Table specifications
 
@@ -167,7 +196,7 @@ Per-(component, version_range) typed rows; the spine of Model A'.
 | `version_range` | VARCHAR(255) | NOT NULL | DSL range string, e.g., `(,0),[0,)`, `[1.0,2.0)` |
 | `overridden_attribute` | VARCHAR(50) | nullable | NULL for BASE/RANGE_PRESENCE; non-NULL for SCALAR_OVERRIDE/MARKER |
 | `row_type` | VARCHAR(32) | NOT NULL | `BASE` / `SCALAR_OVERRIDE` / `MARKER` / `RANGE_PRESENCE` — source-of-truth row classifier |
-| `is_synthetic_base` | BOOLEAN | NOT NULL DEFAULT false | structural flag: no all-versions block + ≥2 ranges (see §3.1); base may still carry real merged values |
+| `is_synthetic_base` | BOOLEAN | NOT NULL DEFAULT false | **Vestigial under ADR-018 — always `false`.** Retained for v4-contract stability; the synthetic-bounded base it once flagged no longer exists, the base is always `ALL_VERSIONS` and coverage lives in `RANGE_PRESENCE` rows (see §3.1, §3.4) |
 | Build aspect | | | |
 | `build_system` | VARCHAR(50) | | MAVEN/GRADLE/ESCROW_PROVIDED_MANUALLY/PROVIDED/etc. |
 | `java_version` | VARCHAR(50) | | |
@@ -366,7 +395,7 @@ All v1-v3 endpoints implemented as adapters over the new schema. Mapper rules:
 | `vcs.versionControlSystems` (v3 legacy) | Not produced — only emitted by dropped `GET /api/3/components` endpoint |
 | `GAV` csv (v1-v3) | `distribution_maven_artifacts` ORDER BY sort_order, then `distribution_file_url_artifacts` ORDER BY sort_order; canonical concat |
 | `docker` csv (v1-v3) | `distribution_docker_images` ORDER BY sort_order; format `image:flavor` when `flavor IS NOT NULL`, else `image` |
-| Legacy variants-Map shape | Skip base row in enumeration when `is_synthetic_base = true` — fixes MIG-029 |
+| Legacy variants-Map shape | Enumerate the declared `RANGE_PRESENCE` ranges by containment; the `ALL_VERSIONS` base is emitted as its own view only when there are no `RANGE_PRESENCE` rows (ADR-018; supersedes the MIG-029 synthetic-base skip) |
 
 ### 5.1 Endpoint kill-list
 
@@ -389,7 +418,7 @@ string builder — no GroovyShell). `ComponentCodeRenderer` walks the entity:
 
 | Mode | Source | Shape |
 |---|---|---|
-| **FULL** (no `version`) | `ComponentEntity` + its `configurations` rows | Delta-style: top-level block (per-component fields + BASE-row aspects) + one `"<range>" { … }` block per distinct override range. Reuses the §3 row taxonomy — SCALAR_OVERRIDE rows become `field = value` (or `field = null` for the import-only null-clear, §3.2), MARKER rows become the replaced child block. RANGE_PRESENCE-only ranges (§3.4) are skipped. The BASE row's aspects are **always rendered** — even for a synthetic base (§3.1, §6.4) they hold the values the loader merged from the component's top-level fields and are the resolver's fallback for every version, so they belong at the top level, NOT hidden behind the overriding ranges. |
+| **FULL** (no `version`) | `ComponentEntity` + its `configurations` rows | Delta-style: top-level block (per-component fields + BASE-row aspects) + one `"<range>" { … }` block per distinct override range. Reuses the §3 row taxonomy — SCALAR_OVERRIDE rows become `field = value` (or `field = null` for the import-only null-clear, §3.2), MARKER rows become the replaced child block. RANGE_PRESENCE-only ranges (§3.4) are skipped. The BASE row's aspects are **always rendered** — under the decoupled model the base is the `ALL_VERSIONS` effective default (§3.1, §6.4) and the resolver's fallback for every version, so they belong at the top level, NOT hidden behind the overriding ranges. |
 | **RESOLVED** (`?version=X`) | merged single view | Reuses the §3.5 resolve primitives (`ComponentConfigurationView.applyScalarOverride` for scalars, marker-pick for child collections) — values match the v2 version-resolution endpoints. Single block, no range sub-blocks. **Difference vs the v2 resolver:** distribution `$version` substitution (§6.8, a runtime concern) is intentionally not applied, so distribution patterns render as the stored templates — consistent with the FULL view. |
 
 Null-clear (§3.2) is preserved in FULL: a SCALAR_OVERRIDE row is rendered by *presence* of the
@@ -460,24 +489,31 @@ For each top-level DSL component:
 
 Grouping is keyed off the loader's `EscrowConfiguration.aggregatorSubComponents` (aggregatorKey → sub-component keys, derived from the `components { }` block), **never** the flat `parentComponent` field (§4.3). After linking, a **re-run cleanup** deletes any pre-existing `component_groups` row whose key is no longer a current aggregator — unlinking its members (`component_group_id = NULL`) first. This makes re-migration idempotent and removes groups left behind by the earlier flat-`parentComponent`-based grouping (a non-aggregator parent — one with no `components { }` block — no longer retains a group). Cleanup runs only on a **full batch** migration (`migrateAllComponents`); a single-component migration (`migrateComponent`) links its own group but does not sweep stale groups.
 
-### 6.4 Base row determination
+### 6.4 Base row determination (ADR-018)
 
-For each component, the base config is the `(,0),[0,)` (ALL_VERSIONS) config if the loader emitted
-one, else `configs.first()`. The base row always carries that config's resolved values (top-level
-DSL fields merged in by the loader, plus `Defaults.groovy`).
+The base row is **always** the `ALL_VERSIONS` (`(,0),[0,)`) effective default — the top-level DSL
+block merged with `Defaults.groovy` — regardless of whether the DSL declared an explicit all-versions
+block. There is **no synthetic-bounded base**: a component that declares only version-range blocks
+no longer borrows its first range as the base; that base is `ALL_VERSIONS`, and the declared ranges
+become the coverage layer (`RANGE_PRESENCE` rows, §6.5/§3.4). `build_system` is the only
+required-on-base field and is always non-null via `Defaults.groovy` (`buildSystem = MAVEN`), so the
+base DB CHECK is unchanged (audit A2).
 
-`is_synthetic_base` is then set **structurally**: `true` when there is no ALL_VERSIONS config AND
-`configs.size > 1` (i.e. the DSL declared only version-range blocks, with no explicit all-versions
-block). Note this fires even when the component HAS top-level fields — those get merged onto the
-first range, which becomes the base — so a synthetic base is not necessarily Defaults-only (see §3.1).
+`is_synthetic_base` is consequently **always set `false`** by the importer; it is retained only for
+v4-contract stability (§3.1, §4.2).
 
-### 6.5 Override row generation
+### 6.5 Override + coverage row generation
 
-For each version-range block in DSL:
-- For each scalar attribute whose value differs from the base row: emit scalar override row (`overridden_attribute = 'aspect.field'`, single column set).
+For each declared **bounded** version-range block in DSL:
+- Emit one `RANGE_PRESENCE` row for the block's range, stored **verbatim** (composite ranges kept
+  as a single string) — this is the coverage layer (§3.4, ADR-018).
+- For each scalar attribute whose value differs from the `ALL_VERSIONS` base row: emit scalar override row (`overridden_attribute = 'aspect.field'`, single column set), on the block's range (which may be open-upper).
 - For each child-collection change (multi-VCS, distribution_*, requiredTools): emit marker row (`overridden_attribute = '<marker>'`, all typed scalars NULL) + child rows attached.
 
-Override detection deduplicates: a row is emitted only when the resolved value differs from the base row's resolved value.
+Override detection deduplicates against the `ALL_VERSIONS` base: a scalar/marker row is emitted only
+when the resolved value differs from the base's resolved value (the `RANGE_PRESENCE` row is still
+emitted so the range stays in `supported`). A block that is an explicit `(,)` / `(,0),[0,)` all-versions
+range yields **no** `RANGE_PRESENCE` row (`supported = ALL`). See ADR-018 case matrix M1–M8.
 
 ### 6.6 Distribution parsing
 
@@ -523,7 +559,7 @@ fake-aggregator-placeholder-url.groovy  — vcsUrl = ".../fake/fake.git"
 fake-aggregator-stub-marker.groovy      — artifactId = "X-stub"
 fake-aggregator-fake-marker.groovy      — artifactId = "fake"
 standalone-component.groovy             — no nested components block
-version-range-only.groovy               — no top-level DSL fields; tests is_synthetic_base
+version-range-only.groovy               — no top-level DSL fields; tests ALL_VERSIONS base + RANGE_PRESENCE coverage (ADR-018)
 multi-aspect-divergence.groovy          — build, vcs, jira, escrow each change at different ranges
 all-distribution-families.groovy        — Maven + fileUrl + Docker + DEB/RPM together
 ```
