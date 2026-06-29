@@ -118,6 +118,26 @@ class SupportedVersionsApiTest {
     }
 
     @Test
+    @DisplayName("coverage splits at TWO non-adjacent override edges (sequential-split composition)")
+    fun `coarse coverage splits at multiple override edges`() {
+        val id = createComponent("sv_multi_${UUID.randomUUID().toString().take(8)}")
+        putSupported(id, """{"ranges":["[1.0,10.0)"]}""")
+        createFieldOverride(id, """{"overriddenAttribute":"build.javaVersion","versionRange":"[2.0,3.0)","value":"11"}""")
+        createFieldOverride(id, """{"overriddenAttribute":"build.mavenVersion","versionRange":"[5.0,7.0)","value":"3.9.0"}""")
+        // Both override edges (2.0/3.0 and 5.0/7.0) partition [1.0,10.0).
+        assertEquals(
+            listOf("[1.0,2.0)", "[2.0,3.0)", "[3.0,5.0)", "[5.0,7.0)", "[7.0,10.0)"),
+            getSupported(id).path("ranges").map { it.asText() },
+        )
+        // A coarse re-PUT must re-split to the same five rows in one delta (no-op, no 500).
+        val resp = putSupported(id, """{"ranges":["[1.0,10.0)"]}""")
+        assertEquals(
+            listOf("[1.0,2.0)", "[2.0,3.0)", "[3.0,5.0)", "[5.0,7.0)", "[7.0,10.0)"),
+            resp.path("ranges").map { it.asText() },
+        )
+    }
+
+    @Test
     @DisplayName("V1/V5: an override left outside the new supported set produces a non-blocking warning")
     fun `override outside supported warns`() {
         val id = createComponent("sv_warn_${UUID.randomUUID().toString().take(8)}")

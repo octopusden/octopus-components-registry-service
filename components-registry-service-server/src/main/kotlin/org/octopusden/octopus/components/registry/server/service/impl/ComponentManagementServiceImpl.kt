@@ -978,30 +978,6 @@ class ComponentManagementServiceImpl(
     }
 
     /**
-     * Write-time auto-split of supported coverage (ADR-018 refinement (b)). After a field-override
-     * write whose range introduces a boundary INSIDE a covering `RANGE_PRESENCE` row, split that
-     * presence row at the override's interior edges so each enumerated range keeps constant resolved
-     * values (range-view enumeration is anchored to `RANGE_PRESENCE`, one config per row). Without
-     * this, the covering range's enumerated view would span versions whose resolved values differ.
-     *
-     * No-op for components with no `RANGE_PRESENCE` rows (supported = ALL, or API-created components
-     * whose override range is enumerated as its own view) and for overrides that introduce no interior
-     * edge (equal to / wider than / disjoint from the presence range). Idempotent: re-running on an
-     * already-aligned set adds nothing. Coverage (the union of ranges) is unchanged — only the
-     * breakpoints move. Uses collection mutation so JPA orphanRemoval/cascade persist the change.
-     *
-     * A composite override range (only possible on a value-only update of an import-created composite
-     * override row) introduces no single new edge — coverage was aligned at import — so it is a no-op.
-     * A composite COVERING presence row cannot be split by this simple-segment helper; if a simple
-     * override intersects one, we reject the write (clear 400) rather than silently leave a range
-     * whose enumerated view would no longer have constant resolved values — composite-coverage editing
-     * is a follow-up.
-     *
-     * Known limitation (P3): a range CHANGE on an override adds new breakpoints but does not merge the
-     * old ones back, so repeated range edits fragment `RANGE_PRESENCE` over time. Correctness holds
-     * (union + per-row constant values); a compaction pass is a follow-up.
-     */
-    /**
      * Pure auto-split (ADR-018 (b)) of a requested supported set: split each requested range at every
      * single-segment override edge that falls inside it, so the result is breakpoint-aligned. A
      * composite override range is import-aligned and introduces no single edge (skipped). A composite
@@ -1035,6 +1011,29 @@ class ComponentManagementServiceImpl(
         return acc.distinct()
     }
 
+    /**
+     * Write-time auto-split of supported coverage (ADR-018 refinement (b)), used by the FIELD-OVERRIDE
+     * write paths (create/update). After a field-override write whose range introduces a boundary
+     * INSIDE a covering `RANGE_PRESENCE` row, split that presence row at the override's interior edges
+     * so each enumerated range keeps constant resolved values (range-view enumeration is anchored to
+     * `RANGE_PRESENCE`, one config per row). Without this, the covering range's enumerated view would
+     * span versions whose resolved values differ.
+     *
+     * No-op for components with no `RANGE_PRESENCE` rows (supported = ALL, or API-created components
+     * whose override range is enumerated as its own view) and for overrides that introduce no interior
+     * edge (equal to / wider than / disjoint from the presence range). Idempotent. Coverage (the union
+     * of ranges) is unchanged — only the breakpoints move. Uses collection mutation so JPA
+     * orphanRemoval/cascade persist the change.
+     *
+     * A composite override range introduces no single new edge — no-op. A composite COVERING presence
+     * row cannot be split by this simple-segment helper; if a simple override intersects one, reject
+     * the write (clear 400) — composite-coverage editing is a follow-up.
+     *
+     * NOTE: `setSupportedVersions` does NOT call this — it computes the post-split set up front via
+     * [coverageAfterOverrideSplit] and applies a single delta (avoids the remove-then-re-add flush
+     * violation). Known limitation (P3): a range CHANGE on an override fragments `RANGE_PRESENCE` over
+     * time (no compaction); correctness holds.
+     */
     private fun autoSplitCoverage(
         component: ComponentEntity,
         overrideRange: String,
@@ -1181,7 +1180,8 @@ class ComponentManagementServiceImpl(
         val warnings = supportedCoverageWarnings(component, requested, all)
 
         bumpParentVersion(component)
-        // `resulting` reflects the actual persisted rows after auto-split re-alignment (the audit log
+        // `resulting` reflects the actual persisted rows (the requested set after the upfront
+        // override-edge split applied as a single delta) so the audit log
         // must reconstruct real DB state, not the pre-split request).
         val resulting =
             component.configurations
