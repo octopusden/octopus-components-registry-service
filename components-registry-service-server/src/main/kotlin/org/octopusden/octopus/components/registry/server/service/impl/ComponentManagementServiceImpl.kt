@@ -1001,6 +1001,40 @@ class ComponentManagementServiceImpl(
      * old ones back, so repeated range edits fragment `RANGE_PRESENCE` over time. Correctness holds
      * (union + per-row constant values); a compaction pass is a follow-up.
      */
+    /**
+     * Pure auto-split (ADR-018 (b)) of a requested supported set: split each requested range at every
+     * single-segment override edge that falls inside it, so the result is breakpoint-aligned. A
+     * composite override range is import-aligned and introduces no single edge (skipped). A composite
+     * COVERING range that a simple override intersects cannot be split here → reject (same as the
+     * field-override write path). String-only so `setSupportedVersions` can delta against the final
+     * rows in ONE pass — avoiding the remove-then-re-add of identical rows that a post-hoc
+     * [autoSplitCoverage] would cause (and the resulting partial-unique-index flush violation).
+     */
+    private fun coverageAfterOverrideSplit(
+        requested: List<String>,
+        overrideRanges: List<String>,
+    ): List<String> {
+        var acc = requested
+        for (ovr in overrideRanges) {
+            if (VersionCoverageSplit.parseSegment(ovr) == null) continue // composite override: no single edge
+            acc =
+                acc.flatMap { pres ->
+                    val parts = VersionCoverageSplit.split(pres, ovr)
+                    when {
+                        parts != null -> parts
+                        rangesIntersect(pres, ovr) ->
+                            throw IllegalArgumentException(
+                                "Supported range '$pres' is composite and intersects override '$ovr'; " +
+                                    "splitting composite coverage at an override edge is not yet supported — " +
+                                    "edit coverage via DSL re-import, or split the composite first.",
+                            )
+                        else -> listOf(pres)
+                    }
+                }
+        }
+        return acc.distinct()
+    }
+
     private fun autoSplitCoverage(
         component: ComponentEntity,
         overrideRange: String,
@@ -1108,18 +1142,28 @@ class ComponentManagementServiceImpl(
                 request.ranges!!.map { normalizeRange(it) }.distinct().also { validateSupportedRanges(it) }
             }
 
-        // Declarative replace, applied as a DELTA so an idempotent (same-range) re-PUT is a no-op
-        // rather than a unique-index violation: Hibernate would otherwise flush the INSERT of a
-        // re-added range before the orphan-removal DELETE of the identical old row, tripping
-        // uq_component_configurations_one_range_presence (component_id, version_range). orphanRemoval +
-        // cascade persist the delta. (RANGE_PRESENCE rows carry no payload, so nothing else migrates.)
+        // Compute the FINAL coverage rows up front: the requested ranges, pre-split at every existing
+        // per-attribute override edge (ADR-018 (b) — each enumerated range keeps constant values).
+        // Computing the post-split set first lets us apply ONE delta against the current rows, so a
+        // range that is unchanged is KEPT (not removed-then-re-added). Removing then re-adding the
+        // identical (component, range) — which a separate auto-split step would do for a coarse PUT of
+        // [1,10) over already-split [1,2),[2,3),[3,10) — trips the partial unique index
+        // uq_component_configurations_one_range_presence on flush (Hibernate orders INSERTs before the
+        // orphan-removal DELETEs). The single-delta approach makes such a re-PUT a true no-op.
+        val overrideRanges =
+            component.configurations
+                .filter { it.rowType in FIELD_OVERRIDE_ROW_TYPES }
+                .map { it.versionRange }
+                .distinct()
+        val finalRanges = if (all) emptyList() else coverageAfterOverrideSplit(requested, overrideRanges)
+        val finalSet = finalRanges.toSet()
+
         val existingPresence = component.configurations.filter { it.rowType == "RANGE_PRESENCE" }
         val existingRanges = existingPresence.map { it.versionRange }.toSet()
-        val requestedSet = requested.toSet()
         existingPresence
-            .filter { it.versionRange !in requestedSet }
+            .filter { it.versionRange !in finalSet }
             .forEach { component.configurations.remove(it) }
-        requested
+        finalRanges
             .filter { it !in existingRanges }
             .forEach {
                 component.configurations.add(
@@ -1131,16 +1175,6 @@ class ComponentManagementServiceImpl(
                     ),
                 )
             }
-
-        // Re-align the new coverage to existing per-attribute override edges so each enumerated range
-        // keeps constant resolved values (ADR-018 (b)). Skipped for supported = ALL (no presence rows).
-        if (!all) {
-            component.configurations
-                .filter { it.rowType in FIELD_OVERRIDE_ROW_TYPES }
-                .map { it.versionRange }
-                .distinct()
-                .forEach { autoSplitCoverage(component, it) }
-        }
 
         // V1/V5 (warn-and-allow): surface overrides left entirely outside the new supported set — they
         // never resolve (the coverage gate 404s first). Non-blocking; the write still succeeds.

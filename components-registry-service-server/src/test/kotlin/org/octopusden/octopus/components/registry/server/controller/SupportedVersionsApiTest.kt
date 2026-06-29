@@ -99,6 +99,25 @@ class SupportedVersionsApiTest {
     }
 
     @Test
+    @DisplayName("coarse re-PUT over already-split coverage is a no-op (no unique-index 500)")
+    fun `coarse re-put over split coverage is safe`() {
+        val id = createComponent("sv_coarse_${UUID.randomUUID().toString().take(8)}")
+        putSupported(id, """{"ranges":["[1.0,10.0)"]}""")
+        // An override inside [1.0,10.0) auto-splits coverage into three rows.
+        createFieldOverride(id, """{"overriddenAttribute":"build.javaVersion","versionRange":"[2.0,3.0)","value":"11"}""")
+        assertEquals(listOf("[1.0,2.0)", "[2.0,3.0)", "[3.0,10.0)"), getSupported(id).path("ranges").map { it.asText() })
+
+        // Re-PUT the COARSE range over the split rows. The server must re-split to the same three rows
+        // without removing-then-re-adding identical (component, range) rows in one flush — i.e. no 500.
+        val resp = putSupported(id, """{"ranges":["[1.0,10.0)"]}""")
+        assertEquals(
+            listOf("[1.0,2.0)", "[2.0,3.0)", "[3.0,10.0)"),
+            resp.path("ranges").map { it.asText() },
+            "coarse re-PUT must re-split to the aligned rows (computed as a single delta, no flush violation)",
+        )
+    }
+
+    @Test
     @DisplayName("V1/V5: an override left outside the new supported set produces a non-blocking warning")
     fun `override outside supported warns`() {
         val id = createComponent("sv_warn_${UUID.randomUUID().toString().take(8)}")
