@@ -272,8 +272,8 @@ class ComponentCodeRendererTest {
     }
 
     @Test
-    @DisplayName("FULL: RANGE_PRESENCE-only range does not emit an empty block")
-    fun fullRangePresenceSkipped() {
+    @DisplayName("FULL: RANGE_PRESENCE-only range renders as an explicit empty block (coverage is faithful — ADR-018)")
+    fun fullRangePresenceRendersEmptyBlock() {
         val c = component()
         base(c) { buildSystem = "MAVEN" }
         c.configurations.add(
@@ -286,7 +286,33 @@ class ComponentCodeRendererTest {
             ),
         )
         val out = renderer.renderFull(c)
-        assertFalse(out.contains("\"[9,10)\""), out)
+        // Decoupled model: the ALL_VERSIONS base carries the values; the RANGE_PRESENCE row is the
+        // SOLE record that the component is supported on [9,10). It must surface so as-code does not
+        // misrepresent a bounded-coverage component as all-versions.
+        assertTrue(out.contains("\"[9,10)\""), out)
+    }
+
+    @Test
+    @DisplayName("FULL: a declared empty coverage block on a defaulted component is faithful (M2 shape)")
+    fun fullEmptyCoverageBlockIsFaithful() {
+        // build{jV=17} top-level (→ ALL_VERSIONS base) + supported only from [1.0,) (empty block,
+        // a RANGE_PRESENCE row). as-code must show the [1.0,) coverage block, not look all-versions.
+        val c = component()
+        base(c) {
+            buildSystem = "MAVEN"
+            javaVersion = "17"
+        }
+        c.configurations.add(
+            ComponentConfigurationEntity(
+                id = UUID.randomUUID(),
+                component = c,
+                versionRange = "[1.0,)",
+                overriddenAttribute = null,
+                rowType = "RANGE_PRESENCE",
+            ),
+        )
+        val out = renderer.renderFull(c)
+        assertTrue(out.contains("\"[1.0,)\""), "as-code must surface the [1.0,) supported-coverage block: $out")
     }
 
     // ----------------------------------------------------------------------

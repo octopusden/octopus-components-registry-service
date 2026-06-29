@@ -586,10 +586,19 @@ class ComponentCodeRenderer(
         // (e.g. MarkerAttributes.GROUP_ARTIFACT_PATTERN, deliberately not in `ALL`)
         // carry no renderable block — including them would emit an empty range block.
         val markers = rows.filter { it.rowType == ROW_MARKER && it.overriddenAttribute in MarkerAttributes.ALL }
-        // RANGE_PRESENCE-only (or import-marker-only) ranges with no ownership override contribute
-        // nothing → skip (no empty block). A range whose ONLY override is artifact ownership still
-        // renders (ownership left the GROUP_ARTIFACT_PATTERN marker for component_artifact_mappings).
-        if (scalarOverrides.isEmpty() && markers.isEmpty() && ownershipMappings.isEmpty()) return
+        if (scalarOverrides.isEmpty() && markers.isEmpty() && ownershipMappings.isEmpty()) {
+            // No editable override content for this range. Under the decoupled model (ADR-018) the
+            // base is always ALL_VERSIONS and supported coverage lives in RANGE_PRESENCE rows, so a
+            // RANGE_PRESENCE-only range still declares that the component is SUPPORTED there — render
+            // it as an explicit empty block (`"[1.0,)" {}`) so full as-code stays faithful (otherwise
+            // a bounded-coverage component would render as all-versions). Import-internal-marker-only
+            // ranges (e.g. GROUP_ARTIFACT_PATTERN, no presence row) still contribute nothing → skip.
+            if (rows.any { it.rowType == ROW_RANGE_PRESENCE }) {
+                cb.open(doubleQuoted(range))
+                cb.close()
+            }
+            return
+        }
 
         cb.open(doubleQuoted(range))
         writeAspectOverrides(cb, "build", scalarOverrides, markers)

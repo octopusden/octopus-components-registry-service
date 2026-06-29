@@ -15,6 +15,8 @@ import org.octopusden.octopus.components.registry.server.dto.v4.EmployeeIntegrat
 import org.octopusden.octopus.components.registry.server.dto.v4.EmployeeMatchResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideCreateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.SupportedVersionsRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.SupportedVersionsResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideUpdateRequest
 import org.octopusden.octopus.components.registry.server.repository.ComponentGroupRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentLabelRepository
@@ -40,6 +42,7 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
@@ -467,6 +470,24 @@ class ComponentControllerV4(
     fun listFieldOverrides(
         @PathVariable id: UUID,
     ): List<FieldOverrideResponse> = componentManagementService.listFieldOverrides(id)
+
+    @GetMapping("/{id}/supported-versions")
+    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
+    fun getSupportedVersions(
+        @PathVariable id: UUID,
+    ): SupportedVersionsResponse = componentManagementService.getSupportedVersions(id)
+
+    // Supported-versions (coverage) editing is a per-component edit, gated by the same
+    // component-level ownership check as the scalar PATCH / field overrides.
+    @PutMapping("/{id}/supported-versions")
+    @PreAuthorize(
+        "@permissionEvaluator.hasPermission('ACCESS_COMPONENTS') " +
+            "and @permissionEvaluator.canEditComponent(#id.toString())",
+    )
+    fun setSupportedVersions(
+        @PathVariable id: UUID,
+        @RequestBody request: SupportedVersionsRequest,
+    ): SupportedVersionsResponse = componentManagementService.setSupportedVersions(id, request)
 
     companion object {
         // Numeric-aware version order: compare dot-separated segments as integers so
