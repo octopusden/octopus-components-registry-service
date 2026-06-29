@@ -33,7 +33,9 @@ import org.octopusden.octopus.escrow.model.VersionControlSystemRoot
 import org.octopusden.octopus.releng.dto.ComponentInfo
 import org.octopusden.octopus.releng.dto.JiraComponent
 import org.octopusden.releng.versions.ComponentVersionFormat
+import org.octopusden.releng.versions.IVersionInfo
 import org.octopusden.releng.versions.NumericVersionFactory
+import org.octopusden.releng.versions.VersionRange
 import org.octopusden.releng.versions.VersionRangeFactory
 
 /** Must match EscrowConfigurationLoader.ALL_VERSIONS = "(,0),[0,)" */
@@ -94,7 +96,7 @@ internal object MarkerAttributes {
  */
 fun ComponentEntity.toEscrowModule(
     versionRangeFactory: VersionRangeFactory,
-    @Suppress("UNUSED_PARAMETER") numericVersionFactory: NumericVersionFactory,
+    numericVersionFactory: NumericVersionFactory,
 ): EscrowModule {
     val module = EscrowModule()
     module.moduleName = this.componentKey
@@ -156,6 +158,7 @@ fun ComponentEntity.toEscrowModule(
                 base = base,
                 overrides = overrides,
                 versionRangeFactory = versionRangeFactory,
+                numericVersionFactory = numericVersionFactory,
             )
         module.moduleConfigurations.add(resolved)
     }
@@ -269,21 +272,32 @@ private fun ComponentEntity.resolveForRange(
     base: ComponentConfigurationEntity,
     overrides: List<ComponentConfigurationEntity>,
     versionRangeFactory: VersionRangeFactory,
+    numericVersionFactory: NumericVersionFactory,
 ): EscrowModuleConfig {
     // For enumeration purposes, an override applies to `range` when its own
-    // range string equals `range` OR fully contains `range`. Equality is the
-    // common case (overrides are keyed by their own range); containment matters
-    // when the base's all-versions range is being enumerated and a narrower
-    // override exists.
+    // range CONTAINS `range` (child is a subset of parent). Equality is the
+    // common case (overrides are keyed by their own range); strict containment
+    // matters when a broader override range covers a narrower enumeration view
+    // (e.g. an override on [1.0,3.0) projected onto an enumerated [1.0,2.0)).
     val scalarOverrides =
         overrides.filter {
             it.rowType == "SCALAR_OVERRIDE" &&
-                rangeApplies(parentRange = it.versionRange, childRange = range, factory = versionRangeFactory)
+                rangeApplies(
+                    parentRange = it.versionRange,
+                    childRange = range,
+                    versionRangeFactory = versionRangeFactory,
+                    numericVersionFactory = numericVersionFactory,
+                )
         }
     val markerOverrides =
         overrides.filter {
             it.rowType == "MARKER" &&
-                rangeApplies(parentRange = it.versionRange, childRange = range, factory = versionRangeFactory)
+                rangeApplies(
+                    parentRange = it.versionRange,
+                    childRange = range,
+                    versionRangeFactory = versionRangeFactory,
+                    numericVersionFactory = numericVersionFactory,
+                )
         }
 
     return buildEscrowModuleConfig(
@@ -296,27 +310,218 @@ private fun ComponentEntity.resolveForRange(
 }
 
 /**
- * True when an override row with `parentRange` should apply to the enumeration
- * view `childRange`. Trivially true when equal; otherwise this should be
- * containment (`child ⊆ parent`), but the version-range library currently
- * exposes only `containsVersion` (point-in-range), not `containsRange`.
+ * True when an override row keyed by [parentRange] should apply to the enumeration view
+ * [childRange] — i.e. when child is a subset of parent (range containment).
  *
- * Current behaviour: returns true ONLY for the equal case. Strict-containment
- * overrides (e.g., override on `[1.0,3.0)` should apply when enumerating a
- * narrower `[1.0,2.0)` range) are NOT picked up. This is the conservative
- * choice — better to miss an override than to apply a non-matching one —
- * but it does mean a broader override on a real component is silently
- * dropped during enumeration.
+ * TD-010 (docs/registry/tech-debt/010-range-applies-containment.md). The version-range library
+ * exposes only point-in-range [VersionRange.containsVersion], not containsRange, so containment is
+ * approximated by a sample-points heuristic: sample the child's endpoints (closed bound inclusive;
+ * open bound epsilon-shifted just inside the interval) plus a fixed number of interior probes across
+ * the child interval, and return true iff EVERY sample lies in the parent. Equality short-circuits to
+ * true. A parent that fails to parse (e.g. the unbounded "(,)" — both-sides-open is rejected by the
+ * factory, deferred to TD-010-b) falls back to string equality, keeping the result conservative
+ * (a missed override, never a wrong one).
  *
- * See TD-010 (`docs/registry/tech-debt/010-range-applies-containment.md`)
- * for the matrix-tests acceptance + sample-points heuristic spec. Same
- * blocker as the partial-overlap write-side rejection item.
+ * The heuristic is exact for the bounded cases in the TD-010 matrix; the only theoretical false
+ * positive would be a child whose violating sub-interval is narrower than the probe spacing and sits
+ * between two samples, which cannot happen for the integer-component versions this registry uses.
  */
-private fun rangeApplies(
+internal fun rangeApplies(
     parentRange: String,
     childRange: String,
-    @Suppress("UNUSED_PARAMETER") factory: VersionRangeFactory,
-): Boolean = parentRange == childRange
+    versionRangeFactory: VersionRangeFactory,
+    numericVersionFactory: NumericVersionFactory,
+): Boolean {
+    if (parentRange == childRange) return true
+
+    val parent =
+        try {
+            versionRangeFactory.create(parentRange)
+        } catch (_: Exception) {
+            // Unparseable parent (e.g. unbounded "(,)", TD-010-b): fall back to the conservative
+            // equality test handled above — reaching here means it was not equal, so no match.
+            return false
+        }
+
+    val samples =
+        try {
+            childRangeSamples(childRange, numericVersionFactory)
+        } catch (_: Exception) {
+            // Unparseable / unbounded child: cannot enumerate samples, stay conservative.
+            return false
+        }
+    if (samples.isEmpty()) return false
+
+    return samples.all { sample ->
+        try {
+            parent.containsVersion(sample)
+        } catch (_: Exception) {
+            false
+        }
+    }
+}
+
+/** Number of interior probe points sampled strictly inside the child interval. */
+private const val INTERIOR_PROBE_COUNT = 8
+
+/**
+ * Build the set of probe versions for [childRange] used by the containment heuristic: the lower and
+ * upper endpoints (with open bounds shifted just inside the interval) plus [INTERIOR_PROBE_COUNT]
+ * interior probes spread across the interval. Only single-interval children are produced; a
+ * multi-segment or unbounded child throws and the caller treats it conservatively.
+ */
+private fun childRangeSamples(
+    childRange: String,
+    numericVersionFactory: NumericVersionFactory,
+): List<IVersionInfo> {
+    val bounds = parseSingleInterval(childRange)
+    val lower = numericVersionFactory.create(bounds.lower)
+    val upper = numericVersionFactory.create(bounds.upper)
+
+    val samples = mutableListOf<IVersionInfo>()
+    // Lower endpoint: closed bound is part of the interval; open bound is excluded, so probe just
+    // above it (epsilon-shift) to represent the smallest point that IS in the child.
+    samples += if (bounds.includeLower) lower else epsilonAbove(bounds.lower, numericVersionFactory)
+    // Upper endpoint: only the closed bound is part of the interval. For an open upper bound the
+    // supremum is not in the child; the interior probes below cover the approach to it.
+    if (bounds.includeUpper) {
+        samples += upper
+    }
+    // Interior probes: spread across [lower, upper] so that a child reaching past the parent (or
+    // sitting in a union-parent gap) is caught even when both endpoints individually land in parent.
+    samples += interiorProbes(lower, upper, numericVersionFactory)
+    return samples
+}
+
+/** A single closed/open version interval parsed from a range string such as "[1.0,2.0)". */
+private data class IntervalBounds(
+    val lower: String,
+    val includeLower: Boolean,
+    val upper: String,
+    val includeUpper: Boolean,
+)
+
+/**
+ * Parse a single-interval range string ("[1.0,2.0)", "(1.0,3.0)", "[1.0]") into its bounds. Throws
+ * for unbounded ("(,2.0)" / "[1.0,)"), multi-segment union, or otherwise malformed input so the
+ * caller can fall back to the conservative path.
+ */
+private fun parseSingleInterval(range: String): IntervalBounds {
+    val trimmed = range.trim()
+    require(trimmed.length >= 3) { "range too short: $range" }
+    val open = trimmed.first()
+    val close = trimmed.last()
+    require(open == '[' || open == '(') { "bad opening bracket: $range" }
+    require(close == ']' || close == ')') { "bad closing bracket: $range" }
+
+    val inner = trimmed.substring(1, trimmed.length - 1)
+    if (',' !in inner) {
+        // Hard single version "[1.0]" — degenerate closed interval [v, v]. Only the fully-closed
+        // bracket form is valid here (matches VersionRangeFactory, which rejects "(1.0)").
+        require(open == '[' && close == ']') { "hard version must be fully closed: $range" }
+        val v = inner.trim()
+        require(v.isNotEmpty()) { "empty hard version: $range" }
+        return IntervalBounds(v, true, v, true)
+    }
+    val parts = inner.split(',')
+    require(parts.size == 2) { "multi-segment or malformed range: $range" }
+    val lower = parts[0].trim()
+    val upper = parts[1].trim()
+    require(lower.isNotEmpty() && upper.isNotEmpty()) { "unbounded range not supported: $range" }
+    return IntervalBounds(lower, open == '[', upper, close == ']')
+}
+
+/**
+ * A version strictly greater than [version] by the smallest representable amount, used to represent
+ * the point just inside an open lower bound. Appends a low-order ".0.0.0.1" tail: trailing zero
+ * components compare equal under the factory's padding, so the final "1" makes the value sort
+ * immediately above the original.
+ */
+private fun epsilonAbove(
+    version: String,
+    numericVersionFactory: NumericVersionFactory,
+): IVersionInfo = numericVersionFactory.create("$version.0.0.0.1")
+
+/**
+ * A version strictly less than [upper] by the smallest representable amount, used as a near-upper
+ * interior probe for open upper bounds. Takes the upper's major and minor and, when minor > 0,
+ * drops one minor and appends a large low-order tail ("2.9" → "2.8.999999"); when minor == 0 but
+ * major > 0, probes just below the major ("3.0" → "2.999999"). Integer-component versions make this
+ * exact. When upper is "0.0" there is no representable version below it in this non-negative domain,
+ * so [upper] itself is returned — `offerIfInside`'s strict `< upper` check then drops it (rather than
+ * fabricating a "-1.999999" string, which the factory would misread via the `-` separator).
+ */
+private fun justBelow(
+    upper: IVersionInfo,
+    numericVersionFactory: NumericVersionFactory,
+): IVersionInfo {
+    val major = upper.getMajor()
+    val minor = upper.getMinor()
+    return when {
+        minor > 0 -> numericVersionFactory.create("$major.${minor - 1}.$NEAR_BOUNDARY_MINOR")
+        major > 0 -> numericVersionFactory.create("${major - 1}.$NEAR_BOUNDARY_MINOR")
+        else -> upper
+    }
+}
+
+/** Large minor index used to probe just below an integer-major boundary (e.g. 2.999999 < 3.0). */
+private const val NEAR_BOUNDARY_MINOR = 999_999
+
+/**
+ * Interior probe versions strictly between [lower] and [upper]. Combines three families so that any
+ * sub-interval where the child escapes the parent contains at least one sample:
+ *  - whole-version grid points (2.0, 3.0, …) lying strictly inside the interval;
+ *  - sub-major minor steps under each major in the span (covers narrow same-major intervals like
+ *    [1.0,2.0) that contain no whole-version grid point);
+ *  - a near-upper probe just below the upper bound's major (covers a child that overshoots an open
+ *    upper bound between the coarser samples, e.g. [1.5,2.9) escaping parent [1.0,2.5)).
+ * Versions in this registry are integer-component, so this set fully covers the interval; the
+ * INTERIOR_PROBE_COUNT cap bounds the TOTAL number of probes (across all three families, enforced by
+ * `offerIfInside` and every loop guard), not a per-family quota, keeping work bounded for very wide
+ * ranges without weakening the matrix cases.
+ */
+private fun interiorProbes(
+    lower: IVersionInfo,
+    upper: IVersionInfo,
+    numericVersionFactory: NumericVersionFactory,
+): List<IVersionInfo> {
+    val probes = mutableListOf<IVersionInfo>()
+    val lowMajor = lower.getMajor()
+    val highMajor = upper.getMajor()
+
+    fun offerIfInside(candidate: IVersionInfo) {
+        if (probes.size < INTERIOR_PROBE_COUNT &&
+            candidate.compareTo(lower) > 0 &&
+            candidate.compareTo(upper) < 0
+        ) {
+            probes += candidate
+        }
+    }
+
+    // Near-upper probe FIRST: a version just below the upper bound, catching an open-upper overshoot
+    // that sits above every whole-version grid point (e.g. the 2.5..2.9 tail of child [1.5,2.9)
+    // against a parent that stops at 2.5). It is the load-bearing sample for that family, so it is
+    // offered before the grid loop — otherwise a child spanning many majors could fill the probe cap
+    // with grid points and silently drop it, opening a false-positive for a wide overshooting child.
+    offerIfInside(justBelow(upper, numericVersionFactory))
+    // Whole-version grid points strictly inside the interval (e.g. 2.0 inside [1.5,2.5)).
+    var major = lowMajor + 1
+    while (major <= highMajor && probes.size < INTERIOR_PROBE_COUNT) {
+        offerIfInside(numericVersionFactory.create("$major.0"))
+        major++
+    }
+    // Sub-major minor steps across the span, covering narrow same-major intervals such as [1.0,2.0).
+    major = lowMajor
+    while (major <= highMajor && probes.size < INTERIOR_PROBE_COUNT) {
+        var minor = 1
+        while (minor <= INTERIOR_PROBE_COUNT && probes.size < INTERIOR_PROBE_COUNT) {
+            offerIfInside(numericVersionFactory.create("$major.$minor"))
+            minor++
+        }
+        major++
+    }
+    return probes
+}
 
 // ============================================================
 // Internal: build EscrowModuleConfig from base + overrides
