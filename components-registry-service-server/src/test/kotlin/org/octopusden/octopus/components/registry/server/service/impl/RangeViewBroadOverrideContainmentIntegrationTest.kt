@@ -131,6 +131,62 @@ class RangeViewBroadOverrideContainmentIntegrationTest {
         assertEquals("BroadOverridePath", broadView!!.buildFilePath)
     }
 
+    @Test
+    @DisplayName("TD-010 open-ended: broad open-upper override [1.0,) is applied to the contained open-upper view [2.0,)")
+    fun openUpperOverrideAppliesToContainedOpenUpperView() {
+        // The motivating "default from this version onward" case: a broad open-upper override must
+        // project onto a narrower open-upper enumeration view it contains. Before open-ended support,
+        // parseSingleInterval rejected "[2.0,)" so rangeApplies returned false and the [2.0,) view fell
+        // back to base "BasePath". With sentinel-tail sampling, [2.0,) ⊆ [1.0,) holds and the override
+        // wins on that view.
+        val key = "td010-openupper-comp"
+        val component = ComponentEntity(componentKey = key, archived = false)
+
+        val base = ComponentConfigurationEntity(
+            component = component,
+            versionRange = ALL_VERSIONS,
+            overriddenAttribute = null,
+            rowType = "BASE",
+            buildSystem = "MAVEN",
+            buildFilePath = "BasePath",
+            deprecated = false,
+        )
+        // Open-upper presence row: makes [2.0,) a distinct enumerated view.
+        val openUpperPresence = ComponentConfigurationEntity(
+            component = component,
+            versionRange = "[2.0,)",
+            overriddenAttribute = null,
+            rowType = "RANGE_PRESENCE",
+        )
+        // Broad open-upper override strictly containing the [2.0,) view.
+        val broadOpenUpperOverride = ComponentConfigurationEntity(
+            component = component,
+            versionRange = "[1.0,)",
+            overriddenAttribute = "build.buildFilePath",
+            rowType = "SCALAR_OVERRIDE",
+            buildFilePath = "FuturePath",
+        )
+        component.configurations.addAll(listOf(base, openUpperPresence, broadOpenUpperOverride))
+        component.addOwnershipMapping("com.example.td010", "widget-a")
+        componentRepository.save(component)
+
+        val module = resolver.getComponentById(key)
+        assertNotNull(module, "component must resolve to an EscrowModule")
+
+        val openUpperView = module!!.moduleConfigurations.firstOrNull { it.versionRangeString == "[2.0,)" }
+        assertNotNull(
+            openUpperView,
+            "the open-upper [2.0,) range must be enumerated as its own view; " +
+                "got ranges=${module.moduleConfigurations.map { it.versionRangeString }}",
+        )
+        assertEquals(
+            "FuturePath",
+            openUpperView!!.buildFilePath,
+            "the broad open-upper [1.0,) override must be applied to the contained [2.0,) view " +
+                "(TD-010 open-ended containment); base 'BasePath' here means the override was dropped",
+        )
+    }
+
     companion object {
         @JvmStatic
         val postgres = PostgreSQLContainer("postgres:16-alpine").apply { start() }

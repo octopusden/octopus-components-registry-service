@@ -113,6 +113,26 @@ class RangeAppliesContainmentTest {
     }
 
     @Nested
+    @DisplayName("open-ended children — '[X,)' / '(,Y)' the everyday from-version-onward shapes")
+    inner class OpenEnded {
+        @ParameterizedTest(name = "{0}: rangeApplies(parent={1}, child={2}) == {3} — {4}")
+        @MethodSource("org.octopusden.octopus.components.registry.server.mapper.RangeAppliesContainmentTest#openEndedCases")
+        fun matches(
+            label: String,
+            parent: String,
+            child: String,
+            expected: Boolean,
+            rationale: String,
+        ) {
+            assertEquals(
+                expected,
+                rangeApplies(parent, child, versionRangeFactory, numericVersionFactory),
+                "$label: $rationale",
+            )
+        }
+    }
+
+    @Nested
     @DisplayName("case 12 deferred — unbounded parent falls back to string equality (conservative)")
     inner class UnboundedDeferred {
         @org.junit.jupiter.api.Test
@@ -159,6 +179,23 @@ class RangeAppliesContainmentTest {
                 // [0.5,1.5): its lower endpoint 0.5 lies in the union-parent's gap [0,1.0), so it is not
                 // contained. Intent preserved; recorded in the doc.
                 Arguments.of(11, "(,0),[1.0,)", "[0.5,1.5)", false, "child straddles a gap in the union-parent"),
+            )
+
+        @JvmStatic
+        fun openEndedCases(): List<Arguments> =
+            // Open-ended (one-sided-unbounded) children — the everyday "from version X onward" /
+            // "up to version Y" shapes. The three OE-1..OE-3 cases are the reviewer's acceptance bar
+            // for open-upper child support (incl. the open-left-union parent); the rest pin the
+            // boundaries (bounded parent cannot contain an open-upper tail; open-lower symmetry).
+            listOf(
+                Arguments.of("OE-1", "[1.0,)", "[2.0,)", true, "open-upper child inside a wider open-upper parent"),
+                Arguments.of("OE-2", "[2.0,)", "[1.0,)", false, "open-upper child's floor (1.0) is below the parent's floor (2.0)"),
+                Arguments.of("OE-3", "(,0),[1.0,)", "[2.0,)", true, "open-upper child inside an open-left-union parent's right segment"),
+                Arguments.of("OE-4", "[1.0,3.0)", "[2.0,)", false, "bounded parent cannot contain an open-upper child's tail"),
+                Arguments.of("OE-5", "[1.0,)", "(2.0,)", true, "open-lower-open-upper child still contained in a wider open-upper parent"),
+                Arguments.of("OE-6", "(,5.0)", "(,3.0)", true, "open-lower child up to 3.0 inside a wider open-lower parent up to 5.0"),
+                Arguments.of("OE-7", "(,3.0)", "(,5.0)", false, "open-lower child up to 5.0 reaches past the narrower parent's 3.0 upper"),
+                Arguments.of("OE-8", "[1.0,)", "[1.0,5.0)", true, "bounded child inside an open-upper parent"),
             )
     }
 }

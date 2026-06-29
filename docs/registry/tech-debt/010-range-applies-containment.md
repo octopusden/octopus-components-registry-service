@@ -12,11 +12,13 @@ containment contract. Scope is the **range-VIEW enumeration** path only; the sin
 `resolve` path (`toResolvedEscrowModuleConfig` / `ComponentCodeRenderer.renderResolved`) was already
 correct (point `containsVersion`) and is untouched.
 
-Bounded cases 1–9 and union cases 10–11 ship as a parameterized matrix in
+Bounded cases 1–9, union cases 10–11, and **open-ended cases OE-1..OE-8** (the everyday
+"from version X onward" `[X,)` / "up to version Y" `(,Y)` shapes) ship as a parameterized matrix in
 `RangeAppliesContainmentTest`; the DB-backed `@Tag("integration")`
 `RangeViewBroadOverrideContainmentIntegrationTest` proves a broad `[1.0,3.0)` scalar override is
 projected onto a contained narrow `[1.0,2.0)` enumeration view (RED-verified against the old
-equality predicate). Two carve-outs are deferred to **TD-010-b** (see Deferred below).
+equality predicate). Only the fully-unbounded `(,)` parent/child and negative bounds are deferred to
+**TD-010-b** (see Deferred below).
 
 ## Problem
 
@@ -66,9 +68,20 @@ For each case, the test asserts the expected `rangeApplies(parent, child)` outco
 
 **Acceptance bar:** all 9 **bounded** cases (1–9) must ship in the TD-010 PR. The 3 **union/unbounded** cases (10–12) may be deferred to a `TD-010-b` follow-up if the underlying `VersionRangeFactory` API doesn't yet support union/unbounded ranges — track explicitly. The "minimum 8" headline above is satisfied by the bounded subset alone.
 
-**As shipped:** cases 1–9 plus **10–11** are green in `RangeAppliesContainmentTest`. The
-`VersionRangeFactory` (releng-lib 2.0.8) *does* parse the open-left-unbounded union parent
-`(,0),[1.0,)`, so the heuristic evaluates 10/11 correctly. Two adjustments are recorded:
+**As shipped:** cases 1–9, **10–11**, and the **open-ended OE-1..OE-8** cases are green in
+`RangeAppliesContainmentTest`. The `VersionRangeFactory` (releng-lib 2.0.8) *does* parse the
+open-left-unbounded union parent `(,0),[1.0,)`, so the heuristic evaluates 10/11 correctly.
+
+**Open-ended child support (review follow-up).** One-sided-unbounded children — the everyday
+`[X,)` "from version X onward" and `(,Y)` "up to version Y" shapes — are supported: `parseSingleInterval`
+accepts one empty bound, and `childRangeSamples` substitutes a sentinel for the open side (`ZERO_VERSION`
+for an unbounded lower, `HUGE_TAIL_VERSION` for an unbounded upper). So `[2.0,)` probes its `2.0` floor
+AND the huge tail — a bounded parent cannot contain the tail (correctly rejected), an open-upper parent
+can (accepted). Acceptance cases: `rangeApplies("[1.0,)","[2.0,)")==true` (OE-1),
+`rangeApplies("[2.0,)","[1.0,)")==false` (OE-2), `rangeApplies("(,0),[1.0,)","[2.0,)")==true` (OE-3,
+open-left-union parent). Only the fully-unbounded `(,)` (both sides empty) remains unparseable/deferred.
+
+Two adjustments are recorded:
 
 - **Case 11 child** is shipped as `[0.5,1.5)` rather than the literal `[-1.0,0.5)`. The factory treats
   `-` as a version separator (so `-1.0` parses to `1.0`), which makes `[-1.0,0.5)` fail the
@@ -126,6 +139,11 @@ Per `project_crs_schema_v2_migration_policy`: schema-v2 is not in prod yet. The 
 - **Negative version bounds.** The factory parses `-` as a separator, so negative endpoints (e.g.
   `[-1.0,…)`) are unrepresentable; not a real registry case, noted only because the original matrix
   case 11 used one.
+- **Multi-segment parent with a far-out internal gap.** The sample-points heuristic can theoretically
+  false-positive if a parent (an override row) has an internal gap narrower than the probe spacing and
+  located beyond the sampled grid (e.g. a union override missing `[500,600)` while an open-ended child
+  spans it). Override rows in this registry are single ranges of small integer-component versions, so
+  this does not occur in practice; a real `containsRange` API would remove the approximation entirely.
 
 ## Out of scope
 

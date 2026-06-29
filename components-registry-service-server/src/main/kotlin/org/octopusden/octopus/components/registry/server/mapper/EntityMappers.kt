@@ -316,15 +316,23 @@ private fun ComponentEntity.resolveForRange(
  * TD-010 (docs/registry/tech-debt/010-range-applies-containment.md). The version-range library
  * exposes only point-in-range [VersionRange.containsVersion], not containsRange, so containment is
  * approximated by a sample-points heuristic: sample the child's endpoints (closed bound inclusive;
- * open bound epsilon-shifted just inside the interval) plus a fixed number of interior probes across
- * the child interval, and return true iff EVERY sample lies in the parent. Equality short-circuits to
- * true. A parent that fails to parse (e.g. the unbounded "(,)" — both-sides-open is rejected by the
+ * open finite bound epsilon-shifted just inside the interval) plus a fixed number of interior probes
+ * across the child interval, and return true iff EVERY sample lies in the parent. Equality
+ * short-circuits to true.
+ *
+ * One-sided-unbounded children ("[2.0,)" open-upper, "(,5.0)" open-lower — the everyday
+ * "from this version onward" / "up to this version" shapes) ARE supported: the open-ended side is
+ * probed via a sentinel (a huge tail version for open-upper, the zero version for open-lower), so an
+ * open-upper child is contained iff its floor is in the parent AND the parent is itself open-upper.
+ * A parent that fails to parse (the fully-unbounded "(,)" — both-sides-open is rejected by the
  * factory, deferred to TD-010-b) falls back to string equality, keeping the result conservative
  * (a missed override, never a wrong one).
  *
- * The heuristic is exact for the bounded cases in the TD-010 matrix; the only theoretical false
- * positive would be a child whose violating sub-interval is narrower than the probe spacing and sits
- * between two samples, which cannot happen for the integer-component versions this registry uses.
+ * The heuristic is exact for the bounded and one-sided-unbounded cases in the TD-010 matrix against a
+ * single-interval or open-left-union parent. The only theoretical false positive is a parent gap
+ * narrower than the probe spacing sitting between two samples (e.g. a multi-segment override row with
+ * a far-out internal gap); this does not occur for the integer-component, single-range overrides this
+ * registry uses, and is noted as a deferred approximation in the TD-010 doc.
  */
 internal fun rangeApplies(
     parentRange: String,
@@ -364,47 +372,86 @@ internal fun rangeApplies(
 /** Number of interior probe points sampled strictly inside the child interval. */
 private const val INTERIOR_PROBE_COUNT = 8
 
+/** Smallest representable version, standing in for a child's unbounded LOWER side ("(,X)"). */
+private const val ZERO_VERSION = "0.0"
+
+/**
+ * A version far above any real registry version, standing in for a child's unbounded UPPER side
+ * ("[X,)"): a bounded parent cannot contain it (so the open-ended child is correctly rejected),
+ * while an open-upper parent does (so it is accepted). Registry versions are small integer-component
+ * numbers, so this is safely beyond every real upper bound.
+ */
+private const val HUGE_TAIL_VERSION = "9999999.0"
+
 /**
  * Build the set of probe versions for [childRange] used by the containment heuristic: the lower and
- * upper endpoints (with open bounds shifted just inside the interval) plus [INTERIOR_PROBE_COUNT]
- * interior probes spread across the interval. Only single-interval children are produced; a
- * multi-segment or unbounded child throws and the caller treats it conservatively.
+ * upper endpoints (closed bound inclusive; open finite bound shifted just inside) plus interior
+ * probes across the interval. One-sided-unbounded children are supported by substituting a sentinel
+ * for the open-ended side — [ZERO_VERSION] for an unbounded lower, [HUGE_TAIL_VERSION] for an
+ * unbounded upper — so a child like "[2.0,)" probes its 2.0 floor AND the huge tail (rejected by a
+ * bounded parent, accepted by an open-upper one). A fully-unbounded "(,)" child throws in
+ * [parseSingleInterval] and the caller treats it conservatively.
  */
 private fun childRangeSamples(
     childRange: String,
     numericVersionFactory: NumericVersionFactory,
 ): List<IVersionInfo> {
     val bounds = parseSingleInterval(childRange)
-    val lower = numericVersionFactory.create(bounds.lower)
-    val upper = numericVersionFactory.create(bounds.upper)
 
     val samples = mutableListOf<IVersionInfo>()
-    // Lower endpoint: closed bound is part of the interval; open bound is excluded, so probe just
-    // above it (epsilon-shift) to represent the smallest point that IS in the child.
-    samples += if (bounds.includeLower) lower else epsilonAbove(bounds.lower, numericVersionFactory)
-    // Upper endpoint: only the closed bound is part of the interval. For an open upper bound the
-    // supremum is not in the child; the interior probes below cover the approach to it.
-    if (bounds.includeUpper) {
-        samples += upper
+
+    // Low edge for interior probing + the lower endpoint sample.
+    val lowerEdge: IVersionInfo
+    if (bounds.lower == null) {
+        // Unbounded below: the child reaches down to the smallest representable version.
+        lowerEdge = numericVersionFactory.create(ZERO_VERSION)
+        samples += lowerEdge
+    } else {
+        lowerEdge = numericVersionFactory.create(bounds.lower)
+        // Closed bound is part of the interval; open bound is excluded, so probe just above it
+        // (epsilon-shift) to represent the smallest point that IS in the child.
+        samples += if (bounds.includeLower) lowerEdge else epsilonAbove(bounds.lower, numericVersionFactory)
     }
-    // Interior probes: spread across [lower, upper] so that a child reaching past the parent (or
-    // sitting in a union-parent gap) is caught even when both endpoints individually land in parent.
-    samples += interiorProbes(lower, upper, numericVersionFactory)
+
+    // High edge for interior probing + (when in the interval) the upper endpoint sample.
+    val upperEdge: IVersionInfo
+    if (bounds.upper == null) {
+        // Unbounded above: a huge sentinel stands in for the tail and IS sampled directly — a bounded
+        // parent cannot contain it, an open-upper parent can.
+        upperEdge = numericVersionFactory.create(HUGE_TAIL_VERSION)
+        samples += upperEdge
+    } else {
+        upperEdge = numericVersionFactory.create(bounds.upper)
+        // Only a closed finite upper bound is part of the interval; an open finite upper bound's
+        // supremum is excluded — the near-upper interior probe covers the approach to it.
+        if (bounds.includeUpper) {
+            samples += upperEdge
+        }
+    }
+
+    // Interior probes: spread across [lowerEdge, upperEdge] so that a child reaching past the parent
+    // (or sitting in a union-parent gap) is caught even when both endpoints individually land inside.
+    samples += interiorProbes(lowerEdge, upperEdge, numericVersionFactory)
     return samples
 }
 
-/** A single closed/open version interval parsed from a range string such as "[1.0,2.0)". */
+/**
+ * A single version interval parsed from a range string such as "[1.0,2.0)". A null [lower]/[upper]
+ * means that side is unbounded (open-ended), e.g. "[1.0,)" → upper == null. An unbounded side is by
+ * definition exclusive, so its include-flag is always false.
+ */
 private data class IntervalBounds(
-    val lower: String,
+    val lower: String?,
     val includeLower: Boolean,
-    val upper: String,
+    val upper: String?,
     val includeUpper: Boolean,
 )
 
 /**
- * Parse a single-interval range string ("[1.0,2.0)", "(1.0,3.0)", "[1.0]") into its bounds. Throws
- * for unbounded ("(,2.0)" / "[1.0,)"), multi-segment union, or otherwise malformed input so the
- * caller can fall back to the conservative path.
+ * Parse a single-interval range string into its bounds: "[1.0,2.0)", "(1.0,3.0)", "[1.0]", and the
+ * one-sided-unbounded forms "[1.0,)" / "(,2.0]". Throws for the fully-unbounded "(,)" (both sides
+ * empty — deferred to TD-010-b, cannot be sampled), a multi-segment union, or otherwise malformed
+ * input, so the caller can fall back to the conservative path.
  */
 private fun parseSingleInterval(range: String): IntervalBounds {
     val trimmed = range.trim()
@@ -425,10 +472,16 @@ private fun parseSingleInterval(range: String): IntervalBounds {
     }
     val parts = inner.split(',')
     require(parts.size == 2) { "multi-segment or malformed range: $range" }
-    val lower = parts[0].trim()
-    val upper = parts[1].trim()
-    require(lower.isNotEmpty() && upper.isNotEmpty()) { "unbounded range not supported: $range" }
-    return IntervalBounds(lower, open == '[', upper, close == ']')
+    val lower = parts[0].trim().ifEmpty { null }
+    val upper = parts[1].trim().ifEmpty { null }
+    // Fully-unbounded "(,)" cannot be sampled (no endpoint to anchor probes) — deferred to TD-010-b.
+    require(lower != null || upper != null) { "fully-unbounded range not supported: $range" }
+    return IntervalBounds(
+        lower = lower,
+        includeLower = open == '[' && lower != null,
+        upper = upper,
+        includeUpper = close == ']' && upper != null,
+    )
 }
 
 /**
