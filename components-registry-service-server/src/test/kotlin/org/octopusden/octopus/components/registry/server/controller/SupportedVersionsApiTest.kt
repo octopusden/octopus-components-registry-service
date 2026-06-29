@@ -114,7 +114,47 @@ class SupportedVersionsApiTest {
         assertEquals(listOf("[1.0,2.0)"), resp.path("ranges").map { it.asText() })
     }
 
+    @Test
+    @DisplayName("idempotent re-PUT of the same coverage set is a no-op (no unique-index 500)")
+    fun `idempotent re-put is safe`() {
+        val id = createComponent("sv_idem_${UUID.randomUUID().toString().take(8)}")
+        putSupported(id, """{"ranges":["[1.0,2.0)","[2.0,)"]}""")
+        // Re-PUT the identical set — the delta replace must add/delete nothing, not violate the
+        // partial unique index by re-inserting a row whose range already exists.
+        val second = putSupported(id, """{"ranges":["[1.0,2.0)","[2.0,)"]}""")
+        assertEquals(listOf("[1.0,2.0)", "[2.0,)"), second.path("ranges").map { it.asText() })
+    }
+
+    @Test
+    @DisplayName("PUT rejects overlapping supported ranges (must be a disjoint partition)")
+    fun `overlapping ranges rejected`() {
+        val id = createComponent("sv_ovl_${UUID.randomUUID().toString().take(8)}")
+        putSupportedExpectingStatus(id, """{"ranges":["[1.0,3.0)","[2.0,4.0)"]}""", status().isBadRequest)
+    }
+
+    @Test
+    @DisplayName("PUT rejects an all-versions sentinel as a coverage range (use all:true instead)")
+    fun `all versions sentinel rejected`() {
+        val id = createComponent("sv_sent_${UUID.randomUUID().toString().take(8)}")
+        putSupportedExpectingStatus(id, """{"ranges":["(,0),[0,)"]}""", status().isBadRequest)
+        putSupportedExpectingStatus(id, """{"ranges":["(,)"]}""", status().isBadRequest)
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
+
+    private fun putSupportedExpectingStatus(
+        componentId: String,
+        payload: String,
+        matcher: org.springframework.test.web.servlet.ResultMatcher,
+    ) {
+        mvc
+            .perform(
+                put("/rest/api/4/components/$componentId/supported-versions")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(payload),
+            ).andExpect(matcher)
+    }
 
     private fun createComponent(name: String): String {
         val body =

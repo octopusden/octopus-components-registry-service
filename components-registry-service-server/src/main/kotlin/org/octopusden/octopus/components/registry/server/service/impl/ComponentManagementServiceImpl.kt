@@ -1105,24 +1105,32 @@ class ComponentManagementServiceImpl(
             if (all) {
                 emptyList()
             } else {
-                request.ranges!!.map { normalizeRange(it) }.also { it.forEach(::validateRangeSyntax) }.distinct()
+                request.ranges!!.map { normalizeRange(it) }.distinct().also { validateSupportedRanges(it) }
             }
 
-        // Declarative replace: drop the existing coverage rows, add the requested set. orphanRemoval +
-        // cascade persist the change. (RANGE_PRESENCE rows carry no scalar/marker payload, so there is
-        // nothing else to migrate off them.)
+        // Declarative replace, applied as a DELTA so an idempotent (same-range) re-PUT is a no-op
+        // rather than a unique-index violation: Hibernate would otherwise flush the INSERT of a
+        // re-added range before the orphan-removal DELETE of the identical old row, tripping
+        // uq_component_configurations_one_range_presence (component_id, version_range). orphanRemoval +
+        // cascade persist the delta. (RANGE_PRESENCE rows carry no payload, so nothing else migrates.)
         val existingPresence = component.configurations.filter { it.rowType == "RANGE_PRESENCE" }
-        component.configurations.removeAll(existingPresence)
-        for (range in requested) {
-            component.configurations.add(
-                ComponentConfigurationEntity(
-                    component = component,
-                    versionRange = range,
-                    overriddenAttribute = null,
-                    rowType = "RANGE_PRESENCE",
-                ),
-            )
-        }
+        val existingRanges = existingPresence.map { it.versionRange }.toSet()
+        val requestedSet = requested.toSet()
+        existingPresence
+            .filter { it.versionRange !in requestedSet }
+            .forEach { component.configurations.remove(it) }
+        requested
+            .filter { it !in existingRanges }
+            .forEach {
+                component.configurations.add(
+                    ComponentConfigurationEntity(
+                        component = component,
+                        versionRange = it,
+                        overriddenAttribute = null,
+                        rowType = "RANGE_PRESENCE",
+                    ),
+                )
+            }
 
         // Re-align the new coverage to existing per-attribute override edges so each enumerated range
         // keeps constant resolved values (ADR-018 (b)). Skipped for supported = ALL (no presence rows).
@@ -1139,18 +1147,52 @@ class ComponentManagementServiceImpl(
         val warnings = supportedCoverageWarnings(component, requested, all)
 
         bumpParentVersion(component)
-        publishAuditEvent(
-            action = "UPDATE",
-            entityId = component.id.toString(),
-            oldValue = mapOf("supportedVersions" to existingPresence.map { it.versionRange }.sortedWith(SUPPORTED_RANGE_ORDER)),
-            newValue = mapOf("supportedVersions" to if (all) listOf("ALL") else requested),
-        )
+        // `resulting` reflects the actual persisted rows after auto-split re-alignment (the audit log
+        // must reconstruct real DB state, not the pre-split request).
         val resulting =
             component.configurations
                 .filter { it.rowType == "RANGE_PRESENCE" }
                 .map { it.versionRange }
                 .sortedWith(SUPPORTED_RANGE_ORDER)
+        publishAuditEvent(
+            action = "UPDATE",
+            entityId = component.id.toString(),
+            oldValue = mapOf("supportedVersions" to existingPresence.map { it.versionRange }.sortedWith(SUPPORTED_RANGE_ORDER)),
+            newValue = mapOf("supportedVersions" to resulting.ifEmpty { listOf("ALL") }),
+        )
         return SupportedVersionsResponse(all = resulting.isEmpty(), ranges = resulting, warnings = warnings)
+    }
+
+    /**
+     * Validate a requested supported-versions set (PUT): each range must parse, must NOT be an
+     * all-versions sentinel (use `all:true` instead of a bounded-looking RANGE_PRESENCE row that
+     * would report `all=false` yet match every override), and the ranges must be pairwise DISJOINT
+     * (ADR-018 stores canonical, non-overlapping coverage segments; overlap would expose multiple
+     * enumerated views for the same versions). Composite (multi-segment) coverage ranges are allowed
+     * verbatim — they just must not overlap each other.
+     */
+    private fun validateSupportedRanges(ranges: List<String>) {
+        ranges.forEach { r ->
+            validateRangeSyntax(r)
+            require(!isAllVersionsCoverage(r)) {
+                "Range '$r' denotes all versions — request supported = ALL via {\"all\": true} " +
+                    "instead of an all-versions coverage row."
+            }
+        }
+        for (i in ranges.indices) {
+            for (j in i + 1 until ranges.size) {
+                require(!rangesIntersect(ranges[i], ranges[j])) {
+                    "Supported ranges must be disjoint, but '${ranges[i]}' and '${ranges[j]}' overlap. " +
+                        "Supply a non-overlapping coverage partition."
+                }
+            }
+        }
+    }
+
+    /** True iff [range] denotes all versions (the ALL_VERSIONS sentinel or the unbounded `(,)`). */
+    private fun isAllVersionsCoverage(range: String): Boolean {
+        val n = normalizeRange(range)
+        return n == ALL_VERSIONS || n == "(,)"
     }
 
     /** V1/V5 advisories: an override whose range no longer intersects supported is unreachable. */
@@ -1164,7 +1206,9 @@ class ComponentManagementServiceImpl(
         return component.configurations
             .filter { it.rowType in FIELD_OVERRIDE_ROW_TYPES }
             .filter { ov ->
-                val ovObj = runCatching { versionRangeFactory.create(ov.versionRange) }.getOrNull() ?: return@filter false
+                // An unparseable override range is itself unreachable — surface it (warn), do NOT
+                // silently treat it as covered (that would suppress the very advisory it should raise).
+                val ovObj = runCatching { versionRangeFactory.create(ov.versionRange) }.getOrNull() ?: return@filter true
                 supportedObjs.none { it.isIntersect(ovObj) }
             }
             .map { ov ->
