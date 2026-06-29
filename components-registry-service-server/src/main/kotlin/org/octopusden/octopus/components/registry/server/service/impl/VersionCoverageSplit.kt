@@ -74,9 +74,14 @@ internal object VersionCoverageSplit {
      * is not a single parseable segment — composite / malformed presence rows are left untouched
      * (the caller skips them).
      *
-     * The split is half-open at the introduced edges: splitting `[1,10)` at `2` and `3` (override
-     * `[2,3)`) yields `[1,2)`, `[2,3)`, `[3,10)`; the outer endpoints keep the original range's
-     * inclusivity. Idempotent: re-splitting an already-aligned set of ranges is a no-op.
+     * The breakpoint inclusivity mirrors the override endpoint that produced it, so the resulting
+     * middle sub-range is EXACTLY the override's range (it then resolves with the override by
+     * containment, neighbours without it):
+     *  - override `[2,3)` in `[1,10)` → `[1,2)`, `[2,3)`, `[3,10)`;
+     *  - override `(2,3)` in `[1,10)` → `[1,2]`, `(2,3)`, `[3,10)` (open lower → `2` joins the left piece);
+     *  - override `[2,3]` in `[1,10)` → `[1,2)`, `[2,3]`, `(3,10)` (closed upper → `3` joins the left piece).
+     * The outer endpoints keep the original range's inclusivity. Idempotent: re-splitting an
+     * already-aligned set of ranges is a no-op.
      */
     internal fun split(
         presenceRange: String,
@@ -85,22 +90,27 @@ internal object VersionCoverageSplit {
         val presence = parseSegment(presenceRange) ?: return null
         val override = parseSegment(overrideRange) ?: return null
 
-        // The override's finite endpoints are the candidate internal breakpoints.
-        val edges = listOfNotNull(override.lo, override.hi)
-            .filter { strictlyInside(presence, it) }
-            .distinct()
-            .sortedWith { a, b -> cmp(a, b) }
+        // The override's finite endpoints are the candidate internal breakpoints. For each, record
+        // whether the breakpoint value belongs to the LEFT (lower) piece — i.e. is NOT in the
+        // override on that side: an OPEN lower bound excludes its value (joins the left piece); a
+        // CLOSED upper bound includes its value (the override owns it, so it joins the left/override
+        // piece). The segment ending at the edge takes hiIncl = inLeft; the next segment takes
+        // loIncl = !inLeft.
+        val edges =
+            buildList {
+                override.lo?.let { if (strictlyInside(presence, it)) add(it to !override.loIncl) }
+                override.hi?.let { if (strictlyInside(presence, it)) add(it to override.hiIncl) }
+            }.sortedWith { a, b -> cmp(a.first, b.first) }
 
         if (edges.isEmpty()) return listOf(render(presence))
 
         val result = mutableListOf<Segment>()
         var curLo = presence.lo
         var curLoIncl = presence.loIncl
-        for (edge in edges) {
-            // [curLo, edge) — upper-exclusive at the introduced breakpoint.
-            result += Segment(lo = curLo, loIncl = curLoIncl, hi = edge, hiIncl = false)
+        for ((edge, inLeft) in edges) {
+            result += Segment(lo = curLo, loIncl = curLoIncl, hi = edge, hiIncl = inLeft)
             curLo = edge
-            curLoIncl = true // the breakpoint belongs to the upper piece
+            curLoIncl = !inLeft
         }
         // Final piece runs to the presence range's original upper bound / inclusivity.
         result += Segment(lo = curLo, loIncl = curLoIncl, hi = presence.hi, hiIncl = presence.hiIncl)

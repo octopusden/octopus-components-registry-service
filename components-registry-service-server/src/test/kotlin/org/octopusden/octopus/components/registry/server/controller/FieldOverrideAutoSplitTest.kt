@@ -123,6 +123,81 @@ class FieldOverrideAutoSplitTest {
     }
 
     @Test
+    @DisplayName("ADR-018(b): a range CHANGE on update also auto-splits the covering presence row")
+    fun `update path range change auto-splits`() {
+        val id = createComponent("autosplitupd_${UUID.randomUUID().toString().take(8)}")
+        seedRangePresence(id, "[1.0,10.0)")
+        val overrideId =
+            createFieldOverride(
+                id,
+                """{"overriddenAttribute":"build.javaVersion","versionRange":"[2.0,3.0)","value":"11"}""",
+            )
+        // create already split into [1.0,2.0),[2.0,3.0),[3.0,10.0)
+        assertEquals(listOf("[1.0,2.0)", "[2.0,3.0)", "[3.0,10.0)"), rangePresenceRanges(id))
+
+        // PATCH the override's range → must re-split the now-covering [3.0,10.0) at 5.0 and 7.0.
+        patchFieldOverride(id, overrideId, """{"versionRange":"[5.0,7.0)"}""")
+        assertEquals(
+            listOf("[1.0,2.0)", "[2.0,3.0)", "[3.0,5.0)", "[5.0,7.0)", "[7.0,10.0)"),
+            rangePresenceRanges(id),
+            "update-path range change must auto-split (old breakpoints are retained — P3 fragmentation)",
+        )
+    }
+
+    @Test
+    @DisplayName("ADR-018(b): a value-only update introduces no new edge → coverage unchanged")
+    fun `value only update does not re-split`() {
+        val id = createComponent("autosplitval_${UUID.randomUUID().toString().take(8)}")
+        seedRangePresence(id, "[1.0,10.0)")
+        val overrideId =
+            createFieldOverride(
+                id,
+                """{"overriddenAttribute":"build.javaVersion","versionRange":"[2.0,3.0)","value":"11"}""",
+            )
+        patchFieldOverride(id, overrideId, """{"value":"17"}""")
+        assertEquals(
+            listOf("[1.0,2.0)", "[2.0,3.0)", "[3.0,10.0)"),
+            rangePresenceRanges(id),
+            "a value-only update must not change coverage",
+        )
+    }
+
+    @Test
+    @DisplayName("ADR-018(b): one override spanning two presence rows splits each at its interior edge")
+    fun `override spanning two presence rows splits both`() {
+        val id = createComponent("autosplitspan_${UUID.randomUUID().toString().take(8)}")
+        seedRangePresence(id, "[1.0,3.0)")
+        seedRangePresence(id, "[3.0,5.0)")
+        createFieldOverride(
+            id,
+            """{"overriddenAttribute":"build.javaVersion","versionRange":"[2.0,4.0)","value":"11"}""",
+        )
+        assertEquals(
+            listOf("[1.0,2.0)", "[2.0,3.0)", "[3.0,4.0)", "[4.0,5.0)"),
+            rangePresenceRanges(id),
+            "edge 2.0 splits [1.0,3.0); edge 4.0 splits [3.0,5.0)",
+        )
+    }
+
+    @Test
+    @DisplayName("ADR-018(b): an override intersecting a composite coverage row is rejected (400, not silent)")
+    fun `override intersecting composite coverage is rejected`() {
+        val id = createComponent("autosplitcomp_${UUID.randomUUID().toString().take(8)}")
+        seedRangePresence(id, "[1.0,2.0),[5.0,)")
+        val response =
+            mvc
+                .perform(
+                    post("/rest/api/4/components/$id/field-overrides")
+                        .with(adminJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""{"overriddenAttribute":"build.javaVersion","versionRange":"[5.5,6.0)","value":"11"}"""),
+                ).andExpect(status().isBadRequest)
+                .andReturn()
+                .response.contentAsString
+        assertEquals(true, response.contains("composite"), "rejection must explain the composite-coverage limitation; got: $response")
+    }
+
+    @Test
     @DisplayName("V2 (ADR-018 §6): a second open-upper override on the same attribute is rejected (400)")
     fun `two open upper overrides on same attribute are rejected`() {
         val id = createComponent("v2_${UUID.randomUUID().toString().take(8)}")
@@ -199,14 +274,33 @@ class FieldOverrideAutoSplitTest {
     private fun createFieldOverride(
         componentId: String,
         payload: String,
+    ): String {
+        val body =
+            mvc
+                .perform(
+                    post("/rest/api/4/components/$componentId/field-overrides")
+                        .with(adminJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload),
+                ).andExpect(status().is2xxSuccessful)
+                .andReturn()
+                .response.contentAsString
+        return objectMapper.readTree(body)["id"].asText()
+    }
+
+    private fun patchFieldOverride(
+        componentId: String,
+        overrideId: String,
+        payload: String,
     ) {
         mvc
             .perform(
-                post("/rest/api/4/components/$componentId/field-overrides")
+                org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                    .patch("/rest/api/4/components/$componentId/field-overrides/$overrideId")
                     .with(adminJwt())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(payload),
-            ).andExpect(status().is2xxSuccessful)
+            ).andExpect(status().isOk)
     }
 
     private fun rangePresenceRanges(componentId: String): List<String> =

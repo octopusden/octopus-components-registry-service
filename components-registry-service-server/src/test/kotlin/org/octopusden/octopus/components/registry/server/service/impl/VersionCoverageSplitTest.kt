@@ -74,6 +74,43 @@ class VersionCoverageSplitTest {
     }
 
     @Test
+    @DisplayName("override with inclusive upper [5,8] → 8 joins the override/left piece: [1,5),[5,8],(8,10)")
+    fun `inclusive upper override keeps its endpoint`() {
+        assertEquals(
+            listOf("[1,5)", "[5,8]", "(8,10)"),
+            VersionCoverageSplit.split("[1,10)", "[5,8]"),
+        )
+    }
+
+    @Test
+    @DisplayName("override with open lower (2,3) → 2 joins the left piece: [1,2],(2,3),[3,10)")
+    fun `open lower override keeps endpoint on left`() {
+        assertEquals(
+            listOf("[1,2]", "(2,3)", "[3,10)"),
+            VersionCoverageSplit.split("[1,10)", "(2,3)"),
+        )
+    }
+
+    @Test
+    @DisplayName("override (2,3] → both endpoints handled: [1,2],(2,3],(3,10)")
+    fun `open lower inclusive upper override`() {
+        assertEquals(
+            listOf("[1,2]", "(2,3]", "(3,10)"),
+            VersionCoverageSplit.split("[1,10)", "(2,3]"),
+        )
+    }
+
+    @Test
+    @DisplayName("the middle sub-range is exactly the override range for every endpoint shape")
+    fun `middle sub-range equals override`() {
+        // For each shape the override range must appear verbatim among the split parts.
+        for (ov in listOf("[2,3)", "(2,3)", "[2,3]", "(2,3]")) {
+            val parts = VersionCoverageSplit.split("[1,10)", ov)!!
+            assertEquals(true, ov in parts, "override $ov must be one of the split sub-ranges: $parts")
+        }
+    }
+
+    @Test
     @DisplayName("composite or malformed presence range → null (left untouched)")
     fun `composite presence returns null`() {
         assertNull(VersionCoverageSplit.split("(,1.0),[2.0,)", "[3.0,4.0)"))

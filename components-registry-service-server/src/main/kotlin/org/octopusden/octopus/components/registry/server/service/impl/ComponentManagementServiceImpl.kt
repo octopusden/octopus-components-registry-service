@@ -996,14 +996,41 @@ class ComponentManagementServiceImpl(
      * edge (equal to / wider than / disjoint from the presence range). Idempotent: re-running on an
      * already-aligned set adds nothing. Coverage (the union of ranges) is unchanged — only the
      * breakpoints move. Uses collection mutation so JPA orphanRemoval/cascade persist the change.
+     *
+     * A composite override range (only possible on a value-only update of an import-created composite
+     * override row) introduces no single new edge — coverage was aligned at import — so it is a no-op.
+     * A composite COVERING presence row cannot be split by this simple-segment helper; if a simple
+     * override intersects one, we reject the write (clear 400) rather than silently leave a range
+     * whose enumerated view would no longer have constant resolved values — composite-coverage editing
+     * is a follow-up.
+     *
+     * Known limitation (P3): a range CHANGE on an override adds new breakpoints but does not merge the
+     * old ones back, so repeated range edits fragment `RANGE_PRESENCE` over time. Correctness holds
+     * (union + per-row constant values); a compaction pass is a follow-up.
      */
     private fun autoSplitCoverage(
         component: ComponentEntity,
         overrideRange: String,
     ) {
+        // Only a single-segment override can introduce one new interior edge to align to. A composite
+        // override range (import-created, value-only updated) was already aligned at import → no-op.
+        VersionCoverageSplit.parseSegment(overrideRange) ?: return
         val presenceRows = component.configurations.filter { it.rowType == "RANGE_PRESENCE" }
         for (presence in presenceRows) {
-            val parts = VersionCoverageSplit.split(presence.versionRange, overrideRange) ?: continue
+            val parts = VersionCoverageSplit.split(presence.versionRange, overrideRange)
+            if (parts == null) {
+                // Composite / unparseable covering range: cannot split simply. If the simple override
+                // intersects it, an interior edge would misalign enumeration — fail loudly.
+                if (rangesIntersect(presence.versionRange, overrideRange)) {
+                    throw IllegalArgumentException(
+                        "Field-override range '$overrideRange' intersects composite supported-coverage " +
+                            "range '${presence.versionRange}'. Splitting composite coverage at an override " +
+                            "edge is not yet supported — edit coverage via DSL re-import, or split the " +
+                            "composite coverage first.",
+                    )
+                }
+                continue
+            }
             if (parts.size <= 1) continue
             component.configurations.remove(presence) // orphanRemoval deletes it on flush
             val existingRanges =
@@ -1806,6 +1833,21 @@ class ComponentManagementServiceImpl(
             throw IllegalArgumentException("Invalid version range: '$range'", e)
         }
     }
+
+    /**
+     * True iff [a] and [b] share any version. Used by auto-split to decide whether a simple override
+     * collides with a composite covering range it cannot split. Conservative: an unparseable range
+     * yields `false` (never a false reject).
+     */
+    private fun rangesIntersect(
+        a: String,
+        b: String,
+    ): Boolean =
+        try {
+            versionRangeFactory.create(a).isIntersect(versionRangeFactory.create(b))
+        } catch (_: Exception) {
+            false
+        }
 
     // ─── Field-override range validation (disjoint-only, matches Portal) ─────────
     //
