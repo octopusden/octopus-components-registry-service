@@ -51,7 +51,30 @@ All RES-NNN contracts below resolve against the **decoupled version model** (`ad
 
 **`enumerate()`** (range-list endpoints — RES-001, RES-018): iterate the declared ranges (`RANGE_PRESENCE` + override rows), resolving each by **containment**. The `ALL_VERSIONS` base is enumerated as its own view **only** when there are no `RANGE_PRESENCE` rows (so a version-range-only component enumerates exactly its declared ranges — no spurious `(,0),[0,)` entry).
 
-Real-version resolve/enumerate output is **byte-identical** to the previous v4 model (audit A1: no overlapping legacy blocks; the ~130k compat baseline is the merge gate). Write-side invariants (V1–V6, write-time auto-split) are **planned for PR-3**, not yet enforced.
+Real-version resolve/enumerate output is **byte-identical** to the previous v4 model (audit A1: no overlapping legacy blocks; the ~130k compat baseline is the merge gate).
+
+### Write-side invariants (PR-3)
+
+- **Write-time auto-split (ADR-018 (b)).** When a field-override write (`createFieldOverride` /
+  `updateFieldOverride`) adds a range whose finite endpoint falls **strictly inside** a covering
+  `RANGE_PRESENCE` row, that row is split at the interior edge(s) so each enumerated range keeps
+  constant resolved values (`ComponentManagementServiceImpl.autoSplitCoverage`,
+  `VersionCoverageSplit`). Coverage (the union) is unchanged — only the breakpoints move. No-op for
+  components with no `RANGE_PRESENCE` rows (the override range is enumerated as its own view) and for
+  overrides equal to / wider than / disjoint from the covering range. Idempotent.
+- **V2 / V3 / V4 — per-attribute override ranges.** `validateFieldOverrideRange` rejects any two
+  overrides on the **same** attribute whose ranges intersect (V3 disjointness); two **open-upper**
+  ranges on one attribute always intersect, so they are rejected with a V2-specific message (≤1
+  open-upper per attribute). Open-upper overrides on **different** attributes are allowed (V4) — each
+  attribute resolves independently. Open-upper overrides are accepted server-side (the portal's
+  former D5 closed-only restriction is not mirrored on the server).
+- **V6 — required-field write coverage:** not applicable. Audit A2 kept the BASE `build_system NOT
+  NULL` DB CHECK (the base is always the `ALL_VERSIONS` effective default, non-null via `Defaults`),
+  so no covered version can resolve a required field to null; the guard the V6 write-check would
+  provide is already supplied by the retained CHECK.
+- **V1 (override outside supported) / V5 (shrink supported under an override):** warn-and-allow;
+  meaningful once the supported-versions edit API lands (a follow-up), since today coverage is fixed
+  at migration. An override outside supported never resolves (the coverage gate 404s first).
 
 ---
 
