@@ -182,12 +182,17 @@ class ComponentCodeRenderer(
                 return null
             }
 
-        // Mirror EntityMappers.toResolvedEscrowModuleConfig's version-range gate (MIG-042): a
-        // version outside the component's effective range union resolves to NO config (404).
-        // Without this the as-code resolved view was more lenient than the real resolver and
-        // would render a component for a version the v2 endpoints return 404 for. Canonical
-        // logic lives in EntityMappers.kt; kept in sync by tests on both sides.
-        if (base.versionRange != ALL_VERSIONS) {
+        // Mirror EntityMappers.toResolvedEscrowModuleConfig's coverage gate (MIG-042 / ADR-018):
+        // a version outside `supported` resolves to NO config (404). In the decoupled model the
+        // base is the ALL_VERSIONS default and coverage is the union of RANGE_PRESENCE / override
+        // rows (plus a bounded base range for legacy/API components); the gate is skipped only when
+        // there is no coverage restriction (ALL_VERSIONS base AND no RANGE_PRESENCE rows). Without
+        // this the as-code resolved view was more lenient than the real resolver and would render a
+        // component for a version the v2 endpoints return 404 for. Canonical logic lives in
+        // EntityMappers.kt; kept in sync by tests on both sides.
+        val hasBoundedBase = base.versionRange != ALL_VERSIONS
+        val hasRangePresence = configs.any { it.rowType == ROW_RANGE_PRESENCE }
+        if (hasBoundedBase || hasRangePresence) {
             val containsVersion = { range: String? ->
                 range.isNullOrBlank() ||
                     range == ALL_VERSIONS ||
@@ -197,10 +202,10 @@ class ComponentCodeRenderer(
                         true
                     }
             }
-            val inEffectiveRange =
-                containsVersion(base.versionRange) ||
-                    configs.any { it.rowType != ROW_BASE && containsVersion(it.versionRange) }
-            if (!inEffectiveRange) return null
+            val inSupported =
+                configs.any { it.rowType != ROW_BASE && containsVersion(it.versionRange) } ||
+                    (hasBoundedBase && containsVersion(base.versionRange))
+            if (!inSupported) return null
         }
 
         val matching =
@@ -709,6 +714,7 @@ class ComponentCodeRenderer(
         const val ROW_BASE = "BASE"
         const val ROW_SCALAR_OVERRIDE = "SCALAR_OVERRIDE"
         const val ROW_MARKER = "MARKER"
+        const val ROW_RANGE_PRESENCE = "RANGE_PRESENCE"
         const val ALL_VERSIONS_RANGE = "(,0),[0,)"
         val IDENTIFIER_RE = Regex("^[A-Za-z_][A-Za-z0-9_]*$")
     }

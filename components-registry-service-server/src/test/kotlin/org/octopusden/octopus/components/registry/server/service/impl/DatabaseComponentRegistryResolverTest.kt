@@ -148,6 +148,18 @@ class DatabaseComponentRegistryResolverTest {
             rowType = "MARKER",
         )
 
+    /** RANGE_PRESENCE coverage anchor (ADR-018): NULL overridden_attribute, all typed cols NULL. */
+    private fun makeRangePresenceRow(
+        component: ComponentEntity,
+        versionRange: String,
+    ): ComponentConfigurationEntity =
+        ComponentConfigurationEntity(
+            component = component,
+            versionRange = versionRange,
+            overriddenAttribute = null,
+            rowType = "RANGE_PRESENCE",
+        )
+
     private fun makeVcsEntry(
         config: ComponentConfigurationEntity,
         vcsPath: String,
@@ -413,28 +425,34 @@ class DatabaseComponentRegistryResolverTest {
     // ========================================================================
 
     @Test
-    fun `(5 MIG-029) synthetic base with override - enumeration emits only the override range`() {
+    fun `(5 MIG-029) decoupled base with override - enumeration emits only the declared range`() {
+        // ADR-018: a version-range-only component migrates to an ALL_VERSIONS base
+        // (the default carrier) + a RANGE_PRESENCE row per declared block. The
+        // all-versions base is NOT a view of its own when presence rows exist, so
+        // enumeration emits exactly the declared range.
         val comp = makeComponent("COMP5")
-        val base = makeBase(comp, isSyntheticBase = true, javaVersion = "8")
+        val base = makeBase(comp, javaVersion = "8")
+        val presence = makeRangePresenceRow(comp, "[1.0,2.0)")
         val overrideRow = makeScalarOverrideRow(comp, "[1.0,2.0)", "build.javaVersion")
         overrideRow.javaVersion = "11"
-        comp.configurations.addAll(listOf(base, overrideRow))
+        comp.configurations.addAll(listOf(base, presence, overrideRow))
         stubComponent(comp)
 
         val module = resolver.getComponentById("COMP5")
         assertNotNull(module)
-        // isSyntheticBase=true AND overrides exist → base range NOT enumerated; only override range
+        // ALL_VERSIONS base + RANGE_PRESENCE → base view suppressed; only the declared range
         assertEquals(1, module!!.moduleConfigurations.size)
         assertEquals("[1.0,2.0)", module.moduleConfigurations.first().versionRangeString)
     }
 
     @Test
-    fun `(5b MIG-029) synthetic base - resolve 1·5·0 returns overridden javaVersion 11`() {
+    fun `(5b MIG-029) decoupled base - resolve 1·5·0 returns overridden javaVersion 11`() {
         val comp = makeComponent("COMP5B")
-        val base = makeBase(comp, isSyntheticBase = true, javaVersion = "8")
+        val base = makeBase(comp, javaVersion = "8")
+        val presence = makeRangePresenceRow(comp, "[1.0,2.0)")
         val overrideRow = makeScalarOverrideRow(comp, "[1.0,2.0)", "build.javaVersion")
         overrideRow.javaVersion = "11"
-        comp.configurations.addAll(listOf(base, overrideRow))
+        comp.configurations.addAll(listOf(base, presence, overrideRow))
         stubComponent(comp)
 
         val cfg = resolver.getResolvedComponentDefinition("COMP5B", "1.5.0")
@@ -443,18 +461,19 @@ class DatabaseComponentRegistryResolverTest {
     }
 
     @Test
-    fun `(5c MIG-029) synthetic base - resolve 0·9·0 falls back to synthetic base values`() {
+    fun `(5c MIG-029) decoupled base - resolve 0·9·0 outside supported returns null (coverage gate)`() {
         val comp = makeComponent("COMP5C")
-        val base = makeBase(comp, isSyntheticBase = true, javaVersion = "8")
+        val base = makeBase(comp, javaVersion = "8")
+        val presence = makeRangePresenceRow(comp, "[1.0,2.0)")
         val overrideRow = makeScalarOverrideRow(comp, "[1.0,2.0)", "build.javaVersion")
         overrideRow.javaVersion = "11"
-        comp.configurations.addAll(listOf(base, overrideRow))
+        comp.configurations.addAll(listOf(base, presence, overrideRow))
         stubComponent(comp)
 
-        // 0.9.0 is not in [1.0,2.0) → no override matches → synthetic base is the fallback
-        val cfg = resolver.getResolvedComponentDefinition("COMP5C", "0.9.0")
-        assertNotNull(cfg)
-        assertEquals("8", cfg!!.buildConfiguration?.javaVersion)
+        // 0.9.0 is outside supported = ∪ RANGE_PRESENCE ([1.0,2.0)). The ALL_VERSIONS base is the
+        // default carrier, NOT coverage — so the coverage gate returns null (V1 404), matching the
+        // real migration of a bounded-block-only component (the old synthetic-bounded base 404'd here too).
+        assertNull(resolver.getResolvedComponentDefinition("COMP5C", "0.9.0"))
     }
 
     @Test
@@ -532,6 +551,40 @@ class DatabaseComponentRegistryResolverTest {
             first.escrow!!.generation.orElse(null),
             "First-enumerated range inherits escrow.generation from synthetic base (AUTO via Defaults), not MANUAL from the other range",
         )
+    }
+
+    @Test
+    @DisplayName(
+        "MIG-029 (ADR-018): canonical [1.0,2.0)+[2.0,) enumeration — two declared ranges " +
+            "(one open-upper) enumerate as two views; resolve gated to supported",
+    )
+    fun `(5f MIG-029) canonical two-range enumeration equivalence with open-upper tail`() {
+        // The plan's canonical enumeration-equivalence check: a bounded-block-only component
+        // [1.0,2.0)+[2.0,) migrates to ALL_VERSIONS base + two RANGE_PRESENCE rows + two scalar
+        // overrides. Enumeration must emit exactly the two declared ranges (base view suppressed),
+        // resolve must honor the open-upper tail, and versions below 1.0 are out of supported.
+        val comp = makeComponent("COMP5F")
+        val base = makeBase(comp, javaVersion = "17")
+        val presenceLow = makeRangePresenceRow(comp, "[1.0,2.0)")
+        val presenceHigh = makeRangePresenceRow(comp, "[2.0,)")
+        val overLow = makeScalarOverrideRow(comp, "[1.0,2.0)", "build.javaVersion").apply { javaVersion = "11" }
+        val overHigh = makeScalarOverrideRow(comp, "[2.0,)", "build.javaVersion").apply { javaVersion = "21" }
+        comp.configurations.addAll(listOf(base, presenceLow, presenceHigh, overLow, overHigh))
+        stubComponent(comp)
+
+        val module = resolver.getComponentById("COMP5F")
+        assertNotNull(module)
+        assertEquals(
+            listOf("[1.0,2.0)", "[2.0,)"),
+            module!!.moduleConfigurations.map { it.versionRangeString },
+            "Enumeration emits exactly the two declared ranges (ALL_VERSIONS base view suppressed)",
+        )
+        assertEquals("11", resolver.getResolvedComponentDefinition("COMP5F", "1.5.0")!!.buildConfiguration?.javaVersion)
+        assertEquals("21", resolver.getResolvedComponentDefinition("COMP5F", "2.5.0")!!.buildConfiguration?.javaVersion)
+        // Open-upper tail keeps resolving above the highest declared bound.
+        assertEquals("21", resolver.getResolvedComponentDefinition("COMP5F", "99.0.0")!!.buildConfiguration?.javaVersion)
+        // Below the lowest declared bound → outside supported → null (V1 404).
+        assertNull(resolver.getResolvedComponentDefinition("COMP5F", "0.5.0"))
     }
 
     // ========================================================================
