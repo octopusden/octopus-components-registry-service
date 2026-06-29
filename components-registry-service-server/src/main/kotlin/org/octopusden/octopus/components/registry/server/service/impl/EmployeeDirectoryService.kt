@@ -113,25 +113,40 @@ class EmployeeDirectoryService(
 
     /**
      * Transport-chain health probe for monitoring surfaces (actuator indicator
-     * and the Portal admin banner). Reuses [isActive] on a synthetic username
-     * that must not exist in the directory: a NOT-FOUND answer proves the whole
-     * CRS → api-gateway → employee-service → directory chain end-to-end, while
-     * [ActiveStatus.UNAVAILABLE] (missing/bad credentials, unreachable service)
-     * is the only state reported as [IntegrationHealth.DOWN].
+     * and the Portal admin banner), with the failure detail. Looks up a synthetic
+     * username that must not exist in the directory: a NOT-FOUND answer proves the
+     * whole CRS → api-gateway → employee-service → directory chain end-to-end.
+     *
+     * On failure it captures the real downstream cause — the exception class and
+     * message, which carries the HTTP status (e.g. "403 Forbidden") — so the
+     * actuator reason can distinguish access-denied (401/403, e.g. a token missing
+     * the `openid` scope) from unreachable, instead of a generic "see logs".
      *
      * Unlike the lookup paths this is NOT fail-open — its whole purpose is to
-     * surface the failure — but it still never throws.
-     *
-     * Calls [isActive] directly (same instance, not through the Spring proxy):
-     * if [isActive] ever grows proxy-bound behavior (caching, retry), probe()
-     * will bypass it — route through a self-injection then.
+     * surface the failure — but it still never throws. Calls the client directly
+     * (not via [isActive]) so the exception is observable rather than collapsed
+     * into [ActiveStatus.UNAVAILABLE].
      */
-    fun probe(): IntegrationHealth =
-        when (isActive(PROBE_USERNAME)) {
-            ActiveStatus.ACTIVE, ActiveStatus.INACTIVE, ActiveStatus.UNKNOWN -> IntegrationHealth.UP
-            ActiveStatus.UNAVAILABLE -> IntegrationHealth.DOWN
-            ActiveStatus.DISABLED -> IntegrationHealth.DISABLED
+    @Suppress("TooGenericExceptionCaught")
+    fun probeHealth(): ProbeResult {
+        val client = clientProvider.getIfAvailable()
+            ?: return ProbeResult(IntegrationHealth.DISABLED, null)
+        return try {
+            // Any answer (even INACTIVE) proves the chain end-to-end.
+            client.getEmployee(PROBE_USERNAME)
+            ProbeResult(IntegrationHealth.UP, null)
+        } catch (e: NotFoundException) {
+            // The expected answer for the synthetic probe user: chain is alive.
+            ProbeResult(IntegrationHealth.UP, null)
+        } catch (e: Exception) {
+            val detail = "${e.javaClass.simpleName}: ${e.message ?: "no message"}"
+            log.warn("employee-service health probe failed — {}", detail, e)
+            ProbeResult(IntegrationHealth.DOWN, detail)
         }
+    }
+
+    /** Coarse health enum for callers that don't need the failure detail. */
+    fun probe(): IntegrationHealth = probeHealth().health
 
     companion object {
         /**
@@ -167,3 +182,14 @@ enum class IntegrationHealth {
     DOWN,
     DISABLED,
 }
+
+/**
+ * Probe outcome for monitoring: the coarse [IntegrationHealth] plus, on
+ * [IntegrationHealth.DOWN], a short detail naming the real downstream cause
+ * (exception class + message, which carries the HTTP status). `null` detail on
+ * UP/DISABLED.
+ */
+data class ProbeResult(
+    val health: IntegrationHealth,
+    val detail: String?,
+)
