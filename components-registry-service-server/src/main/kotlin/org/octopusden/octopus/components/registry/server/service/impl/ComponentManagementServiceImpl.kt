@@ -865,6 +865,8 @@ class ComponentManagementServiceImpl(
             syncRequiredTools(saved.id!!, pendingTools)
             refreshConfigRequiredToolsInMemory(saved, pendingTools)
         }
+        // ADR-018 (b): align supported-coverage breakpoints to this override's interior edges.
+        autoSplitCoverage(component, canonicalRange)
         bumpParentVersion(component)
         // Review #2: an override row can carry mavenArtifacts/dockerImages/jira
         // coordinates that collide with another component — re-run the same 409 /
@@ -930,6 +932,8 @@ class ComponentManagementServiceImpl(
             syncRequiredTools(saved.id!!, pendingTools)
             refreshConfigRequiredToolsInMemory(saved, pendingTools)
         }
+        // ADR-018 (b): a range change can introduce new interior breakpoints — realign coverage.
+        autoSplitCoverage(row.component, saved.versionRange)
         bumpParentVersion(row.component)
         // Review #2: re-run the cross-component composite checks — an UPDATE to a
         // marker override can introduce a colliding GAV / docker image / jira
@@ -980,6 +984,47 @@ class ComponentManagementServiceImpl(
      * editing or deleting them would diverge the DB from the DSL source of
      * truth until the next import overwrote the change.
      */
+    /**
+     * Write-time auto-split of supported coverage (ADR-018 refinement (b)). After a field-override
+     * write whose range introduces a boundary INSIDE a covering `RANGE_PRESENCE` row, split that
+     * presence row at the override's interior edges so each enumerated range keeps constant resolved
+     * values (range-view enumeration is anchored to `RANGE_PRESENCE`, one config per row). Without
+     * this, the covering range's enumerated view would span versions whose resolved values differ.
+     *
+     * No-op for components with no `RANGE_PRESENCE` rows (supported = ALL, or API-created components
+     * whose override range is enumerated as its own view) and for overrides that introduce no interior
+     * edge (equal to / wider than / disjoint from the presence range). Idempotent: re-running on an
+     * already-aligned set adds nothing. Coverage (the union of ranges) is unchanged — only the
+     * breakpoints move. Uses collection mutation so JPA orphanRemoval/cascade persist the change.
+     */
+    private fun autoSplitCoverage(
+        component: ComponentEntity,
+        overrideRange: String,
+    ) {
+        val presenceRows = component.configurations.filter { it.rowType == "RANGE_PRESENCE" }
+        for (presence in presenceRows) {
+            val parts = VersionCoverageSplit.split(presence.versionRange, overrideRange) ?: continue
+            if (parts.size <= 1) continue
+            component.configurations.remove(presence) // orphanRemoval deletes it on flush
+            val existingRanges =
+                component.configurations
+                    .filter { it.rowType == "RANGE_PRESENCE" }
+                    .mapTo(mutableSetOf()) { it.versionRange }
+            for (sub in parts) {
+                if (sub in existingRanges) continue // partial unique index: one presence per (component, range)
+                component.configurations.add(
+                    ComponentConfigurationEntity(
+                        component = component,
+                        versionRange = sub,
+                        overriddenAttribute = null,
+                        rowType = "RANGE_PRESENCE",
+                    ),
+                )
+                existingRanges += sub
+            }
+        }
+    }
+
     private fun requireNotImportManagedMarker(
         row: ComponentConfigurationEntity,
         operation: String,
@@ -1911,6 +1956,17 @@ class ComponentManagementServiceImpl(
                         "override range '${row.versionRange}' on attribute " +
                         "'$attribute'. Each version range can only have one " +
                         "override per attribute (schema-spec §3.5 / UNIQUE).",
+                )
+            }
+            // V2 (ADR-018 §6): at most one open-upper override per attribute. Two open-upper
+            // ranges (`[X,)`) always overlap (both run to +∞), so this is a special case of the
+            // disjointness rule below — surfaced with a clearer, actionable message.
+            if (parsedExisting != null && parsedNew.hi == null && parsedExisting.hi == null) {
+                throw IllegalArgumentException(
+                    "Range '$range' and existing override range '${row.versionRange}' on attribute " +
+                        "'$attribute' are both open-upper (run to +∞) and therefore always overlap. " +
+                        "At most one open-upper override is allowed per attribute (V2) — bound one of " +
+                        "them (e.g. close the earlier range at the later range's floor).",
                 )
             }
             // Reached for partial overlap, strict containment, and (composite
