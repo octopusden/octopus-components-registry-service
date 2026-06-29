@@ -18,6 +18,8 @@ import org.octopusden.octopus.components.registry.server.dto.v4.ComponentUpdateR
 import org.octopusden.octopus.components.registry.server.dto.v4.DockerImageRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideCreateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.SupportedVersionsRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.SupportedVersionsResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideUpdateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FileUrlArtifactRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.MarkerChildrenPayload
@@ -976,15 +978,6 @@ class ComponentManagementServiceImpl(
     }
 
     /**
-     * MIG-047: refuse V4 write paths for MARKER rows whose `overriddenAttribute`
-     * is NOT in [MarkerAttributes.ALL] — those are import-internal markers
-     * (currently only [MarkerAttributes.GROUP_ARTIFACT_PATTERN]) created by
-     * `ImportServiceImpl` and recovered on re-import. The V4 admin API surfaces
-     * them read-only via `listFieldOverrides` so users can see the configuration;
-     * editing or deleting them would diverge the DB from the DSL source of
-     * truth until the next import overwrote the change.
-     */
-    /**
      * Write-time auto-split of supported coverage (ADR-018 refinement (b)). After a field-override
      * write whose range introduces a boundary INSIDE a covering `RANGE_PRESENCE` row, split that
      * presence row at the override's interior edges so each enumerated range keeps constant resolved
@@ -1052,6 +1045,15 @@ class ComponentManagementServiceImpl(
         }
     }
 
+    /**
+     * MIG-047: refuse V4 write paths for MARKER rows whose `overriddenAttribute`
+     * is NOT in [MarkerAttributes.ALL] — those are import-internal markers
+     * (currently only [MarkerAttributes.GROUP_ARTIFACT_PATTERN]) created by
+     * `ImportServiceImpl` and recovered on re-import. The V4 admin API surfaces
+     * them read-only via `listFieldOverrides` so users can see the configuration;
+     * editing or deleting them would diverge the DB from the DSL source of
+     * truth until the next import overwrote the change.
+     */
     private fun requireNotImportManagedMarker(
         row: ComponentConfigurationEntity,
         operation: String,
@@ -1074,6 +1076,145 @@ class ComponentManagementServiceImpl(
             .findByComponentId(componentId)
             .filter { it.rowType == "SCALAR_OVERRIDE" || it.rowType == "MARKER" }
             .map { it.toFieldOverrideResponse() }
+    }
+
+    @Transactional(readOnly = true)
+    override fun getSupportedVersions(componentId: UUID): SupportedVersionsResponse {
+        if (!componentRepository.existsById(componentId)) {
+            throw NotFoundException("Component with id '$componentId' not found")
+        }
+        val ranges =
+            configurationRepository
+                .findByComponentId(componentId)
+                .filter { it.rowType == "RANGE_PRESENCE" }
+                .map { it.versionRange }
+                .sortedWith(SUPPORTED_RANGE_ORDER)
+        // No bounded RANGE_PRESENCE rows ⇒ the ALL_VERSIONS base covers everything (ADR-018).
+        return SupportedVersionsResponse(all = ranges.isEmpty(), ranges = ranges)
+    }
+
+    @Transactional
+    override fun setSupportedVersions(
+        componentId: UUID,
+        request: SupportedVersionsRequest,
+    ): SupportedVersionsResponse {
+        val component = findComponentOr404(componentId)
+        // supported = ALL when explicitly requested, or when no ranges are supplied.
+        val all = request.all == true || request.ranges.isNullOrEmpty()
+        val requested =
+            if (all) {
+                emptyList()
+            } else {
+                request.ranges!!.map { normalizeRange(it) }.distinct().also { validateSupportedRanges(it) }
+            }
+
+        // Declarative replace, applied as a DELTA so an idempotent (same-range) re-PUT is a no-op
+        // rather than a unique-index violation: Hibernate would otherwise flush the INSERT of a
+        // re-added range before the orphan-removal DELETE of the identical old row, tripping
+        // uq_component_configurations_one_range_presence (component_id, version_range). orphanRemoval +
+        // cascade persist the delta. (RANGE_PRESENCE rows carry no payload, so nothing else migrates.)
+        val existingPresence = component.configurations.filter { it.rowType == "RANGE_PRESENCE" }
+        val existingRanges = existingPresence.map { it.versionRange }.toSet()
+        val requestedSet = requested.toSet()
+        existingPresence
+            .filter { it.versionRange !in requestedSet }
+            .forEach { component.configurations.remove(it) }
+        requested
+            .filter { it !in existingRanges }
+            .forEach {
+                component.configurations.add(
+                    ComponentConfigurationEntity(
+                        component = component,
+                        versionRange = it,
+                        overriddenAttribute = null,
+                        rowType = "RANGE_PRESENCE",
+                    ),
+                )
+            }
+
+        // Re-align the new coverage to existing per-attribute override edges so each enumerated range
+        // keeps constant resolved values (ADR-018 (b)). Skipped for supported = ALL (no presence rows).
+        if (!all) {
+            component.configurations
+                .filter { it.rowType in FIELD_OVERRIDE_ROW_TYPES }
+                .map { it.versionRange }
+                .distinct()
+                .forEach { autoSplitCoverage(component, it) }
+        }
+
+        // V1/V5 (warn-and-allow): surface overrides left entirely outside the new supported set — they
+        // never resolve (the coverage gate 404s first). Non-blocking; the write still succeeds.
+        val warnings = supportedCoverageWarnings(component, requested, all)
+
+        bumpParentVersion(component)
+        // `resulting` reflects the actual persisted rows after auto-split re-alignment (the audit log
+        // must reconstruct real DB state, not the pre-split request).
+        val resulting =
+            component.configurations
+                .filter { it.rowType == "RANGE_PRESENCE" }
+                .map { it.versionRange }
+                .sortedWith(SUPPORTED_RANGE_ORDER)
+        publishAuditEvent(
+            action = "UPDATE",
+            entityId = component.id.toString(),
+            oldValue = mapOf("supportedVersions" to existingPresence.map { it.versionRange }.sortedWith(SUPPORTED_RANGE_ORDER)),
+            newValue = mapOf("supportedVersions" to resulting.ifEmpty { listOf("ALL") }),
+        )
+        return SupportedVersionsResponse(all = resulting.isEmpty(), ranges = resulting, warnings = warnings)
+    }
+
+    /**
+     * Validate a requested supported-versions set (PUT): each range must parse, must NOT be an
+     * all-versions sentinel (use `all:true` instead of a bounded-looking RANGE_PRESENCE row that
+     * would report `all=false` yet match every override), and the ranges must be pairwise DISJOINT
+     * (ADR-018 stores canonical, non-overlapping coverage segments; overlap would expose multiple
+     * enumerated views for the same versions). Composite (multi-segment) coverage ranges are allowed
+     * verbatim — they just must not overlap each other.
+     */
+    private fun validateSupportedRanges(ranges: List<String>) {
+        ranges.forEach { r ->
+            validateRangeSyntax(r)
+            require(!isAllVersionsCoverage(r)) {
+                "Range '$r' denotes all versions — request supported = ALL via {\"all\": true} " +
+                    "instead of an all-versions coverage row."
+            }
+        }
+        for (i in ranges.indices) {
+            for (j in i + 1 until ranges.size) {
+                require(!rangesIntersect(ranges[i], ranges[j])) {
+                    "Supported ranges must be disjoint, but '${ranges[i]}' and '${ranges[j]}' overlap. " +
+                        "Supply a non-overlapping coverage partition."
+                }
+            }
+        }
+    }
+
+    /** True iff [range] denotes all versions (the ALL_VERSIONS sentinel or the unbounded `(,)`). */
+    private fun isAllVersionsCoverage(range: String): Boolean {
+        val n = normalizeRange(range)
+        return n == ALL_VERSIONS || n == "(,)"
+    }
+
+    /** V1/V5 advisories: an override whose range no longer intersects supported is unreachable. */
+    private fun supportedCoverageWarnings(
+        component: ComponentEntity,
+        supported: List<String>,
+        all: Boolean,
+    ): List<String> {
+        if (all) return emptyList()
+        val supportedObjs = supported.mapNotNull { runCatching { versionRangeFactory.create(it) }.getOrNull() }
+        return component.configurations
+            .filter { it.rowType in FIELD_OVERRIDE_ROW_TYPES }
+            .filter { ov ->
+                // An unparseable override range is itself unreachable — surface it (warn), do NOT
+                // silently treat it as covered (that would suppress the very advisory it should raise).
+                val ovObj = runCatching { versionRangeFactory.create(ov.versionRange) }.getOrNull() ?: return@filter true
+                supportedObjs.none { it.isIntersect(ovObj) }
+            }
+            .map { ov ->
+                "Override '${ov.overriddenAttribute}' on range '${ov.versionRange}' is outside the supported " +
+                    "versions and will never resolve (V1/V5) — remove it or extend supported to cover it."
+            }
     }
 
     // ============================================================
@@ -1893,6 +2034,16 @@ class ComponentManagementServiceImpl(
 
     private fun compareMavenVersions(a: String, b: String): Int =
         DefaultArtifactVersion(a).compareTo(DefaultArtifactVersion(b))
+
+    /**
+     * Stable display ordering for supported-coverage ranges: by lower bound (open-lower / composite
+     * ranges, whose simple floor is null, sort first via the "0" fallback), then by raw string.
+     */
+    private val SUPPORTED_RANGE_ORDER: Comparator<String> =
+        compareBy<String>(
+            { parseSimpleSegment(it)?.lo?.let(::DefaultArtifactVersion) ?: DefaultArtifactVersion("0") },
+            { it },
+        )
 
     private fun simpleContains(outer: ParsedSimpleRange, inner: ParsedSimpleRange): Boolean {
         val leftOK = when {

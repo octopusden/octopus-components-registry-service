@@ -9,6 +9,8 @@ import org.octopusden.octopus.components.registry.server.dto.v4.ComponentUpdateR
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideCreateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideUpdateRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.SupportedVersionsRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.SupportedVersionsResponse
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import java.util.UUID
@@ -50,6 +52,19 @@ interface ComponentManagementService {
     )
 
     fun listFieldOverrides(componentId: UUID): List<FieldOverrideResponse>
+
+    /** Read the component's supported versions (coverage layer — ADR-018). */
+    fun getSupportedVersions(componentId: UUID): SupportedVersionsResponse
+
+    /**
+     * Declaratively replace the component's supported versions (coverage), re-aligning existing
+     * per-attribute overrides to the new breakpoints. Returns the resulting coverage plus any
+     * non-blocking warnings (e.g. an override left outside supported).
+     */
+    fun setSupportedVersions(
+        componentId: UUID,
+        request: SupportedVersionsRequest,
+    ): SupportedVersionsResponse
 
     /**
      * Render the component (resolved by UUID or name) as a Groovy-style "as-code"
