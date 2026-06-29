@@ -919,7 +919,7 @@ The criteria therefore cover both real shapes:
 
 **Test method:** `MigrationIntegrationTest.MIG-029 version-range-only component does not produce a synthetic ALL_VERSIONS config in toEscrowModule`
 
-> **Note on suggested implementation sketch above:** v2 schema (ADR-014) supersedes the `has_default_config` proposal. The structural fix uses `component_configurations.is_synthetic_base BOOLEAN` on the base row; legacy variants-Map mappers skip rows with `is_synthetic_base = true`. See `schema-spec.md` §3.4.
+> **Note on suggested implementation sketch above:** v2 schema (ADR-014) supersedes the `has_default_config` proposal, and the **decoupled version model (ADR-018)** supersedes the `is_synthetic_base` mechanism. Under ADR-018 the base row is **always** the `ALL_VERSIONS` effective default (`is_synthetic_base` is vestigial, always `false`); coverage lives in `RANGE_PRESENCE` rows. The MIG-029 property still holds, but is now achieved by **enumeration anchoring**: enumerate the declared `RANGE_PRESENCE` ranges, and emit the `ALL_VERSIONS` base as its own view **only** when there are no `RANGE_PRESENCE` rows. A version-range-only component therefore enumerates exactly its declared ranges (no spurious `(,0),[0,)` entry). See `schema-spec.md` §3.4/§3.5 and ADR-018.
 
 ---
 
@@ -1026,13 +1026,21 @@ DSL nested `components { ... }` block creates a `component_groups` row. Detectio
 **Test layer:** integration-test
 **Status:** ❌ Not tested
 
-DSL version-range blocks produce override rows on `component_configurations`. Each scalar attribute change is a separate row (`overridden_attribute = 'aspect.field'`); each child-collection replacement is a marker row.
+> **Decoupled version model (ADR-018).** A DSL range block is decomposed into **two** layers: a
+> `RANGE_PRESENCE` row for the block's range (the coverage layer — `supported = ∪` of those ranges)
+> **and** per-attribute override rows derived against the **`ALL_VERSIONS` base** (the effective
+> default = top-level block ⊕ `Defaults.groovy`). There is **no synthetic-bounded base**. Overrides
+> may be **open-upper** (`[X,)`) and apply by **containment**, not exact range match (TD-010). See
+> ADR-018 and the case matrix M1–M8 in `version-model-spec-DRAFT.md`.
+
+DSL version-range blocks produce a `RANGE_PRESENCE` coverage row plus override rows on `component_configurations`. Each scalar attribute change (relative to the `ALL_VERSIONS` base) is a separate row (`overridden_attribute = 'aspect.field'`); each child-collection replacement is a marker row.
 
 **Acceptance criteria:**
-1. DSL `"[1,2)" { build { javaVersion = "11" } }` produces one scalar override row with `overridden_attribute = 'build.javaVersion'`, `java_version = '11'`, all other typed columns NULL.
-2. DSL `"[1,2)" { vcsSettings { "name1" { ... } } }` produces one marker row with `overridden_attribute = 'vcs.settings'`, all typed scalars NULL, plus corresponding `vcs_settings_entries` child rows.
-3. Resolve at version V applies the matching override per attribute; falls back to base row values for non-overridden fields.
-4. Transitional non-overlap constraint enforced at create/update: partial range overlap rejected with 400.
+1. DSL `"[1.0,2.0)" { build { javaVersion = "17" } }` produces one `RANGE_PRESENCE` row for `[1.0,2.0)` plus one scalar override row with `overridden_attribute = 'build.javaVersion'`, `java_version = '17'`, all other typed columns NULL — over the `ALL_VERSIONS` base.
+2. DSL `"[1.0,2.0)" { vcsSettings { "name1" { ... } } }` produces a `RANGE_PRESENCE` row plus one marker row with `overridden_attribute = 'vcs.settings'`, all typed scalars NULL, plus corresponding `vcs_settings_entries` child rows.
+3. An **open-upper** block `"[1.0,)" { build { javaVersion = "17" } }` produces a `RANGE_PRESENCE` row for `[1.0,)` plus an open-upper `build.javaVersion` override — first-class, not folded into the base.
+4. Resolve at version V applies the **narrowest override whose range contains V** per attribute (containment, TD-010); falls back to the `ALL_VERSIONS` base values for non-overridden fields; returns 404 when `V ∉ supported = ∪ RANGE_PRESENCE`.
+5. Write-side invariants (per-attribute disjoint overrides, ≤1 open-upper per attribute, auto-split, required-field write coverage — validations V1–V6) are **planned for PR-3**, not yet enforced.
 
 ---
 
@@ -1155,29 +1163,31 @@ over-resolving out-of-range versions to 200 with base/inherited data (compat
 cluster A: six 404→200 keys on the 2026-06-07 oracle; live V1 curl literals
 `{"errorMessage":"Component id <c>:<v> is not found"}`).
 
-**Fix (`EntityMappers.toResolvedEscrowModuleConfig`):** after parsing the
-numeric version, gate on the component's effective range:
-- ALL_VERSIONS base — skip (everything in range; the compound `(,0),[0,)` is
-  also not parseable as a union by `VersionRangeFactory`);
-- otherwise — gate on the UNION of the base block's range and every override
-  row's range, REGARDLESS of the synthetic flag: non-synthetic components
-  (top-level scalars) can still declare many DSL range blocks, with the BASE
-  row carrying only the first block. Versions in a GAP between blocks (e.g.
-  `[11,12.1)` + `[12.2,)` queried with `12.1.x`) return null exactly like V1.
+**Fix (`EntityMappers.toResolvedEscrowModuleConfig` + `ComponentCodeRenderer.renderResolved`):**
+after parsing the numeric version, gate on the component's **coverage**:
+- **Decoupled model (ADR-018).** Compute `supported = ∪` of the `RANGE_PRESENCE`
+  ranges. The gate **triggers** when the component has a bounded base (legacy/API
+  shape) **OR** any `RANGE_PRESENCE` row, and returns null (404) when the version
+  is not in `supported`. The gate is **skipped** only when the base is
+  `ALL_VERSIONS` **AND** there are no `RANGE_PRESENCE` rows (`supported = ALL`).
+  Versions in a GAP between declared ranges (e.g. `[11,12.1)` + `[12.2,)` queried
+  with `12.1.x`) return null exactly like V1.
 Unparseable/blank ranges count as containing (conservative — never a false 404).
 
 History: the earlier `fix/mig-042-version-range-gate` branch gated on the base
-range and then SKIPPED synthetic bases entirely (3823-regression fix), which
-left multi-range gap components unfixed; the union gate supersedes both
-iterations.
+range and then SKIPPED synthetic bases entirely (3823-regression fix), then a
+union-over-all-bases iteration superseded it. ADR-018 then made the base always
+`ALL_VERSIONS` (no synthetic-bounded base) and moved coverage to `RANGE_PRESENCE`
+rows, so the gate now keys off `supported = ∪ RANGE_PRESENCE` rather than the
+base block's range — preserving the same byte-identical 404 behaviour.
 
 **Acceptance criteria:**
-1. Version inside the configured range(s) resolves identically to before.
-2. Version outside a bounded non-synthetic base range resolves to null (404).
-3. Version in a gap between a synthetic-base component's range blocks resolves
-   to null (404); versions covered by any block still resolve with that
-   block's overrides.
-4. ALL_VERSIONS components are unaffected.
+1. Version inside `supported` (∪ `RANGE_PRESENCE`) resolves identically to before.
+2. Version outside `supported` for a component with any `RANGE_PRESENCE` row
+   resolves to null (404).
+3. Version in a gap between a component's declared ranges resolves to null (404);
+   versions covered by any range still resolve with that range's overrides.
+4. ALL_VERSIONS components with no `RANGE_PRESENCE` rows are unaffected (gate skipped).
 
 **Test method:** `DatabaseComponentRegistryResolverTest` —
 `(9a MIG-042)`…`(9h MIG-042)` (9f is the gap case, RED before the fix; 9g is

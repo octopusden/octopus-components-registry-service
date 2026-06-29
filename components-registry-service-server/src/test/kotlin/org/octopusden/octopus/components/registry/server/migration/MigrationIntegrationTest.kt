@@ -97,33 +97,41 @@ class MigrationIntegrationTest {
 
     @Test
     @DisplayName(
-        "MIG-029: version-range-only component (TEST_COMPONENT2_WITH_SEVERAL_BRANCHES) " +
-            "has isSyntheticBase=true on its base row and no ALL_VERSIONS range",
+        "MIG-029 (ADR-018): version-range-only component (TEST_COMPONENT2_WITH_SEVERAL_BRANCHES) " +
+            "migrates to an ALL_VERSIONS base (not synthetic) + a RANGE_PRESENCE row per declared block",
     )
-    fun mig029_syntheticBaseForVersionRangeOnlyComponent() {
+    fun mig029_decoupledBaseForVersionRangeOnlyComponent() {
         val component = componentRepository.findByComponentKey("TEST_COMPONENT2_WITH_SEVERAL_BRANCHES")
         assertNotNull(component, "Component TEST_COMPONENT2_WITH_SEVERAL_BRANCHES must be migrated")
 
         val configurations = configurationRepository.findByComponentId(component!!.id!!)
         assertFalse(configurations.isEmpty(), "Must have at least one configuration row")
 
-        // The component has only explicit version ranges — no ALL_VERSIONS block in DSL.
-        // The base row must be marked synthetic.
+        // Decoupled model: the base is always the ALL_VERSIONS effective default — never a
+        // synthetic-bounded range. Coverage is a separate layer (RANGE_PRESENCE rows).
         val baseRow: ComponentConfigurationEntity? =
             configurationRepository.findBaseByComponentId(component.id!!)
         assertNotNull(baseRow, "Must have a base row (overridden_attribute IS NULL)")
-        assertTrue(
+        assertFalse(
             baseRow!!.isSyntheticBase,
-            "Base row for version-range-only component must have isSyntheticBase=true",
+            "Decoupled model never marks a base synthetic (is_synthetic_base must be false)",
+        )
+        assertEquals(
+            ALL_VERSIONS,
+            baseRow.versionRange,
+            "Base row must sit at ALL_VERSIONS (the effective default), not a bounded block range",
         )
 
-        // No row should have versionRange == ALL_VERSIONS from the DSL — that would indicate
-        // the pipeline erroneously created a non-synthetic ALL_VERSIONS row.
-        val allVersionsRows = configurations.filter { it.versionRange == ALL_VERSIONS && !it.isSyntheticBase }
-        assertTrue(
-            allVersionsRows.isEmpty(),
-            "version-range-only component must NOT have a non-synthetic ALL_VERSIONS base row; found: $allVersionsRows",
-        )
+        // Every declared bounded block is preserved verbatim as a RANGE_PRESENCE row (the
+        // coverage layer). TEST_COMPONENT2_WITH_SEVERAL_BRANCHES declares three blocks.
+        val presenceRanges =
+            configurations.filter { it.rowType == "RANGE_PRESENCE" }.map { it.versionRange }.toSet()
+        for (declared in listOf("(,03.38.25]", "(03.38.25,03.38.31]", "(03.38.31,)")) {
+            assertTrue(
+                declared in presenceRanges,
+                "Declared block '$declared' must be preserved as a RANGE_PRESENCE row; found: $presenceRanges",
+            )
+        }
     }
 
     // =========================================================================
@@ -406,8 +414,9 @@ class MigrationIntegrationTest {
 
     @Test
     @DisplayName(
-        "MIG-040: TEST_COMPONENT3 empty `(,1.0.107)` DSL block emits a RANGE_PRESENCE row " +
-            "with NULL overridden_attribute and all typed cols NULL; `[1.0.107,)` keeps its real overrides",
+        "MIG-040 (ADR-018): TEST_COMPONENT3 emits a RANGE_PRESENCE row per declared block " +
+            "(coverage layer) with NULL overridden_attribute and all typed cols NULL; the base sits at " +
+            "ALL_VERSIONS and `[1.0.107,)` carries its real overrides alongside its presence row",
     )
     fun mig040_rangePresenceRowsEmittedForEmptyDslBlocks() {
         val component = componentRepository.findByComponentKey("TEST_COMPONENT3")
@@ -445,22 +454,32 @@ class MigrationIntegrationTest {
         assertNull(presence.jiraVersionPrefix); assertNull(presence.jiraVersionFormat)
         assertNull(presence.jiraHotfixVersionFormat)
 
-        // `[1.0.107,)` must NOT get an extra presence row — it has real overrides.
+        // Decoupled model: `[1.0.107,)` gets a RANGE_PRESENCE row (coverage anchor) AND its real
+        // override rows — they coexist, distinguished by row_type. The presence row is the coverage
+        // layer; the SCALAR_OVERRIDE/MARKER rows are the value layer.
         val rangeRows = allRows.filter { it.versionRange == "[1.0.107,)" }
         assertTrue(
-            rangeRows.none { it.rowType == "RANGE_PRESENCE" },
-            "Range '[1.0.107,)' must not get a presence row when it already has real overrides. " +
+            rangeRows.any { it.rowType == "RANGE_PRESENCE" },
+            "Range '[1.0.107,)' must get a RANGE_PRESENCE coverage row. Found: ${rangeRows.map { it.rowType }}",
+        )
+        assertTrue(
+            rangeRows.any { it.rowType == "SCALAR_OVERRIDE" || it.rowType == "MARKER" },
+            "Range '[1.0.107,)' must keep its real override rows alongside the presence row. " +
                 "Found: ${rangeRows.map { it.rowType }}",
         )
 
-        // The synthetic-base row at `(,1.0.107)` (BASE) must exist alongside the
-        // RANGE_PRESENCE row at the same range — the two share `version_range`
-        // and NULL `overridden_attribute` but are distinguished by `row_type`.
-        val sameRangeRows = allRows.filter { it.versionRange == "(,1.0.107)" }
+        // The base row sits at ALL_VERSIONS now (the effective default), NOT at the first declared
+        // block `(,1.0.107)`. `(,1.0.107)` carries only its RANGE_PRESENCE coverage row.
+        val baseRows = allRows.filter { it.rowType == "BASE" }
+        assertEquals(1, baseRows.size, "Exactly one BASE row")
+        assertEquals(
+            ALL_VERSIONS, baseRows.single().versionRange,
+            "BASE row must be at ALL_VERSIONS (decoupled effective default), not '(,1.0.107)'",
+        )
+        val firstBlockRows = allRows.filter { it.versionRange == "(,1.0.107)" }
         assertTrue(
-            sameRangeRows.any { it.rowType == "BASE" },
-            "Synthetic base row at '(,1.0.107)' must coexist with the RANGE_PRESENCE row " +
-                "(MIG-029 + Stream A). Found rowTypes: ${sameRangeRows.map { it.rowType }}",
+            firstBlockRows.none { it.rowType == "BASE" },
+            "The first declared block '(,1.0.107)' must no longer be a BASE row. Found: ${firstBlockRows.map { it.rowType }}",
         )
     }
 
