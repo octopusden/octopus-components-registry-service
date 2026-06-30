@@ -763,7 +763,10 @@ class ComparatorLogicTest {
 
         val recorded =
             DiffCollector.snapshot().single { it.category == DiffClassifier.STRUCTURAL_DIFF }
-        assertThat(recorded.entityKey).isEqualTo("PRJX / beta-fixture @ [2.0,)")
+        // The real diff (missing component.displayName) still surfaces; the range in the entity key is
+        // now the canonical form ([2.0,) → [2,)) because the jira-ranges array is range-canonicalised
+        // before the shape diff — a cosmetic label change, the component+range is still identified.
+        assertThat(recorded.entityKey).isEqualTo("PRJX / beta-fixture @ [2,)")
         // Structured path (raw, positional) — diff-of-diffs keys on its
         // normalized form instead of parsing the free-text message.
         assertThat(recorded.jsonPath).isEqualTo("\$[1].component.displayName")

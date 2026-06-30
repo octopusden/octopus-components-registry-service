@@ -247,6 +247,25 @@ class VersionRangeMapCanonicalizerTest {
     }
 
     @Test
+    @DisplayName("/jira-component-version-ranges Set-array: reshaped per-component ranges → ZERO shape diffs; real payload change surfaces")
+    fun jiraRangesSetArrayWiring() {
+        val ep = "GET /rest/api/2/common/jira-component-version-ranges"
+        fun el(range: String, project: String) =
+            mapper.readTree("""{"componentName":"c","versionRange":"$range","component":{"projectKey":"$project"}}""")
+        // V1 splits component c into two adjacent same-payload ranges; candidate merges → array size differs.
+        val v1 = mapper.createArrayNode().apply { add(el("[1,2)", "P")); add(el("[2,3)", "P")) }
+        val cand = mapper.createArrayNode().apply { add(el("[1,3)", "P")) }
+        val bn = VersionRangeMapCanonicalizer.normalizeForEndpoint(ep, v1)
+        val cn = VersionRangeMapCanonicalizer.normalizeForEndpoint(ep, cand)
+        assertEquals(emptyList<JsonShape.ShapeDiff>(), JsonShape.diff(bn, cn))
+
+        // A real payload difference (different projectKey) must NOT be merged away → surfaces.
+        val candReal = mapper.createArrayNode().apply { add(el("[1,2)", "P")); add(el("[2,3)", "Q")) }
+        val cnReal = VersionRangeMapCanonicalizer.normalizeForEndpoint(ep, candReal)
+        assertNotEquals(emptyList<JsonShape.ShapeDiff>(), JsonShape.diff(bn, cnReal))
+    }
+
+    @Test
     @DisplayName("unregistered endpoint is passed through untouched (no accidental canonicalisation)")
     fun unregisteredEndpointPassthrough() {
         val ep = "GET /rest/api/2/components"
