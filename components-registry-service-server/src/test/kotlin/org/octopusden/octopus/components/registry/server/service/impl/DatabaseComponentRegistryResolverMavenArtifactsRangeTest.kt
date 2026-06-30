@@ -340,8 +340,8 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
 
     @Test
     @DisplayName(
-        "RES-C-004b: two ranges (BASE + RANGE_PRESENCE) with per-config GAV but no markers " +
-            "→ both ranges return the V1 wildcard via component-level fallback",
+        "RES-C-004b: two enumerated ranges (split by a non-ownership override edge) with per-config " +
+            "GAV but no maven marker → both ranges return the V1 wildcard via component-level fallback",
     )
     fun `RES-C-004b two ranges without markers both return wildcard`() {
         val comp = makeComponent("res-c-prime-fixture-two-ranges")
@@ -349,14 +349,21 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
 
         addComponentLevelArtifact(comp, "com.example.test", V1_WILDCARD)
 
-        val base = makeBase(comp, "(,1.0.107)")
+        val base = makeBase(comp, ALL_VERSIONS)
         addMavenArtifact(base, "com.example.test", "art-a", sortOrder = 0)
-        // RANGE_PRESENCE row brings the second range into the toEscrowModule enumeration
-        // without introducing a DISTRIBUTION_MAVEN marker — exactly the prod shape where
-        // a component has multiple ranges but no per-range maven override.
-        val presence = makeRangePresenceRow(comp, "[1.0.107,)")
+        // ADR-018 redesign: enumeration partitions supported (= ALL here) by value-change edges. A
+        // non-ownership scalar override at [1.0.107,) introduces the edge 1.0.107 → two partitions
+        // (,1.0.107) and [1.0.107,); neither has a per-range DISTRIBUTION_MAVEN/ownership override, so
+        // both fall back to the component-level V1 wildcard.
+        val jvOverride =
+            ComponentConfigurationEntity(
+                component = comp,
+                versionRange = "[1.0.107,)",
+                overriddenAttribute = "build.javaVersion",
+                rowType = "SCALAR_OVERRIDE",
+            )
 
-        comp.configurations.addAll(listOf(base, presence))
+        comp.configurations.addAll(listOf(base, jvOverride))
         stubComponent(comp)
 
         val result = resolver.getMavenArtifactParameters("res-c-prime-fixture-two-ranges")
@@ -498,16 +505,19 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
 
         addComponentLevelArtifact(comp, "com.example.fx", "art-a,art-b,art-c")
 
-        val base = makeBase(comp, "[4,4.9.4-4181)")
+        // ADR-018 redesign: base is ALL_VERSIONS, supported coverage = the declared block [4.9.4-4181,)
+        // as a RANGE_PRESENCE row; the DISTRIBUTION_MAVEN marker's range is a value-change edge.
+        val base = makeBase(comp, ALL_VERSIONS)
         addMavenArtifact(base, "com.example.fx", "art-a", sortOrder = 0)
         addMavenArtifact(base, "com.example.fx", "art-b", sortOrder = 1)
         addMavenArtifact(base, "com.example.fx", "art-c", sortOrder = 2)
+        val presence = makeRangePresenceRow(comp, "[4.9.4-4181,)")
 
         val distMaven = makeMarkerRow(comp, "[4.9.4-4181,)", MarkerAttributes.DISTRIBUTION_MAVEN)
         // 15 GAV tokens like the production DSL — all map to (com.example.fx, lib-sdk).
         repeat(15) { i -> addMavenArtifact(distMaven, "com.example.fx", "lib-sdk", sortOrder = i) }
 
-        comp.configurations.addAll(listOf(base, distMaven))
+        comp.configurations.addAll(listOf(base, presence, distMaven))
         stubComponent(comp)
 
         val result = resolver.getMavenArtifactParameters("fixture-A-3-token")
@@ -553,12 +563,15 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
             "installer-art,main-art",
         )
 
-        val base = makeBase(comp, "[1.7,1.7.3076)")
+        // ADR-018 redesign: base is ALL_VERSIONS, supported coverage = the declared block
+        // [1.7.3076,1.7.3209] as a RANGE_PRESENCE row; the DISTRIBUTION_MAVEN marker is its edge.
+        val base = makeBase(comp, ALL_VERSIONS)
         addMavenArtifact(
             base,
             "com.example.fx.distrib,com.example.fx.distrib.installer",
             "installer-art,main-art",
         )
+        val presence = makeRangePresenceRow(comp, "[1.7.3076,1.7.3209]")
 
         val distMaven = makeMarkerRow(comp, "[1.7.3076,1.7.3209]", MarkerAttributes.DISTRIBUTION_MAVEN)
         // 8 GAV tokens like the production DSL — all map to (com.example.fx.bundled, main-art).
@@ -566,7 +579,7 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
             addMavenArtifact(distMaven, "com.example.fx.bundled", "main-art", sortOrder = i)
         }
 
-        comp.configurations.addAll(listOf(base, distMaven))
+        comp.configurations.addAll(listOf(base, presence, distMaven))
         stubComponent(comp)
 
         val result = resolver.getMavenArtifactParameters("fixture-B-csv")
@@ -583,6 +596,41 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
             rangeWithOverride.artifactPattern,
             "artifactPattern must be the inherited CSV — DISTRIBUTION_MAVEN does NOT replace it with the GAV artifact-token list",
         )
+    }
+
+    @Test
+    @DisplayName(
+        "RES-C-009 (ADR-018 redesign): a per-range ownership split by an override edge keeps its " +
+            "ownership on every partition sub-range (containment selection, NOT exact-match)",
+    )
+    fun `RES-C-009 ownership survives partition sub-ranges via containment`() {
+        val comp = makeComponent("res-c-ownership-containment")
+        comp.distributionExplicit = true
+
+        val base = makeBase(comp, ALL_VERSIONS)
+        // Per-range ownership at [2,8). A non-ownership scalar override at [4,6) introduces the edges
+        // 4 and 6, so enumeration partitions the ownership range into [2,4),[4,6),[6,8) — none of which
+        // EQUALS the stored "[2,8)". Exact-match ownership lookup would miss all three and drop them to
+        // the (empty) base; containment must keep the [2,8) ownership on each sub-range (amendment C).
+        comp.addOwnershipMapping("com.example.own", "widget", versionRange = "[2,8)")
+        val edge =
+            ComponentConfigurationEntity(
+                component = comp,
+                versionRange = "[4,6)",
+                overriddenAttribute = "build.javaVersion",
+                rowType = "SCALAR_OVERRIDE",
+            )
+        comp.configurations.addAll(listOf(base, edge))
+        stubComponent(comp)
+
+        val result = resolver.getMavenArtifactParameters("res-c-ownership-containment")
+
+        for (range in listOf("[2,4)", "[4,6)", "[6,8)")) {
+            val entry = result[range]
+            assertNotNull(entry, "$range must carry the containing [2,8) ownership; got keys=${result.keys}")
+            assertEquals("com.example.own", entry!!.groupPattern, "$range groupPattern must come from the [2,8) ownership")
+            assertEquals("widget", entry.artifactPattern, "$range artifactPattern must come from the [2,8) ownership")
+        }
     }
 
     // ========================================================================

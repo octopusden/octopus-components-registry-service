@@ -100,6 +100,7 @@ class MIG047FieldOverrideWriteGuardTest {
                 fieldConfigService = mock(FieldConfigService::class.java),
                 teamcityProperties = mock(TeamcityProperties::class.java),
                 versionRangeFactory = VersionRangeFactory(versionNames),
+                numericVersionFactory = NumericVersionFactory(versionNames),
                 environment = mock(org.springframework.core.env.Environment::class.java),
                 componentCodeRenderer =
                     ComponentCodeRenderer(

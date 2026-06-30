@@ -51,8 +51,10 @@ import org.octopusden.octopus.components.registry.server.entity.ToolEntity
 import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
 import org.octopusden.octopus.components.registry.server.event.AuditEvent
 import org.octopusden.octopus.components.registry.server.mapper.ALL_VERSIONS
+import org.octopusden.octopus.components.registry.server.util.VersionRangePartition
 import org.octopusden.octopus.components.registry.server.mapper.BEAN_TYPE_NAMES
 import org.octopusden.octopus.components.registry.server.mapper.BUILD_SYSTEM_NAMES
+import org.octopusden.octopus.components.registry.server.mapper.numericVersionComparator
 import org.octopusden.octopus.components.registry.server.mapper.ESCROW_GENERATION_MODE_NAMES
 import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
 import org.octopusden.octopus.components.registry.server.mapper.PACKAGE_TYPE_NAMES
@@ -86,6 +88,7 @@ import org.octopusden.octopus.components.registry.server.util.JiraRowView
 import org.octopusden.octopus.components.registry.server.util.MavenGavCollision
 import org.octopusden.octopus.components.registry.server.util.computeEffectiveJiraPairs
 import org.octopusden.octopus.escrow.config.ConfigHelper
+import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionRangeFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.core.env.Environment
@@ -131,6 +134,7 @@ class ComponentManagementServiceImpl(
     private val fieldConfigService: FieldConfigService,
     private val teamcityProperties: TeamcityProperties,
     private val versionRangeFactory: VersionRangeFactory,
+    private val numericVersionFactory: NumericVersionFactory,
     private val environment: Environment,
     private val componentCodeRenderer: ComponentCodeRenderer,
     private val employeeDirectory: EmployeeDirectoryService,
@@ -867,8 +871,8 @@ class ComponentManagementServiceImpl(
             syncRequiredTools(saved.id!!, pendingTools)
             refreshConfigRequiredToolsInMemory(saved, pendingTools)
         }
-        // ADR-018 (b): align supported-coverage breakpoints to this override's interior edges.
-        autoSplitCoverage(component, canonicalRange)
+        // ADR-018 redesign: coverage is override-independent — no write-time coverage split. The read
+        // path partitions supported by this override's edges at enumerate time.
         bumpParentVersion(component)
         // Review #2: an override row can carry mavenArtifacts/dockerImages/jira
         // coordinates that collide with another component — re-run the same 409 /
@@ -934,8 +938,7 @@ class ComponentManagementServiceImpl(
             syncRequiredTools(saved.id!!, pendingTools)
             refreshConfigRequiredToolsInMemory(saved, pendingTools)
         }
-        // ADR-018 (b): a range change can introduce new interior breakpoints — realign coverage.
-        autoSplitCoverage(row.component, saved.versionRange)
+        // ADR-018 redesign: coverage is override-independent — no write-time coverage split.
         bumpParentVersion(row.component)
         // Review #2: re-run the cross-component composite checks — an UPDATE to a
         // marker override can introduce a colliding GAV / docker image / jira
@@ -975,74 +978,6 @@ class ComponentManagementServiceImpl(
             oldValue = beforeSnapshot,
             newValue = emptyMap(),
         )
-    }
-
-    /**
-     * Write-time auto-split of supported coverage (ADR-018 refinement (b)). After a field-override
-     * write whose range introduces a boundary INSIDE a covering `RANGE_PRESENCE` row, split that
-     * presence row at the override's interior edges so each enumerated range keeps constant resolved
-     * values (range-view enumeration is anchored to `RANGE_PRESENCE`, one config per row). Without
-     * this, the covering range's enumerated view would span versions whose resolved values differ.
-     *
-     * No-op for components with no `RANGE_PRESENCE` rows (supported = ALL, or API-created components
-     * whose override range is enumerated as its own view) and for overrides that introduce no interior
-     * edge (equal to / wider than / disjoint from the presence range). Idempotent: re-running on an
-     * already-aligned set adds nothing. Coverage (the union of ranges) is unchanged — only the
-     * breakpoints move. Uses collection mutation so JPA orphanRemoval/cascade persist the change.
-     *
-     * A composite override range (only possible on a value-only update of an import-created composite
-     * override row) introduces no single new edge — coverage was aligned at import — so it is a no-op.
-     * A composite COVERING presence row cannot be split by this simple-segment helper; if a simple
-     * override intersects one, we reject the write (clear 400) rather than silently leave a range
-     * whose enumerated view would no longer have constant resolved values — composite-coverage editing
-     * is a follow-up.
-     *
-     * Known limitation (P3): a range CHANGE on an override adds new breakpoints but does not merge the
-     * old ones back, so repeated range edits fragment `RANGE_PRESENCE` over time. Correctness holds
-     * (union + per-row constant values); a compaction pass is a follow-up.
-     */
-    private fun autoSplitCoverage(
-        component: ComponentEntity,
-        overrideRange: String,
-    ) {
-        // Only a single-segment override can introduce one new interior edge to align to. A composite
-        // override range (import-created, value-only updated) was already aligned at import → no-op.
-        VersionCoverageSplit.parseSegment(overrideRange) ?: return
-        val presenceRows = component.configurations.filter { it.rowType == "RANGE_PRESENCE" }
-        for (presence in presenceRows) {
-            val parts = VersionCoverageSplit.split(presence.versionRange, overrideRange)
-            if (parts == null) {
-                // Composite / unparseable covering range: cannot split simply. If the simple override
-                // intersects it, an interior edge would misalign enumeration — fail loudly.
-                if (rangesIntersect(presence.versionRange, overrideRange)) {
-                    throw IllegalArgumentException(
-                        "Field-override range '$overrideRange' intersects composite supported-coverage " +
-                            "range '${presence.versionRange}'. Splitting composite coverage at an override " +
-                            "edge is not yet supported — edit coverage via DSL re-import, or split the " +
-                            "composite coverage first.",
-                    )
-                }
-                continue
-            }
-            if (parts.size <= 1) continue
-            component.configurations.remove(presence) // orphanRemoval deletes it on flush
-            val existingRanges =
-                component.configurations
-                    .filter { it.rowType == "RANGE_PRESENCE" }
-                    .mapTo(mutableSetOf()) { it.versionRange }
-            for (sub in parts) {
-                if (sub in existingRanges) continue // partial unique index: one presence per (component, range)
-                component.configurations.add(
-                    ComponentConfigurationEntity(
-                        component = component,
-                        versionRange = sub,
-                        overriddenAttribute = null,
-                        rowType = "RANGE_PRESENCE",
-                    ),
-                )
-                existingRanges += sub
-            }
-        }
     }
 
     /**
@@ -1101,25 +1036,34 @@ class ComponentManagementServiceImpl(
         val component = findComponentOr404(componentId)
         // supported = ALL when explicitly requested, or when no ranges are supplied.
         val all = request.all == true || request.ranges.isNullOrEmpty()
-        val requested =
+        // Normalize the requested set to the canonical MERGED union (adjacent/overlapping collapse;
+        // gaps preserved) — coverage is override-independent (ADR-018 redesign); the read path
+        // partitions supported by value-change edges, so there is no write-time auto-split. The merge
+        // also makes any re-PUT a true no-op delta (no insert-before-delete unique-index violation).
+        val finalRanges =
             if (all) {
                 emptyList()
             } else {
-                request.ranges!!.map { normalizeRange(it) }.distinct().also { validateSupportedRanges(it) }
+                val normalized = request.ranges!!.map { normalizeRange(it) }
+                validateSupportedRanges(normalized)
+                // Canonical invariant: supported = ALL ⟺ no RANGE_PRESENCE rows. validateSupportedRanges
+                // rejects each INDIVIDUAL all-versions range, but ranges that *tile* all-versions
+                // (e.g. ["(,2.0)","[2.0,)"]) collapse to the sentinel under mergeUnion — drop it so we
+                // store zero presence rows (= ALL) rather than a bounded-looking all-versions row that
+                // reports all=false yet matches every override. Mirrors ImportServiceImpl's coverage filter.
+                VersionRangePartition.mergeUnion(normalized, numericVersionComparator(numericVersionFactory))
+                    .filterNot { isAllVersionsCoverage(it) }
             }
 
-        // Declarative replace, applied as a DELTA so an idempotent (same-range) re-PUT is a no-op
-        // rather than a unique-index violation: Hibernate would otherwise flush the INSERT of a
-        // re-added range before the orphan-removal DELETE of the identical old row, tripping
-        // uq_component_configurations_one_range_presence (component_id, version_range). orphanRemoval +
-        // cascade persist the delta. (RANGE_PRESENCE rows carry no payload, so nothing else migrates.)
+        // Declarative replace as a DELTA (delete only removed, add only new) so identical rows are
+        // kept, never removed-then-re-added.
+        val finalSet = finalRanges.toSet()
         val existingPresence = component.configurations.filter { it.rowType == "RANGE_PRESENCE" }
         val existingRanges = existingPresence.map { it.versionRange }.toSet()
-        val requestedSet = requested.toSet()
         existingPresence
-            .filter { it.versionRange !in requestedSet }
+            .filter { it.versionRange !in finalSet }
             .forEach { component.configurations.remove(it) }
-        requested
+        finalRanges
             .filter { it !in existingRanges }
             .forEach {
                 component.configurations.add(
@@ -1132,23 +1076,15 @@ class ComponentManagementServiceImpl(
                 )
             }
 
-        // Re-align the new coverage to existing per-attribute override edges so each enumerated range
-        // keeps constant resolved values (ADR-018 (b)). Skipped for supported = ALL (no presence rows).
-        if (!all) {
-            component.configurations
-                .filter { it.rowType in FIELD_OVERRIDE_ROW_TYPES }
-                .map { it.versionRange }
-                .distinct()
-                .forEach { autoSplitCoverage(component, it) }
-        }
-
         // V1/V5 (warn-and-allow): surface overrides left entirely outside the new supported set — they
         // never resolve (the coverage gate 404s first). Non-blocking; the write still succeeds.
-        val warnings = supportedCoverageWarnings(component, requested, all)
+        // `finalRanges` can be empty even when `all=false` (the request's ranges TILED all-versions and
+        // collapsed to ALL) — that is effectively supported=ALL, so no override is "outside"; treat it
+        // as `all` to avoid spurious warnings.
+        val effectiveAll = all || finalRanges.isEmpty()
+        val warnings = supportedCoverageWarnings(component, finalRanges, effectiveAll)
 
         bumpParentVersion(component)
-        // `resulting` reflects the actual persisted rows after auto-split re-alignment (the audit log
-        // must reconstruct real DB state, not the pre-split request).
         val resulting =
             component.configurations
                 .filter { it.rowType == "RANGE_PRESENCE" }
@@ -1164,12 +1100,12 @@ class ComponentManagementServiceImpl(
     }
 
     /**
-     * Validate a requested supported-versions set (PUT): each range must parse, must NOT be an
-     * all-versions sentinel (use `all:true` instead of a bounded-looking RANGE_PRESENCE row that
-     * would report `all=false` yet match every override), and the ranges must be pairwise DISJOINT
-     * (ADR-018 stores canonical, non-overlapping coverage segments; overlap would expose multiple
-     * enumerated views for the same versions). Composite (multi-segment) coverage ranges are allowed
-     * verbatim — they just must not overlap each other.
+     * Validate a requested supported-versions set (PUT): each range must parse and must NOT be an
+     * all-versions sentinel (use `all:true` instead of a bounded-looking RANGE_PRESENCE row that would
+     * report `all=false` yet match every override). There is **no disjointness requirement** (ADR-018
+     * redesign): overlapping/adjacent requested ranges are normalized into the canonical MERGED union
+     * by `VersionRangePartition.mergeUnion` at the call site, and enumeration breakpoints are derived
+     * at read time — coverage is a union, not a partition.
      */
     private fun validateSupportedRanges(ranges: List<String>) {
         ranges.forEach { r ->
@@ -1179,14 +1115,9 @@ class ComponentManagementServiceImpl(
                     "instead of an all-versions coverage row."
             }
         }
-        for (i in ranges.indices) {
-            for (j in i + 1 until ranges.size) {
-                require(!rangesIntersect(ranges[i], ranges[j])) {
-                    "Supported ranges must be disjoint, but '${ranges[i]}' and '${ranges[j]}' overlap. " +
-                        "Supply a non-overlapping coverage partition."
-                }
-            }
-        }
+        // No disjointness requirement: overlapping/adjacent requested ranges are normalized into the
+        // canonical merged union by VersionRangePartition.mergeUnion (ADR-018 redesign — coverage is a
+        // union, not a partition; enumeration breakpoints are derived at read time).
     }
 
     /** True iff [range] denotes all versions (the ALL_VERSIONS sentinel or the unbounded `(,)`). */
@@ -1974,21 +1905,6 @@ class ComponentManagementServiceImpl(
             throw IllegalArgumentException("Invalid version range: '$range'", e)
         }
     }
-
-    /**
-     * True iff [a] and [b] share any version. Used by auto-split to decide whether a simple override
-     * collides with a composite covering range it cannot split. Conservative: an unparseable range
-     * yields `false` (never a false reject).
-     */
-    private fun rangesIntersect(
-        a: String,
-        b: String,
-    ): Boolean =
-        try {
-            versionRangeFactory.create(a).isIntersect(versionRangeFactory.create(b))
-        } catch (_: Exception) {
-            false
-        }
 
     // ─── Field-override range validation (disjoint-only, matches Portal) ─────────
     //

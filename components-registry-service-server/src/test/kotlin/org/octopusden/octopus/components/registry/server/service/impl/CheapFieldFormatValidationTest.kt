@@ -110,6 +110,7 @@ class CheapFieldFormatValidationTest {
                 fieldConfigService = fieldConfigService,
                 teamcityProperties = mock(TeamcityProperties::class.java),
                 versionRangeFactory = VersionRangeFactory(versionNames),
+                numericVersionFactory = NumericVersionFactory(versionNames),
                 environment = environment,
                 componentCodeRenderer =
                     ComponentCodeRenderer(

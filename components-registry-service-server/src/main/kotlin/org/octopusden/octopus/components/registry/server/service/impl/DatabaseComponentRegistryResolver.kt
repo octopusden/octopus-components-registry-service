@@ -17,6 +17,7 @@ import org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipR
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
 import org.octopusden.octopus.components.registry.server.mapper.escrowModuleConfigField
+import org.octopusden.octopus.components.registry.server.mapper.rangeApplies
 import org.octopusden.octopus.components.registry.server.mapper.toEscrowModule
 import org.octopusden.octopus.components.registry.server.mapper.toResolvedEscrowModuleConfig
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
@@ -368,19 +369,31 @@ class DatabaseComponentRegistryResolver(
         }
 
     /**
-     * For each of the component's declared config ranges, the in-force ownership mappings:
-     * the override mappings keyed to that exact range if present, else the base mappings.
+     * For each of the component's enumerated config ranges, the in-force ownership mappings, selected
+     * by CONTAINMENT (mirrors `EntityMappers.buildEscrowModuleConfig`): a non-ALL ownership mapping
+     * whose stored range CONTAINS the enumerated range, else the base (ALL_VERSIONS) mappings.
+     *
+     * Exact-match lookup is WRONG under the decoupled model: enumeration now partitions supported by
+     * value-change edges (override + ownership endpoints), so an override edge inside an ownership
+     * range splits it into sub-ranges (e.g. ownership `[2,8)` + override `[4,6)` → enumerated
+     * `[2,4)`,`[4,6)`,`[6,8)`). Those sub-ranges no longer equal the stored ownership range `[2,8)`, so
+     * an exact-match `byRange[rangeKey]` would miss and drop ownership to the base — amendment C.
      */
     private fun effectiveMappingsByRange(
         componentEntity: ComponentEntity,
     ): Map<String, List<ComponentArtifactMappingEntity>> {
         val byRange = componentEntity.artifactMappings.groupBy { it.versionRange }
         val baseMappings = byRange[ALL_VERSIONS].orEmpty()
+        val nonBaseMappings = componentEntity.artifactMappings.filter { it.versionRange != ALL_VERSIONS }
         val module = componentEntity.toEscrowModule(versionRangeFactory, numericVersionFactory)
         val configRanges = module.moduleConfigurations.map { it.versionRangeString ?: ALL_VERSIONS }
-        // Consider every declared config range PLUS every override range (an override range must
-        // equal a config range by invariant, but include it explicitly so a per-range override is
-        // never dropped); each range → its override mappings if any, else the base mappings.
+        // Consider every enumerated config range PLUS every ownership range. /maven-artifacts is an
+        // ownership-ENUMERATION endpoint (distinct from version /resolve, which keeps its coverage
+        // gate): the V1 contract surfaces every declared maven-ownership range even one that lies
+        // outside the bounded base's coverage (e.g. base [1.1,) with a per-range ownership at [1.0,1.1)
+        // — RES-C-001). So a per-range ownership range is always included even if it is not itself an
+        // enumerated config view. (Where an ownership range IS within supported, its enumerated
+        // sub-ranges also appear and resolve to the same ownership via containment — harmless overlap.)
         val overrideRanges = byRange.keys.filter { it != ALL_VERSIONS }
         val ranges = (configRanges + overrideRanges).distinct()
         if (ranges.isEmpty()) return emptyMap()
@@ -388,7 +401,15 @@ class DatabaseComponentRegistryResolver(
         // empty artifactIds list): otherwise an empty list reaches the forward render's
         // `minByOrNull { … }!!` and NPEs → GET /maven-artifacts 500. An empty list = no ownership.
         return ranges
-            .associateWith { rangeKey -> byRange[rangeKey] ?: baseMappings }
+            .associateWith { rangeKey ->
+                // Containment: ownership ranges are disjoint by invariant, so at most one non-ALL
+                // mapping range contains rangeKey; fall back to the base (ALL_VERSIONS) mappings.
+                val containing =
+                    nonBaseMappings.filter {
+                        rangeApplies(it.versionRange, rangeKey, versionRangeFactory, numericVersionFactory)
+                    }
+                containing.ifEmpty { baseMappings }
+            }
             .filterValues { it.isNotEmpty() }
     }
 

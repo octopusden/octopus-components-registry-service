@@ -25,6 +25,7 @@ import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
 import org.octopusden.octopus.releng.dto.ComponentInfo
 import org.octopusden.octopus.releng.dto.JiraComponent
 import org.octopusden.releng.versions.VersionNames
+import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionRangeFactory
 
 /**
@@ -63,6 +64,7 @@ class CollectDslJiraPairsTest {
             componentArtifactMappingRepository = mock(ComponentArtifactMappingRepository::class.java),
             dockerImageRepository = mock(DistributionDockerImageRepository::class.java),
             versionRangeFactory = VersionRangeFactory(VersionNames("serviceCBranch", "serviceC", "minorC")),
+            numericVersionFactory = NumericVersionFactory(VersionNames("serviceCBranch", "serviceC", "minorC")),
         )
         collectMethod = ImportServiceImpl::class.java
             .getDeclaredMethod("collectDslJiraPairs", String::class.java, List::class.java)

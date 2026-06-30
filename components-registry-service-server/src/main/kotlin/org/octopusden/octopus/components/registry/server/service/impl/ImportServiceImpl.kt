@@ -35,6 +35,7 @@ import org.octopusden.octopus.components.registry.server.entity.ToolEntity
 import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
 import org.octopusden.octopus.components.registry.server.mapper.ALL_VERSIONS
 import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
+import org.octopusden.octopus.components.registry.server.mapper.numericVersionComparator
 import org.octopusden.octopus.components.registry.server.repository.ComponentBuildToolBeanRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentGroupRepository
@@ -59,6 +60,7 @@ import org.octopusden.octopus.components.registry.server.service.MigrationStatus
 import org.octopusden.octopus.components.registry.server.service.ValidationResult
 import org.octopusden.octopus.components.registry.server.util.JiraRowView
 import org.octopusden.octopus.components.registry.server.util.MavenCoords
+import org.octopusden.octopus.components.registry.server.util.VersionRangePartition
 import org.octopusden.octopus.components.registry.server.util.MavenGavCollision
 import org.octopusden.octopus.components.registry.server.util.computeEffectiveJiraPairs
 import org.octopusden.octopus.components.registry.server.util.parseMavenGavEntry
@@ -68,6 +70,7 @@ import org.octopusden.octopus.escrow.configuration.model.EscrowModule
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
 import org.octopusden.octopus.escrow.model.Distribution
 import org.octopusden.octopus.escrow.model.VCSSettings
+import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionRangeFactory
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
@@ -115,6 +118,7 @@ class ImportServiceImpl(
     private val componentArtifactMappingRepository: ComponentArtifactMappingRepository,
     private val dockerImageRepository: DistributionDockerImageRepository,
     private val versionRangeFactory: VersionRangeFactory,
+    private val numericVersionFactory: NumericVersionFactory,
 ) : ImportService {
 
     @PersistenceContext
@@ -968,41 +972,32 @@ class ImportServiceImpl(
         }
         val tToolsMs = (System.nanoTime() - tToolsStart) / 1_000_000
 
-        // §6.4b Coverage layer (ADR-018): when the component declares bounded
-        // blocks (supported != ALL), emit a verbatim RANGE_PRESENCE row for EVERY
-        // declared block — INCLUDING the one chosen as the base scalar source
-        // (configs.first(), whose own range is otherwise not represented now that
-        // the base row sits at ALL_VERSIONS). Composites are kept as one string.
-        // `supported = ALL` (an all-versions config exists) emits no presence rows:
-        // the lone ALL_VERSIONS base stands for everything. emitRangePresenceRow is
-        // idempotent on (component, range), so a duplicate declared range is a no-op.
+        // §6.4b Coverage layer (ADR-018 redesign): store supported as the MERGED union of the declared
+        // bounded blocks — maximal contiguous segments, gaps preserved — independent of overrides.
+        // Enumeration partitions `supported` by value-change edges at READ time, so there are NO
+        // per-block presence rows: adjacent identical legacy blocks collapse into one segment, and
+        // blocks that differ keep their boundary via their own override/ownership/doc rows.
+        // `supported = ALL` emits none. emitRangePresenceRow is idempotent on (component, range).
         if (!supportedIsAll) {
-            for (cfg in configs) {
-                val range = cfg.versionRangeString
-                if (range != null && !isAllVersionsRange(range)) {
-                    emitRangePresenceRow(saved, range)
-                }
+            val declaredRanges = configs.mapNotNull { it.versionRangeString }.filterNot { isAllVersionsRange(it) }
+            // If the declared blocks together cover everything (e.g. `(,1.0.107)` ∪ `[1.0.107,)`),
+            // mergeUnion collapses to the all-versions sentinel — that means supported = ALL, so emit
+            // NO presence rows (the ALL_VERSIONS base stands for everything; supported = ALL ⟺ no rows).
+            for (segment in VersionRangePartition.mergeUnion(declaredRanges, numericVersionComparator(numericVersionFactory))
+                .filterNot { isAllVersionsRange(it) }) {
+                emitRangePresenceRow(saved, segment)
             }
         }
 
-        // §6.5 Override rows: diff every non-base config against the base. The base
-        // scalar source (configs.first() when supported != ALL, else the all-versions
-        // config) carries no override of its own — it equals the base by construction.
-        // Coverage/enumeration anchors for empty blocks are the RANGE_PRESENCE rows
-        // emitted above; the legacy RES-001 fallback here is therefore unconditional
-        // for the supported != ALL case and only matters for empty bounded blocks that
-        // coexist with an all-versions config (none in real DSL — Scenario A).
+        // §6.5 Override rows: diff every non-base config against the base. The base scalar source
+        // (configs.first() when supported != ALL, else the all-versions config) carries no override of
+        // its own — it equals the base by construction. No RES-001 fallback presence row: coverage is
+        // the merged union above, and an empty block (no value change) simply contributes no edge.
         val tOverridesStart = System.nanoTime()
         val nonBaseConfigs = configs.filter { it !== baseConfig }
         for (override in nonBaseConfigs) {
-            val scalarRows = emitScalarOverrides(saved, baseConfig, override)
-            val markerRows = emitMarkerOverrides(saved, savedBase, baseConfig, override)
-            val overrideRange = override.versionRangeString
-            if (scalarRows.isEmpty() && markerRows.isEmpty() && overrideRange != null &&
-                !isAllVersionsRange(overrideRange)
-            ) {
-                emitRangePresenceRow(saved, overrideRange)
-            }
+            emitScalarOverrides(saved, baseConfig, override)
+            emitMarkerOverrides(saved, savedBase, baseConfig, override)
         }
         val tOverridesMs = (System.nanoTime() - tOverridesStart) / 1_000_000
 

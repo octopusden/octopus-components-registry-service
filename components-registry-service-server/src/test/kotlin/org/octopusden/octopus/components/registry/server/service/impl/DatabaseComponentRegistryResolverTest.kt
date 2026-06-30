@@ -268,7 +268,7 @@ class DatabaseComponentRegistryResolverTest {
     // ========================================================================
 
     @Test
-    fun `(2) scalar override - enumeration yields base-range entry and override-range entry`() {
+    fun `(2) scalar override on supported=ALL - enumeration partitions ALL by the override edges`() {
         val comp = makeComponent("COMP2")
         val base = makeBase(comp, javaVersion = "11")
         val overrideRow = makeScalarOverrideRow(comp, "[1.0,2.0)", "build.javaVersion")
@@ -276,16 +276,17 @@ class DatabaseComponentRegistryResolverTest {
         comp.configurations.addAll(listOf(base, overrideRow))
         stubComponent(comp)
 
+        // ADR-018 redesign: supported = ALL (no RANGE_PRESENCE) is partitioned by the override's
+        // value-change edges (1.0, 2.0) → three constant-value views, no overlapping ALL view.
         val module = resolver.getComponentById("COMP2")
         assertNotNull(module)
-        assertEquals(2, module!!.moduleConfigurations.size)
-
-        val allVersionsCfg = module.moduleConfigurations.first { it.versionRangeString == ALL_VERSIONS }
-        val overrideCfg = module.moduleConfigurations.first { it.versionRangeString == "[1.0,2.0)" }
-        // Base range keeps original javaVersion
-        assertEquals("11", allVersionsCfg.buildConfiguration?.javaVersion)
-        // Override range has overridden javaVersion
-        assertEquals("21", overrideCfg.buildConfiguration?.javaVersion)
+        assertEquals(
+            listOf("(,1.0)", "[1.0,2.0)", "[2.0,)"),
+            module!!.moduleConfigurations.map { it.versionRangeString },
+        )
+        assertEquals("11", module.moduleConfigurations.first { it.versionRangeString == "(,1.0)" }.buildConfiguration?.javaVersion)
+        assertEquals("21", module.moduleConfigurations.first { it.versionRangeString == "[1.0,2.0)" }.buildConfiguration?.javaVersion)
+        assertEquals("11", module.moduleConfigurations.first { it.versionRangeString == "[2.0,)" }.buildConfiguration?.javaVersion)
     }
 
     @Test
@@ -539,19 +540,16 @@ class DatabaseComponentRegistryResolverTest {
         comp.configurations.addAll(listOf(base, manualOverride, rangePresenceForAutoRange))
         stubComponent(comp)
 
+        // ADR-018 redesign: supported = the RANGE_PRESENCE coverage = [1.0,). The MANUAL override on
+        // (,1.0) is OUTSIDE supported, so it is NOT enumerated (and cannot leak MANUAL into the wire) —
+        // a stronger guarantee than the old createdAt-ordering fix. Enumeration is version-ordered.
         val module = resolver.getComponentById("COMP5E")
         assertNotNull(module)
-        assertEquals(2, module!!.moduleConfigurations.size, "Both override ranges must be enumerated")
-        val first = module.moduleConfigurations.first()
-        assertEquals(
-            "[1.0,)",
-            first.versionRangeString,
-            "moduleConfigurations[0] must be the DSL-first range (lowest createdAt), NOT the adversarially-inserted MANUAL range",
-        )
+        assertEquals(listOf("[1.0,)"), module!!.moduleConfigurations.map { it.versionRangeString })
         assertEquals(
             org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode.AUTO,
-            first.escrow!!.generation.orElse(null),
-            "First-enumerated range inherits escrow.generation from synthetic base (AUTO via Defaults), not MANUAL from the other range",
+            module.moduleConfigurations.first().escrow!!.generation.orElse(null),
+            "the only supported range inherits AUTO from base; the out-of-supported MANUAL override does not appear",
         )
     }
 
