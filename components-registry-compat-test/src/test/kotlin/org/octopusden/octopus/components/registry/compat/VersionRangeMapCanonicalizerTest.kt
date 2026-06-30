@@ -138,7 +138,7 @@ class VersionRangeMapCanonicalizerTest {
     fun mavenArtifactsRootWiring() {
         // JsonShape is STRUCTURAL (keys/types) — a pure value change inside a matched range is the
         // typed layer's job; the raw-layer safety property is that a COVERAGE/key difference surfaces.
-        val ep = "GET /rest/api/2/components/ws_runtime/maven-artifacts"
+        val ep = "GET /rest/api/2/components/comp-x/maven-artifacts"
         val v1 = obj("[1.0,2.0),[5.0,6.0)" to """{"a":1}""", "[2.0, 3.0)" to """{"a":2}""")
         val cand = obj("[1.0,2.0)" to """{"a":1}""", "[5.0,6.0)" to """{"a":1}""", "[2,3)" to """{"a":2}""")
         val bn = VersionRangeMapCanonicalizer.normalizeForEndpoint(ep, v1)
