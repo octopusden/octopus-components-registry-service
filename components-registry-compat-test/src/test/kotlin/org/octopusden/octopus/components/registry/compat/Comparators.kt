@@ -113,8 +113,15 @@ object Comparators {
             // both sides by a stable per-endpoint key so JsonShape.diff doesn't report
             // positional false-positives. Pass-through for unregistered endpoints
             // (see RawArraySorters and its unit test for the registered list + contract).
-            val baselineForShape = RawArraySorters.stableSorted(endpoint, baseline.json)
-            val candidateForShape = RawArraySorters.stableSorted(endpoint, candidate.json)
+            val baselineSorted = RawArraySorters.stableSorted(endpoint, baseline.json)
+            val candidateSorted = RawArraySorters.stableSorted(endpoint, candidate.json)
+            // ADR-018: the decoupled-model read path re-partitions version-range-keyed maps (`variants`,
+            // `/maven-artifacts`) — whitespace, composite-split, adjacent-merge and version-form differ
+            // from V1's verbatim DSL keys but describe the SAME (version → value) function. Canonicalise
+            // BOTH sides so those reshapings don't read as STRUCTURAL_DIFF; a real coverage/value change
+            // still surfaces (see VersionRangeMapCanonicalizer + its unit tests).
+            val baselineForShape = VersionRangeMapCanonicalizer.normalizeForEndpoint(endpoint, baselineSorted)
+            val candidateForShape = VersionRangeMapCanonicalizer.normalizeForEndpoint(endpoint, candidateSorted)
             val shapeDiffs = JsonShape.diff(baselineForShape, candidateForShape)
             for (sd in shapeDiffs) {
                 categories += DiffClassifier.STRUCTURAL_DIFF
