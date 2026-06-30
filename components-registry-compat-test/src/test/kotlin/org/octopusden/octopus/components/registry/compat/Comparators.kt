@@ -333,7 +333,7 @@ object ArtifactPatternComparator : Comparator<Any?> {
     // KNOWN_CATCH_ALL forms, backslashes removed). A pattern reducing to one of these is the
     // "owns everything (modulo explicit siblings)" bucket — ALL or ALL_EXCEPT_CLAIMED.
     private val CATCH_ALL_CORES = setOf("[w-.]+", "[w-]+", "w+", ".*", "*")
-    private const val CATCH_ALL = " CATCHALL"
+    private const val CATCH_ALL = "\u0000CATCHALL"
 
     override fun compare(a: Any?, b: Any?): Int {
         if (a == null && b == null) return 0
