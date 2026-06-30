@@ -28,6 +28,28 @@ data class FieldOverrideCreateRequest(
     val markerChildren: MarkerChildrenPayload? = null,
 )
 
+/**
+ * One entry of the desired-FULL-SET sent in ComponentUpdateRequest.fieldOverrides
+ * (item D — folding field overrides into the component PATCH). Same tagged-union
+ * shape as [FieldOverrideCreateRequest], plus an optional [id]:
+ *
+ *  - id == null  → CREATE this override.
+ *  - id != null  → UPDATE the existing override with that id. value/range are set
+ *                  to exactly what is sent here (DESIRED state, not the PATCH
+ *                  null-is-no-op semantic of [FieldOverrideUpdateRequest]).
+ *
+ * Any existing V4-editable override NOT present in the list is DELETED. Import-
+ * managed markers (group-artifact-pattern) are out of scope: never created,
+ * updated or deleted via this path, and a client echo of one (by id) is a no-op.
+ */
+data class FieldOverrideUpsertRequest(
+    val id: UUID? = null,
+    val overriddenAttribute: String,
+    val versionRange: String,
+    val value: Any? = null,
+    val markerChildren: MarkerChildrenPayload? = null,
+)
+
 data class FieldOverrideUpdateRequest(
     val versionRange: String? = null,
     /**

@@ -9,8 +9,10 @@ import jakarta.validation.constraints.Pattern
  * the client; mismatch → 409.
  *
  * `baseConfiguration` (when present) is also patched in-place with the same
- * rules — null aspect fields preserve, present child lists replace. Override
- * rows are managed via the field-override API, not from here.
+ * rules — null aspect fields preserve, present child lists replace. Field
+ * overrides may also ride this PATCH via `fieldOverrides` (item D) as a
+ * desired-FULL-SET; null there = don't touch (see that field's doc). They
+ * remain editable one-at-a-time through the field-override sub-resource API too.
  *
  * **`group` is migration-owned and is NEVER modified via PATCH** (R1
  * aggregator/parentComponent decouple): a ComponentGroup is DSL aggregator
@@ -68,6 +70,16 @@ data class ComponentUpdateRequest(
     val securityGroups: List<SecurityGroupRequest>? = null,
     val teamcityProjects: List<TeamcityProjectRequest>? = null,
     val baseConfiguration: BaseConfigurationRequest? = null,
+    /**
+     * Field overrides as a desired-FULL-SET (item D): when present, this is the
+     * complete set of V4-editable overrides for the component — entries with an
+     * id upsert that row, entries without an id create one, and any existing
+     * editable override absent from the list is deleted, all in this PATCH's
+     * transaction. null = don't touch overrides (so a component-only PATCH never
+     * wipes them). Import-managed markers (group-artifact-pattern) are out of
+     * scope and preserved.
+     */
+    val fieldOverrides: List<FieldOverrideUpsertRequest>? = null,
     // Optional change metadata recorded on the audit row (not on the component).
     // These are change-scoped, not part of the component's patchable state: a
     // blank/whitespace key is accepted as "no key" (normalized to null), and a
