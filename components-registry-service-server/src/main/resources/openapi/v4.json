@@ -882,6 +882,12 @@
             },
             "type" : "array"
           },
+          "fieldOverrides" : {
+            "items" : {
+              "$ref" : "#/components/schemas/FieldOverrideUpsertRequest"
+            },
+            "type" : "array"
+          },
           "group" : {
             "$ref" : "#/components/schemas/ComponentGroupRequest"
           },
@@ -1220,6 +1226,31 @@
             "type" : "string"
           }
         },
+        "type" : "object"
+      },
+      "FieldOverrideUpsertRequest" : {
+        "properties" : {
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "markerChildren" : {
+            "$ref" : "#/components/schemas/MarkerChildrenPayload"
+          },
+          "overriddenAttribute" : {
+            "type" : "string"
+          },
+          "value" : {
+            "type" : "object"
+          },
+          "versionRange" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "overriddenAttribute",
+          "versionRange"
+        ],
         "type" : "object"
       },
       "FileUrlArtifactRequest" : {
