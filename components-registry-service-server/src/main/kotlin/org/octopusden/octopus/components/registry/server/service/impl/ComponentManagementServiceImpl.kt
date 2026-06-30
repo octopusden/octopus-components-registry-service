@@ -21,6 +21,7 @@ import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideRes
 import org.octopusden.octopus.components.registry.server.dto.v4.SupportedVersionsRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.SupportedVersionsResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideUpdateRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideUpsertRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FileUrlArtifactRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.MarkerChildrenPayload
 import org.octopusden.octopus.components.registry.server.dto.v4.MavenArtifactRequest
@@ -656,6 +657,13 @@ class ComponentManagementServiceImpl(
                 base.takeIf { patch.requiredTools != null }
             }
 
+        // Field overrides (item D): desired-FULL-SET applied in-place on the
+        // configuration collection — cascade (orphanRemoval) persists the
+        // inserts/deletes on the saveAndFlush below, bumping the aggregate
+        // @Version once. null = don't touch. The returned plan carries the
+        // post-flush required-tool syncs + per-override audit rows.
+        val fieldOverridePlan = request.fieldOverrides?.let { applyFieldOverrideDesiredSet(entity, it) }
+
         // Cross-component / malformed-input checks are GRANDFATHERED on update:
         // they re-run only when the PATCH actually touches a field they govern
         // (distribution coordinates / jira / docs / the explicit-external-archived
@@ -673,7 +681,8 @@ class ComponentManagementServiceImpl(
                 request.docs != null ||
                 request.distributionExplicit != null ||
                 request.distributionExternal != null ||
-                request.archived != null
+                request.archived != null ||
+                request.fieldOverrides != null // marker overrides can carry colliding maven GAV / docker / jira coordinates
 
         // Malformed-input single-field checks (400) against the PATCHed final
         // entity state (so a caller need not resend unchanged fields).
@@ -710,6 +719,41 @@ class ComponentManagementServiceImpl(
         canonicalizedLabels?.let { refreshComponentLabelsInMemory(saved, it) }
         if (baseConfigForToolsSync != null && patchedRequiredTools != null) {
             refreshConfigRequiredToolsInMemory(baseConfigForToolsSync, patchedRequiredTools)
+        }
+
+        // Item D: field-override post-flush work — sync the (non-cascaded)
+        // required-tool junctions now that newly-inserted rows have ids, then
+        // publish one audit row per override change (same granularity as the
+        // standalone field-override CRUD).
+        fieldOverridePlan?.let { plan ->
+            plan.pendingTools.forEach { (row, tools) ->
+                syncRequiredTools(row.id!!, tools)
+                refreshConfigRequiredToolsInMemory(row, tools)
+            }
+            plan.deletedSnapshots.forEach { snapshot ->
+                publishAuditEvent(
+                    action = "UPDATE",
+                    entityId = saved.id.toString(),
+                    oldValue = snapshot,
+                    newValue = emptyMap(),
+                )
+            }
+            plan.updated.forEach { (row, before) ->
+                publishAuditEvent(
+                    action = "UPDATE",
+                    entityId = saved.id.toString(),
+                    oldValue = before,
+                    newValue = fieldOverrideAuditSnapshot(row),
+                )
+            }
+            plan.created.forEach { row ->
+                publishAuditEvent(
+                    action = "UPDATE",
+                    entityId = saved.id.toString(),
+                    oldValue = emptyMap(),
+                    newValue = fieldOverrideAuditSnapshot(row),
+                )
+            }
         }
 
         if (isRename) sourceRegistry.renameComponent(oldKey, saved.componentKey)
@@ -1011,6 +1055,149 @@ class ComponentManagementServiceImpl(
             .findByComponentId(componentId)
             .filter { it.rowType == "SCALAR_OVERRIDE" || it.rowType == "MARKER" }
             .map { it.toFieldOverrideResponse() }
+    }
+
+    /**
+     * What [applyFieldOverrideDesiredSet] changed, so [updateComponent] can do the
+     * post-flush work that needs assigned ids: sync the non-cascaded required-tool
+     * junctions and publish one audit row per override change.
+     */
+    private data class FieldOverrideApplyPlan(
+        val created: List<ComponentConfigurationEntity>,
+        val updated: List<Pair<ComponentConfigurationEntity, Map<String, Any?>>>,
+        val deletedSnapshots: List<Map<String, Any?>>,
+        val pendingTools: Map<ComponentConfigurationEntity, List<String>>,
+    )
+
+    /**
+     * Item D — apply [desired] as the desired-FULL-SET of V4-editable field
+     * overrides for [component], mutating the in-memory configuration collection
+     * so the caller's single saveAndFlush cascades inserts + orphan-deletes and
+     * bumps the aggregate @Version once. Reuses the same validators/appliers as
+     * the standalone CRUD (disjoint-range rule, scalar typing, marker children).
+     *
+     * Order is DELETE -> UPDATE -> CREATE so the in-memory disjoint-range check
+     * (which walks the live collection) never trips on a row that is itself being
+     * removed in the same request. Import-managed markers (group-artifact-pattern)
+     * are out of scope: never updated or deleted, and a client echo of one (by id)
+     * is preserved as a no-op.
+     *
+     * Known limitation (shared with sequential standalone updates): a single
+     * request that SWAPS two existing rows' ranges on the same attribute is
+     * rejected, because each update validates against the other row still at its
+     * old range. Such a swap must be done in two saves (or delete + create).
+     */
+    private fun applyFieldOverrideDesiredSet(
+        component: ComponentEntity,
+        desired: List<FieldOverrideUpsertRequest>,
+    ): FieldOverrideApplyPlan {
+        fun isImportManaged(row: ComponentConfigurationEntity) =
+            row.rowType == "MARKER" && row.overriddenAttribute !in MarkerAttributes.ALL
+
+        val existing = component.configurations.filter { it.rowType in FIELD_OVERRIDE_ROW_TYPES }
+        val byId = existing.mapNotNull { row -> row.id?.let { it to row } }.toMap()
+
+        // Referenced ids must exist on this component (clear 400, not a silent create).
+        desired.forEach { d ->
+            if (d.id != null && d.id !in byId) {
+                throw IllegalArgumentException(
+                    "fieldOverrides: override id '${d.id}' not found on component '${component.id}'",
+                )
+            }
+        }
+        val keepIds = desired.mapNotNull { it.id }.toSet()
+        val pendingTools = LinkedHashMap<ComponentConfigurationEntity, List<String>>()
+
+        // 1) DELETE editable rows omitted from the desired set (orphanRemoval on flush).
+        val deletedSnapshots = mutableListOf<Map<String, Any?>>()
+        existing.filter { !isImportManaged(it) && it.id !in keepIds }.forEach { row ->
+            deletedSnapshots += fieldOverrideAuditSnapshot(row)
+            component.configurations.remove(row)
+        }
+
+        // 2) UPDATE existing editable rows referenced by id.
+        val updated = mutableListOf<Pair<ComponentConfigurationEntity, Map<String, Any?>>>()
+        desired.filter { it.id != null }.forEach { d ->
+            val row = byId.getValue(d.id!!)
+            if (isImportManaged(row)) return@forEach // preserve; ignore client echo
+            require(d.overriddenAttribute == row.overriddenAttribute) {
+                "fieldOverrides: cannot change overriddenAttribute of override '${d.id}' " +
+                    "(${row.overriddenAttribute} -> ${d.overriddenAttribute})"
+            }
+            val before = fieldOverrideAuditSnapshot(row)
+            applyOverrideUpsertPayload(component, row, d, excludeOverrideId = row.id)?.let { pendingTools[row] = it }
+            updated += row to before
+        }
+
+        // 3) CREATE rows without an id.
+        val created = mutableListOf<ComponentConfigurationEntity>()
+        desired.filter { it.id == null }.forEach { d ->
+            val row =
+                ComponentConfigurationEntity(
+                    component = component,
+                    versionRange = "",
+                    overriddenAttribute = d.overriddenAttribute,
+                    rowType = "",
+                )
+            applyOverrideUpsertPayload(component, row, d, excludeOverrideId = null)?.let { pendingTools[row] = it }
+            component.configurations.add(row)
+            // Explicit save (like the single-row create path) so the generated id
+            // is assigned to this instance now — the parent saveAndFlush's cascade
+            // does not back-populate it onto our reference, which the post-flush
+            // required-tool sync + audit snapshot need.
+            configurationRepository.save(row)
+            created += row
+        }
+        return FieldOverrideApplyPlan(created, updated, deletedSnapshots, pendingTools)
+    }
+
+    /**
+     * Set [row]'s range/value/markerChildren to the desired state in [d]
+     * (validating the range against siblings, excluding self), classify its
+     * rowType, and return the pending required-tool list for build.requiredTools
+     * markers (synced post-flush), or null. Shared by the upsert create + update
+     * paths; mirrors the single-row create/update validation exactly.
+     */
+    private fun applyOverrideUpsertPayload(
+        component: ComponentEntity,
+        row: ComponentConfigurationEntity,
+        d: FieldOverrideUpsertRequest,
+        excludeOverrideId: UUID?,
+    ): List<String>? {
+        val canonicalRange = normalizeRange(d.versionRange)
+        validateFieldOverrideRange(
+            range = canonicalRange,
+            component = component,
+            attribute = d.overriddenAttribute,
+            excludeOverrideId = excludeOverrideId,
+        )
+        row.versionRange = canonicalRange
+        return when {
+            d.overriddenAttribute in MarkerAttributes.ALL -> {
+                row.rowType = "MARKER"
+                require(d.value == null) {
+                    "Marker override '${d.overriddenAttribute}' must not carry a scalar value"
+                }
+                requireNotNull(d.markerChildren) {
+                    "Marker override '${d.overriddenAttribute}' requires markerChildren payload"
+                }
+                applyMarkerChildren(row, d.overriddenAttribute, d.markerChildren)
+            }
+
+            d.overriddenAttribute in SCALAR_ATTRIBUTE_PATHS -> {
+                row.rowType = "SCALAR_OVERRIDE"
+                require(d.markerChildren == null) {
+                    "Scalar override '${d.overriddenAttribute}' must not carry markerChildren"
+                }
+                row.applyScalarValue(d.overriddenAttribute, d.value)
+                null
+            }
+
+            else -> throw IllegalArgumentException(
+                "Unknown overriddenAttribute: '${d.overriddenAttribute}'. " +
+                    "Must be a scalar aspect.field path or one of ${MarkerAttributes.ALL}",
+            )
+        }
     }
 
     @Transactional(readOnly = true)
