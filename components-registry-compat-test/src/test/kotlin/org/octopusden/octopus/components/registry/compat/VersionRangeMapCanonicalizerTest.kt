@@ -209,6 +209,20 @@ class VersionRangeMapCanonicalizerTest {
         // unparseable key → returned unchanged (never drops coverage)
         val weird = mapOf("not-a-range" to V("x"))
         assertEquals(weird, VersionRangeMapCanonicalizer.canonicalizeTypedRangeMap(weird, V::class.java))
+
+        // Production DTO (Kotlin, @JsonCreator) must survive the serialise→canonicalize→treeToValue
+        // round-trip without field loss — this is the type used on /maven-artifacts.
+        val dtoCls = org.octopusden.octopus.components.registry.core.dto.ComponentArtifactConfigurationDTO::class.java
+        val real = mapOf(
+            "[1.0,2.0)" to org.octopusden.octopus.components.registry.core.dto.ComponentArtifactConfigurationDTO("g", "a"),
+            "[2.0,3.0)" to org.octopusden.octopus.components.registry.core.dto.ComponentArtifactConfigurationDTO("g", "a"),
+            "[5.0,6.0)" to org.octopusden.octopus.components.registry.core.dto.ComponentArtifactConfigurationDTO("g2", "b"),
+        )
+        val rc = VersionRangeMapCanonicalizer.canonicalizeTypedRangeMap(real, dtoCls)
+        assertEquals(setOf("[1,3)", "[5,6)"), rc.keys)
+        assertEquals("g", rc["[1,3)"]!!.groupPattern)
+        assertEquals("a", rc["[1,3)"]!!.artifactPattern)
+        assertEquals("g2", rc["[5,6)"]!!.groupPattern)
     }
 
     @Test

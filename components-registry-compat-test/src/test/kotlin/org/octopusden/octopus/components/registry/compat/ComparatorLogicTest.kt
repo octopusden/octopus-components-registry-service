@@ -518,6 +518,50 @@ class ComparatorLogicTest {
         assertThat(recorded.message).contains("id")
     }
 
+    // ----- compareDto integration: variants map canonicalised (ADR-018) -----
+    data class VariantHolder(val id: String, val variants: Map<String, Map<String, Int>>)
+
+    @Test
+    @DisplayName("compareDto: a reshaped-but-equivalent variants map → NO VALUE_DIFF recorded")
+    fun compareDto_variantsReshaping_isSilenced() {
+        Comparators.compareDto(
+            endpoint = "GET /rest/api/3/components",
+            pathParams = emptyMap(),
+            // V1 splits (, 2.0)+[2.0,2.5) (same value); candidate merges to (,2.5). Same function.
+            baseline = VariantHolder("c", mapOf("(, 2.0)" to mapOf("x" to 1), "[2.0,2.5)" to mapOf("x" to 1), "[2.5,)" to mapOf("x" to 2))),
+            candidate = VariantHolder("c", mapOf("(,2.5)" to mapOf("x" to 1), "[2.5,)" to mapOf("x" to 2))),
+        )
+        assertThat(DiffCollector.snapshot()).isEmpty()
+    }
+
+    @Test
+    @DisplayName("compareDto: a real per-range value change in variants STILL records VALUE_DIFF")
+    fun compareDto_variantsRealChange_surfaces() {
+        Comparators.compareDto(
+            endpoint = "GET /rest/api/3/components",
+            pathParams = emptyMap(),
+            baseline = VariantHolder("c", mapOf("(,2.5)" to mapOf("x" to 1))),
+            candidate = VariantHolder("c", mapOf("(,2.5)" to mapOf("x" to 9))),
+        )
+        val recorded = DiffCollector.snapshot().single()
+        assertThat(recorded.category).isEqualTo(DiffClassifier.VALUE_DIFF)
+        assertThat(recorded.message).contains("variants")
+    }
+
+    @Test
+    @DisplayName("compareDto: the variants comparator does NOT fire for an unrelated map field (still surfaces)")
+    fun compareDto_variantsComparatorScoped() {
+        data class OtherMapHolder(val id: String, val other: Map<String, Map<String, Int>>)
+        // `other` (not `variants`) reshaped the same way must STILL surface — proves the regex is scoped.
+        Comparators.compareDto(
+            endpoint = "GET /rest/api/3/components",
+            pathParams = emptyMap(),
+            baseline = OtherMapHolder("c", mapOf("(, 2.0)" to mapOf("x" to 1), "[2.0,2.5)" to mapOf("x" to 1))),
+            candidate = OtherMapHolder("c", mapOf("(,2.5)" to mapOf("x" to 1))),
+        )
+        assertThat(DiffCollector.snapshot()).isNotEmpty()
+    }
+
     // ----- ArtifactPatternComparator: #357 behavior-preserving artifactPattern normalization -----
 
     // Synthetic mirror of the /maven-artifacts payload: Map<versionRange, ComponentArtifactConfigurationDTO>
