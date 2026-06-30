@@ -202,7 +202,7 @@ class ComponentCodeRendererTest {
         base(c) {
             buildSystem = "MAVEN"
             jiraProjectKey = "BS"
-            jiraMajorVersionFormat = "\$major"
+            jiraMinorVersionFormat = "\$major"
         }
 
         val expected =

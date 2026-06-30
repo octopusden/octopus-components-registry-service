@@ -176,7 +176,7 @@ class ConfigSyncService(
                     jira.technical?.let { put("technical", it) }
                     jira.componentVersionFormat?.let { cvf ->
                         buildMap<String, Any?> {
-                            cvf.majorVersionFormat?.let { put("majorVersionFormat", it) }
+                            cvf.minorVersionFormat?.let { put("minorVersionFormat", it) }
                             cvf.releaseVersionFormat?.let { put("releaseVersionFormat", it) }
                             cvf.buildVersionFormat?.let { put("buildVersionFormat", it) }
                             cvf.lineVersionFormat?.let { put("lineVersionFormat", it) }

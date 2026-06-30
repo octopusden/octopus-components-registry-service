@@ -72,7 +72,7 @@ components-registry:
     jira:
       technical: false
       componentVersionFormat:
-        majorVersionFormat: '$major.$minor'
+        minorVersionFormat: '$major.$minor'
         releaseVersionFormat: '$major.$minor.$service'
         hotfixVersionFormat: '$major.$minor.$service-$fix'
     distribution:

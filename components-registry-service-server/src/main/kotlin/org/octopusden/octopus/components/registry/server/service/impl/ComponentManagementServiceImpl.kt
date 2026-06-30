@@ -1740,7 +1740,7 @@ class ComponentManagementServiceImpl(
         request.jira?.let { j ->
             config.jiraProjectKey = j.projectKey
             config.jiraTechnical = j.technical
-            config.jiraMajorVersionFormat = j.majorVersionFormat
+            config.jiraMinorVersionFormat = j.minorVersionFormat
             config.jiraReleaseVersionFormat = j.releaseVersionFormat
             config.jiraBuildVersionFormat = j.buildVersionFormat
             config.jiraLineVersionFormat = j.lineVersionFormat
@@ -1796,7 +1796,7 @@ class ComponentManagementServiceImpl(
         patch.jira?.let { j ->
             j.projectKey?.let { config.jiraProjectKey = it }
             j.technical?.let { config.jiraTechnical = it }
-            j.majorVersionFormat?.let { config.jiraMajorVersionFormat = it }
+            j.minorVersionFormat?.let { config.jiraMinorVersionFormat = it }
             j.releaseVersionFormat?.let { config.jiraReleaseVersionFormat = it }
             j.buildVersionFormat?.let { config.jiraBuildVersionFormat = it }
             j.lineVersionFormat?.let { config.jiraLineVersionFormat = it }
@@ -3251,7 +3251,7 @@ class ComponentManagementServiceImpl(
             "escrow.buildTask" to base?.escrowBuildTask,
             "jira.projectKey" to base?.jiraProjectKey,
             "jira.technical" to base?.jiraTechnical,
-            "jira.majorVersionFormat" to base?.jiraMajorVersionFormat,
+            "jira.minorVersionFormat" to base?.jiraMinorVersionFormat,
             "jira.releaseVersionFormat" to base?.jiraReleaseVersionFormat,
             "jira.buildVersionFormat" to base?.jiraBuildVersionFormat,
             "jira.lineVersionFormat" to base?.jiraLineVersionFormat,

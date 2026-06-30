@@ -500,7 +500,7 @@ jira {
 - Component does NOT explicitly define jira version formats in its DSL file
 
 **Acceptance criteria:**
-1. After migration `GET /rest/api/4/components/{id}` returns `jira.majorVersionFormat = "$major.$minor"`
+1. After migration `GET /rest/api/4/components/{id}` returns `jira.minorVersionFormat = "$major.$minor"` (the DSL `majorVersionFormat` maps to the v4 `minorVersionFormat`)
 2. `jira.releaseVersionFormat = "$major.$minor.$service"`
 3. `jira.hotfixVersionFormat = "$major.$minor.$service-$fix"`
 4. `jira.customer.versionFormat = "$versionPrefix-$baseVersionFormat"`

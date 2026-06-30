@@ -153,7 +153,7 @@ CREATE TABLE component_configurations (
     -- JIRA aspect (per-version overridable fields):
     jira_project_key                            VARCHAR(50),
     jira_technical                              BOOLEAN,
-    jira_major_version_format                   VARCHAR(255),
+    jira_minor_version_format                   VARCHAR(255),
     jira_release_version_format                 VARCHAR(255),
     jira_build_version_format                   VARCHAR(255),
     jira_line_version_format                    VARCHAR(255),
@@ -220,7 +220,7 @@ CREATE TABLE component_configurations (
         AND escrow_gradle_exclude_configurations IS NULL
         AND escrow_gradle_include_test_configurations IS NULL
         AND jira_project_key IS NULL AND jira_technical IS NULL
-        AND jira_major_version_format IS NULL AND jira_release_version_format IS NULL
+        AND jira_minor_version_format IS NULL AND jira_release_version_format IS NULL
         AND jira_build_version_format IS NULL AND jira_line_version_format IS NULL
         AND jira_version_prefix IS NULL AND jira_version_format IS NULL
         AND jira_hotfix_version_format IS NULL

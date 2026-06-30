@@ -288,7 +288,7 @@ private fun ComponentConfigurationEntity.jiraAspectResponse(): JiraAspectRespons
     JiraAspectResponse(
         projectKey = jiraProjectKey,
         technical = jiraTechnical,
-        majorVersionFormat = jiraMajorVersionFormat,
+        minorVersionFormat = jiraMinorVersionFormat,
         releaseVersionFormat = jiraReleaseVersionFormat,
         buildVersionFormat = jiraBuildVersionFormat,
         lineVersionFormat = jiraLineVersionFormat,
