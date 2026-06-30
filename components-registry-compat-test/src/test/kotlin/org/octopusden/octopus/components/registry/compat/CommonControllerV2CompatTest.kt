@@ -39,8 +39,14 @@ class CommonControllerV2CompatTest : CompatibilityTestBase() {
             }.getOrNull()
 
             val cap = config.maxComponents
+            // ADR-018: the decoupled-model re-partitions each component's version ranges; canonicalise
+            // (merge adjacent same-payload ranges per component) on BOTH sides so the benign reshaping
+            // isn't a VALUE_DIFF. The jira DTOs round-trip faithfully (data class + explicit @JsonCreator).
+            val cls = JiraComponentVersionRangeDTO::class.java
             val baselineSliced = sliceCollection(baselineDtos?.toList(), cap)
+                ?.let { VersionRangeMapCanonicalizer.canonicalizeTypedRangeArray(it, cls) }
             val candidateSliced = sliceCollection(candidateDtos?.toList(), cap)
+                ?.let { VersionRangeMapCanonicalizer.canonicalizeTypedRangeArray(it, cls) }
             compareDto(endpoint, params, baselineSliced, candidateSliced)
         }
 

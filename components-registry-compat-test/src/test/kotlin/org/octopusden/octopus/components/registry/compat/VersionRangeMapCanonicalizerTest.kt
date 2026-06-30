@@ -18,6 +18,14 @@ import org.junit.jupiter.api.Test
 class VersionRangeMapCanonicalizerTest {
     private val mapper = ObjectMapper()
 
+    /** Mirrors the jira DTO round-trip shape: data class + explicit @JsonProperty + @JsonCreator + a Boolean. */
+    data class ArrPayload @com.fasterxml.jackson.annotation.JsonCreator constructor(
+        @com.fasterxml.jackson.annotation.JsonProperty("componentName") val componentName: String,
+        @com.fasterxml.jackson.annotation.JsonProperty("versionRange") val versionRange: String,
+        @com.fasterxml.jackson.annotation.JsonProperty("flag") val flag: Boolean,
+        @com.fasterxml.jackson.annotation.JsonProperty("name") val name: String?,
+    )
+
     private fun obj(vararg pairs: Pair<String, String>): ObjectNode {
         val o = mapper.createObjectNode()
         for ((k, v) in pairs) o.set<com.fasterxml.jackson.databind.JsonNode>(k, mapper.readTree(v))
@@ -263,6 +271,24 @@ class VersionRangeMapCanonicalizerTest {
         val candReal = mapper.createArrayNode().apply { add(el("[1,2)", "P")); add(el("[2,3)", "Q")) }
         val cnReal = VersionRangeMapCanonicalizer.normalizeForEndpoint(ep, candReal)
         assertNotEquals(emptyList<JsonShape.ShapeDiff>(), JsonShape.diff(bn, cnReal))
+    }
+
+    @Test
+    @DisplayName("canonicalizeTypedRangeArray merges same-payload jira-ranges + round-trips booleans/values faithfully")
+    fun typedRangeArrayMergesAndRoundTrips() {
+        // Mirrors the jira DTO shape: data class, explicit @JsonProperty, @JsonCreator, a Boolean field
+        // (the round-trip-risk field type). Two adjacent same-payload ranges merge; a different boolean
+        // keeps its own range; the surviving values (boolean + nullable string) survive verbatim.
+        val list = listOf(
+            ArrPayload("c", "[1,5)", true, "x"),
+            ArrPayload("c", "[5,10)", true, "x"),
+            ArrPayload("c", "[10,12)", false, "x"),
+        )
+        val canon = VersionRangeMapCanonicalizer.canonicalizeTypedRangeArray(list, ArrPayload::class.java)
+        assertEquals(listOf("[1,10)", "[10,12)"), canon.map { it.versionRange })
+        org.junit.jupiter.api.Assertions.assertTrue(canon[0].flag) // boolean faithful (the 4073-risk)
+        assertEquals("x", canon[0].name)
+        org.junit.jupiter.api.Assertions.assertFalse(canon[1].flag)
     }
 
     @Test
