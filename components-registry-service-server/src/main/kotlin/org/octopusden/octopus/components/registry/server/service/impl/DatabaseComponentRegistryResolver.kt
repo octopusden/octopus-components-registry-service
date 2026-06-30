@@ -812,11 +812,17 @@ class DatabaseComponentRegistryResolver(
         }
     }
 
+    // ADR-018: component-level metrics read the BASE representative, NOT moduleConfigurations[0] — the
+    // enumeration is version-sorted, so [0] is the lowest range (e.g. a historical override's build
+    // system / archived flag), not the component default.
+    private fun EscrowModule.representative(): EscrowModuleConfig? =
+        componentLevelConfiguration ?: moduleConfigurations.firstOrNull()
+
     private fun EscrowModule.getBuildSystem(): BuildSystem =
-        moduleConfigurations.firstOrNull()?.buildSystem?.toDTO() ?: BuildSystem.NOT_SUPPORTED
+        representative()?.buildSystem?.toDTO() ?: BuildSystem.NOT_SUPPORTED
 
     private fun EscrowModule.isArchived(): Boolean {
-        val moduleConfig = moduleConfigurations.firstOrNull() ?: return false
+        val moduleConfig = representative() ?: return false
         return moduleConfig.archived ||
             (moduleConfig.componentDisplayName?.endsWith("ARCHIVED", ignoreCase = true) ?: false)
     }

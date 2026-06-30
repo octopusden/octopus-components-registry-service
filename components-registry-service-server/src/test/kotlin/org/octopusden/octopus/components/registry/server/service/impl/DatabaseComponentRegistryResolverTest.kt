@@ -378,6 +378,27 @@ class DatabaseComponentRegistryResolverTest {
         assertEquals("ssh://vcs/base", vcsOf(1))
     }
 
+    @Test
+    fun `(5e6 ADR-018) coverage gate counts RANGE_PRESENCE only - an override outside supported does NOT resolve`() {
+        // Decoupled model: coverage = RANGE_PRESENCE rows, INDEPENDENT of overrides. A scalar override
+        // left outside the supported set (e.g. after a supported-versions PUT shrinks coverage) must NOT
+        // make its versions resolve — the gate must union RANGE_PRESENCE rows, not every non-BASE row.
+        val comp = makeComponent("COMP5E6")
+        val base = makeBase(comp).apply { createdAt = java.time.Instant.ofEpochMilli(1000) }
+        val presence = makeRangePresenceRow(comp, "[1.0,2.0)").apply { createdAt = java.time.Instant.ofEpochMilli(2000) }
+        val overrideOutside = makeScalarOverrideRow(comp, "[5.0,6.0)", "build.javaVersion").apply {
+            javaVersion = "11"
+            createdAt = java.time.Instant.ofEpochMilli(3000)
+        }
+        comp.configurations.addAll(listOf(base, presence, overrideOutside))
+        stubComponent(comp)
+
+        // 5.5 is inside the override [5.0,6.0) but OUTSIDE supported [1.0,2.0) → 404 (null).
+        assertNull(resolver.getResolvedComponentDefinition("COMP5E6", "5.5"))
+        // 1.5 is inside supported → resolves.
+        assertNotNull(resolver.getResolvedComponentDefinition("COMP5E6", "1.5"))
+    }
+
     // ========================================================================
     // (3) Marker override: vcs.settings
     // ========================================================================
@@ -960,12 +981,12 @@ class DatabaseComponentRegistryResolverTest {
     @Test
     @DisplayName("MIG-042: synthetic-base multi-range - version in second range resolves (V1 parity)")
     fun `(9e MIG-042) synthetic-base multi-range - version in second range resolves`() {
-        // Two adjacent DSL range blocks "(,1.0)" + "[1.0,)": the synthetic BASE row
-        // holds only the FIRST block's range. A version covered by the SECOND block
-        // must still resolve — gating on the base block alone broke whole component
-        // families on compat run 3823 (the original MIG-042 over-reach).
+        // ADR-018 redesign migration shape: two adjacent blocks "(,1.0)" + "[1.0,)" TILE all-versions, so
+        // mergeUnion → ALL → supported = ALL (NO RANGE_PRESENCE rows), base is ALL_VERSIONS, and the
+        // second block's differing scalar is a [1.0,) override. supported = ALL → the gate is skipped and
+        // every version resolves.
         val comp = makeComponent("COMP9E")
-        val base = makeBase(comp, versionRange = "(,1.0)", isSyntheticBase = true, javaVersion = "8")
+        val base = makeBase(comp, javaVersion = "8")
         val overrideRow = makeScalarOverrideRow(comp, "[1.0,)", "build.javaVersion")
         overrideRow.javaVersion = "11"
         comp.configurations.addAll(listOf(base, overrideRow))
@@ -989,13 +1010,18 @@ class DatabaseComponentRegistryResolverTest {
         // endpoint answers 404 {"errorMessage":"Component id <comp>:12.1.155 is not
         // found"}; v3 must return null instead of over-resolving from the base row.
         // The component's effective range is the UNION of all its blocks.
+        // ADR-018 redesign migration shape: base ALL_VERSIONS + coverage as RANGE_PRESENCE rows =
+        // mergeUnion([10,11),[11,12.1),[12.2,)) = [10,12.1) ∪ [12.2,) (the gap [12.1,12.2) is preserved),
+        // plus per-block scalar overrides. The gate unions RANGE_PRESENCE rows only, so a gap version 404s.
         val comp = makeComponent("COMP9F")
-        val base = makeBase(comp, versionRange = "[10,11)", isSyntheticBase = true, javaVersion = "7")
+        val base = makeBase(comp, javaVersion = "7")
+        val presenceLow = makeRangePresenceRow(comp, "[10,12.1)")
+        val presenceHigh = makeRangePresenceRow(comp, "[12.2,)")
         val second = makeScalarOverrideRow(comp, "[11,12.1)", "build.javaVersion")
         second.javaVersion = "8"
         val third = makeScalarOverrideRow(comp, "[12.2,)", "build.javaVersion")
         third.javaVersion = "17"
-        comp.configurations.addAll(listOf(base, second, third))
+        comp.configurations.addAll(listOf(base, presenceLow, presenceHigh, second, third))
         stubComponent(comp)
 
         // 12.1.155 / 12.1.156 are in the gap [12.1,12.2) → V1 404 → null
@@ -1010,7 +1036,7 @@ class DatabaseComponentRegistryResolverTest {
     }
 
     @Test
-    @DisplayName("MIG-042: NON-synthetic multi-range - version covered by an override block resolves (gate uses the union)")
+    @DisplayName("MIG-042: multi-range - a version in a covered range (carrying an override) resolves; coverage = RANGE_PRESENCE union")
     fun `(9g MIG-042) non-synthetic multi-range - version in override block resolves`() {
         // Live-victim shape from the first union-gate iteration (59 NEW on the
         // full gate): a component WITH top-level scalars (isSyntheticBase=false)
@@ -1019,11 +1045,14 @@ class DatabaseComponentRegistryResolverTest {
         // bases on the BASE range alone 404'd every version covered by a later
         // block (V1 answers 200 there). The effective range is ALWAYS the union
         // of base + override ranges, regardless of the synthetic flag.
+        // ADR-018 redesign migration shape: base ALL_VERSIONS + RANGE_PRESENCE = mergeUnion([1.0,1.1),[1.1,))
+        // = [1.0,) + the [1.1,) scalar override. Gate unions RANGE_PRESENCE; below [1.0,) → 404.
         val comp = makeComponent("COMP9G")
-        val base = makeBase(comp, versionRange = "[1.0,1.1)", isSyntheticBase = false, javaVersion = "8")
+        val base = makeBase(comp, javaVersion = "8")
+        val presence = makeRangePresenceRow(comp, "[1.0,)")
         val later = makeScalarOverrideRow(comp, "[1.1,)", "build.javaVersion")
         later.javaVersion = "17"
-        comp.configurations.addAll(listOf(base, later))
+        comp.configurations.addAll(listOf(base, presence, later))
         stubComponent(comp)
 
         // 1.1.759 is outside the BASE block but inside the later block → resolves (V1=200)

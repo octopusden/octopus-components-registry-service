@@ -128,6 +128,17 @@ class VersionRangeMapCanonicalizerTest {
 
     // ── robustness ────────────────────────────────────────────────────────────────────
     @Test
+    @DisplayName("canonical-key collision with DIFFERENT values → passthrough (no silent overwrite/mask)")
+    fun canonicalKeyCollisionPassesThrough() {
+        // [2.0,3) and [2,3) both render to canonical [2,3) but carry different values — must NOT overwrite.
+        val m = obj("[2.0,3)" to """{"x":1}""", "[2,3)" to """{"x":2}""")
+        assertEquals(m, canon(m)) // unchanged (passthrough), so the difference still surfaces downstream
+        // Same collision on the typed-map path.
+        val tm = mapOf("[2.0,3)" to mapOf("x" to 1), "[2,3)" to mapOf("x" to 2))
+        assertEquals(tm, VersionRangeMapCanonicalizer.canonicalizeTypedRangeMap(tm))
+    }
+
+    @Test
     @DisplayName("an unparseable key leaves the whole object untouched (never silently drops coverage)")
     fun unparseablePassthrough() {
         val weird = obj("not-a-range" to """1""", "[1.0,2.0)" to """2""")

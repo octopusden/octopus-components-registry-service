@@ -236,17 +236,16 @@ fun ComponentEntity.toResolvedEscrowModuleConfig(
     // NO configuration (the controller renders 404), mirroring V1
     // EscrowConfigurationLoader.resolveComponentConfiguration. In the decoupled
     // model the base is the ALL_VERSIONS default and coverage is a separate layer:
-    //   • supported = ∪ of the declared ranges, carried as RANGE_PRESENCE rows
-    //     (every declared block emits one) plus any override / marker rows; and
+    //   • supported = ∪ of the RANGE_PRESENCE rows (migration emits one per declared block, incl. an
+    //     EMPTY block "[1.1,2.0)" {} which proves the version is configured even with no overrides); and
     //   • for legacy/API components whose base is itself bounded, the base range.
-    // The gate is skipped only when there is no coverage restriction at all
-    // (ALL_VERSIONS base AND no RANGE_PRESENCE rows → supported = ALL). Every
-    // non-BASE row participates in the union — including RANGE_PRESENCE rows: an
-    // EMPTY DSL block ("[1.1,2.0)" {}) carries no overrides but still proves the
-    // version is configured (V1 serves base-inherited data there). A version in a
-    // GAP between blocks ([11,12.1) + [12.2,) queried with 12.1.x) is out of the
-    // union, exactly like V1. Unparseable or blank ranges count as containing —
-    // conservative, never a false 404.
+    // The gate is skipped only when there is no coverage restriction at all (ALL_VERSIONS base AND no
+    // RANGE_PRESENCE rows → supported = ALL). Coverage is INDEPENDENT of overrides (ADR-018): a
+    // SCALAR_OVERRIDE / MARKER row does NOT extend supported — after a supported-versions PUT shrinks
+    // coverage, an override left outside the new set must NOT resolve (it warns on PUT, 404s on read),
+    // so we union ONLY RANGE_PRESENCE rows (+ bounded base), never every non-BASE row. A version in a GAP
+    // between presence ranges ([11,12.1) + [12.2,) queried with 12.1.x) is out of the union, like V1.
+    // Unparseable or blank ranges count as containing — conservative, never a false 404.
     val hasBoundedBase = base.versionRange != ALL_VERSIONS
     val hasRangePresence = configs.any { it.rowType == "RANGE_PRESENCE" }
     if (hasBoundedBase || hasRangePresence) {
@@ -260,7 +259,7 @@ fun ComponentEntity.toResolvedEscrowModuleConfig(
                 }
         }
         val inSupported =
-            configs.any { it.rowType != "BASE" && containsVersion(it.versionRange) } ||
+            configs.any { it.rowType == "RANGE_PRESENCE" && containsVersion(it.versionRange) } ||
                 (hasBoundedBase && containsVersion(base.versionRange))
         if (!inSupported) return null
     }

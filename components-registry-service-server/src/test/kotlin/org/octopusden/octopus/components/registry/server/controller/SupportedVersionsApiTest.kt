@@ -115,6 +115,10 @@ class SupportedVersionsApiTest {
         )
         // Still applied (warn-and-allow): supported is the requested set.
         assertEquals(listOf("[1.0,2.0)"), resp.path("ranges").map { it.asText() })
+        // The ADR-018 coverage-gate guard for "an override outside supported must NOT resolve" lives at
+        // the resolver layer (DatabaseComponentRegistryResolverTest `(5e6 ADR-018)`), where it is exact
+        // (the detailed HTTP endpoint additionally applies jira version-format resolution, conflating the
+        // gate with format handling).
     }
 
     @Test
