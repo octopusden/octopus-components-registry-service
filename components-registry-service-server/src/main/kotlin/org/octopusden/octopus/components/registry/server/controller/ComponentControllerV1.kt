@@ -10,7 +10,8 @@ import org.springframework.web.bind.annotation.RestController
 class ComponentControllerV1 : BaseComponentController<ComponentV1>() {
     override var createComponentFunc: (EscrowModule) -> ComponentV1 = { escrowModule ->
         val moduleName = escrowModule.moduleName
-        val escrowModuleConfig = escrowModule.moduleConfigurations[0]
+        // ADR-018: component-level scalars from the resolved BASE representative, not moduleConfigurations[0].
+        val escrowModuleConfig = escrowModule.componentLevelConfiguration ?: escrowModule.moduleConfigurations[0]
         ComponentV1(
             moduleName,
             escrowModuleConfig.componentDisplayName ?: moduleName,

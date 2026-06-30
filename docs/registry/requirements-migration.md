@@ -1040,7 +1040,7 @@ DSL version-range blocks produce a `RANGE_PRESENCE` coverage row plus override r
 2. DSL `"[1.0,2.0)" { vcsSettings { "name1" { ... } } }` produces a `RANGE_PRESENCE` row plus one marker row with `overridden_attribute = 'vcs.settings'`, all typed scalars NULL, plus corresponding `vcs_settings_entries` child rows.
 3. An **open-upper** block `"[1.0,)" { build { javaVersion = "17" } }` produces a `RANGE_PRESENCE` row for `[1.0,)` plus an open-upper `build.javaVersion` override — first-class, not folded into the base.
 4. Resolve at version V applies the **narrowest override whose range contains V** per attribute (containment, TD-010); falls back to the `ALL_VERSIONS` base values for non-overridden fields; returns 404 when `V ∉ supported = ∪ RANGE_PRESENCE`.
-5. Write-side invariants (per-attribute disjoint overrides, ≤1 open-upper per attribute, auto-split, required-field write coverage — validations V1–V6) are **planned for PR-3**, not yet enforced.
+5. Write-side invariants: per-attribute **override** disjointness, ≤1 open-upper per attribute, and required-field write coverage (V1–V6). **Coverage** is stored merged (overlaps merge; no disjoint requirement) and there is **no write-time auto-split** — enumeration partitions coverage by value-change edges at read time (ADR-018 redesign refinement). Note criteria 1–3 above: a single declared block `[1.0,2.0)` still yields one `RANGE_PRESENCE` row (`mergeUnion` of one range is itself); blocks that tile all-versions merge to `supported = ALL` (no rows).
 
 ---
 

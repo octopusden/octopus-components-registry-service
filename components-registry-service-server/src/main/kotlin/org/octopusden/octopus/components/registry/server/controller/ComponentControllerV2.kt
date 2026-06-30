@@ -251,7 +251,8 @@ class ComponentControllerV2(
 
     override var createComponentFunc: (EscrowModule) -> ComponentV2 = { escrowModule ->
         val moduleName = escrowModule.moduleName
-        val escrowModuleConfig = escrowModule.moduleConfigurations[0]
+        // ADR-018: component-level scalars from the resolved BASE representative, not moduleConfigurations[0].
+        val escrowModuleConfig = escrowModule.componentLevelConfiguration ?: escrowModule.moduleConfigurations[0]
         ComponentV2(moduleName, escrowModuleConfig.componentDisplayName, escrowModuleConfig.componentOwner)
     }
 

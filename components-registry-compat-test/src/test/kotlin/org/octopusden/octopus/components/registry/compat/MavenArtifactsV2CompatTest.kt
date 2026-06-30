@@ -40,7 +40,16 @@ class MavenArtifactsV2CompatTest : CompatibilityTestBase() {
             val candidateDto = runCatching {
                 mapper.readValue<Map<String, ComponentArtifactConfigurationDTO>>(candidate.bodyBytes)
             }.getOrNull()
-            compareDto(endpoint, params, baselineDto, candidateDto)
+            // ADR-018: the root map is keyed by version range; the decoupled-model read path re-partitions
+            // it (whitespace / composite-split / adjacent-merge / version-form) vs V1's verbatim DSL keys.
+            // Canonicalise the KEYS on both sides (values stay typed, so compareDto's artifactPattern
+            // normaliser still applies and a real ownership change still surfaces). See VersionRangeMapCanonicalizer.
+            compareDto(
+                endpoint,
+                params,
+                baselineDto?.let { VersionRangeMapCanonicalizer.canonicalizeTypedRangeMap(it) },
+                candidateDto?.let { VersionRangeMapCanonicalizer.canonicalizeTypedRangeMap(it) },
+            )
         }
 
         val after = DiffCollector.count()

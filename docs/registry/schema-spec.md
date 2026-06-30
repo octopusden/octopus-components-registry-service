@@ -108,15 +108,19 @@ This document is the canonical reference for the v2 schema. ADR-014 records the 
 
 ### 3.4 Range-presence row
 - `row_type = 'RANGE_PRESENCE'`, `overridden_attribute IS NULL`, **all typed scalar columns NULL** (same DB CHECK as MARKER)
-- **Coverage layer (ADR-018).** Under the decoupled model these rows are the source of truth for
-  *which versions a component is defined for*: `supported = ∪` of the `version_range` values across
-  all `RANGE_PRESENCE` rows. Each declared bounded DSL block is stored **verbatim** as one
-  `RANGE_PRESENCE` row (a composite range such as `[1,2),[5,)` is kept as a **single string** → one
-  row). A component that declares **no** bounded block — top-level-only DSL, or an explicit `(,)` /
-  `(,0),[0,)` block — produces a single `ALL_VERSIONS` base and **no** `RANGE_PRESENCE` rows
-  (`supported = ALL`). The resolve coverage gate (§3.5) keys off these rows, not off
-  `is_synthetic_base`.
-- Storage-only enumeration anchor: the DSL declared a range block whose scalars/markers all match base, so neither `emitScalarOverrides` nor `emitMarkerOverrides` produced any override row. Without this presence row the range would be invisible to the resolver and disappear from `/jira-component-version-ranges` and `/{component}/maven-artifacts` (RES-001 family symptom).
+- **Coverage layer (ADR-018, redesign refinement).** Under the decoupled model these rows are the
+  source of truth for *which versions a component is defined for*: `supported = ∪` of the
+  `version_range` values across all `RANGE_PRESENCE` rows. Coverage is stored **merged**
+  (`mergeUnion` → maximal contiguous segments) and is **override-independent** — it carries no
+  override boundaries. A component whose declared blocks tile all-versions (or that declares no
+  bounded block — top-level-only DSL / explicit `(,)` / `(,0),[0,)`) produces a single `ALL_VERSIONS`
+  base and **no** `RANGE_PRESENCE` rows (`supported = ALL`). Enumeration (§ resolver doc) partitions
+  these merged segments by value-change edges at read time. The resolve coverage gate (§3.5) keys off
+  these rows, not off `is_synthetic_base`.
+- Storage-only coverage anchor: a `RANGE_PRESENCE` row asserts the component is supported across its
+  range even when no override row falls there. Without it a merged-coverage segment with no override
+  would be invisible to the resolver and disappear from `/jira-component-version-ranges` and
+  `/{component}/maven-artifacts` (RES-001 family symptom).
 - Hidden from V4 editor APIs: filtered out in `V4Mappers.toDetailResponse`'s `configurations[]`, never appears in `GET /components/{id}/field-overrides`, and `createFieldOverride` / `updateFieldOverride` / `deleteFieldOverride` reject these rows.
 - Resolver enumerates them via the `.distinct()` over `versionRange` so the range surfaces in v1-v3 endpoints; `EntityMappers.resolveForRange` filters them out before applying scalar/marker overrides so no all-NULL row overlays base scalars.
 - Partial unique index `uq_component_configurations_one_range_presence` ensures at most one per `(component, version_range)`.
@@ -504,9 +508,12 @@ v4-contract stability (§3.1, §4.2).
 
 ### 6.5 Override + coverage row generation
 
-For each declared **bounded** version-range block in DSL:
-- Emit one `RANGE_PRESENCE` row for the block's range, stored **verbatim** (composite ranges kept
-  as a single string) — this is the coverage layer (§3.4, ADR-018).
+Coverage rows (redesign refinement): collect the declared bounded block ranges, compute
+`mergeUnion` over them, and emit one `RANGE_PRESENCE` row per merged contiguous segment (none when
+the union is all-versions) — this is the coverage layer (§3.4, ADR-018). Coverage is independent of
+the override rows below.
+
+For each declared version-range block in DSL (override/value layer):
 - For each scalar attribute whose value differs from the `ALL_VERSIONS` base row: emit scalar override row (`overridden_attribute = 'aspect.field'`, single column set), on the block's range (which may be open-upper).
 - For each child-collection change (multi-VCS, distribution_*, requiredTools): emit marker row (`overridden_attribute = '<marker>'`, all typed scalars NULL) + child rows attached.
 

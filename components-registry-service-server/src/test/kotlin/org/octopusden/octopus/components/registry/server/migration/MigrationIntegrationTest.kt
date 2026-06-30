@@ -97,8 +97,9 @@ class MigrationIntegrationTest {
 
     @Test
     @DisplayName(
-        "MIG-029 (ADR-018): version-range-only component (TEST_COMPONENT2_WITH_SEVERAL_BRANCHES) " +
-            "migrates to an ALL_VERSIONS base (not synthetic) + a RANGE_PRESENCE row per declared block",
+        "MIG-029 (ADR-018 decoupled): version-range-only component (TEST_COMPONENT2_WITH_SEVERAL_BRANCHES) " +
+            "migrates to an ALL_VERSIONS base (not synthetic); its three contiguous blocks tile all-versions " +
+            "so merged coverage = ALL → NO RANGE_PRESENCE rows (enumeration re-splits at override edges)",
     )
     fun mig029_decoupledBaseForVersionRangeOnlyComponent() {
         val component = componentRepository.findByComponentKey("TEST_COMPONENT2_WITH_SEVERAL_BRANCHES")
@@ -122,16 +123,17 @@ class MigrationIntegrationTest {
             "Base row must sit at ALL_VERSIONS (the effective default), not a bounded block range",
         )
 
-        // Every declared bounded block is preserved verbatim as a RANGE_PRESENCE row (the
-        // coverage layer). TEST_COMPONENT2_WITH_SEVERAL_BRANCHES declares three blocks.
+        // Decoupled redesign: coverage is stored MERGED (override-independent). The three declared
+        // blocks (,03.38.25] / (03.38.25,03.38.31] / (03.38.31,) are contiguous and tile every
+        // version, so their union is all-versions → coverage = ALL and NO RANGE_PRESENCE rows are
+        // emitted (the absence of presence rows + an ALL_VERSIONS base IS "supported = all"). The
+        // per-block VCS overrides survive as MARKER rows and re-split the enumeration at READ time.
         val presenceRanges =
-            configurations.filter { it.rowType == "RANGE_PRESENCE" }.map { it.versionRange }.toSet()
-        for (declared in listOf("(,03.38.25]", "(03.38.25,03.38.31]", "(03.38.31,)")) {
-            assertTrue(
-                declared in presenceRanges,
-                "Declared block '$declared' must be preserved as a RANGE_PRESENCE row; found: $presenceRanges",
-            )
-        }
+            configurations.filter { it.rowType == "RANGE_PRESENCE" }.map { it.versionRange }
+        assertTrue(
+            presenceRanges.isEmpty(),
+            "Blocks tiling all-versions must merge to ALL coverage (no RANGE_PRESENCE rows); found: $presenceRanges",
+        )
     }
 
     // =========================================================================
@@ -414,25 +416,30 @@ class MigrationIntegrationTest {
 
     @Test
     @DisplayName(
-        "MIG-040 (ADR-018): TEST_COMPONENT3 emits a RANGE_PRESENCE row per declared block " +
-            "(coverage layer) with NULL overridden_attribute and all typed cols NULL; the base sits at " +
-            "ALL_VERSIONS and `[1.0.107,)` carries its real overrides alongside its presence row",
+        "MIG-040 (ADR-018 decoupled): TEST_PER_RANGE_HOTFIX_FORMAT has a bounded merged coverage " +
+            "[1.0,) (its empty [1.0,2.0) block + the [2.0,) override block merge) → exactly one " +
+            "RANGE_PRESENCE row at [1.0,) with NULL overridden_attribute and all typed cols NULL; the " +
+            "base sits at ALL_VERSIONS and the [2.0,) override row survives alongside the coverage",
     )
     fun mig040_rangePresenceRowsEmittedForEmptyDslBlocks() {
-        val component = componentRepository.findByComponentKey("TEST_COMPONENT3")
-        assertNotNull(component, "TEST_COMPONENT3 must be migrated")
+        val component = componentRepository.findByComponentKey("TEST_PER_RANGE_HOTFIX_FORMAT")
+        assertNotNull(component, "TEST_PER_RANGE_HOTFIX_FORMAT must be migrated")
 
         val allRows = configurationRepository.findByComponentId(component!!.id!!)
 
-        // Exactly one presence row at `(,1.0.107)`.
-        val presenceRows =
-            allRows.filter { it.versionRange == "(,1.0.107)" && it.rowType == "RANGE_PRESENCE" }
+        // Coverage is stored MERGED: the empty [1.0,2.0) block and the [2.0,) override block are
+        // contiguous, so their union is a single bounded coverage [1.0,) → exactly one presence row.
+        val presenceRows = allRows.filter { it.rowType == "RANGE_PRESENCE" }
         assertEquals(
             1, presenceRows.size,
-            "Must have exactly one RANGE_PRESENCE row for '(,1.0.107)'; found rows: " +
+            "Must have exactly one merged RANGE_PRESENCE row; found rows: " +
                 "${allRows.map { "${it.versionRange}/${it.rowType}" }}",
         )
         val presence = presenceRows.single()
+        assertEquals(
+            "[1.0,)", presence.versionRange,
+            "The merged coverage row must be [1.0,) (union of [1.0,2.0) and [2.0,))",
+        )
         assertNull(presence.overriddenAttribute, "RANGE_PRESENCE row must have NULL overridden_attribute")
         assertFalse(presence.isSyntheticBase, "RANGE_PRESENCE row must not be marked synthetic")
         // All 28 typed scalar columns must be NULL on a presence row.
@@ -454,32 +461,28 @@ class MigrationIntegrationTest {
         assertNull(presence.jiraVersionPrefix); assertNull(presence.jiraVersionFormat)
         assertNull(presence.jiraHotfixVersionFormat)
 
-        // Decoupled model: `[1.0.107,)` gets a RANGE_PRESENCE row (coverage anchor) AND its real
-        // override rows — they coexist, distinguished by row_type. The presence row is the coverage
-        // layer; the SCALAR_OVERRIDE/MARKER rows are the value layer.
-        val rangeRows = allRows.filter { it.versionRange == "[1.0.107,)" }
+        // Decoupled model: the [2.0,) jira-hotfix override survives as its own value-layer row,
+        // independent of (and not merged into) the coverage layer. It is what re-splits the
+        // enumeration at READ time into [1.0,2.0) (base hotfix format) and [2.0,) (overridden).
+        val overrideRows = allRows.filter { it.versionRange == "[2.0,)" && it.rowType != "RANGE_PRESENCE" }
         assertTrue(
-            rangeRows.any { it.rowType == "RANGE_PRESENCE" },
-            "Range '[1.0.107,)' must get a RANGE_PRESENCE coverage row. Found: ${rangeRows.map { it.rowType }}",
-        )
-        assertTrue(
-            rangeRows.any { it.rowType == "SCALAR_OVERRIDE" || it.rowType == "MARKER" },
-            "Range '[1.0.107,)' must keep its real override rows alongside the presence row. " +
-                "Found: ${rangeRows.map { it.rowType }}",
+            overrideRows.any { it.rowType == "SCALAR_OVERRIDE" || it.rowType == "MARKER" },
+            "The [2.0,) jira-hotfix override must survive as a value-layer row. " +
+                "Found: ${allRows.map { "${it.versionRange}/${it.rowType}" }}",
         )
 
-        // The base row sits at ALL_VERSIONS now (the effective default), NOT at the first declared
-        // block `(,1.0.107)`. `(,1.0.107)` carries only its RANGE_PRESENCE coverage row.
+        // The base row sits at ALL_VERSIONS (the effective default), never a bounded block range.
         val baseRows = allRows.filter { it.rowType == "BASE" }
         assertEquals(1, baseRows.size, "Exactly one BASE row")
         assertEquals(
             ALL_VERSIONS, baseRows.single().versionRange,
-            "BASE row must be at ALL_VERSIONS (decoupled effective default), not '(,1.0.107)'",
+            "BASE row must be at ALL_VERSIONS (decoupled effective default)",
         )
-        val firstBlockRows = allRows.filter { it.versionRange == "(,1.0.107)" }
+        // The empty [1.0,2.0) block contributes only to coverage — it leaves no standalone row.
         assertTrue(
-            firstBlockRows.none { it.rowType == "BASE" },
-            "The first declared block '(,1.0.107)' must no longer be a BASE row. Found: ${firstBlockRows.map { it.rowType }}",
+            allRows.none { it.versionRange == "[1.0,2.0)" },
+            "The empty [1.0,2.0) block must be absorbed into merged coverage, not kept as a row. " +
+                "Found: ${allRows.map { "${it.versionRange}/${it.rowType}" }}",
         )
     }
 

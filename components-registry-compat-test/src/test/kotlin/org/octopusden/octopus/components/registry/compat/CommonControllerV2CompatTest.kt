@@ -39,8 +39,19 @@ class CommonControllerV2CompatTest : CompatibilityTestBase() {
             }.getOrNull()
 
             val cap = config.maxComponents
-            val baselineSliced = sliceCollection(baselineDtos?.toList(), cap)
-            val candidateSliced = sliceCollection(candidateDtos?.toList(), cap)
+            // ADR-018: the decoupled-model re-partitions each component's version ranges; canonicalise
+            // (merge adjacent same-payload ranges per component) on BOTH sides so the benign reshaping
+            // isn't a VALUE_DIFF. The jira DTOs round-trip faithfully (data class + explicit @JsonCreator).
+            // Canonicalise BEFORE the cap: the two sides have different pre-canonical row COUNTS for the
+            // same component, so slicing first would compare misaligned prefixes — canonicalising first
+            // makes both sides the same merged rows, then the stable slice takes the same logical subset.
+            val cls = JiraComponentVersionRangeDTO::class.java
+            val baselineSliced = baselineDtos?.toList()
+                ?.let { VersionRangeMapCanonicalizer.canonicalizeTypedRangeArray(it, cls) }
+                ?.let { sliceCollection(it, cap) }
+            val candidateSliced = candidateDtos?.toList()
+                ?.let { VersionRangeMapCanonicalizer.canonicalizeTypedRangeArray(it, cls) }
+                ?.let { sliceCollection(it, cap) }
             compareDto(endpoint, params, baselineSliced, candidateSliced)
         }
 

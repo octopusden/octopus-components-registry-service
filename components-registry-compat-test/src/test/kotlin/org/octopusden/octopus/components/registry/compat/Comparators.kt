@@ -113,8 +113,15 @@ object Comparators {
             // both sides by a stable per-endpoint key so JsonShape.diff doesn't report
             // positional false-positives. Pass-through for unregistered endpoints
             // (see RawArraySorters and its unit test for the registered list + contract).
-            val baselineForShape = RawArraySorters.stableSorted(endpoint, baseline.json)
-            val candidateForShape = RawArraySorters.stableSorted(endpoint, candidate.json)
+            val baselineSorted = RawArraySorters.stableSorted(endpoint, baseline.json)
+            val candidateSorted = RawArraySorters.stableSorted(endpoint, candidate.json)
+            // ADR-018: the decoupled-model read path re-partitions version-range-keyed maps (`variants`,
+            // `/maven-artifacts`) — whitespace, composite-split, adjacent-merge and version-form differ
+            // from V1's verbatim DSL keys but describe the SAME (version → value) function. Canonicalise
+            // BOTH sides so those reshapings don't read as STRUCTURAL_DIFF; a real coverage/value change
+            // still surfaces (see VersionRangeMapCanonicalizer + its unit tests).
+            val baselineForShape = VersionRangeMapCanonicalizer.normalizeForEndpoint(endpoint, baselineSorted)
+            val candidateForShape = VersionRangeMapCanonicalizer.normalizeForEndpoint(endpoint, candidateSorted)
             val shapeDiffs = JsonShape.diff(baselineForShape, candidateForShape)
             for (sd in shapeDiffs) {
                 categories += DiffClassifier.STRUCTURAL_DIFF
@@ -221,6 +228,10 @@ object Comparators {
                         "^(.+\\.)?artifactPattern$",
                     )
             }
+            // NOTE: `ComponentV3.variants` reshaping is folded out by canonicalising its KEYS upstream
+            // (the caller passes maps already run through VersionRangeMapCanonicalizer.canonicalizeTypedRangeMap),
+            // NOT by a field comparator here — a raw-JSON field equality would lose this comparison's
+            // `ignoringCollectionOrder` + the gav/artifactPattern normalisers (build-4073 regression).
             assertion.isEqualTo(candidate)
         }.onFailure { ex ->
             DiffCollector.record(
@@ -322,7 +333,7 @@ object ArtifactPatternComparator : Comparator<Any?> {
     // KNOWN_CATCH_ALL forms, backslashes removed). A pattern reducing to one of these is the
     // "owns everything (modulo explicit siblings)" bucket — ALL or ALL_EXCEPT_CLAIMED.
     private val CATCH_ALL_CORES = setOf("[w-.]+", "[w-]+", "w+", ".*", "*")
-    private const val CATCH_ALL = " CATCHALL"
+    private const val CATCH_ALL = "\u0000CATCHALL"
 
     override fun compare(a: Any?, b: Any?): Int {
         if (a == null && b == null) return 0

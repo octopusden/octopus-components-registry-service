@@ -26,9 +26,10 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 
 /**
- * PR-3b — supported-versions (coverage) edit API (ADR-018). Drives the real `GET` / `PUT
- * /rest/api/4/components/{id}/supported-versions` end-to-end (ft-db = H2 + auto-migrate) and asserts
- * the declarative replace, the auto-split re-alignment with an existing override, the ALL reset, and
+ * PR-3b — supported-versions (coverage) edit API (ADR-018, decoupled redesign). Drives the real
+ * `GET` / `PUT /rest/api/4/components/{id}/supported-versions` end-to-end (ft-db = H2 + auto-migrate)
+ * and asserts the declarative replace, the contiguous/overlapping merge into clean coverage (coverage
+ * is stored MERGED and is independent of per-attribute overrides — no auto-split), the ALL reset, and
  * the V1/V5 warn-and-allow advisory.
  */
 @AutoConfigureMockMvc
@@ -67,14 +68,15 @@ class SupportedVersionsApiTest {
     }
 
     @Test
-    @DisplayName("PUT replaces coverage; GET reflects it; PUT {all:true} clears back to ALL")
+    @DisplayName("PUT replaces coverage; contiguous ranges merge; GET reflects it; PUT {all:true} clears back to ALL")
     fun `put replaces and clears coverage`() {
         val id = createComponent("sv_put_${UUID.randomUUID().toString().take(8)}")
 
+        // Two contiguous ranges are stored MERGED — coverage is a clean maximal-contiguous union.
         putSupported(id, """{"ranges":["[1.0,2.0)","[2.0,)"]}""")
         val after = getSupported(id)
         assertEquals(false, after.path("all").asBoolean())
-        assertEquals(listOf("[1.0,2.0)", "[2.0,)"), after.path("ranges").map { it.asText() })
+        assertEquals(listOf("[1.0,)"), after.path("ranges").map { it.asText() })
 
         putSupported(id, """{"all":true}""")
         val cleared = getSupported(id)
@@ -83,18 +85,19 @@ class SupportedVersionsApiTest {
     }
 
     @Test
-    @DisplayName("setting supported re-aligns an existing override via auto-split")
-    fun `put re-aligns existing override`() {
+    @DisplayName("coverage is decoupled from overrides — PUT supported is NOT split by an existing override's edges")
+    fun `put coverage is independent of overrides`() {
         val id = createComponent("sv_align_${UUID.randomUUID().toString().take(8)}")
         // Override first (component is all-versions, so this is a free-standing override view).
         createFieldOverride(id, """{"overriddenAttribute":"build.javaVersion","versionRange":"[2.0,3.0)","value":"11"}""")
 
-        // Now declare supported = [1.0,10.0): the override edge 2.0/3.0 falls inside → auto-split.
+        // Declare supported = [1.0,10.0): under the decoupled model coverage is stored verbatim-merged,
+        // NOT auto-split by the [2.0,3.0) override. Enumeration (range views) does the splitting at READ.
         putSupported(id, """{"ranges":["[1.0,10.0)"]}""")
         assertEquals(
-            listOf("[1.0,2.0)", "[2.0,3.0)", "[3.0,10.0)"),
+            listOf("[1.0,10.0)"),
             getSupported(id).path("ranges").map { it.asText() },
-            "PUT supported must re-align coverage to the existing override's edges",
+            "PUT supported must store merged coverage unchanged — overrides do not reshape coverage",
         )
     }
 
@@ -112,6 +115,10 @@ class SupportedVersionsApiTest {
         )
         // Still applied (warn-and-allow): supported is the requested set.
         assertEquals(listOf("[1.0,2.0)"), resp.path("ranges").map { it.asText() })
+        // The ADR-018 coverage-gate guard for "an override outside supported must NOT resolve" lives at
+        // the resolver layer (DatabaseComponentRegistryResolverTest `(5e6 ADR-018)`), where it is exact
+        // (the detailed HTTP endpoint additionally applies jira version-format resolution, conflating the
+        // gate with format handling).
     }
 
     @Test
@@ -120,16 +127,41 @@ class SupportedVersionsApiTest {
         val id = createComponent("sv_idem_${UUID.randomUUID().toString().take(8)}")
         putSupported(id, """{"ranges":["[1.0,2.0)","[2.0,)"]}""")
         // Re-PUT the identical set — the delta replace must add/delete nothing, not violate the
-        // partial unique index by re-inserting a row whose range already exists.
+        // partial unique index by re-inserting a row whose range already exists. The two contiguous
+        // ranges merge to a single [1.0,) coverage row on both PUTs.
         val second = putSupported(id, """{"ranges":["[1.0,2.0)","[2.0,)"]}""")
-        assertEquals(listOf("[1.0,2.0)", "[2.0,)"), second.path("ranges").map { it.asText() })
+        assertEquals(listOf("[1.0,)"), second.path("ranges").map { it.asText() })
     }
 
     @Test
-    @DisplayName("PUT rejects overlapping supported ranges (must be a disjoint partition)")
-    fun `overlapping ranges rejected`() {
+    @DisplayName("PUT of ranges that TILE all-versions collapses to supported = ALL (no spurious all-versions row)")
+    fun `tiling ranges collapse to all`() {
+        val id = createComponent("sv_tile_${UUID.randomUUID().toString().take(8)}")
+        // An override that would be "outside" a bounded supported set but is INSIDE all-versions — used
+        // to assert the tiling-collapse path treats supported as ALL (no spurious V1/V5 warning).
+        createFieldOverride(id, """{"overriddenAttribute":"build.javaVersion","versionRange":"[5.0,6.0)","value":"11"}""")
+        // Each individual range is bounded (passes per-range validation), but together they tile every
+        // version → mergeUnion collapses to the all-versions sentinel. The canonical invariant is
+        // "supported = ALL ⟺ no RANGE_PRESENCE rows", so this must report all=true with zero ranges,
+        // NOT all=false with a bounded-looking all-versions coverage row.
+        val resp = putSupported(id, """{"ranges":["(,2.0)","[2.0,)"]}""")
+        assertEquals(true, resp.path("all").asBoolean())
+        assertEquals(0, resp.path("ranges").size())
+        // Tiling collapsed to ALL → the [5.0,6.0) override is inside supported → NO spurious warning.
+        assertEquals(0, resp.path("warnings").size(), "tiling-collapse to ALL must not warn that an override is outside supported")
+        // GET reflects the same.
+        val after = getSupported(id)
+        assertEquals(true, after.path("all").asBoolean())
+        assertEquals(0, after.path("ranges").size())
+    }
+
+    @Test
+    @DisplayName("PUT merges overlapping supported ranges into a clean union (no disjoint requirement)")
+    fun `overlapping ranges merged`() {
         val id = createComponent("sv_ovl_${UUID.randomUUID().toString().take(8)}")
-        putSupportedExpectingStatus(id, """{"ranges":["[1.0,3.0)","[2.0,4.0)"]}""", status().isBadRequest)
+        // Overlapping ranges are not rejected — coverage is stored as a maximal-contiguous union.
+        val resp = putSupported(id, """{"ranges":["[1.0,3.0)","[2.0,4.0)"]}""")
+        assertEquals(listOf("[1.0,4.0)"), resp.path("ranges").map { it.asText() })
     }
 
     @Test

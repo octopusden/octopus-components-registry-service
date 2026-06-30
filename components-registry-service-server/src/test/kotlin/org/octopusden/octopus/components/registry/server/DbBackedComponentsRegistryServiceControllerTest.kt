@@ -111,6 +111,15 @@ class DbBackedComponentsRegistryServiceControllerTest : MockMvcRegistryTestSuppo
 
     override fun testGetBuildTools() = super.testGetBuildTools()
 
+    // ADR-018 decoupled redesign: the DB-backed resolver enumerates the partition of merged coverage
+    // by value-change edges, so adjacent ranges that resolve identically collapse (e.g.
+    // TEST_COMPONENT2_WITH_SEVERAL_BRANCHES's two identical `v2` blocks → one (,03.38.31]; and
+    // TEST_COMPONENT_WITH_DOC_AND_VERSIONS's two equal-resolving blocks → one [1.0,)). It also
+    // re-renders ranges canonically (no internal whitespace). The DSL-loader base test keeps its
+    // verbatim-block fixture; this one points at the decoupled expectation.
+    override val jiraComponentVersionRangesFixture: String =
+        "expected-data/jira-component-version-ranges-decoupled.json"
+
     /**
      * Regression: components migrated from a DSL with no `vcsSettings` block at all
      * (no VCS roots and no externalRegistry) resolve to `EscrowModuleConfig.vcsSettings == null`.

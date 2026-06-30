@@ -268,7 +268,7 @@ class DatabaseComponentRegistryResolverTest {
     // ========================================================================
 
     @Test
-    fun `(2) scalar override - enumeration yields base-range entry and override-range entry`() {
+    fun `(2) scalar override on supported=ALL - enumeration partitions ALL by the override edges`() {
         val comp = makeComponent("COMP2")
         val base = makeBase(comp, javaVersion = "11")
         val overrideRow = makeScalarOverrideRow(comp, "[1.0,2.0)", "build.javaVersion")
@@ -276,16 +276,17 @@ class DatabaseComponentRegistryResolverTest {
         comp.configurations.addAll(listOf(base, overrideRow))
         stubComponent(comp)
 
+        // ADR-018 redesign: supported = ALL (no RANGE_PRESENCE) is partitioned by the override's
+        // value-change edges (1.0, 2.0) → three constant-value views, no overlapping ALL view.
         val module = resolver.getComponentById("COMP2")
         assertNotNull(module)
-        assertEquals(2, module!!.moduleConfigurations.size)
-
-        val allVersionsCfg = module.moduleConfigurations.first { it.versionRangeString == ALL_VERSIONS }
-        val overrideCfg = module.moduleConfigurations.first { it.versionRangeString == "[1.0,2.0)" }
-        // Base range keeps original javaVersion
-        assertEquals("11", allVersionsCfg.buildConfiguration?.javaVersion)
-        // Override range has overridden javaVersion
-        assertEquals("21", overrideCfg.buildConfiguration?.javaVersion)
+        assertEquals(
+            listOf("(,1.0)", "[1.0,2.0)", "[2.0,)"),
+            module!!.moduleConfigurations.map { it.versionRangeString },
+        )
+        assertEquals("11", module.moduleConfigurations.first { it.versionRangeString == "(,1.0)" }.buildConfiguration?.javaVersion)
+        assertEquals("21", module.moduleConfigurations.first { it.versionRangeString == "[1.0,2.0)" }.buildConfiguration?.javaVersion)
+        assertEquals("11", module.moduleConfigurations.first { it.versionRangeString == "[2.0,)" }.buildConfiguration?.javaVersion)
     }
 
     @Test
@@ -315,6 +316,87 @@ class DatabaseComponentRegistryResolverTest {
         val cfg = resolver.getResolvedComponentDefinition("COMP2C", "2.0.0")
         assertNotNull(cfg)
         assertEquals("11", cfg!!.buildConfiguration?.javaVersion)
+    }
+
+    @Test
+    fun `(5e4 MIG-029) singleton + gap vcs markers enumerate as three distinct-vcs views, not one merged`() {
+        // Reproduces the live multi-marker shape (confirmed via QA DB): coverage [2.6.145,2.6.179] with a
+        // singleton vcs marker at each end and a DISTINCT vcs marker on the open gap between them — three
+        // different vcs paths. V1 enumerates three views; the decoupled-model partition must split on the
+        // marker edges {2.6.145, 2.6.179} and resolve each sub-range to its own marker, NOT collapse them
+        // into one view (which would silently drop the per-range vcs distinction the reference keeps).
+        val comp = makeComponent("COMP5E4")
+        val base = makeBase(comp).apply { createdAt = java.time.Instant.ofEpochMilli(1000) }
+        base.vcsEntries.add(makeVcsEntry(base, "ssh://vcs/base"))
+        val presence = makeRangePresenceRow(comp, "[2.6.145,2.6.179]").apply { createdAt = java.time.Instant.ofEpochMilli(2000) }
+        val mLow = makeMarkerRow(comp, "[2.6.145]", "vcs.settings").apply { createdAt = java.time.Instant.ofEpochMilli(3000) }
+        mLow.vcsEntries.add(makeVcsEntry(mLow, "ssh://vcs/low"))
+        val mGap = makeMarkerRow(comp, "(2.6.145,2.6.179)", "vcs.settings").apply { createdAt = java.time.Instant.ofEpochMilli(4000) }
+        mGap.vcsEntries.add(makeVcsEntry(mGap, "ssh://vcs/gap"))
+        val mHigh = makeMarkerRow(comp, "[2.6.179]", "vcs.settings").apply { createdAt = java.time.Instant.ofEpochMilli(5000) }
+        mHigh.vcsEntries.add(makeVcsEntry(mHigh, "ssh://vcs/high"))
+        comp.configurations.addAll(listOf(base, presence, mLow, mGap, mHigh))
+        stubComponent(comp)
+
+        val module = resolver.getComponentById("COMP5E4")
+        assertNotNull(module)
+        assertEquals(
+            listOf("[2.6.145]", "(2.6.145,2.6.179)", "[2.6.179]"),
+            module!!.moduleConfigurations.map { it.versionRangeString },
+            "the three marker edges must produce three enumerated views",
+        )
+        val vcsOf = { i: Int -> module.moduleConfigurations[i].vcsSettings!!.versionControlSystemRoots.first().vcsPath }
+        assertEquals("ssh://vcs/low", vcsOf(0))
+        assertEquals("ssh://vcs/gap", vcsOf(1))
+        assertEquals("ssh://vcs/high", vcsOf(2))
+    }
+
+    @Test
+    fun `(5e5 MIG-029) a marker ending exclusive at the coverage hi carves a base singleton at hi`() {
+        // Exclusive-upper-marker shape (confirmed via QA DB): coverage [1.1.41,1.1.49] with a vcs marker that ends
+        // EXCLUSIVE at the coverage hi ([1.1.41,1.1.49)). So 1.1.49 (the coverage hi, inclusive) is NOT
+        // covered by the marker → resolves to base, distinct from below. V1 enumerates two views;
+        // the partition must carve the base singleton [1.1.49] at the boundary (a RIGHT edge at hi),
+        // not collapse to one merged [1.1.41,1.1.49] view (which drops the 1.1.49=base distinction).
+        val comp = makeComponent("COMP5E5")
+        val base = makeBase(comp).apply { createdAt = java.time.Instant.ofEpochMilli(1000) }
+        base.vcsEntries.add(makeVcsEntry(base, "ssh://vcs/base"))
+        val presence = makeRangePresenceRow(comp, "[1.1.41,1.1.49]").apply { createdAt = java.time.Instant.ofEpochMilli(2000) }
+        val marker = makeMarkerRow(comp, "[1.1.41,1.1.49)", "vcs.settings").apply { createdAt = java.time.Instant.ofEpochMilli(3000) }
+        marker.vcsEntries.add(makeVcsEntry(marker, "ssh://vcs/mk"))
+        comp.configurations.addAll(listOf(base, presence, marker))
+        stubComponent(comp)
+
+        val module = resolver.getComponentById("COMP5E5")
+        assertNotNull(module)
+        assertEquals(
+            listOf("[1.1.41,1.1.49)", "[1.1.49]"),
+            module!!.moduleConfigurations.map { it.versionRangeString },
+        )
+        val vcsOf = { i: Int -> module.moduleConfigurations[i].vcsSettings!!.versionControlSystemRoots.first().vcsPath }
+        assertEquals("ssh://vcs/mk", vcsOf(0))
+        assertEquals("ssh://vcs/base", vcsOf(1))
+    }
+
+    @Test
+    fun `(5e6 ADR-018) coverage gate counts RANGE_PRESENCE only - an override outside supported does NOT resolve`() {
+        // Decoupled model: coverage = RANGE_PRESENCE rows, INDEPENDENT of overrides. A scalar override
+        // left outside the supported set (e.g. after a supported-versions PUT shrinks coverage) must NOT
+        // make its versions resolve — the gate must union RANGE_PRESENCE rows, not every non-BASE row.
+        val comp = makeComponent("COMP5E6")
+        val base = makeBase(comp).apply { createdAt = java.time.Instant.ofEpochMilli(1000) }
+        val presence = makeRangePresenceRow(comp, "[1.0,2.0)").apply { createdAt = java.time.Instant.ofEpochMilli(2000) }
+        val overrideOutside = makeScalarOverrideRow(comp, "[5.0,6.0)", "build.javaVersion").apply {
+            javaVersion = "11"
+            createdAt = java.time.Instant.ofEpochMilli(3000)
+        }
+        comp.configurations.addAll(listOf(base, presence, overrideOutside))
+        stubComponent(comp)
+
+        // 5.5 is inside the override [5.0,6.0) but OUTSIDE supported [1.0,2.0) → 404 (null).
+        assertNull(resolver.getResolvedComponentDefinition("COMP5E6", "5.5"))
+        // 1.5 is inside supported → resolves.
+        assertNotNull(resolver.getResolvedComponentDefinition("COMP5E6", "1.5"))
     }
 
     // ========================================================================
@@ -495,9 +577,14 @@ class DatabaseComponentRegistryResolverTest {
 
     @Test
     fun `(5e MIG-029) synthetic base with multiple overrides - first config follows DSL declaration order (createdAt), not heap-scan`() {
-        // Repros wscardsmodel-shape: synthetic base, multiple version-range blocks where
-        // one declares an explicit scalar override (e.g. escrow.generation = MANUAL) and
-        // others inherit from the synthetic base (escrow.generation = AUTO via Defaults).
+        // Models the MANUAL-below-supported scenario: synthetic base (AUTO via Defaults),
+        // supported coverage = [1.0,) only, and a MANUAL escrow.generation override on the
+        // OUT-OF-SUPPORTED tail (,1.0). Because the override is outside coverage it must NOT
+        // be enumerated, so moduleConfigurations[0] inherits AUTO from the base.
+        //
+        // NOTE: this is the INVERSE of the real wscardsmodel shape (see 5e2 below), where the
+        // base escrow is MANUAL and AUTO sits on higher value-change islands → [0] = MANUAL.
+        // Kept as a distinct guard for the out-of-coverage-override suppression path.
         //
         // V1 contract (prod = QA = baseline): the controller's createComponent() picks
         // moduleConfigurations[0], which V1 emits in DSL declaration order. For an archived
@@ -539,19 +626,123 @@ class DatabaseComponentRegistryResolverTest {
         comp.configurations.addAll(listOf(base, manualOverride, rangePresenceForAutoRange))
         stubComponent(comp)
 
+        // ADR-018 redesign: supported = the RANGE_PRESENCE coverage = [1.0,). The MANUAL override on
+        // (,1.0) is OUTSIDE supported, so it is NOT enumerated (and cannot leak MANUAL into the wire) —
+        // a stronger guarantee than the old createdAt-ordering fix. Enumeration is version-ordered.
         val module = resolver.getComponentById("COMP5E")
         assertNotNull(module)
-        assertEquals(2, module!!.moduleConfigurations.size, "Both override ranges must be enumerated")
-        val first = module.moduleConfigurations.first()
+        assertEquals(listOf("[1.0,)"), module!!.moduleConfigurations.map { it.versionRangeString })
         assertEquals(
-            "[1.0,)",
-            first.versionRangeString,
-            "moduleConfigurations[0] must be the DSL-first range (lowest createdAt), NOT the adversarially-inserted MANUAL range",
+            org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode.AUTO,
+            module.moduleConfigurations.first().escrow!!.generation.orElse(null),
+            "the only supported range inherits AUTO from base; the out-of-supported MANUAL override does not appear",
+        )
+    }
+
+    @Test
+    fun `(5e2 MIG-029) real wscardsmodel shape - MANUAL base with AUTO islands, first view stays MANUAL`() {
+        // Faithful to the REAL migrated wscardsmodel (verified by migrating the live DSL through
+        // the real loader into ft-db H2 and reading the rows): the component's escrow default is
+        // MANUAL (ESCROW_PROVIDED_MANUALLY base), and the GRADLE/AUTO releases are value-change
+        // ISLANDS on higher ranges. The compat stand previously showed V1=MANUAL vs candidate=AUTO
+        // for moduleConfigurations[0]; the live migration on the current tip produces
+        //   [0] (,2.1) = MANUAL  (matching V1)
+        // because [0] is the lowest sub-range, which inherits the MANUAL base — NOT the AUTO island.
+        //
+        // This locks that contract in: an AUTO escrow.generation override on a higher range must
+        // partition the base coverage WITHOUT promoting AUTO to moduleConfigurations[0].
+        val comp = makeComponent("COMP5E2")
+        // Component-level escrow default = MANUAL (the real wscardsmodel base).
+        val base = makeBase(comp, buildSystem = "ESCROW_PROVIDED_MANUALLY").apply {
+            escrowGeneration = "MANUAL"
+            createdAt = java.time.Instant.ofEpochMilli(1000)
+        }
+        // A GRADLE/AUTO release island on a higher bounded range (value-change edge).
+        val autoIsland = makeScalarOverrideRow(comp, "[2.0,3.0)", "escrow.generation").apply {
+            escrowGeneration = "AUTO"
+            createdAt = java.time.Instant.ofEpochMilli(2000)
+        }
+        comp.configurations.addAll(listOf(base, autoIsland))
+        stubComponent(comp)
+
+        val module = resolver.getComponentById("COMP5E2")
+        assertNotNull(module)
+        // Base coverage = ALL; the single AUTO island edge splits it into three version-ordered views.
+        assertEquals(
+            listOf("(,2.0)", "[2.0,3.0)", "[3.0,)"),
+            module!!.moduleConfigurations.map { it.versionRangeString },
+        )
+        val gen = { i: Int ->
+            module.moduleConfigurations[i].escrow!!.generation.orElse(null)
+        }
+        assertEquals(
+            org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode.MANUAL,
+            gen(0),
+            "moduleConfigurations[0] is the lowest sub-range → inherits the MANUAL base, NOT the AUTO island",
         )
         assertEquals(
             org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode.AUTO,
-            first.escrow!!.generation.orElse(null),
-            "First-enumerated range inherits escrow.generation from synthetic base (AUTO via Defaults), not MANUAL from the other range",
+            gen(1),
+            "the [2.0,3.0) island carries its explicit AUTO override",
+        )
+        assertEquals(
+            org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode.MANUAL,
+            gen(2),
+            "the tail above the island falls back to the MANUAL base",
+        )
+        // Primary invariant of the derive-from-base fix: the component-level representative is the
+        // resolved BASE config (MANUAL), NOT the version-sorted moduleConfigurations[0] nor the AUTO island.
+        assertEquals(
+            org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode.MANUAL,
+            module.componentLevelConfiguration!!.escrow!!.generation.orElse(null),
+            "component-level escrow.generation must come from the MANUAL base, not the higher AUTO island",
+        )
+    }
+
+    @Test
+    fun `(5e3 MIG-029) component-level representative comes from BASE, not the version-sorted first range`() {
+        // Real tiling-shape component, confirmed against the live QA DB: BASE (,0),[0,) escrow=AUTO
+        // (the Defaults value) + a low-version SCALAR_OVERRIDE escrow.generation=UNSUPPORTED on
+        // (,03.51.29.15). V1's component-level escrow.generation = AUTO because V1's
+        // moduleConfigurations[0] is the first DSL-declared (current/default) block; the redesign sorts
+        // the enumeration partition by version ASC, so moduleConfigurations[0] became the lowest range
+        // (the UNSUPPORTED historical override) — flipping the wire DTO to UNSUPPORTED for 12 components.
+        //
+        // FIX (ADR-018 redesign, derive-from-base): the component-level scalar representative is the
+        // resolved BASE config, exposed as EscrowModule.componentLevelConfiguration and consumed by the
+        // controllers — moduleConfigurations[0] is NO LONGER the implicit source of component-level
+        // scalar truth. Enumeration stays version-sorted/atomic (asserted below), decoupling
+        // "how ranges are enumerated" from "which config is the representative".
+        val comp = makeComponent("COMP5E3")
+        val base = makeBase(comp, buildSystem = "WHISKEY").apply {
+            escrowGeneration = "AUTO"
+            createdAt = java.time.Instant.ofEpochMilli(1000)
+        }
+        val lowUnsupported = makeScalarOverrideRow(comp, "(,03.51.29.15)", "escrow.generation").apply {
+            escrowGeneration = "UNSUPPORTED"
+            createdAt = java.time.Instant.ofEpochMilli(2000)
+        }
+        comp.configurations.addAll(listOf(base, lowUnsupported))
+        stubComponent(comp)
+
+        val module = resolver.getComponentById("COMP5E3")
+        assertNotNull(module)
+        // Component-level representative = BASE → AUTO (matches V1), regardless of enumeration order.
+        assertEquals(
+            org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode.AUTO,
+            module!!.componentLevelConfiguration!!.escrow!!.generation.orElse(null),
+            "component-level escrow.generation must come from the AUTO base, not the low UNSUPPORTED override",
+        )
+        // Enumeration stays version-sorted/atomic: the low UNSUPPORTED range is still first in the list.
+        assertEquals(
+            listOf("(,03.51.29.15)", "[03.51.29.15,)"),
+            module.moduleConfigurations.map { it.versionRangeString },
+            "variants enumeration stays version-ordered (decoupled from the component-level representative)",
+        )
+        assertEquals(
+            org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode.UNSUPPORTED,
+            module.moduleConfigurations.first().escrow!!.generation.orElse(null),
+            "the low range view still carries its UNSUPPORTED override (per-range values unchanged)",
         )
     }
 
@@ -790,12 +981,12 @@ class DatabaseComponentRegistryResolverTest {
     @Test
     @DisplayName("MIG-042: synthetic-base multi-range - version in second range resolves (V1 parity)")
     fun `(9e MIG-042) synthetic-base multi-range - version in second range resolves`() {
-        // Two adjacent DSL range blocks "(,1.0)" + "[1.0,)": the synthetic BASE row
-        // holds only the FIRST block's range. A version covered by the SECOND block
-        // must still resolve — gating on the base block alone broke whole component
-        // families on compat run 3823 (the original MIG-042 over-reach).
+        // ADR-018 redesign migration shape: two adjacent blocks "(,1.0)" + "[1.0,)" TILE all-versions, so
+        // mergeUnion → ALL → supported = ALL (NO RANGE_PRESENCE rows), base is ALL_VERSIONS, and the
+        // second block's differing scalar is a [1.0,) override. supported = ALL → the gate is skipped and
+        // every version resolves.
         val comp = makeComponent("COMP9E")
-        val base = makeBase(comp, versionRange = "(,1.0)", isSyntheticBase = true, javaVersion = "8")
+        val base = makeBase(comp, javaVersion = "8")
         val overrideRow = makeScalarOverrideRow(comp, "[1.0,)", "build.javaVersion")
         overrideRow.javaVersion = "11"
         comp.configurations.addAll(listOf(base, overrideRow))
@@ -819,13 +1010,18 @@ class DatabaseComponentRegistryResolverTest {
         // endpoint answers 404 {"errorMessage":"Component id <comp>:12.1.155 is not
         // found"}; v3 must return null instead of over-resolving from the base row.
         // The component's effective range is the UNION of all its blocks.
+        // ADR-018 redesign migration shape: base ALL_VERSIONS + coverage as RANGE_PRESENCE rows =
+        // mergeUnion([10,11),[11,12.1),[12.2,)) = [10,12.1) ∪ [12.2,) (the gap [12.1,12.2) is preserved),
+        // plus per-block scalar overrides. The gate unions RANGE_PRESENCE rows only, so a gap version 404s.
         val comp = makeComponent("COMP9F")
-        val base = makeBase(comp, versionRange = "[10,11)", isSyntheticBase = true, javaVersion = "7")
+        val base = makeBase(comp, javaVersion = "7")
+        val presenceLow = makeRangePresenceRow(comp, "[10,12.1)")
+        val presenceHigh = makeRangePresenceRow(comp, "[12.2,)")
         val second = makeScalarOverrideRow(comp, "[11,12.1)", "build.javaVersion")
         second.javaVersion = "8"
         val third = makeScalarOverrideRow(comp, "[12.2,)", "build.javaVersion")
         third.javaVersion = "17"
-        comp.configurations.addAll(listOf(base, second, third))
+        comp.configurations.addAll(listOf(base, presenceLow, presenceHigh, second, third))
         stubComponent(comp)
 
         // 12.1.155 / 12.1.156 are in the gap [12.1,12.2) → V1 404 → null
@@ -840,7 +1036,7 @@ class DatabaseComponentRegistryResolverTest {
     }
 
     @Test
-    @DisplayName("MIG-042: NON-synthetic multi-range - version covered by an override block resolves (gate uses the union)")
+    @DisplayName("MIG-042: multi-range - a version in a covered range (carrying an override) resolves; coverage = RANGE_PRESENCE union")
     fun `(9g MIG-042) non-synthetic multi-range - version in override block resolves`() {
         // Live-victim shape from the first union-gate iteration (59 NEW on the
         // full gate): a component WITH top-level scalars (isSyntheticBase=false)
@@ -849,11 +1045,14 @@ class DatabaseComponentRegistryResolverTest {
         // bases on the BASE range alone 404'd every version covered by a later
         // block (V1 answers 200 there). The effective range is ALWAYS the union
         // of base + override ranges, regardless of the synthetic flag.
+        // ADR-018 redesign migration shape: base ALL_VERSIONS + RANGE_PRESENCE = mergeUnion([1.0,1.1),[1.1,))
+        // = [1.0,) + the [1.1,) scalar override. Gate unions RANGE_PRESENCE; below [1.0,) → 404.
         val comp = makeComponent("COMP9G")
-        val base = makeBase(comp, versionRange = "[1.0,1.1)", isSyntheticBase = false, javaVersion = "8")
+        val base = makeBase(comp, javaVersion = "8")
+        val presence = makeRangePresenceRow(comp, "[1.0,)")
         val later = makeScalarOverrideRow(comp, "[1.1,)", "build.javaVersion")
         later.javaVersion = "17"
-        comp.configurations.addAll(listOf(base, later))
+        comp.configurations.addAll(listOf(base, presence, later))
         stubComponent(comp)
 
         // 1.1.759 is outside the BASE block but inside the later block → resolves (V1=200)

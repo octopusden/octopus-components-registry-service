@@ -109,10 +109,14 @@ class ProjectControllerV2CompatTest : CompatibilityTestBase() {
         compareRaw(endpoint, params, baseline, candidate)
 
         if (baseline.status in 200..299 && candidate.status in 200..299) {
+            // ADR-018: canonicalise the per-component range partition on BOTH sides (see CommonControllerV2CompatTest).
+            val cls = JiraComponentVersionRangeDTO::class.java
             val baselineDto =
                 runCatching { mapper.readValue<Set<JiraComponentVersionRangeDTO>>(baseline.bodyBytes) }.getOrNull()
+                    ?.let { VersionRangeMapCanonicalizer.canonicalizeTypedRangeArray(it.toList(), cls) }
             val candidateDto =
                 runCatching { mapper.readValue<Set<JiraComponentVersionRangeDTO>>(candidate.bodyBytes) }.getOrNull()
+                    ?.let { VersionRangeMapCanonicalizer.canonicalizeTypedRangeArray(it.toList(), cls) }
             compareDto(endpoint, params, baselineDto, candidateDto)
         }
 

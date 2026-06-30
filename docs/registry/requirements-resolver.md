@@ -42,26 +42,32 @@
 
 All RES-NNN contracts below resolve against the **decoupled version model** (`adr/018-decoupled-version-model.md`). Two independent layers govern every resolve/enumerate:
 
-- **Coverage ("supported versions").** `supported = ∪` of the declared bounded ranges, each stored verbatim as a `RANGE_PRESENCE` row (a composite range stays one string → one row). A component that declares no bounded block (top-level-only DSL, or an explicit `(,)` / `(,0),[0,)` block) has a single `ALL_VERSIONS` base and **no** `RANGE_PRESENCE` rows → `supported = ALL`.
+- **Coverage ("supported versions").** `supported = mergeUnion` of the declared ranges, stored **merged** (maximal contiguous segments) as `RANGE_PRESENCE` rows — override-independent. A component whose declared blocks tile all-versions (or that declares no bounded block) has a single `ALL_VERSIONS` base and **no** `RANGE_PRESENCE` rows → `supported = ALL`. Coverage carries no override boundaries (the redesign decoupled the two).
 - **Per-attribute values.** The BASE row is **always** the effective default at `ALL_VERSIONS` (top-level block ⊕ `Defaults.groovy`). There is **no synthetic-bounded base** (`is_synthetic_base` is vestigial / always `false`). Per-attribute overrides apply on ranges **including open-upper** (`[X,)`), selected by **containment** (TD-010), not exact range match.
 
 **`resolve(v)`:**
 1. **Coverage gate.** If the component has a bounded base (legacy/API shape) **or** any `RANGE_PRESENCE` row, and `v ∉ supported`, return **404** ("no configuration"). The gate is **skipped** only when the base is `ALL_VERSIONS` **and** there are no `RANGE_PRESENCE` rows. Implemented in `EntityMappers.toResolvedEscrowModuleConfig` and `ComponentCodeRenderer.renderResolved`.
 2. For each attribute: the **narrowest override whose range contains `v`**, else the `ALL_VERSIONS` base value.
 
-**`enumerate()`** (range-list endpoints — RES-001, RES-018): iterate the declared ranges (`RANGE_PRESENCE` + override rows), resolving each by **containment**. The `ALL_VERSIONS` base is enumerated as its own view **only** when there are no `RANGE_PRESENCE` rows (so a version-range-only component enumerates exactly its declared ranges — no spurious `(,0),[0,)` entry).
+**`enumerate()`** (range-list endpoints — RES-001, RES-018): the **partition of `supported` by
+value-change edges** (`VersionRangePartition.partition`). Edges = the finite endpoints of scalar/marker
+override ranges ∪ artifact-ownership ranges that fall **strictly inside** a supported segment; each
+resulting sub-range is resolved by **containment** (TD-010). Adjacent sub-ranges with no edge between
+them stay one view, so **redundant-identical legacy blocks collapse** (e.g. two adjacent blocks that
+resolve to the same config → one range). With `supported = ALL` and no edges, enumeration is the single
+`(,0),[0,)` view. Doc-link majors are **not** edges. Range strings are re-rendered canonically (no
+internal whitespace).
 
-Real-version resolve/enumerate output is **byte-identical** to the previous v4 model (audit A1: no overlapping legacy blocks; the ~130k compat baseline is the merge gate).
+Real-version **resolve** output is **byte-identical** to the previous v4 model (audit A1). **Enumerate**
+output is byte-identical **except** intended redundant-collapses and range-whitespace canonicalization;
+the ~130k compat baseline is audited on the stand to confirm every enumerate diff is one of those (not a
+resolve regression).
 
-### Write-side invariants (PR-3)
+### Write-side invariants
 
-- **Write-time auto-split (ADR-018 (b)).** When a field-override write (`createFieldOverride` /
-  `updateFieldOverride`) adds a range whose finite endpoint falls **strictly inside** a covering
-  `RANGE_PRESENCE` row, that row is split at the interior edge(s) so each enumerated range keeps
-  constant resolved values (`ComponentManagementServiceImpl.autoSplitCoverage`,
-  `VersionCoverageSplit`). Coverage (the union) is unchanged — only the breakpoints move. No-op for
-  components with no `RANGE_PRESENCE` rows (the override range is enumerated as its own view) and for
-  overrides equal to / wider than / disjoint from the covering range. Idempotent.
+- **Coverage merge (no auto-split).** A supported-versions PUT stores `mergeUnion` of the requested
+  ranges (overlapping/contiguous merge; no disjoint requirement). There is **no write-time
+  auto-split** — coverage never carries override boundaries; enumeration partitions at read instead.
 - **V2 / V3 / V4 — per-attribute override ranges.** `validateFieldOverrideRange` rejects any two
   overrides on the **same** attribute whose ranges intersect (V3 disjointness); two **open-upper**
   ranges on one attribute always intersect, so they are rejected with a V2-specific message (≤1

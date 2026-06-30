@@ -113,7 +113,10 @@ abstract class BaseComponentController<T : Component> {
     @Suppress("DEPRECATION") // sets the deprecated comma-joined RM/SC props on the legacy DTO for v1/v3 compatibility
     private fun createComponent(escrowModule: EscrowModule): T =
         with(createComponentFunc(escrowModule)) {
-            val escrowModuleConfig = escrowModule.moduleConfigurations[0]
+            // ADR-018: component-level scalars come from the resolved BASE representative (set by the DB
+            // resolver), NOT the version-sorted moduleConfigurations[0]. Legacy in-memory loader leaves
+            // componentLevelConfiguration null → fall back to [0] (already DSL-declaration order there).
+            val escrowModuleConfig = escrowModule.componentLevelConfiguration ?: escrowModule.moduleConfigurations[0]
             releaseManager = escrowModuleConfig.releaseManager
             securityChampion = escrowModuleConfig.securityChampion
             distribution = getComponentDistribution(escrowModuleConfig)
