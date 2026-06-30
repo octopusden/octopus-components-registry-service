@@ -75,38 +75,57 @@ object VersionRangeMapCanonicalizer {
         return out
     }
 
-    // Kotlin-aware: the typed values (e.g. ComponentArtifactConfigurationDTO) are Kotlin classes with no
-    // default constructor — a plain ObjectMapper silently fails treeToValue and the round-trip no-ops.
+    // Kotlin-aware AND all datatype modules registered: the typed values are Kotlin classes with no
+    // default constructor (need KotlinModule) and carry `Optional<…>` escrow fields (need
+    // jackson-datatype-jdk8). Without findAndRegisterModules the round-trip throws on the first Optional
+    // field and silently no-ops (runCatching → passthrough), leaving the reshaping un-canonicalised.
     private val mapper = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper()
+        .registerModule(com.fasterxml.jackson.datatype.jdk8.Jdk8Module())
 
     /**
      * Canonicalise a TYPED version-range-keyed map (e.g. /maven-artifacts'
-     * `Map<String, ComponentArtifactConfigurationDTO>` or `ComponentV3.variants`) by round-tripping
-     * through JSON: serialise → [canonicalize] (key-normalise + merge adjacent byte-identical-value runs)
-     * → deserialise the VALUES back to [valueType]. Returns canonical KEYS as typed objects so the
-     * caller's recursive `compareDto` still compares the VALUES with its full semantics
-     * (`ignoringCollectionOrder`, gav/artifactPattern normalisers) — only the range-key reshaping is
-     * folded out. This is why we canonicalise KEYS here and DO NOT compare values by raw JSON: a JSON
-     * equality would lose collection-order-independence and the field normalisers (the cause of the
-     * build-4073 false-positive explosion). Within a single stand, adjacent same-value ranges have
-     * byte-identical JSON and merge; the cross-stand value comparison is delegated to `compareDto`.
-     * On any failure returns [map] unchanged (never drops coverage).
+     * `Map<String, ComponentArtifactConfigurationDTO>` or `ComponentV3.variants`): normalise the KEYS
+     * (whitespace / composite-split / adjacent-merge / version-form) while keeping the ORIGINAL typed
+     * values untouched, so the caller's recursive `compareDto` still compares the values with its full
+     * semantics (`ignoringCollectionOrder`, gav/artifactPattern normalisers) — only the range-key
+     * reshaping is folded out. We serialise each value to JSON ONLY to decide merge-equality of adjacent
+     * ranges (byte-identical value ⇒ mergeable); we DO NOT deserialise — the API beans round-trip
+     * unfaithfully (Optional fields, and EscrowBean's `is`-prefixed boolean serialises as `isReusable`
+     * but deserialises as `reusable`), which previously made the whole thing silently no-op. Keeping the
+     * original instances is also faithful: no field can be lost or masked on a round-trip.
+     * On any failure (e.g. an unparseable key) returns [map] unchanged — never drops coverage.
      */
-    fun <V> canonicalizeTypedRangeMap(map: Map<String, *>, valueType: Class<V>): Map<String, V> {
-        @Suppress("UNCHECKED_CAST")
-        val passthrough = map as Map<String, V> // values unchanged on any non-canonicalising path
+    fun <V> canonicalizeTypedRangeMap(map: Map<String, V>): Map<String, V> {
+        if (map.isEmpty()) return map
         return runCatching {
-            val tree = mapper.valueToTree<JsonNode>(map) as? ObjectNode ?: return passthrough
-            val canon = canonicalize(tree)
-            if (canon === tree) return passthrough // unparseable / empty → canonicalize returned input untouched
-            val out = LinkedHashMap<String, V>()
-            val it = canon.fields()
-            while (it.hasNext()) {
-                val (k, v) = it.next()
-                out[k] = mapper.treeToValue(v, valueType)
+            // (interval, serialised-value-for-merge-equality, ORIGINAL typed value)
+            val entries = mutableListOf<Triple<Interval, JsonNode, V>>()
+            for ((key, value) in map) {
+                val ivs = parseRangeKey(key) ?: return map // unparseable key → leave whole map intact
+                val json = mapper.valueToTree<JsonNode>(value)
+                for (iv in ivs) entries += Triple(iv, json, value)
             }
-            out as Map<String, V>
-        }.getOrDefault(passthrough)
+            val sorted = entries.sortedWith(
+                Comparator { a, b ->
+                    val lc = compareBound(a.first.lo, b.first.lo)
+                    if (lc != 0) lc else (if (b.first.loIncl) 1 else 0) - (if (a.first.loIncl) 1 else 0)
+                },
+            )
+            val merged = mutableListOf<Triple<Interval, JsonNode, V>>()
+            for (cur in sorted) {
+                val last = merged.lastOrNull()
+                if (last != null && last.second == cur.second && contiguous(last.first, cur.first)) {
+                    val unionHi = pickUpper(last.first, cur.first)
+                    merged[merged.size - 1] =
+                        Triple(Interval(last.first.lo, last.first.loIncl, unionHi.first, unionHi.second), last.second, last.third)
+                } else {
+                    merged += cur
+                }
+            }
+            val out = LinkedHashMap<String, V>()
+            for ((iv, _, value) in merged) out[renderInterval(iv)] = value
+            out
+        }.getOrDefault(map)
     }
 
     /**

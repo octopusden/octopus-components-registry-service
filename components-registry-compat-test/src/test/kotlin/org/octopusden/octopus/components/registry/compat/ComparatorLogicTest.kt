@@ -527,7 +527,7 @@ class ComparatorLogicTest {
     data class VariantHolder(val id: String, val variants: Map<String, VarVal>)
 
     private fun canonV(m: Map<String, VarVal>): Map<String, VarVal> =
-        VersionRangeMapCanonicalizer.canonicalizeTypedRangeMap(m, VarVal::class.java)
+        VersionRangeMapCanonicalizer.canonicalizeTypedRangeMap(m)
 
     @Test
     @DisplayName("variants: reshaped keys (split/merge/whitespace/version-form) → NO VALUE_DIFF")

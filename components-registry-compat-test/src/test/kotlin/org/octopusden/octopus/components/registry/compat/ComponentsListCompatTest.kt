@@ -106,11 +106,5 @@ class ComponentsListCompatTest : CompatibilityTestBase() {
 
     /** Rebuild a [ComponentV3] with its `variants` map's KEYS canonicalised (values unchanged & typed). */
     private fun canonicaliseVariants(c: ComponentV3): ComponentV3 =
-        ComponentV3(
-            c.component,
-            VersionRangeMapCanonicalizer.canonicalizeTypedRangeMap(
-                c.variants,
-                org.octopusden.octopus.components.registry.api.beans.VersionedComponentConfigurationBean::class.java,
-            ),
-        )
+        ComponentV3(c.component, VersionRangeMapCanonicalizer.canonicalizeTypedRangeMap(c.variants))
 }

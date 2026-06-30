@@ -44,12 +44,11 @@ class MavenArtifactsV2CompatTest : CompatibilityTestBase() {
             // it (whitespace / composite-split / adjacent-merge / version-form) vs V1's verbatim DSL keys.
             // Canonicalise the KEYS on both sides (values stay typed, so compareDto's artifactPattern
             // normaliser still applies and a real ownership change still surfaces). See VersionRangeMapCanonicalizer.
-            val cls = ComponentArtifactConfigurationDTO::class.java
             compareDto(
                 endpoint,
                 params,
-                baselineDto?.let { VersionRangeMapCanonicalizer.canonicalizeTypedRangeMap(it, cls) },
-                candidateDto?.let { VersionRangeMapCanonicalizer.canonicalizeTypedRangeMap(it, cls) },
+                baselineDto?.let { VersionRangeMapCanonicalizer.canonicalizeTypedRangeMap(it) },
+                candidateDto?.let { VersionRangeMapCanonicalizer.canonicalizeTypedRangeMap(it) },
             )
         }
 

@@ -187,7 +187,7 @@ class VersionRangeMapCanonicalizerTest {
         // collection-order equality. (Normalising order here would shift that decision to the wrong layer
         // and was the shape of the build-4073 regression.)
         val m = mapOf("[1,2)" to Val(listOf("b", "a")), "[2,3)" to Val(listOf("b", "a")))
-        val canon = VersionRangeMapCanonicalizer.canonicalizeTypedRangeMap(m, Val::class.java)
+        val canon = VersionRangeMapCanonicalizer.canonicalizeTypedRangeMap(m)
         assertEquals(setOf("[1,3)"), canon.keys)
         assertEquals(listOf("b", "a"), canon["[1,3)"]!!.ids)
     }
@@ -201,28 +201,49 @@ class VersionRangeMapCanonicalizerTest {
             "[2.0, 3.0)" to V("a", "g"), // contiguous + equal → merges with the above
             "[5.0,6.0)" to V("b", "g"),
         )
-        val canon = VersionRangeMapCanonicalizer.canonicalizeTypedRangeMap(m, V::class.java)
+        val canon = VersionRangeMapCanonicalizer.canonicalizeTypedRangeMap(m)
         assertEquals(setOf("[1,3)", "[5,6)"), canon.keys)
         assertEquals(V("a", "g"), canon["[1,3)"])
         assertEquals(V("b", "g"), canon["[5,6)"])
 
         // unparseable key → returned unchanged (never drops coverage)
         val weird = mapOf("not-a-range" to V("x"))
-        assertEquals(weird, VersionRangeMapCanonicalizer.canonicalizeTypedRangeMap(weird, V::class.java))
+        assertEquals(weird, VersionRangeMapCanonicalizer.canonicalizeTypedRangeMap(weird))
 
-        // Production DTO (Kotlin, @JsonCreator) must survive the serialise→canonicalize→treeToValue
-        // round-trip without field loss — this is the type used on /maven-artifacts.
-        val dtoCls = org.octopusden.octopus.components.registry.core.dto.ComponentArtifactConfigurationDTO::class.java
+        // Production DTO (the /maven-artifacts value type): values are kept as the ORIGINAL instances
+        // (canonicaliser touches only keys), so no field is lost — merged keys, identical values.
         val real = mapOf(
             "[1.0,2.0)" to org.octopusden.octopus.components.registry.core.dto.ComponentArtifactConfigurationDTO("g", "a"),
             "[2.0,3.0)" to org.octopusden.octopus.components.registry.core.dto.ComponentArtifactConfigurationDTO("g", "a"),
             "[5.0,6.0)" to org.octopusden.octopus.components.registry.core.dto.ComponentArtifactConfigurationDTO("g2", "b"),
         )
-        val rc = VersionRangeMapCanonicalizer.canonicalizeTypedRangeMap(real, dtoCls)
+        val rc = VersionRangeMapCanonicalizer.canonicalizeTypedRangeMap(real)
         assertEquals(setOf("[1,3)", "[5,6)"), rc.keys)
         assertEquals("g", rc["[1,3)"]!!.groupPattern)
         assertEquals("a", rc["[1,3)"]!!.artifactPattern)
         assertEquals("g2", rc["[5,6)"]!!.groupPattern)
+    }
+
+    @Test
+    @DisplayName("canonicalizeTypedRangeMap handles the real VersionedComponentConfigurationBean (variants value)")
+    fun typedRangeMapRoundTripsVariantBean() {
+        fun cfg(group: String) =
+            org.octopusden.octopus.components.registry.api.beans.VersionedComponentConfigurationBean().apply {
+                setGroupId(group)
+                setVcs(org.octopusden.octopus.components.registry.api.beans.GitVersionControlSystemBean("url", "tag1", "main"))
+            }
+        // The variant bean serialises Optional<…> escrow fields (needs the jdk8 module) and an
+        // `is`-prefixed boolean that does NOT deserialise back symmetrically — so the canonicaliser must
+        // NOT round-trip it. Two adjacent same-value ranges must MERGE (proves serialisation-for-equality
+        // works) while the surviving value stays the ORIGINAL instance (groupId + vcs.tag intact).
+        val m = mapOf("[1,2)" to cfg("g"), "[2,3)" to cfg("g"))
+        val canon = VersionRangeMapCanonicalizer.canonicalizeTypedRangeMap(m)
+        assertEquals(setOf("[1,3)"), canon.keys)
+        assertEquals("g", canon["[1,3)"]!!.groupId)
+        assertEquals(
+            "tag1",
+            (canon["[1,3)"]!!.vcs as org.octopusden.octopus.components.registry.api.vcs.GitVersionControlSystem).tag,
+        )
     }
 
     @Test
