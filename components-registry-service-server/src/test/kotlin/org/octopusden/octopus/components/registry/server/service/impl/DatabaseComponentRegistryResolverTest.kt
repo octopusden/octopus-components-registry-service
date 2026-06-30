@@ -351,6 +351,33 @@ class DatabaseComponentRegistryResolverTest {
         assertEquals("ssh://vcs/high", vcsOf(2))
     }
 
+    @Test
+    fun `(5e5 MIG-029) a marker ending exclusive at the coverage hi carves a base singleton at hi`() {
+        // Exclusive-upper-marker shape (confirmed via QA DB): coverage [1.1.41,1.1.49] with a vcs marker that ends
+        // EXCLUSIVE at the coverage hi ([1.1.41,1.1.49)). So 1.1.49 (the coverage hi, inclusive) is NOT
+        // covered by the marker → resolves to base, distinct from below. V1 enumerates two views;
+        // the partition must carve the base singleton [1.1.49] at the boundary (a RIGHT edge at hi),
+        // not collapse to one merged [1.1.41,1.1.49] view (which drops the 1.1.49=base distinction).
+        val comp = makeComponent("COMP5E5")
+        val base = makeBase(comp).apply { createdAt = java.time.Instant.ofEpochMilli(1000) }
+        base.vcsEntries.add(makeVcsEntry(base, "ssh://vcs/base"))
+        val presence = makeRangePresenceRow(comp, "[1.1.41,1.1.49]").apply { createdAt = java.time.Instant.ofEpochMilli(2000) }
+        val marker = makeMarkerRow(comp, "[1.1.41,1.1.49)", "vcs.settings").apply { createdAt = java.time.Instant.ofEpochMilli(3000) }
+        marker.vcsEntries.add(makeVcsEntry(marker, "ssh://vcs/mk"))
+        comp.configurations.addAll(listOf(base, presence, marker))
+        stubComponent(comp)
+
+        val module = resolver.getComponentById("COMP5E5")
+        assertNotNull(module)
+        assertEquals(
+            listOf("[1.1.41,1.1.49)", "[1.1.49]"),
+            module!!.moduleConfigurations.map { it.versionRangeString },
+        )
+        val vcsOf = { i: Int -> module.moduleConfigurations[i].vcsSettings!!.versionControlSystemRoots.first().vcsPath }
+        assertEquals("ssh://vcs/mk", vcsOf(0))
+        assertEquals("ssh://vcs/base", vcsOf(1))
+    }
+
     // ========================================================================
     // (3) Marker override: vcs.settings
     // ========================================================================

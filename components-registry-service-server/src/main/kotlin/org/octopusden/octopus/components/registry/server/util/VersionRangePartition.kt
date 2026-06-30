@@ -188,24 +188,31 @@ object VersionRangePartition {
                 emit(normalize(segStr))
                 continue
             }
-            // A GAP breakpoint (singleton override/marker, p excluded by both neighbours) that coincides
-            // with the segment's own lo/hi is NOT strictlyInside, so carve it off the boundary first:
-            // a singleton vcs/scalar marker sitting exactly at the coverage edge (e.g. coverage
-            // [2.6.145,2.6.179] with singleton markers [2.6.145] and [2.6.179]) must become its own view,
-            // not be swallowed into one merged range (which would silently drop its per-range value).
+            // A value-change edge coincident with the segment's own lo/hi is NOT strictlyInside, so carve
+            // the boundary point as its own view first — otherwise its (distinct) resolved value is
+            // silently swallowed into one merged range. Carve `[lo]` when an edge CLOSES at lo
+            // (sawLeft — LEFT or GAP: the value at lo differs from above), and `[hi]` when an edge OPENS
+            // at hi (sawRight — RIGHT or GAP: the value at hi differs from below). Examples from live data:
+            //   • singleton markers `[2.6.145]`/`[2.6.179]` at coverage `[2.6.145,2.6.179]` (GAP both ends)
+            //   • a marker `[1.1.41,1.1.49)` ending EXCLUSIVE at coverage hi 1.1.49 → 1.1.49 = base (RIGHT at hi)
+            // Redundant carves (boundary value == neighbour) collapse downstream like any other adjacent
+            // same-value pair, so this never over-splits the resolved enumeration.
             var effLo = seg.lo
             var effLoIncl = seg.loIncl
             var effHi = seg.hi
             var effHiIncl = seg.hiIncl
-            val gapAtLo = seg.lo != null && buckets.any { compare(it.value, seg.lo) == 0 && it.sawLeft && it.sawRight }
-            val gapAtHi = seg.hi != null && buckets.any { compare(it.value, seg.hi) == 0 && it.sawLeft && it.sawRight }
+            // Only carve when the boundary point is actually IN the segment (inclusive bound) — an
+            // exclusive bound (e.g. `[1.0,2.0)`) does not contain its endpoint, so an edge there is the
+            // normal hand-off to the adjacent segment, not a singleton to isolate.
+            val carveAtLo = seg.lo != null && seg.loIncl && buckets.any { compare(it.value, seg.lo) == 0 && it.sawLeft }
+            val carveAtHi = seg.hi != null && seg.hiIncl && buckets.any { compare(it.value, seg.hi) == 0 && it.sawRight }
             val tail = mutableListOf<Segment>()
-            if (gapAtLo) {
+            if (carveAtLo) {
                 emitSeg(Segment(seg.lo, true, seg.lo, true)) // [lo]
                 effLo = seg.lo
                 effLoIncl = false // remaining segment opens after lo
             }
-            if (gapAtHi) {
+            if (carveAtHi) {
                 tail += Segment(seg.hi, true, seg.hi, true) // [hi] — emitted after the interior pieces
                 effHi = seg.hi
                 effHiIncl = false // remaining segment closes before hi
