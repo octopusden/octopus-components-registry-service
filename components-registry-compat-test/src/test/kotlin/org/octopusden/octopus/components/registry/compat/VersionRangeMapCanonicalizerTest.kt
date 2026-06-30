@@ -193,6 +193,25 @@ class VersionRangeMapCanonicalizerTest {
     }
 
     @Test
+    @DisplayName("canonicalizeTypedRangeMap: normalises keys + merges adjacent equal values, keeps values typed")
+    fun typedRangeMapRoundTrip() {
+        data class V(val pattern: String = "", val groupId: String = "")
+        val m = mapOf(
+            "[1.0,2.0)" to V("a", "g"),
+            "[2.0, 3.0)" to V("a", "g"), // contiguous + equal → merges with the above
+            "[5.0,6.0)" to V("b", "g"),
+        )
+        val canon = VersionRangeMapCanonicalizer.canonicalizeTypedRangeMap(m, V::class.java)
+        assertEquals(setOf("[1,3)", "[5,6)"), canon.keys)
+        assertEquals(V("a", "g"), canon["[1,3)"])
+        assertEquals(V("b", "g"), canon["[5,6)"])
+
+        // unparseable key → returned unchanged (never drops coverage)
+        val weird = mapOf("not-a-range" to V("x"))
+        assertEquals(weird, VersionRangeMapCanonicalizer.canonicalizeTypedRangeMap(weird, V::class.java))
+    }
+
+    @Test
     @DisplayName("unregistered endpoint is passed through untouched (no accidental canonicalisation)")
     fun unregisteredEndpointPassthrough() {
         val ep = "GET /rest/api/2/components"

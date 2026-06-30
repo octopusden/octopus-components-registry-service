@@ -75,7 +75,9 @@ object VersionRangeMapCanonicalizer {
         return out
     }
 
-    private val mapper = com.fasterxml.jackson.databind.ObjectMapper()
+    // Kotlin-aware: the typed values (e.g. ComponentArtifactConfigurationDTO) are Kotlin classes with no
+    // default constructor — a plain ObjectMapper silently fails treeToValue and the round-trip no-ops.
+    private val mapper = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper()
 
     /**
      * Typed-layer equality for a version-range-keyed Map field (e.g. `ComponentV3.variants`): serialise
@@ -91,6 +93,30 @@ object VersionRangeMapCanonicalizer {
         val bn = mapper.valueToTree<JsonNode>(b) as? ObjectNode ?: return a == b
         return canonicalize(an) == canonicalize(bn)
     }
+
+    /**
+     * Canonicalise a TYPED version-range-keyed root map (e.g. /maven-artifacts'
+     * `Map<String, ComponentArtifactConfigurationDTO>`) by round-tripping through JSON: serialise →
+     * [canonicalize] (key-normalise + merge adjacent byte-identical-value runs) → deserialise back to the
+     * same map type. Returns canonical KEYS as typed objects so the caller's recursive `compareDto`
+     * (with its per-field normalisers, e.g. artifactPattern) still compares the VALUES — only the
+     * range-key reshaping is folded out. Within a single stand adjacent same-ownership ranges have
+     * byte-identical values and merge; the cross-stand value normalisers then apply at compare time.
+     * On any failure returns [map] unchanged (never drops coverage).
+     */
+    fun <V> canonicalizeTypedRangeMap(map: Map<String, V>, valueType: Class<V>): Map<String, V> =
+        runCatching {
+            val tree = mapper.valueToTree<JsonNode>(map) as? ObjectNode ?: return map
+            val canon = canonicalize(tree)
+            if (canon === tree) return map // unparseable → canonicalize returned input untouched
+            val out = LinkedHashMap<String, V>()
+            val it = canon.fields()
+            while (it.hasNext()) {
+                val (k, v) = it.next()
+                out[k] = mapper.treeToValue(v, valueType)
+            }
+            out
+        }.getOrDefault(map)
 
     /**
      * Return a canonicalised copy of [map] (a version-range-keyed object). On any parse failure the
