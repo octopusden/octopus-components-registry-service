@@ -80,43 +80,34 @@ object VersionRangeMapCanonicalizer {
     private val mapper = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper()
 
     /**
-     * Typed-layer equality for a version-range-keyed Map field (e.g. `ComponentV3.variants`): serialise
-     * both maps to JSON, [canonicalize] each (key-normalise + merge adjacent same-value runs), and compare
-     * the canonical objects. Used as the AssertJ field comparator so the recursive DTO compare treats the
-     * decoupled-model reshaping of `variants` as equal while a real per-range VALUE change still surfaces
-     * (canonical objects differ). Returns true iff canonically equal.
-     */
-    fun mapsEqualCanonically(a: Any?, b: Any?): Boolean {
-        if (a == null && b == null) return true
-        if (a == null || b == null) return false
-        val an = mapper.valueToTree<JsonNode>(a) as? ObjectNode ?: return a == b
-        val bn = mapper.valueToTree<JsonNode>(b) as? ObjectNode ?: return a == b
-        return canonicalize(an) == canonicalize(bn)
-    }
-
-    /**
-     * Canonicalise a TYPED version-range-keyed root map (e.g. /maven-artifacts'
-     * `Map<String, ComponentArtifactConfigurationDTO>`) by round-tripping through JSON: serialise →
-     * [canonicalize] (key-normalise + merge adjacent byte-identical-value runs) → deserialise back to the
-     * same map type. Returns canonical KEYS as typed objects so the caller's recursive `compareDto`
-     * (with its per-field normalisers, e.g. artifactPattern) still compares the VALUES — only the
-     * range-key reshaping is folded out. Within a single stand adjacent same-ownership ranges have
-     * byte-identical values and merge; the cross-stand value normalisers then apply at compare time.
+     * Canonicalise a TYPED version-range-keyed map (e.g. /maven-artifacts'
+     * `Map<String, ComponentArtifactConfigurationDTO>` or `ComponentV3.variants`) by round-tripping
+     * through JSON: serialise → [canonicalize] (key-normalise + merge adjacent byte-identical-value runs)
+     * → deserialise the VALUES back to [valueType]. Returns canonical KEYS as typed objects so the
+     * caller's recursive `compareDto` still compares the VALUES with its full semantics
+     * (`ignoringCollectionOrder`, gav/artifactPattern normalisers) — only the range-key reshaping is
+     * folded out. This is why we canonicalise KEYS here and DO NOT compare values by raw JSON: a JSON
+     * equality would lose collection-order-independence and the field normalisers (the cause of the
+     * build-4073 false-positive explosion). Within a single stand, adjacent same-value ranges have
+     * byte-identical JSON and merge; the cross-stand value comparison is delegated to `compareDto`.
      * On any failure returns [map] unchanged (never drops coverage).
      */
-    fun <V> canonicalizeTypedRangeMap(map: Map<String, V>, valueType: Class<V>): Map<String, V> =
-        runCatching {
-            val tree = mapper.valueToTree<JsonNode>(map) as? ObjectNode ?: return map
+    fun <V> canonicalizeTypedRangeMap(map: Map<String, *>, valueType: Class<V>): Map<String, V> {
+        @Suppress("UNCHECKED_CAST")
+        val passthrough = map as Map<String, V> // values unchanged on any non-canonicalising path
+        return runCatching {
+            val tree = mapper.valueToTree<JsonNode>(map) as? ObjectNode ?: return passthrough
             val canon = canonicalize(tree)
-            if (canon === tree) return map // unparseable → canonicalize returned input untouched
+            if (canon === tree) return passthrough // unparseable / empty → canonicalize returned input untouched
             val out = LinkedHashMap<String, V>()
             val it = canon.fields()
             while (it.hasNext()) {
                 val (k, v) = it.next()
                 out[k] = mapper.treeToValue(v, valueType)
             }
-            out
-        }.getOrDefault(map)
+            out as Map<String, V>
+        }.getOrDefault(passthrough)
+    }
 
     /**
      * Return a canonicalised copy of [map] (a version-range-keyed object). On any parse failure the

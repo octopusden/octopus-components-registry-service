@@ -228,15 +228,10 @@ object Comparators {
                         "^(.+\\.)?artifactPattern$",
                     )
             }
-            // ADR-018: the `variants` map (ComponentV3) is re-partitioned by the decoupled-model read path
-            // (whitespace / composite-split / adjacent-merge / version-form) — same reshaping the raw layer
-            // canonicalises. Compare it canonically so those don't read as a VALUE_DIFF; a real per-range
-            // value change still surfaces (canonical maps differ). See VersionRangeMapCanonicalizer.
-            assertion =
-                assertion.withEqualsForFieldsMatchingRegexes(
-                    java.util.function.BiPredicate<Any?, Any?> { a, b -> VersionRangeMapCanonicalizer.mapsEqualCanonically(a, b) },
-                    "^(.+\\.)?variants$",
-                )
+            // NOTE: `ComponentV3.variants` reshaping is folded out by canonicalising its KEYS upstream
+            // (the caller passes maps already run through VersionRangeMapCanonicalizer.canonicalizeTypedRangeMap),
+            // NOT by a field comparator here — a raw-JSON field equality would lose this comparison's
+            // `ignoringCollectionOrder` + the gav/artifactPattern normalisers (build-4073 regression).
             assertion.isEqualTo(candidate)
         }.onFailure { ex ->
             DiffCollector.record(

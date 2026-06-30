@@ -179,17 +179,17 @@ class VersionRangeMapCanonicalizerTest {
 
     // ── typed-layer map equality (compareDto `variants` field) ──────────────────────────
     @Test
-    @DisplayName("mapsEqualCanonically: reshaped variants maps are equal; a per-range value change is not")
-    fun typedMapEquality() {
-        val v1 = mapOf("(, 2.0)" to mapOf("x" to 1), "[2.0,2.5)" to mapOf("x" to 1), "[2.5,)" to mapOf("x" to 2))
-        val candEq = mapOf("(,2.5)" to mapOf("x" to 1), "[2.5,)" to mapOf("x" to 2))
-        org.junit.jupiter.api.Assertions.assertTrue(VersionRangeMapCanonicalizer.mapsEqualCanonically(v1, candEq))
-
-        val candDiff = mapOf("(,2.5)" to mapOf("x" to 9), "[2.5,)" to mapOf("x" to 2)) // value changed below 2.5
-        org.junit.jupiter.api.Assertions.assertFalse(VersionRangeMapCanonicalizer.mapsEqualCanonically(v1, candDiff))
-
-        org.junit.jupiter.api.Assertions.assertTrue(VersionRangeMapCanonicalizer.mapsEqualCanonically(null, null))
-        org.junit.jupiter.api.Assertions.assertFalse(VersionRangeMapCanonicalizer.mapsEqualCanonically(v1, null))
+    @DisplayName("canonicalizeTypedRangeMap preserves a value's collection ORDER verbatim (compareDto ignores it, not us)")
+    fun typedRangeMapPreservesCollectionOrder() {
+        data class Val(val ids: List<String> = emptyList())
+        // Adjacent ranges with the SAME value merge; the surviving value's list order is preserved as-is
+        // (NOT sorted) so the downstream recursive compareDto — not this canonicaliser — decides
+        // collection-order equality. (Normalising order here would shift that decision to the wrong layer
+        // and was the shape of the build-4073 regression.)
+        val m = mapOf("[1,2)" to Val(listOf("b", "a")), "[2,3)" to Val(listOf("b", "a")))
+        val canon = VersionRangeMapCanonicalizer.canonicalizeTypedRangeMap(m, Val::class.java)
+        assertEquals(setOf("[1,3)"), canon.keys)
+        assertEquals(listOf("b", "a"), canon["[1,3)"]!!.ids)
     }
 
     @Test
