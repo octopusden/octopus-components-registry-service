@@ -36,6 +36,7 @@ import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoa
 import org.octopusden.octopus.escrow.configuration.model.DefaultConfigParameters
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
 import org.octopusden.releng.versions.VersionNames
+import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionRangeFactory
 
 /**
@@ -111,6 +112,7 @@ class MIG047PerRangeGroupIdImportTest {
             componentArtifactMappingRepository = componentArtifactMappingRepository,
             dockerImageRepository = mock(DistributionDockerImageRepository::class.java),
             versionRangeFactory = VersionRangeFactory(VersionNames("serviceCBranch", "serviceC", "minorC")),
+            numericVersionFactory = NumericVersionFactory(VersionNames("serviceCBranch", "serviceC", "minorC")),
         )
 
         emitMarkerOverridesMethod = ImportServiceImpl::class.java.getDeclaredMethod(

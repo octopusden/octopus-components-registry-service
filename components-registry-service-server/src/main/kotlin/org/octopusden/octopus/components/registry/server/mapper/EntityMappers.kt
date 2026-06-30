@@ -137,25 +137,36 @@ fun ComponentEntity.toEscrowModule(
     // before applying overrides.
     val overrides = configs.filter { it.rowType != "BASE" }
 
-    // Decoupled version model (ADR-018): coverage is carried by RANGE_PRESENCE
-    // rows, independent of the base. The base is the ALL_VERSIONS default and is
-    // enumerated as a view of its own ONLY when the component has no bounded
-    // coverage (supported = ALL → no RANGE_PRESENCE rows). When RANGE_PRESENCE
-    // rows exist the ALL_VERSIONS base is just the default carrier, never a view;
-    // enumeration iterates the declared ranges (presence + override rows). A
-    // legacy/API bounded base (versionRange != ALL_VERSIONS) is always its own
-    // view — only the all-versions default carrier is suppressed.
-    val hasRangePresence = overrides.any { it.rowType == "RANGE_PRESENCE" }
-    val suppressBaseView = base.versionRange == ALL_VERSIONS && hasRangePresence
-    val enumeratedRanges = mutableListOf<String>()
-    if (!suppressBaseView) {
-        enumeratedRanges += base.versionRange
-    }
-    overrides
-        .map { it.versionRange }
-        .distinct()
-        .filter { it !in enumeratedRanges }
-        .forEach { enumeratedRanges += it }
+    // Decoupled version model (ADR-018, redesign): coverage ⟂ enumeration.
+    //  • COVERAGE (supported) = ∪ RANGE_PRESENCE rows, stored MERGED (override-independent). With no
+    //    presence rows, supported = the base's own range (ALL_VERSIONS, or a bounded legacy/API base).
+    //  • ENUMERATION (this range-view list) = partition `supported` by the union of VALUE-CHANGE
+    //    edges — scalar/marker override ranges and artifact-ownership ranges — then resolve each
+    //    partition by containment. No edge between two sub-ranges ⇒ one view, so redundant-identical
+    //    legacy blocks collapse; any attribute change keeps its edge.
+    val presenceRanges = overrides.filter { it.rowType == "RANGE_PRESENCE" }.map { it.versionRange }
+    val supportedSegments = presenceRanges.ifEmpty { listOf(base.versionRange) }
+    val valueChangeEdges =
+        (
+            // Scalar overrides + renderable markers only. The import-internal `group-artifact-pattern`
+            // marker (NOT in MarkerAttributes.ALL) does not change the resolved EscrowModuleConfig —
+            // it feeds getMavenArtifactParameters, which enumerates independently — so it is excluded
+            // here to avoid spurious splits (amendment B).
+            //
+            // Doc links are NOT edges: V1/legacy never enumerated a boundary for a doc-link major (a
+            // component-level `doc{majorVersion}` applies to the whole component — splitting an
+            // all-versions component at the doc major regresses the legacy single-range enumeration).
+            // Per-range docs always co-occur with a real config override (e.g. a vcsSettings branch
+            // change) that already supplies the edge; `pickDocLink` still applies the right doc per
+            // resolved range by containment.
+            overrides
+                .filter { it.rowType == "SCALAR_OVERRIDE" || (it.rowType == "MARKER" && it.overriddenAttribute in MarkerAttributes.ALL) }
+                .map { it.versionRange } +
+                this.artifactMappings.map { it.versionRange }.filter { it != ALL_VERSIONS }
+        ).distinct()
+    val enumeratedRanges =
+        org.octopusden.octopus.components.registry.server.util.VersionRangePartition
+            .partition(supportedSegments, valueChangeEdges, numericVersionComparator(numericVersionFactory))
 
     for (range in enumeratedRanges) {
         val resolved =
@@ -168,6 +179,26 @@ fun ComponentEntity.toEscrowModule(
             )
         module.moduleConfigurations.add(resolved)
     }
+
+    // Component-level scalar representative (ADR-018 redesign): resolve the BASE / all-versions config.
+    // The non-versioned wire DTO (escrow, owner, RM/SC, distribution, ...) is built from THIS, not from
+    // `moduleConfigurations[0]` — the partition is version-sorted, so its first element is the lowest
+    // range (which may carry a historical override, e.g. a low-version escrow.generation=UNSUPPORTED).
+    // V1's reference reads the first DSL-declared (current/default) block, which resolves to the base
+    // scalars; resolving at `base.versionRange` reproduces that. For the common ALL_VERSIONS base,
+    // `rangeApplies` parses the override's range against the composite `(,0),[0,)` child: `parseSingleInterval`
+    // rejects that multi-segment string, so NO override applies and the representative carries pure base
+    // scalars. (This relies on no SCALAR_OVERRIDE/MARKER row carrying versionRange=ALL_VERSIONS — enforced
+    // by import, which excludes the base config from non-base rows, and by API range validation.) Decouples
+    // "which range is the representative" from "how ranges are enumerated".
+    module.componentLevelConfiguration =
+        this.resolveForRange(
+            range = base.versionRange,
+            base = base,
+            overrides = overrides,
+            versionRangeFactory = versionRangeFactory,
+            numericVersionFactory = numericVersionFactory,
+        )
 
     return module
 }
@@ -205,17 +236,16 @@ fun ComponentEntity.toResolvedEscrowModuleConfig(
     // NO configuration (the controller renders 404), mirroring V1
     // EscrowConfigurationLoader.resolveComponentConfiguration. In the decoupled
     // model the base is the ALL_VERSIONS default and coverage is a separate layer:
-    //   • supported = ∪ of the declared ranges, carried as RANGE_PRESENCE rows
-    //     (every declared block emits one) plus any override / marker rows; and
+    //   • supported = ∪ of the RANGE_PRESENCE rows (migration emits one per declared block, incl. an
+    //     EMPTY block "[1.1,2.0)" {} which proves the version is configured even with no overrides); and
     //   • for legacy/API components whose base is itself bounded, the base range.
-    // The gate is skipped only when there is no coverage restriction at all
-    // (ALL_VERSIONS base AND no RANGE_PRESENCE rows → supported = ALL). Every
-    // non-BASE row participates in the union — including RANGE_PRESENCE rows: an
-    // EMPTY DSL block ("[1.1,2.0)" {}) carries no overrides but still proves the
-    // version is configured (V1 serves base-inherited data there). A version in a
-    // GAP between blocks ([11,12.1) + [12.2,) queried with 12.1.x) is out of the
-    // union, exactly like V1. Unparseable or blank ranges count as containing —
-    // conservative, never a false 404.
+    // The gate is skipped only when there is no coverage restriction at all (ALL_VERSIONS base AND no
+    // RANGE_PRESENCE rows → supported = ALL). Coverage is INDEPENDENT of overrides (ADR-018): a
+    // SCALAR_OVERRIDE / MARKER row does NOT extend supported — after a supported-versions PUT shrinks
+    // coverage, an override left outside the new set must NOT resolve (it warns on PUT, 404s on read),
+    // so we union ONLY RANGE_PRESENCE rows (+ bounded base), never every non-BASE row. A version in a GAP
+    // between presence ranges ([11,12.1) + [12.2,) queried with 12.1.x) is out of the union, like V1.
+    // Unparseable or blank ranges count as containing — conservative, never a false 404.
     val hasBoundedBase = base.versionRange != ALL_VERSIONS
     val hasRangePresence = configs.any { it.rowType == "RANGE_PRESENCE" }
     if (hasBoundedBase || hasRangePresence) {
@@ -229,7 +259,7 @@ fun ComponentEntity.toResolvedEscrowModuleConfig(
                 }
         }
         val inSupported =
-            configs.any { it.rowType != "BASE" && containsVersion(it.versionRange) } ||
+            configs.any { it.rowType == "RANGE_PRESENCE" && containsVersion(it.versionRange) } ||
                 (hasBoundedBase && containsVersion(base.versionRange))
         if (!inSupported) return null
     }
@@ -268,6 +298,8 @@ fun ComponentEntity.toResolvedEscrowModuleConfig(
         // views come from the enumeration path (toEscrowModule), not here.
         versionRange = base.versionRange,
         ownershipRange = ownershipRange,
+        versionRangeFactory = versionRangeFactory,
+        numericVersionFactory = numericVersionFactory,
     )
 }
 
@@ -314,6 +346,8 @@ private fun ComponentEntity.resolveForRange(
         scalarOverrides = scalarOverrides,
         markerOverrides = markerOverrides,
         versionRange = range,
+        versionRangeFactory = versionRangeFactory,
+        numericVersionFactory = numericVersionFactory,
     )
 }
 
@@ -342,6 +376,24 @@ private fun ComponentEntity.resolveForRange(
  * a far-out internal gap); this does not occur for the integer-component, single-range overrides this
  * registry uses, and is noted as a deferred approximation in the TD-010 doc.
  */
+/**
+ * A comparator over RAW version-range-endpoint strings using the registry's own scheme
+ * ([NumericVersionFactory] / [VersionNames]) — the SAME ordering [VersionRangeFactory] uses to
+ * validate a range. [VersionRangePartition] MUST sort/dedup edges with this, NOT Maven's
+ * `DefaultArtifactVersion`: for dash-qualifier versions (`0.7-803`) and dot versions (`0.7.157`) the
+ * two orderings disagree, so a Maven sort makes partition build an inverted `(0.7-803,0.7.157]` that
+ * the factory rejects (`left > right` → HTTP 400). Falls back to the Maven default for the rare
+ * endpoint the factory can't parse, so it never throws.
+ */
+internal fun numericVersionComparator(factory: NumericVersionFactory): (String, String) -> Int =
+    { a, b ->
+        try {
+            factory.create(a).compareTo(factory.create(b))
+        } catch (_: Exception) {
+            org.octopusden.octopus.components.registry.server.util.VersionRangePartition.defaultVersionCompare(a, b)
+        }
+    }
+
 internal fun rangeApplies(
     parentRange: String,
     childRange: String,
@@ -623,6 +675,10 @@ private fun buildEscrowModuleConfig(
     // enumeration path, but the resolved-single-version path passes the override range that CONTAINS
     // the version (override REPLACES base) — base.versionRange there would ignore an ownership override.
     ownershipRange: String = versionRange,
+    // Factories for the containment-based ownership lookup (an enumerated partition can be a strict
+    // sub-range of an ownership mapping range — amendment C).
+    versionRangeFactory: VersionRangeFactory,
+    numericVersionFactory: NumericVersionFactory,
 ): EscrowModuleConfig {
     val config = EscrowModuleConfig()
     setField(config, "versionRange", versionRange)
@@ -755,11 +811,19 @@ private fun buildEscrowModuleConfig(
                 .Doc(docLink.docComponentKey, docLink.majorVersion)
     }
 
-    // Artifact ownership — the PRIMARY (lowest sortOrder) effective mapping for this range
-    // (override mappings keyed to `versionRange` if present, else the base ALL_VERSIONS
-    // mappings) rendered to the legacy (groupIdPattern, artifactIdPattern) pair.
-    val mappingsByRange = component.artifactMappings.groupBy { it.versionRange }
-    val effectiveMappings = mappingsByRange[ownershipRange] ?: mappingsByRange[ALL_VERSIONS].orEmpty()
+    // Artifact ownership — the PRIMARY (lowest sortOrder) effective mapping for this range, rendered
+    // to the legacy (groupIdPattern, artifactIdPattern) pair. The mapping is selected by CONTAINMENT:
+    // a non-ALL ownership mapping whose range contains [ownershipRange] (ownership ranges are disjoint
+    // by invariant and are partition edges, so at most one matches), else the ALL_VERSIONS mappings.
+    // (Exact-match lookup would drop ownership for an enumerated partition that is a strict sub-range
+    // of the stored ownership range — amendment C.)
+    val containingMappings =
+        component.artifactMappings.filter {
+            it.versionRange != ALL_VERSIONS &&
+                rangeApplies(it.versionRange, ownershipRange, versionRangeFactory, numericVersionFactory)
+        }
+    val effectiveMappings =
+        containingMappings.ifEmpty { component.artifactMappings.filter { it.versionRange == ALL_VERSIONS } }
     effectiveMappings.minByOrNull { it.sortOrder }?.let { primary ->
         setField(config, "groupIdPattern", primary.groupPattern)
         setField(

@@ -202,8 +202,10 @@ class ComponentCodeRenderer(
                         true
                     }
             }
+            // Coverage = RANGE_PRESENCE rows (+ bounded base) only; overrides do NOT extend supported
+            // (ADR-018). Mirror of the EntityMappers gate — kept in sync by tests on both sides.
             val inSupported =
-                configs.any { it.rowType != ROW_BASE && containsVersion(it.versionRange) } ||
+                configs.any { it.rowType == ROW_RANGE_PRESENCE && containsVersion(it.versionRange) } ||
                     (hasBoundedBase && containsVersion(base.versionRange))
             if (!inSupported) return null
         }

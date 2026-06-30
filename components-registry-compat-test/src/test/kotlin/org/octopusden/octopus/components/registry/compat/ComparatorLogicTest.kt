@@ -518,6 +518,58 @@ class ComparatorLogicTest {
         assertThat(recorded.message).contains("id")
     }
 
+    // ----- variants: canonicalise KEYS upstream, then compareDto recursive (ADR-018) -----
+    // Mirrors ComponentsListCompatTest: each side's `variants` map runs through
+    // canonicalizeTypedRangeMap (keys only) BEFORE compareDto, whose recursive comparison
+    // (ignoringCollectionOrder) then compares the typed values. NOT a JSON-equality field comparator —
+    // that lost ignoringCollectionOrder and exploded VALUE_DIFFs 276->1155 on build 4072/4073.
+    data class VarVal(val gen: String = "", val ids: List<String> = emptyList())
+    data class VariantHolder(val id: String, val variants: Map<String, VarVal>)
+
+    private fun canonV(m: Map<String, VarVal>): Map<String, VarVal> =
+        VersionRangeMapCanonicalizer.canonicalizeTypedRangeMap(m)
+
+    @Test
+    @DisplayName("variants: reshaped keys (split/merge/whitespace/version-form) → NO VALUE_DIFF")
+    fun variantsReshaping_isSilenced() {
+        Comparators.compareDto(
+            endpoint = "GET /rest/api/3/components",
+            pathParams = emptyMap(),
+            baseline = VariantHolder("c", canonV(mapOf("(, 2.0)" to VarVal("A"), "[2.0,2.5)" to VarVal("A"), "[2.5,)" to VarVal("B")))),
+            candidate = VariantHolder("c", canonV(mapOf("(,2.5)" to VarVal("A"), "[2.5,)" to VarVal("B")))),
+        )
+        assertThat(DiffCollector.snapshot()).isEmpty()
+    }
+
+    @Test
+    @DisplayName("variants: a value's collection-order difference is NOT a diff (build-4073 regression guard)")
+    fun variantsCollectionOrder_isNotADiff() {
+        // Both describe (,3)->ids{a,b}; V1 split + ids[a,b], candidate merged + ids[b,a]. The recursive
+        // compare ignores collection order, so this must NOT surface. The old JSON-equality comparator
+        // flagged it — this test pins that it no longer does.
+        Comparators.compareDto(
+            endpoint = "GET /rest/api/3/components",
+            pathParams = emptyMap(),
+            baseline = VariantHolder("c", canonV(mapOf("[1,2)" to VarVal("A", listOf("a", "b")), "[2,3)" to VarVal("A", listOf("a", "b"))))),
+            candidate = VariantHolder("c", canonV(mapOf("[1,3)" to VarVal("A", listOf("b", "a"))))),
+        )
+        assertThat(DiffCollector.snapshot()).isEmpty()
+    }
+
+    @Test
+    @DisplayName("variants: a real per-range value change STILL records VALUE_DIFF")
+    fun variantsRealChange_surfaces() {
+        Comparators.compareDto(
+            endpoint = "GET /rest/api/3/components",
+            pathParams = emptyMap(),
+            baseline = VariantHolder("c", canonV(mapOf("(,2.5)" to VarVal("A")))),
+            candidate = VariantHolder("c", canonV(mapOf("(,2.5)" to VarVal("B")))),
+        )
+        val recorded = DiffCollector.snapshot().single()
+        assertThat(recorded.category).isEqualTo(DiffClassifier.VALUE_DIFF)
+        assertThat(recorded.message).contains("variants")
+    }
+
     // ----- ArtifactPatternComparator: #357 behavior-preserving artifactPattern normalization -----
 
     // Synthetic mirror of the /maven-artifacts payload: Map<versionRange, ComponentArtifactConfigurationDTO>
@@ -711,7 +763,10 @@ class ComparatorLogicTest {
 
         val recorded =
             DiffCollector.snapshot().single { it.category == DiffClassifier.STRUCTURAL_DIFF }
-        assertThat(recorded.entityKey).isEqualTo("PRJX / beta-fixture @ [2.0,)")
+        // The real diff (missing component.displayName) still surfaces; the range in the entity key is
+        // now the canonical form ([2.0,) → [2,)) because the jira-ranges array is range-canonicalised
+        // before the shape diff — a cosmetic label change, the component+range is still identified.
+        assertThat(recorded.entityKey).isEqualTo("PRJX / beta-fixture @ [2,)")
         // Structured path (raw, positional) — diff-of-diffs keys on its
         // normalized form instead of parsing the free-text message.
         assertThat(recorded.jsonPath).isEqualTo("\$[1].component.displayName")

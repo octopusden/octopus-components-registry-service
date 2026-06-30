@@ -7,10 +7,29 @@ promotes the frozen design spec `docs/registry/version-model-spec-DRAFT.md` (whi
 the authoritative record), incorporating the three plan-review-3 corrections and the results of
 pre-migration audits A1/A2.
 
-PR-2 implements layer 1 (supported = ∪ RANGE_PRESENCE) + layer 2 (ALL_VERSIONS base default +
-containment overrides) at migration time, plus the coverage-gate rewire on both read paths
-(`EntityMappers.toResolvedEscrowModuleConfig` and `ComponentCodeRenderer.renderResolved`). The
-write-side invariants (refinements (b) and (c) below, validations V1–V6) land in PR-3.
+Implementation: layer 1 (supported coverage) + layer 2 (ALL_VERSIONS base default + containment
+overrides) at migration time, plus the coverage-gate rewire on both read paths
+(`EntityMappers.toResolvedEscrowModuleConfig` and `ComponentCodeRenderer.renderResolved`) and the
+write-side invariants (validations V1–V6).
+
+> **Redesign refinement (authoritative; supersedes the original §1/§Algorithms/refinement-(b)
+> below).** The first cut coupled enumeration to coverage: it stored one `RANGE_PRESENCE` row per
+> legacy block (verbatim) and auto-split coverage on every override write. That was wrong — it leaked
+> override boundaries into the *coverage* concept the two layers were meant to separate, and forced
+> the user to re-merge ranges by hand. The corrected model:
+>
+> - **Coverage is stored MERGED and is override-independent.** At migration, `supported = mergeUnion`
+>   of the legacy declared ranges (maximal contiguous segments); blocks that tile all-versions
+>   collapse to `supported = ALL` (no `RANGE_PRESENCE` rows at all). A v4 PUT stores the requested
+>   ranges merged the same way — overlapping/contiguous inputs merge, no disjoint requirement, no
+>   auto-split. Coverage never reshapes itself around overrides.
+> - **Enumeration is computed at READ time** as the *partition of `supported` by value-change edges*
+>   (scalar/marker override range endpoints ∪ artifact-ownership range endpoints), each sub-range
+>   resolved by containment (TD-010). No edge between two adjacent sub-ranges ⇒ they stay one view, so
+>   redundant-identical legacy blocks collapse automatically; any real attribute change keeps its
+>   edge. Doc links are NOT edges (legacy never enumerated a boundary for a doc major).
+> - Net effect for the user: editing supported versions is purely about coverage; the v2/v3 range
+>   lists are derived and always minimal. See `VersionRangePartition` (`mergeUnion` + `partition`).
 
 ## Context
 
@@ -47,13 +66,14 @@ Model a component's configuration as **two independent layers**:
 
 ### 1. Supported versions (coverage)
 
-- Stored as `RANGE_PRESENCE` rows. `supported = ∪` of those ranges.
+- Stored as `RANGE_PRESENCE` rows, **merged** (`supported = mergeUnion` of the declared/requested
+  ranges → maximal contiguous segments). The rows are override-independent.
 - `resolve(v)` and enumeration **404 outside** `supported`.
-- At **migration**, supported = the legacy declared ranges stored **verbatim** (composites kept as a
-  single string). When `supported = ALL`, there are no bounded `RANGE_PRESENCE` rows — a single
-  `ALL_VERSIONS` base stands for everything.
-- After a **v4 write**, supported is stored as canonical **coverage segments** (see the write-time
-  auto-split invariant below) — so the "verbatim" property holds only for freshly-migrated rows.
+- At **migration**, supported = `mergeUnion` of the legacy declared ranges. When the union is
+  all-versions (blocks tile everything), there are no `RANGE_PRESENCE` rows — a single `ALL_VERSIONS`
+  base stands for everything.
+- A **v4 PUT** stores the requested ranges merged the same way (overlapping/contiguous merge; no
+  disjoint requirement; no auto-split). `{all:true}` clears coverage back to ALL.
 
 ### 2. Per-attribute values
 
@@ -67,8 +87,10 @@ Model a component's configuration as **two independent layers**:
 ### Algorithms
 
 - `resolve(v)`: `v ∉ supported → 404`; else for each attribute, the narrowest override whose range
-  contains `v`, else the base value.
-- `enumerate()`: iterate `RANGE_PRESENCE` ranges (verbatim), resolving each by containment.
+  contains `v`, else the base value. (Point containment, hot path — unchanged.)
+- `enumerate()`: `partition(supported, valueChangeEdges)` — split each supported segment at the
+  override/ownership range endpoints that fall strictly inside it, resolve each sub-range by
+  containment. Adjacent sub-ranges with no edge between them stay one view (redundant-collapse).
 
 ### Three refinements (plan-review-3) — authoritative here
 
@@ -79,12 +101,13 @@ Model a component's configuration as **two independent layers**:
   version-range library exposes no `containsRange`, so enumeration containment is a sample-points
   heuristic; one-sided-unbounded children are supported, with an **open-upper child requiring an
   open-upper parent** (decided structurally, not by probing a finite +∞ sentinel).
-- **(b) Enumeration breakpoint-alignment + write-time auto-split (Phase 3).** Migrated declared
-  ranges are breakpoint-aligned (every attribute is constant within each), so enumeration is one
-  entry per `RANGE_PRESENCE`. A future override write that introduces a boundary **inside** a
-  supported range must **auto-split** the covering `RANGE_PRESENCE` at that edge, so each enumerated
-  range keeps constant resolved values. (Alternative — enumerate-time partition by override edges —
-  rejected as read-path complexity; auto-split keeps reads trivial.)
+- **(b) ~~Enumeration breakpoint-alignment + write-time auto-split~~ → enumerate-time partition
+  (REVISED by the redesign refinement above).** The original plan kept reads trivial by storing
+  breakpoint-aligned coverage and auto-splitting on write. The redesign **reverses this choice**:
+  coverage is stored merged and enumeration partitions by value-change edges at READ time. This is
+  what keeps the two layers genuinely decoupled (coverage carries no override boundaries) and makes
+  the derived v2/v3 range lists always minimal without any write-time coverage mutation. The
+  "read-path complexity" is isolated in the pure, unit-tested `VersionRangePartition`.
 - **(c) V6 — required-field write coverage (Phase 3).** Because the BASE `build_system NOT NULL`
   invariant is retained (see A2), no write may leave a covered version without a required value: if a
   required field has no base value, the union of that field's overrides must cover all of supported,
@@ -122,16 +145,22 @@ Model a component's configuration as **two independent layers**:
 **Negative / cost**
 
 - The `ImportServiceImpl` change is **structural** (drop the synthetic-bounded base; emit
-  `ALL_VERSIONS` base + verbatim `RANGE_PRESENCE` + open-upper overrides) → the entire compat suite
-  must be re-run, not just unit tests.
+  `ALL_VERSIONS` base + **merged** `RANGE_PRESENCE` coverage + open-upper overrides) → the entire
+  compat suite must be re-run, not just unit tests. Enumeration now diverges from the legacy
+  DSL-loader for **redundant-collapse** cases (adjacent legacy blocks that resolve identically merge
+  into one v2/v3 range — e.g. two identical `branch=v2` blocks; or two blocks differing only by a
+  dropped/constant attribute). These are **intended** diffs; the DB-backed RES-001 test uses a
+  separate `-decoupled` expectation fixture, and the ~130k stand baseline must be audited to confirm
+  every enumerate diff is a redundant-collapse (plus benign range-whitespace canonicalization), not a
+  resolve regression.
 - The resolve coverage gate must be **explicitly rewired**: today both `toResolvedEscrowModuleConfig`
   and `ComponentCodeRenderer.renderResolved` *skip* the coverage check when `base.versionRange ==
   ALL_VERSIONS`. Once the base becomes `ALL_VERSIONS`, that gate must instead test membership in
   `supported = ∪ RANGE_PRESENCE`, or tails/gaps would start resolving to base instead of 404 —
   breaking the byte-identical goal.
-- New write-side invariants are required (Phase 3): per-attribute disjoint overrides; at most one
-  open-upper override per attribute; write-time auto-split (b); V6 required-field write coverage (c);
-  allow open-upper overrides server-side.
+- Write-side invariants: at most one open-upper override per attribute; V6 required-field write
+  coverage (c); allow open-upper overrides server-side. **Coverage no longer requires disjoint input
+  (overlaps merge) and there is no write-time auto-split** — both dropped by the redesign.
 
 **Deferred**
 

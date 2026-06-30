@@ -51,7 +51,11 @@ class ComponentsListCompatTest : CompatibilityTestBase() {
         val allIds = (baselineById.keys + candidateById.keys).toSortedSet()
         for (id in allIds) {
             val perCompParams = params + ("componentId" to id)
-            compareDto(endpoint, perCompParams, baselineById[id], candidateById[id])
+            // ADR-018: canonicalise each component's `variants` KEYS (whitespace / composite-split /
+            // adjacent-merge / version-form) so the decoupled-model reshaping isn't a diff; values stay
+            // typed so compareDto's recursive comparison (ignoringCollectionOrder + normalisers) still
+            // compares them and a real per-range change surfaces. See VersionRangeMapCanonicalizer.
+            compareDto(endpoint, perCompParams, baselineById[id]?.let(::canonicaliseVariants), candidateById[id]?.let(::canonicaliseVariants))
         }
 
         val after = DiffCollector.count()
@@ -99,4 +103,8 @@ class ComponentsListCompatTest : CompatibilityTestBase() {
         if (cap == null) return dtos
         return dtos.sortedBy { it.component.id }.take(cap)
     }
+
+    /** Rebuild a [ComponentV3] with its `variants` map's KEYS canonicalised (values unchanged & typed). */
+    private fun canonicaliseVariants(c: ComponentV3): ComponentV3 =
+        ComponentV3(c.component, VersionRangeMapCanonicalizer.canonicalizeTypedRangeMap(c.variants))
 }

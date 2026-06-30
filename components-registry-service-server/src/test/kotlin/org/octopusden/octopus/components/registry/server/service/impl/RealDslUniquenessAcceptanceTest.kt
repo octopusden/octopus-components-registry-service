@@ -24,6 +24,7 @@ import org.octopusden.octopus.escrow.configuration.loader.ComponentRegistryInfo
 import org.octopusden.octopus.escrow.configuration.loader.ConfigLoader
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
 import org.octopusden.releng.versions.VersionNames
+import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionRangeFactory
 import java.net.URI
 import java.nio.file.Paths
@@ -144,6 +145,7 @@ class RealDslUniquenessAcceptanceTest {
             componentArtifactMappingRepository = mock(ComponentArtifactMappingRepository::class.java),
             dockerImageRepository = mock(DistributionDockerImageRepository::class.java),
             versionRangeFactory = VersionRangeFactory(versionNames),
+            numericVersionFactory = NumericVersionFactory(versionNames),
         )
 
         val detect = ImportServiceImpl::class.java

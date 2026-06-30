@@ -31,6 +31,7 @@ import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoa
 import org.octopusden.octopus.escrow.model.VCSSettings
 import org.octopusden.octopus.escrow.model.VersionControlSystemRoot
 import org.octopusden.releng.versions.VersionNames
+import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionRangeFactory
 
 /**
@@ -78,6 +79,7 @@ class ImportServiceImplVcsNameTest {
             componentArtifactMappingRepository = mock(ComponentArtifactMappingRepository::class.java),
             dockerImageRepository = mock(DistributionDockerImageRepository::class.java),
             versionRangeFactory = VersionRangeFactory(VersionNames("serviceCBranch", "serviceC", "minorC")),
+            numericVersionFactory = NumericVersionFactory(VersionNames("serviceCBranch", "serviceC", "minorC")),
         )
 
         attachVcsEntriesMethod = ImportServiceImpl::class.java

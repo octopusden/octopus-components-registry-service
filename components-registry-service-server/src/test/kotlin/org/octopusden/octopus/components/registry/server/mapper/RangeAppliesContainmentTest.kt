@@ -98,6 +98,35 @@ class RangeAppliesContainmentTest {
         }
 
         @org.junit.jupiter.api.Test
+        @DisplayName("GAP singleton '[p]' child: equal-parent matches; the two open neighbours that exclude p do NOT")
+        fun gapSingletonContainment() {
+            // VersionRangePartition emits a single-version `[p]` for a both-excluded boundary (e.g.
+            // overrides [1,2) and (2,3] over [1,10) → … [2] …). Downstream override selection probes
+            // rangeApplies(override, "[2]"); the point p resolves to base, so neither open neighbour
+            // may claim it, while an exact [p] override (or any range containing p) still applies.
+            assertEquals(
+                true,
+                rangeApplies("[2]", "[2]", versionRangeFactory, numericVersionFactory),
+                "the equality short-circuit must match a singleton against itself",
+            )
+            assertEquals(
+                false,
+                rangeApplies("[1,2)", "[2]", versionRangeFactory, numericVersionFactory),
+                "an open-upper override ending before p must not claim the singleton point p",
+            )
+            assertEquals(
+                false,
+                rangeApplies("(2,3]", "[2]", versionRangeFactory, numericVersionFactory),
+                "an open-lower override starting after p must not claim the singleton point p",
+            )
+            assertEquals(
+                true,
+                rangeApplies("[1,5)", "[2]", versionRangeFactory, numericVersionFactory),
+                "a wider override that contains p must still apply to the singleton",
+            )
+        }
+
+        @org.junit.jupiter.api.Test
         @DisplayName("wide child (9+ major span) overshooting the parent is still detected (probe-cap guard)")
         fun wideSpanOvershootStillDetected() {
             // child [0.5,8.9) spans 9 majors, so the whole-version grid points (1.0..8.0) alone would

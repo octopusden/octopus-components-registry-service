@@ -125,10 +125,14 @@ class RangeViewBroadOverrideContainmentIntegrationTest {
                 "(TD-010 containment); base 'BasePath' here means the override was dropped",
         )
 
-        // Sanity: the broad override's own [1.0,3.0) view also carries the override (equality path).
-        val broadView = module.moduleConfigurations.firstOrNull { it.versionRangeString == "[1.0,3.0)" }
-        assertNotNull(broadView, "the broad [1.0,3.0) override range must also be enumerated")
-        assertEquals("BroadOverridePath", broadView!!.buildFilePath)
+        // ADR-018 decoupled model: enumeration partitions SUPPORTED (here [1.0,2.0)) only — the broad
+        // [1.0,3.0) override is NOT coverage, so it is never enumerated as its own view; its portion
+        // beyond supported ([2.0,3.0)) is simply uncovered. Only the contained [1.0,2.0) view exists.
+        assertEquals(
+            listOf("[1.0,2.0)"),
+            module.moduleConfigurations.map { it.versionRangeString },
+            "only the supported [1.0,2.0) range is enumerated; the broad override does not add a view",
+        )
     }
 
     @Test

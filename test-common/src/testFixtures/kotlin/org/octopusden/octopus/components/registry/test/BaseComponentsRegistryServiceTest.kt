@@ -194,12 +194,21 @@ abstract class BaseComponentsRegistryServiceTest {
 
     protected abstract fun getComponentArtifactsParameters(component: String): Map<String, ComponentArtifactConfigurationDTO>
 
+    /**
+     * Expected Jira-version-range fixture. The DSL-loader implementation enumerates one range per
+     * declared block (verbatim). The DB-backed resolver (ADR-018 decoupled redesign) enumerates the
+     * partition of merged coverage by value-change edges, so adjacent ranges that resolve identically
+     * collapse — the DB-backed test overrides this to point at the `-decoupled` fixture.
+     */
+    protected open val jiraComponentVersionRangesFixture: String =
+        "expected-data/jira-component-version-ranges.json"
+
     @Test
     @DisplayName("RES-001: All Jira component version ranges returned correctly")
     open fun testGetAllJiraComponentVersionRanges() {
         val expected =
             testDataDir
-                .resolve("expected-data/jira-component-version-ranges.json")
+                .resolve(jiraComponentVersionRangesFixture)
                 .toObject(object : TypeReference<Set<JiraComponentVersionRangeDTO>>() {})
                 .sortedBy { it.componentName + it.versionRange }
         val actual =
