@@ -47,7 +47,10 @@ object VersionRangeMapCanonicalizer {
         return when {
             endpoint.contains("maven-artifacts") ->
                 (root as? ObjectNode)?.let { canonicalize(it) } ?: root
-            endpoint.contains("api/3/components") && !endpoint.contains("find-by") ->
+            // Exact suffix: ONLY the v3 list endpoint (`…/api/3/components`) carries the `variants` map.
+            // Per-component v3 paths (`…/api/3/components/{c}/build-tools`) and the find-by-* actions do
+            // not end here, so they are left untouched even though they share the prefix.
+            endpoint.endsWith("/api/3/components") ->
                 canonicalizeVariantsInArray(root)
             else -> root
         }

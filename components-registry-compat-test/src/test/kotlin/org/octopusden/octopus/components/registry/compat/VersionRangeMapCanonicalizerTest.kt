@@ -74,8 +74,22 @@ class VersionRangeMapCanonicalizerTest {
     @Test
     @DisplayName("single-version `[x]` renders identically regardless of trailing-zero form")
     fun singleVersionForm() {
-        assertEquals(canon(obj("[11.7.1]" to """1""")), canon(obj("[11.7.1]" to """1""")))
+        assertEquals(canon(obj("[11.7.1.0]" to """1""")), canon(obj("[11.7.1]" to """1""")))
         assertEquals(canon(obj("[2.0]" to """1""")), canon(obj("[2]" to """1""")))
+    }
+
+    @Test
+    @DisplayName("overlapping same-value intervals (composite `[1,3),[2,5)`) merge to their union `[1,5)`")
+    fun overlappingSameValueMerge() {
+        assertEquals(canon(obj("[1,5)" to """{"x":1}""")), canon(obj("[1,3),[2,5)" to """{"x":1}""")))
+    }
+
+    @Test
+    @DisplayName("value equality is field-order independent (`{x,y}` ≡ `{y,x}`) so such neighbours still merge")
+    fun valueEqualityIgnoresFieldOrder() {
+        val a = obj("[1,2)" to """{"x":1,"y":2}""", "[2,3)" to """{"y":2,"x":1}""")
+        val b = obj("[1,3)" to """{"x":1,"y":2}""")
+        assertEquals(canon(b), canon(a))
     }
 
     // ── SAFETY: real differences MUST still surface ────────────────────────────────────
