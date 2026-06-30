@@ -37,7 +37,11 @@ class ComponentControllerV3(
     fun getAllComponents(): Collection<ComponentV3> =
         componentRegistryResolver.getComponents().map { escrowModule ->
             // TODO Check/Discuss if display name and owner should be in escrowModule (not versioned part of Component)
-            val baseConfiguration = escrowModule.moduleConfigurations.find { it.componentOwner != null }!!
+            // ADR-018: component-level scalars from the resolved BASE representative (DB resolver). Legacy
+            // in-memory loader leaves it null → fall back to the first owner-bearing config (DSL order there).
+            val baseConfiguration =
+                escrowModule.componentLevelConfiguration
+                    ?: escrowModule.moduleConfigurations.find { it.componentOwner != null }!!
 
             val componentV2 =
                 ComponentV2(

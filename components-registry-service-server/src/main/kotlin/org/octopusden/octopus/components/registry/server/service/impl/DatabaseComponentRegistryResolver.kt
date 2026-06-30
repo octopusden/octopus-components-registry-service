@@ -868,9 +868,10 @@ class DatabaseComponentRegistryResolver(
         return this
     }
 
-    /** Apply [nullifyEmptyEscrow] to every config in the module. */
+    /** Apply [nullifyEmptyEscrow] to every config in the module, plus the component-level representative. */
     private fun EscrowModule.nullifyEmptyEscrow(): EscrowModule {
         moduleConfigurations.forEach { it.nullifyEmptyEscrow() }
+        componentLevelConfiguration?.nullifyEmptyEscrow()
         return this
     }
 

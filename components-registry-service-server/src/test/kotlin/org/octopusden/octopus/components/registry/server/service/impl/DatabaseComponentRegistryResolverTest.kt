@@ -496,9 +496,14 @@ class DatabaseComponentRegistryResolverTest {
 
     @Test
     fun `(5e MIG-029) synthetic base with multiple overrides - first config follows DSL declaration order (createdAt), not heap-scan`() {
-        // Repros wscardsmodel-shape: synthetic base, multiple version-range blocks where
-        // one declares an explicit scalar override (e.g. escrow.generation = MANUAL) and
-        // others inherit from the synthetic base (escrow.generation = AUTO via Defaults).
+        // Models the MANUAL-below-supported scenario: synthetic base (AUTO via Defaults),
+        // supported coverage = [1.0,) only, and a MANUAL escrow.generation override on the
+        // OUT-OF-SUPPORTED tail (,1.0). Because the override is outside coverage it must NOT
+        // be enumerated, so moduleConfigurations[0] inherits AUTO from the base.
+        //
+        // NOTE: this is the INVERSE of the real wscardsmodel shape (see 5e2 below), where the
+        // base escrow is MANUAL and AUTO sits on higher value-change islands → [0] = MANUAL.
+        // Kept as a distinct guard for the out-of-coverage-override suppression path.
         //
         // V1 contract (prod = QA = baseline): the controller's createComponent() picks
         // moduleConfigurations[0], which V1 emits in DSL declaration order. For an archived
@@ -550,6 +555,113 @@ class DatabaseComponentRegistryResolverTest {
             org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode.AUTO,
             module.moduleConfigurations.first().escrow!!.generation.orElse(null),
             "the only supported range inherits AUTO from base; the out-of-supported MANUAL override does not appear",
+        )
+    }
+
+    @Test
+    fun `(5e2 MIG-029) real wscardsmodel shape - MANUAL base with AUTO islands, first view stays MANUAL`() {
+        // Faithful to the REAL migrated wscardsmodel (verified by migrating the live DSL through
+        // the real loader into ft-db H2 and reading the rows): the component's escrow default is
+        // MANUAL (ESCROW_PROVIDED_MANUALLY base), and the GRADLE/AUTO releases are value-change
+        // ISLANDS on higher ranges. The compat stand previously showed V1=MANUAL vs candidate=AUTO
+        // for moduleConfigurations[0]; the live migration on the current tip produces
+        //   [0] (,2.1) = MANUAL  (matching V1)
+        // because [0] is the lowest sub-range, which inherits the MANUAL base — NOT the AUTO island.
+        //
+        // This locks that contract in: an AUTO escrow.generation override on a higher range must
+        // partition the base coverage WITHOUT promoting AUTO to moduleConfigurations[0].
+        val comp = makeComponent("COMP5E2")
+        // Component-level escrow default = MANUAL (the real wscardsmodel base).
+        val base = makeBase(comp, buildSystem = "ESCROW_PROVIDED_MANUALLY").apply {
+            escrowGeneration = "MANUAL"
+            createdAt = java.time.Instant.ofEpochMilli(1000)
+        }
+        // A GRADLE/AUTO release island on a higher bounded range (value-change edge).
+        val autoIsland = makeScalarOverrideRow(comp, "[2.0,3.0)", "escrow.generation").apply {
+            escrowGeneration = "AUTO"
+            createdAt = java.time.Instant.ofEpochMilli(2000)
+        }
+        comp.configurations.addAll(listOf(base, autoIsland))
+        stubComponent(comp)
+
+        val module = resolver.getComponentById("COMP5E2")
+        assertNotNull(module)
+        // Base coverage = ALL; the single AUTO island edge splits it into three version-ordered views.
+        assertEquals(
+            listOf("(,2.0)", "[2.0,3.0)", "[3.0,)"),
+            module!!.moduleConfigurations.map { it.versionRangeString },
+        )
+        val gen = { i: Int ->
+            module.moduleConfigurations[i].escrow!!.generation.orElse(null)
+        }
+        assertEquals(
+            org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode.MANUAL,
+            gen(0),
+            "moduleConfigurations[0] is the lowest sub-range → inherits the MANUAL base, NOT the AUTO island",
+        )
+        assertEquals(
+            org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode.AUTO,
+            gen(1),
+            "the [2.0,3.0) island carries its explicit AUTO override",
+        )
+        assertEquals(
+            org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode.MANUAL,
+            gen(2),
+            "the tail above the island falls back to the MANUAL base",
+        )
+        // Primary invariant of the derive-from-base fix: the component-level representative is the
+        // resolved BASE config (MANUAL), NOT the version-sorted moduleConfigurations[0] nor the AUTO island.
+        assertEquals(
+            org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode.MANUAL,
+            module.componentLevelConfiguration!!.escrow!!.generation.orElse(null),
+            "component-level escrow.generation must come from the MANUAL base, not the higher AUTO island",
+        )
+    }
+
+    @Test
+    fun `(5e3 MIG-029) component-level representative comes from BASE, not the version-sorted first range`() {
+        // Real tiling-shape component, confirmed against the live QA DB: BASE (,0),[0,) escrow=AUTO
+        // (the Defaults value) + a low-version SCALAR_OVERRIDE escrow.generation=UNSUPPORTED on
+        // (,03.51.29.15). V1's component-level escrow.generation = AUTO because V1's
+        // moduleConfigurations[0] is the first DSL-declared (current/default) block; the redesign sorts
+        // the enumeration partition by version ASC, so moduleConfigurations[0] became the lowest range
+        // (the UNSUPPORTED historical override) — flipping the wire DTO to UNSUPPORTED for 12 components.
+        //
+        // FIX (ADR-018 redesign, derive-from-base): the component-level scalar representative is the
+        // resolved BASE config, exposed as EscrowModule.componentLevelConfiguration and consumed by the
+        // controllers — moduleConfigurations[0] is NO LONGER the implicit source of component-level
+        // scalar truth. Enumeration stays version-sorted/atomic (asserted below), decoupling
+        // "how ranges are enumerated" from "which config is the representative".
+        val comp = makeComponent("COMP5E3")
+        val base = makeBase(comp, buildSystem = "WHISKEY").apply {
+            escrowGeneration = "AUTO"
+            createdAt = java.time.Instant.ofEpochMilli(1000)
+        }
+        val lowUnsupported = makeScalarOverrideRow(comp, "(,03.51.29.15)", "escrow.generation").apply {
+            escrowGeneration = "UNSUPPORTED"
+            createdAt = java.time.Instant.ofEpochMilli(2000)
+        }
+        comp.configurations.addAll(listOf(base, lowUnsupported))
+        stubComponent(comp)
+
+        val module = resolver.getComponentById("COMP5E3")
+        assertNotNull(module)
+        // Component-level representative = BASE → AUTO (matches V1), regardless of enumeration order.
+        assertEquals(
+            org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode.AUTO,
+            module!!.componentLevelConfiguration!!.escrow!!.generation.orElse(null),
+            "component-level escrow.generation must come from the AUTO base, not the low UNSUPPORTED override",
+        )
+        // Enumeration stays version-sorted/atomic: the low UNSUPPORTED range is still first in the list.
+        assertEquals(
+            listOf("(,03.51.29.15)", "[03.51.29.15,)"),
+            module.moduleConfigurations.map { it.versionRangeString },
+            "variants enumeration stays version-ordered (decoupled from the component-level representative)",
+        )
+        assertEquals(
+            org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode.UNSUPPORTED,
+            module.moduleConfigurations.first().escrow!!.generation.orElse(null),
+            "the low range view still carries its UNSUPPORTED override (per-range values unchanged)",
         )
     }
 

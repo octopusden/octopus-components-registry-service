@@ -180,6 +180,26 @@ fun ComponentEntity.toEscrowModule(
         module.moduleConfigurations.add(resolved)
     }
 
+    // Component-level scalar representative (ADR-018 redesign): resolve the BASE / all-versions config.
+    // The non-versioned wire DTO (escrow, owner, RM/SC, distribution, ...) is built from THIS, not from
+    // `moduleConfigurations[0]` — the partition is version-sorted, so its first element is the lowest
+    // range (which may carry a historical override, e.g. a low-version escrow.generation=UNSUPPORTED).
+    // V1's reference reads the first DSL-declared (current/default) block, which resolves to the base
+    // scalars; resolving at `base.versionRange` reproduces that. For the common ALL_VERSIONS base,
+    // `rangeApplies` parses the override's range against the composite `(,0),[0,)` child: `parseSingleInterval`
+    // rejects that multi-segment string, so NO override applies and the representative carries pure base
+    // scalars. (This relies on no SCALAR_OVERRIDE/MARKER row carrying versionRange=ALL_VERSIONS — enforced
+    // by import, which excludes the base config from non-base rows, and by API range validation.) Decouples
+    // "which range is the representative" from "how ranges are enumerated".
+    module.componentLevelConfiguration =
+        this.resolveForRange(
+            range = base.versionRange,
+            base = base,
+            overrides = overrides,
+            versionRangeFactory = versionRangeFactory,
+            numericVersionFactory = numericVersionFactory,
+        )
+
     return module
 }
 
