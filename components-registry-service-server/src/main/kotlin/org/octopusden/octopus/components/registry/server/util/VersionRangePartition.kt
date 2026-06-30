@@ -195,11 +195,12 @@ object VersionRangePartition {
             // at hi (sawRight — RIGHT or GAP: the value at hi differs from below). Examples from live data:
             //   • singleton markers `[2.6.145]`/`[2.6.179]` at coverage `[2.6.145,2.6.179]` (GAP both ends)
             //   • a marker `[1.1.41,1.1.49)` ending EXCLUSIVE at coverage hi 1.1.49 → 1.1.49 = base (RIGHT at hi)
-            // Redundant carves (boundary value == neighbour) collapse downstream like any other adjacent
-            // same-value pair, so this never over-splits the resolved enumeration.
-            var effLo = seg.lo
+            // This never over-splits: a `sawLeft`/`sawRight` edge at an inclusive boundary IS by definition
+            // a value-change point (an override closes/opens exactly there), so the carved boundary view
+            // always resolves to a different value than its neighbour — never a spurious same-value split.
+            val effLo = seg.lo
             var effLoIncl = seg.loIncl
-            var effHi = seg.hi
+            val effHi = seg.hi
             var effHiIncl = seg.hiIncl
             // Only carve when the boundary point is actually IN the segment (inclusive bound) — an
             // exclusive bound (e.g. `[1.0,2.0)`) does not contain its endpoint, so an edge there is the
@@ -209,13 +210,11 @@ object VersionRangePartition {
             val tail = mutableListOf<Segment>()
             if (carveAtLo) {
                 emitSeg(Segment(seg.lo, true, seg.lo, true)) // [lo]
-                effLo = seg.lo
-                effLoIncl = false // remaining segment opens after lo
+                effLoIncl = false // remaining segment opens after lo (boundary VALUE unchanged)
             }
             if (carveAtHi) {
                 tail += Segment(seg.hi, true, seg.hi, true) // [hi] — emitted after the interior pieces
-                effHi = seg.hi
-                effHiIncl = false // remaining segment closes before hi
+                effHiIncl = false // remaining segment closes before hi (boundary VALUE unchanged)
             }
             val effSeg = Segment(effLo, effLoIncl, effHi, effHiIncl)
             val interior =

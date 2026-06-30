@@ -145,6 +145,18 @@ class VersionRangePartitionTest {
     }
 
     @Test
+    @DisplayName("boundary carve: a GAP singleton at an inclusive lo carves [lo]; an exclusive hi is NOT carved")
+    fun `partition carves boundary singletons only at inclusive bounds`() {
+        // Inclusive lo + GAP edges `[1,2)`,`(2,5)` exclude point 2... but here test the boundary itself:
+        // coverage [2,10) with a singleton override [2] (GAP at the inclusive lo 2) → carve [2], then (2,10).
+        assertEquals(listOf("[2]", "(2,10)"), VersionRangePartition.partition(listOf("[2,10)"), listOf("[2]")))
+        // Same singleton but coverage with EXCLUSIVE lo (2,10): point 2 is not in the segment → no carve.
+        assertEquals(listOf("(2,10)"), VersionRangePartition.partition(listOf("(2,10)"), listOf("[2]")))
+        // GAP singleton at an inclusive hi: coverage (0,2] with singleton [2] → (0,2) then [2].
+        assertEquals(listOf("(0,2)", "[2]"), VersionRangePartition.partition(listOf("(0,2]"), listOf("[2]")))
+    }
+
+    @Test
     @DisplayName("multiple supported segments each partitioned independently; edges outside a segment ignored")
     fun `partition multiple segments`() {
         // edge [2,) → point 2 (only inside [1,3)); edge [6,7) → points 6 AND 7 (both inside [5,8)).
