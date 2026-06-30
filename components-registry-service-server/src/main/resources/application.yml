@@ -20,7 +20,6 @@ components-registry:
       - "3.3.9"
       - "3.6"
       - "3.6.3"
-      - "3.8"
       - "3.9"
 
   # Admin config-as-code BASELINE (product defaults). service-config overrides
