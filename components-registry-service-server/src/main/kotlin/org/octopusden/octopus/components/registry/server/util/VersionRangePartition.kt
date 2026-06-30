@@ -93,6 +93,10 @@ object VersionRangePartition {
         // The unbounded-both interval IS all-versions — render the canonical sentinel so an
         // all-versions component with no value-change edges enumerates byte-identically to before.
         if (seg.lo == null && seg.hi == null) return ALL_VERSIONS_SENTINEL
+        // An inclusive single-version interval renders in Maven hard-version form `[x]`, NOT `[x,x]`,
+        // to match V1's verbatim block rendering — otherwise every single-version block produces a
+        // KEY_MISSING enumeration diff (`[x]` baseline vs `[x,x]` candidate).
+        if (seg.lo != null && seg.lo == seg.hi && seg.loIncl && seg.hiIncl) return "[${seg.lo}]"
         return buildString {
             append(if (seg.loIncl) '[' else '(')
             append(seg.lo ?: "")

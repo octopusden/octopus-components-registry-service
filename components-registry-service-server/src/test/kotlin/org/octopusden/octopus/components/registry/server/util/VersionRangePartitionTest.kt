@@ -12,6 +12,25 @@ import org.octopusden.releng.versions.VersionRangeFactory
 /** Unit tests for [VersionRangePartition] (ADR-018 redesign: coverage merge + enumeration partition). */
 class VersionRangePartitionTest {
 
+    // ── canonical render forms (EXACT strings — these catch rendering regressions locally,
+    //    before the stand baseline; the bug we missed was [x] rendered as [x,x]) ─────────────
+
+    @Test
+    @DisplayName("render forms are byte-identical to V1: [x] stays [x], composites/bounds unchanged")
+    fun `canonical render forms`() {
+        // Single-version block round-trips to the hard-version form, NOT [x,x].
+        assertEquals(listOf("[1.0.49]"), VersionRangePartition.mergeUnion(listOf("[1.0.49]")))
+        assertEquals(listOf("[3.5.0]"), VersionRangePartition.mergeUnion(listOf("[3.5.0]")))
+        // Bounded / open-upper / open-lower keep their exact bracket + bound forms.
+        assertEquals(listOf("[1,2)"), VersionRangePartition.mergeUnion(listOf("[1,2)")))
+        assertEquals(listOf("[2,)"), VersionRangePartition.mergeUnion(listOf("[2,)")))
+        assertEquals(listOf("(,3]"), VersionRangePartition.mergeUnion(listOf("(,3]")))
+        // partition emits a single-version sub-range as [x] too (an inclusive edge landing on a point).
+        assertEquals(listOf("[1,5]"), VersionRangePartition.mergeUnion(listOf("[1,5]")))
+        // disjoint single-version blocks stay separate, each in [x] form.
+        assertEquals(listOf("[1.0.2]", "[1.0.14]"), VersionRangePartition.mergeUnion(listOf("[1.0.2]", "[1.0.14]")))
+    }
+
     // ── scheme-aware comparator + single-version parse (stand-compat regressions) ───
 
     @Test
@@ -26,11 +45,10 @@ class VersionRangePartitionTest {
         // parseSegment's comma-requiring regex returned null, so mergeUnion silently produced an empty
         // coverage set and the resolve gate 404'd version 2.2.5 (== 2.2.5-0000 in this scheme).
         val merged = VersionRangePartition.mergeUnion(listOf("[2.2.5-0000]"), cmp)
-        assertEquals(1, merged.size, "single-version range must yield exactly one coverage segment, not be dropped")
-        assertTrue(
-            vrf.create(merged.single()).containsVersion(nvf.create("2.2.5-0000")),
-            "merged coverage must still contain 2.2.5-0000; got ${merged.single()}",
-        )
+        // EXACT string, not just containment: V1 renders a single-version block verbatim as `[x]`, so
+        // we must too — `[x,x]` would round-trip-contain the version yet still produce a KEY_MISSING
+        // enumeration diff vs V1. (A containment-only assertion silently passed the `[x,x]` regression.)
+        assertEquals(listOf("[2.2.5-0000]"), merged, "single-version block must render as [x], not [x,x] or be dropped")
         assertTrue(
             vrf.create(merged.single()).containsVersion(nvf.create("2.2.5")),
             "merged coverage must contain 2.2.5 (== 2.2.5-0000 in scheme); got ${merged.single()}",
@@ -116,7 +134,7 @@ class VersionRangePartitionTest {
         // overrides [1,2) and (2,3] both EXCLUDE point 2 → 2 resolves to base, so it must be its own
         // singleton view between the two open neighbours, not swallowed by either side.
         assertEquals(
-            listOf("[1,2)", "[2,2]", "(2,3]", "(3,10)"),
+            listOf("[1,2)", "[2]", "(2,3]", "(3,10)"),
             VersionRangePartition.partition(listOf("[1,10)"), listOf("[1,2)", "(2,3]")),
         )
         // closed-open adjacency (the legacy/migrated shape) does NOT gap: 2 belongs to the right piece.

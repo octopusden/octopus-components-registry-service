@@ -98,30 +98,30 @@ class RangeAppliesContainmentTest {
         }
 
         @org.junit.jupiter.api.Test
-        @DisplayName("GAP singleton '[p,p]' child: equal-parent matches; the two open neighbours that exclude p do NOT")
+        @DisplayName("GAP singleton '[p]' child: equal-parent matches; the two open neighbours that exclude p do NOT")
         fun gapSingletonContainment() {
-            // VersionRangePartition emits a singleton [p,p] for a both-excluded boundary (e.g. overrides
-            // [1,2) and (2,3] over [1,10) → … [2,2] …). Downstream override selection probes
-            // rangeApplies(override, "[2,2]"); the point p resolves to base, so neither open neighbour
-            // may claim it, while an exact [p,p] override (or any range containing p) still applies.
+            // VersionRangePartition emits a single-version `[p]` for a both-excluded boundary (e.g.
+            // overrides [1,2) and (2,3] over [1,10) → … [2] …). Downstream override selection probes
+            // rangeApplies(override, "[2]"); the point p resolves to base, so neither open neighbour
+            // may claim it, while an exact [p] override (or any range containing p) still applies.
             assertEquals(
                 true,
-                rangeApplies("[2,2]", "[2,2]", versionRangeFactory, numericVersionFactory),
+                rangeApplies("[2]", "[2]", versionRangeFactory, numericVersionFactory),
                 "the equality short-circuit must match a singleton against itself",
             )
             assertEquals(
                 false,
-                rangeApplies("[1,2)", "[2,2]", versionRangeFactory, numericVersionFactory),
+                rangeApplies("[1,2)", "[2]", versionRangeFactory, numericVersionFactory),
                 "an open-upper override ending before p must not claim the singleton point p",
             )
             assertEquals(
                 false,
-                rangeApplies("(2,3]", "[2,2]", versionRangeFactory, numericVersionFactory),
+                rangeApplies("(2,3]", "[2]", versionRangeFactory, numericVersionFactory),
                 "an open-lower override starting after p must not claim the singleton point p",
             )
             assertEquals(
                 true,
-                rangeApplies("[1,5)", "[2,2]", versionRangeFactory, numericVersionFactory),
+                rangeApplies("[1,5)", "[2]", versionRangeFactory, numericVersionFactory),
                 "a wider override that contains p must still apply to the singleton",
             )
         }
