@@ -172,6 +172,15 @@ object VersionRangePartition {
         fun emit(piece: String) {
             if (piece !in result) result += piece
         }
+        // Render+emit a piece, skipping degenerate intervals (lo>hi, or lo==hi unless both-inclusive) so
+        // boundary carving can never produce an empty range like `(p,p)`.
+        fun emitSeg(s: Segment) {
+            if (s.lo != null && s.hi != null) {
+                val c = compare(s.lo, s.hi)
+                if (c > 0 || (c == 0 && !(s.loIncl && s.hiIncl))) return
+            }
+            emit(render(s))
+        }
         for (segStr in segments) {
             val seg = toSegments(segStr).singleOrNull()
             if (seg == null) {
@@ -179,25 +188,49 @@ object VersionRangePartition {
                 emit(normalize(segStr))
                 continue
             }
+            // A GAP breakpoint (singleton override/marker, p excluded by both neighbours) that coincides
+            // with the segment's own lo/hi is NOT strictlyInside, so carve it off the boundary first:
+            // a singleton vcs/scalar marker sitting exactly at the coverage edge (e.g. coverage
+            // [2.6.145,2.6.179] with singleton markers [2.6.145] and [2.6.179]) must become its own view,
+            // not be swallowed into one merged range (which would silently drop its per-range value).
+            var effLo = seg.lo
+            var effLoIncl = seg.loIncl
+            var effHi = seg.hi
+            var effHiIncl = seg.hiIncl
+            val gapAtLo = seg.lo != null && buckets.any { compare(it.value, seg.lo) == 0 && it.sawLeft && it.sawRight }
+            val gapAtHi = seg.hi != null && buckets.any { compare(it.value, seg.hi) == 0 && it.sawLeft && it.sawRight }
+            val tail = mutableListOf<Segment>()
+            if (gapAtLo) {
+                emitSeg(Segment(seg.lo, true, seg.lo, true)) // [lo]
+                effLo = seg.lo
+                effLoIncl = false // remaining segment opens after lo
+            }
+            if (gapAtHi) {
+                tail += Segment(seg.hi, true, seg.hi, true) // [hi] — emitted after the interior pieces
+                effHi = seg.hi
+                effHiIncl = false // remaining segment closes before hi
+            }
+            val effSeg = Segment(effLo, effLoIncl, effHi, effHiIncl)
             val interior =
-                buckets.filter { strictlyInside(seg, it.value, compare) }
+                buckets.filter { strictlyInside(effSeg, it.value, compare) }
                     .sortedWith { a, b -> compare(a.value, b.value) }
-            var curLo = seg.lo
-            var curLoIncl = seg.loIncl
+            var curLo = effLo
+            var curLoIncl = effLoIncl
             for (bp in interior) {
                 val gap = bp.sawLeft && bp.sawRight
                 if (gap) {
-                    emit(render(Segment(curLo, curLoIncl, bp.value, false))) // left piece, p excluded
-                    emit(render(Segment(bp.value, true, bp.value, true))) // singleton [p,p]
+                    emitSeg(Segment(curLo, curLoIncl, bp.value, false)) // left piece, p excluded
+                    emitSeg(Segment(bp.value, true, bp.value, true)) // singleton [p,p]
                     curLo = bp.value
                     curLoIncl = false // right piece opens after p (exclusive)
                 } else {
-                    emit(render(Segment(curLo, curLoIncl, bp.value, bp.sawLeft)))
+                    emitSeg(Segment(curLo, curLoIncl, bp.value, bp.sawLeft))
                     curLo = bp.value
                     curLoIncl = !bp.sawLeft
                 }
             }
-            emit(render(Segment(curLo, curLoIncl, seg.hi, seg.hiIncl)))
+            emitSeg(Segment(curLo, curLoIncl, effHi, effHiIncl))
+            tail.forEach { emitSeg(it) }
         }
         return result
     }

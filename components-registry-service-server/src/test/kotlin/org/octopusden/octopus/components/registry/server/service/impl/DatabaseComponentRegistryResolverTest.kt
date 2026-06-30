@@ -318,6 +318,39 @@ class DatabaseComponentRegistryResolverTest {
         assertEquals("11", cfg!!.buildConfiguration?.javaVersion)
     }
 
+    @Test
+    fun `(5e4 MIG-029) singleton + gap vcs markers enumerate as three distinct-vcs views, not one merged`() {
+        // Reproduces the live multi-marker shape (confirmed via QA DB): coverage [2.6.145,2.6.179] with a
+        // singleton vcs marker at each end and a DISTINCT vcs marker on the open gap between them — three
+        // different vcs paths. V1 enumerates three views; the decoupled-model partition must split on the
+        // marker edges {2.6.145, 2.6.179} and resolve each sub-range to its own marker, NOT collapse them
+        // into one view (which would silently drop the per-range vcs distinction the reference keeps).
+        val comp = makeComponent("COMP5E4")
+        val base = makeBase(comp).apply { createdAt = java.time.Instant.ofEpochMilli(1000) }
+        base.vcsEntries.add(makeVcsEntry(base, "ssh://vcs/base"))
+        val presence = makeRangePresenceRow(comp, "[2.6.145,2.6.179]").apply { createdAt = java.time.Instant.ofEpochMilli(2000) }
+        val mLow = makeMarkerRow(comp, "[2.6.145]", "vcs.settings").apply { createdAt = java.time.Instant.ofEpochMilli(3000) }
+        mLow.vcsEntries.add(makeVcsEntry(mLow, "ssh://vcs/low"))
+        val mGap = makeMarkerRow(comp, "(2.6.145,2.6.179)", "vcs.settings").apply { createdAt = java.time.Instant.ofEpochMilli(4000) }
+        mGap.vcsEntries.add(makeVcsEntry(mGap, "ssh://vcs/gap"))
+        val mHigh = makeMarkerRow(comp, "[2.6.179]", "vcs.settings").apply { createdAt = java.time.Instant.ofEpochMilli(5000) }
+        mHigh.vcsEntries.add(makeVcsEntry(mHigh, "ssh://vcs/high"))
+        comp.configurations.addAll(listOf(base, presence, mLow, mGap, mHigh))
+        stubComponent(comp)
+
+        val module = resolver.getComponentById("COMP5E4")
+        assertNotNull(module)
+        assertEquals(
+            listOf("[2.6.145]", "(2.6.145,2.6.179)", "[2.6.179]"),
+            module!!.moduleConfigurations.map { it.versionRangeString },
+            "the three marker edges must produce three enumerated views",
+        )
+        val vcsOf = { i: Int -> module.moduleConfigurations[i].vcsSettings!!.versionControlSystemRoots.first().vcsPath }
+        assertEquals("ssh://vcs/low", vcsOf(0))
+        assertEquals("ssh://vcs/gap", vcsOf(1))
+        assertEquals("ssh://vcs/high", vcsOf(2))
+    }
+
     // ========================================================================
     // (3) Marker override: vcs.settings
     // ========================================================================

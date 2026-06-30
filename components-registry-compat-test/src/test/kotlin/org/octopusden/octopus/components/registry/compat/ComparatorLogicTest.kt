@@ -518,48 +518,56 @@ class ComparatorLogicTest {
         assertThat(recorded.message).contains("id")
     }
 
-    // ----- compareDto integration: variants map canonicalised (ADR-018) -----
-    data class VariantHolder(val id: String, val variants: Map<String, Map<String, Int>>)
+    // ----- variants: canonicalise KEYS upstream, then compareDto recursive (ADR-018) -----
+    // Mirrors ComponentsListCompatTest: each side's `variants` map runs through
+    // canonicalizeTypedRangeMap (keys only) BEFORE compareDto, whose recursive comparison
+    // (ignoringCollectionOrder) then compares the typed values. NOT a JSON-equality field comparator —
+    // that lost ignoringCollectionOrder and exploded VALUE_DIFFs 276->1155 on build 4072/4073.
+    data class VarVal(val gen: String = "", val ids: List<String> = emptyList())
+    data class VariantHolder(val id: String, val variants: Map<String, VarVal>)
+
+    private fun canonV(m: Map<String, VarVal>): Map<String, VarVal> =
+        VersionRangeMapCanonicalizer.canonicalizeTypedRangeMap(m, VarVal::class.java)
 
     @Test
-    @DisplayName("compareDto: a reshaped-but-equivalent variants map → NO VALUE_DIFF recorded")
-    fun compareDto_variantsReshaping_isSilenced() {
+    @DisplayName("variants: reshaped keys (split/merge/whitespace/version-form) → NO VALUE_DIFF")
+    fun variantsReshaping_isSilenced() {
         Comparators.compareDto(
             endpoint = "GET /rest/api/3/components",
             pathParams = emptyMap(),
-            // V1 splits (, 2.0)+[2.0,2.5) (same value); candidate merges to (,2.5). Same function.
-            baseline = VariantHolder("c", mapOf("(, 2.0)" to mapOf("x" to 1), "[2.0,2.5)" to mapOf("x" to 1), "[2.5,)" to mapOf("x" to 2))),
-            candidate = VariantHolder("c", mapOf("(,2.5)" to mapOf("x" to 1), "[2.5,)" to mapOf("x" to 2))),
+            baseline = VariantHolder("c", canonV(mapOf("(, 2.0)" to VarVal("A"), "[2.0,2.5)" to VarVal("A"), "[2.5,)" to VarVal("B")))),
+            candidate = VariantHolder("c", canonV(mapOf("(,2.5)" to VarVal("A"), "[2.5,)" to VarVal("B")))),
         )
         assertThat(DiffCollector.snapshot()).isEmpty()
     }
 
     @Test
-    @DisplayName("compareDto: a real per-range value change in variants STILL records VALUE_DIFF")
-    fun compareDto_variantsRealChange_surfaces() {
+    @DisplayName("variants: a value's collection-order difference is NOT a diff (build-4073 regression guard)")
+    fun variantsCollectionOrder_isNotADiff() {
+        // Both describe (,3)->ids{a,b}; V1 split + ids[a,b], candidate merged + ids[b,a]. The recursive
+        // compare ignores collection order, so this must NOT surface. The old JSON-equality comparator
+        // flagged it — this test pins that it no longer does.
         Comparators.compareDto(
             endpoint = "GET /rest/api/3/components",
             pathParams = emptyMap(),
-            baseline = VariantHolder("c", mapOf("(,2.5)" to mapOf("x" to 1))),
-            candidate = VariantHolder("c", mapOf("(,2.5)" to mapOf("x" to 9))),
+            baseline = VariantHolder("c", canonV(mapOf("[1,2)" to VarVal("A", listOf("a", "b")), "[2,3)" to VarVal("A", listOf("a", "b"))))),
+            candidate = VariantHolder("c", canonV(mapOf("[1,3)" to VarVal("A", listOf("b", "a"))))),
+        )
+        assertThat(DiffCollector.snapshot()).isEmpty()
+    }
+
+    @Test
+    @DisplayName("variants: a real per-range value change STILL records VALUE_DIFF")
+    fun variantsRealChange_surfaces() {
+        Comparators.compareDto(
+            endpoint = "GET /rest/api/3/components",
+            pathParams = emptyMap(),
+            baseline = VariantHolder("c", canonV(mapOf("(,2.5)" to VarVal("A")))),
+            candidate = VariantHolder("c", canonV(mapOf("(,2.5)" to VarVal("B")))),
         )
         val recorded = DiffCollector.snapshot().single()
         assertThat(recorded.category).isEqualTo(DiffClassifier.VALUE_DIFF)
         assertThat(recorded.message).contains("variants")
-    }
-
-    @Test
-    @DisplayName("compareDto: the variants comparator does NOT fire for an unrelated map field (still surfaces)")
-    fun compareDto_variantsComparatorScoped() {
-        data class OtherMapHolder(val id: String, val other: Map<String, Map<String, Int>>)
-        // `other` (not `variants`) reshaped the same way must STILL surface — proves the regex is scoped.
-        Comparators.compareDto(
-            endpoint = "GET /rest/api/3/components",
-            pathParams = emptyMap(),
-            baseline = OtherMapHolder("c", mapOf("(, 2.0)" to mapOf("x" to 1), "[2.0,2.5)" to mapOf("x" to 1))),
-            candidate = OtherMapHolder("c", mapOf("(,2.5)" to mapOf("x" to 1))),
-        )
-        assertThat(DiffCollector.snapshot()).isNotEmpty()
     }
 
     // ----- ArtifactPatternComparator: #357 behavior-preserving artifactPattern normalization -----
