@@ -177,6 +177,21 @@ class VersionRangeMapCanonicalizerTest {
         assertEquals(emptyList<JsonShape.ShapeDiff>(), JsonShape.diff(bn, cn))
     }
 
+    // ── typed-layer map equality (compareDto `variants` field) ──────────────────────────
+    @Test
+    @DisplayName("mapsEqualCanonically: reshaped variants maps are equal; a per-range value change is not")
+    fun typedMapEquality() {
+        val v1 = mapOf("(, 2.0)" to mapOf("x" to 1), "[2.0,2.5)" to mapOf("x" to 1), "[2.5,)" to mapOf("x" to 2))
+        val candEq = mapOf("(,2.5)" to mapOf("x" to 1), "[2.5,)" to mapOf("x" to 2))
+        org.junit.jupiter.api.Assertions.assertTrue(VersionRangeMapCanonicalizer.mapsEqualCanonically(v1, candEq))
+
+        val candDiff = mapOf("(,2.5)" to mapOf("x" to 9), "[2.5,)" to mapOf("x" to 2)) // value changed below 2.5
+        org.junit.jupiter.api.Assertions.assertFalse(VersionRangeMapCanonicalizer.mapsEqualCanonically(v1, candDiff))
+
+        org.junit.jupiter.api.Assertions.assertTrue(VersionRangeMapCanonicalizer.mapsEqualCanonically(null, null))
+        org.junit.jupiter.api.Assertions.assertFalse(VersionRangeMapCanonicalizer.mapsEqualCanonically(v1, null))
+    }
+
     @Test
     @DisplayName("unregistered endpoint is passed through untouched (no accidental canonicalisation)")
     fun unregisteredEndpointPassthrough() {

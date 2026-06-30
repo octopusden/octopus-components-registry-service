@@ -75,6 +75,23 @@ object VersionRangeMapCanonicalizer {
         return out
     }
 
+    private val mapper = com.fasterxml.jackson.databind.ObjectMapper()
+
+    /**
+     * Typed-layer equality for a version-range-keyed Map field (e.g. `ComponentV3.variants`): serialise
+     * both maps to JSON, [canonicalize] each (key-normalise + merge adjacent same-value runs), and compare
+     * the canonical objects. Used as the AssertJ field comparator so the recursive DTO compare treats the
+     * decoupled-model reshaping of `variants` as equal while a real per-range VALUE change still surfaces
+     * (canonical objects differ). Returns true iff canonically equal.
+     */
+    fun mapsEqualCanonically(a: Any?, b: Any?): Boolean {
+        if (a == null && b == null) return true
+        if (a == null || b == null) return false
+        val an = mapper.valueToTree<JsonNode>(a) as? ObjectNode ?: return a == b
+        val bn = mapper.valueToTree<JsonNode>(b) as? ObjectNode ?: return a == b
+        return canonicalize(an) == canonicalize(bn)
+    }
+
     /**
      * Return a canonicalised copy of [map] (a version-range-keyed object). On any parse failure the
      * input is returned unchanged so an unexpected key shape surfaces as a real diff rather than noise.
