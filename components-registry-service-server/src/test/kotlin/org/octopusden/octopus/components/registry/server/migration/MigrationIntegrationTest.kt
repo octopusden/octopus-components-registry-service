@@ -242,8 +242,8 @@ class MigrationIntegrationTest {
 
     @Test
     @DisplayName(
-        "MIG-036: TEST_COMPONENT3 has override rows for version ranges " +
-            "'(,1.0.107)' and '[1.0.107,)' — marker rows for jira and vcs",
+        "MIG-036 (ADR-018): TEST_COMPONENT3 base carries the OPEN-UPPER [1.0.107,) release format; " +
+            "the OLDER (,1.0.107) block carries the value-layer overrides (base = newest value)",
     )
     fun mig036_versionRangeOverridesCreated() {
         val component = componentRepository.findByComponentKey("TEST_COMPONENT3")
@@ -252,20 +252,50 @@ class MigrationIntegrationTest {
         val allRows = configurationRepository.findByComponentId(component!!.id!!)
 
         // TEST_COMPONENT3 has:
-        // - top-level: GAV, explicit=true, external=true, jira.projectKey=TC3, build.javaVersion=1.8
-        // - "(,1.0.107)" {} — empty block (no overrides → RANGE_PRESENCE row)
-        // - "[1.0.107,)" { jira { releaseVersionFormat = '...' }; tag = '...' }
-        // So we should have at least one real override row for range "[1.0.107,)"
-        // (not just a RANGE_PRESENCE row).
-        val rangeRows = allRows.filter { it.versionRange == "[1.0.107,)" }
-        assertTrue(
-            rangeRows.isNotEmpty(),
-            "Must have override rows for version range '[1.0.107,)'; found rows: ${allRows.map { it.versionRange }}",
+        // - top-level: GAV, explicit=true, external=true, jira.projectKey=TC3, build.javaVersion=1.8,
+        //   tag='octopustds-$version', NO releaseVersionFormat.
+        // - "(,1.0.107)" {} — empty block (inherits top-level: no releaseVersionFormat, default tag)
+        // - "[1.0.107,)" { jira { releaseVersionFormat = '$major.$minor.$service-$fix' }; tag = 'tdsecure-$version' }
+        // Per ADR-018 the base = the OPEN-UPPER [1.0.107,) block's effective value.
+        val baseRow = configurationRepository.findBaseByComponentId(component.id!!)
+        assertNotNull(baseRow, "TEST_COMPONENT3 must have a base row")
+        assertEquals(
+            "\$major.\$minor.\$service-\$fix", baseRow!!.jiraReleaseVersionFormat,
+            "BASE must carry the open-upper [1.0.107,) releaseVersionFormat (newest value = base default)",
         )
+
+        // The open-upper block is now the base — it leaves no standalone override/presence row.
         assertTrue(
-            rangeRows.any { it.rowType != "RANGE_PRESENCE" },
-            "Range '[1.0.107,)' must include at least one SCALAR_OVERRIDE/MARKER row, not just RANGE_PRESENCE. " +
-                "Found rowTypes: ${rangeRows.map { it.rowType }}",
+            allRows.none { it.versionRange == "[1.0.107,)" },
+            "The open-upper [1.0.107,) block became the base; expected no standalone row. " +
+                "Found: ${allRows.map { "${it.versionRange}/${it.rowType}" }}",
+        )
+
+        // The OLDER (,1.0.107) block diverges from base and survives as value-layer override rows. This is
+        // the exact legacy shape that motivated the amendment: the newest base carries the open-upper '$major.$minor.$service-$fix',
+        // while the older band (which sets no releaseVersionFormat of its own) inherits the Defaults.groovy
+        // default '$major.$minor.$service' — emitted as a SCALAR_OVERRIDE so the base's newer value does
+        // not leak into the older range.
+        val olderRows = allRows.filter { it.versionRange == "(,1.0.107)" }
+        val releaseOverride =
+            olderRows.singleOrNull {
+                it.rowType == "SCALAR_OVERRIDE" && it.overriddenAttribute == "jira.releaseVersionFormat"
+            }
+        assertNotNull(
+            releaseOverride,
+            "The older (,1.0.107) block must carry a jira.releaseVersionFormat SCALAR_OVERRIDE. " +
+                "Found: ${allRows.map { "${it.versionRange}/${it.rowType}/${it.overriddenAttribute}" }}",
+        )
+        assertEquals(
+            "\$major.\$minor.\$service", releaseOverride!!.jiraReleaseVersionFormat,
+            "The (,1.0.107) override must carry the older (Defaults) release format, NOT the newer base value",
+        )
+        // A marker (vcs.settings) override also follows base: the older block keeps the top-level tag
+        // 'octopustds-$version' while the base carries the open-upper 'tdsecure-$version'.
+        assertTrue(
+            olderRows.any { it.rowType == "MARKER" && it.overriddenAttribute == MarkerAttributes.VCS_SETTINGS },
+            "The older (,1.0.107) block must carry a vcs.settings MARKER (its tag differs from base). " +
+                "Found: ${allRows.map { "${it.versionRange}/${it.rowType}/${it.overriddenAttribute}" }}",
         )
     }
 
@@ -419,7 +449,8 @@ class MigrationIntegrationTest {
         "MIG-040 (ADR-018 decoupled): TEST_PER_RANGE_HOTFIX_FORMAT has a bounded merged coverage " +
             "[1.0,) (its empty [1.0,2.0) block + the [2.0,) override block merge) → exactly one " +
             "RANGE_PRESENCE row at [1.0,) with NULL overridden_attribute and all typed cols NULL; the " +
-            "base sits at ALL_VERSIONS and the [2.0,) override row survives alongside the coverage",
+            "base sits at ALL_VERSIONS carrying the OPEN-UPPER [2.0,) hotfix format, and the OLDER " +
+            "[1.0,2.0) block survives as the value-layer override (base = newest value, ADR-018)",
     )
     fun mig040_rangePresenceRowsEmittedForEmptyDslBlocks() {
         val component = componentRepository.findByComponentKey("TEST_PER_RANGE_HOTFIX_FORMAT")
@@ -461,27 +492,37 @@ class MigrationIntegrationTest {
         assertNull(presence.jiraVersionPrefix); assertNull(presence.jiraVersionFormat)
         assertNull(presence.jiraHotfixVersionFormat)
 
-        // Decoupled model: the [2.0,) jira-hotfix override survives as its own value-layer row,
-        // independent of (and not merged into) the coverage layer. It is what re-splits the
-        // enumeration at READ time into [1.0,2.0) (base hotfix format) and [2.0,) (overridden).
-        val overrideRows = allRows.filter { it.versionRange == "[2.0,)" && it.rowType != "RANGE_PRESENCE" }
-        assertTrue(
-            overrideRows.any { it.rowType == "SCALAR_OVERRIDE" || it.rowType == "MARKER" },
-            "The [2.0,) jira-hotfix override must survive as a value-layer row. " +
-                "Found: ${allRows.map { "${it.versionRange}/${it.rowType}" }}",
-        )
-
-        // The base row sits at ALL_VERSIONS (the effective default), never a bounded block range.
+        // The base row sits at ALL_VERSIONS (the effective default), never a bounded block range,
+        // and — per ADR-018 — carries the OPEN-UPPER (newest) block's value: the [2.0,) hotfix format.
         val baseRows = allRows.filter { it.rowType == "BASE" }
         assertEquals(1, baseRows.size, "Exactly one BASE row")
+        val baseRow = baseRows.single()
         assertEquals(
-            ALL_VERSIONS, baseRows.single().versionRange,
+            ALL_VERSIONS, baseRow.versionRange,
             "BASE row must be at ALL_VERSIONS (decoupled effective default)",
         )
-        // The empty [1.0,2.0) block contributes only to coverage — it leaves no standalone row.
+        assertEquals(
+            "\$major.\$minor.\$service-\$fix-\$build", baseRow.jiraHotfixVersionFormat,
+            "BASE must carry the OPEN-UPPER [2.0,) hotfix format (newest value = base default, ADR-018)",
+        )
+
+        // Decoupled model: the OLDER [1.0,2.0) block now differs from the (newest) base, so it survives
+        // as its own value-layer SCALAR_OVERRIDE carrying the pre-[2.0,) hotfix format. It is what
+        // re-splits the enumeration at READ time into [1.0,2.0) (older format) and [2.0,) (= base).
+        val overrideRows = allRows.filter { it.versionRange == "[1.0,2.0)" && it.rowType == "SCALAR_OVERRIDE" }
+        assertEquals(
+            1, overrideRows.size,
+            "The older [1.0,2.0) block must survive as one SCALAR_OVERRIDE. " +
+                "Found: ${allRows.map { "${it.versionRange}/${it.rowType}" }}",
+        )
+        assertEquals(
+            "\$major.\$minor.\$service-\$fix", overrideRows.single().jiraHotfixVersionFormat,
+            "The [1.0,2.0) override must carry the older (top-level) hotfix format",
+        )
+        // The OPEN-UPPER [2.0,) block is now the base itself — it leaves no standalone override row.
         assertTrue(
-            allRows.none { it.versionRange == "[1.0,2.0)" },
-            "The empty [1.0,2.0) block must be absorbed into merged coverage, not kept as a row. " +
+            allRows.none { it.versionRange == "[2.0,)" },
+            "The open-upper [2.0,) block became the base and must leave no standalone row. " +
                 "Found: ${allRows.map { "${it.versionRange}/${it.rowType}" }}",
         )
     }

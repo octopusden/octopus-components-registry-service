@@ -1028,8 +1028,10 @@ DSL nested `components { ... }` block creates a `component_groups` row. Detectio
 
 > **Decoupled version model (ADR-018).** A DSL range block is decomposed into **two** layers: a
 > `RANGE_PRESENCE` row for the block's range (the coverage layer — `supported = ∪` of those ranges)
-> **and** per-attribute override rows derived against the **`ALL_VERSIONS` base** (the effective
-> default = top-level block ⊕ `Defaults.groovy`). There is **no synthetic-bounded base**. Overrides
+> **and** per-attribute override rows derived against the **`ALL_VERSIONS` base**. The base VALUE is
+> the effective config of the **OPEN-UPPER (newest) range** (base-row semantics superseded 2026-07 —
+> was `top-level ⊕ Defaults`; see [ADR-018 §2 amendment](adr/018-decoupled-version-model.md)), with the
+> OLDER blocks kept as overrides. There is **no synthetic-bounded base**. Overrides
 > may be **open-upper** (`[X,)`) and apply by **containment**, not exact range match (TD-010). See
 > ADR-018 and the case matrix M1–M8 in `version-model-spec-DRAFT.md`.
 
@@ -1038,7 +1040,7 @@ DSL version-range blocks produce a `RANGE_PRESENCE` coverage row plus override r
 **Acceptance criteria:**
 1. DSL `"[1.0,2.0)" { build { javaVersion = "17" } }` produces one `RANGE_PRESENCE` row for `[1.0,2.0)` plus one scalar override row with `overridden_attribute = 'build.javaVersion'`, `java_version = '17'`, all other typed columns NULL — over the `ALL_VERSIONS` base.
 2. DSL `"[1.0,2.0)" { vcsSettings { "name1" { ... } } }` produces a `RANGE_PRESENCE` row plus one marker row with `overridden_attribute = 'vcs.settings'`, all typed scalars NULL, plus corresponding `vcs_settings_entries` child rows.
-3. An **open-upper** block `"[1.0,)" { build { javaVersion = "17" } }` produces a `RANGE_PRESENCE` row for `[1.0,)` plus an open-upper `build.javaVersion` override — first-class, not folded into the base.
+3. An **open-upper** block `"[1.0,)" { build { javaVersion = "17" } }` **seeds the base** (base-row = newest/open-upper, 2026-07 amendment): it produces a `RANGE_PRESENCE` row for `[1.0,)` and its `build.javaVersion = 17` lands on the `ALL_VERSIONS` BASE row; it is the OLDER blocks (if any) that survive as overrides. (Open-upper overrides remain first-class when they are NOT the base — e.g. an open-upper override on one attribute while another block seeds the base.)
 4. Resolve at version V applies the **narrowest override whose range contains V** per attribute (containment, TD-010); falls back to the `ALL_VERSIONS` base values for non-overridden fields; returns 404 when `V ∉ supported = ∪ RANGE_PRESENCE`.
 5. Write-side invariants: per-attribute **override** disjointness, ≤1 open-upper per attribute, and required-field write coverage (V1–V6). **Coverage** is stored merged (overlaps merge; no disjoint requirement) and there is **no write-time auto-split** — enumeration partitions coverage by value-change edges at read time (ADR-018 redesign refinement). Note criteria 1–3 above: a single declared block `[1.0,2.0)` still yields one `RANGE_PRESENCE` row (`mergeUnion` of one range is itself); blocks that tile all-versions merge to `supported = ALL` (no rows).
 
@@ -1131,9 +1133,10 @@ applies but `findConfigurationByDockerImage` did not.
 **Status:** ⏳ Follow-up (distinct, narrower defect than MIG-039)
 
 A second find-by-artifacts defect from the same 2026-06-02 repro: a component whose component-level
-DSL `artifactId` is a CSV (e.g. `comp-foo,comp-bar`) migrated only the FIRST
+DSL `artifactId` is a CSV (e.g. `comp-foo,comp-bar`) migrated only the base
 version-range block's `artifactId` into `component_artifact_ids`
-(`ImportServiceImpl.importModule`: `baseConfig = configs.firstOrNull { ALL_VERSIONS } ?: configs.first()`,
+(`ImportServiceImpl.importModule`: `baseConfig = selectBaseConfig(configs)` — the all-versions block,
+else the open-upper/newest block, else the highest range; 2026-07 amendment, was `configs.first()`),
 then `buildComponentEntity` writes rows from `baseConfig.artifactIdPattern`). The dropped token means
 the reverse lookup cannot map that artifact to the owning component (it falls to the literal
 same-named component instead).

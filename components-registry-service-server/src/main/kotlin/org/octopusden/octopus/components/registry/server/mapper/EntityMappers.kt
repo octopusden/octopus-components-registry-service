@@ -21,6 +21,7 @@ import org.octopusden.octopus.components.registry.server.entity.DistributionMave
 import org.octopusden.octopus.components.registry.server.entity.DistributionPackageEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionSecurityGroupEntity
 import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
+import org.octopusden.octopus.components.registry.server.util.VersionRangePartition
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.RepositoryType
 import org.octopusden.octopus.escrow.configuration.model.EscrowModule
@@ -443,13 +444,7 @@ internal fun rangeApplies(
  * "[1.0,10000000.0)") and for a hard single version ("[1.0]"). Used by [rangeApplies] so an open-upper
  * child is only ever matched against an open-upper parent.
  */
-private fun isOpenUpper(range: String): Boolean {
-    val trimmed = range.trim()
-    if (trimmed.isEmpty() || trimmed.last() != ')') return false
-    val lastComma = trimmed.lastIndexOf(',')
-    return lastComma in 0 until trimmed.length - 1 &&
-        trimmed.substring(lastComma + 1, trimmed.length - 1).isBlank()
-}
+private fun isOpenUpper(range: String): Boolean = VersionRangePartition.isOpenUpper(range)
 
 /** Number of interior probe points sampled strictly inside the child interval. */
 private const val INTERIOR_PROBE_COUNT = 8

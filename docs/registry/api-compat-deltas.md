@@ -16,6 +16,7 @@ The compat-test exercises **API contracts**:
 - `POST /rest/api/2/components/find-by-artifact` and the batch detailed-versions endpoint
 - `GET /rest/api/2/components-registry/service/ping` — plain-text behavioral contract
 - `PUT /rest/api/2/components-registry/service/updateCache` — **phase-aware** contract: returns **200** + the Git-refresh duration (ms) while any component is still served from Git (migration-status `git > 0`), and **410 Gone** only once fully migrated to the DB (`git == 0`). A fully-migrated db-mode candidate returns 410 → suppressed via `known-deltas-db.json`; a git-mode (no-migration) candidate returns 200 and matches baseline → no delta. See "Per-mode known-deltas" below.
+- `GET /components` list / `GET /components/{c}` detail / `GET /components/{c}/distribution` (v1/v2/v3) — the **component-level** `Component.distribution` and `escrow` fields report the **OPEN-UPPER (newest) block's** values (ADR-018 base-row amendment, 2026-07), not the top-level/oldest block's. Confirmed intentional by the domain owner 2026-07-01 over all 11 affected components; suppressed via the "ADR-018 base-row amendment" `known-deltas-db.json` entries until this release becomes the baseline. Per-VERSION endpoints are byte-identical (unaffected). The standalone `{c}/distribution` endpoint is deprecated (zero recorded prod traffic).
 
 **Operational metadata endpoints are explicitly excluded** from the compat surface:
 
@@ -91,12 +92,15 @@ under `deltas[]`:
 
 | Field | Required | Semantics |
 |---|---|---|
-| `endpoint` | yes | Must match `DiffRecord.endpoint` exactly. Format: `"<METHOD> <path>"`, e.g. `"PUT /rest/api/2/components-registry/service/updateCache"`. The HTTP method is part of this string; there is no separate `method` field. |
+| `endpoint` | one of endpoint / endpointPattern | Must match `DiffRecord.endpoint` exactly. Format: `"<METHOD> <path>"`, e.g. `"PUT /rest/api/2/components-registry/service/updateCache"`. The HTTP method is part of this string; there is no separate `method` field. |
+| `endpointPattern` | one of endpoint / endpointPattern | Regex (`find()`) against `DiffRecord.endpoint`. For records whose endpoint embeds a LITERAL path value — the prod-trace replayer does not parameterize paths, so raw trace requests carry real component keys, which must NOT be committed to this public repo (CI Content Validation). Match the path SHAPE instead (e.g. `^GET /rest/api/[12]/components/[^/{}]+$` = any literal v1/v2 component-detail request; `{component}` template records are excluded by the brace class). An entry with NEITHER endpoint NOR endpointPattern never matches. If both are set, both must match. |
 | `category` | yes | One of `STATUS_CODE_DIFF`, `HEADER_DIFF`, `STRUCTURAL_DIFF`, `VALUE_DIFF`, `NULL_VS_EMPTY` (see `DiffClassifier`). **Env categories (`SNAPSHOT_MISMATCH`, `CANDIDATE_NOT_DB_MODE` — the latter currently dormant) are not suppressible.** |
 | `baselineValue` | no | Exact-match (string compare); `null` means "any". |
 | `candidateValue` | no | Exact-match; `null` means "any". |
 | `pathParams` | no | Map exact-match; `null` means "any". |
 | `queryParams` | no | Map exact-match; `null` means "any". Required to distinguish e.g. `?ignore-required=true` from `?ignore-required=false` when only one of the two variants is intentional. |
+| `jsonPathPattern` | no | Regex, matched with `find()` against the record's raw-layer `jsonPath` (e.g. `\$\.components\[\d+\]\.distribution\.(docker\|GAV)$` covers every array index). A specified pattern requires the record to CARRY a jsonPath and match — records with `jsonPath: null` never match, so the key narrows, never widens. For cluster-wide intentional deltas where per-`pathParams` entries would explode combinatorially. |
+| `messagePattern` | no | Regex, matched with `find()` against the record's `message` (the typed-layer AssertJ text — typed records carry `jsonPath: null`, and the differing field appears only as `field/property 'x.y' differ`). Same narrowing semantics as `jsonPathPattern`. Keep patterns anchored to the differing-field clause, NOT to component names/values, so an entry documents a rule ("this field intentionally changed"), not a data snapshot. **Granularity caveat:** suppression is per RECORD, and one typed record = one whole AssertJ comparison — per-component on detail/v2-list compares (all differing fields of that component in one message), the ENTIRE collection on the v1 whole-list compare. A matching entry therefore also swallows co-occurring unrelated diffs inside the same record for its lifetime; state that blast radius in `reason`. |
 | `reason` | yes | Free-text justification. Should reference the relevant code path and/or PR. |
 | `regressionTest` | yes | UT method name in `ClassName.testMethodName` form (simple class name, no package prefix — e.g. `ComponentsRegistryServiceControllerUpdateCacheTest.git equal to zero retires the endpoint with 410 and does not re-read`) that pins the intended behavior. This is the contract that prevents the entry from going stale. |
 
@@ -172,3 +176,17 @@ Failure modes:
 - **A handful of `VALUE_DIFF` or `STATUS_CODE_DIFF` records on specific
   endpoints** → real regressions. Investigate, classify into category 1 or
   category 4, follow the corresponding procedure.
+- **Extra `jira-component-version-ranges` / `maven-artifacts` views that differ
+  ONLY in `versionRange` (two adjacent ranges with byte-identical payloads)** →
+  a side effect of the base-row = open-upper amendment (2026-07, ADR-018 §2):
+  when a component declares two ADJACENT version blocks with identical values,
+  they were previously collapsed only because the oldest of them happened to seed
+  the base; now that the newest block is the base, both older twins survive as
+  separate override rows and enumerate as separate (identical) views. **Preferred
+  fix: clean the redundant twin block in the source DSL (old CR) / the test
+  fixture — merge the two identical adjacent ranges — NOT a resolver-side
+  adjacent-view collapse** (a collapse in the read path was tried and rejected: it
+  needs value-equality the resolved config objects don't cleanly provide and it
+  regressed the `maven-artifacts` enumeration). The one-off scan
+  `scan-open-upper-base-violations.sql` detects the related "open-upper
+  SCALAR_OVERRIDE" residue of the OLD base form after migration.

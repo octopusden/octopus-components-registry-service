@@ -215,6 +215,59 @@ tasks.register('unitTest', Test) {
     // summary.md noisily.
 }
 
+// SINGLE authoritative known-deltas matcher, shared by BOTH gates that consume the
+// known-deltas files: `compatibilityReporter` (full-run suppression) and
+// `compatDiffOfDiffs` (per-commit regression gate). They previously carried two
+// hand-duplicated copies which silently drifted when the regex keys were added —
+// any change to the matching semantics must happen HERE and nowhere else.
+//
+// Semantics (spec: docs/registry/api-compat-deltas.md):
+//  - endpoint + category are required match keys (endpoint already encodes the
+//    HTTP method as its first token, e.g. "PUT /rest/api/...").
+//  - baselineValue / candidateValue / pathParams / queryParams are optional
+//    exact-match keys — null/omitted means "any value on the record matches".
+//    A delta that *specifies* a value requires the record to carry exactly that
+//    value: a null record-side value is coerced to the empty string, so it cannot
+//    match a non-null delta value. To suppress diffs where the record's value is
+//    legitimately null, omit the field from the delta entry entirely.
+//  - jsonPathPattern / messagePattern are optional REGEX keys (find(), not
+//    full-match) for records whose identity lives inside the diff payload rather
+//    than the request coordinates: jsonPathPattern matches the raw-layer jsonPath
+//    (e.g. every array index of `$.components[N].distribution.docker`);
+//    messagePattern matches the typed-layer AssertJ message (raw jsonPath is null
+//    there; the differing field only appears as `field/property 'x.y' differ`).
+//    A specified pattern REQUIRES the record field to be present and matching —
+//    a null/absent record field never matches, so these keys narrow, never widen.
+//    Needed for cluster-wide intentional deltas (ADR-018 base-row amendment)
+//    where per-pathParams entries would explode combinatorially.
+def compatMatchesDelta = { Map delta, Map record ->
+    // endpoint: exact string match, OR endpointPattern: regex find(). endpointPattern exists for
+    // records whose endpoint embeds a LITERAL path value (the prod-trace replayer does not
+    // parameterize paths, so raw trace requests carry real component keys) — real component keys
+    // must not be committed to this public repo (CI Content Validation), so such entries match the
+    // path SHAPE instead of naming it. Exactly one of the two should be set; if both are, both must match.
+    if (delta.endpoint != null && delta.endpoint != record.endpoint) return false
+    if (delta.endpointPattern != null) {
+        def ep = record.endpoint
+        if (ep == null || !(ep.toString() =~ delta.endpointPattern.toString())) return false
+    }
+    if (delta.endpoint == null && delta.endpointPattern == null) return false // malformed entry: never matches
+    if (delta.category != record.category) return false
+    if (delta.baselineValue != null && delta.baselineValue.toString() != (record.baselineValue ?: '').toString()) return false
+    if (delta.candidateValue != null && delta.candidateValue.toString() != (record.candidateValue ?: '').toString()) return false
+    if (delta.pathParams != null && delta.pathParams != (record.pathParams ?: [:])) return false
+    if (delta.queryParams != null && delta.queryParams != (record.queryParams ?: [:])) return false
+    if (delta.jsonPathPattern != null) {
+        def jp = record.jsonPath
+        if (jp == null || !(jp.toString() =~ delta.jsonPathPattern.toString())) return false
+    }
+    if (delta.messagePattern != null) {
+        def msg = record.message
+        if (msg == null || !(msg.toString() =~ delta.messagePattern.toString())) return false
+    }
+    return true
+}
+
 tasks.register('compatibilityReporter') {
     group = 'verification'
     description = 'Aggregates per-worker diff/exec ndjson into summary.md and execution-log.md; fails the build if any unclassified diffs remain.'
@@ -368,29 +421,10 @@ tasks.register('compatibilityReporter') {
         } else {
             logger.warn("[compat] known-deltas file not found: ${knownDeltasFile}; treating as empty")
         }
-        def matchesDelta = { Map delta, Map record ->
-            // endpoint + category are required match keys (endpoint already encodes the
-            // HTTP method as its first token, e.g. "PUT /rest/api/...").
-            if (delta.endpoint != record.endpoint) return false
-            if (delta.category != record.category) return false
-            // Optional match keys — null/omitted on the delta means "any value on the
-            // record matches this field". A delta that *specifies* a value requires the
-            // record to carry exactly that value: a null record-side value is coerced
-            // to the empty string for comparison, so it cannot match a non-null delta
-            // value. To suppress diffs where the record's value is legitimately null,
-            // omit the field from the delta entry entirely.
-            if (delta.baselineValue != null && delta.baselineValue.toString() != (record.baselineValue ?: '').toString()) return false
-            if (delta.candidateValue != null && delta.candidateValue.toString() != (record.candidateValue ?: '').toString()) return false
-            if (delta.pathParams != null && delta.pathParams != (record.pathParams ?: [:])) return false
-            // queryParams optional match. Required so an intentional delta on, e.g.,
-            // `?ignore-required=true` doesn't accidentally also suppress the diff for
-            // `?ignore-required=false` (and vice-versa). Omitting queryParams from the
-            // delta entry still matches records with any queryParams.
-            if (delta.queryParams != null && delta.queryParams != (record.queryParams ?: [:])) return false
-            return true
-        }
+        // Shared matcher — see `compatMatchesDelta` above the task registrations
+        // (single source of truth for BOTH this reporter and compatDiffOfDiffs).
         def findDeltaFor = { Map record ->
-            knownDeltas.find { delta -> matchesDelta(delta as Map, record) }
+            knownDeltas.find { delta -> compatMatchesDelta(delta as Map, record) }
         }
 
         def diffFiles = dir.listFiles({ f -> f.name.startsWith('diff-worker-') && f.name.endsWith('.ndjson') } as FileFilter) ?: []
@@ -716,15 +750,11 @@ tasks.register('compatDiffOfDiffs') {
                 logger.warn("[compat-dod] failed to parse ${knownDeltasName}: ${e.message}; treating as empty")
             }
         }
-        def matchesDelta = { Map delta, Map record ->
-            if (delta.endpoint != record.endpoint) return false
-            if (delta.category != record.category) return false
-            if (delta.baselineValue != null && delta.baselineValue.toString() != (record.baselineValue ?: '').toString()) return false
-            if (delta.candidateValue != null && delta.candidateValue.toString() != (record.candidateValue ?: '').toString()) return false
-            if (delta.pathParams != null && delta.pathParams != (record.pathParams ?: [:])) return false
-            if (delta.queryParams != null && delta.queryParams != (record.queryParams ?: [:])) return false
-            return true
-        }
+        // Shared matcher — see `compatMatchesDelta` above the task registrations. This task
+        // previously carried a hand-duplicated copy that silently drifted (it missed the
+        // jsonPathPattern/messagePattern keys), so ADR-018-amendment entries were excluded by
+        // the reporter but NOT by this gate. One definition, both gates.
+        def matchesDelta = { Map delta, Map record -> compatMatchesDelta(delta, record) }
 
         def loadRecords = { File dir, String label ->
             // No diff-worker-*.ndjson means ZERO diffs: DiffCollector only

@@ -46,18 +46,20 @@ overrides never changes coverage, and vice versa.
   Active development**. First release ships a single flat `supported`; status data not populated.
   Status is metadata, does not change resolve.
 
-**Layer 2 — Per-attribute values.** Each attribute has a **base = effective default value** at
+**Layer 2 — Per-attribute values.** Each attribute has a **base value** at
 `ALL_VERSIONS`, plus **overrides** on sub-ranges, **including open-upper** ranges. Resolve of an
 attribute for a covered version = `the override whose range CONTAINS v ?? base`.
-- **Base = effective default = `top-level block ⊕ Defaults.groovy`.** For real legacy data this
-  always carries the required fields (e.g. `build_system`), because legacy resolved a value for
-  every covered version via the Defaults fallback. **Required-field edge (P1):** if a required
-  BASE field has no all-versions default anywhere (set only inside version blocks, no Defaults),
-  **relax the BASE `build_system IS NOT NULL` DB invariant** (`V1__schema.sql:243`) to allow NULL
-  rather than re-synthesizing a bounded base — the value then lives purely in overrides and the
-  supported gate guarantees we never resolve outside their union. Decision in §8.
-- **Open-upper ranges are OVERRIDES, not the base.** The portal's current "D5" rule
-  (open-upper → edit BASE) is **relaxed**: open-upper overrides are first-class.
+- **Base = the effective value of the OPEN-UPPER (newest) range** (base-VALUE semantics superseded
+  2026-07; was `top-level block ⊕ Defaults.groovy` — see [ADR-018 §2 amendment](adr/018-decoupled-version-model.md)).
+  Selected by `ImportServiceImpl.selectBaseConfig`: the all-versions block if declared, else the
+  open-upper `[X,)` block, else the highest declared range. The newest block's merged config still
+  inherits `Defaults.groovy`, so required fields (e.g. `build_system`) stay non-null on the base.
+  **Required-field edge (P1):** if a required BASE field is unset on the newest block AND has no
+  Defaults value, **relax the BASE `build_system IS NOT NULL` DB invariant** (`V1__schema.sql:243`)
+  to allow NULL — the value then lives purely in an older override.
+- **The OLDER/other declared blocks are the overrides** (including the historical-left `(,Y)` and
+  bounded blocks). The portal's current "D5" rule (open-upper → edit BASE) is **relaxed**: the newest
+  band IS the base, and older bands are first-class overrides.
 - Disjointness is enforced **per attribute**, not per component (different attributes may have
   different, independently-overlapping range structures).
 - Overrides apply by **containment** (`containsRange`), not exact range match — see §5 / §8 (TD-010).
@@ -75,9 +77,11 @@ resolve(component, v):
 migrate(legacy DSL):
   declaredRanges = the block range strings, VERBATIM (incl composites)  // persisted as RANGE_PRESENCE rows
   supported      = ∪ declaredRanges                       || ALL        (no blocks → all versions)
-  base(A)        = effective default of A = (top-level block ⊕ Defaults.groovy)   // ALL_VERSIONS, carries required fields
-  overrides      = per attribute, derived from the blocks; adjacent same-value MAY be merged
-                   (safe — enumeration is anchored to RANGE_PRESENCE, not to override edges)
+  base(A)        = effective value of the OPEN-UPPER (newest) range   // ALL_VERSIONS row; superseded 2026-07 (was top-level ⊕ Defaults)
+  overrides      = per attribute, derived from the OLDER blocks (newest = base); adjacent same-value MAY be merged.
+                   NOTE: enumeration currently DOES key off override edges, so two adjacent value-identical
+                   OLDER blocks yield two identical views. Preferred fix = clean the redundant blocks in the
+                   source DSL (old CR) / fixtures, NOT a resolver-side collapse. See §compat.
   // no synthetic-bounded base
 
 enumerate(component):                                    // v2/v3 range-list endpoints
@@ -227,7 +231,7 @@ constant across a declared range and containment is unambiguous.
 | Override application (resolve + enumerate) | `EntityMappers.kt:315-319` `rangeApplies()` | exact-match → **containsRange** (TD-010) |
 | Enumeration synthetic-base skip | `EntityMappers.kt:143-150` | replace with verbatim RANGE_PRESENCE enumeration; prove equivalence |
 | Resolve coverage gate | `EntityMappers.kt:~209` (`base.versionRange != ALL_VERSIONS` union check) + `ComponentCodeRenderer.renderResolved` ~190-204 | gate on `supported` (∪ RANGE_PRESENCE) |
-| Base row build | `ImportServiceImpl.buildBaseConfigRow:~1456` | base.versionRange = ALL_VERSIONS; value = effective default (top-level ⊕ Defaults via `commonDefaultsCache:731`); drop synthetic-bounded range |
+| Base row build | `ImportServiceImpl.buildBaseConfigRow` + `selectBaseConfig` | base.versionRange = ALL_VERSIONS; value = effective config of the OPEN-UPPER (newest) block (2026-07 amendment, was top-level ⊕ Defaults); drop synthetic-bounded range |
 | Synthetic base decision | `ImportServiceImpl.importModule:~895-904` | remove `isSyntheticBase` bounded-base path; supported = ∪ declared ranges |
 | RANGE_PRESENCE emission | `ImportServiceImpl.emitRangePresenceRow:~970-993` | emit for every declared bounded block (verbatim, incl composites); none when supported = ALL |
 | Enumeration ordering | `V4Mappers.kt` `ARTIFACT_MAPPING_ORDER` | lexicographic today (existing bug) — don't introduce a new diff; numeric fix is a separate decision (§8.5) |
