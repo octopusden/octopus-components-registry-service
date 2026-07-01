@@ -219,10 +219,11 @@ class ComponentRegistryResolverImpl(
     }
 
     override fun findComponentsByDockerImages(images: Set<Image>): Set<ComponentImage> {
-        val imageNames = images.map { it.name }.toSet()
-        return buildImageToComponentMap().filterKeys(imageNames::contains).mapNotNull { (imgName, component) ->
-            images.find { it.name == imgName }?.let { requiredImage ->
-                findConfigurationByImage(imgName, requiredImage.tag, component)
+        val imageToComponentMap = buildImageToComponentMap()
+        return images.mapNotNull { image ->
+            val component = imageToComponentMap[image.name]
+            component?.let {
+                findConfigurationByImage(image.name, image.tag, it)
             }
         }.toSet()
     }

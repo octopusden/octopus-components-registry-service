@@ -12,12 +12,14 @@ import org.octopusden.octopus.components.registry.core.dto.ArtifactComponentsDTO
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.core.dto.BuildSystem
 import org.octopusden.octopus.components.registry.core.dto.ComponentArtifactConfigurationDTO
+import org.octopusden.octopus.components.registry.core.dto.ComponentImage
 import org.octopusden.octopus.components.registry.core.dto.ComponentV1
 import org.octopusden.octopus.components.registry.core.dto.ComponentV2
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponent
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersion
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersions
 import org.octopusden.octopus.components.registry.core.dto.DistributionDTO
+import org.octopusden.octopus.components.registry.core.dto.Image
 import org.octopusden.octopus.components.registry.core.dto.DocDTO
 import org.octopusden.octopus.components.registry.core.dto.EscrowDTO
 import org.octopusden.octopus.components.registry.core.dto.EscrowGenerationMode
@@ -303,6 +305,18 @@ class ComponentsRegistryServiceControllerTest : BaseComponentsRegistryServiceTes
             .andReturn()
             .response
             .toObject(object : TypeReference<Map<String, ComponentArtifactConfigurationDTO>>() {})
+
+    override fun findComponentsByDockerImages(images: Set<Image>): Set<ComponentImage> =
+        mvc.perform(
+            MockMvcRequestBuilders.post("/rest/api/3/components/find-by-docker-images")
+                .accept(APPLICATION_JSON)
+                .contentType(APPLICATION_JSON)
+                .content(objectMapper.writeValueAsBytes(images))
+        )
+            .andExpect(status().isOk)
+            .andReturn()
+            .response
+            .toObject(object : TypeReference<Set<ComponentImage>>() {})
 
     @Test
     fun testPing() {
