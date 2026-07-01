@@ -61,8 +61,10 @@ This document is the canonical reference for the v2 schema. ADR-014 records the 
 ## 3. Core model: Model A' override taxonomy
 
 > **Decoupled version model (ADR-018).** Coverage ("supported versions") and per-attribute
-> values are now **two independent layers**. The BASE row is **always** the effective default at
-> `ALL_VERSIONS` (top-level DSL block ⊕ `Defaults.groovy`); the old "synthetic bounded base" (a BASE
+> values are now **two independent layers**. The BASE row is **always** at `ALL_VERSIONS`; its VALUE is
+> the effective config of the **OPEN-UPPER (newest) range** (base-row semantics superseded 2026-07 —
+> was `top-level ⊕ Defaults`; see [ADR-018 §2 amendment](adr/018-decoupled-version-model.md)), with the
+> OLDER declared blocks kept as overrides. The old "synthetic bounded base" (a BASE
 > row whose `version_range` was the first declared block, `is_synthetic_base = true`) is **gone**.
 > Supported versions are a separate layer: `supported = ∪` of the declared bounded ranges, each
 > stored verbatim as a `RANGE_PRESENCE` row. `is_synthetic_base` is retained on the schema/DTO for
@@ -72,8 +74,10 @@ This document is the canonical reference for the v2 schema. ADR-014 records the 
 
 ### 3.1 Base row
 - `row_type = 'BASE'`, `overridden_attribute IS NULL`
-- `version_range` is **always `ALL_VERSIONS`** (`(,0),[0,)`). The base is the component's effective
-  default — top-level DSL block ⊕ `Defaults.groovy` — applied across the whole version space (ADR-018).
+- `version_range` is **always `ALL_VERSIONS`** (`(,0),[0,)`). The base VALUE is the effective config of
+  the **OPEN-UPPER (newest) range** — what current versions resolve to — applied across the whole
+  version space (base-row semantics superseded 2026-07, was `top-level ⊕ Defaults`; see
+  [ADR-018 §2 amendment](adr/018-decoupled-version-model.md)). Older blocks survive as overrides.
 - All typed columns may carry values (defaults for that component)
 - `is_synthetic_base` is **vestigial: always `false`** under the decoupled model. It is retained as
   a NOT-NULL column / DTO field only for v4-contract stability. The pre-ADR-018 importer set it
@@ -493,15 +497,20 @@ For each top-level DSL component:
 
 Grouping is keyed off the loader's `EscrowConfiguration.aggregatorSubComponents` (aggregatorKey → sub-component keys, derived from the `components { }` block), **never** the flat `parentComponent` field (§4.3). After linking, a **re-run cleanup** deletes any pre-existing `component_groups` row whose key is no longer a current aggregator — unlinking its members (`component_group_id = NULL`) first. This makes re-migration idempotent and removes groups left behind by the earlier flat-`parentComponent`-based grouping (a non-aggregator parent — one with no `components { }` block — no longer retains a group). Cleanup runs only on a **full batch** migration (`migrateAllComponents`); a single-component migration (`migrateComponent`) links its own group but does not sweep stale groups.
 
-### 6.4 Base row determination (ADR-018)
+### 6.4 Base row determination (ADR-018; base-VALUE amendment 2026-07)
 
-The base row is **always** the `ALL_VERSIONS` (`(,0),[0,)`) effective default — the top-level DSL
-block merged with `Defaults.groovy` — regardless of whether the DSL declared an explicit all-versions
-block. There is **no synthetic-bounded base**: a component that declares only version-range blocks
-no longer borrows its first range as the base; that base is `ALL_VERSIONS`, and the declared ranges
-become the coverage layer (`RANGE_PRESENCE` rows, §6.5/§3.4). `build_system` is the only
-required-on-base field and is always non-null via `Defaults.groovy` (`buildSystem = MAVEN`), so the
-base DB CHECK is unchanged (audit A2).
+The base row's `version_range` is **always** `ALL_VERSIONS` (`(,0),[0,)`). Its VALUE is the merged
+config of the **OPEN-UPPER (newest) range** — what current versions resolve to — selected by
+`ImportServiceImpl.selectBaseConfig` (all-versions block if declared, else the open-upper `[X,)`
+block, else the highest declared range). This **supersedes** the original ADR-018 rule that seeded the
+base from `top-level ⊕ Defaults` / the first declared block — see the
+[ADR-018 §2 amendment](adr/018-decoupled-version-model.md) for the rationale (the base row is the
+portal's editable default and must reflect the newest band, not a `Defaults` fallback no range uses).
+There is still **no synthetic-bounded base** and no first-range borrowing: `version_range` is always
+`ALL_VERSIONS`, and the declared ranges become the coverage layer (`RANGE_PRESENCE` rows, §6.5/§3.4)
+while the OLDER blocks become overrides (§6.5). The newest block's merged config still inherits
+`Defaults.groovy` (`buildSystem = MAVEN`), so `build_system` stays non-null on the base and the base
+DB CHECK is unchanged (audit A2).
 
 `is_synthetic_base` is consequently **always set `false`** by the importer; it is retained only for
 v4-contract stability (§3.1, §4.2).
@@ -513,9 +522,10 @@ Coverage rows (redesign refinement): collect the declared bounded block ranges, 
 the union is all-versions) — this is the coverage layer (§3.4, ADR-018). Coverage is independent of
 the override rows below.
 
-For each declared version-range block in DSL (override/value layer):
-- For each scalar attribute whose value differs from the `ALL_VERSIONS` base row: emit scalar override row (`overridden_attribute = 'aspect.field'`, single column set), on the block's range (which may be open-upper).
-- For each child-collection change (multi-VCS, distribution_*, requiredTools): emit marker row (`overridden_attribute = '<marker>'`, all typed scalars NULL) + child rows attached.
+For each declared version-range block in DSL **except the one chosen as the base** (§6.4 — the
+open-upper/newest block; older & historical-left blocks are the ones that survive here) (override/value layer):
+- For each scalar attribute whose value differs from the `ALL_VERSIONS` base row: emit scalar override row (`overridden_attribute = 'aspect.field'`, single column set), on the block's range. Under the 2026-07 base-VALUE amendment these are the OLDER blocks (the newest block equals the base and emits nothing).
+- For each child-collection change (multi-VCS, distribution_*, requiredTools): emit marker row (`overridden_attribute = '<marker>'`, all typed scalars NULL) + child rows attached. Base VCS/distribution/tools now come from the newest block too.
 
 Override detection deduplicates against the `ALL_VERSIONS` base: a scalar/marker row is emitted only
 when the resolved value differs from the base's resolved value (the `RANGE_PRESENCE` row is still

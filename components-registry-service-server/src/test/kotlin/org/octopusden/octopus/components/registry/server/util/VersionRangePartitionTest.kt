@@ -2,6 +2,7 @@ package org.octopusden.octopus.components.registry.server.util
 
 import org.junit.jupiter.api.Assertions.assertDoesNotThrow
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
@@ -198,5 +199,49 @@ class VersionRangePartitionTest {
     fun `merge all-versions`() {
         assertEquals(listOf("(,0),[0,)"), VersionRangePartition.mergeUnion(listOf("[1,2)", "(,0),[0,)")))
         assertEquals(listOf("(,0),[0,)"), VersionRangePartition.mergeUnion(listOf("(,)")))
+    }
+
+    // ── isOpenUpper (shared range-shape primitive; also used by EntityMappers.rangeApplies) ─────
+
+    @Test
+    @DisplayName("isOpenUpper is true only for ranges whose trailing segment runs to +inf")
+    fun `open-upper detection`() {
+        assertTrue(VersionRangePartition.isOpenUpper("[1.0,)"))
+        assertTrue(VersionRangePartition.isOpenUpper("(1.0,)"))
+        assertTrue(VersionRangePartition.isOpenUpper("(,0),[1.0,)")) // composite with open tail
+        assertTrue(VersionRangePartition.isOpenUpper("(,)")) // fully unbounded
+        assertTrue(VersionRangePartition.isOpenUpper("[2.1.108-290,)")) // dash-qualified floor
+        // finite / closed / single-version are NOT open-upper
+        assertFalse(VersionRangePartition.isOpenUpper("[1.0,2.0)"))
+        assertFalse(VersionRangePartition.isOpenUpper("(,3.0]"))
+        assertFalse(VersionRangePartition.isOpenUpper("(,1.0.107)"))
+        assertFalse(VersionRangePartition.isOpenUpper("[1.0]"))
+    }
+
+    // ── baseCandidateComparator (decoupled-model base-row selection: newest/open-upper wins) ─────
+
+    @Test
+    @DisplayName("base-candidate max is the open-upper block; falls back to the highest bounded range")
+    fun `base candidate selection`() {
+        val names = VersionNames("serviceCBranch", "serviceC", "minorC")
+        val nvf = NumericVersionFactory(names)
+        val cmp: (String, String) -> Int = { a, b -> nvf.create(a).compareTo(nvf.create(b)) }
+        val rank = VersionRangePartition.baseCandidateComparator(cmp)
+
+        // Historical-left + bounded chain + open-upper tail: the open-upper [1.2.474,) is the base.
+        assertEquals(
+            "[1.2.474,)",
+            listOf("(,1.0.107)", "[1.0.107,1.2.471)", "[1.2.471,1.2.474)", "[1.2.474,)").maxWith(rank),
+        )
+        // Dash-qualified floors: the open-upper [2.1.108-290,) wins (scheme-aware ordering).
+        assertEquals(
+            "[2.1.108-290,)",
+            listOf("(,2.1.61)", "[2.1.61,2.1.108-290)", "[2.1.108-290,)").maxWith(rank),
+        )
+        // Two open-upper ranges: the higher floor is newer.
+        assertEquals("[2.0,)", listOf("[1.0,)", "[2.0,)").maxWith(rank))
+        // No open-upper block (all bounded/historical): the highest range wins — floor, then ceiling.
+        assertEquals("[2.0,3.0)", listOf("(,1.0)", "[1.0,2.0)", "[2.0,3.0)").maxWith(rank))
+        assertEquals("(,2.0)", listOf("(,1.0)", "(,2.0)").maxWith(rank)) // same (-inf) floor → higher ceiling
     }
 }

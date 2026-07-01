@@ -77,11 +77,42 @@ Model a component's configuration as **two independent layers**:
 
 ### 2. Per-attribute values
 
-- `base = effective default = (top-level block ⊕ Defaults.groovy)` at `ALL_VERSIONS` — it always
-  carries the required fields because the legacy loader resolved a value for every covered version
-  via the Defaults fallback.
+> **AMENDMENT (2026-07, base-row = newest): the base-row VALUE semantics below are SUPERSEDED.**
+> The rules in this section originally set `base = (top-level block ⊕ Defaults.groovy)` and treated
+> the open-upper block as an override. We intentionally supersede that: the **base row now carries the
+> effective value of the OPEN-UPPER (newest) range** — i.e. what current versions resolve to — and the
+> OLDER/other declared blocks (including the historical-left `(,Y)` and any bounded blocks) become the
+> overrides. Rationale: the base row is the component's editable default in the portal and the fallback
+> for the newest band, so it must show the value current versions actually use — not a `Defaults.groovy`
+> fallback that no declared range uses (observed live as a stale `releaseVersionFormat` on one
+> component and a stale `versionPrefix` on another). Everything else in this ADR (coverage layer,
+> containment, enumeration, migration
+> compatibility) is UNCHANGED — only which config seeds the base row changes. See
+> `ImportServiceImpl.selectBaseConfig` and `VersionRangePartition.baseCandidateComparator`.
+>
+> **Confirmed legacy-surface change (2026-07-01).** Per-VERSION resolution is byte-identical, but the
+> COMPONENT-LEVEL representative — `Component.distribution` (and `escrow`) in the legacy v1/v2/v3
+> list (`GET /components`), detail (`GET /components/{c}`) and standalone
+> (`GET /components/{c}/distribution`, now deprecated) responses — is rendered from the BASE row and
+> therefore switches from the top-level/oldest block's values to the NEWEST block's. The full-stand
+> compat run (build 4099: ~130k replayed prod-trace tuples + the exhaustive sweep) surfaced exactly
+> 11 affected components — ten on `distribution.gav`/`docker` and one on `escrow.generation`
+> (UNSUPPORTED→AUTO). Component keys are withheld from this public repo (CI Content Validation);
+> the authoritative list is in the internal compat report for build 4099. The domain owner reviewed
+> every live baseline↔candidate pair and confirmed the NEW (newest-block) values are the correct
+> component-level representation (the old output showed retired platforms/artifacts: aix/rhel6
+> zips, `file://` installers, dropped docker images, stale artifact names). These diffs are
+> suppressed as intentional known-deltas (`known-deltas-db.json`, "ADR-018 base-row amendment"
+> entries) until this release becomes the compat baseline, after which the entries match nothing.
+
+- `base = effective value at the OPEN-UPPER (newest) range` at `ALL_VERSIONS` — selected by
+  `selectBaseConfig`: the all-versions block if declared, else the open-upper `[X,)` block, else
+  (no open-upper block) the highest declared range. **Required-field edge:** when the newest block
+  leaves a required field unset the base column may be NULL (the `build_system` BASE check is relaxed);
+  the value then lives purely in an older override.
 - **Overrides** apply on ranges **including open-upper** (`[X,)`), selected by **containment**
-  (`override.range ⊇ R`), not exact string match.
+  (`override.range ⊇ R`), not exact string match. After the amendment the OLDER blocks are the ones
+  that survive as overrides (they differ from the newest base).
 - **No synthetic bounded base.** The migrated base is always `ALL_VERSIONS`.
 
 ### Algorithms
@@ -125,9 +156,10 @@ Model a component's configuration as **two independent layers**:
   stand, not stored locally.)
 - **A2 — per-range-only required fields: none material.** `build_system` is the **only** required-on-
   BASE field in the schema (`chk_..._base_build_system`). `Defaults.groovy` sets `buildSystem = MAVEN`
-  globally, so every migrated base (top-level ⊕ Defaults) is non-null: components either set it
-  top-level or inherit `MAVEN`. The components that set `buildSystem` only inside a range block all
-  use `MAVEN` (equal to the Defaults value), so their per-range value is a no-op against the base.
+  globally, and the base row is the newest block's MERGED config (2026-07 amendment) which still
+  inherits that default, so every migrated base is non-null: components either set `buildSystem`
+  top-level/in the newest block or inherit `MAVEN`. The components that set `buildSystem` only inside a
+  range block all use `MAVEN` (equal to the Defaults value), so it stays non-null on the base.
   **No path to a null base `build_system` → the DB CHECK is kept unchanged (no relaxation).**
 
 ### `distribution.*` — per-range vs per-component (CRS #387)

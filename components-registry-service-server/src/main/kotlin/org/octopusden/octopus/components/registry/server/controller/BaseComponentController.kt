@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.controller
 
+import io.swagger.v3.oas.annotations.Operation
 import org.octopusden.octopus.components.registry.core.dto.BuildSystem
 import org.octopusden.octopus.components.registry.core.dto.Component
 import org.octopusden.octopus.components.registry.core.dto.ComponentsDTO
@@ -93,8 +94,16 @@ abstract class BaseComponentController<T : Component> {
         return createComponent(escrowModule)
     }
 
-    // todo - consider removing the whole endpoint or just version specific fields, like docker,
-    //  because version is not provided in this context
+    // DEPRECATED (2026-07, with the ADR-018 base-row amendment): the component-level distribution
+    // is ambiguous without a version — it now reports the OPEN-UPPER (newest) block's values, which
+    // changed this endpoint's output for components whose newest range redefines distribution. The
+    // recorded prod trace shows ZERO traffic here (all real /distribution calls are per-version).
+    // Use GET {component}/versions/{version}/distribution instead. Kept only for wire-compat.
+    @Deprecated("Component-level distribution is ambiguous without a version; use the per-version endpoint")
+    @Operation(
+        deprecated = true,
+        summary = "Deprecated: component-level distribution (newest-range values); use /versions/{version}/distribution",
+    )
     @GetMapping("{component}/distribution")
     fun getComponentDistribution(
         @PathVariable("component") component: String,
