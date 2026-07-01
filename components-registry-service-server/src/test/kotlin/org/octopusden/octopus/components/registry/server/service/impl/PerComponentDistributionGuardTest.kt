@@ -75,4 +75,24 @@ class PerComponentDistributionGuardTest {
             validatePerComponentDistributionInvariants(component, loadConfigs("TopLevelOnly.groovy"))
         }
     }
+
+    @Test
+    @DisplayName("rejects when the FIRST-declared block is the divergent one and a later block omits (order-independent)")
+    fun rejectsWhenFirstBlockDivergesAndLaterOmits() {
+        val ex = assertThrows<IllegalStateException> {
+            validatePerComponentDistributionInvariants(component, loadConfigs("FirstBlockDiverges.groovy"))
+        }
+        val msg = ex.message!!
+        assertTrue(msg.contains("distribution.explicit"), "message names the attribute: $msg")
+        assertTrue(msg.contains("[03.53,03.54)"), "message names the declaring range: $msg")
+        assertTrue(msg.contains("[03.54,03.55)"), "message names the inheriting range: $msg")
+    }
+
+    @Test
+    @DisplayName("loads + passes when a range declares distribution with no top-level default (loader null-safety)")
+    fun acceptsRangeDistributionWithoutTopLevelDefault() {
+        assertDoesNotThrow {
+            validatePerComponentDistributionInvariants(component, loadConfigs("NoTopLevelDistribution.groovy"))
+        }
+    }
 }

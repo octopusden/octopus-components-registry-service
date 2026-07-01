@@ -1024,8 +1024,8 @@ class EscrowConfigurationLoader {
 
     @TypeChecked(TypeCheckingMode.SKIP)
     static Distribution parseDistributionSection(ConfigObject distributionConfigObject, Distribution defaultDistribution) {
-        def explicit = distributionConfigObject.containsKey("explicit") ? distributionConfigObject.explicit : defaultDistribution.explicit()
-        def external = distributionConfigObject.containsKey("external") ? distributionConfigObject.external : defaultDistribution.external()
+        def explicit = distributionConfigObject.containsKey("explicit") ? distributionConfigObject.explicit : (defaultDistribution?.explicit() ?: false)
+        def external = distributionConfigObject.containsKey("external") ? distributionConfigObject.external : (defaultDistribution?.external() ?: false)
         def GAV = distributionConfigObject.getOrDefault("GAV", defaultDistribution?.GAV()) as String
         def DEB = distributionConfigObject.getOrDefault("DEB", defaultDistribution?.DEB()) as String
         def RPM = distributionConfigObject.getOrDefault("RPM", defaultDistribution?.RPM()) as String
