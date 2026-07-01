@@ -242,6 +242,87 @@ object VersionRangePartition {
     }
 
     /**
+     * True iff [range]'s trailing segment has an empty (open-ended) upper bound, i.e. the range runs
+     * to +inf — "[1.0,)", "(,0),[1.0,)", and the fully-unbounded "(,)". False for any finite or closed
+     * upper bound ("[1.0,2.0)", "(,3]") and for a hard single version ("[1.0]"). This is the shared
+     * range-shape primitive: `EntityMappers.rangeApplies` uses it so an open-upper child is only matched
+     * against an open-upper parent, and migration base-row selection uses it to pick the newest block.
+     *
+     * String-based (matches the range verbatim) so it agrees with the loader's stored bracket forms
+     * without needing scheme-aware parsing.
+     */
+    fun isOpenUpper(range: String): Boolean {
+        val trimmed = range.trim()
+        if (trimmed.isEmpty() || trimmed.last() != ')') return false
+        val lastComma = trimmed.lastIndexOf(',')
+        return lastComma in 0 until trimmed.length - 1 &&
+            trimmed.substring(lastComma + 1, trimmed.length - 1).isBlank()
+    }
+
+    /**
+     * Comparator over version-range STRINGS ranking them as BASE-row candidates for the decoupled
+     * model (ADR-018): the base row must carry the effective **open-upper (newest) value**, so the
+     * GREATEST range under this comparator is the block whose scalars seed the base. Feed the winner
+     * to `maxWith`/`maxWithOrNull`.
+     *
+     * Ranking (ascending — bigger = better base):
+     *  1. an open-upper range (runs to +inf) outranks any finite range — the newest versions live there;
+     *  2. among equal open-upper-ness, the higher floor wins (`[2.0,)` beats `[1.0,)`; a range whose
+     *     highest segment-floor is unbounded-left ranks lowest);
+     *  3. tie-break on the higher ceiling (unbounded-upper = +inf ranks highest);
+     *  4. final deterministic tie-break on the normalized string, so selection is stable across runs.
+     *
+     * [compare] MUST be the component's scheme-aware ordering (`numericVersionComparator`) so dash- and
+     * dot-qualified versions (`2.1.108-290`) order the same way the `VersionRangeFactory` validates them.
+     */
+    fun baseCandidateComparator(compare: (String, String) -> Int): Comparator<String> =
+        Comparator { a, b ->
+            val ao = isOpenUpper(a) && !isAllVersions(a)
+            val bo = isOpenUpper(b) && !isAllVersions(b)
+            if (ao != bo) {
+                if (ao) 1 else -1
+            } else {
+                val floorCmp =
+                    compareNullableBound(highestFloor(a, compare), highestFloor(b, compare), compare, nullRanksHigh = false)
+                if (floorCmp != 0) {
+                    floorCmp
+                } else {
+                    val ceilCmp =
+                        compareNullableBound(highestCeiling(a, compare), highestCeiling(b, compare), compare, nullRanksHigh = true)
+                    if (ceilCmp != 0) ceilCmp else normalize(a).compareTo(normalize(b))
+                }
+            }
+        }
+
+    /** The greatest lower bound across [range]'s segments (`null` = some segment is unbounded-left). */
+    private fun highestFloor(range: String, compare: (String, String) -> Int): String? =
+        toSegments(range).mapNotNull { it.lo }.maxWithOrNull(Comparator(compare))
+
+    /** The greatest upper bound across [range]'s segments (`null` = some segment runs to +inf). */
+    private fun highestCeiling(range: String, compare: (String, String) -> Int): String? {
+        val segs = toSegments(range)
+        if (segs.any { it.hi == null }) return null
+        return segs.mapNotNull { it.hi }.maxWithOrNull(Comparator(compare))
+    }
+
+    /**
+     * Compare two bounds where `null` is unbounded. [nullRanksHigh] picks the direction: for a CEILING
+     * an unbounded (+inf) bound is the greatest; for a FLOOR an unbounded (−inf) bound is the least.
+     */
+    private fun compareNullableBound(
+        a: String?,
+        b: String?,
+        compare: (String, String) -> Int,
+        nullRanksHigh: Boolean,
+    ): Int =
+        when {
+            a == null && b == null -> 0
+            a == null -> if (nullRanksHigh) 1 else -1
+            b == null -> if (nullRanksHigh) -1 else 1
+            else -> compare(a, b)
+        }
+
+    /**
      * Collapse [ranges] (possibly composite) into maximal contiguous single intervals (amendment D).
      * Two segments merge iff their union is a single interval — they overlap, or touch at the same
      * point with at least one side inclusive there (`[1,2)`+`[2,5)`→`[1,5)`; `[1,2)`+`[3,5)` stays

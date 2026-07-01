@@ -28,6 +28,104 @@
       "candidateValue": "404",
       "reason": "#256 stale-git bleed-through fix (Distribution counterpart of the vcs-settings entry above). DB-sourced project + version absent from DB: git baseline may serve a stale Distribution as 200; v3 candidate routes by resolved component source and returns 404. Authoritative guard is the unit test; this entry is defensive documentation.",
       "regressionTest": "ComponentRoutingResolverStaleAndNotFoundTest.issue256_getDistributionForProject_dbSourcedMissingVersion_throwsNotFound_noGitBleed"
+    },
+    {
+      "endpoint": "GET /rest/api/1/components",
+      "category": "STRUCTURAL_DIFF",
+      "jsonPathPattern": "\\$\\.components\\[\\d+\\]\\.distribution\\.(docker|GAV)$",
+      "reason": "ADR-018 base-row amendment (2026-07): the component-level representative (Component.distribution) is now the OPEN-UPPER (newest) block's value instead of the top-level/oldest block, so docker keys appear (components whose newest range ships docker) and stale GAVs disappear (components whose newest range is docker-only / renamed the artifacts). Domain-owner reviewed every live diff (11 components; keys withheld from this public repo — see the internal compat report, build 4099) and confirmed the NEW values are correct on 2026-07-01. Baseline (old release) still reports the oldest-block values until the amendment ships as the new baseline; then this entry matches nothing.",
+      "regressionTest": "MigrationIntegrationTest.MIG-036 (ADR-018): TEST_COMPONENT3 base carries the OPEN-UPPER [1.0.107,) release format; the OLDER (,1.0.107) block carries the value-layer overrides (base = newest value)"
+    },
+    {
+      "endpoint": "GET /rest/api/2/components",
+      "category": "STRUCTURAL_DIFF",
+      "jsonPathPattern": "\\$\\.components\\[\\d+\\]\\.distribution\\.(docker|GAV)$",
+      "reason": "ADR-018 base-row amendment (2026-07) — see the GET /rest/api/1/components STRUCTURAL_DIFF entry.",
+      "regressionTest": "MigrationIntegrationTest.MIG-036 (ADR-018): TEST_COMPONENT3 base carries the OPEN-UPPER [1.0.107,) release format; the OLDER (,1.0.107) block carries the value-layer overrides (base = newest value)"
+    },
+    {
+      "endpoint": "GET /rest/api/1/components",
+      "category": "VALUE_DIFF",
+      "messagePattern": "field/property 'components' differ",
+      "reason": "ADR-018 base-row amendment (2026-07): the v1 typed list compares the whole collection ONCE, so the 11 amended component-level representatives surface as ONE whole-collection diff. KNOWN BLAST RADIUS (accepted, time-boxed): while this entry is active, AssertJ collapses EVERY v1 list element mismatch into this same single 'components' differ record — so ANY future typed VALUE_DIFF on GET /rest/api/1/components (any component, any field) is also suppressed. Guards that remain live for the suppression window: the raw-layer STRUCTURAL entry above (docker/GAV keys only), the per-component v2 list + v1/v2 detail entries (field-scoped), and the trace-replay raw requests. Self-heals when the amendment ships as the new baseline (record disappears -> entry matches nothing).",
+      "regressionTest": "MigrationIntegrationTest.MIG-036 (ADR-018): TEST_COMPONENT3 base carries the OPEN-UPPER [1.0.107,) release format; the OLDER (,1.0.107) block carries the value-layer overrides (base = newest value)"
+    },
+    {
+      "endpoint": "GET /rest/api/2/components",
+      "category": "VALUE_DIFF",
+      "messagePattern": "field/property '(distribution\\.(gav|docker)|escrow\\.generation)' differ",
+      "reason": "ADR-018 base-row amendment (2026-07): typed per-element list diffs on the amended component-level fields — distribution.gav/docker (newest block's distribution) and escrow.generation (one component with a historical UNSUPPORTED on the oldest block; newest resolves AUTO). Domain-owner confirmed all 11 affected components 2026-07-01 (keys withheld from this public repo — see the internal compat report, build 4099). Granularity note: one AssertJ record covers ALL differing fields of one component, so a future unrelated field regression CO-OCCURRING on one of the 11 amended components on this endpoint would ride along suppressed until the amendment ships as the new baseline; unaffected components still fail the gate.",
+      "regressionTest": "MigrationIntegrationTest.MIG-036 (ADR-018): TEST_COMPONENT3 base carries the OPEN-UPPER [1.0.107,) release format; the OLDER (,1.0.107) block carries the value-layer overrides (base = newest value)"
+    },
+    {
+      "endpoint": "GET /rest/api/3/components",
+      "category": "VALUE_DIFF",
+      "messagePattern": "field/property 'component\\.escrow\\.generation' differ",
+      "reason": "ADR-018 base-row amendment (2026-07): v3 wraps Component, so the single affected component's escrow.generation change (UNSUPPORTED -> AUTO, newest-block escrow) appears under the component.* prefix.",
+      "regressionTest": "MigrationIntegrationTest.MIG-040 (ADR-018 decoupled): TEST_PER_RANGE_HOTFIX_FORMAT has a bounded merged coverage [1.0,) (its empty [1.0,2.0) block + the [2.0,) override block merge) → exactly one RANGE_PRESENCE row at [1.0,) with NULL overridden_attribute and all typed cols NULL; the base sits at ALL_VERSIONS carrying the OPEN-UPPER [2.0,) hotfix format, and the OLDER [1.0,2.0) block survives as the value-layer override (base = newest value, ADR-018)"
+    },
+    {
+      "endpoint": "GET /rest/api/1/components/{component}",
+      "category": "STRUCTURAL_DIFF",
+      "jsonPathPattern": "^\\$\\.distribution\\.(docker|GAV)$",
+      "reason": "ADR-018 base-row amendment (2026-07): component detail's distribution is the newest block's value — see the GET /rest/api/1/components STRUCTURAL_DIFF entry.",
+      "regressionTest": "MigrationIntegrationTest.MIG-036 (ADR-018): TEST_COMPONENT3 base carries the OPEN-UPPER [1.0.107,) release format; the OLDER (,1.0.107) block carries the value-layer overrides (base = newest value)"
+    },
+    {
+      "endpoint": "GET /rest/api/2/components/{component}",
+      "category": "STRUCTURAL_DIFF",
+      "jsonPathPattern": "^\\$\\.distribution\\.(docker|GAV)$",
+      "reason": "ADR-018 base-row amendment (2026-07) — see the GET /rest/api/1/components/{component} STRUCTURAL_DIFF entry.",
+      "regressionTest": "MigrationIntegrationTest.MIG-036 (ADR-018): TEST_COMPONENT3 base carries the OPEN-UPPER [1.0.107,) release format; the OLDER (,1.0.107) block carries the value-layer overrides (base = newest value)"
+    },
+    {
+      "endpoint": "GET /rest/api/1/components/{component}",
+      "category": "VALUE_DIFF",
+      "messagePattern": "field/property '(distribution\\.(gav|docker)|escrow\\.generation)' differ",
+      "reason": "ADR-018 base-row amendment (2026-07): typed component-detail diffs on the amended component-level fields — see the GET /rest/api/2/components VALUE_DIFF entry.",
+      "regressionTest": "MigrationIntegrationTest.MIG-036 (ADR-018): TEST_COMPONENT3 base carries the OPEN-UPPER [1.0.107,) release format; the OLDER (,1.0.107) block carries the value-layer overrides (base = newest value)"
+    },
+    {
+      "endpoint": "GET /rest/api/2/components/{component}",
+      "category": "VALUE_DIFF",
+      "messagePattern": "field/property '(distribution\\.(gav|docker)|escrow\\.generation)' differ",
+      "reason": "ADR-018 base-row amendment (2026-07): typed component-detail diffs on the amended component-level fields — see the GET /rest/api/2/components VALUE_DIFF entry.",
+      "regressionTest": "MigrationIntegrationTest.MIG-036 (ADR-018): TEST_COMPONENT3 base carries the OPEN-UPPER [1.0.107,) release format; the OLDER (,1.0.107) block carries the value-layer overrides (base = newest value)"
+    },
+    {
+      "endpoint": "GET /rest/api/1/components/{component}/distribution",
+      "category": "STRUCTURAL_DIFF",
+      "jsonPathPattern": "^\\$\\.(docker|GAV)$",
+      "reason": "ADR-018 base-row amendment (2026-07): the standalone component-level distribution endpoint mirrors Component.distribution (newest block). Endpoint has ZERO recorded prod traffic (all real /distribution traffic is per-VERSION) and is deprecated in this release.",
+      "regressionTest": "MigrationIntegrationTest.MIG-036 (ADR-018): TEST_COMPONENT3 base carries the OPEN-UPPER [1.0.107,) release format; the OLDER (,1.0.107) block carries the value-layer overrides (base = newest value)"
+    },
+    {
+      "endpoint": "GET /rest/api/2/components/{component}/distribution",
+      "category": "STRUCTURAL_DIFF",
+      "jsonPathPattern": "^\\$\\.(docker|GAV)$",
+      "reason": "ADR-018 base-row amendment (2026-07) — see the GET /rest/api/1/components/{component}/distribution STRUCTURAL_DIFF entry.",
+      "regressionTest": "MigrationIntegrationTest.MIG-036 (ADR-018): TEST_COMPONENT3 base carries the OPEN-UPPER [1.0.107,) release format; the OLDER (,1.0.107) block carries the value-layer overrides (base = newest value)"
+    },
+    {
+      "endpoint": "GET /rest/api/1/components/{component}/distribution",
+      "category": "VALUE_DIFF",
+      "messagePattern": "field/property '(gav|docker)' differ",
+      "reason": "ADR-018 base-row amendment (2026-07): typed standalone-distribution diffs (DistributionDTO fields are top-level here, no distribution.* prefix) — see the STRUCTURAL_DIFF entry above.",
+      "regressionTest": "MigrationIntegrationTest.MIG-036 (ADR-018): TEST_COMPONENT3 base carries the OPEN-UPPER [1.0.107,) release format; the OLDER (,1.0.107) block carries the value-layer overrides (base = newest value)"
+    },
+    {
+      "endpoint": "GET /rest/api/2/components/{component}/distribution",
+      "category": "VALUE_DIFF",
+      "messagePattern": "field/property '(gav|docker)' differ",
+      "reason": "ADR-018 base-row amendment (2026-07) — see the GET /rest/api/1/components/{component}/distribution VALUE_DIFF entry.",
+      "regressionTest": "MigrationIntegrationTest.MIG-036 (ADR-018): TEST_COMPONENT3 base carries the OPEN-UPPER [1.0.107,) release format; the OLDER (,1.0.107) block carries the value-layer overrides (base = newest value)"
+    },
+    {
+      "endpointPattern": "^GET /rest/api/[12]/components/[^/{}]+$",
+      "category": "STRUCTURAL_DIFF",
+      "jsonPathPattern": "^\\$\\.distribution\\.(docker|GAV)$",
+      "reason": "ADR-018 base-row amendment (2026-07): trace-replay raw requests carry LITERAL component-detail paths (the prod-trace replayer does not parameterize), and real component keys must not be committed to this public repo — so this entry matches the path SHAPE (a v1/v2 component-detail request) instead of naming components. Same cause and same field scope (distribution.docker/GAV keys only) as the parameterized GET /rest/api/1/components/{component} STRUCTURAL_DIFF entry; the affected component keys are visible in the internal compat report (build 4099).",
+      "regressionTest": "MigrationIntegrationTest.MIG-036 (ADR-018): TEST_COMPONENT3 base carries the OPEN-UPPER [1.0.107,) release format; the OLDER (,1.0.107) block carries the value-layer overrides (base = newest value)"
     }
   ]
 }

@@ -916,10 +916,11 @@ class ImportServiceImpl(
         // bounded blocks — i.e. the loader emitted an all-versions config (a
         // top-level-only component, or an explicit "(,)" / ALL_VERSIONS block).
         // Otherwise (only bounded blocks) supported = ∪ of the declared ranges and
-        // the base scalars come from the first declared block's merged config
-        // (top-level ⊕ Defaults for the attributes constant across blocks;
-        // per-block differences are emitted as overrides). No synthetic-bounded base.
-        val baseConfig = configs.firstOrNull { isAllVersionsRange(it.versionRangeString) } ?: configs.first()
+        // the base scalars come from the NEWEST (open-upper) block's merged config —
+        // see [selectBaseConfig]: the base default must equal the value effective for
+        // the open-upper `[X,)` range (what current versions resolve to). Per-block
+        // differences (including OLDER blocks) are emitted as overrides. No synthetic-bounded base.
+        val baseConfig = selectBaseConfig(configs)
         val supportedIsAll = configs.any { isAllVersionsRange(it.versionRangeString) }
 
         // §6.4 Build the ComponentEntity from the first/base config
@@ -997,9 +998,10 @@ class ImportServiceImpl(
         }
 
         // §6.5 Override rows: diff every non-base config against the base. The base scalar source
-        // (configs.first() when supported != ALL, else the all-versions config) carries no override of
-        // its own — it equals the base by construction. No RES-001 fallback presence row: coverage is
-        // the merged union above, and an empty block (no value change) simply contributes no edge.
+        // (selectBaseConfig: the open-upper/newest block, or the all-versions config) carries no override
+        // of its own — it equals the base by construction; the OLDER blocks become the overrides. No
+        // RES-001 fallback presence row: coverage is the merged union above, and an empty block (no
+        // value change vs base) simply contributes no edge.
         val tOverridesStart = System.nanoTime()
         val nonBaseConfigs = configs.filter { it !== baseConfig }
         for (override in nonBaseConfigs) {
@@ -1046,7 +1048,7 @@ class ImportServiceImpl(
      * [computeDisplayNameCollisions]) so it is unit-testable without Spring fixtures.
      * Empty-body modules (`"FOO" { }`, no moduleConfigurations) are excluded — Pass 1 skips
      * them, so they must not contribute phantom rows; the base-config selection mirrors
-     * importModule's `firstOrNull { ALL_VERSIONS } ?: configs.first()` exactly.
+     * importModule's `selectBaseConfig` exactly (both call it via `baseConfigOf`).
      */
     private fun detectUniquenessViolations(allModules: Map<String, EscrowModule>) {
         val nonEmpty = allModules.filterValues { it.moduleConfigurations.isNotEmpty() }
@@ -1154,9 +1156,38 @@ class ImportServiceImpl(
         return violations
     }
 
-    /** importModule's base-config selection: the all-versions row, else the first one. */
+    /**
+     * Base-row config selection for the decoupled model. The base row carries the effective value at
+     * ALL_VERSIONS — it stands for every version no override covers, INCLUDING the newest band — so its
+     * scalars come from the OPEN-UPPER (newest) block. NOTE: this SUPERSEDES ADR-018's original base-row
+     * rule (`base = top-level ⊕ Defaults`, open-upper = override); see the ADR-018 §2 amendment (2026-07)
+     * — the base row is the portal's editable default and must reflect what current versions use.
+     * Precedence:
+     *   1. an explicit all-versions block (top-level-only component, or a `(,)` / ALL_VERSIONS block):
+     *      it already covers everything, so it IS the base. (The loader does not emit a separate
+     *      all-versions config alongside bounded blocks — a top-level default is merged INTO each
+     *      range config — so this branch and step 2 are mutually exclusive in practice.)
+     *   2. otherwise the newest block by [VersionRangePartition.baseCandidateComparator]: the open-upper
+     *      `[X,)` block, or — when NO block is open-upper (all bounded/historical) — the highest declared
+     *      range. That last case is a behaviour change from the previous `configs.first()` (the
+     *      OLDEST/lowest block); "newest" is a judgement call there, but such components are
+     *      deprecated/historical and the previous oldest-first choice was itself arbitrary.
+     * Fixes the bug where the base got the OLDEST block's stale value and the newest block's value was
+     * pushed into a redundant open-upper override (e.g. a release format only the oldest range used, or
+     * a version prefix that newest versions no longer set).
+     */
+    private fun selectBaseConfig(configs: List<EscrowModuleConfig>): EscrowModuleConfig {
+        configs.firstOrNull { isAllVersionsRange(it.versionRangeString) }?.let { return it }
+        val rank = VersionRangePartition.baseCandidateComparator(numericVersionComparator(numericVersionFactory))
+        return configs
+            .filter { it.versionRangeString != null }
+            .maxWithOrNull { x, y -> rank.compare(x.versionRangeString!!, y.versionRangeString!!) }
+            ?: configs.first()
+    }
+
+    /** Base-config selection shared with the uniqueness pre-pass; null only for an empty config list. */
     private fun baseConfigOf(configs: List<EscrowModuleConfig>): EscrowModuleConfig? =
-        configs.firstOrNull { isAllVersionsRange(it.versionRangeString) } ?: configs.firstOrNull()
+        if (configs.isEmpty()) null else selectBaseConfig(configs)
 
     /**
      * True when [range] denotes the all-versions coverage set: null, the canonical
@@ -1233,7 +1264,14 @@ class ImportServiceImpl(
         // migrated data. A collision can only be introduced by a NEW v4 write, which the matrix guards.
         // Migration itself enforces correctness via strict artifactId→mode classification (no escape
         // hatch; unclassifiable patterns hard-fail). See ADR-017 / SYS-058.
-        addGavRows(baseConfig.versionRangeString ?: ALL_VERSIONS, baseConfig.distribution)
+        // The base distribution is persisted on the BASE row at ALL_VERSIONS (buildBaseConfigRow /
+        // attachDistribution), regardless of which block seeded the base (selectBaseConfig). Record the
+        // base GAV at ALL_VERSIONS — NOT baseConfig.versionRangeString — so this pre-pass matches the
+        // physical row the API-side validateMavenArtifactCollisions reads back. Using the base block's
+        // declared range (e.g. the open-upper `[X,)`) would make the pre-pass miss a cross-component
+        // collision outside that range that the API would later reject (pre-pass contract: reject here
+        // exactly what the API would reject).
+        addGavRows(ALL_VERSIONS, baseConfig.distribution)
         for (override in configs.filter { it !== baseConfig }) {
             val overrideRange = override.versionRangeString ?: continue
             if (mavenArtifactsDiffer(baseConfig.distribution, override.distribution)) {
