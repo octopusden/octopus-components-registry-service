@@ -903,6 +903,13 @@ class ImportServiceImpl(
     ) {
         if (configs.isEmpty()) return
 
+        // CRS #387: reject per-range distribution.explicit / .external /
+        // .securityGroups.read that vary across ranges — they are per-component
+        // only and the divergent value was silently dropped before. Runs before
+        // this component's own rows are written (the per-component try/catch in
+        // migrateAllComponents fails just this component, not the batch).
+        validatePerComponentDistributionInvariants(componentKey, configs)
+
         // Decoupled version model (ADR-018): the base row is ALWAYS the effective
         // default at ALL_VERSIONS, and coverage is a separate layer expressed as
         // RANGE_PRESENCE rows. `supported = ALL` exactly when the DSL declares no
@@ -1321,7 +1328,10 @@ class ImportServiceImpl(
         // vcs.externalRegistry is per-component
         entity.vcsExternalRegistry = cfg.vcsSettings?.externalRegistry
 
-        // distribution.explicit / distribution.external are per-component
+        // distribution.explicit / distribution.external are per-component; a
+        // per-range value that differs from the base is rejected at import
+        // (validatePerComponentDistributionInvariants, CRS #387), so taking the
+        // base value here can no longer silently drop a divergent per-range one.
         cfg.distribution?.let { dist ->
             entity.distributionExplicit = dist.explicit()
             entity.distributionExternal = dist.external()
