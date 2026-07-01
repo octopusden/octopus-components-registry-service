@@ -16,6 +16,7 @@ import org.octopusden.octopus.components.registry.client.impl.ClassicComponentsR
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.core.dto.BuildSystem
 import org.octopusden.octopus.components.registry.core.dto.ComponentArtifactConfigurationDTO
+import org.octopusden.octopus.components.registry.core.dto.ComponentImage
 import org.octopusden.octopus.components.registry.core.dto.ComponentV1
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersion
 import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersions
@@ -114,6 +115,9 @@ class ComponentRegistryServiceClientTest : BaseComponentsRegistryServiceTest() {
 
     override fun getComponentArtifactsParameters(component: String): Map<String, ComponentArtifactConfigurationDTO> =
         componentsRegistryClient.getComponentArtifactsParameters(component)
+
+    override fun findComponentsByDockerImages(images: Set<Image>): Set<ComponentImage> =
+        componentsRegistryClient.findComponentsByDockerImages(images)
 
     override fun getSupportedGroupIds(): Set<String> = componentsRegistryClient.getSupportedGroupIds()
 
