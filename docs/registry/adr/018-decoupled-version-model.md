@@ -130,6 +130,34 @@ Model a component's configuration as **two independent layers**:
   use `MAVEN` (equal to the Defaults value), so their per-range value is a no-op against the base.
   **No path to a null base `build_system` → the DB CHECK is kept unchanged (no relaxation).**
 
+### `distribution.*` — per-range vs per-component (CRS #387)
+
+The `distribution` block mixes two storage classes. The marker child-collections vary per range
+(stored as `MARKER` override rows and resolved via `pickMarkerChildren`); three scalar-ish fields are
+per-component only, stored on the `components` row and **never** overridable per range:
+
+| Field | Per-range | Storage |
+|---|---|---|
+| `distribution.gav` (mavenArtifacts) | yes | `DISTRIBUTION_MAVEN` marker, `distribution_maven_artifacts` |
+| `distribution.docker` | yes | `DISTRIBUTION_DOCKER` marker, `distribution_docker_images` |
+| `distribution.deb` / `rpm` (packages) | yes | `DISTRIBUTION_PACKAGES` marker, `distribution_packages` |
+| `distribution.fileUrl` | yes | `DISTRIBUTION_FILE_URL` marker, `distribution_file_url_artifacts` |
+| `distribution.explicit` | **no** | `components.distribution_explicit` |
+| `distribution.external` | **no** | `components.distribution_external` |
+| `distribution.securityGroups.read` | **no** | `distribution_security_groups` (`group_type='read'`, group id in `group_name`) |
+
+A bounded-range block that declares one of the three per-component fields with a value differing from
+the base was **silently dropped** before (`buildEscrowModuleConfig` reads only the base scalar), so
+`resolve` returned the base at every version — a data-loss trap surfaced by the DMS
+`ee-component-with-version-ranges` FT fixture. The import now **fails loud**
+(`validatePerComponentDistributionInvariants`, `ImportServiceImpl`): for every non-base config it
+compares the resolved `explicit` / `external` / `securityGroups.read` against the base and throws
+naming the component, range, and attribute(s). Because the DSL loader resolves an omitted per-range
+field to the value it inherits from the component default, a range that merely omits these fields
+resolves equal to the base and does not trip the guard. As-code rendering
+(`ComponentCodeRenderer.writeMarkerDistribution`) emits only the four marker attributes per range and
+never renders `explicit` / `external` / `securityGroups.read` inside a per-range block.
+
 ## Consequences
 
 **Positive**

@@ -14,6 +14,7 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentConfigu
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentRequiredToolEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionDockerImageEntity
+import org.octopusden.octopus.components.registry.server.entity.DistributionSecurityGroupEntity
 import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
 import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
 import org.octopusden.releng.versions.NumericVersionFactory
@@ -385,6 +386,31 @@ class ComponentCodeRendererTest {
         assertTrue(out.contains("docker {"), out)
         assertTrue(out.contains("imageName = \"acme/svc\""), out)
         assertTrue(out.contains("flavor = \"slim\""), out)
+    }
+
+    @Test
+    @DisplayName("FULL: per-range distribution block renders markers but NOT the per-component fields (CRS #387)")
+    fun fullPerRangeDistributionOmitsPerComponentFields() {
+        val c = component()
+        c.distributionExplicit = true
+        c.distributionExternal = true
+        c.securityGroups.add(DistributionSecurityGroupEntity(component = c, groupType = "read", groupName = "grp-a"))
+        base(c) { buildSystem = "MAVEN" }
+        val m = marker(c, "[2,)", MarkerAttributes.DISTRIBUTION_DOCKER) {}
+        m.dockerImages.add(docker(m, image = "acme/svc", flavor = "slim"))
+
+        val out = renderer.renderFull(c)
+        // Base distribution carries the per-component fields.
+        assertTrue(out.contains("explicit = true"), out)
+        assertTrue(out.contains("external = true"), out)
+        assertTrue(out.contains("securityGroups {"), out)
+        // The per-range block renders only the docker marker — never the per-component
+        // fields (explicit / external / securityGroups.read), which would leak per-range.
+        val rangeBlock = out.substringAfter("\"[2,)\" {")
+        assertTrue(rangeBlock.contains("docker {"), rangeBlock)
+        assertFalse(rangeBlock.contains("explicit"), rangeBlock)
+        assertFalse(rangeBlock.contains("external"), rangeBlock)
+        assertFalse(rangeBlock.contains("securityGroups"), rangeBlock)
     }
 
     @Test
