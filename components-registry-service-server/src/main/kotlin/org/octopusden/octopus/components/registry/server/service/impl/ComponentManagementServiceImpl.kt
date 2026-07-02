@@ -208,6 +208,11 @@ class ComponentManagementServiceImpl(
         // property getter — so we hoist explicitly here rather than
         // sprinkling `!!` or `?.let` at each call site.
         val buildSystemValue: String = buildAspect.buildSystem!!
+        // CRS-B: a supplied (non-null) value for a field the caller may not edit is
+        // rejected up-front; an absent field lets server defaults apply. Runs BEFORE the
+        // value validators below so an INVALID value on a non-editable field surfaces the
+        // editability error (403/422), not a value-400 — the gate must win the ordering.
+        enforceEditabilityOnCreate(request)
         request.productType?.let { if (!fieldConfigService.isHidden("component.productType")) validateProductType(it) }
         request.clientCode?.let {
             if (!fieldConfigService.isHidden("component.clientCode")) validateClientCode(it)
@@ -225,9 +230,6 @@ class ComponentManagementServiceImpl(
         // inside `replaceVcsEntries` / `replacePackages` (covers both base-config
         // and field-override marker paths).
         validateLabels(request.labels)
-        // CRS-B: a supplied (non-null) value for a field the caller may not edit is
-        // rejected up-front; an absent field lets server defaults apply.
-        enforceEditabilityOnCreate(request)
         // Canonicalise once and reuse so the synced junction, the
         // in-memory refresh, and the audit snapshot all see the same
         // trimmed/deduped set — the originally requested set may still
@@ -474,8 +476,13 @@ class ComponentManagementServiceImpl(
         // now a non-null one means the same.
         //
         // `clearParent` (remove the parent) and `parentComponentName` (set a parent)
-        // are mutually exclusive — accepting both would silently drop one.
-        require(!(request.clearParent && request.parentComponentName != null)) {
+        // are mutually exclusive — accepting both would silently drop one. Skip the
+        // conflict guard when the field is hidden: both signals are stripped silently
+        // downstream (see the parent block below), so a hidden field must never 4xx.
+        require(
+            fieldConfigService.isHidden("component.parentComponentName") ||
+                !(request.clearParent && request.parentComponentName != null),
+        ) {
             "parentComponentName: clearParent and parentComponentName are mutually exclusive"
         }
 
@@ -1037,28 +1044,32 @@ class ComponentManagementServiceImpl(
 
         val beforeSnapshot = fieldOverrideAuditSnapshot(row)
 
-        request.versionRange?.let {
-            val canonicalRange = normalizeRange(it)
-            validateFieldOverrideRange(
-                range = canonicalRange,
-                component = row.component,
-                attribute = row.overriddenAttribute!!,
-                excludeOverrideId = row.id,
-            )
-            row.versionRange = canonicalRange
-        }
-
+        // Gate-before-validation: an INVALID range/value on a non-editable override must
+        // surface the editability error (403/422), not a value-400. The successful
+        // valid-value path is still gated change-based by the snapshot diff below.
         val pendingTools: List<String>? =
-            when {
-                row.overriddenAttribute in MarkerAttributes.ALL -> {
-                    require(request.value == null) { "Marker override does not accept a scalar value" }
-                    request.markerChildren?.let { applyMarkerChildren(row, row.overriddenAttribute!!, it) }
+            gatingEditabilityOnInvalidPayload(row.overriddenAttribute!!) {
+                request.versionRange?.let {
+                    val canonicalRange = normalizeRange(it)
+                    validateFieldOverrideRange(
+                        range = canonicalRange,
+                        component = row.component,
+                        attribute = row.overriddenAttribute!!,
+                        excludeOverrideId = row.id,
+                    )
+                    row.versionRange = canonicalRange
                 }
+                when {
+                    row.overriddenAttribute in MarkerAttributes.ALL -> {
+                        require(request.value == null) { "Marker override does not accept a scalar value" }
+                        request.markerChildren?.let { applyMarkerChildren(row, row.overriddenAttribute!!, it) }
+                    }
 
-                else -> {
-                    require(request.markerChildren == null) { "Scalar override does not accept markerChildren" }
-                    request.value?.let { row.applyScalarValue(row.overriddenAttribute!!, it) }
-                    null
+                    else -> {
+                        require(request.markerChildren == null) { "Scalar override does not accept markerChildren" }
+                        request.value?.let { row.applyScalarValue(row.overriddenAttribute!!, it) }
+                        null
+                    }
                 }
             }
 
@@ -1233,7 +1244,12 @@ class ComponentManagementServiceImpl(
                     "(${row.overriddenAttribute} -> ${d.overriddenAttribute})"
             }
             val before = fieldOverrideAuditSnapshot(row)
-            applyOverrideUpsertPayload(component, row, d, excludeOverrideId = row.id)?.let { pendingTools[row] = it }
+            // Gate-before-validation: an INVALID range/value on a non-editable override
+            // yields the editability error (403/422), not a value-400. A valid change is
+            // still gated change-based by the snapshot diff below.
+            gatingEditabilityOnInvalidPayload(d.overriddenAttribute) {
+                applyOverrideUpsertPayload(component, row, d, excludeOverrideId = row.id)
+            }?.let { pendingTools[row] = it }
             // CRS-B: gate any actual change (value / markerChildren / range) to an
             // override on a non-editable field; an unchanged echo (combined Save
             // re-sends the whole set) leaves the snapshot equal and is left alone.
@@ -1901,6 +1917,26 @@ class ComponentManagementServiceImpl(
             else -> Unit // "all"
         }
     }
+
+    /**
+     * Run [applyPayload] — which mutates an override row and may throw a value-400
+     * (ConfigurationRowAccessors.requireString / requireBuildSystem / range checks) —
+     * but make the editability gate take precedence: if application fails on a
+     * non-editable [attribute], the caller sees the 403/422 editability error, NOT the
+     * value-400. An editable caller still gets the original 400. The callers keep their
+     * own change-based snapshot-diff gate on the SUCCESSFUL, valid-value path (an
+     * unchanged echo applies cleanly, diffs equal, and is left untouched).
+     */
+    private inline fun <T> gatingEditabilityOnInvalidPayload(
+        attribute: String,
+        applyPayload: () -> T,
+    ): T =
+        try {
+            applyPayload()
+        } catch (e: IllegalArgumentException) {
+            enforceOverrideEditable(attribute)
+            throw e
+        }
 
     /** True when the override's attribute maps to a field-config `visibility: hidden`. */
     private fun isHiddenOverrideAttribute(attribute: String?): Boolean =
