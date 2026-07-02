@@ -90,6 +90,7 @@ class ComponentDetailMapperTest {
         assertNull(response.jiraDisplayName)
         assertNull(response.jiraHotfixVersionFormat)
         assertNull(response.vcsExternalRegistry)
+        assertEquals(false, response.skipCommitCheck)
         assertNull(response.distributionExplicit)
         assertNull(response.distributionExternal)
         assertNull(response.group)
@@ -117,6 +118,9 @@ class ComponentDetailMapperTest {
             it.jiraDisplayName = "Alpha Jira"
             it.jiraHotfixVersionFormat = "\$major.\$minor.x"
             it.vcsExternalRegistry = "ssh://external.git"
+            // skipCommitCheck is a dedicated flag independent of vcsExternalRegistry — the v4
+            // view exposes BOTH the real registry and the flag (unlike the legacy folded surface).
+            it.skipCommitCheck = true
             it.distributionExplicit = true
             it.distributionExternal = false
         }
@@ -135,6 +139,7 @@ class ComponentDetailMapperTest {
         assertEquals("Alpha Jira", response.jiraDisplayName)
         assertEquals("\$major.\$minor.x", response.jiraHotfixVersionFormat)
         assertEquals("ssh://external.git", response.vcsExternalRegistry)
+        assertEquals(true, response.skipCommitCheck)
         assertEquals(true, response.distributionExplicit)
         assertEquals(false, response.distributionExternal)
     }

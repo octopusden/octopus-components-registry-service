@@ -53,6 +53,9 @@ data class ComponentUpdateRequest(
     val jiraHotfixVersionFormat: String? = null,
     @field:Schema(description = V4_SCALAR_CLEAR_SEMANTICS)
     val vcsExternalRegistry: String? = null,
+    // PATCH boolean: null = "don't touch" (pre-existing convention). true/false sets it.
+    @field:Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED, description = V4_SKIP_COMMIT_CHECK)
+    val skipCommitCheck: Boolean? = null,
     val distributionExplicit: Boolean? = null,
     val distributionExternal: Boolean? = null,
     // Both accepted for backward compatibility but IGNORED (no-op): group membership

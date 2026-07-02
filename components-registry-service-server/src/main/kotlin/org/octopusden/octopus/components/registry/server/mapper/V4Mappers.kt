@@ -68,6 +68,7 @@ fun ComponentEntity.toDetailResponse(teamcityBaseUrl: String? = null): Component
         jiraDisplayName = this.jiraDisplayName,
         jiraHotfixVersionFormat = this.jiraHotfixVersionFormat,
         vcsExternalRegistry = this.vcsExternalRegistry,
+        skipCommitCheck = this.skipCommitCheck,
         distributionExplicit = this.distributionExplicit,
         distributionExternal = this.distributionExternal,
         group = this.componentGroup?.let { group -> group.toResponse(thisComponentKey = this.componentKey) },

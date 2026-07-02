@@ -35,6 +35,7 @@ import org.octopusden.octopus.components.registry.server.entity.ToolEntity
 import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
 import org.octopusden.octopus.components.registry.server.mapper.ALL_VERSIONS
 import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
+import org.octopusden.octopus.components.registry.server.mapper.NOT_AVAILABLE_EXTERNAL_REGISTRY
 import org.octopusden.octopus.components.registry.server.mapper.numericVersionComparator
 import org.octopusden.octopus.components.registry.server.repository.ComponentBuildToolBeanRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
@@ -1369,8 +1370,27 @@ class ImportServiceImpl(
                 jira.componentVersionFormat?.hotfixVersionFormat?.takeIf { it.isNotBlank() }
         }
 
-        // vcs.externalRegistry is per-component
-        entity.vcsExternalRegistry = cfg.vcsSettings?.externalRegistry
+        // vcs.externalRegistry is per-component. CRS-C bridge: the legacy
+        // `externalRegistry = "NOT_AVAILABLE"` sentinel is NEVER stored — it becomes the
+        // dedicated skipCommitCheck flag with a NULL registry. Any real registry name imports
+        // as-is (skipCommitCheck stays false).
+        val importedExternalRegistry = cfg.vcsSettings?.externalRegistry
+        if (importedExternalRegistry == NOT_AVAILABLE_EXTERNAL_REGISTRY) {
+            entity.skipCommitCheck = true
+            entity.vcsExternalRegistry = null
+            // Q13: WHISKEY + NOT_AVAILABLE is a data contradiction (a WHISKEY component should
+            // carry a real registry, not the sentinel). Warn but still import — the v4 write path
+            // rejects the combination; existing DSL data is the domain owner's to reconcile.
+            if (cfg.buildSystem == org.octopusden.octopus.escrow.BuildSystem.WHISKEY) {
+                LOG.warn(
+                    "Component '{}': externalRegistry=NOT_AVAILABLE combined with buildSystem=WHISKEY — " +
+                        "imported as skipCommitCheck=true; this pairing is rejected on v4 write and should be reviewed.",
+                    componentKey,
+                )
+            }
+        } else {
+            entity.vcsExternalRegistry = importedExternalRegistry
+        }
 
         // distribution.explicit / distribution.external are per-component; a
         // per-range value that differs from the base is rejected at import

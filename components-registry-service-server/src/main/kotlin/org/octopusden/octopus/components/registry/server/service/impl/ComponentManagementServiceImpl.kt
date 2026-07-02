@@ -300,6 +300,8 @@ class ComponentManagementServiceImpl(
                 jiraHotfixVersionFormat = stripIfHidden("component.jiraHotfixVersionFormat", request.jiraHotfixVersionFormat),
                 // CRS-A: create maps "" → NULL (treated as absent), consistent with the PATCH clear rule.
                 vcsExternalRegistry = stripIfHidden("component.vcsExternalRegistry", request.vcsExternalRegistry?.let(::clearBlankScalar)),
+                // Non-null Boolean with a false default — hidden strips to the default rather than null.
+                skipCommitCheck = if (fieldConfigService.isHidden("component.skipCommitCheck")) false else request.skipCommitCheck,
                 distributionExplicit = stripIfHidden("component.distributionExplicit", request.distributionExplicit),
                 distributionExternal = stripIfHidden("component.distributionExternal", request.distributionExternal),
                 systemCode = canonicalSystem,
@@ -337,6 +339,9 @@ class ComponentManagementServiceImpl(
         // no DB lookup beyond the soft doc-ref existence probe and run against the
         // final in-memory entity state (everything is freshly assigned on create).
         validateMalformedFieldRules(entity)
+
+        // Q13: reject skipCommitCheck on a WHISKEY component (422). Runs on the final state.
+        validateSkipCommitCheckNotWhiskey(entity)
 
         // Flush so the self-excluding 409 collision queries below see the new
         // component's rows and the entity carries an assigned id.
@@ -603,6 +608,12 @@ class ComponentManagementServiceImpl(
             // CRS-A: "" clears the external registry (persist NULL); non-blank sets verbatim.
             if (!fieldConfigService.isHidden("component.vcsExternalRegistry")) entity.vcsExternalRegistry = clearBlankScalar(it)
         }
+        // PATCH boolean: null = don't touch (handled by ?.let). Editable by any component
+        // editor (Q11) — no adminOnly hardcode; the CRS-B gate above already lets field-config
+        // narrow it later. Hidden-strip mirrors the peer component scalars.
+        request.skipCommitCheck?.let {
+            if (!fieldConfigService.isHidden("component.skipCommitCheck")) entity.skipCommitCheck = it
+        }
         request.distributionExplicit?.let {
             if (!fieldConfigService.isHidden("component.distributionExplicit")) entity.distributionExplicit = it
         }
@@ -695,6 +706,17 @@ class ComponentManagementServiceImpl(
                 applyBaseConfigurationPatch(base, patch)
                 base.takeIf { patch.requiredTools != null }
             }
+
+        // Q13: validate the COMBINED post-patch state (flag + base build system are both
+        // applied by now), so switching buildSystem → WHISKEY while the flag is true, or
+        // setting the flag true while WHISKEY, is rejected 422 in the same place. GATED on the
+        // PATCH actually touching the flag or the BASE build system — mirroring the
+        // "grandfathered on update" convention below: an unrelated PATCH (e.g. clientCode-only)
+        // must NOT 422 a pre-existing WHISKEY+flag component that the import bridge admitted
+        // with a warning (import warns rather than hard-fails on that data contradiction).
+        if (request.skipCommitCheck != null || request.baseConfiguration?.build?.buildSystem != null) {
+            validateSkipCommitCheckNotWhiskey(entity)
+        }
 
         // Field overrides (item D): desired-FULL-SET applied in-place on the
         // configuration collection — cascade (orphanRemoval) persists the
@@ -1942,6 +1964,8 @@ class ComponentManagementServiceImpl(
         request.vcsExternalRegistry?.let {
             enforceFieldEditable("component.vcsExternalRegistry", it, entity.vcsExternalRegistry)
         }
+        // Editable by all by default (Q11); gated here only so field-config CAN narrow it later.
+        request.skipCommitCheck?.let { enforceFieldEditable("component.skipCommitCheck", it, entity.skipCommitCheck) }
         request.distributionExplicit?.let { enforceFieldEditable("component.distributionExplicit", it, entity.distributionExplicit) }
         request.distributionExternal?.let { enforceFieldEditable("component.distributionExternal", it, entity.distributionExternal) }
         request.system?.let { enforceFieldEditable("component.system", it, entity.systemCode) }
@@ -2018,6 +2042,8 @@ class ComponentManagementServiceImpl(
         request.jiraDisplayName?.let { enforceFieldEditable("component.jiraDisplayName", it, null) }
         request.jiraHotfixVersionFormat?.let { enforceFieldEditable("component.jiraHotfixVersionFormat", it, null) }
         request.vcsExternalRegistry?.let { enforceFieldEditable("component.vcsExternalRegistry", it, null) }
+        // skipCommitCheck defaults to false on create; only a supplied `true` is a change to gate.
+        request.skipCommitCheck.takeIf { it }?.let { enforceFieldEditable("component.skipCommitCheck", it, null) }
         request.distributionExplicit?.let { enforceFieldEditable("component.distributionExplicit", it, null) }
         request.distributionExternal?.let { enforceFieldEditable("component.distributionExternal", it, null) }
         request.system?.let { enforceFieldEditable("component.system", it, null) }
@@ -2063,6 +2089,28 @@ class ComponentManagementServiceImpl(
             e.gradleExcludeConfigurations?.let { enforceFieldEditable("escrow.gradleExcludeConfigurations", it, null) }
             e.gradleIncludeTestConfigurations?.let { enforceFieldEditable("escrow.gradleIncludeTestConfigurations", it, null) }
             e.buildTask?.let { enforceFieldEditable("escrow.buildTask", it, null) }
+        }
+    }
+
+    /**
+     * CRS-C / Q13: `skipCommitCheck` is mutually exclusive with a WHISKEY effective BASE
+     * build system. A real external registry only ever exists on WHISKEY components, so the
+     * flag (a NOT_AVAILABLE stand-in) and WHISKEY can never coexist meaningfully.
+     *
+     * Validates the COMBINED post-write state (call AFTER the flag and the base build system
+     * are both applied), so it catches every transition uniformly: create with both set,
+     * PATCH flipping the flag true while WHISKEY, and PATCH switching buildSystem → WHISKEY
+     * while the flag is already true. Effective BASE = the BASE configuration row's
+     * `build_system` (per-range build overrides do not relax this component-level flag).
+     */
+    private fun validateSkipCommitCheckNotWhiskey(entity: ComponentEntity) {
+        if (!entity.skipCommitCheck) return
+        val baseBuildSystem = entity.configurations.firstOrNull { it.rowType == "BASE" }?.buildSystem
+        if (baseBuildSystem.equals("WHISKEY", ignoreCase = true)) {
+            throw ResponseStatusException(
+                HttpStatus.UNPROCESSABLE_ENTITY,
+                "skipCommitCheck is not applicable when the effective BASE build system is WHISKEY",
+            )
         }
     }
 
@@ -3617,6 +3665,7 @@ class ComponentManagementServiceImpl(
             "jiraDisplayName" to entity.jiraDisplayName,
             "jiraHotfixVersionFormat" to entity.jiraHotfixVersionFormat,
             "vcsExternalRegistry" to entity.vcsExternalRegistry,
+            "skipCommitCheck" to entity.skipCommitCheck,
             "distributionExplicit" to entity.distributionExplicit,
             "distributionExternal" to entity.distributionExternal,
             "labels" to (overrideLabels ?: entity.labelJunctions.map { it.labelCode }.toSet()),
