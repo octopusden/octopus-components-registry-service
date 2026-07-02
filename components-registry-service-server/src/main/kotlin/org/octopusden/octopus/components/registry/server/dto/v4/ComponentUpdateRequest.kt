@@ -51,6 +51,7 @@ data class ComponentUpdateRequest(
     val labels: Set<String>? = null,
     val jiraDisplayName: String? = null,
     val jiraHotfixVersionFormat: String? = null,
+    @field:Schema(description = V4_SCALAR_CLEAR_SEMANTICS)
     val vcsExternalRegistry: String? = null,
     val distributionExplicit: Boolean? = null,
     val distributionExternal: Boolean? = null,
