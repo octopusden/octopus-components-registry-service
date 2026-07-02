@@ -147,6 +147,24 @@ class SkipCommitCheckBridgeIntegrationTest {
         assertTrue(updated.skipCommitCheck, "the pre-existing flag is preserved by an unrelated PATCH")
     }
 
+    @Test
+    @Transactional
+    @DisplayName("full-form echo of an unchanged skipCommitCheck=true on a grandfathered WHISKEY row is legal (no 422)")
+    fun `echoing unchanged flag on grandfathered whiskey row is legal`() {
+        migrate(WHISKEY_NA_COMPONENT)
+        val imported = componentManagementService.getComponentByName(WHISKEY_NA_COMPONENT)
+        assertTrue(imported.skipCommitCheck)
+
+        // A combined Save posts the whole Jira slice, echoing skipCommitCheck=true UNCHANGED. The
+        // Q13 gate is change-based, so this must be accepted (not 422) — the flag did not transition.
+        val updated =
+            componentManagementService.updateComponent(
+                imported.id,
+                ComponentUpdateRequest(version = imported.version, skipCommitCheck = true),
+            )
+        assertTrue(updated.skipCommitCheck, "the echoed unchanged flag is preserved and accepted")
+    }
+
     companion object {
         private const val NA_COMPONENT = "sccNotAvailable"
         private const val REAL_COMPONENT = "sccRealRegistry"

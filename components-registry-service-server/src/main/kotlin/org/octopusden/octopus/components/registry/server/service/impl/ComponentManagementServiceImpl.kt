@@ -58,6 +58,7 @@ import org.octopusden.octopus.components.registry.server.mapper.BUILD_SYSTEM_NAM
 import org.octopusden.octopus.components.registry.server.mapper.numericVersionComparator
 import org.octopusden.octopus.components.registry.server.mapper.ESCROW_GENERATION_MODE_NAMES
 import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
+import org.octopusden.octopus.components.registry.server.mapper.NOT_AVAILABLE_EXTERNAL_REGISTRY
 import org.octopusden.octopus.components.registry.server.mapper.PACKAGE_TYPE_NAMES
 import org.octopusden.octopus.components.registry.server.mapper.PRODUCT_TYPE_NAMES
 import org.octopusden.octopus.components.registry.server.mapper.REPOSITORY_TYPE_NAMES
@@ -299,7 +300,12 @@ class ComponentManagementServiceImpl(
                 jiraDisplayName = stripIfHidden("component.jiraDisplayName", request.jiraDisplayName),
                 jiraHotfixVersionFormat = stripIfHidden("component.jiraHotfixVersionFormat", request.jiraHotfixVersionFormat),
                 // CRS-A: create maps "" → NULL (treated as absent), consistent with the PATCH clear rule.
-                vcsExternalRegistry = stripIfHidden("component.vcsExternalRegistry", request.vcsExternalRegistry?.let(::clearBlankScalar)),
+                // CRS-C: reject the legacy NOT_AVAILABLE sentinel — it must never land in the column.
+                vcsExternalRegistry =
+                    stripIfHidden(
+                        "component.vcsExternalRegistry",
+                        request.vcsExternalRegistry?.let(::clearBlankScalar).also(::rejectLegacyExternalRegistrySentinel),
+                    ),
                 // Non-null Boolean with a false default — hidden strips to the default rather than null.
                 skipCommitCheck = if (fieldConfigService.isHidden("component.skipCommitCheck")) false else request.skipCommitCheck,
                 distributionExplicit = stripIfHidden("component.distributionExplicit", request.distributionExplicit),
@@ -551,6 +557,13 @@ class ComponentManagementServiceImpl(
         val oldSecurityChampions = entity.securityChampionUsernames()
         val oldExplicit = entity.distributionExplicit
         val oldExternal = entity.distributionExternal
+        // CRS-C / Q13: snapshot the flag + effective BASE build system BEFORE the patch so the
+        // WHISKEY exclusion is CHANGE-based. A full-form combined Save echoes the whole slice, so a
+        // grandfathered skipCommitCheck=true + WHISKEY row (admitted by the import bridge with a
+        // warning) must tolerate an unchanged echo; only a real transition (flag false→true while
+        // WHISKEY, or buildSystem→WHISKEY while the flag is set) is rejected 422.
+        val oldSkipCommitCheck = entity.skipCommitCheck
+        val oldBaseBuildSystem = entity.configurations.firstOrNull { it.rowType == "BASE" }?.buildSystem
 
         if (isRename) entity.componentKey = normalizedNewKey!!
 
@@ -606,7 +619,10 @@ class ComponentManagementServiceImpl(
         }
         request.vcsExternalRegistry?.let {
             // CRS-A: "" clears the external registry (persist NULL); non-blank sets verbatim.
-            if (!fieldConfigService.isHidden("component.vcsExternalRegistry")) entity.vcsExternalRegistry = clearBlankScalar(it)
+            // CRS-C: reject the legacy NOT_AVAILABLE sentinel — it must never land in the column.
+            val normalized = clearBlankScalar(it)
+            rejectLegacyExternalRegistrySentinel(normalized)
+            if (!fieldConfigService.isHidden("component.vcsExternalRegistry")) entity.vcsExternalRegistry = normalized
         }
         // PATCH boolean: null = don't touch (handled by ?.let). Editable by any component
         // editor (Q11) — no adminOnly hardcode; the CRS-B gate above already lets field-config
@@ -707,14 +723,14 @@ class ComponentManagementServiceImpl(
                 base.takeIf { patch.requiredTools != null }
             }
 
-        // Q13: validate the COMBINED post-patch state (flag + base build system are both
-        // applied by now), so switching buildSystem → WHISKEY while the flag is true, or
-        // setting the flag true while WHISKEY, is rejected 422 in the same place. GATED on the
-        // PATCH actually touching the flag or the BASE build system — mirroring the
-        // "grandfathered on update" convention below: an unrelated PATCH (e.g. clientCode-only)
-        // must NOT 422 a pre-existing WHISKEY+flag component that the import bridge admitted
-        // with a warning (import warns rather than hard-fails on that data contradiction).
-        if (request.skipCommitCheck != null || request.baseConfiguration?.build?.buildSystem != null) {
+        // Q13: validate the COMBINED post-patch state (flag + base build system are both applied by
+        // now). CHANGE-based, not presence-based: only a real transition is rejected — the flag
+        // actually flipping or the BASE build system actually changing. A full-form combined Save
+        // that echoes an unchanged skipCommitCheck=true or buildSystem="WHISKEY" on a grandfathered
+        // row (import admits WHISKEY+sentinel with a warning) is legal, mirroring the CRS-B
+        // change-based write-gate and the "grandfathered on update" convention below.
+        val newBaseBuildSystem = entity.configurations.firstOrNull { it.rowType == "BASE" }?.buildSystem
+        if (entity.skipCommitCheck != oldSkipCommitCheck || newBaseBuildSystem != oldBaseBuildSystem) {
             validateSkipCommitCheckNotWhiskey(entity)
         }
 
@@ -2110,6 +2126,22 @@ class ComponentManagementServiceImpl(
             throw ResponseStatusException(
                 HttpStatus.UNPROCESSABLE_ENTITY,
                 "skipCommitCheck is not applicable when the effective BASE build system is WHISKEY",
+            )
+        }
+    }
+
+    /**
+     * CRS-C: the legacy `NOT_AVAILABLE` sentinel must never be written to `vcs_external_registry`
+     * via v4 — the storage invariant is "real registry names only"; skip-commit intent is expressed
+     * through the dedicated `skipCommitCheck` flag. Reject an explicit sentinel (exact match, after
+     * the CRS-A blank→null normalization) with 422 rather than silently folding it into the flag —
+     * the Portal never sends the sentinel, so this only fires on a misbehaving client.
+     */
+    private fun rejectLegacyExternalRegistrySentinel(normalizedValue: String?) {
+        if (normalizedValue == NOT_AVAILABLE_EXTERNAL_REGISTRY) {
+            throw ResponseStatusException(
+                HttpStatus.UNPROCESSABLE_ENTITY,
+                "vcsExternalRegistry must not be the legacy \"NOT_AVAILABLE\" sentinel; use skipCommitCheck instead",
             )
         }
     }

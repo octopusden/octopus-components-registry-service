@@ -11,6 +11,8 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
+import org.octopusden.octopus.components.registry.server.entity.RegistryConfigEntity
+import org.octopusden.octopus.components.registry.server.repository.RegistryConfigRepository
 import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
@@ -55,6 +57,9 @@ class SkipCommitCheckV4Test {
 
     @Autowired
     private lateinit var objectMapper: ObjectMapper
+
+    @Autowired
+    private lateinit var registryConfigRepository: RegistryConfigRepository
 
     init {
         // application-common.yml's work-dir/groovy-path placeholders resolve against this;
@@ -249,5 +254,73 @@ class SkipCommitCheckV4Test {
                 ?: error("expected an UPDATE audit row carrying skipCommitCheck: $history")
         assertEquals(false, diff.path("old").asBoolean(), "audit old must be the pre-toggle value")
         assertEquals(true, diff.path("new").asBoolean(), "audit new must be the toggled value")
+    }
+
+    // ------------------------------------------------------------------
+    // the legacy NOT_AVAILABLE sentinel must never be stored via v4
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("create with vcsExternalRegistry=\"NOT_AVAILABLE\" is rejected 422 (use skipCommitCheck)")
+    fun `create rejects sentinel registry`() {
+        mvc
+            .perform(
+                post("/rest/api/4/components")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        createBody(
+                            unique("scc_sentinel_create"),
+                            """{"build":{"buildSystem":"MAVEN"}}""",
+                            topLevelJson = """"vcsExternalRegistry":"NOT_AVAILABLE",""",
+                        ),
+                    ),
+            ).andExpect(status().isUnprocessableEntity)
+    }
+
+    @Test
+    @DisplayName("PATCH vcsExternalRegistry=\"NOT_AVAILABLE\" is rejected 422 (use skipCommitCheck)")
+    fun `patch rejects sentinel registry`() {
+        val created = create(unique("scc_sentinel_patch"), """{"build":{"buildSystem":"MAVEN"}}""")
+        mvc
+            .perform(
+                patch("/rest/api/4/components/${created["id"].asText()}")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"version":${version(created)},"vcsExternalRegistry":"NOT_AVAILABLE"}"""),
+            ).andExpect(status().isUnprocessableEntity)
+    }
+
+    // ------------------------------------------------------------------
+    // hidden component.skipCommitCheck is stripped on create (→ default false)
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("hidden component.skipCommitCheck strips an incoming true on create (saved false)")
+    fun `hidden flag stripped on create`() {
+        try {
+            seedFieldConfig(mapOf("component" to mapOf("skipCommitCheck" to mapOf("visibility" to "hidden"))))
+            val created =
+                create(
+                    unique("scc_hidden"),
+                    """{"build":{"buildSystem":"MAVEN"}}""",
+                    topLevelJson = """"skipCommitCheck":true,""",
+                )
+            assertFalse(
+                created["skipCommitCheck"].asBoolean(),
+                "a hidden skipCommitCheck must be stripped to its false default on create",
+            )
+            assertFalse(getComponent(created["id"].asText())["skipCommitCheck"].asBoolean(), "durable across a fresh read")
+        } finally {
+            seedFieldConfig(emptyMap())
+        }
+    }
+
+    /** Seed the `field-config` cache row directly (mirrors ConfigSyncService's writer). */
+    private fun seedFieldConfig(value: Map<String, Any?>) {
+        val entity =
+            registryConfigRepository.findById("field-config").orElse(RegistryConfigEntity(key = "field-config"))
+        entity.value = value
+        registryConfigRepository.save(entity)
     }
 }
