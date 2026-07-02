@@ -61,7 +61,7 @@ components-registry:
   # New-component defaults baseline (generic values only). system code and
   # distribution security groups are installation-specific → service-config.
   component-defaults:
-    buildSystem: MAVEN
+    buildSystem: GRADLE
     artifactIdPattern: '[\w-\.]+'
     releasesInDefaultBranch: true
     solution: false
