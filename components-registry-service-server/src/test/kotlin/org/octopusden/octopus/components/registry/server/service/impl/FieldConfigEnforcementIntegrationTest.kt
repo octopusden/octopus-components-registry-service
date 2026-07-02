@@ -765,6 +765,41 @@ class FieldConfigEnforcementIntegrationTest {
     }
 
     @Test
+    @DisplayName("hidden displayName: explicit+external CREATE with a stripped displayName does NOT 400 on required")
+    fun hiddenDisplayName_explicitExternal_requiredGuard() {
+        withFieldConfig(mapOf("component" to mapOf("displayName" to mapOf("visibility" to "hidden")))) {
+            val g = "org.example.test.${UUID.randomUUID().toString().take(8)}"
+            val resp =
+                adminPost(
+                    """{"name":"crsB_ee_${UUID.randomUUID().toString().take(8)}","componentOwner":"owner1",""" +
+                        """"releaseManager":["rm1"],"securityChampion":["sc1"],""" +
+                        """"displayName":"Should Be Stripped","distributionExplicit":true,"distributionExternal":true,""" +
+                        """"group":{"groupKey":"org.example.test","isFake":false},""" +
+                        """"baseConfiguration":{"build":{"buildSystem":"MAVEN"},""" +
+                        """"mavenArtifacts":[{"groupPattern":"$g","artifactPattern":"art"}]}}""",
+                ).andReturn().response
+            assertEquals(201, resp.status, "explicit+external create must succeed; body=${resp.contentAsString}")
+            val created = objectMapper.readTree(resp.contentAsString)
+            // displayName was stripped (hidden) → persisted empty/null; the required rule was skipped.
+            assertEquals("", created["displayName"].asText(""), "hidden displayName must be stripped, requiredness skipped")
+        }
+    }
+
+    @Test
+    @DisplayName("hidden productType: an invalid value on PATCH is stripped, not validated → 2xx (never 4xx)")
+    fun hiddenProductType_badValueStrippedNotRejected() {
+        val created = createOwnedByBob()
+        val id = created["id"].asText()
+        val version = created["version"].asLong()
+
+        withFieldConfig(mapOf("component" to mapOf("productType" to mapOf("visibility" to "hidden")))) {
+            // "NOT_A_TYPE" would 400 via validateProductType if not skipped for the hidden field.
+            patchRaw(adminJwt(), id, """{"version":$version,"productType":"NOT_A_TYPE"}""")
+                .andExpect(status().is2xxSuccessful)
+        }
+    }
+
+    @Test
     @DisplayName("hidden escrow.generation: a bad value is stripped, not validated → 2xx (never 4xx)")
     fun hiddenEscrowGeneration_badValueStrippedNotRejected() {
         val created = createBobRaw("""{"build":{"buildSystem":"MAVEN"},"escrow":{"generation":"AUTO"}}""")

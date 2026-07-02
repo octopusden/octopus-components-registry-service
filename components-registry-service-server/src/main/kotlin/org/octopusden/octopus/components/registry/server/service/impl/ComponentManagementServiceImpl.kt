@@ -485,7 +485,8 @@ class ComponentManagementServiceImpl(
         // row for jira/build aspect currents, so it must run ahead of the patch appliers.
         enforceEditabilityOnUpdate(entity, request)
 
-        request.productType?.let { validateProductType(it) }
+        // Hidden productType is stripped at its write site → don't 4xx on its value here.
+        request.productType?.let { if (!fieldConfigService.isHidden("component.productType")) validateProductType(it) }
         // `baseConfiguration.versionRange` is validated downstream inside the
         // base-configuration patch block via `validateRangeSyntax` — no
         // top-level guard needed here.
@@ -3259,6 +3260,9 @@ class ComponentManagementServiceImpl(
      * the 400 inline onto the displayName field.
      */
     private fun validateRequiredDisplayName(entity: ComponentEntity) {
+        // A hidden displayName is silently stripped (persisted null), so its requiredness
+        // must not 4xx — mirrors validateRequiredCopyright's hidden guard above.
+        if (fieldConfigService.isHidden("component.displayName")) return
         if (entity.distributionExplicit != true || entity.distributionExternal != true) return
         require(!entity.displayName.isNullOrBlank()) {
             "displayName: componentDisplayName is required for an explicit+external " +
