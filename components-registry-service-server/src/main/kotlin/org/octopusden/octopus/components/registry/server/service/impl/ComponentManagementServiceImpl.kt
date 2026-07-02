@@ -276,7 +276,8 @@ class ComponentManagementServiceImpl(
                 releasesInDefaultBranch = request.releasesInDefaultBranch,
                 jiraDisplayName = request.jiraDisplayName,
                 jiraHotfixVersionFormat = request.jiraHotfixVersionFormat,
-                vcsExternalRegistry = request.vcsExternalRegistry,
+                // CRS-A: create maps "" → NULL (treated as absent), consistent with the PATCH clear rule.
+                vcsExternalRegistry = request.vcsExternalRegistry?.let(::clearBlankScalar),
                 distributionExplicit = request.distributionExplicit,
                 distributionExternal = request.distributionExternal,
                 systemCode = canonicalSystem,
@@ -565,7 +566,8 @@ class ComponentManagementServiceImpl(
             if (!fieldConfigService.isHidden("component.jiraHotfixVersionFormat")) entity.jiraHotfixVersionFormat = it
         }
         request.vcsExternalRegistry?.let {
-            if (!fieldConfigService.isHidden("component.vcsExternalRegistry")) entity.vcsExternalRegistry = it
+            // CRS-A: "" clears the external registry (persist NULL); non-blank sets verbatim.
+            if (!fieldConfigService.isHidden("component.vcsExternalRegistry")) entity.vcsExternalRegistry = clearBlankScalar(it)
         }
         request.distributionExplicit?.let {
             if (!fieldConfigService.isHidden("component.distributionExplicit")) entity.distributionExplicit = it
@@ -1714,38 +1716,43 @@ class ComponentManagementServiceImpl(
     ) {
         if (request == null) return
         request.versionRange?.let { config.versionRange = it }
+        // CRS-A: on create an incoming "" maps to NULL (treated as absent), for
+        // consistency with the PATCH clear rule. `?.let(::clearBlankScalar)`
+        // keeps null as null, maps "" → null, and sets non-blank verbatim.
         request.build?.let { b ->
+            // buildSystem is a required enum (validated) — not clearable; set as-is.
             config.buildSystem = b.buildSystem
-            config.javaVersion = b.javaVersion
-            config.mavenVersion = b.mavenVersion
-            config.gradleVersion = b.gradleVersion
-            config.buildFilePath = b.buildFilePath
+            config.javaVersion = b.javaVersion?.let(::clearBlankScalar)
+            config.mavenVersion = b.mavenVersion?.let(::clearBlankScalar)
+            config.gradleVersion = b.gradleVersion?.let(::clearBlankScalar)
+            config.buildFilePath = b.buildFilePath?.let(::clearBlankScalar)
             config.deprecated = b.deprecated
             config.requiredProject = b.requiredProject
-            config.projectVersion = b.projectVersion
-            config.systemProperties = b.systemProperties
-            config.buildTasks = b.buildTasks
+            config.projectVersion = b.projectVersion?.let(::clearBlankScalar)
+            config.systemProperties = b.systemProperties?.let(::clearBlankScalar)
+            config.buildTasks = b.buildTasks?.let(::clearBlankScalar)
         }
         request.escrow?.let { e ->
-            config.escrowProvidedDependencies = e.providedDependencies
+            config.escrowProvidedDependencies = e.providedDependencies?.let(::clearBlankScalar)
             config.escrowReusable = e.reusable
+            // escrow.generation is a validated enum mode — not clearable; set as-is.
             config.escrowGeneration = e.generation
-            config.escrowDiskSpace = e.diskSpace
-            config.escrowAdditionalSources = e.additionalSources
-            config.escrowGradleIncludeConfigurations = e.gradleIncludeConfigurations
-            config.escrowGradleExcludeConfigurations = e.gradleExcludeConfigurations
+            config.escrowDiskSpace = e.diskSpace?.let(::clearBlankScalar)
+            config.escrowAdditionalSources = e.additionalSources?.let(::clearBlankScalar)
+            config.escrowGradleIncludeConfigurations = e.gradleIncludeConfigurations?.let(::clearBlankScalar)
+            config.escrowGradleExcludeConfigurations = e.gradleExcludeConfigurations?.let(::clearBlankScalar)
             config.escrowGradleIncludeTestConfigurations = e.gradleIncludeTestConfigurations
-            config.escrowBuildTask = e.buildTask
+            config.escrowBuildTask = e.buildTask?.let(::clearBlankScalar)
         }
         request.jira?.let { j ->
-            config.jiraProjectKey = j.projectKey
+            config.jiraProjectKey = j.projectKey?.let(::clearBlankScalar)
             config.jiraTechnical = j.technical
-            config.jiraMinorVersionFormat = j.minorVersionFormat
-            config.jiraReleaseVersionFormat = j.releaseVersionFormat
-            config.jiraBuildVersionFormat = j.buildVersionFormat
-            config.jiraLineVersionFormat = j.lineVersionFormat
-            config.jiraVersionPrefix = j.versionPrefix
-            config.jiraVersionFormat = j.versionFormat
+            config.jiraMinorVersionFormat = j.minorVersionFormat?.let(::clearBlankScalar)
+            config.jiraReleaseVersionFormat = j.releaseVersionFormat?.let(::clearBlankScalar)
+            config.jiraBuildVersionFormat = j.buildVersionFormat?.let(::clearBlankScalar)
+            config.jiraLineVersionFormat = j.lineVersionFormat?.let(::clearBlankScalar)
+            config.jiraVersionPrefix = j.versionPrefix?.let(::clearBlankScalar)
+            config.jiraVersionFormat = j.versionFormat?.let(::clearBlankScalar)
             // jiraHotfixVersionFormat per-range write is intentionally not
             // exposed via V4 (no UI need today); DSL import is the only
             // producer of the per-range column.
@@ -1769,39 +1776,46 @@ class ComponentManagementServiceImpl(
         config: ComponentConfigurationEntity,
         patch: BaseConfigurationRequest,
     ) {
+        // CRS-A tri-state for free-text string scalars: null/absent = no-op (the
+        // `?.let` skips it), "" = clear to NULL (clearBlankScalar), non-blank = set
+        // verbatim. Booleans keep the plain `?.let` (no clear semantic). The two
+        // enum-validated scalars are NOT clearable: `build.buildSystem` is required
+        // and `escrow.generation` must be a known mode — both are validated
+        // (validateBuildSystem / validateEscrowGenerationMode reject blank), so a
+        // "" on those is a 400, not a clear. They keep set-only semantics.
         patch.versionRange?.let { config.versionRange = it }
         patch.build?.let { b ->
             b.buildSystem?.let { config.buildSystem = it }
-            b.javaVersion?.let { config.javaVersion = it }
-            b.mavenVersion?.let { config.mavenVersion = it }
-            b.gradleVersion?.let { config.gradleVersion = it }
-            b.buildFilePath?.let { config.buildFilePath = it }
+            b.javaVersion?.let { config.javaVersion = clearBlankScalar(it) }
+            b.mavenVersion?.let { config.mavenVersion = clearBlankScalar(it) }
+            b.gradleVersion?.let { config.gradleVersion = clearBlankScalar(it) }
+            b.buildFilePath?.let { config.buildFilePath = clearBlankScalar(it) }
             b.deprecated?.let { config.deprecated = it }
             b.requiredProject?.let { config.requiredProject = it }
-            b.projectVersion?.let { config.projectVersion = it }
-            b.systemProperties?.let { config.systemProperties = it }
-            b.buildTasks?.let { config.buildTasks = it }
+            b.projectVersion?.let { config.projectVersion = clearBlankScalar(it) }
+            b.systemProperties?.let { config.systemProperties = clearBlankScalar(it) }
+            b.buildTasks?.let { config.buildTasks = clearBlankScalar(it) }
         }
         patch.escrow?.let { e ->
-            e.providedDependencies?.let { config.escrowProvidedDependencies = it }
+            e.providedDependencies?.let { config.escrowProvidedDependencies = clearBlankScalar(it) }
             e.reusable?.let { config.escrowReusable = it }
             e.generation?.let { config.escrowGeneration = it }
-            e.diskSpace?.let { config.escrowDiskSpace = it }
-            e.additionalSources?.let { config.escrowAdditionalSources = it }
-            e.gradleIncludeConfigurations?.let { config.escrowGradleIncludeConfigurations = it }
-            e.gradleExcludeConfigurations?.let { config.escrowGradleExcludeConfigurations = it }
+            e.diskSpace?.let { config.escrowDiskSpace = clearBlankScalar(it) }
+            e.additionalSources?.let { config.escrowAdditionalSources = clearBlankScalar(it) }
+            e.gradleIncludeConfigurations?.let { config.escrowGradleIncludeConfigurations = clearBlankScalar(it) }
+            e.gradleExcludeConfigurations?.let { config.escrowGradleExcludeConfigurations = clearBlankScalar(it) }
             e.gradleIncludeTestConfigurations?.let { config.escrowGradleIncludeTestConfigurations = it }
-            e.buildTask?.let { config.escrowBuildTask = it }
+            e.buildTask?.let { config.escrowBuildTask = clearBlankScalar(it) }
         }
         patch.jira?.let { j ->
-            j.projectKey?.let { config.jiraProjectKey = it }
+            j.projectKey?.let { config.jiraProjectKey = clearBlankScalar(it) }
             j.technical?.let { config.jiraTechnical = it }
-            j.minorVersionFormat?.let { config.jiraMinorVersionFormat = it }
-            j.releaseVersionFormat?.let { config.jiraReleaseVersionFormat = it }
-            j.buildVersionFormat?.let { config.jiraBuildVersionFormat = it }
-            j.lineVersionFormat?.let { config.jiraLineVersionFormat = it }
-            j.versionPrefix?.let { config.jiraVersionPrefix = it }
-            j.versionFormat?.let { config.jiraVersionFormat = it }
+            j.minorVersionFormat?.let { config.jiraMinorVersionFormat = clearBlankScalar(it) }
+            j.releaseVersionFormat?.let { config.jiraReleaseVersionFormat = clearBlankScalar(it) }
+            j.buildVersionFormat?.let { config.jiraBuildVersionFormat = clearBlankScalar(it) }
+            j.lineVersionFormat?.let { config.jiraLineVersionFormat = clearBlankScalar(it) }
+            j.versionPrefix?.let { config.jiraVersionPrefix = clearBlankScalar(it) }
+            j.versionFormat?.let { config.jiraVersionFormat = clearBlankScalar(it) }
             // jiraHotfixVersionFormat per-range PATCH is intentionally not
             // exposed via V4; see applyBaseConfigurationCreate above.
         }

@@ -4,6 +4,14 @@ import io.swagger.v3.oas.annotations.media.Schema
 import java.util.UUID
 
 /**
+ * CRS-A tri-state clear contract shared by every write-side aspect string
+ * scalar (build/escrow/jira) and the top-level `vcsExternalRegistry`.
+ */
+const val V4_SCALAR_CLEAR_SEMANTICS: String =
+    "Write tri-state: omit or null = leave unchanged; \"\" (or blank) = clear to null; " +
+        "non-blank = set verbatim. On create, \"\" is treated as null."
+
+/**
  * One row of `component_configurations`, projected for the v4 editor view.
  *
  * Three editor-visible shapes per schema-spec.md §3 (Model A' override taxonomy):
@@ -175,38 +183,67 @@ data class BaseConfigurationRequest(
 )
 
 data class BuildAspectRequest(
+    // buildSystem is a required, validated enum — not subject to the clear rule.
     val buildSystem: String? = null,
+    @field:Schema(description = V4_SCALAR_CLEAR_SEMANTICS)
     val javaVersion: String? = null,
+    @field:Schema(description = V4_SCALAR_CLEAR_SEMANTICS)
     val mavenVersion: String? = null,
+    @field:Schema(description = V4_SCALAR_CLEAR_SEMANTICS)
     val gradleVersion: String? = null,
+    @field:Schema(description = V4_SCALAR_CLEAR_SEMANTICS)
     val buildFilePath: String? = null,
     val deprecated: Boolean? = null,
     val requiredProject: Boolean? = null,
+    @field:Schema(description = V4_SCALAR_CLEAR_SEMANTICS)
     val projectVersion: String? = null,
+    @field:Schema(description = V4_SCALAR_CLEAR_SEMANTICS)
     val systemProperties: String? = null,
+    @field:Schema(description = V4_SCALAR_CLEAR_SEMANTICS)
     val buildTasks: String? = null,
 )
 
 data class EscrowAspectRequest(
+    @field:Schema(description = V4_SCALAR_CLEAR_SEMANTICS)
     val providedDependencies: String? = null,
     val reusable: Boolean? = null,
+    // generation is a validated enum mode — not subject to the clear rule.
     val generation: String? = null,
+    @field:Schema(description = V4_SCALAR_CLEAR_SEMANTICS)
     val diskSpace: String? = null,
+    @field:Schema(description = V4_SCALAR_CLEAR_SEMANTICS)
     val additionalSources: String? = null,
+    @field:Schema(description = V4_SCALAR_CLEAR_SEMANTICS)
     val gradleIncludeConfigurations: String? = null,
+    @field:Schema(description = V4_SCALAR_CLEAR_SEMANTICS)
     val gradleExcludeConfigurations: String? = null,
     val gradleIncludeTestConfigurations: Boolean? = null,
+    @field:Schema(description = V4_SCALAR_CLEAR_SEMANTICS)
     val buildTask: String? = null,
 )
 
 data class JiraAspectRequest(
+    @field:Schema(
+        description = "$V4_SCALAR_CLEAR_SEMANTICS Clearing it removes the component's Jira association " +
+            "(no Jira version coordinates are computed) and drops its (projectKey, versionPrefix) uniqueness claim.",
+    )
     val projectKey: String? = null,
     val technical: Boolean? = null,
+    @field:Schema(description = V4_SCALAR_CLEAR_SEMANTICS)
     val minorVersionFormat: String? = null,
+    @field:Schema(description = V4_SCALAR_CLEAR_SEMANTICS)
     val releaseVersionFormat: String? = null,
+    @field:Schema(
+        description = "$V4_SCALAR_CLEAR_SEMANTICS When cleared, the build version format falls back to the release version format.",
+    )
     val buildVersionFormat: String? = null,
+    @field:Schema(
+        description = "$V4_SCALAR_CLEAR_SEMANTICS When cleared, the line version format falls back to the minor version format.",
+    )
     val lineVersionFormat: String? = null,
+    @field:Schema(description = V4_SCALAR_CLEAR_SEMANTICS)
     val versionPrefix: String? = null,
+    @field:Schema(description = V4_SCALAR_CLEAR_SEMANTICS)
     val versionFormat: String? = null,
     // Intentionally NOT exposing per-range hotfixVersionFormat as a V4
     // editor-write field — DSL import is currently the only producer in
