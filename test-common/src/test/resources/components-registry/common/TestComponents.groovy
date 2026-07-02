@@ -1239,3 +1239,36 @@ NON_ARCHIVED_TEST_COMPONENT {
         }
     }
 }
+
+"TEST_MERGED_SCALAR_OVERRIDES" {
+    // MIG-048 fixture (adjacent same-value scalar-override merge): javaVersion is declared
+    // ONLY in the open-upper (newest) block, which seeds the BASE row (ADR-018 amendment).
+    // BOTH older blocks inherit the top-level 1.8, so without merging the import would emit
+    // two ADJACENT identical build.javaVersion overrides ((,2.0) and [2.0,3.0) -> 1.8).
+    // mavenVersion keeps the first block distinct from the second (not a full twin), and
+    // must NOT be swept into the javaVersion merge.
+    componentOwner = "user9"
+    groupId = "org.octopusden.octopus.test.mergedscalars"
+    artifactId = "test-merged-scalars"
+    build {
+        javaVersion = "1.8"
+    }
+
+    "(,2.0)" {
+        build {
+            mavenVersion = "3.6.3"
+        }
+    }
+    "[2.0,3.0)" {
+    }
+    "[3.0,)" {
+        build {
+            javaVersion = "17"
+        }
+        jira {
+            component {
+                versionPrefix = "tmso2"
+            }
+        }
+    }
+}

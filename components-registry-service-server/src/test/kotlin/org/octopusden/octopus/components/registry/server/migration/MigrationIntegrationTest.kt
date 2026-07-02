@@ -528,6 +528,65 @@ class MigrationIntegrationTest {
     }
 
     // =========================================================================
+    // MIG-048: adjacent same-value scalar overrides merge into one row.
+    // =========================================================================
+
+    @Test
+    @DisplayName(
+        "MIG-048: TEST_MERGED_SCALAR_OVERRIDES — two adjacent older blocks that resolve the SAME " +
+            "inherited build.javaVersion emit ONE merged SCALAR_OVERRIDE (,3.0), not one row per block; " +
+            "a value differing only in one block (build.mavenVersion) keeps its own verbatim range",
+    )
+    fun mig048_adjacentSameValueScalarOverridesMerged() {
+        val component = componentRepository.findByComponentKey("TEST_MERGED_SCALAR_OVERRIDES")
+        assertNotNull(component, "TEST_MERGED_SCALAR_OVERRIDES must be migrated")
+
+        val allRows = configurationRepository.findByComponentId(component!!.id!!)
+
+        // Base = the open-upper [3.0,) block (ADR-018 amendment): javaVersion 17.
+        val baseRow = configurationRepository.findBaseByComponentId(component.id!!)
+        assertNotNull(baseRow, "must have a base row")
+        assertEquals("17", baseRow!!.javaVersion, "BASE must carry the open-upper javaVersion")
+
+        // BOTH older blocks ((,2.0) and [2.0,3.0)) resolve the inherited top-level javaVersion 1.8 —
+        // adjacent + same value ⇒ ONE merged override over their union (,3.0). Two per-block rows
+        // ((,2.0) and [2.0,3.0)) would be the unmerged regression shape.
+        val javaOverrides = allRows.filter { it.rowType == "SCALAR_OVERRIDE" && it.overriddenAttribute == "build.javaVersion" }
+        assertEquals(
+            1, javaOverrides.size,
+            "Adjacent same-value javaVersion overrides must merge into one row. " +
+                "Found: ${javaOverrides.map { "${it.versionRange}=${it.javaVersion}" }}",
+        )
+        assertEquals("(,3.0)", javaOverrides.single().versionRange, "merged range must be the union of the two older blocks")
+        assertEquals("1.8", javaOverrides.single().javaVersion)
+
+        // mavenVersion differs from base ONLY in the first block — it must keep its own verbatim
+        // range and must NOT be widened by the javaVersion merge.
+        val mavenOverrides = allRows.filter { it.rowType == "SCALAR_OVERRIDE" && it.overriddenAttribute == "build.mavenVersion" }
+        assertEquals(
+            listOf("(,2.0)"), mavenOverrides.map { it.versionRange },
+            "mavenVersion override must stay on its own declared range",
+        )
+        assertEquals("3.6.3", mavenOverrides.single().mavenVersion)
+
+        // jira.versionPrefix is set only in the newest block too (both older blocks null-clear it,
+        // same value = null), BUT it is a jira uniqueness-pair attribute: computeEffectiveJiraPairs
+        // reconstructs (projectKey, versionPrefix) by EXACT-range grouping of the persisted rows, so
+        // these rows must stay on their verbatim per-block ranges — excluded from the merge.
+        val prefixOverrides = allRows
+            .filter { it.rowType == "SCALAR_OVERRIDE" && it.overriddenAttribute == "jira.versionPrefix" }
+            .sortedBy { it.versionRange }
+        assertEquals(
+            listOf("(,2.0)", "[2.0,3.0)"), prefixOverrides.map { it.versionRange },
+            "jira.versionPrefix rows must stay verbatim per block (uniqueness-pair attr, never merged)",
+        )
+        assertTrue(
+            prefixOverrides.all { it.jiraVersionPrefix == null },
+            "both older blocks null-clear the newest-block prefix",
+        )
+    }
+
+    // =========================================================================
     // MIG-041: §6.3 aggregator handling — component_groups rows + is_fake + component_group_id FK
     // =========================================================================
 
