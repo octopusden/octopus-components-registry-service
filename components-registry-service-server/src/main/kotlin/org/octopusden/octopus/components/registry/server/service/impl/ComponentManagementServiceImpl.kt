@@ -1818,12 +1818,20 @@ class ComponentManagementServiceImpl(
         }
     }
 
-    /** Change detection with CRS-A "" ≡ null normalization for strings; value equality otherwise. */
+    /**
+     * Change detection for the editability gate. For strings it delegates to the CRS-A
+     * storage normalizer [clearBlankScalar] so the comparison rule can NEVER drift from what
+     * the write path actually persists (`ifBlank { null }`, NO trim: blank clears to null, a
+     * non-blank value is kept verbatim — surrounding whitespace is significant for format
+     * templates). Trimming here would make a padded echo (`"  x  "` vs stored `"x"`) compare
+     * equal while the write would still persist the padded value — a silent change to a
+     * non-editable field. Booleans/lists compare by value.
+     */
     private fun isFieldChange(
         incoming: Any?,
         current: Any?,
     ): Boolean {
-        fun norm(v: Any?): Any? = if (v is String) v.trim().ifBlank { null } else v
+        fun norm(v: Any?): Any? = if (v is String) clearBlankScalar(v) else v
         return norm(incoming) != norm(current)
     }
 

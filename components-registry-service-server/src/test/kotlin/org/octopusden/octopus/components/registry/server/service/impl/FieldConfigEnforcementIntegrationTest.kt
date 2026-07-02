@@ -478,6 +478,46 @@ class FieldConfigEnforcementIntegrationTest {
     }
 
     @Test
+    @DisplayName("adminOnly string: non-admin PADDED echo (\"  x  \" vs stored \"x\") → 403 (whitespace is a change)")
+    fun adminOnlyString_paddedEcho_forbidden() {
+        val created = createOwnedByBob(vcsExternalRegistry = "x")
+        val id = created["id"].asText()
+        val version = created["version"].asLong()
+
+        withFieldConfig(mapOf("component" to mapOf("vcsExternalRegistry" to mapOf("editable" to "adminOnly")))) {
+            // A padded value is NOT the stored value — the write would persist "  x  " verbatim,
+            // so it must be treated as a change and rejected for a non-admin.
+            patchRaw(editorJwt(), id, """{"version":$version,"vcsExternalRegistry":"  x  "}""")
+                .andExpect(status().isForbidden)
+            assertEquals("x", getComponent(id)["vcsExternalRegistry"].asText())
+        }
+    }
+
+    @Test
+    @DisplayName("adminOnly string: change-detection norm mirrors clearBlankScalar over {\"\",\"  \",\"x\",\"  x  \"}")
+    fun adminOnlyString_normParityWithStorage() {
+        // Stored value is "x". A non-admin echo is allowed iff clearBlankScalar(incoming) ==
+        // clearBlankScalar("x"): only a verbatim "x" is a no-op; "" / "  " (clear→null) and
+        // "  x  " (verbatim, whitespace-significant) are all real changes → 403.
+        val created = createOwnedByBob(vcsExternalRegistry = "x")
+        val id = created["id"].asText()
+        val version = created["version"].asLong()
+
+        withFieldConfig(mapOf("component" to mapOf("vcsExternalRegistry" to mapOf("editable" to "adminOnly")))) {
+            // Changes (403) — these all leave the transaction rolled back, so `version` stays valid.
+            for (changing in listOf("", "  ", "  x  ")) {
+                patchRaw(editorJwt(), id, """{"version":$version,"vcsExternalRegistry":"$changing"}""")
+                    .andExpect(status().isForbidden)
+            }
+            assertEquals("x", getComponent(id)["vcsExternalRegistry"].asText())
+
+            // No-op echo of the exact stored value → allowed.
+            patchRaw(editorJwt(), id, """{"version":$version,"vcsExternalRegistry":"x"}""")
+                .andExpect(status().is2xxSuccessful)
+        }
+    }
+
+    @Test
     @DisplayName("OVERRIDE DELETE: non-admin deleting a jira.technical override → 403; admin → 204")
     fun override_delete_gated() {
         val created = createOwnedByBob(technical = false)
