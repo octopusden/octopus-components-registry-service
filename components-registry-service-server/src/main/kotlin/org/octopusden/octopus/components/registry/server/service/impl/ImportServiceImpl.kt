@@ -1002,10 +1002,16 @@ class ImportServiceImpl(
         // of its own — it equals the base by construction; the OLDER blocks become the overrides. No
         // RES-001 fallback presence row: coverage is the merged union above, and an empty block (no
         // value change vs base) simply contributes no edge.
+        //
+        // Scalar overrides are emitted MERGED per attribute (MIG-048): with base = the newest block,
+        // an attribute set only there makes EVERY older block diff identically (they all inherit the
+        // same top-level/Defaults value), which would emit one identical row per block. Adjacent
+        // same-value ranges collapse into their union (spec: "adjacent same-value MAY be merged").
+        // Markers stay per declared block — their per-block boundaries also anchor enumeration edges.
         val tOverridesStart = System.nanoTime()
         val nonBaseConfigs = configs.filter { it !== baseConfig }
+        emitMergedScalarOverrides(saved, baseConfig, nonBaseConfigs)
         for (override in nonBaseConfigs) {
-            emitScalarOverrides(saved, baseConfig, override)
             emitMarkerOverrides(saved, savedBase, baseConfig, override)
         }
         val tOverridesMs = (System.nanoTime() - tOverridesStart) / 1_000_000
@@ -1547,7 +1553,7 @@ class ImportServiceImpl(
 
     /**
      * Emit a RANGE_PRESENCE row for a DSL-declared version range whose
-     * scalars/markers all match base (so neither `emitScalarOverrides` nor
+     * scalars/markers all match base (so neither `emitMergedScalarOverrides` nor
      * `emitMarkerOverrides` produced any row). Without this, the range is
      * invisible to the resolver and disappears from
      * `/jira-component-version-ranges` and `/{component}/maven-artifacts`
@@ -1660,14 +1666,32 @@ class ImportServiceImpl(
     // =========================================================================
 
     /**
-     * Emit scalar override rows for each scalar attribute that differs
-     * between [base] config and [override] config.
+     * Emit SCALAR_OVERRIDE rows for every attribute where a non-base config differs from the base,
+     * MERGING adjacent/overlapping ranges that carry the same value into one row (MIG-048).
+     *
+     * With the base = the OPEN-UPPER (newest) block (ADR-018 amendment), an attribute declared only
+     * there makes every OLDER block diff identically against it — they all resolve the same inherited
+     * top-level/Defaults value — which would emit one identical row per declared block (e.g. two
+     * adjacent `javaVersion=1.8` rows). The spec allows merging ("adjacent same-value MAY be merged"),
+     * so ranges are grouped per (attribute, value) and collapsed via [VersionRangePartition.mergeUnion]
+     * with the component's scheme-aware ordering. Non-adjacent same-value ranges stay separate rows.
+     *
+     * Defensive guard: if a merged union collapses to the all-versions shape, the group's VERBATIM
+     * per-block ranges are emitted instead — a SCALAR_OVERRIDE at ALL_VERSIONS would shadow the base
+     * row for the whole version space. The shape is unreachable today ONLY because of a loader
+     * invariant, not structure: the Groovy loader merges top-level defaults INTO each range config
+     * rather than emitting a separate all-versions config (see [isAllVersionsRange] KDoc), so
+     * `selectBaseConfig` branch 1 (explicit all-versions base) never coexists with bounded siblings
+     * whose union tiles everything. If it ever fires, the fallback deliberately reintroduces the
+     * duplicated-adjacent-rows shape this merge removes (fail-safe over fail-wrong), and the verbatim
+     * strings are unnormalized DSL text — the idempotency lookup below then depends on DSL string
+     * stability.
      */
     @Suppress("CyclomaticComplexMethod")
-    private fun emitScalarOverrides(
+    private fun emitMergedScalarOverrides(
         component: ComponentEntity,
         base: EscrowModuleConfig,
-        override: EscrowModuleConfig,
+        nonBaseConfigs: List<EscrowModuleConfig>,
     ): List<ComponentConfigurationEntity> {
         // Transient throwaway entities used only as carriers for the diff
         // computation; never persisted. They still need a `rowType` because
@@ -1681,42 +1705,69 @@ class ImportServiceImpl(
             )
         populateScalarsFromConfig(baseRow, base)
 
-        val overRow =
-            ComponentConfigurationEntity(
-                component = component,
-                versionRange = "",
-                rowType = "BASE",
-            )
-        populateScalarsFromConfig(overRow, override)
-
-        val versionRange = override.versionRangeString ?: return emptyList()
-
-        val saved = mutableListOf<ComponentConfigurationEntity>()
-        // Collect changed scalar attribute → value pairs
-        val changed = collectScalarDiffs(baseRow, overRow)
-        for ((attrPath, newValue) in changed) {
-            // Avoid duplicate rows for same (component, range, attribute)
-            val existing =
-                configurationRepository.findByComponentIdAndVersionRangeAndOverriddenAttribute(
-                    component.id!!,
-                    versionRange,
-                    attrPath,
-                )
-            if (existing != null) {
-                saved += existing
-                continue // idempotent
-            }
-
-            val scalarRow =
+        // (attribute, value) -> the declared ranges carrying that diff. The value is part of the
+        // grouping key (nullable — an explicit null-clear groups like any other value), so only
+        // SAME-value ranges ever merge; a range with a different value keeps its own group.
+        val rangesByAttrValue = LinkedHashMap<Pair<String, Any?>, MutableList<String>>()
+        for (override in nonBaseConfigs) {
+            val versionRange = override.versionRangeString ?: continue
+            val overRow =
                 ComponentConfigurationEntity(
                     component = component,
-                    versionRange = versionRange,
-                    overriddenAttribute = attrPath,
-                    rowType = "SCALAR_OVERRIDE",
-                    isSyntheticBase = false,
+                    versionRange = "",
+                    rowType = "BASE",
                 )
-            applyScalarValueToRow(scalarRow, attrPath, newValue)
-            saved += configurationRepository.save(scalarRow)
+            populateScalarsFromConfig(overRow, override)
+            for ((attrPath, newValue) in collectScalarDiffs(baseRow, overRow)) {
+                rangesByAttrValue.getOrPut(attrPath to newValue) { mutableListOf() }.add(versionRange)
+            }
+        }
+
+        val saved = mutableListOf<ComponentConfigurationEntity>()
+        val compare = numericVersionComparator(numericVersionFactory)
+        for ((attrValue, ranges) in rangesByAttrValue) {
+            val (attrPath, newValue) = attrValue
+            // The jira uniqueness pair `(projectKey, versionPrefix)` is reconstructed from PERSISTED
+            // rows by grouping on the EXACT versionRange (computeEffectiveJiraPairs: pkRow+prefixRow
+            // must sit in the SAME range group; mirrored by the API-side validator). Merging one of
+            // the two attributes independently of the other would tear companion rows apart —
+            // e.g. a widened projectKey row paired with the BASE prefix instead of its range's
+            // prefix — corrupting collision detection. Keep these two attributes on their VERBATIM
+            // per-block ranges; every other scalar merges.
+            val merged =
+                if (attrPath in JIRA_UNIQUENESS_PAIR_ATTRS) ranges
+                else VersionRangePartition.mergeUnion(ranges, compare)
+            val effectiveRanges = if (merged.any { isAllVersionsRange(it) }) ranges else merged
+            for (versionRange in effectiveRanges) {
+                // Avoid duplicate rows for same (component, range, attribute). NOTE: this exact-range
+                // lookup assumes import never re-runs over a component that already has override rows
+                // (both importModule call sites hard-skip components present in the DB). If a
+                // re-migration/refresh path is ever added, rows persisted by an OLDER import at
+                // unmerged per-block ranges would NOT be found under the merged range and the same
+                // attribute would end up with overlapping rows — there is no import-side disjointness
+                // validator (validateFieldOverrideRange guards only the v4 API write path).
+                val existing =
+                    configurationRepository.findByComponentIdAndVersionRangeAndOverriddenAttribute(
+                        component.id!!,
+                        versionRange,
+                        attrPath,
+                    )
+                if (existing != null) {
+                    saved += existing
+                    continue // idempotent
+                }
+
+                val scalarRow =
+                    ComponentConfigurationEntity(
+                        component = component,
+                        versionRange = versionRange,
+                        overriddenAttribute = attrPath,
+                        rowType = "SCALAR_OVERRIDE",
+                        isSyntheticBase = false,
+                    )
+                applyScalarValueToRow(scalarRow, attrPath, newValue)
+                saved += configurationRepository.save(scalarRow)
+            }
         }
         return saved
     }
@@ -2525,6 +2576,14 @@ class ImportServiceImpl(
 
     companion object {
         private val LOG = LoggerFactory.getLogger(ImportServiceImpl::class.java)
+
+        /**
+         * Attributes EXCLUDED from adjacent same-value override merging (MIG-048): the jira
+         * uniqueness pair is reconstructed from persisted rows by exact-range grouping
+         * (`computeEffectiveJiraPairs`), so `jira.projectKey` / `jira.versionPrefix` rows must keep
+         * their verbatim per-block ranges — see [emitMergedScalarOverrides].
+         */
+        private val JIRA_UNIQUENESS_PAIR_ATTRS = setOf("jira.projectKey", "jira.versionPrefix")
 
         /** Exact-string FAKE-aggregator artifactId markers. */
         private val FAKE_ARTIFACT_ID_LITERALS: Set<String> = setOf("fake", "dummy", "stub")
