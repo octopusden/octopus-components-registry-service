@@ -132,7 +132,7 @@ class RangeOnlyParityGuardTest {
             jiraProjectKey = "GUARD",
             deprecated = false,
         )
-        base.jiraMajorVersionFormat = "\$major"
+        base.jiraMinorVersionFormat = "\$major"
         base.jiraReleaseVersionFormat = "\$major.\$minor.\$service"
         base.vcsEntries.add(
             VcsSettingsEntryEntity(

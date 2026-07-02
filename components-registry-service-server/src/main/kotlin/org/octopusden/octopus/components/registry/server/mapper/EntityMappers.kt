@@ -876,7 +876,7 @@ internal class ComponentConfigurationView {
 
     var jiraProjectKey: String? = null
     var jiraTechnical: Boolean? = null
-    var jiraMajorVersionFormat: String? = null
+    var jiraMinorVersionFormat: String? = null
     var jiraReleaseVersionFormat: String? = null
     var jiraBuildVersionFormat: String? = null
     var jiraLineVersionFormat: String? = null
@@ -932,7 +932,7 @@ internal class ComponentConfigurationView {
 
             "jira.projectKey" -> jiraProjectKey = override.jiraProjectKey
             "jira.technical" -> jiraTechnical = override.jiraTechnical
-            "jira.majorVersionFormat" -> jiraMajorVersionFormat = override.jiraMajorVersionFormat
+            "jira.minorVersionFormat" -> jiraMinorVersionFormat = override.jiraMinorVersionFormat
             "jira.releaseVersionFormat" -> jiraReleaseVersionFormat = override.jiraReleaseVersionFormat
             "jira.buildVersionFormat" -> jiraBuildVersionFormat = override.jiraBuildVersionFormat
             "jira.lineVersionFormat" -> jiraLineVersionFormat = override.jiraLineVersionFormat
@@ -1072,7 +1072,7 @@ internal class ComponentConfigurationView {
 
                 jiraProjectKey = base.jiraProjectKey
                 jiraTechnical = base.jiraTechnical
-                jiraMajorVersionFormat = base.jiraMajorVersionFormat
+                jiraMinorVersionFormat = base.jiraMinorVersionFormat
                 jiraReleaseVersionFormat = base.jiraReleaseVersionFormat
                 jiraBuildVersionFormat = base.jiraBuildVersionFormat
                 jiraLineVersionFormat = base.jiraLineVersionFormat
@@ -1190,7 +1190,7 @@ private fun buildJiraComponent(
 ): JiraComponent? {
     val projectKey = merged.jiraProjectKey ?: return null
 
-    val majorFmt = merged.jiraMajorVersionFormat ?: "\$major"
+    val majorFmt = merged.jiraMinorVersionFormat ?: "\$major"
     val releaseFmt = merged.jiraReleaseVersionFormat ?: "\$major.\$minor"
     val buildFmt = merged.jiraBuildVersionFormat ?: releaseFmt
     val lineFmt = merged.jiraLineVersionFormat ?: majorFmt

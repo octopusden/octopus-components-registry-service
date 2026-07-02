@@ -155,8 +155,8 @@ class ComponentConfigurationEntity(
     @Column(name = "jira_technical")
     var jiraTechnical: Boolean? = null,
 
-    @Column(name = "jira_major_version_format")
-    var jiraMajorVersionFormat: String? = null,
+    @Column(name = "jira_minor_version_format")
+    var jiraMinorVersionFormat: String? = null,
 
     @Column(name = "jira_release_version_format")
     var jiraReleaseVersionFormat: String? = null,

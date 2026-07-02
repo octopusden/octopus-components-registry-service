@@ -58,4 +58,38 @@ class AdminConfigPropertiesBindingTest {
                 assertNull(props.fieldConfig["distribution"]?.get("maven")?.label)
             }
     }
+
+    // ── component-defaults majorVersionFormat → minorVersionFormat alias ───────
+    // service-config still emits the old `majorVersionFormat` YAML key until it is
+    // renamed in lockstep; the deprecated write-through setter must bind it to the
+    // renamed `minorVersionFormat`, and `minorVersionFormat` must win when both
+    // keys are present (regardless of binder property order). This exercises the
+    // real Spring relaxed binder, not just the Kotlin setter.
+
+    @Test
+    fun `legacy majorVersionFormat YAML key binds through to minorVersionFormat`() {
+        runner
+            .withPropertyValues(
+                "components-registry.component-defaults.jira.componentVersionFormat.majorVersionFormat=legacy",
+            )
+            .run { ctx ->
+                val cvf = ctx.getBean(AdminConfigProperties::class.java)
+                    .componentDefaults.jira?.componentVersionFormat
+                assertEquals("legacy", cvf?.minorVersionFormat)
+            }
+    }
+
+    @Test
+    fun `minorVersionFormat wins when both YAML keys are bound`() {
+        runner
+            .withPropertyValues(
+                "components-registry.component-defaults.jira.componentVersionFormat.majorVersionFormat=legacy",
+                "components-registry.component-defaults.jira.componentVersionFormat.minorVersionFormat=new",
+            )
+            .run { ctx ->
+                val cvf = ctx.getBean(AdminConfigProperties::class.java)
+                    .componentDefaults.jira?.componentVersionFormat
+                assertEquals("new", cvf?.minorVersionFormat)
+            }
+    }
 }
