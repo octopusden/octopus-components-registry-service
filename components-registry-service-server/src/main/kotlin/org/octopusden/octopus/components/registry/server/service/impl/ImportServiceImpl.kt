@@ -1369,8 +1369,23 @@ class ImportServiceImpl(
                 jira.componentVersionFormat?.hotfixVersionFormat?.takeIf { it.isNotBlank() }
         }
 
-        // vcs.externalRegistry is per-component
-        entity.vcsExternalRegistry = cfg.vcsSettings?.externalRegistry
+        // vcs.externalRegistry is per-component. CRS-C bridge: the legacy
+        // `externalRegistry = "NOT_AVAILABLE"` sentinel is NEVER stored — it becomes the
+        // dedicated skipCommitCheck flag with a NULL registry; any real registry name imports
+        // as-is with the flag off. The helper sets BOTH fields authoritatively so a re-import
+        // that changed/dropped the sentinel can never leave a stale flag.
+        val importedExternalRegistry = cfg.vcsSettings?.externalRegistry
+        applyImportedExternalRegistry(entity, importedExternalRegistry)
+        // Q13: WHISKEY + NOT_AVAILABLE is a data contradiction (a WHISKEY component should carry a
+        // real registry, not the sentinel). Warn but still import — the v4 write path rejects the
+        // combination; existing DSL data is the domain owner's to reconcile.
+        if (entity.skipCommitCheck && cfg.buildSystem == org.octopusden.octopus.escrow.BuildSystem.WHISKEY) {
+            LOG.warn(
+                "Component '{}': externalRegistry=NOT_AVAILABLE combined with buildSystem=WHISKEY — " +
+                    "imported as skipCommitCheck=true; this pairing is rejected on v4 write and should be reviewed.",
+                componentKey,
+            )
+        }
 
         // distribution.explicit / distribution.external are per-component; a
         // per-range value that differs from the base is rejected at import

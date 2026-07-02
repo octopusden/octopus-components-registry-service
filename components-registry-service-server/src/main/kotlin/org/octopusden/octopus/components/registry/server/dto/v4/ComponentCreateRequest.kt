@@ -63,6 +63,8 @@ data class ComponentCreateRequest(
     val jiraHotfixVersionFormat: String? = null,
     @field:Schema(description = V4_SCALAR_CLEAR_SEMANTICS)
     val vcsExternalRegistry: String? = null,
+    @field:Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED, description = V4_SKIP_COMMIT_CHECK)
+    val skipCommitCheck: Boolean = false,
     val distributionExplicit: Boolean? = null,
     val distributionExternal: Boolean? = null,
     // Accepted for backward compatibility but IGNORED: group membership is

@@ -43,6 +43,14 @@ import org.octopusden.releng.versions.VersionRangeFactory
 internal const val ALL_VERSIONS: String = "(,0),[0,)"
 
 /**
+ * Legacy sentinel value for `VCSSettings.externalRegistry` meaning "skip commit checks".
+ * CRS-C stores this intent as the dedicated `ComponentEntity.skipCommitCheck` flag and never
+ * persists the string; the import bridge maps it in and the legacy v1–v3 read / as-code
+ * renderer map it back out, so the DSL and legacy wire contracts are unchanged.
+ */
+internal const val NOT_AVAILABLE_EXTERNAL_REGISTRY: String = "NOT_AVAILABLE"
+
+/**
  * Marker names for child-collection replacement overrides (see schema-spec.md §3.3).
  */
 internal object MarkerAttributes {
@@ -716,8 +724,15 @@ private fun buildEscrowModuleConfig(
             markerOverrides = markerOverrides,
             baseChildren = base.vcsEntries.toList(),
         ) { it.vcsEntries.toList() }
-    if (vcsEntries.isNotEmpty() || component.vcsExternalRegistry != null) {
-        setField(config, "vcsSettings", vcsEntries.toVCSSettings(component.vcsExternalRegistry))
+    // CRS-C legacy bridge: the dedicated skipCommitCheck flag re-materializes the legacy
+    // `externalRegistry = "NOT_AVAILABLE"` sentinel for v1–v3 consumers (Jira plugin / RM),
+    // so the legacy surface is bit-for-bit identical to the pre-flag world. The flag WINS
+    // over any real registry value (they are mutually exclusive by construction — Q13 forbids
+    // the flag on WHISKEY, the only build system that carries a real registry).
+    val effectiveExternalRegistry =
+        if (component.skipCommitCheck) NOT_AVAILABLE_EXTERNAL_REGISTRY else component.vcsExternalRegistry
+    if (vcsEntries.isNotEmpty() || effectiveExternalRegistry != null) {
+        setField(config, "vcsSettings", vcsEntries.toVCSSettings(effectiveExternalRegistry))
     }
 
     // Distribution — composed from four family child collections, each

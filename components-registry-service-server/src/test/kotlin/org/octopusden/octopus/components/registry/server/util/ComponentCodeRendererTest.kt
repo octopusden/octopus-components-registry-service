@@ -351,6 +351,42 @@ class ComponentCodeRendererTest {
     }
 
     @Test
+    @DisplayName("FULL: skipCommitCheck renders the legacy DSL literal externalRegistry = \"NOT_AVAILABLE\"")
+    fun fullSkipCommitCheckRendersSentinel() {
+        val c = component().also { it.skipCommitCheck = true }
+        base(c) { buildSystem = "MAVEN" }
+
+        val out = renderer.renderFull(c)
+        assertTrue(out.contains("vcsSettings {"), out)
+        assertTrue(out.contains("externalRegistry = \"NOT_AVAILABLE\""), out)
+    }
+
+    @Test
+    @DisplayName("FULL: skipCommitCheck wins over a real registry — renders NOT_AVAILABLE, not the real value")
+    fun fullSkipCommitCheckWinsOverRealRegistry() {
+        val c = component().also {
+            it.skipCommitCheck = true
+            it.vcsExternalRegistry = "some-registry"
+        }
+        base(c) { buildSystem = "MAVEN" }
+
+        val out = renderer.renderFull(c)
+        assertTrue(out.contains("externalRegistry = \"NOT_AVAILABLE\""), out)
+        assertFalse(out.contains("some-registry"), out)
+    }
+
+    @Test
+    @DisplayName("FULL: a real registry with the flag off renders the real value verbatim")
+    fun fullRealRegistryNoFlag() {
+        val c = component().also { it.vcsExternalRegistry = "some-registry" }
+        base(c) { buildSystem = "MAVEN" }
+
+        val out = renderer.renderFull(c)
+        assertTrue(out.contains("externalRegistry = \"some-registry\""), out)
+        assertFalse(out.contains("NOT_AVAILABLE"), out)
+    }
+
+    @Test
     @DisplayName("FULL: build markers (requiredTools + buildTools beans) render inside build block")
     fun fullBuildMarkers() {
         val c = component()

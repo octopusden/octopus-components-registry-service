@@ -168,6 +168,14 @@ class ComponentEntity(
     @Column(name = "vcs_external_registry", columnDefinition = "TEXT")
     var vcsExternalRegistry: String? = null,
 
+    // Dedicated replacement for the legacy `externalRegistry = "NOT_AVAILABLE"` sentinel
+    // (Q12): when true, commit checks are skipped at release/RC issue-assignment. The
+    // sentinel is NEVER stored — DSL import maps it here (with a NULL vcsExternalRegistry)
+    // and the legacy v1–v3 read re-emits it (flag wins over any real registry). Q13:
+    // must be false when the effective BASE build system is WHISKEY (validated on write).
+    @Column(name = "skip_commit_check", nullable = false)
+    var skipCommitCheck: Boolean = false,
+
     @Column(name = "distribution_explicit")
     var distributionExplicit: Boolean? = null,
 

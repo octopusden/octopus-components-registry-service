@@ -44,6 +44,9 @@ data class ComponentDetailResponse(
     val jiraDisplayName: String? = null,
     val jiraHotfixVersionFormat: String? = null,
     val vcsExternalRegistry: String? = null,
+    // Dedicated flag (Q12) — the v4 view shows it alongside the real registry; the
+    // legacy v1–v3 surface still folds true back into externalRegistry="NOT_AVAILABLE".
+    val skipCommitCheck: Boolean = false,
     val distributionExplicit: Boolean? = null,
     val distributionExternal: Boolean? = null,
     // Per-component child rows (never per-version-rangeable) ————————————————

@@ -67,6 +67,15 @@ CREATE TABLE components (
     -- when present (see EntityMappers.buildJiraComponent).
     jira_hotfix_version_format  VARCHAR(255),
     vcs_external_registry       TEXT,
+    -- Dedicated flag replacing the legacy `externalRegistry = "NOT_AVAILABLE"` sentinel
+    -- in storage: when true, commit checks are skipped at release/RC issue-assignment
+    -- (RC↔issue binding goes by builds only). The sentinel survives ONLY as a legacy
+    -- wire/DSL bridge — DSL import maps NOT_AVAILABLE → skip_commit_check=true with a NULL
+    -- vcs_external_registry, and the legacy v1–v3 read re-emits externalRegistry="NOT_AVAILABLE"
+    -- when this is true (flag wins over any real registry). No CHECK couples it to
+    -- vcs_external_registry: a non-WHISKEY component may legitimately carry both a real
+    -- registry and the flag; the flag-wins rule keeps the legacy surface unambiguous.
+    skip_commit_check           BOOLEAN NOT NULL DEFAULT false,
     -- distribution fields that never vary per-version:
     distribution_explicit       BOOLEAN,
     distribution_external       BOOLEAN,

@@ -12,6 +12,16 @@ const val V4_SCALAR_CLEAR_SEMANTICS: String =
         "non-blank = set verbatim. On create, \"\" is treated as null."
 
 /**
+ * Description of the dedicated `skipCommitCheck` flag (Q12), replacing the legacy
+ * `externalRegistry = "NOT_AVAILABLE"` sentinel in v4 storage.
+ */
+const val V4_SKIP_COMMIT_CHECK: String =
+    "When true, commit checks are skipped at release/RC issue-assignment (issues bind to RCs by " +
+        "builds only). Dedicated flag replacing the legacy externalRegistry=\"NOT_AVAILABLE\" sentinel; " +
+        "legacy v1–v3 clients still see externalRegistry=\"NOT_AVAILABLE\" when this is true. Must be " +
+        "false when the effective BASE build system is WHISKEY (rejected 422 otherwise)."
+
+/**
  * One row of `component_configurations`, projected for the v4 editor view.
  *
  * Three editor-visible shapes per schema-spec.md §3 (Model A' override taxonomy):
