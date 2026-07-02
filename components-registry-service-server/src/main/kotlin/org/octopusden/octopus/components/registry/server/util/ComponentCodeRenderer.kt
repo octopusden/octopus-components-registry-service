@@ -461,7 +461,7 @@ class ComponentCodeRenderer(
             }
         val hasContent =
             listOf(
-                s.jiraProjectKey, s.jiraMajorVersionFormat, s.jiraReleaseVersionFormat, s.jiraBuildVersionFormat,
+                s.jiraProjectKey, s.jiraMinorVersionFormat, s.jiraReleaseVersionFormat, s.jiraBuildVersionFormat,
                 s.jiraLineVersionFormat, s.jiraVersionPrefix, s.jiraVersionFormat, effectiveHotfix,
                 component.jiraDisplayName,
             ).any { it != null } || s.jiraTechnical != null
@@ -470,7 +470,7 @@ class ComponentCodeRenderer(
         cb.str("projectKey", s.jiraProjectKey)
         cb.str("displayName", component.jiraDisplayName)
         cb.bool("technical", s.jiraTechnical)
-        cb.str("majorVersionFormat", s.jiraMajorVersionFormat)
+        cb.str("majorVersionFormat", s.jiraMinorVersionFormat)
         cb.str("releaseVersionFormat", s.jiraReleaseVersionFormat)
         cb.str("buildVersionFormat", s.jiraBuildVersionFormat)
         cb.str("lineVersionFormat", s.jiraLineVersionFormat)

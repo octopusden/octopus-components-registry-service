@@ -487,7 +487,7 @@ class MigrationIntegrationTest {
         assertNull(presence.escrowGradleExcludeConfigurations)
         assertNull(presence.escrowGradleIncludeTestConfigurations)
         assertNull(presence.jiraProjectKey); assertNull(presence.jiraTechnical)
-        assertNull(presence.jiraMajorVersionFormat); assertNull(presence.jiraReleaseVersionFormat)
+        assertNull(presence.jiraMinorVersionFormat); assertNull(presence.jiraReleaseVersionFormat)
         assertNull(presence.jiraBuildVersionFormat); assertNull(presence.jiraLineVersionFormat)
         assertNull(presence.jiraVersionPrefix); assertNull(presence.jiraVersionFormat)
         assertNull(presence.jiraHotfixVersionFormat)

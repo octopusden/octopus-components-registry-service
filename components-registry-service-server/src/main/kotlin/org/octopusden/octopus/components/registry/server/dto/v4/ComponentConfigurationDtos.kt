@@ -90,7 +90,7 @@ data class EscrowAspectResponse(
 data class JiraAspectResponse(
     val projectKey: String? = null,
     val technical: Boolean? = null,
-    val majorVersionFormat: String? = null,
+    val minorVersionFormat: String? = null,
     val releaseVersionFormat: String? = null,
     val buildVersionFormat: String? = null,
     val lineVersionFormat: String? = null,
@@ -202,7 +202,7 @@ data class EscrowAspectRequest(
 data class JiraAspectRequest(
     val projectKey: String? = null,
     val technical: Boolean? = null,
-    val majorVersionFormat: String? = null,
+    val minorVersionFormat: String? = null,
     val releaseVersionFormat: String? = null,
     val buildVersionFormat: String? = null,
     val lineVersionFormat: String? = null,

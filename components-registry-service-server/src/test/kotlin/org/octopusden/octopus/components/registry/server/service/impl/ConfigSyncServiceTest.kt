@@ -186,7 +186,7 @@ class ConfigSyncServiceTest {
                     projectKey = "PROJ"
                     technical = false
                     componentVersionFormat = AdminConfigProperties.Jira.ComponentVersionFormat().apply {
-                        majorVersionFormat = "\$major.\$minor"
+                        minorVersionFormat = "\$major.\$minor"
                     }
                 }
                 distribution = AdminConfigProperties.Distribution().apply {
@@ -207,7 +207,7 @@ class ConfigSyncServiceTest {
                 "jira" to mapOf(
                     "projectKey" to "PROJ",
                     "technical" to false,
-                    "componentVersionFormat" to mapOf("majorVersionFormat" to "\$major.\$minor"),
+                    "componentVersionFormat" to mapOf("minorVersionFormat" to "\$major.\$minor"),
                 ),
                 "distribution" to mapOf("explicit" to false, "securityGroups" to mapOf("read" to "Prod")),
             ),
@@ -281,7 +281,7 @@ class ConfigSyncServiceTest {
                     displayName = "Proj"
                     technical = false
                     componentVersionFormat = AdminConfigProperties.Jira.ComponentVersionFormat().apply {
-                        majorVersionFormat = "\$major.\$minor"
+                        minorVersionFormat = "\$major.\$minor"
                         releaseVersionFormat = "\$major.\$minor.\$service"
                         buildVersionFormat = "\$major.\$minor.\$service-\$build"
                         lineVersionFormat = "\$major.\$minor"
@@ -352,7 +352,7 @@ class ConfigSyncServiceTest {
                     "displayName" to "Proj",
                     "technical" to false,
                     "componentVersionFormat" to mapOf(
-                        "majorVersionFormat" to "\$major.\$minor",
+                        "minorVersionFormat" to "\$major.\$minor",
                         "releaseVersionFormat" to "\$major.\$minor.\$service",
                         "buildVersionFormat" to "\$major.\$minor.\$service-\$build",
                         "lineVersionFormat" to "\$major.\$minor",

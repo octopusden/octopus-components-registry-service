@@ -1638,7 +1638,7 @@ class ImportServiceImpl(
             row.jiraProjectKey = jira.projectKey
             row.jiraTechnical = jira.isTechnical.takeIf { it }
             jira.componentVersionFormat?.let { cvf ->
-                row.jiraMajorVersionFormat = cvf.majorVersionFormat
+                row.jiraMinorVersionFormat = cvf.majorVersionFormat
                 row.jiraReleaseVersionFormat = cvf.releaseVersionFormat
                 row.jiraBuildVersionFormat = cvf.buildVersionFormat
                 row.jiraLineVersionFormat = cvf.lineVersionFormat
@@ -2229,7 +2229,7 @@ class ImportServiceImpl(
 
         diffScalar("jira.projectKey", base.jiraProjectKey, override.jiraProjectKey)
         diffScalar("jira.technical", base.jiraTechnical, override.jiraTechnical)
-        diffScalar("jira.majorVersionFormat", base.jiraMajorVersionFormat, override.jiraMajorVersionFormat)
+        diffScalar("jira.minorVersionFormat", base.jiraMinorVersionFormat, override.jiraMinorVersionFormat)
         diffScalar("jira.releaseVersionFormat", base.jiraReleaseVersionFormat, override.jiraReleaseVersionFormat)
         diffScalar("jira.buildVersionFormat", base.jiraBuildVersionFormat, override.jiraBuildVersionFormat)
         diffScalar("jira.lineVersionFormat", base.jiraLineVersionFormat, override.jiraLineVersionFormat)
@@ -2276,7 +2276,7 @@ class ImportServiceImpl(
             "escrow.additionalSources" -> row.escrowAdditionalSources = value?.toString()
             "jira.projectKey" -> row.jiraProjectKey = value?.toString()
             "jira.technical" -> row.jiraTechnical = value as? Boolean ?: value?.toString()?.toBooleanStrictOrNull()
-            "jira.majorVersionFormat" -> row.jiraMajorVersionFormat = value?.toString()
+            "jira.minorVersionFormat" -> row.jiraMinorVersionFormat = value?.toString()
             "jira.releaseVersionFormat" -> row.jiraReleaseVersionFormat = value?.toString()
             "jira.buildVersionFormat" -> row.jiraBuildVersionFormat = value?.toString()
             "jira.lineVersionFormat" -> row.jiraLineVersionFormat = value?.toString()

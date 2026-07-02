@@ -302,7 +302,7 @@ DONE!
      ```
 
 3. **Use `majorVersion` (not `lineVersion`):**
-   - Keep consistent with existing `majorVersionFormat` terminology in jira section
+   - The doc-link field names the major version line it documents (e.g. `3.x`); it is unrelated to the Jira version-format templates (`jira.minorVersionFormat` / `jira.lineVersionFormat`) and keeps its own name
    - Rename would be confusing across the codebase
 
 4. **Validation: single doc component per version:**

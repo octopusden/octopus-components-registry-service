@@ -229,7 +229,7 @@ Per-(component, version_range) typed rows; the spine of Model A'.
 | Jira aspect | | | |
 | `jira_project_key` | VARCHAR(50) | | |
 | `jira_technical` | BOOLEAN | | |
-| `jira_major_version_format` | VARCHAR(255) | | |
+| `jira_minor_version_format` | VARCHAR(255) | | |
 | `jira_release_version_format` | VARCHAR(255) | | |
 | `jira_build_version_format` | VARCHAR(255) | | |
 | `jira_line_version_format` | VARCHAR(255) | | |

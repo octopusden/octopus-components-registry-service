@@ -95,7 +95,23 @@ class AdminConfigProperties {
         var componentVersionFormat: ComponentVersionFormat? = null
 
         class ComponentVersionFormat {
-            var majorVersionFormat: String? = null
+            var minorVersionFormat: String? = null
+
+            /**
+             * External-config compatibility alias for the renamed [minorVersionFormat].
+             * Spring binds `...componentVersionFormat.majorVersionFormat` (still emitted by
+             * service-config until it is renamed in lockstep) here; the setter writes through
+             * to [minorVersionFormat] only when the latter has not already been bound, so
+             * `minorVersionFormat` wins when both keys are present regardless of binding order.
+             * Remove this alias once service-config no longer emits `majorVersionFormat`.
+             */
+            @Deprecated("Use minorVersionFormat; retained for service-config binding compatibility")
+            var majorVersionFormat: String?
+                get() = minorVersionFormat
+                set(value) {
+                    if (minorVersionFormat == null) minorVersionFormat = value
+                }
+
             var releaseVersionFormat: String? = null
             var buildVersionFormat: String? = null
             var lineVersionFormat: String? = null
