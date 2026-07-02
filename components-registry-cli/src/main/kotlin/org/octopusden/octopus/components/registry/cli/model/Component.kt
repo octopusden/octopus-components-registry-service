@@ -121,7 +121,7 @@ data class JiraAspectResponse(
     val buildVersionFormat: String? = null,
     val hotfixVersionFormat: String? = null,
     val lineVersionFormat: String? = null,
-    val majorVersionFormat: String? = null,
+    val minorVersionFormat: String? = null,
     val projectKey: String? = null,
     val releaseVersionFormat: String? = null,
     val technical: Boolean? = null,
