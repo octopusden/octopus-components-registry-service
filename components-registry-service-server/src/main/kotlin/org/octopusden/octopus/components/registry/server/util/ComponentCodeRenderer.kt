@@ -13,6 +13,7 @@ import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntry
 import org.octopusden.octopus.components.registry.server.mapper.ALL_VERSIONS
 import org.octopusden.octopus.components.registry.server.mapper.ComponentConfigurationView
 import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
+import org.octopusden.octopus.components.registry.server.mapper.NOT_AVAILABLE_EXTERNAL_REGISTRY
 import org.octopusden.octopus.components.registry.server.mapper.extractScalarValue
 import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionRangeFactory
@@ -322,7 +323,14 @@ class ComponentCodeRenderer(
         cb.strList("securityChampion", component.securityChampionUsernames())
         cb.strList("labels", component.labelJunctions.map { it.labelCode })
 
-        writeVcs(cb, vcsEntries, component.vcsExternalRegistry)
+        // CRS-C bridge: emit the DSL literal `externalRegistry = "NOT_AVAILABLE"` for the
+        // dedicated skipCommitCheck flag so the as-code DSL contract is unchanged. Flag wins
+        // over any real registry (mirrors the legacy read; mutually exclusive by Q13).
+        writeVcs(
+            cb,
+            vcsEntries,
+            if (component.skipCommitCheck) NOT_AVAILABLE_EXTERNAL_REGISTRY else component.vcsExternalRegistry,
+        )
         writeBuild(cb, scalars, requiredTools, buildToolBeans)
         writeArtifactIds(cb, ownershipMappings, ownershipExportPatterns)
         writeJira(cb, scalars, component)
