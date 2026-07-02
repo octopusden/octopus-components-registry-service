@@ -80,6 +80,7 @@ import org.octopusden.octopus.components.registry.server.repository.LabelReposit
 import org.octopusden.octopus.components.registry.server.repository.SystemRepository
 import org.octopusden.octopus.components.registry.server.repository.ToolRepository
 import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
+import org.octopusden.octopus.components.registry.server.security.PermissionEvaluator
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
 import org.octopusden.octopus.components.registry.server.service.RenderedComponentCode
@@ -98,8 +99,10 @@ import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Pageable
 import org.springframework.data.domain.Sort
 import org.springframework.data.jpa.domain.Specification
+import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.web.server.ResponseStatusException
 import java.nio.file.Files
 import java.time.Instant
 import java.util.UUID
@@ -133,6 +136,7 @@ class ComponentManagementServiceImpl(
     private val applicationEventPublisher: ApplicationEventPublisher,
     private val currentUserResolver: CurrentUserResolver,
     private val fieldConfigService: FieldConfigService,
+    private val permissionEvaluator: PermissionEvaluator,
     private val teamcityProperties: TeamcityProperties,
     private val versionRangeFactory: VersionRangeFactory,
     private val numericVersionFactory: NumericVersionFactory,
@@ -168,7 +172,9 @@ class ComponentManagementServiceImpl(
         // (mirrors EscrowConfigValidator.validateExplicitExternalComponent). The 400 is
         // colon-prefixed so the Portal routes it inline onto the displayName field.
         val normalizedDisplayName = request.displayName?.trim()?.takeIf { it.isNotEmpty() }
-        if (normalizedDisplayName != null) {
+        // Skip the uniqueness probe for a hidden displayName — the value is stripped below
+        // (not persisted), so it must not surface a 4xx (hidden = silent, never rejected).
+        if (normalizedDisplayName != null && !fieldConfigService.isHidden("component.displayName")) {
             require(!componentRepository.existsByDisplayName(normalizedDisplayName)) {
                 "displayName: a component with display name '$normalizedDisplayName' already exists"
             }
@@ -201,7 +207,7 @@ class ComponentManagementServiceImpl(
         // property getter — so we hoist explicitly here rather than
         // sprinkling `!!` or `?.let` at each call site.
         val buildSystemValue: String = buildAspect.buildSystem!!
-        request.productType?.let { validateProductType(it) }
+        request.productType?.let { if (!fieldConfigService.isHidden("component.productType")) validateProductType(it) }
         request.clientCode?.let {
             if (!fieldConfigService.isHidden("component.clientCode")) validateClientCode(it)
         }
@@ -210,11 +216,17 @@ class ComponentManagementServiceImpl(
         }
         baseConfigRequest.versionRange?.let { validateRangeSyntax(it) }
         validateBuildSystem(buildSystemValue)
-        baseConfigRequest.escrow?.generation?.let { validateEscrowGenerationMode(it) }
+        // Hidden escrow.generation is stripped below → don't 4xx on its value here.
+        baseConfigRequest.escrow?.generation?.let {
+            if (!fieldConfigService.isHidden("escrow.generation")) validateEscrowGenerationMode(it)
+        }
         // vcsEntries[].repositoryType / packages[].packageType are validated
         // inside `replaceVcsEntries` / `replacePackages` (covers both base-config
         // and field-override marker paths).
         validateLabels(request.labels)
+        // CRS-B: a supplied (non-null) value for a field the caller may not edit is
+        // rejected up-front; an absent field lets server defaults apply.
+        enforceEditabilityOnCreate(request)
         // Canonicalise once and reuse so the synced junction, the
         // in-memory refresh, and the audit snapshot all see the same
         // trimmed/deduped set — the originally requested set may still
@@ -235,17 +247,27 @@ class ComponentManagementServiceImpl(
         // the FK from `components.system_code → systems(code)` is
         // always satisfied on first write of a newly-introduced (but
         // config-allowed) code.
-        val canonicalSystem = request.system?.trim()?.takeIf { it.isNotEmpty() }?.let {
-            val canon = validateAndCanonicalizeSystemCode(it)
-            ensureSystemExists(canon)
-            canon
-        }
-
-        val parent =
-            request.parentComponentName?.let { parentKey ->
-                componentRepository.findByComponentKey(parentKey)
-                    ?: throw NotFoundException("Parent component '$parentKey' not found")
+        val canonicalSystem = request.system
+            ?.takeUnless { fieldConfigService.isHidden("component.system") }
+            ?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                val canon = validateAndCanonicalizeSystemCode(it)
+                ensureSystemExists(canon)
+                canon
             }
+
+        // CRS-B: hidden component-level fields are silently STRIPPED on create (symmetric with
+        // the PATCH write-site gates) — a hidden field is never persisted and never 4xx. A hidden
+        // parentComponentName is treated as absent (no parent), a hidden canBeParent as its
+        // `false` default. Editability (adminOnly/none) is enforced separately by
+        // enforceEditabilityOnCreate before this point.
+        val effectiveCanBeParent = request.canBeParent && !fieldConfigService.isHidden("component.canBeParent")
+        val parent =
+            request.parentComponentName
+                ?.takeUnless { fieldConfigService.isHidden("component.parentComponentName") }
+                ?.let { parentKey ->
+                    componentRepository.findByComponentKey(parentKey)
+                        ?: throw NotFoundException("Parent component '$parentKey' not found")
+                }
 
         // Parent invariants (create = everything is new): a chosen parent must be
         // marked can-be-parent, and a component that itself can be a parent may
@@ -254,7 +276,7 @@ class ComponentManagementServiceImpl(
             require(parent.canBeParent) {
                 "parentComponentName: parent '${parent.componentKey}' is not marked can-be-parent"
             }
-            require(!request.canBeParent) {
+            require(!effectiveCanBeParent) {
                 "parentComponentName: a component that can be a parent cannot itself have a parent"
             }
         }
@@ -262,32 +284,33 @@ class ComponentManagementServiceImpl(
         val entity =
             ComponentEntity(
                 componentKey = normalizedKey,
-                displayName = normalizedDisplayName,
-                componentOwner = request.componentOwner,
-                productType = request.productType,
-                clientCode = request.clientCode,
+                displayName = stripIfHidden("component.displayName", normalizedDisplayName),
+                componentOwner = stripIfHidden("component.componentOwner", request.componentOwner),
+                productType = stripIfHidden("component.productType", request.productType),
+                clientCode = stripIfHidden("component.clientCode", request.clientCode),
                 archived = request.archived,
-                solution = request.solution,
+                solution = stripIfHidden("component.solution", request.solution),
                 parentComponent = parent,
                 // R1: group = migration-derived aggregator membership only; never assigned via API.
                 componentGroup = null,
-                canBeParent = request.canBeParent,
-                copyright = request.copyright,
-                releasesInDefaultBranch = request.releasesInDefaultBranch,
-                jiraDisplayName = request.jiraDisplayName,
-                jiraHotfixVersionFormat = request.jiraHotfixVersionFormat,
+                canBeParent = effectiveCanBeParent,
+                copyright = stripIfHidden("component.copyright", request.copyright),
+                releasesInDefaultBranch = stripIfHidden("component.releasesInDefaultBranch", request.releasesInDefaultBranch),
+                jiraDisplayName = stripIfHidden("component.jiraDisplayName", request.jiraDisplayName),
+                jiraHotfixVersionFormat = stripIfHidden("component.jiraHotfixVersionFormat", request.jiraHotfixVersionFormat),
                 // CRS-A: create maps "" → NULL (treated as absent), consistent with the PATCH clear rule.
-                vcsExternalRegistry = request.vcsExternalRegistry?.let(::clearBlankScalar),
-                distributionExplicit = request.distributionExplicit,
-                distributionExternal = request.distributionExternal,
+                vcsExternalRegistry = stripIfHidden("component.vcsExternalRegistry", request.vcsExternalRegistry?.let(::clearBlankScalar)),
+                distributionExplicit = stripIfHidden("component.distributionExplicit", request.distributionExplicit),
+                distributionExternal = stripIfHidden("component.distributionExternal", request.distributionExternal),
                 systemCode = canonicalSystem,
             )
 
         // Per-component child collections (cascade = ALL on these — flushed with the parent)
         // Ordered multi-value people — the accessor canonicalizes (trim → drop
         // blank → keep-first dedupe), so create matches patch/import exactly.
-        entity.replaceReleaseManagerUsernames(request.releaseManager)
-        entity.replaceSecurityChampionUsernames(request.securityChampion)
+        // CRS-B: hidden people-lists are silently stripped (symmetric with the PATCH gate).
+        if (!fieldConfigService.isHidden("component.releaseManager")) entity.replaceReleaseManagerUsernames(request.releaseManager)
+        if (!fieldConfigService.isHidden("component.securityChampion")) entity.replaceSecurityChampionUsernames(request.securityChampion)
         addArtifactIds(entity, request.artifactIds)
         addSecurityGroups(entity, request.securityGroups.map { it.groupType to it.groupName })
         addTeamcityProjects(entity, request.teamcityProjects.map { it.projectId })
@@ -457,12 +480,21 @@ class ComponentManagementServiceImpl(
         }
         val isRename = normalizedNewKey != null && normalizedNewKey != oldKey
 
-        request.productType?.let { validateProductType(it) }
+        // CRS-B: reject an attempt to CHANGE a field the caller may not edit BEFORE any
+        // mutation (change-based; unchanged echo is tolerated). Reads the pristine BASE
+        // row for jira/build aspect currents, so it must run ahead of the patch appliers.
+        enforceEditabilityOnUpdate(entity, request)
+
+        // Hidden productType is stripped at its write site → don't 4xx on its value here.
+        request.productType?.let { if (!fieldConfigService.isHidden("component.productType")) validateProductType(it) }
         // `baseConfiguration.versionRange` is validated downstream inside the
         // base-configuration patch block via `validateRangeSyntax` — no
         // top-level guard needed here.
         request.baseConfiguration?.build?.buildSystem?.let { validateBuildSystem(it) }
-        request.baseConfiguration?.escrow?.generation?.let { validateEscrowGenerationMode(it) }
+        // Hidden escrow.generation is stripped in applyBaseConfigurationPatch → don't 4xx here.
+        request.baseConfiguration?.escrow?.generation?.let {
+            if (!fieldConfigService.isHidden("escrow.generation")) validateEscrowGenerationMode(it)
+        }
         // vcsEntries[].repositoryType / packages[].packageType are validated
         // inside `replaceVcsEntries` / `replacePackages` (see service helpers).
         request.labels?.let { validateLabels(it) }
@@ -483,11 +515,13 @@ class ComponentManagementServiceImpl(
         // `systems("CLASSIC")`. `ensureSystemExists` then auto-creates
         // the master `systems` row so the FK from `components.system_code
         // → systems(code)` is satisfied.
-        val canonicalSystem = request.system?.trim()?.takeIf { it.isNotEmpty() }?.let {
-            val canon = validateAndCanonicalizeSystemCode(it)
-            ensureSystemExists(canon)
-            canon
-        }
+        val canonicalSystem = request.system
+            ?.takeUnless { fieldConfigService.isHidden("component.system") }
+            ?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                val canon = validateAndCanonicalizeSystemCode(it)
+                ensureSystemExists(canon)
+                canon
+            }
 
         // Capture the pre-update label set so the post-sync audit `newValue`
         // (which is computed after `syncLabels` has bypassed the entity's
@@ -541,9 +575,9 @@ class ComponentManagementServiceImpl(
         }
         request.solution?.let { if (!fieldConfigService.isHidden("component.solution")) entity.solution = it }
         request.archived?.let { entity.archived = it }
-        // canBeParent is structural (not field-config-gated). Invariants are
-        // validated below once the final parent/canBeParent state is known.
-        request.canBeParent?.let { entity.canBeParent = it }
+        // canBeParent: editability enforced above; `hidden` silently strips (consistent with
+        // the other field-config-gated scalars). Structural invariants are validated below.
+        request.canBeParent?.let { if (!fieldConfigService.isHidden("component.canBeParent")) entity.canBeParent = it }
         // Ordered multi-value people. `null` = don't touch; a provided list
         // (including empty = clear) replaces the whole ordered child collection.
         request.releaseManager?.let {
@@ -593,14 +627,17 @@ class ComponentManagementServiceImpl(
 
         // Parent. `parentComponentName == null` = don't touch (JSON Merge Patch);
         // `clearParent` is the explicit removal signal (remediates a grandfathered
-        // parent-of-parent row by letting the user drop the parent).
-        if (request.clearParent) {
-            entity.parentComponent = null
-        }
-        request.parentComponentName?.let { parentKey ->
-            entity.parentComponent =
-                componentRepository.findByComponentKey(parentKey)
-                    ?: throw NotFoundException("Parent component '$parentKey' not found")
+        // parent-of-parent row by letting the user drop the parent). Editability is
+        // enforced above; `hidden` silently strips both the set and the clear.
+        if (!fieldConfigService.isHidden("component.parentComponentName")) {
+            if (request.clearParent) {
+                entity.parentComponent = null
+            }
+            request.parentComponentName?.let { parentKey ->
+                entity.parentComponent =
+                    componentRepository.findByComponentKey(parentKey)
+                        ?: throw NotFoundException("Parent component '$parentKey' not found")
+            }
         }
 
         // Parent / canBeParent invariants (single-level — matches the DSL validator):
@@ -848,6 +885,12 @@ class ComponentManagementServiceImpl(
         request: FieldOverrideCreateRequest,
     ): FieldOverrideResponse {
         val component = findComponentOr404(componentId)
+        // CRS-B: introducing an override IS a value change on the overridden attribute.
+        // A hidden attribute is masked as unknown (400, no leak); otherwise gate by the
+        // caller's editability. Unknown/marker attributes resolve to `all` (no-op) and
+        // still hit their own validation below.
+        rejectHiddenOverrideAttribute(request.overriddenAttribute)
+        enforceOverrideEditable(request.overriddenAttribute)
         // Whitespace normalisation up-front so the DB UNIQUE (which is exact-
         // string) and the duplicate-row lookup agree with the partial-overlap
         // validator below: `[1.0, 2.0)` stored as `[1.0,2.0)` lets the next
@@ -951,6 +994,8 @@ class ComponentManagementServiceImpl(
             "Cannot update id $overrideId via field-override endpoint (row_type=${row.rowType})"
         }
         requireNotImportManagedMarker(row, "update")
+        // CRS-B: a hidden attribute is masked as unknown (400) on the standalone endpoint.
+        row.overriddenAttribute?.let { rejectHiddenOverrideAttribute(it) }
 
         val beforeSnapshot = fieldOverrideAuditSnapshot(row)
 
@@ -978,6 +1023,14 @@ class ComponentManagementServiceImpl(
                     null
                 }
             }
+
+        // CRS-B: gate any ACTUAL change (scalar value, markerChildren, or range) to an
+        // override on a non-editable field. Snapshot-diff keeps it change-based across
+        // both scalar and marker attributes — an unchanged echo leaves the snapshot
+        // equal and is allowed (the transaction rolls back on the thrown 403/422).
+        if (fieldOverrideAuditSnapshot(row) != beforeSnapshot) {
+            enforceOverrideEditable(row.overriddenAttribute!!)
+        }
 
         val saved = configurationRepository.save(row)
         if (pendingTools != null) {
@@ -1014,6 +1067,12 @@ class ComponentManagementServiceImpl(
             "Cannot delete id $overrideId via field-override endpoint (row_type=${row.rowType})"
         }
         requireNotImportManagedMarker(row, "delete")
+        // CRS-B: a hidden attribute is masked as unknown (400); otherwise removing an override
+        // changes the effective value — gate it like the desired-set delete (no direct-DELETE bypass).
+        row.overriddenAttribute?.let {
+            rejectHiddenOverrideAttribute(it)
+            enforceOverrideEditable(it)
+        }
         val owningComponent = row.component
         val beforeSnapshot = fieldOverrideAuditSnapshot(row)
         configurationRepository.delete(row)
@@ -1111,29 +1170,48 @@ class ComponentManagementServiceImpl(
         val pendingTools = LinkedHashMap<ComponentConfigurationEntity, List<String>>()
 
         // 1) DELETE editable rows omitted from the desired set (orphanRemoval on flush).
+        // CRS-B: hidden-attribute rows are PRESERVED here (never deleted) — like import-managed
+        // markers — so a client that (correctly) omits hidden fields from its slice does not
+        // silently drop them.
         val deletedSnapshots = mutableListOf<Map<String, Any?>>()
-        existing.filter { !isImportManaged(it) && it.id !in keepIds }.forEach { row ->
-            deletedSnapshots += fieldOverrideAuditSnapshot(row)
-            component.configurations.remove(row)
-        }
+        existing
+            .filter { !isImportManaged(it) && !isHiddenOverrideAttribute(it.overriddenAttribute) && it.id !in keepIds }
+            .forEach { row ->
+                // Removing an override changes the effective value on that attribute — gate it.
+                row.overriddenAttribute?.let { enforceOverrideEditable(it) }
+                deletedSnapshots += fieldOverrideAuditSnapshot(row)
+                component.configurations.remove(row)
+            }
 
         // 2) UPDATE existing editable rows referenced by id.
         val updated = mutableListOf<Pair<ComponentConfigurationEntity, Map<String, Any?>>>()
         desired.filter { it.id != null }.forEach { d ->
             val row = byId.getValue(d.id!!)
             if (isImportManaged(row)) return@forEach // preserve; ignore client echo
+            // CRS-B: hidden-attribute rows are stripped — preserved as-is, incoming change ignored.
+            if (isHiddenOverrideAttribute(row.overriddenAttribute)) return@forEach
             require(d.overriddenAttribute == row.overriddenAttribute) {
                 "fieldOverrides: cannot change overriddenAttribute of override '${d.id}' " +
                     "(${row.overriddenAttribute} -> ${d.overriddenAttribute})"
             }
             val before = fieldOverrideAuditSnapshot(row)
             applyOverrideUpsertPayload(component, row, d, excludeOverrideId = row.id)?.let { pendingTools[row] = it }
+            // CRS-B: gate any actual change (value / markerChildren / range) to an
+            // override on a non-editable field; an unchanged echo (combined Save
+            // re-sends the whole set) leaves the snapshot equal and is left alone.
+            if (fieldOverrideAuditSnapshot(row) != before) {
+                enforceOverrideEditable(d.overriddenAttribute)
+            }
             updated += row to before
         }
 
         // 3) CREATE rows without an id.
         val created = mutableListOf<ComponentConfigurationEntity>()
         desired.filter { it.id == null }.forEach { d ->
+            // CRS-B: hidden-attribute create is silently dropped (strip); otherwise a new
+            // override is a value change on the overridden attribute — gate it.
+            if (isHiddenOverrideAttribute(d.overriddenAttribute)) return@forEach
+            enforceOverrideEditable(d.overriddenAttribute)
             val row =
                 ComponentConfigurationEntity(
                     component = component,
@@ -1706,6 +1784,289 @@ class ComponentManagementServiceImpl(
     }
 
     // ============================================================
+    // Helpers — field-config editability enforcement (CRS-B)
+    // ============================================================
+
+    /**
+     * CRS-B editability write-gate for a single scalar field, keyed by the
+     * section-prefixed field-config path (e.g. `jira.technical`,
+     * `component.vcsExternalRegistry`).
+     *
+     * **Change-based** — the single most important property: a write is rejected
+     * only when it would actually CHANGE the field. Echoing the current value (or
+     * clearing an already-empty field) is a no-op and is always allowed, because
+     * the Portal's combined Save posts whole section slices; a presence-based
+     * reject would fail every ordinary editor's save. On CREATE the caller passes
+     * `current = null`, so any supplied non-null value counts as a change.
+     *
+     *  - `editable: adminOnly` without `EDIT_ANY_COMPONENT` → 403 (authorization).
+     *  - `editable: none` / `visibility: readonly` (unified) → 422 for everyone.
+     *  - `visibility: hidden` is NOT handled here — it keeps its silent-strip
+     *    behavior at the individual write sites (`isHidden` short-circuits first).
+     *
+     * String values are compared with CRS-A "" ≡ null normalization (blank means
+     * clear); booleans and lists compare by value equality. Comparison is
+     * case-sensitive for strings (a case-only echo of an already-canonicalized
+     * value is treated as a change — erring toward reject, the safe direction).
+     */
+    private fun enforceFieldEditable(
+        fieldPath: String,
+        incoming: Any?,
+        current: Any?,
+    ) {
+        if (fieldConfigService.isHidden(fieldPath)) return
+        if (!isFieldChange(incoming, current)) return
+        when (fieldConfigService.editabilityFor(fieldPath)) {
+            "adminonly" ->
+                if (!permissionEvaluator.canEditAdminOnlyFields()) {
+                    throw ResponseStatusException(
+                        HttpStatus.FORBIDDEN,
+                        "Field '$fieldPath' is editable by administrators only",
+                    )
+                }
+            "none" ->
+                throw ResponseStatusException(
+                    HttpStatus.UNPROCESSABLE_ENTITY,
+                    "Field '$fieldPath' is not editable",
+                )
+            else -> Unit // "all"
+        }
+    }
+
+    /**
+     * Reject a create/modify/delete of a per-range override on a field the caller
+     * may not edit — the same policy as [enforceFieldEditable], but for the
+     * field-override sub-resource where introducing/removing an override IS a
+     * value change on the overridden attribute (`overriddenAttribute` doubles as
+     * the field-config path, e.g. `jira.technical`). Callers invoke this only for
+     * actual changes (an unchanged desired-set echo is left untouched).
+     *
+     * `hidden` is NOT handled here — the two override entry points treat it differently:
+     * the combined-Save desired-set silently strips hidden-attribute records (consistent
+     * with the base write), while the standalone CRUD endpoints reject them via
+     * [rejectHiddenOverrideAttribute]. Callers apply the hidden rule first.
+     */
+    private fun enforceOverrideEditable(attribute: String) {
+        when (fieldConfigService.editabilityFor(attribute)) {
+            "adminonly" ->
+                if (!permissionEvaluator.canEditAdminOnlyFields()) {
+                    throw ResponseStatusException(
+                        HttpStatus.FORBIDDEN,
+                        "Field-override on '$attribute' is editable by administrators only",
+                    )
+                }
+            "none" ->
+                throw ResponseStatusException(
+                    HttpStatus.UNPROCESSABLE_ENTITY,
+                    "Field-override on '$attribute' targets a non-editable field",
+                )
+            else -> Unit // "all"
+        }
+    }
+
+    /** True when the override's attribute maps to a field-config `visibility: hidden`. */
+    private fun isHiddenOverrideAttribute(attribute: String?): Boolean =
+        attribute != null && fieldConfigService.isHidden(attribute)
+
+    /**
+     * Standalone field-override CRUD rejects a `hidden` attribute with the SAME 400 as a
+     * genuinely unknown attribute — deliberately NOT distinguishing "hidden" from "does not
+     * exist". Field paths are a public contract, but which fields an installation hides is
+     * not: leaking it here would let a caller enumerate hidden config via the override API.
+     * (The combined-Save desired-set instead silently strips hidden records — see
+     * [applyFieldOverrideDesiredSet].)
+     */
+    private fun rejectHiddenOverrideAttribute(attribute: String) {
+        if (fieldConfigService.isHidden(attribute)) throw unknownOverrideAttribute(attribute)
+    }
+
+    /**
+     * CRS-B create-side hidden strip: returns null when [fieldPath] is `hidden` (so the
+     * value is not persisted), else the value verbatim. Mirrors the component-scalar
+     * `if (!isHidden)` gate the PATCH path applies at each write site; used to keep CREATE
+     * symmetric with PATCH (a hidden field is silently dropped, never persisted, never 4xx).
+     */
+    private fun <T> stripIfHidden(
+        fieldPath: String,
+        value: T?,
+    ): T? = if (fieldConfigService.isHidden(fieldPath)) null else value
+
+    /** The canonical 400 for an unsupported override attribute (also reused to mask hidden ones). */
+    private fun unknownOverrideAttribute(attribute: String): IllegalArgumentException =
+        IllegalArgumentException(
+            "Unknown overriddenAttribute: '$attribute'. " +
+                "Must be a scalar aspect.field path or one of ${MarkerAttributes.ALL}",
+        )
+
+    /**
+     * Change detection for the editability gate. For strings it delegates to the CRS-A
+     * storage normalizer [clearBlankScalar] so the comparison rule can NEVER drift from what
+     * the write path actually persists (`ifBlank { null }`, NO trim: blank clears to null, a
+     * non-blank value is kept verbatim — surrounding whitespace is significant for format
+     * templates). Trimming here would make a padded echo (`"  x  "` vs stored `"x"`) compare
+     * equal while the write would still persist the padded value — a silent change to a
+     * non-editable field. Booleans/lists compare by value.
+     */
+    private fun isFieldChange(
+        incoming: Any?,
+        current: Any?,
+    ): Boolean {
+        fun norm(v: Any?): Any? = if (v is String) clearBlankScalar(v) else v
+        return norm(incoming) != norm(current)
+    }
+
+    /**
+     * CRS-B: enforce editability across every scalar the given PATCH touches, BEFORE
+     * any mutation, comparing incoming against the entity's current value (its BASE
+     * configuration row for jira/build aspect scalars). `null`/absent request fields
+     * are skipped (JSON Merge Patch "don't touch"), so only fields actually present
+     * in the payload are considered — and even then only a real value change is gated.
+     */
+    private fun enforceEditabilityOnUpdate(
+        entity: ComponentEntity,
+        request: ComponentUpdateRequest,
+    ) {
+        request.displayName?.let { enforceFieldEditable("component.displayName", it, entity.displayName) }
+        request.componentOwner?.let { enforceFieldEditable("component.componentOwner", it, entity.componentOwner) }
+        request.productType?.let { enforceFieldEditable("component.productType", it, entity.productType) }
+        request.clientCode?.let { enforceFieldEditable("component.clientCode", it, entity.clientCode) }
+        request.solution?.let { enforceFieldEditable("component.solution", it, entity.solution) }
+        request.copyright?.let { enforceFieldEditable("component.copyright", it, entity.copyright) }
+        request.releasesInDefaultBranch?.let {
+            enforceFieldEditable("component.releasesInDefaultBranch", it, entity.releasesInDefaultBranch)
+        }
+        request.jiraDisplayName?.let { enforceFieldEditable("component.jiraDisplayName", it, entity.jiraDisplayName) }
+        request.jiraHotfixVersionFormat?.let {
+            enforceFieldEditable("component.jiraHotfixVersionFormat", it, entity.jiraHotfixVersionFormat)
+        }
+        request.vcsExternalRegistry?.let {
+            enforceFieldEditable("component.vcsExternalRegistry", it, entity.vcsExternalRegistry)
+        }
+        request.distributionExplicit?.let { enforceFieldEditable("component.distributionExplicit", it, entity.distributionExplicit) }
+        request.distributionExternal?.let { enforceFieldEditable("component.distributionExternal", it, entity.distributionExternal) }
+        request.system?.let { enforceFieldEditable("component.system", it, entity.systemCode) }
+        request.releaseManager?.let { enforceFieldEditable("component.releaseManager", it, entity.releaseManagerUsernames()) }
+        request.securityChampion?.let { enforceFieldEditable("component.securityChampion", it, entity.securityChampionUsernames()) }
+        request.canBeParent?.let { enforceFieldEditable("component.canBeParent", it, entity.canBeParent) }
+        request.parentComponentName?.let {
+            enforceFieldEditable("component.parentComponentName", it, entity.parentComponent?.componentKey)
+        }
+        // clearParent is the explicit "remove parent" signal — an actual change only when a
+        // parent currently exists; gate it under the same parentComponentName policy.
+        if (request.clearParent && entity.parentComponent != null) {
+            enforceFieldEditable("component.parentComponentName", null, entity.parentComponent?.componentKey)
+        }
+
+        val base = entity.configurations.firstOrNull { it.rowType == "BASE" }
+        request.baseConfiguration?.jira?.let { j ->
+            j.projectKey?.let { enforceFieldEditable("jira.projectKey", it, base?.jiraProjectKey) }
+            j.technical?.let { enforceFieldEditable("jira.technical", it, base?.jiraTechnical) }
+            j.minorVersionFormat?.let { enforceFieldEditable("jira.minorVersionFormat", it, base?.jiraMinorVersionFormat) }
+            j.releaseVersionFormat?.let { enforceFieldEditable("jira.releaseVersionFormat", it, base?.jiraReleaseVersionFormat) }
+            j.buildVersionFormat?.let { enforceFieldEditable("jira.buildVersionFormat", it, base?.jiraBuildVersionFormat) }
+            j.lineVersionFormat?.let { enforceFieldEditable("jira.lineVersionFormat", it, base?.jiraLineVersionFormat) }
+            j.versionPrefix?.let { enforceFieldEditable("jira.versionPrefix", it, base?.jiraVersionPrefix) }
+            j.versionFormat?.let { enforceFieldEditable("jira.versionFormat", it, base?.jiraVersionFormat) }
+        }
+        // Full build/escrow aspect-scalar set — must mirror every path applyBaseConfigurationPatch
+        // actually writes (see ConfigurationRowAccessors.SCALAR_ATTRIBUTE_PATHS). Booleans gate by value.
+        request.baseConfiguration?.build?.let { b ->
+            b.buildSystem?.let { enforceFieldEditable("build.buildSystem", it, base?.buildSystem) }
+            b.javaVersion?.let { enforceFieldEditable("build.javaVersion", it, base?.javaVersion) }
+            b.gradleVersion?.let { enforceFieldEditable("build.gradleVersion", it, base?.gradleVersion) }
+            b.mavenVersion?.let { enforceFieldEditable("build.mavenVersion", it, base?.mavenVersion) }
+            b.buildFilePath?.let { enforceFieldEditable("build.buildFilePath", it, base?.buildFilePath) }
+            b.deprecated?.let { enforceFieldEditable("build.deprecated", it, base?.deprecated) }
+            b.requiredProject?.let { enforceFieldEditable("build.requiredProject", it, base?.requiredProject) }
+            b.projectVersion?.let { enforceFieldEditable("build.projectVersion", it, base?.projectVersion) }
+            b.systemProperties?.let { enforceFieldEditable("build.systemProperties", it, base?.systemProperties) }
+            b.buildTasks?.let { enforceFieldEditable("build.buildTasks", it, base?.buildTasks) }
+        }
+        request.baseConfiguration?.escrow?.let { e ->
+            e.providedDependencies?.let { enforceFieldEditable("escrow.providedDependencies", it, base?.escrowProvidedDependencies) }
+            e.reusable?.let { enforceFieldEditable("escrow.reusable", it, base?.escrowReusable) }
+            e.generation?.let { enforceFieldEditable("escrow.generation", it, base?.escrowGeneration) }
+            e.diskSpace?.let { enforceFieldEditable("escrow.diskSpace", it, base?.escrowDiskSpace) }
+            e.additionalSources?.let { enforceFieldEditable("escrow.additionalSources", it, base?.escrowAdditionalSources) }
+            e.gradleIncludeConfigurations?.let {
+                enforceFieldEditable("escrow.gradleIncludeConfigurations", it, base?.escrowGradleIncludeConfigurations)
+            }
+            e.gradleExcludeConfigurations?.let {
+                enforceFieldEditable("escrow.gradleExcludeConfigurations", it, base?.escrowGradleExcludeConfigurations)
+            }
+            e.gradleIncludeTestConfigurations?.let {
+                enforceFieldEditable("escrow.gradleIncludeTestConfigurations", it, base?.escrowGradleIncludeTestConfigurations)
+            }
+            e.buildTask?.let { enforceFieldEditable("escrow.buildTask", it, base?.escrowBuildTask) }
+        }
+    }
+
+    /**
+     * CRS-B: create-side editability — a supplied (non-null) value for a field the
+     * caller may not edit is rejected (`current = null`, so any non-blank value is a
+     * change); an absent field lets server defaults apply. Mirrors
+     * [enforceEditabilityOnUpdate] for the fields the create payload carries.
+     */
+    private fun enforceEditabilityOnCreate(request: ComponentCreateRequest) {
+        request.displayName?.let { enforceFieldEditable("component.displayName", it, null) }
+        request.componentOwner?.let { enforceFieldEditable("component.componentOwner", it, null) }
+        request.productType?.let { enforceFieldEditable("component.productType", it, null) }
+        request.clientCode?.let { enforceFieldEditable("component.clientCode", it, null) }
+        request.solution?.let { enforceFieldEditable("component.solution", it, null) }
+        request.copyright?.let { enforceFieldEditable("component.copyright", it, null) }
+        request.releasesInDefaultBranch?.let { enforceFieldEditable("component.releasesInDefaultBranch", it, null) }
+        request.jiraDisplayName?.let { enforceFieldEditable("component.jiraDisplayName", it, null) }
+        request.jiraHotfixVersionFormat?.let { enforceFieldEditable("component.jiraHotfixVersionFormat", it, null) }
+        request.vcsExternalRegistry?.let { enforceFieldEditable("component.vcsExternalRegistry", it, null) }
+        request.distributionExplicit?.let { enforceFieldEditable("component.distributionExplicit", it, null) }
+        request.distributionExternal?.let { enforceFieldEditable("component.distributionExternal", it, null) }
+        request.system?.let { enforceFieldEditable("component.system", it, null) }
+        request.parentComponentName?.let { enforceFieldEditable("component.parentComponentName", it, null) }
+        // canBeParent is a non-null boolean with a `false` default; only a supplied `true`
+        // (a non-default value) counts as a supplied change on create.
+        if (request.canBeParent) enforceFieldEditable("component.canBeParent", true, null)
+        // People lists: only a supplied NON-EMPTY list is a change (empty ≡ absent → server default).
+        request.releaseManager?.takeIf { it.isNotEmpty() }?.let { enforceFieldEditable("component.releaseManager", it, null) }
+        request.securityChampion?.takeIf { it.isNotEmpty() }?.let { enforceFieldEditable("component.securityChampion", it, null) }
+
+        request.baseConfiguration?.jira?.let { j ->
+            j.projectKey?.let { enforceFieldEditable("jira.projectKey", it, null) }
+            j.technical?.let { enforceFieldEditable("jira.technical", it, null) }
+            j.minorVersionFormat?.let { enforceFieldEditable("jira.minorVersionFormat", it, null) }
+            j.releaseVersionFormat?.let { enforceFieldEditable("jira.releaseVersionFormat", it, null) }
+            j.buildVersionFormat?.let { enforceFieldEditable("jira.buildVersionFormat", it, null) }
+            j.lineVersionFormat?.let { enforceFieldEditable("jira.lineVersionFormat", it, null) }
+            j.versionPrefix?.let { enforceFieldEditable("jira.versionPrefix", it, null) }
+            j.versionFormat?.let { enforceFieldEditable("jira.versionFormat", it, null) }
+        }
+        request.baseConfiguration?.build?.let { b ->
+            // buildSystem is required on create; gate it too so a non-editable config is
+            // enforced symmetrically with the PATCH path (no CREATE-only bypass).
+            b.buildSystem?.let { enforceFieldEditable("build.buildSystem", it, null) }
+            b.javaVersion?.let { enforceFieldEditable("build.javaVersion", it, null) }
+            b.gradleVersion?.let { enforceFieldEditable("build.gradleVersion", it, null) }
+            b.mavenVersion?.let { enforceFieldEditable("build.mavenVersion", it, null) }
+            b.buildFilePath?.let { enforceFieldEditable("build.buildFilePath", it, null) }
+            b.deprecated?.let { enforceFieldEditable("build.deprecated", it, null) }
+            b.requiredProject?.let { enforceFieldEditable("build.requiredProject", it, null) }
+            b.projectVersion?.let { enforceFieldEditable("build.projectVersion", it, null) }
+            b.systemProperties?.let { enforceFieldEditable("build.systemProperties", it, null) }
+            b.buildTasks?.let { enforceFieldEditable("build.buildTasks", it, null) }
+        }
+        request.baseConfiguration?.escrow?.let { e ->
+            e.providedDependencies?.let { enforceFieldEditable("escrow.providedDependencies", it, null) }
+            e.reusable?.let { enforceFieldEditable("escrow.reusable", it, null) }
+            e.generation?.let { enforceFieldEditable("escrow.generation", it, null) }
+            e.diskSpace?.let { enforceFieldEditable("escrow.diskSpace", it, null) }
+            e.additionalSources?.let { enforceFieldEditable("escrow.additionalSources", it, null) }
+            e.gradleIncludeConfigurations?.let { enforceFieldEditable("escrow.gradleIncludeConfigurations", it, null) }
+            e.gradleExcludeConfigurations?.let { enforceFieldEditable("escrow.gradleExcludeConfigurations", it, null) }
+            e.gradleIncludeTestConfigurations?.let { enforceFieldEditable("escrow.gradleIncludeTestConfigurations", it, null) }
+            e.buildTask?.let { enforceFieldEditable("escrow.buildTask", it, null) }
+        }
+    }
+
+    // ============================================================
     // Helpers — base configuration apply/patch
     // ============================================================
 
@@ -1719,40 +2080,61 @@ class ComponentManagementServiceImpl(
         // CRS-A: on create an incoming "" maps to NULL (treated as absent), for
         // consistency with the PATCH clear rule. `?.let(::clearBlankScalar)`
         // keeps null as null, maps "" → null, and sets non-blank verbatim.
+        // CRS-B: an aspect field whose field-config visibility is `hidden` is SILENTLY
+        // STRIPPED (its incoming value is ignored, not persisted and NOT a 4xx) — mirroring
+        // the component-scalar isHidden gate. buildSystem is exempt: it is a required enum,
+        // hiding it is unsupported. Editability (adminOnly/none) is enforced separately.
         request.build?.let { b ->
-            // buildSystem is a required enum (validated) — not clearable; set as-is.
+            // buildSystem is a required enum (validated) — not clearable, not hidden-stripped.
             config.buildSystem = b.buildSystem
-            config.javaVersion = b.javaVersion?.let(::clearBlankScalar)
-            config.mavenVersion = b.mavenVersion?.let(::clearBlankScalar)
-            config.gradleVersion = b.gradleVersion?.let(::clearBlankScalar)
-            config.buildFilePath = b.buildFilePath?.let(::clearBlankScalar)
-            config.deprecated = b.deprecated
-            config.requiredProject = b.requiredProject
-            config.projectVersion = b.projectVersion?.let(::clearBlankScalar)
-            config.systemProperties = b.systemProperties?.let(::clearBlankScalar)
-            config.buildTasks = b.buildTasks?.let(::clearBlankScalar)
+            if (!fieldConfigService.isHidden("build.javaVersion")) config.javaVersion = b.javaVersion?.let(::clearBlankScalar)
+            if (!fieldConfigService.isHidden("build.mavenVersion")) config.mavenVersion = b.mavenVersion?.let(::clearBlankScalar)
+            if (!fieldConfigService.isHidden("build.gradleVersion")) config.gradleVersion = b.gradleVersion?.let(::clearBlankScalar)
+            if (!fieldConfigService.isHidden("build.buildFilePath")) config.buildFilePath = b.buildFilePath?.let(::clearBlankScalar)
+            if (!fieldConfigService.isHidden("build.deprecated")) config.deprecated = b.deprecated
+            if (!fieldConfigService.isHidden("build.requiredProject")) config.requiredProject = b.requiredProject
+            if (!fieldConfigService.isHidden("build.projectVersion")) config.projectVersion = b.projectVersion?.let(::clearBlankScalar)
+            if (!fieldConfigService.isHidden("build.systemProperties")) config.systemProperties = b.systemProperties?.let(::clearBlankScalar)
+            if (!fieldConfigService.isHidden("build.buildTasks")) config.buildTasks = b.buildTasks?.let(::clearBlankScalar)
         }
         request.escrow?.let { e ->
-            config.escrowProvidedDependencies = e.providedDependencies?.let(::clearBlankScalar)
-            config.escrowReusable = e.reusable
-            // escrow.generation is a validated enum mode — not clearable; set as-is.
-            config.escrowGeneration = e.generation
-            config.escrowDiskSpace = e.diskSpace?.let(::clearBlankScalar)
-            config.escrowAdditionalSources = e.additionalSources?.let(::clearBlankScalar)
-            config.escrowGradleIncludeConfigurations = e.gradleIncludeConfigurations?.let(::clearBlankScalar)
-            config.escrowGradleExcludeConfigurations = e.gradleExcludeConfigurations?.let(::clearBlankScalar)
-            config.escrowGradleIncludeTestConfigurations = e.gradleIncludeTestConfigurations
-            config.escrowBuildTask = e.buildTask?.let(::clearBlankScalar)
+            if (!fieldConfigService.isHidden("escrow.providedDependencies")) {
+                config.escrowProvidedDependencies = e.providedDependencies?.let(::clearBlankScalar)
+            }
+            if (!fieldConfigService.isHidden("escrow.reusable")) config.escrowReusable = e.reusable
+            if (!fieldConfigService.isHidden("escrow.generation")) config.escrowGeneration = e.generation
+            if (!fieldConfigService.isHidden("escrow.diskSpace")) config.escrowDiskSpace = e.diskSpace?.let(::clearBlankScalar)
+            if (!fieldConfigService.isHidden("escrow.additionalSources")) {
+                config.escrowAdditionalSources = e.additionalSources?.let(::clearBlankScalar)
+            }
+            if (!fieldConfigService.isHidden("escrow.gradleIncludeConfigurations")) {
+                config.escrowGradleIncludeConfigurations = e.gradleIncludeConfigurations?.let(::clearBlankScalar)
+            }
+            if (!fieldConfigService.isHidden("escrow.gradleExcludeConfigurations")) {
+                config.escrowGradleExcludeConfigurations = e.gradleExcludeConfigurations?.let(::clearBlankScalar)
+            }
+            if (!fieldConfigService.isHidden("escrow.gradleIncludeTestConfigurations")) {
+                config.escrowGradleIncludeTestConfigurations = e.gradleIncludeTestConfigurations
+            }
+            if (!fieldConfigService.isHidden("escrow.buildTask")) config.escrowBuildTask = e.buildTask?.let(::clearBlankScalar)
         }
         request.jira?.let { j ->
-            config.jiraProjectKey = j.projectKey?.let(::clearBlankScalar)
-            config.jiraTechnical = j.technical
-            config.jiraMinorVersionFormat = j.minorVersionFormat?.let(::clearBlankScalar)
-            config.jiraReleaseVersionFormat = j.releaseVersionFormat?.let(::clearBlankScalar)
-            config.jiraBuildVersionFormat = j.buildVersionFormat?.let(::clearBlankScalar)
-            config.jiraLineVersionFormat = j.lineVersionFormat?.let(::clearBlankScalar)
-            config.jiraVersionPrefix = j.versionPrefix?.let(::clearBlankScalar)
-            config.jiraVersionFormat = j.versionFormat?.let(::clearBlankScalar)
+            if (!fieldConfigService.isHidden("jira.projectKey")) config.jiraProjectKey = j.projectKey?.let(::clearBlankScalar)
+            if (!fieldConfigService.isHidden("jira.technical")) config.jiraTechnical = j.technical
+            if (!fieldConfigService.isHidden("jira.minorVersionFormat")) {
+                config.jiraMinorVersionFormat = j.minorVersionFormat?.let(::clearBlankScalar)
+            }
+            if (!fieldConfigService.isHidden("jira.releaseVersionFormat")) {
+                config.jiraReleaseVersionFormat = j.releaseVersionFormat?.let(::clearBlankScalar)
+            }
+            if (!fieldConfigService.isHidden("jira.buildVersionFormat")) {
+                config.jiraBuildVersionFormat = j.buildVersionFormat?.let(::clearBlankScalar)
+            }
+            if (!fieldConfigService.isHidden("jira.lineVersionFormat")) {
+                config.jiraLineVersionFormat = j.lineVersionFormat?.let(::clearBlankScalar)
+            }
+            if (!fieldConfigService.isHidden("jira.versionPrefix")) config.jiraVersionPrefix = j.versionPrefix?.let(::clearBlankScalar)
+            if (!fieldConfigService.isHidden("jira.versionFormat")) config.jiraVersionFormat = j.versionFormat?.let(::clearBlankScalar)
             // jiraHotfixVersionFormat per-range write is intentionally not
             // exposed via V4 (no UI need today); DSL import is the only
             // producer of the per-range column.
@@ -1783,39 +2165,66 @@ class ComponentManagementServiceImpl(
         // and `escrow.generation` must be a known mode — both are validated
         // (validateBuildSystem / validateEscrowGenerationMode reject blank), so a
         // "" on those is a 400, not a clear. They keep set-only semantics.
+        // CRS-B: hidden aspect fields are silently stripped (see applyBaseConfigurationCreate).
+        // buildSystem is exempt (required enum). The `if (!isHidden)` sits inside each `?.let`
+        // so an absent field stays a no-op and only a PRESENT value on a visible field is written.
         patch.versionRange?.let { config.versionRange = it }
         patch.build?.let { b ->
             b.buildSystem?.let { config.buildSystem = it }
-            b.javaVersion?.let { config.javaVersion = clearBlankScalar(it) }
-            b.mavenVersion?.let { config.mavenVersion = clearBlankScalar(it) }
-            b.gradleVersion?.let { config.gradleVersion = clearBlankScalar(it) }
-            b.buildFilePath?.let { config.buildFilePath = clearBlankScalar(it) }
-            b.deprecated?.let { config.deprecated = it }
-            b.requiredProject?.let { config.requiredProject = it }
-            b.projectVersion?.let { config.projectVersion = clearBlankScalar(it) }
-            b.systemProperties?.let { config.systemProperties = clearBlankScalar(it) }
-            b.buildTasks?.let { config.buildTasks = clearBlankScalar(it) }
+            b.javaVersion?.let { if (!fieldConfigService.isHidden("build.javaVersion")) config.javaVersion = clearBlankScalar(it) }
+            b.mavenVersion?.let { if (!fieldConfigService.isHidden("build.mavenVersion")) config.mavenVersion = clearBlankScalar(it) }
+            b.gradleVersion?.let { if (!fieldConfigService.isHidden("build.gradleVersion")) config.gradleVersion = clearBlankScalar(it) }
+            b.buildFilePath?.let { if (!fieldConfigService.isHidden("build.buildFilePath")) config.buildFilePath = clearBlankScalar(it) }
+            b.deprecated?.let { if (!fieldConfigService.isHidden("build.deprecated")) config.deprecated = it }
+            b.requiredProject?.let { if (!fieldConfigService.isHidden("build.requiredProject")) config.requiredProject = it }
+            b.projectVersion?.let { if (!fieldConfigService.isHidden("build.projectVersion")) config.projectVersion = clearBlankScalar(it) }
+            b.systemProperties?.let {
+                if (!fieldConfigService.isHidden("build.systemProperties")) config.systemProperties = clearBlankScalar(it)
+            }
+            b.buildTasks?.let { if (!fieldConfigService.isHidden("build.buildTasks")) config.buildTasks = clearBlankScalar(it) }
         }
         patch.escrow?.let { e ->
-            e.providedDependencies?.let { config.escrowProvidedDependencies = clearBlankScalar(it) }
-            e.reusable?.let { config.escrowReusable = it }
-            e.generation?.let { config.escrowGeneration = it }
-            e.diskSpace?.let { config.escrowDiskSpace = clearBlankScalar(it) }
-            e.additionalSources?.let { config.escrowAdditionalSources = clearBlankScalar(it) }
-            e.gradleIncludeConfigurations?.let { config.escrowGradleIncludeConfigurations = clearBlankScalar(it) }
-            e.gradleExcludeConfigurations?.let { config.escrowGradleExcludeConfigurations = clearBlankScalar(it) }
-            e.gradleIncludeTestConfigurations?.let { config.escrowGradleIncludeTestConfigurations = it }
-            e.buildTask?.let { config.escrowBuildTask = clearBlankScalar(it) }
+            e.providedDependencies?.let {
+                if (!fieldConfigService.isHidden("escrow.providedDependencies")) config.escrowProvidedDependencies = clearBlankScalar(it)
+            }
+            e.reusable?.let { if (!fieldConfigService.isHidden("escrow.reusable")) config.escrowReusable = it }
+            e.generation?.let { if (!fieldConfigService.isHidden("escrow.generation")) config.escrowGeneration = it }
+            e.diskSpace?.let { if (!fieldConfigService.isHidden("escrow.diskSpace")) config.escrowDiskSpace = clearBlankScalar(it) }
+            e.additionalSources?.let {
+                if (!fieldConfigService.isHidden("escrow.additionalSources")) config.escrowAdditionalSources = clearBlankScalar(it)
+            }
+            e.gradleIncludeConfigurations?.let {
+                if (!fieldConfigService.isHidden("escrow.gradleIncludeConfigurations")) {
+                    config.escrowGradleIncludeConfigurations = clearBlankScalar(it)
+                }
+            }
+            e.gradleExcludeConfigurations?.let {
+                if (!fieldConfigService.isHidden("escrow.gradleExcludeConfigurations")) {
+                    config.escrowGradleExcludeConfigurations = clearBlankScalar(it)
+                }
+            }
+            e.gradleIncludeTestConfigurations?.let {
+                if (!fieldConfigService.isHidden("escrow.gradleIncludeTestConfigurations")) config.escrowGradleIncludeTestConfigurations = it
+            }
+            e.buildTask?.let { if (!fieldConfigService.isHidden("escrow.buildTask")) config.escrowBuildTask = clearBlankScalar(it) }
         }
         patch.jira?.let { j ->
-            j.projectKey?.let { config.jiraProjectKey = clearBlankScalar(it) }
-            j.technical?.let { config.jiraTechnical = it }
-            j.minorVersionFormat?.let { config.jiraMinorVersionFormat = clearBlankScalar(it) }
-            j.releaseVersionFormat?.let { config.jiraReleaseVersionFormat = clearBlankScalar(it) }
-            j.buildVersionFormat?.let { config.jiraBuildVersionFormat = clearBlankScalar(it) }
-            j.lineVersionFormat?.let { config.jiraLineVersionFormat = clearBlankScalar(it) }
-            j.versionPrefix?.let { config.jiraVersionPrefix = clearBlankScalar(it) }
-            j.versionFormat?.let { config.jiraVersionFormat = clearBlankScalar(it) }
+            j.projectKey?.let { if (!fieldConfigService.isHidden("jira.projectKey")) config.jiraProjectKey = clearBlankScalar(it) }
+            j.technical?.let { if (!fieldConfigService.isHidden("jira.technical")) config.jiraTechnical = it }
+            j.minorVersionFormat?.let {
+                if (!fieldConfigService.isHidden("jira.minorVersionFormat")) config.jiraMinorVersionFormat = clearBlankScalar(it)
+            }
+            j.releaseVersionFormat?.let {
+                if (!fieldConfigService.isHidden("jira.releaseVersionFormat")) config.jiraReleaseVersionFormat = clearBlankScalar(it)
+            }
+            j.buildVersionFormat?.let {
+                if (!fieldConfigService.isHidden("jira.buildVersionFormat")) config.jiraBuildVersionFormat = clearBlankScalar(it)
+            }
+            j.lineVersionFormat?.let {
+                if (!fieldConfigService.isHidden("jira.lineVersionFormat")) config.jiraLineVersionFormat = clearBlankScalar(it)
+            }
+            j.versionPrefix?.let { if (!fieldConfigService.isHidden("jira.versionPrefix")) config.jiraVersionPrefix = clearBlankScalar(it) }
+            j.versionFormat?.let { if (!fieldConfigService.isHidden("jira.versionFormat")) config.jiraVersionFormat = clearBlankScalar(it) }
             // jiraHotfixVersionFormat per-range PATCH is intentionally not
             // exposed via V4; see applyBaseConfigurationCreate above.
         }
@@ -2851,6 +3260,9 @@ class ComponentManagementServiceImpl(
      * the 400 inline onto the displayName field.
      */
     private fun validateRequiredDisplayName(entity: ComponentEntity) {
+        // A hidden displayName is silently stripped (persisted null), so its requiredness
+        // must not 4xx — mirrors validateRequiredCopyright's hidden guard above.
+        if (fieldConfigService.isHidden("component.displayName")) return
         if (entity.distributionExplicit != true || entity.distributionExternal != true) return
         require(!entity.displayName.isNullOrBlank()) {
             "displayName: componentDisplayName is required for an explicit+external " +

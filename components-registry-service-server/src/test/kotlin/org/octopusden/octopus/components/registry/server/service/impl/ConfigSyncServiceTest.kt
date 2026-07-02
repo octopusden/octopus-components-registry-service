@@ -29,6 +29,8 @@ class ConfigSyncServiceTest {
         defaultValue: String? = null,
         label: String? = null,
         description: String? = null,
+        editable: String? = null,
+        options: MutableList<String>? = null,
     ) = AdminConfigProperties.FieldEntry().apply {
         this.visibility = visibility
         this.searchable = searchable
@@ -36,6 +38,8 @@ class ConfigSyncServiceTest {
         this.defaultValue = defaultValue
         this.label = label
         this.description = description
+        this.editable = editable
+        this.options = options
     }
 
     @Test
@@ -138,6 +142,67 @@ class ConfigSyncServiceTest {
             ),
             result.fieldConfig,
         )
+    }
+
+    @Test
+    fun `editable axis normalizes to lowercase and options serialize trimmed`() {
+        val props = AdminConfigProperties().apply {
+            fieldConfig = mutableMapOf(
+                "jira" to mutableMapOf(
+                    "technical" to fieldEntry(visibility = "editable", editable = " AdminOnly "),
+                ),
+                "component" to mutableMapOf(
+                    "vcsExternalRegistry" to fieldEntry(
+                        editable = "adminOnly",
+                        options = mutableListOf(" alpha ", "beta", "  "),
+                    ),
+                ),
+            )
+        }
+
+        val result = service(props).syncToCache()
+
+        assertEquals(
+            mapOf(
+                "jira" to mapOf(
+                    "technical" to mapOf("visibility" to "editable", "editable" to "adminonly"),
+                ),
+                "component" to mapOf(
+                    // blank option dropped, survivors trimmed
+                    "vcsExternalRegistry" to mapOf("editable" to "adminonly", "options" to listOf("alpha", "beta")),
+                ),
+            ),
+            result.fieldConfig,
+        )
+    }
+
+    @Test
+    fun `all-blank options list is omitted`() {
+        val props = AdminConfigProperties().apply {
+            fieldConfig = mutableMapOf(
+                "component" to mutableMapOf(
+                    "vcsExternalRegistry" to fieldEntry(editable = "none", options = mutableListOf(" ", "")),
+                ),
+            )
+        }
+
+        val result = service(props).syncToCache()
+
+        assertEquals(
+            mapOf("component" to mapOf("vcsExternalRegistry" to mapOf("editable" to "none"))),
+            result.fieldConfig,
+        )
+    }
+
+    @Test
+    fun `invalid editable aborts the sync`() {
+        val props = AdminConfigProperties().apply {
+            fieldConfig = mutableMapOf(
+                "jira" to mutableMapOf("technical" to fieldEntry(editable = "sometimes")),
+            )
+        }
+        assertThrows(ConfigValidationException::class.java) { service(props).syncToCache() }
+        verify(repo, never()).save(any())
     }
 
     @Test

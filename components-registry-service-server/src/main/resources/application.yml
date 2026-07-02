@@ -47,13 +47,20 @@ components-registry:
       groupKey:             { visibility: editable, searchable: Extended, required: true }
       distributionExplicit: { visibility: editable, searchable: Extended }
       distributionExternal: { visibility: editable, searchable: Extended }
+      # External Registry (Whiskey) — universal product rule: admin-only edit.
+      # NOTE: the write-side gate reads the `component.vcsExternalRegistry` path
+      # (ComponentManagementServiceImpl), while the Portal display path is
+      # `vcs.externalRegistry`; the enforced entry MUST live here under `component`.
+      # The list of registry NAMES (options) is installation-specific → service-config.
+      vcsExternalRegistry:  { editable: adminOnly }
     build:
       buildSystem:          { visibility: editable, searchable: Main }
       javaVersion:          { visibility: editable, searchable: Extended }
       gradleVersion:        { visibility: editable, searchable: Extended }
     jira:
       projectKey:           { visibility: editable, searchable: Extended }
-      technical:            { visibility: editable, searchable: Extended }
+      # Technical flag drives release automation — admin-only edit (universal rule).
+      technical:            { visibility: editable, searchable: Extended, editable: adminOnly }
     vcs:
       vcsPath:              { visibility: editable, searchable: Extended }
       branch:               { visibility: editable, searchable: Extended }

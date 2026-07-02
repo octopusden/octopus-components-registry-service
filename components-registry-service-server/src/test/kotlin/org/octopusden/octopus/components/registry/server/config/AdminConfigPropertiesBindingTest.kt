@@ -59,6 +59,24 @@ class AdminConfigPropertiesBindingTest {
             }
     }
 
+    @Test
+    fun `editable axis and options list bind onto a FieldEntry`() {
+        runner
+            .withPropertyValues(
+                "components-registry.field-config.jira.technical.editable=adminOnly",
+                "components-registry.field-config.component.vcsExternalRegistry.editable=adminOnly",
+                "components-registry.field-config.component.vcsExternalRegistry.options[0]=alpha",
+                "components-registry.field-config.component.vcsExternalRegistry.options[1]=beta",
+            )
+            .run { ctx ->
+                val props = ctx.getBean(AdminConfigProperties::class.java)
+                assertEquals("adminOnly", props.fieldConfig["jira"]?.get("technical")?.editable)
+                val registry = props.fieldConfig["component"]?.get("vcsExternalRegistry")
+                assertEquals("adminOnly", registry?.editable)
+                assertEquals(listOf("alpha", "beta"), registry?.options)
+            }
+    }
+
     // ── component-defaults majorVersionFormat → minorVersionFormat alias ───────
     // service-config still emits the old `majorVersionFormat` YAML key until it is
     // renamed in lockstep; the deprecated write-through setter must bind it to the

@@ -40,18 +40,7 @@ class FieldConfigService(
     private val registryConfigRepository: RegistryConfigRepository,
 ) {
     fun visibilityFor(fieldPath: String): String {
-        val parts = fieldPath.split('.', limit = 2)
-        if (parts.size != 2) return EDITABLE
-
-        val config = registryConfigRepository.findById(FIELD_CONFIG_KEY).orElse(null) ?: return EDITABLE
-
-        @Suppress("UNCHECKED_CAST")
-        val sectionMap =
-            (config.value as? Map<String, Any?>)?.get(parts[0]) as? Map<String, Any?>
-                ?: return EDITABLE
-
-        @Suppress("UNCHECKED_CAST")
-        val entry = sectionMap[parts[1]] as? Map<String, Any?> ?: return EDITABLE
+        val entry = entryFor(fieldPath) ?: return EDITABLE
 
         // Normalize: trim + lowercase before returning so a typo like
         // `"Hidden"` or `"hidden "` in admin-edited JSON still matches the
@@ -66,9 +55,55 @@ class FieldConfigService(
 
     fun isHidden(fieldPath: String): Boolean = visibilityFor(fieldPath) == HIDDEN
 
+    /**
+     * CRS-B editability policy for a section-prefixed path: `all` | `adminonly` | `none`
+     * (normalized lowercase). User-agnostic — the caller pairs this with the requester's
+     * permissions. `visibility: readonly` is unified with `editable: none`: a readonly
+     * field is non-editable for everyone, so the two synonyms enforce identically.
+     * Everything else (including `visibility: hidden`, which is strip-gated separately
+     * via [isHidden]) resolves to `all` unless an explicit `editable` says otherwise.
+     */
+    fun editabilityFor(fieldPath: String): String {
+        val entry = entryFor(fieldPath) ?: return ALL
+
+        val visibility = (entry["visibility"] as? String)?.trim()?.lowercase()
+        if (visibility == READONLY) return NONE
+
+        val editable =
+            (entry["editable"] as? String)
+                ?.trim()
+                ?.lowercase()
+                ?.takeIf { it.isNotBlank() }
+                ?: return ALL
+        return when (editable) {
+            ADMIN_ONLY, NONE -> editable
+            // "all" or any unrecognized token → fully editable (graceful; the sync-time
+            // validator in ConfigSyncService already rejects unknown tokens loudly).
+            else -> ALL
+        }
+    }
+
+    /** Resolve the raw entry map for a section-prefixed path, or null if unconfigured/malformed. */
+    private fun entryFor(fieldPath: String): Map<String, Any?>? {
+        val parts = fieldPath.split('.', limit = 2)
+        if (parts.size != 2) return null
+
+        val config = registryConfigRepository.findById(FIELD_CONFIG_KEY).orElse(null) ?: return null
+
+        @Suppress("UNCHECKED_CAST")
+        val sectionMap = (config.value as? Map<String, Any?>)?.get(parts[0]) as? Map<String, Any?> ?: return null
+
+        @Suppress("UNCHECKED_CAST")
+        return sectionMap[parts[1]] as? Map<String, Any?>
+    }
+
     companion object {
         private const val FIELD_CONFIG_KEY = "field-config"
         private const val EDITABLE = "editable"
         private const val HIDDEN = "hidden"
+        private const val READONLY = "readonly"
+        private const val ALL = "all"
+        private const val ADMIN_ONLY = "adminonly"
+        private const val NONE = "none"
     }
 }

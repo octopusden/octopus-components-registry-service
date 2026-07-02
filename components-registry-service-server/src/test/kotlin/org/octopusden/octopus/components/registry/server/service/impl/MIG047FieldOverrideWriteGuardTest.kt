@@ -33,6 +33,7 @@ import org.octopusden.octopus.components.registry.server.repository.LabelReposit
 import org.octopusden.octopus.components.registry.server.repository.SystemRepository
 import org.octopusden.octopus.components.registry.server.repository.ToolRepository
 import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
+import org.octopusden.octopus.components.registry.server.security.PermissionEvaluator
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
 import org.octopusden.octopus.components.registry.server.util.ComponentCodeRenderer
 import org.octopusden.octopus.components.registry.server.teamcity.TeamcityProperties
@@ -98,6 +99,7 @@ class MIG047FieldOverrideWriteGuardTest {
                 applicationEventPublisher = mock(ApplicationEventPublisher::class.java),
                 currentUserResolver = mock(CurrentUserResolver::class.java),
                 fieldConfigService = mock(FieldConfigService::class.java),
+                permissionEvaluator = mock(PermissionEvaluator::class.java),
                 teamcityProperties = mock(TeamcityProperties::class.java),
                 versionRangeFactory = VersionRangeFactory(versionNames),
                 numericVersionFactory = NumericVersionFactory(versionNames),

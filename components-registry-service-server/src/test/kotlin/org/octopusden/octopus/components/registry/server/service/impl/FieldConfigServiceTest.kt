@@ -54,7 +54,7 @@ class FieldConfigServiceTest {
     }
 
     @Test
-    @DisplayName("readonly field → visibility returned but isHidden=false (server only enforces hidden)")
+    @DisplayName("readonly field → visibility returned, isHidden=false, editabilityFor unifies to none")
     fun readonly_notHidden() {
         val svc =
             service(
@@ -68,6 +68,65 @@ class FieldConfigServiceTest {
 
         assertEquals("readonly", svc.visibilityFor("component.displayName"))
         assertFalse(svc.isHidden("component.displayName"))
+        // CRS-B: readonly is unified with editable:none (non-editable for everyone).
+        assertEquals("none", svc.editabilityFor("component.displayName"))
+    }
+
+    @Test
+    @DisplayName("editabilityFor: unconfigured / absent-editable → all")
+    fun editability_defaultsToAll() {
+        assertEquals("all", service(stored = null).editabilityFor("jira.technical"))
+        assertEquals(
+            "all",
+            service(mapOf("jira" to mapOf("technical" to mapOf("visibility" to "editable"))))
+                .editabilityFor("jira.technical"),
+        )
+    }
+
+    @Test
+    @DisplayName("editabilityFor: explicit adminOnly / none normalized from mixed case + whitespace")
+    fun editability_adminOnlyAndNone() {
+        val svc =
+            service(
+                mapOf(
+                    "jira" to mapOf("technical" to mapOf("editable" to "  AdminOnly ")),
+                    "component" to mapOf("system" to mapOf("editable" to "NONE")),
+                ),
+            )
+        assertEquals("adminonly", svc.editabilityFor("jira.technical"))
+        assertEquals("none", svc.editabilityFor("component.system"))
+    }
+
+    @Test
+    @DisplayName("editabilityFor: explicit editable:none overrides even when visibility=editable")
+    fun editability_noneWithEditableVisibility() {
+        val svc =
+            service(
+                mapOf("jira" to mapOf("technical" to mapOf("visibility" to "editable", "editable" to "none"))),
+            )
+        assertEquals("none", svc.editabilityFor("jira.technical"))
+    }
+
+    @Test
+    @DisplayName("editabilityFor: hidden field (no editable key) still resolves to all — strip is a separate axis")
+    fun editability_hiddenResolvesToAll() {
+        val svc =
+            service(
+                mapOf("component" to mapOf("displayName" to mapOf("visibility" to "hidden"))),
+            )
+        // Hidden is enforced via isHidden (silent strip), not via editabilityFor.
+        assertTrue(svc.isHidden("component.displayName"))
+        assertEquals("all", svc.editabilityFor("component.displayName"))
+    }
+
+    @Test
+    @DisplayName("editabilityFor: unrecognized editable token degrades to all")
+    fun editability_unknownTokenAll() {
+        val svc =
+            service(
+                mapOf("jira" to mapOf("technical" to mapOf("editable" to "mostly"))),
+            )
+        assertEquals("all", svc.editabilityFor("jira.technical"))
     }
 
     @Test
