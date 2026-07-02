@@ -2,6 +2,7 @@ package org.octopusden.octopus.components.registry.server.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
@@ -83,6 +84,16 @@ class StrictContractTest {
         entity.value = value
         registryConfigRepository.save(entity)
     }
+
+    /**
+     * Start every test with an empty `field-config` cache row. Several tests seed a restrictive
+     * policy (e.g. `component.system: hidden`) mid-test; without this reset the row leaks into
+     * sibling tests (JUnit method order is unspecified) — and, across classes, into this one.
+     * This matters now that CRS-B honors hidden on the CREATE path too (values for hidden fields
+     * are stripped), so a leaked `system: hidden` would drop a create's system value.
+     */
+    @BeforeEach
+    fun resetFieldConfig() = seedFieldConfig(emptyMap())
 
     init {
         val testResourcesPath =

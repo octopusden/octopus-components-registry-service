@@ -545,4 +545,237 @@ class FieldConfigEnforcementIntegrationTest {
                 .andExpect(status().isNoContent)
         }
     }
+
+    // ---- helpers for the aspect/parent/people coverage below ----
+
+    private fun JsonNode.baseScalar(aspect: String, field: String): String? =
+        baseRow()[aspect]?.get(field)?.takeUnless { it.isNull }?.asText()
+
+    /** POST a bob-owned component with a caller-supplied baseConfiguration (as admin). */
+    private fun createBobRaw(baseConfig: String = """{"build":{"buildSystem":"MAVEN"}}"""): JsonNode {
+        val body =
+            """{"name":"crsB_${UUID.randomUUID().toString().take(8)}","componentOwner":"bob",""" +
+                """"group":{"groupKey":"org.example.test","isFake":false},"baseConfiguration":$baseConfig}"""
+        return objectMapper.readTree(
+            mvc
+                .perform(post("/rest/api/4/components").with(adminJwt()).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated)
+                .andReturn().response.contentAsString,
+        )
+    }
+
+    private fun adminPost(bodyJson: String) =
+        mvc.perform(post("/rest/api/4/components").with(adminJwt()).contentType(MediaType.APPLICATION_JSON).content(bodyJson))
+
+    private fun editorPost(bodyJson: String) =
+        mvc.perform(post("/rest/api/4/components").with(editorJwt()).contentType(MediaType.APPLICATION_JSON).content(bodyJson))
+
+    // Finding 1+2 — full aspect-scalar set: hidden strip and adminOnly gating reach build/escrow.
+
+    @Test
+    @DisplayName("hidden aspect field (jira.minorVersionFormat): PATCH change silently STRIPPED, not applied, not 4xx")
+    fun hiddenAspectField_stripOnPatch() {
+        val mvf = "${'$'}major.${'$'}minor"
+        val created = createBobRaw("""{"build":{"buildSystem":"MAVEN"},"jira":{"projectKey":"${uniqueProjectKey()}","minorVersionFormat":"$mvf"}}""")
+        val id = created["id"].asText()
+        val version = created["version"].asLong()
+
+        withFieldConfig(mapOf("jira" to mapOf("minorVersionFormat" to mapOf("visibility" to "hidden")))) {
+            patchRaw(adminJwt(), id, """{"version":$version,"baseConfiguration":{"jira":{"minorVersionFormat":"${'$'}changed"}}}""")
+                .andExpect(status().is2xxSuccessful)
+            assertEquals(mvf, getComponent(id).baseScalar("jira", "minorVersionFormat"), "hidden aspect must be stripped, not changed")
+        }
+    }
+
+    @Test
+    @DisplayName("hidden aspect field (jira.releaseVersionFormat): supplied on CREATE is silently STRIPPED (persists null)")
+    fun hiddenAspectField_stripOnCreate() {
+        withFieldConfig(mapOf("jira" to mapOf("releaseVersionFormat" to mapOf("visibility" to "hidden")))) {
+            val created =
+                createBobRaw("""{"build":{"buildSystem":"MAVEN"},"jira":{"projectKey":"${uniqueProjectKey()}","releaseVersionFormat":"${'$'}foo"}}""")
+            assertEquals(null, created.baseScalar("jira", "releaseVersionFormat"), "hidden aspect must be stripped on create")
+        }
+    }
+
+    @Test
+    @DisplayName("adminOnly escrow.diskSpace: non-admin CHANGE → 403; ECHO unchanged → 2xx")
+    fun adminOnlyEscrowDiskSpace_gated() {
+        val created = createBobRaw("""{"build":{"buildSystem":"MAVEN"},"escrow":{"diskSpace":"10G"}}""")
+        val id = created["id"].asText()
+        val version = created["version"].asLong()
+
+        withFieldConfig(mapOf("escrow" to mapOf("diskSpace" to mapOf("editable" to "adminOnly")))) {
+            patchRaw(editorJwt(), id, """{"version":$version,"baseConfiguration":{"escrow":{"diskSpace":"20G"}}}""")
+                .andExpect(status().isForbidden)
+            assertEquals("10G", getComponent(id).baseScalar("escrow", "diskSpace"))
+            patchRaw(editorJwt(), id, """{"version":$version,"baseConfiguration":{"escrow":{"diskSpace":"10G"}}}""")
+                .andExpect(status().is2xxSuccessful)
+        }
+    }
+
+    @Test
+    @DisplayName("adminOnly build.buildFilePath: non-admin CHANGE → 403")
+    fun adminOnlyBuildFilePath_reject() {
+        val created = createBobRaw("""{"build":{"buildSystem":"MAVEN","buildFilePath":"pom.xml"}}""")
+        val id = created["id"].asText()
+        val version = created["version"].asLong()
+
+        withFieldConfig(mapOf("build" to mapOf("buildFilePath" to mapOf("editable" to "adminOnly")))) {
+            patchRaw(editorJwt(), id, """{"version":$version,"baseConfiguration":{"build":{"buildFilePath":"build.gradle"}}}""")
+                .andExpect(status().isForbidden)
+            assertEquals("pom.xml", getComponent(id).baseScalar("build", "buildFilePath"))
+        }
+    }
+
+    // Finding 3 — override paths + hidden.
+
+    @Test
+    @DisplayName("OVERRIDE on hidden attribute: standalone create → 400 (masked as unknown, no leak)")
+    fun override_hiddenAttribute_standalone400() {
+        val created = createOwnedByBob(technical = false)
+        val id = created["id"].asText()
+
+        withFieldConfig(mapOf("jira" to mapOf("technical" to mapOf("visibility" to "hidden")))) {
+            // Even admin gets a generic 400 — the standalone API never reveals hidden-ness.
+            mvc
+                .perform(
+                    post("/rest/api/4/components/$id/field-overrides")
+                        .with(adminJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""{"overriddenAttribute":"jira.technical","versionRange":"[1.0,2.0)","value":true}"""),
+                ).andExpect(status().isBadRequest)
+        }
+    }
+
+    @Test
+    @DisplayName("OVERRIDE on hidden attribute: combined-save desired-set omitting it PRESERVES the row (strip, not delete)")
+    fun override_hiddenAttribute_desiredSetPreserves() {
+        val created = createOwnedByBob(technical = false)
+        val id = created["id"].asText()
+
+        // Create the override while the field is visible.
+        mvc
+            .perform(
+                post("/rest/api/4/components/$id/field-overrides")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"overriddenAttribute":"jira.technical","versionRange":"[1.0,2.0)","value":true}"""),
+            ).andExpect(status().isCreated)
+
+        withFieldConfig(mapOf("jira" to mapOf("technical" to mapOf("visibility" to "hidden")))) {
+            val version = getComponent(id)["version"].asLong()
+            // Desired-set = [] would delete all editable overrides; the hidden one must survive.
+            patchRaw(adminJwt(), id, """{"version":$version,"fieldOverrides":[]}""")
+                .andExpect(status().is2xxSuccessful)
+
+            val overrides =
+                objectMapper.readTree(
+                    mvc.perform(get("/rest/api/4/components/$id/field-overrides").with(adminJwt()))
+                        .andExpect(status().isOk).andReturn().response.contentAsString,
+                )
+            assertTrue(
+                overrides.any { it["overriddenAttribute"].asText() == "jira.technical" },
+                "hidden-attribute override must be preserved, not deleted by the desired-set",
+            )
+        }
+    }
+
+    // Finding 4 — create people-list gating.
+
+    @Test
+    @DisplayName("CREATE people: non-admin supplying an adminOnly releaseManager → 403; omitting → 2xx")
+    fun create_people_gated() {
+        withFieldConfig(mapOf("component" to mapOf("releaseManager" to mapOf("editable" to "adminOnly")))) {
+            editorPost(
+                """{"name":"crsB_ppl_${UUID.randomUUID().toString().take(8)}","componentOwner":"bob","releaseManager":["bob"],""" +
+                    """"group":{"groupKey":"org.example.test","isFake":false},"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
+            ).andExpect(status().isForbidden)
+
+            editorPost(
+                """{"name":"crsB_ppl_${UUID.randomUUID().toString().take(8)}","componentOwner":"bob",""" +
+                    """"group":{"groupKey":"org.example.test","isFake":false},"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
+            ).andExpect(status().isCreated)
+        }
+    }
+
+    // Finding 5 — parentComponentName / canBeParent gating.
+
+    @Test
+    @DisplayName("adminOnly canBeParent: non-admin flipping → 403; echoing unchanged → 2xx")
+    fun adminOnlyCanBeParent_gated() {
+        val created = createOwnedByBob() // canBeParent defaults to false
+        val id = created["id"].asText()
+        val version = created["version"].asLong()
+
+        withFieldConfig(mapOf("component" to mapOf("canBeParent" to mapOf("editable" to "adminOnly")))) {
+            patchRaw(editorJwt(), id, """{"version":$version,"canBeParent":true}""").andExpect(status().isForbidden)
+            patchRaw(editorJwt(), id, """{"version":$version,"canBeParent":false}""").andExpect(status().is2xxSuccessful)
+        }
+    }
+
+    @Test
+    @DisplayName("adminOnly parentComponentName: non-admin setting a parent → 403")
+    fun adminOnlyParentComponentName_reject() {
+        val parentKey = "crsB_parent_${UUID.randomUUID().toString().take(8)}"
+        adminPost(
+            """{"name":"$parentKey","componentOwner":"owner1","canBeParent":true,""" +
+                """"group":{"groupKey":"org.example.test","isFake":false},"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
+        ).andExpect(status().isCreated)
+
+        val child = createOwnedByBob()
+        val id = child["id"].asText()
+        val version = child["version"].asLong()
+
+        withFieldConfig(mapOf("component" to mapOf("parentComponentName" to mapOf("editable" to "adminOnly")))) {
+            patchRaw(editorJwt(), id, """{"version":$version,"parentComponentName":"$parentKey"}""")
+                .andExpect(status().isForbidden)
+        }
+    }
+
+    // Hidden strip on CREATE for component-level fields (symmetry with PATCH).
+
+    @Test
+    @DisplayName("CREATE: hidden component.canBeParent supplied true → silently stripped to false")
+    fun create_hiddenCanBeParent_stripped() {
+        withFieldConfig(mapOf("component" to mapOf("canBeParent" to mapOf("visibility" to "hidden")))) {
+            val created =
+                objectMapper.readTree(
+                    adminPost(
+                        """{"name":"crsB_cbp_${UUID.randomUUID().toString().take(8)}","componentOwner":"owner1","canBeParent":true,""" +
+                            """"group":{"groupKey":"org.example.test","isFake":false},"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
+                    ).andExpect(status().isCreated).andReturn().response.contentAsString,
+                )
+            assertEquals(false, created["canBeParent"].asBoolean(), "hidden canBeParent must be stripped to its default")
+        }
+    }
+
+    @Test
+    @DisplayName("CREATE: hidden component.releaseManager supplied → silently stripped (empty)")
+    fun create_hiddenReleaseManager_stripped() {
+        withFieldConfig(mapOf("component" to mapOf("releaseManager" to mapOf("visibility" to "hidden")))) {
+            val created =
+                objectMapper.readTree(
+                    adminPost(
+                        """{"name":"crsB_rm_${UUID.randomUUID().toString().take(8)}","componentOwner":"owner1","releaseManager":["bob"],""" +
+                            """"group":{"groupKey":"org.example.test","isFake":false},"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
+                    ).andExpect(status().isCreated).andReturn().response.contentAsString,
+                )
+            assertTrue(created["releaseManager"].isEmpty, "hidden releaseManager must be stripped (not persisted)")
+        }
+    }
+
+    @Test
+    @DisplayName("hidden escrow.generation: a bad value is stripped, not validated → 2xx (never 4xx)")
+    fun hiddenEscrowGeneration_badValueStrippedNotRejected() {
+        val created = createBobRaw("""{"build":{"buildSystem":"MAVEN"},"escrow":{"generation":"AUTO"}}""")
+        val id = created["id"].asText()
+        val version = created["version"].asLong()
+
+        withFieldConfig(mapOf("escrow" to mapOf("generation" to mapOf("visibility" to "hidden")))) {
+            // "NOTAMODE" would be a 400 if validated; hidden must strip it before validation.
+            patchRaw(adminJwt(), id, """{"version":$version,"baseConfiguration":{"escrow":{"generation":"NOTAMODE"}}}""")
+                .andExpect(status().is2xxSuccessful)
+            assertEquals("AUTO", getComponent(id).baseScalar("escrow", "generation"))
+        }
+    }
 }
