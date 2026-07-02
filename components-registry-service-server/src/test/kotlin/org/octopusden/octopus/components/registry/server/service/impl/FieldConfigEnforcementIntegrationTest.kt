@@ -813,4 +813,97 @@ class FieldConfigEnforcementIntegrationTest {
             assertEquals("AUTO", getComponent(id).baseScalar("escrow", "generation"))
         }
     }
+
+    // ================================================================
+    // Gate-before-validation ordering: an INVALID value on a NON-EDITABLE
+    // field must surface the editability error (403/422), NOT a value-400.
+    // ================================================================
+
+    @Test
+    @DisplayName("CREATE: non-admin supplying an INVALID value on an adminOnly field → 403 (editability precedes value validation)")
+    fun create_nonAdminInvalidValueOnAdminOnly_forbiddenNotBadRequest() {
+        withFieldConfig(mapOf("component" to mapOf("productType" to mapOf("editable" to "adminOnly")))) {
+            // "NOT_A_TYPE" is not a valid productType — validateProductType would 400 if it ran
+            // first. The editability gate must win: a non-admin may not supply this field at all.
+            val body =
+                """{"name":"crsB_create_${UUID.randomUUID().toString().take(8)}","componentOwner":"bob","productType":"NOT_A_TYPE",""" +
+                    """"group":{"groupKey":"org.example.test","isFake":false},""" +
+                    """"baseConfiguration":{"build":{"buildSystem":"MAVEN"},"jira":{"projectKey":"${uniqueProjectKey()}"}}}"""
+            editorPost(body).andExpect(status().isForbidden)
+        }
+    }
+
+    @Test
+    @DisplayName("OVERRIDE UPDATE (standalone): non-admin sending an INVALID value on an adminOnly override → 403 (not 400)")
+    fun override_update_invalidValueOnAdminOnly_forbiddenNotBadRequest() {
+        val created = createBobRaw("""{"build":{"buildSystem":"MAVEN"},"escrow":{"generation":"AUTO"}}""")
+        val id = created["id"].asText()
+
+        // Create the scalar override as admin while escrow.generation is still editable.
+        val overrideResponse =
+            mvc
+                .perform(
+                    post("/rest/api/4/components/$id/field-overrides")
+                        .with(adminJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""{"overriddenAttribute":"escrow.generation","versionRange":"[1.0,2.0)","value":"MANUAL"}"""),
+                ).andExpect(status().isCreated)
+                .andReturn().response.contentAsString
+        val overrideId = objectMapper.readTree(overrideResponse)["id"].asText()
+
+        withFieldConfig(mapOf("escrow" to mapOf("generation" to mapOf("editable" to "adminOnly")))) {
+            // "NOTAMODE" would 400 via requireEscrowGenerationMode if applied before the gate.
+            mvc
+                .perform(
+                    patch("/rest/api/4/components/$id/field-overrides/$overrideId")
+                        .with(editorJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""{"value":"NOTAMODE"}"""),
+                ).andExpect(status().isForbidden)
+        }
+    }
+
+    @Test
+    @DisplayName("COMBINED SAVE desired-set: non-admin sending an INVALID override value on an adminOnly field → 403 (not 400)")
+    fun desiredSet_invalidValueOnAdminOnly_forbiddenNotBadRequest() {
+        val created = createBobRaw("""{"build":{"buildSystem":"MAVEN"},"escrow":{"generation":"AUTO"}}""")
+        val id = created["id"].asText()
+
+        val overrideResponse =
+            mvc
+                .perform(
+                    post("/rest/api/4/components/$id/field-overrides")
+                        .with(adminJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""{"overriddenAttribute":"escrow.generation","versionRange":"[1.0,2.0)","value":"MANUAL"}"""),
+                ).andExpect(status().isCreated)
+                .andReturn().response.contentAsString
+        val overrideId = objectMapper.readTree(overrideResponse)["id"].asText()
+
+        withFieldConfig(mapOf("escrow" to mapOf("generation" to mapOf("editable" to "adminOnly")))) {
+            val version = getComponent(id)["version"].asLong()
+            patchRaw(
+                editorJwt(),
+                id,
+                """{"version":$version,"fieldOverrides":[""" +
+                    """{"id":"$overrideId","overriddenAttribute":"escrow.generation","versionRange":"[1.0,2.0)","value":"NOTAMODE"}]}""",
+            ).andExpect(status().isForbidden)
+        }
+    }
+
+    @Test
+    @DisplayName("hidden parentComponentName: PATCH with clearParent + parentComponentName → silently stripped, not a 400 conflict")
+    fun hiddenParent_clearAndSetConflict_strippedNotBadRequest() {
+        val child = createOwnedByBob()
+        val id = child["id"].asText()
+        val version = child["version"].asLong()
+
+        withFieldConfig(mapOf("component" to mapOf("parentComponentName" to mapOf("visibility" to "hidden")))) {
+            // Both clearParent and parentComponentName target a hidden field → both stripped
+            // silently. The mutual-exclusion conflict-400 must NOT fire (hidden = never 4xx).
+            // "no-such-parent" would otherwise 404 on lookup if the set were not stripped.
+            patchRaw(adminJwt(), id, """{"version":$version,"clearParent":true,"parentComponentName":"no-such-parent"}""")
+                .andExpect(status().is2xxSuccessful)
+        }
+    }
 }
