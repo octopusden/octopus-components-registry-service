@@ -11,6 +11,8 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
+import org.octopusden.octopus.components.registry.server.entity.RegistryConfigEntity
+import org.octopusden.octopus.components.registry.server.repository.RegistryConfigRepository
 import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
@@ -62,6 +64,9 @@ class V4ClearSemanticsTest {
 
     @Autowired
     private lateinit var objectMapper: ObjectMapper
+
+    @Autowired
+    private lateinit var registryConfigRepository: RegistryConfigRepository
 
     init {
         val testResourcesPath =
@@ -328,5 +333,147 @@ class V4ClearSemanticsTest {
                 ?: error("expected an UPDATE audit row carrying build.mavenVersion: $history")
         assertEquals("3.9", diff.path("old").asText(), "audit old must be the pre-clear value")
         assertTrue(diff.path("new").isNull, "audit new must be null on clear, was ${diff.path("new")}")
+    }
+
+    // ------------------------------------------------------------------
+    // P2: per-range scalar override with a blank string value is REJECTED 400
+    // (an override row stores its value verbatim — no clear semantics; DELETE
+    // removes it). Contrast with the BASE row where "" clears (tested above).
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("per-range string scalar override with a blank value is rejected 400 (base \"\" clears, override \"\" does not)")
+    fun `blank override value is rejected`() {
+        val created = create(unique("override_blank"), """{"build":{"buildSystem":"MAVEN"}}""")
+        val id = created["id"].asText()
+
+        // "" for a string-typed scalar override → 400 (not stored, not a clear).
+        mvc
+            .perform(
+                post("/rest/api/4/components/$id/field-overrides")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"overriddenAttribute":"jira.buildVersionFormat","versionRange":"[1.0,2.0)","value":""}"""),
+            ).andExpect(status().isBadRequest)
+
+        // whitespace-only is likewise blank → 400.
+        mvc
+            .perform(
+                post("/rest/api/4/components/$id/field-overrides")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"overriddenAttribute":"build.buildFilePath","versionRange":"[1.0,2.0)","value":"   "}"""),
+            ).andExpect(status().isBadRequest)
+
+        // sanity: a non-blank override value is still accepted.
+        mvc
+            .perform(
+                post("/rest/api/4/components/$id/field-overrides")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"overriddenAttribute":"build.buildFilePath","versionRange":"[1.0,2.0)","value":"pom.xml"}"""),
+            ).andExpect(status().is2xxSuccessful)
+    }
+
+    // ------------------------------------------------------------------
+    // P3.1: the two enum-validated scalars are NOT clearable via "" — 400 in
+    // both create and PATCH flows (they are excluded from the clear rule).
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("create with build.buildSystem or escrow.generation = \"\" is rejected 400 (validated enums)")
+    fun `create rejects blank enum scalars`() {
+        mvc
+            .perform(
+                post("/rest/api/4/components")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """{"name":"${unique("cr_bs")}","componentOwner":"owner1",""" +
+                            """"group":{"groupKey":"org.example.test","isFake":false},""" +
+                            """"baseConfiguration":{"build":{"buildSystem":""}}}""",
+                    ),
+            ).andExpect(status().isBadRequest)
+
+        mvc
+            .perform(
+                post("/rest/api/4/components")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """{"name":"${unique("cr_gen")}","componentOwner":"owner1",""" +
+                            """"group":{"groupKey":"org.example.test","isFake":false},""" +
+                            """"baseConfiguration":{"build":{"buildSystem":"MAVEN"},"escrow":{"generation":""}}}""",
+                    ),
+            ).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    @DisplayName("PATCH build.buildSystem or escrow.generation = \"\" is rejected 400 (validated enums)")
+    fun `patch rejects blank enum scalars`() {
+        val created =
+            create(unique("patch_enum"), """{"build":{"buildSystem":"MAVEN"},"escrow":{"generation":"AUTO"}}""")
+        val id = created["id"].asText()
+
+        mvc
+            .perform(
+                patch("/rest/api/4/components/$id")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"version":${version(created)},"baseConfiguration":{"build":{"buildSystem":""}}}"""),
+            ).andExpect(status().isBadRequest)
+
+        mvc
+            .perform(
+                patch("/rest/api/4/components/$id")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"version":${version(created)},"baseConfiguration":{"escrow":{"generation":""}}}"""),
+            ).andExpect(status().isBadRequest)
+    }
+
+    // ------------------------------------------------------------------
+    // P3.2: a field-config-hidden scalar ignores an incoming "" entirely —
+    // the hidden gate strips the write before the clear rule runs, so "" is
+    // NOT a clear (the value is preserved).
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("hidden vcsExternalRegistry ignores an incoming \"\" (no clear — value preserved)")
+    fun `hidden field ignores empty string`() {
+        // create sets the value (create does not gate on hidden); PATCH does.
+        val created =
+            create(
+                unique("hidden_vcsreg"),
+                """{"build":{"buildSystem":"MAVEN"}}""",
+                topLevelJson = """"vcsExternalRegistry":"keep-me",""",
+            )
+        val id = created["id"].asText()
+        assertEquals("keep-me", created["vcsExternalRegistry"].asText())
+
+        try {
+            // Mark component.vcsExternalRegistry hidden via the field-config cache row.
+            seedFieldConfig(
+                mapOf("component" to mapOf("vcsExternalRegistry" to mapOf("visibility" to "hidden"))),
+            )
+            // PATCH "" — would clear if visible; hidden gate must strip it (no clear).
+            patch(id, version(created), """"vcsExternalRegistry":""""")
+            assertEquals(
+                "keep-me",
+                getComponent(id)["vcsExternalRegistry"].asText(),
+                "hidden field must ignore the incoming \"\" — the clear must NOT happen",
+            )
+        } finally {
+            // Reset so the persistent field-config row doesn't leak into sibling tests.
+            seedFieldConfig(emptyMap())
+        }
+    }
+
+    /** Seed the `field-config` cache row directly (mirrors ConfigSyncService's writer). */
+    private fun seedFieldConfig(value: Map<String, Any?>) {
+        val entity =
+            registryConfigRepository.findById("field-config").orElse(RegistryConfigEntity(key = "field-config"))
+        entity.value = value
+        registryConfigRepository.save(entity)
     }
 }

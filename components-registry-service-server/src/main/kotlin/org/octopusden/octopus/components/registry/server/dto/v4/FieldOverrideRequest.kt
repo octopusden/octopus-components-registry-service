@@ -1,7 +1,18 @@
 package org.octopusden.octopus.components.registry.server.dto.v4
 
+import io.swagger.v3.oas.annotations.media.Schema
 import java.time.Instant
 import java.util.UUID
+
+/**
+ * CRS-A note shared by the write-side override `value` fields: a blank string
+ * for a string-typed scalar attribute is rejected (400). Unlike a BASE scalar,
+ * an override row has no "clear" — use DELETE /field-overrides/{id}.
+ */
+private const val OVERRIDE_VALUE_BLANK_NOTE: String =
+    "For a string-typed scalar attribute a blank value (\"\" or whitespace) is rejected (400): " +
+        "an override row stores its value verbatim and has no clear semantics — use " +
+        "DELETE /field-overrides/{id} to remove it."
 
 /**
  * Create body for one override row in `component_configurations`. The request
@@ -24,6 +35,7 @@ import java.util.UUID
 data class FieldOverrideCreateRequest(
     val overriddenAttribute: String,
     val versionRange: String,
+    @field:Schema(description = OVERRIDE_VALUE_BLANK_NOTE)
     val value: Any? = null,
     val markerChildren: MarkerChildrenPayload? = null,
 )
@@ -46,6 +58,7 @@ data class FieldOverrideUpsertRequest(
     val id: UUID? = null,
     val overriddenAttribute: String,
     val versionRange: String,
+    @field:Schema(description = OVERRIDE_VALUE_BLANK_NOTE)
     val value: Any? = null,
     val markerChildren: MarkerChildrenPayload? = null,
 )
@@ -69,6 +82,7 @@ data class FieldOverrideUpdateRequest(
      * DSL override range sets a scalar to null, clearing an inherited base value). See
      * `ConfigurationRowAccessors.kt` for the full null-handling contract across all four paths.
      */
+    @field:Schema(description = OVERRIDE_VALUE_BLANK_NOTE)
     val value: Any? = null,
     val markerChildren: MarkerChildrenPayload? = null,
 )

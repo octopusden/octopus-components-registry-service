@@ -111,8 +111,16 @@ internal fun ComponentConfigurationEntity.extractScalarValue(): Any? =
 
 /**
  * Set the single typed column corresponding to `attributePath` from a JSON
- * primitive value. Throws [IllegalArgumentException] when the path is unknown
- * or the value is the wrong type — the service maps that to a 400.
+ * primitive value. Throws [IllegalArgumentException] when the path is unknown,
+ * the value is the wrong type, or (CRS-A) a string-scalar value is blank — the
+ * service maps that to a 400.
+ *
+ * **Blank string override (CRS-A):** a `""`/whitespace value for a string-typed
+ * scalar attribute is rejected. On the BASE row `""` means "clear to NULL", but
+ * an override row stores its value verbatim, and a non-null `""` would defeat
+ * the resolver's `?:` format fallbacks. Overrides have no "clear" operation —
+ * removal is `DELETE /field-overrides/{id}`. (`null` is likewise rejected on
+ * create; see the table below.)
  *
  * Mutates the receiver in place; clears every other scalar column first so
  * the row keeps the "exactly one column non-NULL" invariant required by
@@ -204,7 +212,17 @@ private fun requireString(
     value: Any,
 ): String =
     when (value) {
-        is String -> value
+        is String -> {
+            // CRS-A: a blank ("" / whitespace) scalar override is meaningless. Unlike
+            // a base scalar (where "" = clear to NULL), a non-null "" stored on an
+            // override row would be echoed verbatim by the resolver and defeat its
+            // `?:` format fallbacks — the exact trap base-row clear semantics avoid.
+            // There is no "clear via override": use DELETE /field-overrides/{id}.
+            require(value.isNotBlank()) {
+                "Attribute '$path' must not be blank — use DELETE /field-overrides/{id} to remove the override"
+            }
+            value
+        }
         is Number -> value.toString()
         else -> throw IllegalArgumentException("Attribute '$path' expects a string value; got ${value::class.simpleName}")
     }
