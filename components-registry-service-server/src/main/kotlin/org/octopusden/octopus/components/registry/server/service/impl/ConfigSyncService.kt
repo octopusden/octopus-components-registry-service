@@ -117,12 +117,25 @@ class ConfigSyncService(
                 }
                 put("visibility", v)
             }
+            entry.editable?.let {
+                val e = it.trim().lowercase()
+                require(e in EDITABILITIES) {
+                    invalid("$section.$field.editable", it, EDITABILITIES)
+                }
+                put("editable", e)
+            }
             entry.searchable?.let {
                 require(it.trim() in SEARCHABLES) {
                     invalid("$section.$field.searchable", it, SEARCHABLES)
                 }
                 put("searchable", it.trim())
             }
+            // Dropdown options (e.g. External Registry names): trimmed, blanks dropped;
+            // an all-blank/empty list is omitted rather than written as `[]`.
+            entry.options
+                ?.mapNotNull { opt -> opt.trim().takeIf { it.isNotBlank() } }
+                ?.takeIf { it.isNotEmpty() }
+                ?.let { put("options", it) }
             entry.required?.let { put("required", it) }
             entry.defaultValue?.let { put("defaultValue", it) }
             // Free-text display overrides — no validation beyond blank-dropping.
@@ -237,6 +250,7 @@ class ConfigSyncService(
         const val FIELD_CONFIG_KEY = "field-config"
         const val COMPONENT_DEFAULTS_KEY = "component-defaults"
         private val VISIBILITIES = setOf("editable", "readonly", "hidden")
+        private val EDITABILITIES = setOf("all", "adminonly", "none")
         private val SEARCHABLES = setOf("Main", "Extended", "None")
     }
 }
