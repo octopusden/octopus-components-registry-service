@@ -78,10 +78,15 @@ migrate(legacy DSL):
   declaredRanges = the block range strings, VERBATIM (incl composites)  // persisted as RANGE_PRESENCE rows
   supported      = ∪ declaredRanges                       || ALL        (no blocks → all versions)
   base(A)        = effective value of the OPEN-UPPER (newest) range   // ALL_VERSIONS row; superseded 2026-07 (was top-level ⊕ Defaults)
-  overrides      = per attribute, derived from the OLDER blocks (newest = base); adjacent same-value MAY be merged.
-                   NOTE: enumeration currently DOES key off override edges, so two adjacent value-identical
-                   OLDER blocks yield two identical views. Preferred fix = clean the redundant blocks in the
-                   source DSL (old CR) / fixtures, NOT a resolver-side collapse. See §compat.
+  overrides      = per attribute, derived from the OLDER blocks (newest = base); adjacent same-value
+                   SCALAR overrides ARE merged at import (MIG-048, ImportServiceImpl.emitMergedScalarOverrides:
+                   ranges grouped per (attribute, value), collapsed via mergeUnion) — with base = newest,
+                   an attribute set only there would otherwise emit one identical row per older block.
+                   Markers stay per declared block (their boundaries anchor enumeration edges).
+                   NOTE: enumeration keys off override edges, so two FULL-twin adjacent blocks (identical
+                   in every attribute incl. markers) would still collapse a view. Preferred fix for full
+                   twins = clean the redundant blocks in the source DSL (old CR) / fixtures, NOT a
+                   resolver-side collapse. See §compat.
   // no synthetic-bounded base
 
 enumerate(component):                                    // v2/v3 range-list endpoints
@@ -124,8 +129,23 @@ Notes:
 
 ## 5. Enumeration is anchored to declared ranges (so per-attribute merge is safe)
 
+> **SUPERSEDED (ADR-018 redesign refinement + MIG-048).** This section describes the FIRST-CUT
+> anchoring (verbatim per-block RANGE_PRESENCE; enumeration iterates declared ranges). The shipped
+> redesign stores coverage MERGED and computes enumeration as the partition of `supported` by
+> override/ownership VALUE-CHANGE edges — so override edges DO drive enumeration now. The merge
+> conclusion survives with a narrower argument: merging adjacent SAME-VALUE scalar overrides removes
+> only an edge between two sub-ranges that resolved identically (a no-op view boundary), so
+> enumeration output is unchanged; marker rows stay per block and keep their edges. Implemented at
+> import by `ImportServiceImpl.emitMergedScalarOverrides` (jira uniqueness-pair attributes excluded —
+> see §migrate() note above and schema-spec §6.5).
+
+*Historical first-cut reasoning below — retained verbatim for the review record; the anchoring it
+describes (verbatim RANGE_PRESENCE iteration) was replaced by the edge-partition redesign per the
+note above.*
+
 The earlier "do not merge" rule is **withdrawn** — it conflated two things the model now keeps
-separate. Enumeration does **not** recompute a partition from override edges; it iterates the
+separate. Enumeration does **not** recompute a partition from override edges *(first-cut; shipped
+enumeration DOES partition by edges)*; it iterates the
 **preserved declared ranges** (RANGE_PRESENCE, stored verbatim — composites included). Therefore:
 
 - Merging adjacent same-value **per-attribute overrides** is **safe** and allowed (cleaner data,
@@ -135,11 +155,11 @@ separate. Enumeration does **not** recompute a partition from override edges; it
   even though the override is merged. No structural diff.
 - Composites (M8) stay **one** RANGE_PRESENCE entry → one enumerated config. No split.
 
-**Required implementation item (P2 / TD-010):** overrides must apply by **containment**
-(`override.range ⊇ R`), not exact equality. Current code applies an override only when
-`parentRange == childRange` (`EntityMappers.kt:293`) — that must become a `containsRange` check
-for both resolve and enumerate. Declared ranges are breakpoint-aligned, so each attribute is
-constant across a declared range and containment is unambiguous.
+**~~Required implementation item (P2 / TD-010)~~ — SHIPPED:** overrides apply by **containment**
+(`override.range ⊇ R`), not exact equality — implemented in `EntityMappers.rangeApplies`
+(structural open-upper guard + sampled containment; see TD-010). The original requirement text is
+kept for the record: exact text equality would silently drop a broad override projected onto a
+narrower enumerated view.
 
 ## 6. Validation rules (migration + v4 write)
 
@@ -165,7 +185,9 @@ constant across a declared range and containment is unambiguous.
   the canonical check).
 - **Full compat baseline** (real versions, ~130k): 0 diffs on resolve **and** enumeration.
 - **Resolve**: identical for real versions (overrides cover them; base = default elsewhere).
-- **Enumeration parity**: `enumerate()` iterates the **preserved declared ranges**
+- **Enumeration parity** *(first-cut wording; shipped: coverage is stored MERGED and enumeration
+  partitions `supported` by value-change edges — see the §5 note and ADR-018 redesign refinement)*:
+  `enumerate()` iterates the **preserved declared ranges**
   (RANGE_PRESENCE, verbatim — composites stay single strings) and resolves each by containment →
   identical range list to legacy, independent of per-attribute merge. Verify: composites (one
   entry), redundant adjacent-identical-value blocks (two entries), and broad-override-over-narrow-
@@ -192,17 +214,16 @@ constant across a declared range and containment is unambiguous.
 
 ## 8. Open decisions (for the reviewer)
 
-1. **Supported storage** *(leaning decided)*: store declared ranges **verbatim** as `RANGE_PRESENCE`
-   rows (composites kept as single strings); `supported = ∪` of them; resolve gate + enumerate both
-   read them. Confirm this is the representation (vs a separate coverage table).
+1. **Supported storage** *(RESOLVED — superseded by the ADR-018 redesign refinement)*: shipped
+   representation stores coverage **MERGED** (`mergeUnion` of declared ranges, maximal contiguous
+   segments; NO rows when the union is all-versions) — not verbatim per-block rows as first drafted.
 2. **Base required-field invariant (P1)**: gated on **audit A2**. If a required BASE field is ever
    per-range-only, **relax the DB CHECK to allow NULL** (preferred, no synthetic base) vs. neutral
    default vs. representative. If A2 finds none → no change needed.
-3. **`containsRange` / TD-010 (P2)** — REQUIRED impl item, not optional: `rangeApplies()` currently
-   returns `parentRange == childRange` (exact text equality, `EntityMappers.kt:315-319`); replace
-   with a containment check (`override.range ⊇ R`) for resolve **and** enumerate. Counterexample
-   today: override on `[1.0,3.0)` over declared ranges `[1.0,2.0)`+`[2.0,3.0)` is silently dropped
-   (text mismatch) → resolves to base instead of the override.
+3. **`containsRange` / TD-010 (P2)** — *SHIPPED*: `rangeApplies()` is containment-based
+   (structural open-upper guard + sampled containment; see TD-010 write-up). Original motivation
+   kept for the record: exact text equality silently dropped an override on `[1.0,3.0)` projected
+   onto declared ranges `[1.0,2.0)`+`[2.0,3.0)` → resolved to base instead of the override.
 4. **V1**: warn-and-allow vs hard-constrain override input to within supported.
 5. **Resolver ordering**: fix lexicographic → numeric now (risk) or as a separate change?
 6. **Lifecycle layer**: confirm deferred; default status at migration when introduced.
@@ -228,12 +249,12 @@ constant across a declared range and containment is unambiguous.
 
 | Area | File:line | Change |
 |---|---|---|
-| Override application (resolve + enumerate) | `EntityMappers.kt:315-319` `rangeApplies()` | exact-match → **containsRange** (TD-010) |
-| Enumeration synthetic-base skip | `EntityMappers.kt:143-150` | replace with verbatim RANGE_PRESENCE enumeration; prove equivalence |
+| Override application (resolve + enumerate) | `EntityMappers.kt` `rangeApplies()` | exact-match → **containsRange** (TD-010) — **SHIPPED** |
+| Enumeration synthetic-base skip | `EntityMappers.kt` | first cut said "verbatim RANGE_PRESENCE enumeration"; **SHIPPED** as edge-partition of MERGED coverage (redesign refinement) |
 | Resolve coverage gate | `EntityMappers.kt:~209` (`base.versionRange != ALL_VERSIONS` union check) + `ComponentCodeRenderer.renderResolved` ~190-204 | gate on `supported` (∪ RANGE_PRESENCE) |
 | Base row build | `ImportServiceImpl.buildBaseConfigRow` + `selectBaseConfig` | base.versionRange = ALL_VERSIONS; value = effective config of the OPEN-UPPER (newest) block (2026-07 amendment, was top-level ⊕ Defaults); drop synthetic-bounded range |
 | Synthetic base decision | `ImportServiceImpl.importModule:~895-904` | remove `isSyntheticBase` bounded-base path; supported = ∪ declared ranges |
-| RANGE_PRESENCE emission | `ImportServiceImpl.emitRangePresenceRow:~970-993` | emit for every declared bounded block (verbatim, incl composites); none when supported = ALL |
+| RANGE_PRESENCE emission | `ImportServiceImpl.emitRangePresenceRow` | first cut said verbatim per block; **SHIPPED**: one row per MERGED contiguous segment (`mergeUnion`); none when supported = ALL |
 | Enumeration ordering | `V4Mappers.kt` `ARTIFACT_MAPPING_ORDER` | lexicographic today (existing bug) — don't introduce a new diff; numeric fix is a separate decision (§8.5) |
 | BASE field invariant | `V1__schema.sql:243` `chk_..._base_build_system` | relax to allow NULL only if audit A2 finds per-range-only required fields |
 | Docs | `schema-spec.md`, `requirements-migration.md`, `requirements-resolver.md` + new **ADR-018** | update during implementation |

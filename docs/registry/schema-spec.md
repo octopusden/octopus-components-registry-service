@@ -524,7 +524,7 @@ the override rows below.
 
 For each declared version-range block in DSL **except the one chosen as the base** (§6.4 — the
 open-upper/newest block; older & historical-left blocks are the ones that survive here) (override/value layer):
-- For each scalar attribute whose value differs from the `ALL_VERSIONS` base row: emit scalar override row (`overridden_attribute = 'aspect.field'`, single column set), on the block's range. Under the 2026-07 base-VALUE amendment these are the OLDER blocks (the newest block equals the base and emits nothing).
+- For each scalar attribute whose value differs from the `ALL_VERSIONS` base row: emit scalar override row (`overridden_attribute = 'aspect.field'`, single column set). Under the 2026-07 base-VALUE amendment these are the OLDER blocks (the newest block equals the base and emits nothing). Ranges are emitted MERGED per (attribute, value) — adjacent/overlapping same-value blocks collapse into one row via `mergeUnion` (MIG-048, `ImportServiceImpl.emitMergedScalarOverrides`); non-adjacent same-value ranges stay separate. EXCEPTION: `jira.projectKey` / `jira.versionPrefix` always keep their verbatim per-block ranges — the jira uniqueness pair is reconstructed from persisted rows by exact-range grouping (`computeEffectiveJiraPairs`), and independently-widened companion rows would tear the pairs apart.
 - For each child-collection change (multi-VCS, distribution_*, requiredTools): emit marker row (`overridden_attribute = '<marker>'`, all typed scalars NULL) + child rows attached. Base VCS/distribution/tools now come from the newest block too.
 
 Override detection deduplicates against the `ALL_VERSIONS` base: a scalar/marker row is emitted only
