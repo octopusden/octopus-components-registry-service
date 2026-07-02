@@ -98,6 +98,14 @@ class PermissionEvaluator(
     fun canImport(): Boolean = hasPermission(IMPORT_DATA)
 
     /**
+     * CRS-B field-config `editable: adminOnly` gate. A caller may write a field marked
+     * `adminOnly` only when they hold [EDIT_ANY_COMPONENT] — the same permission that
+     * bypasses the per-component ownership check in [canEditComponent]. Read server-side
+     * from the requester's permissions; the field-config read blob stays user-agnostic.
+     */
+    fun canEditAdminOnlyFields(): Boolean = hasPermission(EDIT_ANY_COMPONENT)
+
+    /**
      * Edit component-configuration metadata — gates the raw Field-Overrides edit
      * surface (add/edit/delete, incl. marker editing); a power-user / escape-hatch
      * capability. Distinct from CREATE_COMPONENTS (new component creation) and

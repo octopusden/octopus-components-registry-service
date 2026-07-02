@@ -80,6 +80,7 @@ import org.octopusden.octopus.components.registry.server.repository.LabelReposit
 import org.octopusden.octopus.components.registry.server.repository.SystemRepository
 import org.octopusden.octopus.components.registry.server.repository.ToolRepository
 import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
+import org.octopusden.octopus.components.registry.server.security.PermissionEvaluator
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
 import org.octopusden.octopus.components.registry.server.service.RenderedComponentCode
@@ -98,8 +99,10 @@ import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Pageable
 import org.springframework.data.domain.Sort
 import org.springframework.data.jpa.domain.Specification
+import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.web.server.ResponseStatusException
 import java.nio.file.Files
 import java.time.Instant
 import java.util.UUID
@@ -133,6 +136,7 @@ class ComponentManagementServiceImpl(
     private val applicationEventPublisher: ApplicationEventPublisher,
     private val currentUserResolver: CurrentUserResolver,
     private val fieldConfigService: FieldConfigService,
+    private val permissionEvaluator: PermissionEvaluator,
     private val teamcityProperties: TeamcityProperties,
     private val versionRangeFactory: VersionRangeFactory,
     private val numericVersionFactory: NumericVersionFactory,
@@ -215,6 +219,9 @@ class ComponentManagementServiceImpl(
         // inside `replaceVcsEntries` / `replacePackages` (covers both base-config
         // and field-override marker paths).
         validateLabels(request.labels)
+        // CRS-B: a supplied (non-null) value for a field the caller may not edit is
+        // rejected up-front; an absent field lets server defaults apply.
+        enforceEditabilityOnCreate(request)
         // Canonicalise once and reuse so the synced junction, the
         // in-memory refresh, and the audit snapshot all see the same
         // trimmed/deduped set — the originally requested set may still
@@ -456,6 +463,11 @@ class ComponentManagementServiceImpl(
             }
         }
         val isRename = normalizedNewKey != null && normalizedNewKey != oldKey
+
+        // CRS-B: reject an attempt to CHANGE a field the caller may not edit BEFORE any
+        // mutation (change-based; unchanged echo is tolerated). Reads the pristine BASE
+        // row for jira/build aspect currents, so it must run ahead of the patch appliers.
+        enforceEditabilityOnUpdate(entity, request)
 
         request.productType?.let { validateProductType(it) }
         // `baseConfiguration.versionRange` is validated downstream inside the
@@ -848,6 +860,10 @@ class ComponentManagementServiceImpl(
         request: FieldOverrideCreateRequest,
     ): FieldOverrideResponse {
         val component = findComponentOr404(componentId)
+        // CRS-B: introducing an override IS a value change on the overridden attribute
+        // — gate it by the caller's editability for that field. Unknown/marker
+        // attributes resolve to `all` (no-op) and still hit their own validation below.
+        enforceOverrideEditable(request.overriddenAttribute)
         // Whitespace normalisation up-front so the DB UNIQUE (which is exact-
         // string) and the duplicate-row lookup agree with the partial-overlap
         // validator below: `[1.0, 2.0)` stored as `[1.0,2.0)` lets the next
@@ -979,6 +995,14 @@ class ComponentManagementServiceImpl(
                 }
             }
 
+        // CRS-B: gate any ACTUAL change (scalar value, markerChildren, or range) to an
+        // override on a non-editable field. Snapshot-diff keeps it change-based across
+        // both scalar and marker attributes — an unchanged echo leaves the snapshot
+        // equal and is allowed (the transaction rolls back on the thrown 403/422).
+        if (fieldOverrideAuditSnapshot(row) != beforeSnapshot) {
+            enforceOverrideEditable(row.overriddenAttribute!!)
+        }
+
         val saved = configurationRepository.save(row)
         if (pendingTools != null) {
             syncRequiredTools(saved.id!!, pendingTools)
@@ -1014,6 +1038,9 @@ class ComponentManagementServiceImpl(
             "Cannot delete id $overrideId via field-override endpoint (row_type=${row.rowType})"
         }
         requireNotImportManagedMarker(row, "delete")
+        // CRS-B: removing an override changes the effective value on its attribute —
+        // gate it like the combined-save desired-set delete branch (no direct-DELETE bypass).
+        row.overriddenAttribute?.let { enforceOverrideEditable(it) }
         val owningComponent = row.component
         val beforeSnapshot = fieldOverrideAuditSnapshot(row)
         configurationRepository.delete(row)
@@ -1113,6 +1140,8 @@ class ComponentManagementServiceImpl(
         // 1) DELETE editable rows omitted from the desired set (orphanRemoval on flush).
         val deletedSnapshots = mutableListOf<Map<String, Any?>>()
         existing.filter { !isImportManaged(it) && it.id !in keepIds }.forEach { row ->
+            // CRS-B: removing an override changes the effective value on that attribute.
+            row.overriddenAttribute?.let { enforceOverrideEditable(it) }
             deletedSnapshots += fieldOverrideAuditSnapshot(row)
             component.configurations.remove(row)
         }
@@ -1128,12 +1157,20 @@ class ComponentManagementServiceImpl(
             }
             val before = fieldOverrideAuditSnapshot(row)
             applyOverrideUpsertPayload(component, row, d, excludeOverrideId = row.id)?.let { pendingTools[row] = it }
+            // CRS-B: gate any actual change (value / markerChildren / range) to an
+            // override on a non-editable field; an unchanged echo (combined Save
+            // re-sends the whole set) leaves the snapshot equal and is left alone.
+            if (fieldOverrideAuditSnapshot(row) != before) {
+                enforceOverrideEditable(d.overriddenAttribute)
+            }
             updated += row to before
         }
 
         // 3) CREATE rows without an id.
         val created = mutableListOf<ComponentConfigurationEntity>()
         desired.filter { it.id == null }.forEach { d ->
+            // CRS-B: a new override is a value change on the overridden attribute.
+            enforceOverrideEditable(d.overriddenAttribute)
             val row =
                 ComponentConfigurationEntity(
                     component = component,
@@ -1702,6 +1739,184 @@ class ComponentManagementServiceImpl(
             throw IllegalArgumentException(
                 "canBeParent: cannot disable can-be-parent while other components reference this as their parent",
             )
+        }
+    }
+
+    // ============================================================
+    // Helpers — field-config editability enforcement (CRS-B)
+    // ============================================================
+
+    /**
+     * CRS-B editability write-gate for a single scalar field, keyed by the
+     * section-prefixed field-config path (e.g. `jira.technical`,
+     * `component.vcsExternalRegistry`).
+     *
+     * **Change-based** — the single most important property: a write is rejected
+     * only when it would actually CHANGE the field. Echoing the current value (or
+     * clearing an already-empty field) is a no-op and is always allowed, because
+     * the Portal's combined Save posts whole section slices; a presence-based
+     * reject would fail every ordinary editor's save. On CREATE the caller passes
+     * `current = null`, so any supplied non-null value counts as a change.
+     *
+     *  - `editable: adminOnly` without `EDIT_ANY_COMPONENT` → 403 (authorization).
+     *  - `editable: none` / `visibility: readonly` (unified) → 422 for everyone.
+     *  - `visibility: hidden` is NOT handled here — it keeps its silent-strip
+     *    behavior at the individual write sites (`isHidden` short-circuits first).
+     *
+     * String values are compared with CRS-A "" ≡ null normalization (blank means
+     * clear); booleans and lists compare by value equality. Comparison is
+     * case-sensitive for strings (a case-only echo of an already-canonicalized
+     * value is treated as a change — erring toward reject, the safe direction).
+     */
+    private fun enforceFieldEditable(
+        fieldPath: String,
+        incoming: Any?,
+        current: Any?,
+    ) {
+        if (fieldConfigService.isHidden(fieldPath)) return
+        if (!isFieldChange(incoming, current)) return
+        when (fieldConfigService.editabilityFor(fieldPath)) {
+            "adminonly" ->
+                if (!permissionEvaluator.canEditAdminOnlyFields()) {
+                    throw ResponseStatusException(
+                        HttpStatus.FORBIDDEN,
+                        "Field '$fieldPath' is editable by administrators only",
+                    )
+                }
+            "none" ->
+                throw ResponseStatusException(
+                    HttpStatus.UNPROCESSABLE_ENTITY,
+                    "Field '$fieldPath' is not editable",
+                )
+            else -> Unit // "all"
+        }
+    }
+
+    /**
+     * Reject a create/modify/delete of a per-range override on a field the caller
+     * may not edit — the same policy as [enforceFieldEditable], but for the
+     * field-override sub-resource where introducing/removing an override IS a
+     * value change on the overridden attribute (`overriddenAttribute` doubles as
+     * the field-config path, e.g. `jira.technical`). Callers invoke this only for
+     * actual changes (an unchanged desired-set echo is left untouched).
+     */
+    private fun enforceOverrideEditable(attribute: String) {
+        when (fieldConfigService.editabilityFor(attribute)) {
+            "adminonly" ->
+                if (!permissionEvaluator.canEditAdminOnlyFields()) {
+                    throw ResponseStatusException(
+                        HttpStatus.FORBIDDEN,
+                        "Field-override on '$attribute' is editable by administrators only",
+                    )
+                }
+            "none" ->
+                throw ResponseStatusException(
+                    HttpStatus.UNPROCESSABLE_ENTITY,
+                    "Field-override on '$attribute' targets a non-editable field",
+                )
+            else -> Unit // "all"
+        }
+    }
+
+    /** Change detection with CRS-A "" ≡ null normalization for strings; value equality otherwise. */
+    private fun isFieldChange(
+        incoming: Any?,
+        current: Any?,
+    ): Boolean {
+        fun norm(v: Any?): Any? = if (v is String) v.trim().ifBlank { null } else v
+        return norm(incoming) != norm(current)
+    }
+
+    /**
+     * CRS-B: enforce editability across every scalar the given PATCH touches, BEFORE
+     * any mutation, comparing incoming against the entity's current value (its BASE
+     * configuration row for jira/build aspect scalars). `null`/absent request fields
+     * are skipped (JSON Merge Patch "don't touch"), so only fields actually present
+     * in the payload are considered — and even then only a real value change is gated.
+     */
+    private fun enforceEditabilityOnUpdate(
+        entity: ComponentEntity,
+        request: ComponentUpdateRequest,
+    ) {
+        request.displayName?.let { enforceFieldEditable("component.displayName", it, entity.displayName) }
+        request.componentOwner?.let { enforceFieldEditable("component.componentOwner", it, entity.componentOwner) }
+        request.productType?.let { enforceFieldEditable("component.productType", it, entity.productType) }
+        request.clientCode?.let { enforceFieldEditable("component.clientCode", it, entity.clientCode) }
+        request.solution?.let { enforceFieldEditable("component.solution", it, entity.solution) }
+        request.copyright?.let { enforceFieldEditable("component.copyright", it, entity.copyright) }
+        request.releasesInDefaultBranch?.let {
+            enforceFieldEditable("component.releasesInDefaultBranch", it, entity.releasesInDefaultBranch)
+        }
+        request.jiraDisplayName?.let { enforceFieldEditable("component.jiraDisplayName", it, entity.jiraDisplayName) }
+        request.jiraHotfixVersionFormat?.let {
+            enforceFieldEditable("component.jiraHotfixVersionFormat", it, entity.jiraHotfixVersionFormat)
+        }
+        request.vcsExternalRegistry?.let {
+            enforceFieldEditable("component.vcsExternalRegistry", it, entity.vcsExternalRegistry)
+        }
+        request.distributionExplicit?.let { enforceFieldEditable("component.distributionExplicit", it, entity.distributionExplicit) }
+        request.distributionExternal?.let { enforceFieldEditable("component.distributionExternal", it, entity.distributionExternal) }
+        request.system?.let { enforceFieldEditable("component.system", it, entity.systemCode) }
+        request.releaseManager?.let { enforceFieldEditable("component.releaseManager", it, entity.releaseManagerUsernames()) }
+        request.securityChampion?.let { enforceFieldEditable("component.securityChampion", it, entity.securityChampionUsernames()) }
+
+        val base = entity.configurations.firstOrNull { it.rowType == "BASE" }
+        request.baseConfiguration?.jira?.let { j ->
+            j.projectKey?.let { enforceFieldEditable("jira.projectKey", it, base?.jiraProjectKey) }
+            j.technical?.let { enforceFieldEditable("jira.technical", it, base?.jiraTechnical) }
+            j.minorVersionFormat?.let { enforceFieldEditable("jira.minorVersionFormat", it, base?.jiraMinorVersionFormat) }
+            j.releaseVersionFormat?.let { enforceFieldEditable("jira.releaseVersionFormat", it, base?.jiraReleaseVersionFormat) }
+            j.buildVersionFormat?.let { enforceFieldEditable("jira.buildVersionFormat", it, base?.jiraBuildVersionFormat) }
+            j.lineVersionFormat?.let { enforceFieldEditable("jira.lineVersionFormat", it, base?.jiraLineVersionFormat) }
+            j.versionPrefix?.let { enforceFieldEditable("jira.versionPrefix", it, base?.jiraVersionPrefix) }
+            j.versionFormat?.let { enforceFieldEditable("jira.versionFormat", it, base?.jiraVersionFormat) }
+        }
+        request.baseConfiguration?.build?.let { b ->
+            b.buildSystem?.let { enforceFieldEditable("build.buildSystem", it, base?.buildSystem) }
+            b.javaVersion?.let { enforceFieldEditable("build.javaVersion", it, base?.javaVersion) }
+            b.gradleVersion?.let { enforceFieldEditable("build.gradleVersion", it, base?.gradleVersion) }
+            b.mavenVersion?.let { enforceFieldEditable("build.mavenVersion", it, base?.mavenVersion) }
+        }
+    }
+
+    /**
+     * CRS-B: create-side editability — a supplied (non-null) value for a field the
+     * caller may not edit is rejected (`current = null`, so any non-blank value is a
+     * change); an absent field lets server defaults apply. Mirrors
+     * [enforceEditabilityOnUpdate] for the fields the create payload carries.
+     */
+    private fun enforceEditabilityOnCreate(request: ComponentCreateRequest) {
+        request.displayName?.let { enforceFieldEditable("component.displayName", it, null) }
+        request.componentOwner?.let { enforceFieldEditable("component.componentOwner", it, null) }
+        request.productType?.let { enforceFieldEditable("component.productType", it, null) }
+        request.clientCode?.let { enforceFieldEditable("component.clientCode", it, null) }
+        request.solution?.let { enforceFieldEditable("component.solution", it, null) }
+        request.copyright?.let { enforceFieldEditable("component.copyright", it, null) }
+        request.releasesInDefaultBranch?.let { enforceFieldEditable("component.releasesInDefaultBranch", it, null) }
+        request.jiraDisplayName?.let { enforceFieldEditable("component.jiraDisplayName", it, null) }
+        request.jiraHotfixVersionFormat?.let { enforceFieldEditable("component.jiraHotfixVersionFormat", it, null) }
+        request.vcsExternalRegistry?.let { enforceFieldEditable("component.vcsExternalRegistry", it, null) }
+        request.distributionExplicit?.let { enforceFieldEditable("component.distributionExplicit", it, null) }
+        request.distributionExternal?.let { enforceFieldEditable("component.distributionExternal", it, null) }
+        request.system?.let { enforceFieldEditable("component.system", it, null) }
+
+        request.baseConfiguration?.jira?.let { j ->
+            j.projectKey?.let { enforceFieldEditable("jira.projectKey", it, null) }
+            j.technical?.let { enforceFieldEditable("jira.technical", it, null) }
+            j.minorVersionFormat?.let { enforceFieldEditable("jira.minorVersionFormat", it, null) }
+            j.releaseVersionFormat?.let { enforceFieldEditable("jira.releaseVersionFormat", it, null) }
+            j.buildVersionFormat?.let { enforceFieldEditable("jira.buildVersionFormat", it, null) }
+            j.lineVersionFormat?.let { enforceFieldEditable("jira.lineVersionFormat", it, null) }
+            j.versionPrefix?.let { enforceFieldEditable("jira.versionPrefix", it, null) }
+            j.versionFormat?.let { enforceFieldEditable("jira.versionFormat", it, null) }
+        }
+        request.baseConfiguration?.build?.let { b ->
+            // buildSystem is required on create; gate it too so a non-editable config is
+            // enforced symmetrically with the PATCH path (no CREATE-only bypass).
+            b.buildSystem?.let { enforceFieldEditable("build.buildSystem", it, null) }
+            b.javaVersion?.let { enforceFieldEditable("build.javaVersion", it, null) }
+            b.gradleVersion?.let { enforceFieldEditable("build.gradleVersion", it, null) }
+            b.mavenVersion?.let { enforceFieldEditable("build.mavenVersion", it, null) }
         }
     }
 

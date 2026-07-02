@@ -23,10 +23,14 @@ import org.springframework.http.MediaType
 import org.springframework.test.annotation.DirtiesContext
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.request.RequestPostProcessor
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.nio.file.Paths
+import java.util.UUID
 
 /**
  * Risk-1 mitigation — end-to-end test for [FieldConfigService].
@@ -198,5 +202,307 @@ class FieldConfigEnforcementIntegrationTest {
             updated["displayName"].asText(""),
             "displayName should reflect the patch when field-config marks it editable",
         )
+    }
+
+    // ================================================================
+    // CRS-B — editability axis (all | adminOnly | none) write-enforcement
+    // ================================================================
+
+    private fun uniqueProjectKey() = "PK${UUID.randomUUID().toString().take(8).uppercase().replace("-", "")}"
+
+    /** BASE row of a detail node; its jira.technical boolean. */
+    private fun JsonNode.baseRow(): JsonNode = this["configurations"].first { it["rowType"].asText() == "BASE" }
+
+    private fun JsonNode.jiraTechnical(): Boolean = baseRow()["jira"]["technical"].asBoolean()
+
+    private fun JsonNode.baseJira(field: String): String? =
+        baseRow()["jira"]?.get(field)?.takeUnless { it.isNull }?.asText()
+
+    /**
+     * Create a component OWNED BY the editor "bob" (so `editorJwt()` passes the
+     * per-component edit gate) with a known `jira.technical` + projectKey and an
+     * optional top-level `vcsExternalRegistry`. Created as admin (bypasses all gates).
+     */
+    private fun createOwnedByBob(
+        technical: Boolean = false,
+        projectKey: String = uniqueProjectKey(),
+        vcsExternalRegistry: String? = null,
+    ): JsonNode {
+        val registryFragment = vcsExternalRegistry?.let { """"vcsExternalRegistry":"$it",""" } ?: ""
+        val body =
+            """{"name":"crsB_${UUID.randomUUID().toString().take(8)}","componentOwner":"bob",""" +
+                registryFragment +
+                """"group":{"groupKey":"org.example.test","isFake":false},""" +
+                """"baseConfiguration":{"build":{"buildSystem":"MAVEN"},""" +
+                """"jira":{"projectKey":"$projectKey","technical":$technical}}}"""
+        val response =
+            mvc
+                .perform(
+                    post("/rest/api/4/components")
+                        .with(adminJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body),
+                ).andExpect(status().isCreated)
+                .andReturn().response.contentAsString
+        return objectMapper.readTree(response)
+    }
+
+    private fun patchRaw(
+        who: RequestPostProcessor,
+        id: String,
+        bodyJson: String,
+    ) = mvc.perform(
+        patch("/rest/api/4/components/$id")
+            .with(who)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(bodyJson),
+    )
+
+    /** Seed a field-config, run [block], then reset the row so it can't leak into sibling tests. */
+    private fun withFieldConfig(
+        value: Map<String, Any?>,
+        block: () -> Unit,
+    ) {
+        seedFieldConfig(value)
+        try {
+            block()
+        } finally {
+            seedFieldConfig(emptyMap())
+        }
+    }
+
+    @Test
+    @DisplayName("adminOnly jira.technical: non-admin editor FLIPPING the value → 403")
+    fun adminOnlyTechnical_nonAdminFlip_forbidden() {
+        val created = createOwnedByBob(technical = false)
+        val id = created["id"].asText()
+        val version = created["version"].asLong()
+
+        withFieldConfig(mapOf("jira" to mapOf("technical" to mapOf("editable" to "adminOnly")))) {
+            patchRaw(
+                editorJwt(), // bob = owner, but lacks EDIT_ANY_COMPONENT
+                id,
+                """{"version":$version,"baseConfiguration":{"jira":{"technical":true}}}""",
+            ).andExpect(status().isForbidden)
+            // Value unchanged (transaction rolled back).
+            assertEquals(false, getComponent(id).jiraTechnical())
+        }
+    }
+
+    @Test
+    @DisplayName("adminOnly jira.technical: non-admin editor ECHOING the unchanged value → 2xx (combined-save tolerance)")
+    fun adminOnlyTechnical_nonAdminEcho_ok() {
+        val created = createOwnedByBob(technical = false)
+        val id = created["id"].asText()
+        val version = created["version"].asLong()
+
+        withFieldConfig(mapOf("jira" to mapOf("technical" to mapOf("editable" to "adminOnly")))) {
+            patchRaw(
+                editorJwt(),
+                id,
+                // Echo current value (false) — the Portal's combined Save sends the whole slice.
+                """{"version":$version,"baseConfiguration":{"jira":{"technical":false}}}""",
+            ).andExpect(status().is2xxSuccessful)
+        }
+    }
+
+    @Test
+    @DisplayName("adminOnly jira.technical: admin FLIPPING the value → 2xx and persisted")
+    fun adminOnlyTechnical_adminFlip_ok() {
+        val created = createOwnedByBob(technical = false)
+        val id = created["id"].asText()
+        val version = created["version"].asLong()
+
+        withFieldConfig(mapOf("jira" to mapOf("technical" to mapOf("editable" to "adminOnly")))) {
+            patchRaw(
+                adminJwt(),
+                id,
+                """{"version":$version,"baseConfiguration":{"jira":{"technical":true}}}""",
+            ).andExpect(status().is2xxSuccessful)
+            assertEquals(true, getComponent(id).jiraTechnical())
+        }
+    }
+
+    @Test
+    @DisplayName("readonly jira.projectKey: admin CHANGING → 422; ECHOING unchanged → 2xx")
+    fun readonlyProjectKey_changeRejected_echoOk() {
+        val pk = uniqueProjectKey()
+        val created = createOwnedByBob(projectKey = pk)
+        val id = created["id"].asText()
+        val version = created["version"].asLong()
+
+        withFieldConfig(mapOf("jira" to mapOf("projectKey" to mapOf("visibility" to "readonly")))) {
+            // readonly is unified with editable:none — non-editable even for admin.
+            patchRaw(
+                adminJwt(),
+                id,
+                """{"version":$version,"baseConfiguration":{"jira":{"projectKey":"${uniqueProjectKey()}"}}}""",
+            ).andExpect(status().isUnprocessableEntity)
+            assertEquals(pk, getComponent(id).baseJira("projectKey"))
+
+            // Echo of the unchanged value is tolerated.
+            patchRaw(
+                adminJwt(),
+                id,
+                """{"version":$version,"baseConfiguration":{"jira":{"projectKey":"$pk"}}}""",
+            ).andExpect(status().is2xxSuccessful)
+        }
+    }
+
+    @Test
+    @DisplayName("hidden precedence: a hidden+adminOnly field is silently STRIPPED for a non-admin, never 403")
+    fun hiddenBeatsAdminOnly_stripNotReject() {
+        val created = createOwnedByBob(vcsExternalRegistry = "orig-registry")
+        val id = created["id"].asText()
+        val version = created["version"].asLong()
+
+        withFieldConfig(
+            mapOf("component" to mapOf("vcsExternalRegistry" to mapOf("visibility" to "hidden", "editable" to "adminOnly"))),
+        ) {
+            // Non-admin owner tries to change a hidden field: hidden wins → silent strip, 2xx.
+            patchRaw(
+                editorJwt(),
+                id,
+                """{"version":$version,"vcsExternalRegistry":"changed-registry"}""",
+            ).andExpect(status().is2xxSuccessful)
+            assertEquals(
+                "orig-registry",
+                getComponent(id)["vcsExternalRegistry"].asText(),
+                "hidden field must be stripped (unchanged), not rejected",
+            )
+        }
+    }
+
+    @Test
+    @DisplayName("CREATE: non-admin supplying an adminOnly value (jira.technical) → 403")
+    fun create_nonAdminSuppliesAdminOnly_forbidden() {
+        withFieldConfig(mapOf("jira" to mapOf("technical" to mapOf("editable" to "adminOnly")))) {
+            val body =
+                """{"name":"crsB_create_${UUID.randomUUID().toString().take(8)}","componentOwner":"bob",""" +
+                    """"group":{"groupKey":"org.example.test","isFake":false},""" +
+                    """"baseConfiguration":{"build":{"buildSystem":"MAVEN"},""" +
+                    """"jira":{"projectKey":"${uniqueProjectKey()}","technical":true}}}"""
+            mvc
+                .perform(
+                    post("/rest/api/4/components")
+                        .with(editorJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body),
+                ).andExpect(status().isForbidden)
+        }
+    }
+
+    @Test
+    @DisplayName("CREATE: non-admin OMITTING the adminOnly field → 2xx (server default applies)")
+    fun create_nonAdminOmitsAdminOnly_ok() {
+        withFieldConfig(mapOf("jira" to mapOf("technical" to mapOf("editable" to "adminOnly")))) {
+            val body =
+                """{"name":"crsB_create_${UUID.randomUUID().toString().take(8)}","componentOwner":"bob",""" +
+                    """"group":{"groupKey":"org.example.test","isFake":false},""" +
+                    """"baseConfiguration":{"build":{"buildSystem":"MAVEN"},""" +
+                    """"jira":{"projectKey":"${uniqueProjectKey()}"}}}"""
+            mvc
+                .perform(
+                    post("/rest/api/4/components")
+                        .with(editorJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body),
+                ).andExpect(status().isCreated)
+        }
+    }
+
+    @Test
+    @DisplayName("OVERRIDE: non-admin creating a jira.technical override → 403; admin → 201")
+    fun override_adminOnlyField_gated() {
+        val created = createOwnedByBob(technical = false)
+        val id = created["id"].asText()
+
+        withFieldConfig(mapOf("jira" to mapOf("technical" to mapOf("editable" to "adminOnly")))) {
+            val overrideBody = """{"overriddenAttribute":"jira.technical","versionRange":"[1.0,2.0)","value":true}"""
+
+            mvc
+                .perform(
+                    post("/rest/api/4/components/$id/field-overrides")
+                        .with(editorJwt()) // bob = owner, no EDIT_ANY_COMPONENT
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(overrideBody),
+                ).andExpect(status().isForbidden)
+
+            mvc
+                .perform(
+                    post("/rest/api/4/components/$id/field-overrides")
+                        .with(adminJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(overrideBody),
+                ).andExpect(status().isCreated)
+        }
+    }
+
+    @Test
+    @DisplayName("OVERRIDE UPDATE: non-admin CHANGING a jira.technical override value → 403; ECHOING it → 2xx")
+    fun override_update_valueChange_gated() {
+        val created = createOwnedByBob(technical = false)
+        val id = created["id"].asText()
+
+        // Create the override as admin while the field is still editable (unseeded).
+        val overrideResponse =
+            mvc
+                .perform(
+                    post("/rest/api/4/components/$id/field-overrides")
+                        .with(adminJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""{"overriddenAttribute":"jira.technical","versionRange":"[1.0,2.0)","value":true}"""),
+                ).andExpect(status().isCreated)
+                .andReturn().response.contentAsString
+        val overrideId = objectMapper.readTree(overrideResponse)["id"].asText()
+
+        withFieldConfig(mapOf("jira" to mapOf("technical" to mapOf("editable" to "adminOnly")))) {
+            // Non-admin owner flips the override value → change → 403.
+            mvc
+                .perform(
+                    patch("/rest/api/4/components/$id/field-overrides/$overrideId")
+                        .with(editorJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""{"value":false}"""),
+                ).andExpect(status().isForbidden)
+
+            // Non-admin owner echoes the unchanged value → snapshot-equal → 2xx.
+            mvc
+                .perform(
+                    patch("/rest/api/4/components/$id/field-overrides/$overrideId")
+                        .with(editorJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""{"value":true}"""),
+                ).andExpect(status().is2xxSuccessful)
+        }
+    }
+
+    @Test
+    @DisplayName("OVERRIDE DELETE: non-admin deleting a jira.technical override → 403; admin → 204")
+    fun override_delete_gated() {
+        val created = createOwnedByBob(technical = false)
+        val id = created["id"].asText()
+
+        val overrideResponse =
+            mvc
+                .perform(
+                    post("/rest/api/4/components/$id/field-overrides")
+                        .with(adminJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""{"overriddenAttribute":"jira.technical","versionRange":"[1.0,2.0)","value":true}"""),
+                ).andExpect(status().isCreated)
+                .andReturn().response.contentAsString
+        val overrideId = objectMapper.readTree(overrideResponse)["id"].asText()
+
+        withFieldConfig(mapOf("jira" to mapOf("technical" to mapOf("editable" to "adminOnly")))) {
+            // Direct DELETE by a non-admin must be gated the same as the combined-save path.
+            mvc
+                .perform(delete("/rest/api/4/components/$id/field-overrides/$overrideId").with(editorJwt()))
+                .andExpect(status().isForbidden)
+            // Admin can delete it.
+            mvc
+                .perform(delete("/rest/api/4/components/$id/field-overrides/$overrideId").with(adminJwt()))
+                .andExpect(status().isNoContent)
+        }
     }
 }

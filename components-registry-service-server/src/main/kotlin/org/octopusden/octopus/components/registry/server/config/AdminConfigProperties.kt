@@ -38,6 +38,23 @@ class AdminConfigProperties {
         /** `editable` | `readonly` | `hidden`. */
         var visibility: String? = null
 
+        /**
+         * Editability axis (CRS-B), orthogonal to [visibility]: `all` | `adminOnly` | `none`.
+         * Absent = `all`. `adminOnly` requires the writer to hold `EDIT_ANY_COMPONENT`;
+         * `none` is non-editable for everyone. `visibility: readonly` is unified with
+         * `none` in `FieldConfigService.editabilityFor`. Enforced change-based on write
+         * (echoing the unchanged value is always allowed) by `ComponentManagementServiceImpl`.
+         */
+        var editable: String? = null
+
+        /**
+         * Enumerated allowed values surfaced to the Portal as a dropdown (e.g. the
+         * configured External Registry names). Serialized into the read-side blob; the
+         * Portal's `useFieldOptions` already consumes `options` with priority over the
+         * meta endpoints. Server does NOT value-validate writes against this list.
+         */
+        var options: MutableList<String>? = null
+
         /** `Main` | `Extended` | `None`. */
         var searchable: String? = null
         var required: Boolean? = null
