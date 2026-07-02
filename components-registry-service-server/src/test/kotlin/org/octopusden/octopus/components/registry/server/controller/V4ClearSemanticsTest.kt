@@ -195,18 +195,24 @@ class V4ClearSemanticsTest {
         val created =
             create(
                 unique("clear_build"),
-                """{"build":{"buildSystem":"MAVEN","javaVersion":"17","mavenVersion":"3.9","buildFilePath":"pom.xml"}}""",
+                """{"build":{"buildSystem":"MAVEN","javaVersion":"17","mavenVersion":"3.9","buildFilePath":"pom.xml",""" +
+                    """"gradleVersion":"8.6","projectVersion":"1.0","systemProperties":"-Dfoo=bar","buildTasks":"clean build"}}""",
             )
         val id = created["id"].asText()
         val patched =
             patch(
                 id, version(created),
-                """"baseConfiguration":{"build":{"buildSystem":"MAVEN","javaVersion":"","mavenVersion":"","buildFilePath":""}}""",
+                """"baseConfiguration":{"build":{"buildSystem":"MAVEN","javaVersion":"","mavenVersion":"","buildFilePath":"",""" +
+                    """"gradleVersion":"","projectVersion":"","systemProperties":"","buildTasks":""}}""",
             )
         assertEquals("MAVEN", patched.baseScalar("build", "buildSystem"), "non-blank value stays set")
         assertNull(patched.baseScalar("build", "javaVersion"))
         assertNull(patched.baseScalar("build", "mavenVersion"))
         assertNull(patched.baseScalar("build", "buildFilePath"))
+        assertNull(patched.baseScalar("build", "gradleVersion"))
+        assertNull(patched.baseScalar("build", "projectVersion"))
+        assertNull(patched.baseScalar("build", "systemProperties"))
+        assertNull(patched.baseScalar("build", "buildTasks"))
     }
 
     // ------------------------------------------------------------------
@@ -220,7 +226,8 @@ class V4ClearSemanticsTest {
             create(
                 unique("clear_escrow"),
                 """{"build":{"buildSystem":"MAVEN"},"escrow":{"generation":"AUTO","diskSpace":"500M",""" +
-                    """"buildTask":"clean build","providedDependencies":"org.foo:bar"}}""",
+                    """"buildTask":"clean build","providedDependencies":"org.foo:bar","additionalSources":"src/extra",""" +
+                    """"gradleIncludeConfigurations":"runtimeClasspath","gradleExcludeConfigurations":"testRuntime"}}""",
             )
         val id = created["id"].asText()
         // generation is a validated enum (not free-text) — echo it unchanged; the
@@ -228,12 +235,16 @@ class V4ClearSemanticsTest {
         val patched =
             patch(
                 id, version(created),
-                """"baseConfiguration":{"escrow":{"generation":"AUTO","diskSpace":"","buildTask":"","providedDependencies":""}}""",
+                """"baseConfiguration":{"escrow":{"generation":"AUTO","diskSpace":"","buildTask":"","providedDependencies":"",""" +
+                    """"additionalSources":"","gradleIncludeConfigurations":"","gradleExcludeConfigurations":""}}""",
             )
         assertEquals("AUTO", patched.baseScalar("escrow", "generation"), "the validated generation enum stays set")
         assertNull(patched.baseScalar("escrow", "diskSpace"))
         assertNull(patched.baseScalar("escrow", "buildTask"))
         assertNull(patched.baseScalar("escrow", "providedDependencies"))
+        assertNull(patched.baseScalar("escrow", "additionalSources"))
+        assertNull(patched.baseScalar("escrow", "gradleIncludeConfigurations"))
+        assertNull(patched.baseScalar("escrow", "gradleExcludeConfigurations"))
     }
 
     // ------------------------------------------------------------------
@@ -279,6 +290,33 @@ class V4ClearSemanticsTest {
             "\$major.\$minor.\$service",
             patched.baseScalar("jira", "releaseVersionFormat"),
             "an absent scalar must be left unchanged (null = don't touch)",
+        )
+    }
+
+    @Test
+    @DisplayName("PATCH with an EXPLICIT JSON null scalar is likewise a no-op (distinct from \"\")")
+    fun `explicit json null scalar is a no-op`() {
+        val pk = uniqueProjectKey()
+        val created =
+            create(
+                unique("noop_explicit_null"),
+                """{"build":{"buildSystem":"MAVEN","javaVersion":"17"},""" +
+                    """"jira":{"projectKey":"$pk","releaseVersionFormat":"${'$'}major.${'$'}minor.${'$'}service"}}""",
+            )
+        val id = created["id"].asText()
+        // Explicit JSON nulls (NOT absent fields) — the tri-state's null branch must
+        // leave both values untouched, in contrast to "" which would clear them.
+        val patched =
+            patch(
+                id, version(created),
+                """"baseConfiguration":{"build":{"buildSystem":"MAVEN","javaVersion":null},""" +
+                    """"jira":{"projectKey":"$pk","releaseVersionFormat":null}}""",
+            )
+        assertEquals("17", patched.baseScalar("build", "javaVersion"), "explicit null must not clear")
+        assertEquals(
+            "\$major.\$minor.\$service",
+            patched.baseScalar("jira", "releaseVersionFormat"),
+            "explicit null must not clear",
         )
     }
 
@@ -373,6 +411,64 @@ class V4ClearSemanticsTest {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"overriddenAttribute":"build.buildFilePath","versionRange":"[1.0,2.0)","value":"pom.xml"}"""),
             ).andExpect(status().is2xxSuccessful)
+    }
+
+    @Test
+    @DisplayName("blank override value is rejected on standalone PATCH and on the component-PATCH desired-set too")
+    fun `blank override value is rejected on update paths`() {
+        val created = create(unique("override_blank_upd"), """{"build":{"buildSystem":"MAVEN"}}""")
+        val id = created["id"].asText()
+
+        // Seed a valid override, keep its id for the standalone PATCH path.
+        val overrideId =
+            objectMapper
+                .readTree(
+                    mvc
+                        .perform(
+                            post("/rest/api/4/components/$id/field-overrides")
+                                .with(adminJwt())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                    """{"overriddenAttribute":"jira.buildVersionFormat",""" +
+                                        """"versionRange":"[1.0,2.0)","value":"${'$'}major.${'$'}minor"}""",
+                                ),
+                        ).andExpect(status().is2xxSuccessful)
+                        .andReturn().response.contentAsString,
+                )["id"].asText()
+
+        // Standalone PATCH of the override with a blank value → 400 (same guard as POST).
+        mvc
+            .perform(
+                patch("/rest/api/4/components/$id/field-overrides/$overrideId")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"value":"   "}"""),
+            ).andExpect(status().isBadRequest)
+
+        // Component-PATCH desired-set branch: a blank value inside fieldOverrides → 400,
+        // and the PATCH must not partially apply.
+        val versionNow = version(getComponent(id))
+        mvc
+            .perform(
+                patch("/rest/api/4/components/$id")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """{"version":$versionNow,"fieldOverrides":[{"overriddenAttribute":"jira.buildVersionFormat",""" +
+                            """"versionRange":"[1.0,2.0)","value":""}]}""",
+                    ),
+            ).andExpect(status().isBadRequest)
+
+        // The seeded override survives both rejected writes unchanged.
+        val overrides =
+            objectMapper.readTree(
+                mvc
+                    .perform(get("/rest/api/4/components/$id/field-overrides").with(adminJwt()))
+                    .andExpect(status().isOk)
+                    .andReturn().response.contentAsString,
+            )
+        val row = overrides.first { it["id"].asText() == overrideId }
+        assertEquals("\$major.\$minor", row["value"].asText(), "rejected blank writes must not alter the override")
     }
 
     // ------------------------------------------------------------------
