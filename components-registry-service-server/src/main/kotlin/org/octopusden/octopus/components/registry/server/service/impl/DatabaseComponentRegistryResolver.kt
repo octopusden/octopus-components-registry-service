@@ -547,14 +547,12 @@ class DatabaseComponentRegistryResolver(
             }.toMap()
 
     override fun findComponentsByDockerImages(images: Set<Image>): Set<ComponentImage> {
-        val imageNames = images.map { it.name }.toSet()
-        return buildImageToComponentMap()
-            .filterKeys(imageNames::contains)
-            .mapNotNull { (imgName, component) ->
-                images.find { it.name == imgName }?.let { requiredImage ->
-                    findConfigurationByDockerImage(imgName, requiredImage.tag, component)
-                }
-            }.toSet()
+        val imageToComponentMap = buildImageToComponentMap()
+        return images.mapNotNull { image ->
+            imageToComponentMap[image.name]?.let { component ->
+                findConfigurationByDockerImage(image.name, image.tag, component)
+            }
+        }.toSet()
     }
 
     // ============================================================

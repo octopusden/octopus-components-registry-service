@@ -18,6 +18,7 @@ import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.core.dto.BuildParametersDTO
 import org.octopusden.octopus.components.registry.core.dto.BuildSystem
 import org.octopusden.octopus.components.registry.core.dto.ComponentArtifactConfigurationDTO
+import org.octopusden.octopus.components.registry.core.dto.ComponentImage
 import org.octopusden.octopus.components.registry.core.dto.ComponentInfoDTO
 import org.octopusden.octopus.components.registry.core.dto.ComponentRegistryVersion
 import org.octopusden.octopus.components.registry.core.dto.ComponentV1
@@ -29,6 +30,7 @@ import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVers
 import org.octopusden.octopus.components.registry.core.dto.DistributionDTO
 import org.octopusden.octopus.components.registry.core.dto.EscrowDTO
 import org.octopusden.octopus.components.registry.core.dto.EscrowGenerationMode
+import org.octopusden.octopus.components.registry.core.dto.Image
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentDTO
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionDTO
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionRangeDTO
@@ -193,6 +195,8 @@ abstract class BaseComponentsRegistryServiceTest {
     protected abstract fun findByArtifactsV3(artifacts: Set<ArtifactDependency>): ArtifactComponentsDTO
 
     protected abstract fun getComponentArtifactsParameters(component: String): Map<String, ComponentArtifactConfigurationDTO>
+
+    protected abstract fun findComponentsByDockerImages(images: Set<Image>): Set<ComponentImage>
 
     /**
      * Expected Jira-version-range fixture. The DSL-loader implementation enumerates one range per
@@ -650,6 +654,35 @@ abstract class BaseComponentsRegistryServiceTest {
                 .resolve(path)
                 .toObject(object : TypeReference<Map<String, ComponentArtifactConfigurationDTO>>() {})
         Assertions.assertEquals(expectedArtifact, actualArtifacts)
+    }
+
+    @Test
+    @DisplayName("RES-026: Find components by docker images resolves each image independently")
+    fun testFindComponentsByDockerImagesMultipleComponents() {
+        val images = setOf(
+            Image("test/versions-api", "1.0"),
+            Image("test-docker-1", "1.0.0"),
+            Image("test-docker-1_1", "1.0.0"),
+            Image("test-docker-1_1", "1.1.0")
+        )
+        val result = findComponentsByDockerImages(images).map {
+            it.component to it.version
+        }.toSet()
+        val expected = setOf(
+            "TESTONE" to "1.0",
+            "TEST_COMPONENT_WITH_DOCKER_1" to "1.0.0",
+            "TEST_COMPONENT_WITH_DOCKER_1_1" to "1.0.0",
+            "TEST_COMPONENT_WITH_DOCKER_1_1" to "1.1.0"
+        )
+        Assertions.assertEquals(expected, result)
+    }
+
+    @Test
+    @DisplayName("RES-027: Find components by docker images returns empty when nothing matches")
+    fun testFindComponentsByDockerImagesNotFound() {
+        val images = setOf(Image("non-existent-image", "latest"))
+        val result = findComponentsByDockerImages(images)
+        Assertions.assertTrue(result.isEmpty())
     }
 
     @Test
