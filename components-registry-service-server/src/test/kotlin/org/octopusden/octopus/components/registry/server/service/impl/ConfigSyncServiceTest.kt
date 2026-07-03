@@ -228,6 +228,34 @@ class ConfigSyncServiceTest {
     }
 
     @Test
+    fun `hidden build_buildSystem aborts the sync - required enum cannot be hidden`() {
+        val props = AdminConfigProperties().apply {
+            fieldConfig = mutableMapOf(
+                "build" to mutableMapOf("buildSystem" to fieldEntry(visibility = "hidden")),
+            )
+        }
+        val ex = assertThrows(ConfigValidationException::class.java) { service(props).syncToCache() }
+        assertEquals("build.buildSystem is a required enum and cannot be hidden", ex.message)
+        verify(repo, never()).save(any())
+    }
+
+    @Test
+    fun `adminOnly build_buildSystem is allowed - only hidden is forbidden`() {
+        val props = AdminConfigProperties().apply {
+            fieldConfig = mutableMapOf(
+                "build" to mutableMapOf("buildSystem" to fieldEntry(editable = "adminOnly")),
+            )
+        }
+
+        val result = service(props).syncToCache()
+
+        assertEquals(
+            mapOf("build" to mapOf("buildSystem" to mapOf("editable" to "adminonly"))),
+            result.fieldConfig,
+        )
+    }
+
+    @Test
     fun `empty subtrees are not written - cache is preserved (no-clobber)`() {
         service(AdminConfigProperties()).syncToCache()
 
