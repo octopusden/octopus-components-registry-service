@@ -2,9 +2,7 @@
 
 Step-by-step ops playbook for bringing a **fresh production environment** onto the DB-backed v3
 service. This is the reusable, generic form of the cutover — another organization should be able to
-follow it end to end. It is the production sibling of
-[`qa-post-deploy-migration.md`](qa-post-deploy-migration.md) (what the QA `[3.1]` step automates) and
-implements the strategy in [ADR-013](../adr/013-cutover-strategy.md).
+follow it end to end. It implements the strategy in [ADR-013](../adr/013-cutover-strategy.md).
 
 > Conventions: replace every `<placeholder>` with your environment's value. Commands that mutate
 > production (deploy, `vault`/secret writes, `pg_*`) should be reviewed and run by an operator.
@@ -156,5 +154,4 @@ part of this runbook.
 - Anonymous probe: `MigrationStatusControllerV4` (`GET /rest/api/4/migration-status`).
 - Resolver source flag: `ComponentsRegistryProperties.defaultSource` (`git`|`db`).
 - Schema: `db/migration/V1__schema.sql`, `V2__add_distribution_docker_image_name_index.sql`.
-- QA automation of the same migrate call: [`qa-post-deploy-migration.md`](qa-post-deploy-migration.md).
 - Strategy & post-cutover stages: [ADR-013](../adr/013-cutover-strategy.md).
