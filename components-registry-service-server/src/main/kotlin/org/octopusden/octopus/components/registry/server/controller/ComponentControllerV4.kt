@@ -368,10 +368,24 @@ class ComponentControllerV4(
         @RequestParam(required = false) version: String?,
     ): ResponseEntity<String> {
         val rendered =
-            if (version.isNullOrBlank()) {
-                componentManagementService.renderComponentAsCode(idOrName)
-            } else {
-                componentManagementService.renderResolvedComponentAsCode(idOrName, version)
+            try {
+                if (version.isNullOrBlank()) {
+                    componentManagementService.renderComponentAsCode(idOrName)
+                } else {
+                    componentManagementService.renderResolvedComponentAsCode(idOrName, version)
+                }
+            } catch (e: NotFoundException) {
+                // This endpoint is produces=text/plain. The global @ExceptionHandler for
+                // NotFoundException returns a JSON ErrorResponse, which has no acceptable
+                // representation for a text/plain request → HttpMediaTypeNotAcceptableException
+                // → the 404 surfaces as a misleading 500. Handle it locally and return a clean
+                // text/plain 404 instead: an unknown component, or (resolved mode) a version
+                // that falls outside every configured range. The Portal's resolved view treats
+                // this 404 as "no configuration resolves for this version" and shows a hint.
+                return ResponseEntity
+                    .status(HttpStatus.NOT_FOUND)
+                    .contentType(MediaType.parseMediaType(TEXT_PLAIN_UTF8))
+                    .body(e.message ?: "No configuration resolves for the requested version.")
             }
         val disposition =
             ContentDisposition
