@@ -5,6 +5,7 @@
 tmp/
 out/
 *.retry
+build/
 */build/**
 !*/src/**
 **/bin/**
@@ -13,6 +14,7 @@ out/
 **/application-local.yml
 
 # Test/debug files
+.teamcity/target/
 BOOT-INF/
 *.class
 *.sh
