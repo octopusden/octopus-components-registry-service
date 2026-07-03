@@ -115,6 +115,14 @@ class ConfigSyncService(
                 require(v in VISIBILITIES) {
                     invalid("$section.$field.visibility", it, VISIBILITIES)
                 }
+                // build.buildSystem is a required enum on every BASE configuration row — it can
+                // never be stripped or absent, so the CREATE/PATCH writers deliberately EXEMPT it
+                // from the hidden-strip (see ComponentManagementServiceImpl.applyBaseConfiguration*).
+                // Hiding it would therefore silently do nothing; reject it structurally here so the
+                // misconfiguration is surfaced loudly. Narrowing to adminOnly/none is still allowed.
+                if (v == "hidden" && "$section.$field" == BUILD_SYSTEM_PATH) {
+                    throw ConfigValidationException("build.buildSystem is a required enum and cannot be hidden")
+                }
                 put("visibility", v)
             }
             entry.editable?.let {
@@ -249,6 +257,8 @@ class ConfigSyncService(
     companion object {
         const val FIELD_CONFIG_KEY = "field-config"
         const val COMPONENT_DEFAULTS_KEY = "component-defaults"
+        /** Required enum on the BASE row — cannot be hidden (see [serializeFieldEntry]). */
+        private const val BUILD_SYSTEM_PATH = "build.buildSystem"
         private val VISIBILITIES = setOf("editable", "readonly", "hidden")
         private val EDITABILITIES = setOf("all", "adminonly", "none")
         private val SEARCHABLES = setOf("Main", "Extended", "None")
