@@ -54,10 +54,24 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "WebFetch(domain:github.com)"
     ],
+    "deny": [
+      "Read(./**/BOOT-INF/**)",
+      "Read(./**/.gradle/**)",
+      "Read(./**/.kotlin/**)",
+      "Read(./**/.idea/**)",
+      "Read(./**/.idea-copy/**)",
+      "Read(./**/.teamcity/target/**)"
+    ],
     "defaultMode": "dontAsk",
     "additionalDirectories": [
       "/Users/pgorbachev/projects/octopus",
       "/tmp"
     ]
-  }
+  },
+  "claudeMdExcludes": [
+    "**/octopus-components-registry-service-wt/**",
+    "**/octopus-components-management-portal-wt/**",
+    "**/*-wrapper-archive-*/**",
+    "**/*.backup.git/**"
+  ]
 }
