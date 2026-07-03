@@ -237,14 +237,12 @@ class ComponentRegistryResolverImpl(
     override fun getComponentProductMapping(): Map<String, ProductTypes> = buildToolsResolver.componentProductMapping
 
     override fun findComponentsByDockerImages(images: Set<Image>): Set<ComponentImage> {
-        val imageNames = images.map { it.name }.toSet()
-        return buildImageToComponentMap()
-            .filterKeys(imageNames::contains)
-            .mapNotNull { (imgName, component) ->
-                images.find { it.name == imgName }?.let { requiredImage ->
-                    findConfigurationByImage(imgName, requiredImage.tag, component)
-                }
-            }.toSet()
+        val imageToComponentMap = buildImageToComponentMap()
+        return images.mapNotNull { image ->
+            imageToComponentMap[image.name]?.let { component ->
+                findConfigurationByImage(image.name, image.tag, component)
+            }
+        }.toSet()
     }
 
     private fun findConfigurationByImage(
