@@ -79,9 +79,11 @@ Required environment/secrets (the pod fails to start without the mandatory ones)
   *baseline* it and skip `V1`, leaving an invalid schema that `validate` may not catch. The production
   database must be empty at first deploy. If Flyway finds an unexpectedly non-empty schema, **stop and
   investigate** rather than baseline.
-- Pre-flight (CI): the `:components-registry-service-server:integrationTest` task includes
-  `FlywayValidatePostgresStartupTest`, which proves Flyway + `validate` boot cleanly against a fresh
-  Postgres. Confirm it is green before deploying.
+- Pre-flight (CI): the `:components-registry-service-server:dbTest` task runs
+  `FlywayValidatePostgresStartupTest` (`@Tag("integration")`, in `src/test`), which proves Flyway +
+  `validate` boot cleanly against a fresh Postgres. Confirm it is green — the TeamCity
+  `[1.2] Integration & DB Tests` gate — before deploying. (`:integrationTest` is a separate fat-jar
+  source set and does NOT contain this test.)
 
 ## Procedure
 
@@ -139,8 +141,11 @@ If the migrate job ends with `failed > 0`, or the pod crashed mid-migration:
 
 - **While still in git-mode:** redeploy the prior image / keep `default-source: git` — the Git
   resolver is byte-identical and the database is untouched.
-- **After the db flip:** revert `default-source: git` and restart (the database is retained), or
-  redeploy the previous released image. The previous immutable image/tag is the runtime fallback.
+- **After the db flip:** redeploy the previous released image (its immutable image/tag is the runtime
+  fallback), or restore the pre-migration dump. Reverting `default-source: git` alone does **not** roll
+  serving back — routing is per-component via persisted `source='db'` rows
+  (`ComponentRoutingResolver.resolverFor`), so migrated components keep resolving from the database
+  regardless of the global default.
 - Database backups (including the pre-migration dump) are the data floor.
 
 ## After cutover
