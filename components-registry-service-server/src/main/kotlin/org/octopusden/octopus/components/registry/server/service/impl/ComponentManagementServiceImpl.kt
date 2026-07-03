@@ -2202,6 +2202,9 @@ class ComponentManagementServiceImpl(
         // hiding it is unsupported. Editability (adminOnly/none) is enforced separately.
         request.build?.let { b ->
             // buildSystem is a required enum (validated) — not clearable, not hidden-stripped.
+            // This hidden-strip exemption is enforced structurally at config-sync time:
+            // ConfigSyncService.serializeFieldEntry rejects `build.buildSystem: {visibility: hidden}`
+            // (ConfigValidationException), so a hidden buildSystem can never reach this writer.
             config.buildSystem = b.buildSystem
             if (!fieldConfigService.isHidden("build.javaVersion")) config.javaVersion = b.javaVersion?.let(::clearBlankScalar)
             if (!fieldConfigService.isHidden("build.mavenVersion")) config.mavenVersion = b.mavenVersion?.let(::clearBlankScalar)
@@ -2286,6 +2289,9 @@ class ComponentManagementServiceImpl(
         // so an absent field stays a no-op and only a PRESENT value on a visible field is written.
         patch.versionRange?.let { config.versionRange = it }
         patch.build?.let { b ->
+            // buildSystem exemption (required enum) is enforced structurally at config-sync time —
+            // ConfigSyncService.serializeFieldEntry rejects `build.buildSystem: {visibility: hidden}`,
+            // so no hidden-strip guard is needed (or wanted) on this writer.
             b.buildSystem?.let { config.buildSystem = it }
             b.javaVersion?.let { if (!fieldConfigService.isHidden("build.javaVersion")) config.javaVersion = clearBlankScalar(it) }
             b.mavenVersion?.let { if (!fieldConfigService.isHidden("build.mavenVersion")) config.mavenVersion = clearBlankScalar(it) }
