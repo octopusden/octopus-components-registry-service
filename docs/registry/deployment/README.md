@@ -8,8 +8,6 @@ This directory collects the deployment-related inputs and working documents for 
 - `keycloak-setup.md` — operator-facing setup steps for Keycloak realm-roles
   required by CRS authorization (manual Admin-Console actions not covered by
   source patches)
-- `qa-post-deploy-migration.md` — what the `[3.1] Migrate components on QA DEV
-  [AUTO]` TC build does, when it skips, and what TC parameters it expects
 - `migration-runbook.md` — production migration ops playbook: git-mode-first →
   Flyway/validate → `POST /admin/migrate` → verify → flip `default-source` to `db`,
   with the partial-failure recovery and rollback paths (the reusable, generic
