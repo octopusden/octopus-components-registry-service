@@ -15,6 +15,7 @@ import com.fasterxml.jackson.annotation.JsonProperty
  * `DATA_INTEGRITY` — clients must tolerate unknown values.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
+@JsonInclude(JsonInclude.Include.NON_NULL)
 data class ErrorResponse @JsonCreator constructor(
         @JsonProperty("errorMessage") val errorMessage: String,
         // NON_NULL is wire-compat-bearing: the [1.7]/[1.8] compat oracles byte-diff
