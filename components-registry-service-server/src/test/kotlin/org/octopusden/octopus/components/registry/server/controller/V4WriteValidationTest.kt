@@ -142,6 +142,66 @@ class V4WriteValidationTest {
         postCreate(body).andExpect(status().isBadRequest)
     }
 
+    // ── distribution.mavenArtifacts coordinate validation (TD-011 / #349) ──
+    // Symmetric with the import fail-loud guard: a Maven coordinate must carry
+    // BOTH a groupPattern and an artifactPattern. A blank field is the v4
+    // structured equivalent of the import's "< 2 colon-segments" drop, and was
+    // previously accepted verbatim (201) — a silent-broken-data trap.
+
+    @Test
+    @DisplayName("CREATE rejects distribution.mavenArtifacts[].groupPattern blank")
+    fun create_rejects_blankMavenGroupPattern() {
+        val body =
+            """
+            {
+              "name": "validation-test-comp-mvn-blankgroup",
+              "componentOwner": "owner1",
+              "group": {"groupKey": "org.example.test", "isFake": false},
+              "baseConfiguration": {
+                "build": {"buildSystem": "MAVEN"},
+                "mavenArtifacts": [ {"groupPattern": "", "artifactPattern": "alpha"} ]
+              }
+            }
+            """.trimIndent()
+        postCreate(body).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    @DisplayName("CREATE rejects distribution.mavenArtifacts[].artifactPattern blank (groupId-only coordinate)")
+    fun create_rejects_blankMavenArtifactPattern() {
+        val body =
+            """
+            {
+              "name": "validation-test-comp-mvn-blankart",
+              "componentOwner": "owner1",
+              "group": {"groupKey": "org.example.test", "isFake": false},
+              "baseConfiguration": {
+                "build": {"buildSystem": "MAVEN"},
+                "mavenArtifacts": [ {"groupPattern": "org.example", "artifactPattern": ""} ]
+              }
+            }
+            """.trimIndent()
+        postCreate(body).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    @DisplayName("CREATE accepts a well-formed distribution.mavenArtifacts coordinate")
+    fun create_accepts_validMavenCoordinate() {
+        val body =
+            """
+            {
+              "name": "validation-test-comp-mvn-ok",
+              "componentOwner": "owner1",
+              "group": {"groupKey": "org.example.test", "isFake": false},
+              "baseConfiguration": {
+                "build": {"buildSystem": "MAVEN"},
+                "mavenArtifacts": [ {"groupPattern": "org.example", "artifactPattern": "alpha", "extension": "jar"} ]
+              }
+            }
+            """.trimIndent()
+        postCreate(body).andExpect(status().isCreated)
+    }
+
     @Test
     @DisplayName("POST /field-overrides rejects scalar build.buildSystem with unknown enum value")
     fun fieldOverride_rejects_unknownBuildSystemScalar() {
