@@ -310,7 +310,9 @@ class ComponentCodeRenderer(
         // when set (cb.str omits a null), so the as-code view faithfully round-trips the source.
         cb.str("displayName", component.displayName)
         cb.str("componentOwner", component.componentOwner)
-        cb.str("system", component.systemCode)
+        // The DSL `system` field is a CSV string that may name several systems;
+        // join all memberships back into that shape (null when none → omitted).
+        cb.str("system", component.systemJunctions.joinToString(",") { it.systemCode }.ifEmpty { null })
         cb.str("productType", component.productType)
         cb.str("clientCode", component.clientCode)
         cb.bool("solution", component.solution)

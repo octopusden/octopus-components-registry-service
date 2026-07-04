@@ -139,6 +139,9 @@ class EscrowModuleConfig {
     }
 
     Set<String> getSystemSet() {
+        // A component may belong to several systems (CSV). Membership is
+        // order-agnostic (consumers use `contains(...)`); git-vs-DB parity is
+        // set-equality, so no ordering guarantee is imposed here.
         Set<String> systemSet = new HashSet<>()
         if (system != null) {
             for(String s : system.split(SPLIT_PATTERN)) {

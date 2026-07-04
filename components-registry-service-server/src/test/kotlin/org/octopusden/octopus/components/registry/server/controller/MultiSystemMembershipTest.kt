@@ -134,6 +134,36 @@ class MultiSystemMembershipTest {
     }
 
     @Test
+    @DisplayName("a component matching a multi-value filter on several of its systems is returned once (distinct JOIN)")
+    fun `multi-system component is not duplicated by a multi-value filter`() {
+        val first = uniqueSysCode("ALFA")
+        val second = uniqueSysCode("BETA")
+        val dual = uniqueName("dual_distinct")
+        createComponentWithSystems(dual, listOf(first, second))
+
+        // Filter by BOTH of its systems. The junction JOIN emits one row per
+        // matching membership, so without `distinct(true)` this component would
+        // appear twice. Read the raw content LIST (not a Set) so a duplicate is
+        // actually observable — a Set would silently hide the regression.
+        val body =
+            mvc
+                .perform(
+                    get("/rest/api/4/components")
+                        .with(viewerJwt())
+                        .param("system", "$first,$second")
+                        .param("size", "200"),
+                ).andExpect(status().isOk)
+                .andReturn().response.contentAsString
+        val names = objectMapper.readTree(body)["content"].map { it["name"].asText() }
+        assertEquals(1, names.count { it == dual }, "dual-system component must appear exactly once: $body")
+        assertEquals(
+            names.size,
+            names.toSet().size,
+            "no component may appear more than once in a filtered page (distinct JOIN): $names",
+        )
+    }
+
+    @Test
     @DisplayName("detail + summary echo the full multi-system set")
     fun `detail and summary return all systems`() {
         val first = uniqueSysCode("ALFA")

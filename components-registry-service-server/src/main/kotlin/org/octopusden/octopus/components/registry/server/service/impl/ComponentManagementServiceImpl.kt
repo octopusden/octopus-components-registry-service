@@ -40,6 +40,7 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentBuildTo
 import org.octopusden.octopus.components.registry.server.entity.ComponentReleaseManagerEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentRequiredToolEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentSecurityChampionEntity
+import org.octopusden.octopus.components.registry.server.entity.ComponentSystemEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentTeamcityProjectEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionDockerImageEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionFileUrlArtifactEntity
@@ -75,6 +76,7 @@ import org.octopusden.octopus.components.registry.server.repository.ComponentCon
 import org.octopusden.octopus.components.registry.server.repository.ComponentLabelRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRequiredToolRepository
+import org.octopusden.octopus.components.registry.server.repository.ComponentSystemRepository
 import org.octopusden.octopus.components.registry.server.repository.DistributionDockerImageRepository
 import org.octopusden.octopus.components.registry.server.repository.DistributionMavenArtifactRepository
 import org.octopusden.octopus.components.registry.server.repository.LabelRepository
@@ -124,6 +126,7 @@ class ComponentManagementServiceImpl(
     private val componentRepository: ComponentRepository,
     private val configurationRepository: ComponentConfigurationRepository,
     private val componentLabelRepository: ComponentLabelRepository,
+    private val componentSystemRepository: ComponentSystemRepository,
     private val componentRequiredToolRepository: ComponentRequiredToolRepository,
     private val componentBuildToolBeanRepository: ComponentBuildToolBeanRepository,
     private val mavenArtifactRepository: DistributionMavenArtifactRepository,
@@ -236,26 +239,19 @@ class ComponentManagementServiceImpl(
         // contain "A " entries that the storage layer would otherwise
         // reject on read-side filtering.
         val canonicalizedLabels = canonicalizeLabels(request.labels)
-        // Single-value system: trim, validate against the env-config
-        // allowlist (no fuzzy / prefix match — `system_code` is a flat
-        // enum-like identifier). Blank-after-trim normalises to null so
-        // a caller that posts `system: "  "` ends up with system_code =
-        // NULL rather than an unselectable whitespace value. The
-        // validator returns the CANONICAL form (config's casing for
-        // config-allowed codes; master-table-verbatim for import-seeded
-        // codes), so a caller posting `Classic` lands `CLASSIC` on the
-        // entity — prevents a duplicate `systems("Classic")` row beside
-        // the canonical `systems("CLASSIC")`. The master `systems` row
-        // is auto-created by `ensureSystemExists` post-validation so
-        // the FK from `components.system_code → systems(code)` is
-        // always satisfied on first write of a newly-introduced (but
-        // config-allowed) code.
-        val canonicalSystem = request.system
-            ?.takeUnless { fieldConfigService.isHidden("component.system") }
-            ?.trim()?.takeIf { it.isNotEmpty() }?.let {
-                val canon = validateAndCanonicalizeSystemCode(it)
-                ensureSystemExists(canon)
-                canon
+        // Multi-value system: trim, drop blanks, validate + canonicalize each
+        // code (dedup on the canonical form), or strip entirely when the field
+        // is field-config-hidden (CRS-B: hidden fields are silently stripped on
+        // create). Each code is validated against the env-config allowlist (or
+        // the master `systems` dictionary) and returned in its canonical casing
+        // so a caller posting `Classic` lands `CLASSIC` — preventing a duplicate
+        // `systems("Classic")` row beside `systems("CLASSIC")`. The junction
+        // rows are written by `syncSystems` after the parent flush.
+        val canonicalizedSystems =
+            if (fieldConfigService.isHidden("component.system")) {
+                emptySet()
+            } else {
+                canonicalizeSystems(request.systems)
             }
 
         // CRS-B: hidden component-level fields are silently STRIPPED on create (symmetric with
@@ -312,7 +308,6 @@ class ComponentManagementServiceImpl(
                 skipCommitCheck = if (fieldConfigService.isHidden("component.skipCommitCheck")) false else request.skipCommitCheck,
                 distributionExplicit = stripIfHidden("component.distributionExplicit", request.distributionExplicit),
                 distributionExternal = stripIfHidden("component.distributionExternal", request.distributionExternal),
-                systemCode = canonicalSystem,
             )
 
         // Per-component child collections (cascade = ALL on these — flushed with the parent)
@@ -368,17 +363,15 @@ class ComponentManagementServiceImpl(
 
         // M:N junctions (no cascade — see ComponentEntity kdoc convention) must be
         // persisted via their own repositories AFTER the parent has an assigned id.
-        // `system` is now a scalar FK on `components` (collapsed from the
-        // former `component_systems` M:N), so its persistence happens
-        // implicitly via `componentRepository.save(entity)` above — no
-        // post-save sync needed.
         syncLabels(saved.id!!, canonicalizedLabels)
+        syncSystems(saved.id!!, canonicalizedSystems)
         val baseRequiredTools = baseConfigRequest.requiredTools
         if (baseRequiredTools != null) syncRequiredTools(baseConfig.id!!, baseRequiredTools)
 
         // Refresh in-memory junction collections so the response DTO reflects the
         // synced DB state — repo-direct writes bypass the entity's collections.
         refreshComponentLabelsInMemory(saved, canonicalizedLabels)
+        refreshComponentSystemsInMemory(saved, canonicalizedSystems)
         if (baseRequiredTools != null) refreshConfigRequiredToolsInMemory(baseConfig, baseRequiredTools)
 
         // Mark this component as DB-sourced so the v1–v3 routing path lands on
@@ -392,6 +385,7 @@ class ComponentManagementServiceImpl(
                 scalarAuditMap(
                     saved,
                     overrideLabels = canonicalizedLabels,
+                    overrideSystems = canonicalizedSystems,
                 ) + sectionAuditMap(saved),
             jiraTaskKey = request.jiraTaskKey,
             changeComment = request.changeComment,
@@ -521,35 +515,25 @@ class ComponentManagementServiceImpl(
         // "don't touch" — the canonical form is computed only when the
         // patch carries a labels payload.
         val canonicalizedLabels = request.labels?.let { canonicalizeLabels(it) }
-        // PATCH semantic for the single-value `system` field: null = don't
-        // touch. A non-null incoming value is trimmed (blank-after-trim
-        // would normalise to null, but we treat that as a no-op here too —
-        // an explicit clear requires a future `clearSystem` flag). The
-        // config-driven validator runs only when the trimmed value is a
-        // real code AND returns the canonical form (config's casing, not
-        // the caller's input) — so a PATCH posting `system: "Classic"`
-        // lands the canonical `"CLASSIC"` on the entity rather than
-        // creating a duplicate `systems("Classic")` master row beside
-        // `systems("CLASSIC")`. `ensureSystemExists` then auto-creates
-        // the master `systems` row so the FK from `components.system_code
-        // → systems(code)` is satisfied.
-        val canonicalSystem = request.system
-            ?.takeUnless { fieldConfigService.isHidden("component.system") }
-            ?.trim()?.takeIf { it.isNotEmpty() }?.let {
-                val canon = validateAndCanonicalizeSystemCode(it)
-                ensureSystemExists(canon)
-                canon
-            }
+        // PATCH semantic for the multi-value `system` field: null = don't touch;
+        // a non-null set (including the empty set) REPLACES the whole membership
+        // (empty clears all systems — mirrors the labels PATCH semantic). Each
+        // code is trimmed, blank-dropped, validated + canonicalized (config's
+        // casing, not the caller's input) so a PATCH posting `Classic` lands the
+        // canonical `CLASSIC` rather than creating a duplicate `systems("Classic")`
+        // master row. Field-config-hidden strips the write (silent no-op).
+        val canonicalizedSystems =
+            request.systems
+                ?.takeUnless { fieldConfigService.isHidden("component.system") }
+                ?.let { canonicalizeSystems(it) }
 
-        // Capture the pre-update label set so the post-sync audit `newValue`
-        // (which is computed after `syncLabels` has bypassed the entity's
-        // in-memory junction collections) can compose the effective new set
-        // as `request.labels ?: original`. `systemCode` does NOT need a
-        // captured original — it's a scalar column on the entity, the
-        // post-write read in `scalarAuditMap` reflects the actual persisted
-        // value including the FC-hidden no-op case.
+        // Capture the pre-update label / system membership so the post-sync audit
+        // `newValue` (computed after `syncLabels` / `syncSystems` have bypassed
+        // the entity's in-memory junction collections) can compose the effective
+        // new set as `request.X ?: original`.
         val originalLabels = entity.labelJunctions.map { it.labelCode }.toSet()
-        val oldValue = scalarAuditMap(entity, originalLabels) + sectionAuditMap(entity)
+        val originalSystems = entity.systemJunctions.map { it.systemCode }.toSet()
+        val oldValue = scalarAuditMap(entity, originalLabels, originalSystems) + sectionAuditMap(entity)
         // Snapshot parent + canBeParent BEFORE applying the patch — the group is
         // rederived only when one of these actually changes (a no-op update
         // preserves the existing group, incl. grandfathered parent-of-parent rows).
@@ -643,21 +627,14 @@ class ComponentManagementServiceImpl(
         request.distributionExternal?.let {
             if (!fieldConfigService.isHidden("component.distributionExternal")) entity.distributionExternal = it
         }
-        // Single-value system: PATCH writes the canonical (config-cased)
-        // value directly onto the entity's scalar column. `null` (after
-        // trim / takeIf) means "don't touch" — see notes above on the
-        // no-explicit-clear semantic. FC-gated like peer scalars so an
-        // admin can hide `component.system` via field-config and v4
-        // writes for the field become a silent no-op (consistent with
-        // displayName / componentOwner / productType etc. above).
-        canonicalSystem?.let {
-            if (!fieldConfigService.isHidden("component.system")) entity.systemCode = it
-        }
+        // Multi-value system membership is written through `syncSystems` below,
+        // after the parent flush — the @OneToMany `systemJunctions` has no
+        // cascade (same convention as labels). `canonicalizedSystems` already
+        // folded in the field-config-hidden strip (null when hidden or absent),
+        // so no extra gate here.
 
         // Junctions are synced via their repositories below — after the parent save —
-        // because @OneToMany on `labelJunctions` has no cascade. `systemCode` is
-        // a scalar column on `components` itself and gets persisted with the
-        // parent `saveAndFlush(entity)`.
+        // because @OneToMany on `labelJunctions` / `systemJunctions` has no cascade.
 
         // Parent. `parentComponentName == null` = don't touch (JSON Merge Patch);
         // `clearParent` is the explicit removal signal (remediates a grandfathered
@@ -789,9 +766,8 @@ class ComponentManagementServiceImpl(
         }
 
         // Junctions — synced via their repositories after the parent flush so the
-        // assigned ids (for newly-created rows) are visible. `systemCode` is
-        // already persisted by `saveAndFlush(entity)` above — no extra sync
-        // needed.
+        // assigned ids (for newly-created rows) are visible.
+        canonicalizedSystems?.let { syncSystems(saved.id!!, it) }
         canonicalizedLabels?.let { syncLabels(saved.id!!, it) }
         val patchedRequiredTools = request.baseConfiguration?.requiredTools
         if (baseConfigForToolsSync != null && patchedRequiredTools != null) {
@@ -801,6 +777,7 @@ class ComponentManagementServiceImpl(
         // Refresh in-memory junction collections so the response DTO reflects the
         // synced DB state — repo-direct writes bypass the entity's collections.
         canonicalizedLabels?.let { refreshComponentLabelsInMemory(saved, it) }
+        canonicalizedSystems?.let { refreshComponentSystemsInMemory(saved, it) }
         if (baseConfigForToolsSync != null && patchedRequiredTools != null) {
             refreshConfigRequiredToolsInMemory(baseConfigForToolsSync, patchedRequiredTools)
         }
@@ -850,6 +827,7 @@ class ComponentManagementServiceImpl(
                 scalarAuditMap(
                     saved,
                     overrideLabels = canonicalizedLabels ?: originalLabels,
+                    overrideSystems = canonicalizedSystems ?: originalSystems,
                 ) + sectionAuditMap(saved),
             jiraTaskKey = request.jiraTaskKey,
             changeComment = request.changeComment,
@@ -1645,6 +1623,19 @@ class ComponentManagementServiceImpl(
     }
 
     /**
+     * Trim, drop blank entries, and validate + canonicalize every remaining
+     * system code (see [validateAndCanonicalizeSystemCode]), deduplicating on
+     * the canonical form. An entirely-empty (or entirely-blank) input yields an
+     * empty set — a legitimate "no systems" assignment. A non-blank code that is
+     * neither config-allowed nor a known master code throws → 400.
+     */
+    private fun canonicalizeSystems(raw: Set<String>): Set<String> =
+        raw.map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .map { validateAndCanonicalizeSystemCode(it) }
+            .toSet()
+
+    /**
      * Replace the `component_labels` rows for [componentId] with exactly the
      * labels in [desired]. Junctions have no JPA cascade — they must be written
      * through their own repository (see `ComponentEntity` kdoc convention).
@@ -1668,6 +1659,28 @@ class ComponentManagementServiceImpl(
             ensureLabelExists(code)
             componentLabelRepository.save(
                 ComponentLabelEntity(componentId = componentId, labelCode = code),
+            )
+        }
+    }
+
+    /**
+     * Replace the `component_systems` junction rows for [componentId] with
+     * exactly [desired]. Same cascade-free convention as labels — the parent
+     * `components` row must be flushed first. Callers pass a set already run
+     * through [canonicalizeSystems] (validated + canonical casing); the
+     * per-code [ensureSystemExists] here keeps the FK to `systems(code)`
+     * satisfied for a config-allowed code introduced for the first time.
+     */
+    private fun syncSystems(
+        componentId: UUID,
+        desired: Set<String>,
+    ) {
+        val existing = componentSystemRepository.findByComponentId(componentId)
+        if (existing.isNotEmpty()) componentSystemRepository.deleteAllInBatch(existing)
+        desired.forEach { code ->
+            ensureSystemExists(code)
+            componentSystemRepository.save(
+                ComponentSystemEntity(componentId = componentId, systemCode = code),
             )
         }
     }
@@ -1709,7 +1722,7 @@ class ComponentManagementServiceImpl(
      * canonical form. A secondary path
      * also accepts any code that's already in the master `systems`
      * table — this matches the import-side seeding model in
-     * `ImportServiceImpl.seedSystems`, which auto-creates `SystemEntity`
+     * `ImportServiceImpl.upsertSystem`, which auto-creates `SystemEntity`
      * rows from DSL discovery without requiring an env-config redeploy.
      * Without this secondary check, a v4 caller could not edit a
      * component whose system code was legitimately introduced by a DSL
@@ -1726,7 +1739,7 @@ class ComponentManagementServiceImpl(
      * matching against the config path is case-insensitive (env config
      * typically uses upper-case codes `NONE,CLASSIC,ALFA` but a caller
      * posting `Classic` should not be rejected for stylistic difference), but
-     * the form persisted to `components.system_code` is the config's
+     * the form persisted to the `component_systems` junction is the config's
      * canonical casing — NOT the caller's input. This prevents a v4
      * write of `system: "Classic"` from creating a duplicate master
      * `systems("Classic")` row alongside the canonical `systems("CLASSIC")`
@@ -1780,6 +1793,19 @@ class ComponentManagementServiceImpl(
         desired.distinct().forEach { code ->
             component.labelJunctions.add(
                 ComponentLabelEntity(componentId = component.id!!, labelCode = code),
+            )
+        }
+    }
+
+    /** See [refreshComponentLabelsInMemory]; same pattern for `systemJunctions`. */
+    private fun refreshComponentSystemsInMemory(
+        component: ComponentEntity,
+        desired: Set<String>,
+    ) {
+        component.systemJunctions.clear()
+        desired.distinct().forEach { code ->
+            component.systemJunctions.add(
+                ComponentSystemEntity(componentId = component.id!!, systemCode = code),
             )
         }
     }
@@ -2020,7 +2046,7 @@ class ComponentManagementServiceImpl(
         request.skipCommitCheck?.let { enforceFieldEditable("component.skipCommitCheck", it, entity.skipCommitCheck) }
         request.distributionExplicit?.let { enforceFieldEditable("component.distributionExplicit", it, entity.distributionExplicit) }
         request.distributionExternal?.let { enforceFieldEditable("component.distributionExternal", it, entity.distributionExternal) }
-        request.system?.let { enforceFieldEditable("component.system", it, entity.systemCode) }
+        request.systems?.let { enforceFieldEditable("component.system", it, entity.systemJunctions.map { j -> j.systemCode }.toSet()) }
         request.releaseManager?.let { enforceFieldEditable("component.releaseManager", it, entity.releaseManagerUsernames()) }
         request.securityChampion?.let { enforceFieldEditable("component.securityChampion", it, entity.securityChampionUsernames()) }
         request.canBeParent?.let { enforceFieldEditable("component.canBeParent", it, entity.canBeParent) }
@@ -2098,7 +2124,8 @@ class ComponentManagementServiceImpl(
         request.skipCommitCheck.takeIf { it }?.let { enforceFieldEditable("component.skipCommitCheck", it, null) }
         request.distributionExplicit?.let { enforceFieldEditable("component.distributionExplicit", it, null) }
         request.distributionExternal?.let { enforceFieldEditable("component.distributionExternal", it, null) }
-        request.system?.let { enforceFieldEditable("component.system", it, null) }
+        // Only a supplied NON-EMPTY set is a change on create (empty ≡ absent → server default).
+        request.systems.takeIf { it.isNotEmpty() }?.let { enforceFieldEditable("component.system", it, null) }
         request.parentComponentName?.let { enforceFieldEditable("component.parentComponentName", it, null) }
         // canBeParent is a non-null boolean with a `false` default; only a supplied `true`
         // (a non-default value) counts as a supplied change on create.
@@ -3522,20 +3549,22 @@ class ComponentManagementServiceImpl(
                     },
                 )
         }
-        // OR across selected system codes against the scalar
-        // `components.system_code` column. A component matches when its
-        // single system_code is in the list; components with
-        // `system_code IS NULL` never match a non-empty filter. With the
-        // M:N junction collapsed to a 1:0..1 reference, this reduces to a
-        // plain `IN(...)` predicate on the scalar column — no JOIN, no
-        // `query.distinct(true)` needed. The controller's normalisation
-        // guarantees the list, if present, is non-empty and free of
-        // blank/whitespace/duplicate entries.
+        // OR across selected system codes — a component matches when ANY of its
+        // system junctions has a code in the list. Unlike labels (also
+        // junction-backed but AND across selections), the picker semantics here
+        // is "components belonging to any of these systems". One JOIN through
+        // systemJunctions + IN(...) keeps the predicate count bounded regardless
+        // of selection size; `distinct(true)` dedupes the row multiplication a
+        // multi-system component would otherwise cause. The controller's
+        // normalisation guarantees the list, if present, is non-empty, has no
+        // blanks, and has no duplicates.
         if (!filter.system.isNullOrEmpty()) {
             spec =
                 spec.and(
-                    Specification { root, _, _ ->
-                        root.get<String?>("systemCode").`in`(filter.system)
+                    Specification { root, query, _ ->
+                        val join = root.join<ComponentEntity, ComponentSystemEntity>("systemJunctions")
+                        query?.distinct(true)
+                        join.get<String>("systemCode").`in`(filter.system)
                     },
                 )
         }
@@ -3694,30 +3723,19 @@ class ComponentManagementServiceImpl(
     }
 
     /**
-     * Snapshot of the component's scalar fields + label membership + system
-     * code for audit-log purposes. `overrideLabels` short-circuits the
-     * entity's in-memory `labelJunctions` — needed after the `syncLabels`
-     * repo-direct write, since it bypasses the entity collection.
-     *
-     * `system` is read directly from `entity.systemCode` — it's a scalar
-     * column on the entity, already persisted with the parent flush, and
-     * (critically) reflects the post-FC-hidden-gate value. A previous
-     * iteration accepted an `overrideSystem` parameter that mirrored the
-     * `overrideLabels` shape; in practice it caused an audit-trail bug
-     * when `component.system` was hidden via field-config: the FC gate
-     * correctly skipped `entity.systemCode = it`, but the caller still
-     * passed the would-have-been-written `canonicalSystem` as
-     * `overrideSystem`, producing a `newValue.system = "ALFA"` for a
-     * patch that never modified the column. The override path is
-     * unnecessary for a scalar — reading from the entity gives the
-     * correct "what actually persisted" view in all paths (FC-hidden,
-     * unchanged, or changed). Labels keep their override because labels
-     * are written through a separate `syncLabels` path that doesn't
-     * refresh the entity collection before this method runs.
+     * Snapshot of the component's scalar fields + label/system memberships for
+     * audit-log purposes. `overrideLabels` / `overrideSystems` short-circuit the
+     * entity's in-memory `labelJunctions` / `systemJunctions` — needed after the
+     * `syncLabels` / `syncSystems` repo-direct writes, since those bypass the
+     * entity's collections and the in-memory collections still hold the pre-sync
+     * set. When the field was field-config-hidden, callers pass the already-
+     * stripped set (empty on create, null → falls back to the captured original
+     * on patch), so the audit reflects what actually persisted.
      */
     private fun scalarAuditMap(
         entity: ComponentEntity,
         overrideLabels: Set<String>? = null,
+        overrideSystems: Set<String>? = null,
     ): Map<String, Any?> =
         mapOf(
             "name" to entity.componentKey,
@@ -3743,7 +3761,7 @@ class ComponentManagementServiceImpl(
             "distributionExplicit" to entity.distributionExplicit,
             "distributionExternal" to entity.distributionExternal,
             "labels" to (overrideLabels ?: entity.labelJunctions.map { it.labelCode }.toSet()),
-            "system" to entity.systemCode,
+            "systems" to (overrideSystems ?: entity.systemJunctions.map { it.systemCode }.toSet()),
         )
 
     /**

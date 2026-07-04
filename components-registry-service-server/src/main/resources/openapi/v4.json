@@ -544,8 +544,12 @@
           "solution" : {
             "type" : "boolean"
           },
-          "system" : {
-            "type" : "string"
+          "systems" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array",
+            "uniqueItems" : true
           },
           "teamcityProjects" : {
             "items" : {
@@ -671,8 +675,12 @@
           "solution" : {
             "type" : "boolean"
           },
-          "system" : {
-            "type" : "string"
+          "systems" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array",
+            "uniqueItems" : true
           },
           "teamcityProjects" : {
             "items" : {
@@ -705,6 +713,7 @@
           "securityChampion",
           "securityGroups",
           "skipCommitCheck",
+          "systems",
           "teamcityProjects",
           "version"
         ],
@@ -819,8 +828,12 @@
             },
             "type" : "array"
           },
-          "system" : {
-            "type" : "string"
+          "systems" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array",
+            "uniqueItems" : true
           },
           "teamcityProjectId" : {
             "type" : "string"
@@ -843,7 +856,8 @@
           "labels",
           "name",
           "releaseManagers",
-          "securityChampions"
+          "securityChampions",
+          "systems"
         ],
         "type" : "object"
       },
@@ -962,8 +976,12 @@
           "solution" : {
             "type" : "boolean"
           },
-          "system" : {
-            "type" : "string"
+          "systems" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array",
+            "uniqueItems" : true
           },
           "teamcityProjects" : {
             "items" : {

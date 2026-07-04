@@ -561,9 +561,6 @@ class TeamcitySyncServiceTest {
         override fun findDistinctOwners(): List<String> =
             components.mapNotNull { it.componentOwner }.distinct().sorted()
 
-        override fun findDistinctSystemCodes(): List<String> =
-            components.mapNotNull { it.systemCode }.filter { it.isNotBlank() }.distinct().sorted()
-
         override fun findDistinctClientCodes(): List<String> =
             components.mapNotNull { it.clientCode }.filter { it.isNotBlank() }.distinct().sorted()
 

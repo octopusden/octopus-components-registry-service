@@ -24,7 +24,7 @@ data class ComponentDetailResponse(
     val displayName: String?,
     val componentOwner: String?,
     val productType: String?,
-    val system: String?,
+    val systems: Set<String>,
     val clientCode: String?,
     val archived: Boolean,
     val solution: Boolean?,

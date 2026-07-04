@@ -19,7 +19,7 @@ data class ComponentSummaryResponse(
     // Nullable + unique. NULL when no componentDisplayName is declared.
     val displayName: String?,
     val componentOwner: String?,
-    val system: String?,
+    val systems: Set<String>,
     val productType: String?,
     val archived: Boolean,
     val canBeParent: Boolean = false,
