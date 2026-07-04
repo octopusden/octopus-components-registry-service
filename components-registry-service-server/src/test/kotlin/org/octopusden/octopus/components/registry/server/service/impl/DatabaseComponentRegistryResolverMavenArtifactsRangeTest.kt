@@ -14,6 +14,7 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentConfigu
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionMavenArtifactEntity
 import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
+import org.octopusden.octopus.components.registry.server.mapper.toEscrowModule
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.DependencyMappingRepository
 import org.octopusden.releng.versions.NumericVersionFactory
@@ -921,6 +922,126 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
             result["[1.0,2.0)"]!!.artifactPattern,
             "the rival's base token is shadowed by its own [1.0,2.0) override → exclude only override-art",
         )
+    }
+
+    // ========================================================================
+    // ARTGRP: artifact-group canonicalization (one groupId per stored row).
+    //
+    // Storage is normalized so `group_pattern` holds exactly ONE Maven groupId: a
+    // legacy comma group-list `"a,b"` is split at import/write into one mapping per
+    // group with the SAME mode/tokens/range. The legacy v1-v3 forward wire MUST stay
+    // byte-identical, so the render RE-COMPOSES contiguous split-equivalent rows back
+    // into the single `(groupIdPattern, artifactIdPattern)` pair (`"a,b"`). These
+    // guards pin: (1) re-compose does not drop a group; (2) it does NOT over-join
+    // genuinely-distinct same-range mappings (different tokens / ALL_EXCEPT); (3) an
+    // un-migrated single CSV row still renders identically.
+    // ========================================================================
+
+    @Test
+    @DisplayName(
+        "ARTGRP-001: two split EXPLICIT rows (one groupId each, same token) re-compose into the " +
+            "legacy CSV groupPattern on /maven-artifacts — no group dropped",
+    )
+    fun `ARTGRP-001 split explicit group rows recompose to csv wire`() {
+        val comp = makeComponent("artgrp-split-explicit")
+        comp.distributionExplicit = true
+        // Post-canonicalization storage: one row per groupId, identical token, contiguous sortOrder.
+        comp.addOwnershipMapping("grp-alfa", "widget")
+        comp.addOwnershipMapping("grp-beta", "widget")
+        comp.configurations.add(makeBase(comp, ALL_VERSIONS))
+        stubComponent(comp)
+
+        val entry = resolver.getMavenArtifactParameters("artgrp-split-explicit")[ALL_VERSIONS]
+        assertNotNull(entry, "ALL_VERSIONS entry must be present")
+        assertEquals(
+            "grp-alfa,grp-beta",
+            entry!!.groupPattern,
+            "split rows must re-compose to the legacy CSV group — the primary-only render must NOT drop grp-beta",
+        )
+        assertEquals("widget", entry.artifactPattern, "artifact pattern is the shared token")
+    }
+
+    @Test
+    @DisplayName(
+        "ARTGRP-002 (no over-join): two same-range EXPLICIT rows with DIFFERENT tokens are NOT merged — " +
+            "the legacy single pair renders only the primary (lowest sortOrder), exactly as today",
+    )
+    fun `ARTGRP-002 heterogeneous same-range explicit rows are not over-joined`() {
+        val comp = makeComponent("artgrp-heterogeneous")
+        comp.distributionExplicit = true
+        comp.addOwnershipMapping("grp-alfa", "widget-x")
+        comp.addOwnershipMapping("grp-beta", "widget-y")
+        comp.configurations.add(makeBase(comp, ALL_VERSIONS))
+        stubComponent(comp)
+
+        val entry = resolver.getMavenArtifactParameters("artgrp-heterogeneous")[ALL_VERSIONS]
+        assertNotNull(entry, "ALL_VERSIONS entry must be present")
+        assertEquals(
+            "grp-alfa",
+            entry!!.groupPattern,
+            "distinct-token rows are NOT split-equivalent → must not merge into 'grp-alfa,grp-beta'",
+        )
+        assertEquals("widget-x", entry.artifactPattern, "only the primary row's token is rendered")
+    }
+
+    @Test
+    @DisplayName(
+        "ARTGRP-003 (ALL_EXCEPT non-collapse): two single-group ALL_EXCEPT_CLAIMED rows are NEVER merged " +
+            "(their forward pattern is per-group sibling-aware) — the primary renders alone",
+    )
+    fun `ARTGRP-003 all-except rows never collapse`() {
+        val comp = makeComponent("artgrp-all-except")
+        comp.addAllExceptMapping("grp-alfa")
+        comp.addAllExceptMapping("grp-beta")
+        comp.configurations.add(makeBase(comp, ALL_VERSIONS))
+        stubComponent(comp)
+
+        val entry = resolver.getMavenArtifactParameters("artgrp-all-except")[ALL_VERSIONS]
+        assertNotNull(entry, "ALL_VERSIONS entry must be present")
+        assertEquals(
+            "grp-alfa",
+            entry!!.groupPattern,
+            "ALL_EXCEPT_CLAIMED rows must each stay their own pair — the primary renders alone, never 'grp-alfa,grp-beta'",
+        )
+    }
+
+    @Test
+    @DisplayName(
+        "ARTGRP-004 (back-compat): an un-migrated single CSV-group row still renders the same CSV wire " +
+            "(the re-compose helper is a no-op on a one-row legacy pair)",
+    )
+    fun `ARTGRP-004 legacy single csv group row renders unchanged`() {
+        val comp = makeComponent("artgrp-legacy-csv")
+        comp.distributionExplicit = true
+        comp.addOwnershipMapping("grp-alfa,grp-beta", "widget")
+        comp.configurations.add(makeBase(comp, ALL_VERSIONS))
+        stubComponent(comp)
+
+        val entry = resolver.getMavenArtifactParameters("artgrp-legacy-csv")[ALL_VERSIONS]
+        assertNotNull(entry, "ALL_VERSIONS entry must be present")
+        assertEquals("grp-alfa,grp-beta", entry!!.groupPattern, "a legacy single CSV row must keep rendering the CSV verbatim")
+        assertEquals("widget", entry.artifactPattern)
+    }
+
+    @Test
+    @DisplayName(
+        "ARTGRP-ESC-001: split EXPLICIT rows re-compose into the legacy groupIdPattern of the escrow " +
+            "module view (drives /maven-artifacts, view-as-code and the v1-v3 compat baseline)",
+    )
+    fun `ARTGRP-ESC-001 split rows recompose escrow groupIdPattern`() {
+        val comp = makeComponent("artgrp-escrow")
+        comp.addOwnershipMapping("grp-alfa", "widget")
+        comp.addOwnershipMapping("grp-beta", "widget")
+        comp.configurations.add(makeBase(comp, ALL_VERSIONS))
+
+        val module = comp.toEscrowModule(versionRangeFactory, numericVersionFactory)
+        val cfg = module.moduleConfigurations.first()
+        assertEquals(
+            "grp-alfa,grp-beta",
+            cfg.groupIdPattern,
+            "escrow groupIdPattern must re-compose the split rows — must NOT drop grp-beta",
+        )
+        assertEquals("widget", cfg.artifactIdPattern, "artifactIdPattern is the shared token")
     }
 
     // ========================================================================
