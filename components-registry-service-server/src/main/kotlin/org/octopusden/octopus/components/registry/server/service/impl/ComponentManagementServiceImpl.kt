@@ -3366,20 +3366,22 @@ class ComponentManagementServiceImpl(
                 "(groupId-only coordinate '${req.groupPattern}' is not supported — see TD-011/#349)"
         }
         // The V1-compat read path (EntityMappers.composeGavCsv) rebuilds the GAV
-        // string as `group:artifact[:ext[:classifier]]` joined by ','. A ':' or
-        // ',' inside any field would silently corrupt that round-trip — the exact
-        // divergence class this guard closes — so reject the separators in every
-        // field (the import path, which splits a raw string on those chars, can
-        // never produce a segment containing them).
+        // string as `group:artifact[:ext[:classifier]]`. A ':' inside any field
+        // would silently corrupt that round-trip (re-parsing to a DIFFERENT
+        // coordinate) — the exact divergence class this guard closes — and ':'
+        // is never valid inside a Maven groupId/artifactId/type/classifier. So
+        // reject ':' in every field. NOTE: ',' is NOT rejected — a groupPattern
+        // is legitimately a comma-separated CSV of groups (MavenGavCollision
+        // splits it), a first-class pattern shape.
         listOf(
             "groupPattern" to req.groupPattern,
             "artifactPattern" to req.artifactPattern,
             "extension" to req.extension,
             "classifier" to req.classifier,
         ).forEach { (field, value) ->
-            require(value == null || (!value.contains(':') && !value.contains(','))) {
-                "distribution.mavenArtifacts: $field must not contain ':' or ',' " +
-                    "(they are the coordinate separators; value='$value')"
+            require(value == null || !value.contains(':')) {
+                "distribution.mavenArtifacts: $field must not contain ':' " +
+                    "(the coordinate segment separator; value='$value')"
             }
         }
     }

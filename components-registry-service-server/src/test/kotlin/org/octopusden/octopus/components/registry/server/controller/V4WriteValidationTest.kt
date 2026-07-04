@@ -185,11 +185,12 @@ class V4WriteValidationTest {
     }
 
     @Test
-    @DisplayName("CREATE rejects distribution.mavenArtifacts pattern containing ':' or ',' (round-trip separators)")
-    fun create_rejects_mavenCoordinateWithSeparators() {
-        // A ':' or ',' smuggled into a pattern corrupts the V1-compat GAV CSV
-        // round-trip (EntityMappers.composeGavCsv). The import path can't produce
-        // such a segment; the v4 write path must reject it for symmetry.
+    @DisplayName("CREATE rejects a distribution.mavenArtifacts pattern containing ':' (segment separator)")
+    fun create_rejects_mavenCoordinateWithColon() {
+        // A ':' smuggled into a pattern corrupts the V1-compat GAV round-trip
+        // (EntityMappers.composeGavCsv re-parses to a different coordinate). The
+        // import path can't produce such a segment; the v4 write path rejects it
+        // for symmetry. (',' is intentionally allowed — groupPattern is a CSV.)
         val colon =
             """
             {
@@ -203,20 +204,24 @@ class V4WriteValidationTest {
             }
             """.trimIndent()
         postCreate(colon).andExpect(status().isBadRequest)
+    }
 
-        val comma =
+    @Test
+    @DisplayName("CREATE accepts a CSV groupPattern (comma-separated groups are a valid pattern shape)")
+    fun create_accepts_csvGroupPattern() {
+        val body =
             """
             {
-              "name": "validation-test-comp-mvn-comma",
+              "name": "validation-test-comp-mvn-csvgroup",
               "componentOwner": "owner1",
               "group": {"groupKey": "org.example.test", "isFake": false},
               "baseConfiguration": {
                 "build": {"buildSystem": "MAVEN"},
-                "mavenArtifacts": [ {"groupPattern": "org.example", "artifactPattern": "alpha,beta"} ]
+                "mavenArtifacts": [ {"groupPattern": "org.example.a,org.example.b", "artifactPattern": "alpha"} ]
               }
             }
             """.trimIndent()
-        postCreate(comma).andExpect(status().isBadRequest)
+        postCreate(body).andExpect(status().isCreated)
     }
 
     @Test
