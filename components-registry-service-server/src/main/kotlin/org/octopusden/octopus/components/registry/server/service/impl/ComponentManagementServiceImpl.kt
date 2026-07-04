@@ -2424,8 +2424,11 @@ class ComponentManagementServiceImpl(
                     componentConfiguration = config,
                     groupPattern = req.groupPattern,
                     artifactPattern = req.artifactPattern,
-                    extension = req.extension,
-                    classifier = req.classifier,
+                    // Normalize blank → null, matching the import path
+                    // (parseMavenGavEntry's `takeIf { isNotEmpty }`), so a v4-written
+                    // "" and an import-written null compare equal in MavenGavCollision.
+                    extension = req.extension?.takeIf { it.isNotBlank() },
+                    classifier = req.classifier?.takeIf { it.isNotBlank() },
                     sortOrder = index,
                 ),
             )
@@ -3361,6 +3364,23 @@ class ComponentManagementServiceImpl(
         require(req.artifactPattern.isNotBlank()) {
             "distribution.mavenArtifacts: artifactPattern must not be blank " +
                 "(groupId-only coordinate '${req.groupPattern}' is not supported — see TD-011/#349)"
+        }
+        // The V1-compat read path (EntityMappers.composeGavCsv) rebuilds the GAV
+        // string as `group:artifact[:ext[:classifier]]` joined by ','. A ':' or
+        // ',' inside any field would silently corrupt that round-trip — the exact
+        // divergence class this guard closes — so reject the separators in every
+        // field (the import path, which splits a raw string on those chars, can
+        // never produce a segment containing them).
+        listOf(
+            "groupPattern" to req.groupPattern,
+            "artifactPattern" to req.artifactPattern,
+            "extension" to req.extension,
+            "classifier" to req.classifier,
+        ).forEach { (field, value) ->
+            require(value == null || (!value.contains(':') && !value.contains(','))) {
+                "distribution.mavenArtifacts: $field must not contain ':' or ',' " +
+                    "(they are the coordinate separators; value='$value')"
+            }
         }
     }
 

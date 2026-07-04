@@ -185,6 +185,63 @@ class V4WriteValidationTest {
     }
 
     @Test
+    @DisplayName("CREATE rejects distribution.mavenArtifacts pattern containing ':' or ',' (round-trip separators)")
+    fun create_rejects_mavenCoordinateWithSeparators() {
+        // A ':' or ',' smuggled into a pattern corrupts the V1-compat GAV CSV
+        // round-trip (EntityMappers.composeGavCsv). The import path can't produce
+        // such a segment; the v4 write path must reject it for symmetry.
+        val colon =
+            """
+            {
+              "name": "validation-test-comp-mvn-colon",
+              "componentOwner": "owner1",
+              "group": {"groupKey": "org.example.test", "isFake": false},
+              "baseConfiguration": {
+                "build": {"buildSystem": "MAVEN"},
+                "mavenArtifacts": [ {"groupPattern": "org.example:injected", "artifactPattern": "alpha"} ]
+              }
+            }
+            """.trimIndent()
+        postCreate(colon).andExpect(status().isBadRequest)
+
+        val comma =
+            """
+            {
+              "name": "validation-test-comp-mvn-comma",
+              "componentOwner": "owner1",
+              "group": {"groupKey": "org.example.test", "isFake": false},
+              "baseConfiguration": {
+                "build": {"buildSystem": "MAVEN"},
+                "mavenArtifacts": [ {"groupPattern": "org.example", "artifactPattern": "alpha,beta"} ]
+              }
+            }
+            """.trimIndent()
+        postCreate(comma).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    @DisplayName("PATCH rejects a blank distribution.mavenArtifacts coordinate (symmetric with CREATE)")
+    fun patch_rejects_blankMavenArtifactPattern() {
+        val seedResponse =
+            postCreate(validSeedBody("validation-test-comp-mvn-patch"))
+                .andExpect(status().is2xxSuccessful)
+                .andReturn().response.contentAsString
+        val seed = objectMapper.readTree(seedResponse)
+        val id = seed["id"].asText()
+        val versionLock = seed["version"].asLong()
+        val patchBody =
+            """{"version": $versionLock, "baseConfiguration": {"mavenArtifacts": """ +
+                """[ {"groupPattern": "org.example", "artifactPattern": ""} ]}}"""
+        mvc
+            .perform(
+                patch("/rest/api/4/components/$id")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(patchBody),
+            ).andExpect(status().isBadRequest)
+    }
+
+    @Test
     @DisplayName("CREATE accepts a well-formed distribution.mavenArtifacts coordinate")
     fun create_accepts_validMavenCoordinate() {
         val body =
