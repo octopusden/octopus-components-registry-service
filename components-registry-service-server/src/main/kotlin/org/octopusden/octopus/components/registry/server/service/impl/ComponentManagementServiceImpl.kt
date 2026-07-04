@@ -1455,12 +1455,16 @@ class ComponentManagementServiceImpl(
         component: ComponentEntity,
         requests: List<org.octopusden.octopus.components.registry.server.dto.v4.ArtifactIdRequest>,
     ) {
-        // Each request is one ownership mapping. sort_order = list index (0 = primary).
+        // Canonicalization: one Maven groupId per stored row. A request's comma group-list expands
+        // to one mapping per group (sharing mode/tokens/range), so `sort_order` is a RUNNING counter
+        // across all requests — NOT the request index, which would collide/reorder once a request
+        // yields >1 row (the resolver treats the lowest sort_order as the legacy primary).
         // Validations (all 400 / IllegalArgumentException): group/token allowlist, mode
         // default + token invariants, ALL_EXCEPT single-group, range alignment, and the
         // intra-component "a group token belongs to ≤1 mapping per (component, range)" rule.
         val claimedByRange = mutableSetOf<Pair<String, String>>()
-        requests.forEachIndexed { index, req ->
+        var sortOrder = 0
+        requests.forEach { req ->
             val versionRange = req.versionRange?.takeIf { it.isNotBlank() } ?: ALL_VERSIONS
             val groupRaw = req.groupPattern.trim()
             require(groupRaw.isNotEmpty()) { "artifactIds: groupPattern must not be blank" }
@@ -1498,19 +1502,21 @@ class ComponentManagementServiceImpl(
                     "artifactIds: group '$g' is claimed by more than one mapping in range '$versionRange'"
                 }
             }
-            val mapping = ComponentArtifactMappingEntity(
-                component = component,
-                versionRange = versionRange,
-                groupPattern = groupRaw,
-                artifactIdMode = mode.name,
-                sortOrder = index,
-            )
-            tokens.forEachIndexed { i, t ->
-                mapping.tokens.add(
-                    ComponentArtifactMappingTokenEntity(mapping = mapping, artifactPattern = t, sortOrder = i),
+            groupItems.forEach { g ->
+                val mapping = ComponentArtifactMappingEntity(
+                    component = component,
+                    versionRange = versionRange,
+                    groupPattern = g,
+                    artifactIdMode = mode.name,
+                    sortOrder = sortOrder++,
                 )
+                tokens.forEachIndexed { i, t ->
+                    mapping.tokens.add(
+                        ComponentArtifactMappingTokenEntity(mapping = mapping, artifactPattern = t, sortOrder = i),
+                    )
+                }
+                component.artifactMappings.add(mapping)
             }
-            component.artifactMappings.add(mapping)
         }
         validateNonOverlappingOwnershipRanges(component)
     }

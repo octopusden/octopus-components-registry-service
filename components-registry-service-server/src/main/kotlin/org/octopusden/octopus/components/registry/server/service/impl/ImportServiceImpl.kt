@@ -1437,9 +1437,10 @@ class ImportServiceImpl(
      * pair. Classifies the artifactId into a mode (EXPLICIT / ALL_EXCEPT_CLAIMED / ALL —
      * [ArtifactOwnershipModeClassifier]) and returns [ComponentArtifactMappingEntity] rows
      * (EXPLICIT adds literal token children). ALL_EXCEPT_CLAIMED is single-group, so a
-     * comma group-list is split into one mapping per group; ALL/EXPLICIT keep the
-     * comma-list as one mapping. `sortOrder` runs from [startSortOrder] (0 = primary).
-     * Returns an empty list when there is no group.
+     * comma group-list is split into one mapping per group for EVERY mode (canonicalization:
+     * exactly one Maven groupId per stored row). The split rows share mode/tokens/range and are
+     * re-composed into the legacy single pair by the forward render (ArtifactOwnershipGrouping).
+     * `sortOrder` runs from [startSortOrder] (0 = primary). Empty list when there is no group.
      */
     private fun buildOwnershipMappings(
         component: ComponentEntity,
@@ -1451,12 +1452,11 @@ class ImportServiceImpl(
         val group = groupIdPattern?.trim()
         if (group.isNullOrBlank()) return emptyList()
         val mode = ArtifactOwnershipModeClassifier.classify(artifactIdPattern)
-        val groups =
-            if (mode == ArtifactIdMode.ALL_EXCEPT_CLAIMED) {
-                group.split(',').map { it.trim() }.filter { it.isNotEmpty() }
-            } else {
-                listOf(group)
-            }
+        // Canonicalize ownership to exactly ONE Maven groupId per stored row (for EVERY mode, not just
+        // ALL_EXCEPT_CLAIMED): a comma group-list "a,b" becomes one mapping per group sharing the same
+        // mode/tokens/range. Semantically safe — resolution matches a single real groupId against each
+        // token, and the forward wire re-composes the split rows (ArtifactOwnershipGrouping).
+        val groups = group.split(',').map { it.trim() }.filter { it.isNotEmpty() }
         val tokens =
             if (mode == ArtifactIdMode.EXPLICIT) {
                 ArtifactOwnershipModeClassifier.splitTokens(artifactIdPattern.orEmpty())
