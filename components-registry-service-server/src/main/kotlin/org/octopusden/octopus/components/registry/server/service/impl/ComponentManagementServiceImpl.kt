@@ -2416,6 +2416,7 @@ class ComponentManagementServiceImpl(
         config: ComponentConfigurationEntity,
         artifacts: List<MavenArtifactRequest>,
     ) {
+        artifacts.forEach { validateMavenArtifactCoordinate(it) }
         config.mavenArtifacts.clear()
         artifacts.forEachIndexed { index, req ->
             config.mavenArtifacts.add(
@@ -3341,6 +3342,25 @@ class ComponentManagementServiceImpl(
         require(value.isNotBlank()) { "package.packageType must not be blank" }
         require(value in PACKAGE_TYPE_NAMES) {
             "Invalid package.packageType: '$value'. Allowed: $PACKAGE_TYPE_NAMES"
+        }
+    }
+
+    /**
+     * A distribution Maven coordinate must carry BOTH a groupPattern and an
+     * artifactPattern — the structured-DTO equivalent of the import path's
+     * "group:artifact" requirement (parseMavenGavEntry rejects < 2 segments).
+     * A blank field was previously copied verbatim (201), silently persisting a
+     * broken coordinate — symmetric with the import silent-drop. A groupId-only
+     * coordinate (blank artifactPattern) is not supported; see TD-011 / #349
+     * (if groupId-only support is ever added, relax the artifactPattern check).
+     */
+    private fun validateMavenArtifactCoordinate(req: MavenArtifactRequest) {
+        require(req.groupPattern.isNotBlank()) {
+            "distribution.mavenArtifacts: groupPattern must not be blank"
+        }
+        require(req.artifactPattern.isNotBlank()) {
+            "distribution.mavenArtifacts: artifactPattern must not be blank " +
+                "(groupId-only coordinate '${req.groupPattern}' is not supported — see TD-011/#349)"
         }
     }
 
