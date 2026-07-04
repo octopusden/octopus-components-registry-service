@@ -71,9 +71,9 @@ class ListComponentsSystemFilterTest {
      * Behaviour, not just status: when the auto-migrated fixture contains
      * components with `system = "CLASSIC"` (see common/TestComponents.groovy),
      * filtering by `?system=CLASSIC` must return a non-empty content list AND
-     * every returned row must have `system == "CLASSIC"`. A weaker
-     * "expect 200" check would still pass if the new scalar-column filter
-     * were silently ignored and the endpoint returned an unfiltered page.
+     * every returned row must carry `CLASSIC` among its `systems`. A weaker
+     * "expect 200" check would still pass if the junction filter were silently
+     * ignored and the endpoint returned an unfiltered page.
      */
     @Test
     @DisplayName("?system=CLASSIC returns only components whose system == CLASSIC")
@@ -190,12 +190,11 @@ class ListComponentsSystemFilterTest {
     }
 
     @Test
-    @DisplayName("SYS-042: ?system=A,B (CSV) returns components whose single system is A OR B (OR semantics)")
+    @DisplayName("SYS-042: ?system=A,B (CSV) returns components in system A OR B (OR semantics)")
     fun `SYS-042 system A,B CSV OR semantics`() {
-        // After the M:N collapse to single-value, a component cannot carry
-        // "both A and B". OR semantics still holds across distinct
-        // components: filter `?system=A,B` matches any component whose
-        // single `system_code` is in {A, B}.
+        // OR semantics across the junction: `?system=A,B` matches any component
+        // that belongs to A OR B. Exercised here with single-system components;
+        // a component belonging to BOTH is covered by MultiSystemMembershipTest.
         val sysA = uniqueSysCode("orsysa")
         val sysB = uniqueSysCode("orsysb")
         val sysC = uniqueSysCode("orsysc")

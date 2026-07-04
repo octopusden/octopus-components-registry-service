@@ -164,6 +164,33 @@ class MultiSystemMembershipTest {
     }
 
     @Test
+    @DisplayName("pagination total counts a multi-system component once under a multi-value filter (distinct count query)")
+    fun `multi-system component counted once in pagination total`() {
+        // Two codes UNIQUE to this test so exactly one component matches the
+        // filter — makes totalElements deterministic regardless of other data.
+        val x = uniqueSysCode("ALFA")
+        val y = uniqueSysCode("BETA")
+        val dual = uniqueName("dual_count")
+        createComponentWithSystems(dual, listOf(x, y))
+
+        // Filter by BOTH — the junction JOIN yields two rows for this component.
+        // Without `distinct` on the COUNT query, totalElements would be 2.
+        // size=1 forces the count/pagination path to be exercised.
+        val body =
+            mvc
+                .perform(
+                    get("/rest/api/4/components")
+                        .with(viewerJwt())
+                        .param("system", "$x,$y")
+                        .param("size", "1"),
+                ).andExpect(status().isOk)
+                .andReturn().response.contentAsString
+        val root = objectMapper.readTree(body)
+        assertEquals(1L, root["totalElements"].asLong(), "multi-system component must be counted once: $body")
+        assertEquals(1, root["totalPages"].asInt(), "one match with size=1 must be a single page")
+    }
+
+    @Test
     @DisplayName("detail + summary echo the full multi-system set")
     fun `detail and summary return all systems`() {
         val first = uniqueSysCode("ALFA")
