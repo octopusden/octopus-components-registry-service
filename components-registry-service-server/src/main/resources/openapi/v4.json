@@ -771,6 +771,33 @@
         ],
         "type" : "object"
       },
+      "ComponentRegistryVersion" : {
+        "properties" : {
+          "jiraVersion" : {
+            "type" : "string"
+          },
+          "type" : {
+            "enum" : [
+              "LINE",
+              "MINOR",
+              "BUILD",
+              "RELEASE",
+              "RC",
+              "HOTFIX"
+            ],
+            "type" : "string"
+          },
+          "version" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "jiraVersion",
+          "type",
+          "version"
+        ],
+        "type" : "object"
+      },
       "ComponentSummaryResponse" : {
         "properties" : {
           "archived" : {
@@ -982,6 +1009,40 @@
         },
         "required" : [
           "version"
+        ],
+        "type" : "object"
+      },
+      "DetailedComponentVersion" : {
+        "properties" : {
+          "buildVersion" : {
+            "$ref" : "#/components/schemas/ComponentRegistryVersion"
+          },
+          "component" : {
+            "type" : "string"
+          },
+          "hotfixVersion" : {
+            "$ref" : "#/components/schemas/ComponentRegistryVersion"
+          },
+          "lineVersion" : {
+            "$ref" : "#/components/schemas/ComponentRegistryVersion"
+          },
+          "minorVersion" : {
+            "$ref" : "#/components/schemas/ComponentRegistryVersion"
+          },
+          "rcVersion" : {
+            "$ref" : "#/components/schemas/ComponentRegistryVersion"
+          },
+          "releaseVersion" : {
+            "$ref" : "#/components/schemas/ComponentRegistryVersion"
+          }
+        },
+        "required" : [
+          "buildVersion",
+          "component",
+          "lineVersion",
+          "minorVersion",
+          "rcVersion",
+          "releaseVersion"
         ],
         "type" : "object"
       },
@@ -2332,6 +2393,109 @@
           "id",
           "sortOrder",
           "vcsPath"
+        ],
+        "type" : "object"
+      },
+      "VersionPreviewFormats" : {
+        "description" : "Effective BASE Jira version formats (the editor's section draft).",
+        "properties" : {
+          "buildVersionFormat" : {
+            "description" : "Falls back to the release version format when blank.",
+            "type" : "string"
+          },
+          "hotfixVersionFormat" : {
+            "description" : "Hotfix version format. A hotfix coordinate is rendered only when the request's hotfixEnabled is true; this format then shapes it. When hotfixEnabled is true but this is omitted, a degenerate empty hotfix coordinate is rendered (matching detailed-version). Ignored when hotfixEnabled is false.",
+            "type" : "string"
+          },
+          "lineVersionFormat" : {
+            "description" : "Falls back to the minor version format when blank.",
+            "type" : "string"
+          },
+          "minorVersionFormat" : {
+            "type" : "string"
+          },
+          "releaseVersionFormat" : {
+            "type" : "string"
+          },
+          "versionFormat" : {
+            "description" : "Custom-component wrapper format, e.g. \"$versionPrefix-$baseVersionFormat\".",
+            "type" : "string"
+          },
+          "versionPrefix" : {
+            "description" : "Custom-component version prefix (e.g. \"acme\"). Requires versionFormat when set.",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "VersionPreviewOverride" : {
+        "description" : "A per-range format override. Only the fields that differ from the base need to be set; a null field inherits the base. Applied when the input version falls inside versionRange.",
+        "properties" : {
+          "buildVersionFormat" : {
+            "type" : "string"
+          },
+          "hotfixVersionFormat" : {
+            "type" : "string"
+          },
+          "lineVersionFormat" : {
+            "type" : "string"
+          },
+          "minorVersionFormat" : {
+            "type" : "string"
+          },
+          "releaseVersionFormat" : {
+            "type" : "string"
+          },
+          "versionFormat" : {
+            "type" : "string"
+          },
+          "versionPrefix" : {
+            "type" : "string"
+          },
+          "versionRange" : {
+            "description" : "Maven-style version range, e.g. \"(,1.0.107)\" or \"[1.0,2.0)\".",
+            "example" : "(,1.0.107)",
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "versionRange"
+        ],
+        "type" : "object"
+      },
+      "VersionPreviewRequest" : {
+        "description" : "Stateless version-format preview request: render the six version coordinates for `version` from ad-hoc formats (base + per-range overrides) without persisting or looking up a component.",
+        "properties" : {
+          "base" : {
+            "$ref" : "#/components/schemas/VersionPreviewFormats"
+          },
+          "hotfixEnabled" : {
+            "description" : "Whether hotfix versioning is enabled for the component (in the persisted path this derives from a configured hotfix VCS branch, NOT from the presence of a hotfix format). When true, a hotfix coordinate is rendered — shaped by hotfixVersionFormat, or a degenerate empty coordinate when no format resolves (matching detailed-version). When false, no hotfix coordinate is rendered regardless of the format.",
+            "type" : "boolean"
+          },
+          "overrides" : {
+            "description" : "Per-range format overrides. First range that contains the version wins; base otherwise.",
+            "items" : {
+              "$ref" : "#/components/schemas/VersionPreviewOverride"
+            },
+            "type" : "array"
+          },
+          "technical" : {
+            "description" : "Whether the component is technical. Carried for parity; does not affect rendering.",
+            "type" : "boolean"
+          },
+          "version" : {
+            "description" : "The input version that drives range selection and rendering.",
+            "example" : "1.0.50",
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "base",
+          "hotfixEnabled",
+          "overrides",
+          "technical",
+          "version"
         ],
         "type" : "object"
       }
@@ -7967,6 +8131,108 @@
         },
         "tags" : [
           "migration-status-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/versions/preview" : {
+      "post" : {
+        "description" : "Renders a DetailedComponentVersion for the given input version from base + per-range override formats, without persisting or looking up a component.",
+        "operationId" : "preview",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/VersionPreviewRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DetailedComponentVersion"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          }
+        },
+        "summary" : "Preview version coordinates from ad-hoc formats",
+        "tags" : [
+          "versions-controller-v-4"
         ]
       }
     }
