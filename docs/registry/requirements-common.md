@@ -67,6 +67,7 @@
 | SYS-056 | `GET /components?releaseManager=<u>` / `?securityChampion=<u>` filter the list to components on which the user is a release manager / security champion (JOIN through the ordered child tables, OR across CSV / repeatable values, distinct); the list summary additionally emits `releaseManagers` / `securityChampions` username arrays (batched, emitted-empty-not-null) | High | integration-test | ✅ Tested |
 | SYS-057 | `GET /rest/api/4/health/statistics` returns registry-wide counts (`totalComponents`, `activeComponents`) and people-dimension breakdowns (`componentsByOwner`, `componentsByReleaseManager`, `componentsBySecurityChampion`) computed via SQL GROUP BY (never by loading all components into memory); ACCESS_COMPONENTS-gated; counts + people only (problem/validation aggregation is portal-owned) | High | integration-test | ✅ Tested |
 | SYS-058 | Artifact-ID ownership is modelled explicitly as a per-component LIST of `(group-list, mode ∈ {EXPLICIT, ALL_EXCEPT_CLAIMED, ALL}, version range)` mappings (`component_artifact_mappings` + `_tokens`), replacing the opaque regex `component_artifact_ids`. Cross-component uniqueness is decided deterministically from the stored modes (restores legacy validator #24/#25), enforced on v4 create/update (409); per-range overrides REPLACE the base for their range; v1–v3 wire renders the primary mapping; migration classifies DSL patterns into modes strictly (no escape hatch) | High | unit + integration-test | ✅ Tested |
+| SYS-059 | `POST /rest/api/4/versions/preview` renders a `DetailedComponentVersion` from ad-hoc Jira formats (base + per-range overrides) and an input version, with no persistence and no component lookup — reusing the persisted-path render seam (including `normalizeVersion` canonicalization) so output matches `detailed-version` for the same effective config. Range is resolved server-side; `line`/`build` mirror `minor`/`release` and `minor`/`release` default to `$major`/`$major.$minor` when blank; hotfix coordinate gated on caller-supplied `hotfixEnabled` (VCS-derived), not format presence; custom `versionPrefix`/`versionFormat` render the wrapped `jiraVersion`; padding is template-driven (no `buildSystem`); blank/non-numeric version or malformed range → 400, a version matching no format → 404; authenticated-only | High | unit + integration-test | ✅ Tested |
 
 ---
 
@@ -2099,3 +2100,81 @@ is invented.
 `SYS-057 statistics groups components by owner RM and SC`,
 `SYS-057 statistics people breakdowns count active components only`,
 `SYS-057 statistics is ACCESS_COMPONENTS gated`.
+
+### SYS-059: Live version-format preview endpoint
+
+**Priority:** High
+**Test layer:** unit + integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+The Portal component editor shows a "Version Preview" of the coordinates a version
+would resolve to. Previously it either rendered client-side (a hand-maintained
+ladder that drifts from the server's real formatter) or called the saved-config
+`detailed-version` endpoint (which reflects the *persisted* config, not the
+*unsaved* edits). For customers with custom version prefixes / zero-padding the
+client ladder cannot faithfully reproduce the server's rendering. A stateless
+server endpoint that renders from the **unsaved** editor config makes the preview
+live and byte-accurate without a save.
+
+**Description:**
+`POST /rest/api/4/versions/preview` (new `VersionsControllerV4`, NOT
+`@ConditionalOnDatabaseEnabled` — rendering only needs the always-present
+`VersionNames` / formatter beans, so it works in git and DB modes). The request
+carries an input `version`, a `base` block of effective Jira formats, and a list
+of per-range `overrides`; there is no persistence and no component lookup.
+
+Server logic (`VersionPreviewService`):
+1. Resolve the range: the first override whose `versionRange` contains the input
+   version wins; the `base` applies when none matches.
+2. Materialise the effective `ComponentVersionFormat` = base overlaid with the
+   matched override's present (non-null) fields. `minorVersionFormat` /
+   `releaseVersionFormat` default to `$major` / `$major.$minor` when blank, and
+   `lineVersionFormat` / `buildVersionFormat` mirror `minorVersionFormat` /
+   `releaseVersionFormat` when blank — matching `EntityMappers.buildJiraComponent`
+   (the persisted DB path); the editor contract documents the same fallbacks.
+3. Canonicalise the input via `JiraComponentVersionFormatter.normalizeVersion(...,
+   strict=false, hotfixEnabled)` — exactly as `getJiraComponentVersion` does: pick
+   the format the version matches, re-render it, and drive ALL coordinates off that
+   clean version. A version matching no format → `null` → `NotFoundException` (404),
+   mirroring the resolver's not-found.
+4. Build a `JiraComponentVersion` from those formats + the clean version and hand
+   it to the existing `Mapper<JiraComponentVersion, DetailedComponentVersion>` — the
+   SAME render seam the persisted `detailed-version` uses, so output is
+   byte-for-byte identical for the same effective config + version.
+
+Field naming mirrors the v4 write contract (`minorVersionFormat` is the
+resolver's `majorVersionFormat`). `buildSystem` is deliberately absent: padding /
+custom-variable expansion is driven purely by the format templates + `VersionNames`.
+Hotfix eligibility is caller-supplied via `hotfixEnabled` (VCS-branch-derived in the
+persisted path, NOT inferred from the presence of a hotfix format); a hotfix
+coordinate renders only when `hotfixEnabled` is true and a hotfix format resolves.
+Custom-component behaviour (`versionPrefix` + `versionFormat`) renders the wrapped
+value on `jiraVersion` while `version` stays the raw template render — exactly the
+dichotomy `detailed-version` already produces. Authenticated-only via the
+`rest/api/4` catch-all; no finer permission since no persisted data is touched.
+
+**Acceptance criteria:**
+1. Base formats render the six coordinates for the input version, matching
+   `detailed-version` for the same effective config.
+2. A version inside an override range renders that range's format; outside → base.
+3. Custom `versionPrefix`/`versionFormat` renders the wrapped `jiraVersion`;
+   `version` stays unwrapped. Zero-padding is driven purely by the format template.
+4. A hotfix coordinate renders only when `hotfixEnabled` is true and a hotfix format
+   resolves; a hotfix format alone (with `hotfixEnabled` false) renders none.
+5. Blank / non-numeric `version`, a malformed override range, or a `versionPrefix`
+   without `versionFormat` → `400`; a version matching none of the supplied formats
+   → `404`.
+6. An authenticated caller gets `200`; an unauthenticated request gets `401`.
+7. Preview output equals `detailed-version` for a real seeded component (parity guard).
+
+**Test method:** `VersionPreviewServiceImplTest` —
+`SYS-059 base render`, `SYS-059 override range selection`,
+`SYS-059 custom prefix render`, `SYS-059 padding is template-driven`,
+`SYS-059 hotfix coordinate`, `SYS-059 unmatched version is not found`,
+`SYS-059 invalid version rejected`,
+`SYS-059 malformed override range rejected`,
+`SYS-059 prefix without wrapper format rejected`; `VersionsControllerV4Test` —
+`SYS-059 authenticated preview returns rendered coordinates`,
+`SYS-059 unauthenticated preview is 401`, `SYS-059 invalid version is 400`,
+`SYS-059 preview matches detailed-version for a real component`.

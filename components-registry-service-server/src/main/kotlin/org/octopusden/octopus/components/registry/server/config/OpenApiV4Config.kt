@@ -39,6 +39,8 @@ class OpenApiV4Config {
                 "/rest/api/4/info",
                 // MigrationStatusControllerV4 — anonymous migration-activity probe (SYS-055).
                 "/rest/api/4/migration-status",
+                // VersionsControllerV4 — stateless version-format preview (SYS-059).
+                "/rest/api/4/versions/**",
                 // AuthController at /auth/me — outside /rest/api/4.
                 "/auth/**",
             )
