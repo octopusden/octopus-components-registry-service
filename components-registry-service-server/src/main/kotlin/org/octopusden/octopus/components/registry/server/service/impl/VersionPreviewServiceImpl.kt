@@ -36,19 +36,23 @@ class VersionPreviewServiceImpl(
             "version '$version' is not a parseable numeric version"
         }
 
-        // Range selection: the first override whose range contains the input
-        // version wins; the base applies when none matches. Range strings are
-        // validated here — a malformed range throws IllegalArgumentException
-        // (→ 400 via ControllerExceptionHandler).
-        val matched =
-            request.overrides.firstOrNull { override ->
-                versionRangeFactory.create(override.versionRange).containsVersion(numericVersion)
-            }
         val base = request.base
 
-        // Effective format = base overlaid with the matched override's present
-        // (non-null) fields.
-        fun effective(select: JiraPreviewFormatFields.() -> String?): String? = matched?.select() ?: base.select()
+        // Per-FIELD override resolution. Overrides are per-(range, attribute): the
+        // editor may override different jira attributes on DIFFERENT ranges (e.g.
+        // releaseVersionFormat on (,1.0.107) and hotfixVersionFormat on (,1.2.471)),
+        // and one version can fall inside several of them. So each field is resolved
+        // independently — the first override that BOTH contains the version AND sets
+        // that field wins; otherwise the base. Reading every field off a single
+        // "winning override" would drop the other attributes' overrides. Range
+        // strings are validated here (a malformed range → IllegalArgumentException
+        // → 400 via ControllerExceptionHandler).
+        fun effective(select: JiraPreviewFormatFields.() -> String?): String? =
+            request.overrides
+                .firstOrNull { override ->
+                    override.select() != null && versionRangeFactory.create(override.versionRange).containsVersion(numericVersion)
+                }?.select()
+                ?: base.select()
 
         val prefix = effective { versionPrefix }
         val wrapperFormat = effective { versionFormat }
