@@ -24,6 +24,15 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentArtifac
  *
  * CONTIGUITY (not global grouping) preserves author/request order and never merges two
  * independent same-token mappings that a third, different mapping separates.
+ *
+ * Merging is provenance-agnostic ON PURPOSE and is SEMANTICALLY LOSSLESS: it does not matter
+ * whether two adjacent same-(mode,tokens) rows for groups `a` and `b` came from splitting one
+ * `"a,b"` pair or from two independently-authored v4 rows — the legacy pair `"a,b"→X` denotes
+ * exactly the same ownership set as `{a→X, b→X}` (a real groupId matches the CSV pattern iff it
+ * equals one of its items; the reverse resolver and the uniqueness matrix both tokenize). The
+ * forward wire holds one pair per range, so the only alternative is to DROP the non-primary group
+ * — strictly worse. Rows that differ in mode or tokens are genuinely distinct pairs and are never
+ * merged; the single-pair surfaces then keep only the primary run, exactly as before.
  */
 internal object ArtifactOwnershipGrouping {
 
@@ -59,7 +68,9 @@ internal object ArtifactOwnershipGrouping {
 
     private fun keyOf(mapping: ComponentArtifactMappingEntity, index: Int): RunKey =
         when (ArtifactIdMode.valueOf(mapping.artifactIdMode)) {
-            // Per-row unique index ⇒ never equal to any neighbour ⇒ never merged.
+            // Baking the row's position into the key makes it unequal to any neighbour, so an
+            // ALL_EXCEPT_CLAIMED row is always its own run (never merged). This is a pure in-memory
+            // guarantee from [uniq] — there is no DB uniqueness constraint behind it.
             ArtifactIdMode.ALL_EXCEPT_CLAIMED -> RunKey(mapping.artifactIdMode, emptyList(), index)
             ArtifactIdMode.EXPLICIT -> RunKey(mapping.artifactIdMode, tokensOf(mapping), null)
             ArtifactIdMode.ALL -> RunKey(mapping.artifactIdMode, emptyList(), null)

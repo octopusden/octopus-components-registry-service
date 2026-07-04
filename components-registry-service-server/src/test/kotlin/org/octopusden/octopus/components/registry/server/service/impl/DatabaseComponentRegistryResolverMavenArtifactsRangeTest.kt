@@ -945,7 +945,10 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
     fun `ARTGRP-001 split explicit group rows recompose to csv wire`() {
         val comp = makeComponent("artgrp-split-explicit")
         comp.distributionExplicit = true
-        // Post-canonicalization storage: one row per groupId, identical token, contiguous sortOrder.
+        // Two SEPARATE per-groupId rows sharing mode+token (the post-canonicalization storage shape —
+        // and the identical shape whether they came from splitting one "a,b" pair or from two
+        // independently-authored v4 rows). Both re-compose: "a,b"→X ≡ {a→X, b→X}, so the merge is
+        // semantically lossless and NOT provenance-dependent.
         comp.addOwnershipMapping("grp-alfa", "widget")
         comp.addOwnershipMapping("grp-beta", "widget")
         comp.configurations.add(makeBase(comp, ALL_VERSIONS))
@@ -1021,6 +1024,26 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
         assertNotNull(entry, "ALL_VERSIONS entry must be present")
         assertEquals("grp-alfa,grp-beta", entry!!.groupPattern, "a legacy single CSV row must keep rendering the CSV verbatim")
         assertEquals("widget", entry.artifactPattern)
+    }
+
+    @Test
+    @DisplayName(
+        "ARTGRP-005 (ALL mode merge): two same-range ALL rows for different groups re-compose into the " +
+            "catch-all pair with the CSV group — 'own everything under a' + 'under b' ≡ 'under a,b'",
+    )
+    fun `ARTGRP-005 all-mode rows for different groups recompose`() {
+        val comp = makeComponent("artgrp-all-mode")
+        comp.distributionExplicit = true
+        // ALL mode = catch-all artifact pattern; two groups. Merging is lossless (same catch-all).
+        comp.addOwnershipMapping("grp-alfa", V1_WILDCARD)
+        comp.addOwnershipMapping("grp-beta", V1_WILDCARD)
+        comp.configurations.add(makeBase(comp, ALL_VERSIONS))
+        stubComponent(comp)
+
+        val entry = resolver.getMavenArtifactParameters("artgrp-all-mode")[ALL_VERSIONS]
+        assertNotNull(entry, "ALL_VERSIONS entry must be present")
+        assertEquals("grp-alfa,grp-beta", entry!!.groupPattern, "ALL rows for different groups re-compose to the CSV group")
+        assertEquals(V1_WILDCARD, entry.artifactPattern, "shared catch-all pattern is unchanged")
     }
 
     @Test
