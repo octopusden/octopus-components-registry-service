@@ -91,6 +91,48 @@ class VersionPreviewServiceImplTest {
     }
 
     @Test
+    @DisplayName("SYS-059: overrides on DIFFERENT ranges/attributes each resolve per-field (not one winning override)")
+    fun `SYS-059 per-field override resolution across ranges`() {
+        // Reproduces the editor scenario: a release override on (,1.0.107) and a
+        // hotfix override on (,1.2.471). Version 1.0.3-87 falls inside BOTH ranges.
+        // The release coordinate MUST use the release override — regardless of the
+        // hotfix override being listed first — because overrides are per-(range,
+        // attribute), not one winning object.
+        val result =
+            service.preview(
+                VersionPreviewRequest(
+                    version = "1.0.3-87",
+                    hotfixEnabled = true,
+                    base =
+                        VersionPreviewFormats(
+                            minorVersionFormat = "\$major.\$minor",
+                            releaseVersionFormat = "\$major.\$minor.\$service-\$fix",
+                            lineVersionFormat = "\$major.\$minor",
+                            hotfixVersionFormat = "\$major.\$minor.\$service-\$fix-\$build",
+                        ),
+                    overrides =
+                        listOf(
+                            // Listed FIRST so a "first matching override wins" bug would
+                            // pick this one and drop the release override below.
+                            VersionPreviewOverride(
+                                versionRange = "(,1.2.471)",
+                                hotfixVersionFormat = "\$major.\$minor.\$service-\$fix",
+                            ),
+                            VersionPreviewOverride(
+                                versionRange = "(,1.0.107)",
+                                releaseVersionFormat = "\$major.\$minor.\$service",
+                            ),
+                        ),
+                ),
+            )
+
+        // Release uses the (,1.0.107) override "$major.$minor.$service" → "1.0.3"
+        // (NOT the base "$major.$minor.$service-$fix" → "1.0.3-87").
+        assertEquals("1.0.3", result.releaseVersion.version)
+        assertEquals("1.0.3_RC", result.rcVersion.version)
+    }
+
+    @Test
     @DisplayName("SYS-059: custom versionPrefix renders jiraVersion with the wrapper; version stays unwrapped")
     fun `SYS-059 custom prefix render`() {
         val result =
