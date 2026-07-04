@@ -36,8 +36,8 @@ import java.util.UUID
  * component entirely.
  *
  * The affected system codes are not exercised by production traffic, so the
- * request-replay compat baseline CRS gates its merges on never touches this
- * path — a single-value regression here slipped past the baseline entirely.
+ * request-replay compat baseline that CRS gates its merges on never touches
+ * this path — a single-value regression here slipped past the baseline entirely.
  * This test closes that coverage gap by pinning multi-system membership at the
  * v4 API round-trip: a component created with two systems must be returned by
  * a filter for EITHER system, and its detail/summary must echo BOTH.
