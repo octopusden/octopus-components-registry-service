@@ -431,13 +431,17 @@ class ComponentCodeRenderer(
         // top block / effective range for the resolved view / the override's range for a range
         // block), rendered to the legacy (groupPattern, artifactPattern) form. ALL_EXCEPT_CLAIMED
         // uses the sibling-aware export pattern from [exportPatterns] when supplied.
-        val sorted = mappings.sortedBy { it.sortOrder }
-        if (sorted.isEmpty()) return
+        // Normalized storage keeps one groupId per row; re-compose contiguous split-equivalent rows
+        // (fragments of one legacy pair) into a SINGLE `artifact` block with the group re-joined by ','
+        // so view-as-code stays byte-stable against the legacy DSL. Genuinely-distinct same-range
+        // mappings (different tokens / ALL_EXCEPT groups) stay separate blocks (their own runs).
+        val runs = ArtifactOwnershipGrouping.collapseRuns(mappings)
+        if (runs.isEmpty()) return
         cb.open("artifactIds")
-        sorted.forEach { m ->
+        runs.forEach { run ->
             cb.open("artifact")
-            cb.str("groupPattern", m.groupPattern)
-            cb.str("artifactPattern", artifactPatternFor(m, exportPatterns))
+            cb.str("groupPattern", ArtifactOwnershipGrouping.joinGroupPattern(run))
+            cb.str("artifactPattern", artifactPatternFor(run.first(), exportPatterns))
             cb.close()
         }
         cb.close()
