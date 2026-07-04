@@ -47,7 +47,11 @@ data class VersionPreviewFormats(
     override val buildVersionFormat: String? = null,
     @field:Schema(description = "Falls back to the minor version format when blank.")
     override val lineVersionFormat: String? = null,
-    @field:Schema(description = "When present (non-blank), a hotfix coordinate is rendered in the response.")
+    @field:Schema(
+        description = "Hotfix version format. A hotfix coordinate is rendered only when the request's " +
+            "hotfixEnabled is true; this format then shapes it. When hotfixEnabled is true but this is omitted, a " +
+            "degenerate empty hotfix coordinate is rendered (matching detailed-version). Ignored when hotfixEnabled is false.",
+    )
     override val hotfixVersionFormat: String? = null,
     @field:Schema(description = "Custom-component version prefix (e.g. \"acme\"). Requires versionFormat when set.")
     override val versionPrefix: String? = null,
@@ -82,8 +86,9 @@ data class VersionPreviewRequest(
     val technical: Boolean = false,
     @field:Schema(
         description = "Whether hotfix versioning is enabled for the component (in the persisted path this derives " +
-            "from a configured hotfix VCS branch, NOT from the presence of a hotfix format). A hotfix coordinate is " +
-            "rendered only when this is true AND a hotfixVersionFormat resolves for the version.",
+            "from a configured hotfix VCS branch, NOT from the presence of a hotfix format). When true, a hotfix " +
+            "coordinate is rendered — shaped by hotfixVersionFormat, or a degenerate empty coordinate when no format " +
+            "resolves (matching detailed-version). When false, no hotfix coordinate is rendered regardless of the format.",
     )
     val hotfixEnabled: Boolean = false,
     val base: VersionPreviewFormats,

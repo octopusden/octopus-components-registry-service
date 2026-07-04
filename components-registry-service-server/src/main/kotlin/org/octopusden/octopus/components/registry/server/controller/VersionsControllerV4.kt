@@ -49,7 +49,9 @@ class VersionsControllerV4(
     fun preview(
         @RequestBody request: VersionPreviewRequest,
     ): DetailedComponentVersion {
-        LOG.info("Preview version coordinates for '{}' ({} override(s))", request.version, request.overrides.size)
+        // DEBUG, not INFO: the editor calls this on every keystroke (debounced),
+        // so per-request INFO would flood prod logs.
+        LOG.debug("Preview version coordinates for '{}' ({} override(s))", request.version, request.overrides.size)
         return versionPreviewService.preview(request)
     }
 

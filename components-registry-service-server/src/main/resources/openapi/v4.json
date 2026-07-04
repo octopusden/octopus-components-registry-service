@@ -2404,7 +2404,7 @@
             "type" : "string"
           },
           "hotfixVersionFormat" : {
-            "description" : "When present (non-blank), a hotfix coordinate is rendered in the response.",
+            "description" : "Hotfix version format. A hotfix coordinate is rendered only when the request's hotfixEnabled is true; this format then shapes it. When hotfixEnabled is true but this is omitted, a degenerate empty hotfix coordinate is rendered (matching detailed-version). Ignored when hotfixEnabled is false.",
             "type" : "string"
           },
           "lineVersionFormat" : {
@@ -2470,7 +2470,7 @@
             "$ref" : "#/components/schemas/VersionPreviewFormats"
           },
           "hotfixEnabled" : {
-            "description" : "Whether hotfix versioning is enabled for the component (in the persisted path this derives from a configured hotfix VCS branch, NOT from the presence of a hotfix format). A hotfix coordinate is rendered only when this is true AND a hotfixVersionFormat resolves for the version.",
+            "description" : "Whether hotfix versioning is enabled for the component (in the persisted path this derives from a configured hotfix VCS branch, NOT from the presence of a hotfix format). When true, a hotfix coordinate is rendered — shaped by hotfixVersionFormat, or a degenerate empty coordinate when no format resolves (matching detailed-version). When false, no hotfix coordinate is rendered regardless of the format.",
             "type" : "boolean"
           },
           "overrides" : {
