@@ -2416,6 +2416,7 @@ class ComponentManagementServiceImpl(
         config: ComponentConfigurationEntity,
         artifacts: List<MavenArtifactRequest>,
     ) {
+        artifacts.forEach { validateMavenArtifactCoordinate(it) }
         config.mavenArtifacts.clear()
         artifacts.forEachIndexed { index, req ->
             config.mavenArtifacts.add(
@@ -2423,8 +2424,11 @@ class ComponentManagementServiceImpl(
                     componentConfiguration = config,
                     groupPattern = req.groupPattern,
                     artifactPattern = req.artifactPattern,
-                    extension = req.extension,
-                    classifier = req.classifier,
+                    // Normalize blank → null, matching the import path
+                    // (parseMavenGavEntry's `takeIf { isNotEmpty }`), so a v4-written
+                    // "" and an import-written null compare equal in MavenGavCollision.
+                    extension = req.extension?.takeIf { it.isNotBlank() },
+                    classifier = req.classifier?.takeIf { it.isNotBlank() },
                     sortOrder = index,
                 ),
             )
@@ -3341,6 +3345,44 @@ class ComponentManagementServiceImpl(
         require(value.isNotBlank()) { "package.packageType must not be blank" }
         require(value in PACKAGE_TYPE_NAMES) {
             "Invalid package.packageType: '$value'. Allowed: $PACKAGE_TYPE_NAMES"
+        }
+    }
+
+    /**
+     * A distribution Maven coordinate must carry BOTH a groupPattern and an
+     * artifactPattern — the structured-DTO equivalent of the import path's
+     * "group:artifact" requirement (parseMavenGavEntry rejects < 2 segments).
+     * A blank field was previously copied verbatim (201), silently persisting a
+     * broken coordinate — symmetric with the import silent-drop. A groupId-only
+     * coordinate (blank artifactPattern) is not supported; see TD-011 / #349
+     * (if groupId-only support is ever added, relax the artifactPattern check).
+     */
+    private fun validateMavenArtifactCoordinate(req: MavenArtifactRequest) {
+        require(req.groupPattern.isNotBlank()) {
+            "distribution.mavenArtifacts: groupPattern must not be blank"
+        }
+        require(req.artifactPattern.isNotBlank()) {
+            "distribution.mavenArtifacts: artifactPattern must not be blank " +
+                "(groupId-only coordinate '${req.groupPattern}' is not supported — see TD-011/#349)"
+        }
+        // The V1-compat read path (EntityMappers.composeGavCsv) rebuilds the GAV
+        // string as `group:artifact[:ext[:classifier]]`. A ':' inside any field
+        // would silently corrupt that round-trip (re-parsing to a DIFFERENT
+        // coordinate) — the exact divergence class this guard closes — and ':'
+        // is never valid inside a Maven groupId/artifactId/type/classifier. So
+        // reject ':' in every field. NOTE: ',' is NOT rejected — a groupPattern
+        // is legitimately a comma-separated CSV of groups (MavenGavCollision
+        // splits it), a first-class pattern shape.
+        listOf(
+            "groupPattern" to req.groupPattern,
+            "artifactPattern" to req.artifactPattern,
+            "extension" to req.extension,
+            "classifier" to req.classifier,
+        ).forEach { (field, value) ->
+            require(value == null || !value.contains(':')) {
+                "distribution.mavenArtifacts: $field must not contain ':' " +
+                    "(the coordinate segment separator; value='$value')"
+            }
         }
     }
 

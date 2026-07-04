@@ -142,6 +142,128 @@ class V4WriteValidationTest {
         postCreate(body).andExpect(status().isBadRequest)
     }
 
+    // ── distribution.mavenArtifacts coordinate validation (TD-011 / #349) ──
+    // Symmetric with the import fail-loud guard: a Maven coordinate must carry
+    // BOTH a groupPattern and an artifactPattern. A blank field is the v4
+    // structured equivalent of the import's "< 2 colon-segments" drop, and was
+    // previously accepted verbatim (201) — a silent-broken-data trap.
+
+    @Test
+    @DisplayName("CREATE rejects distribution.mavenArtifacts[].groupPattern blank")
+    fun create_rejects_blankMavenGroupPattern() {
+        val body =
+            """
+            {
+              "name": "validation-test-comp-mvn-blankgroup",
+              "componentOwner": "owner1",
+              "group": {"groupKey": "org.example.test", "isFake": false},
+              "baseConfiguration": {
+                "build": {"buildSystem": "MAVEN"},
+                "mavenArtifacts": [ {"groupPattern": "", "artifactPattern": "alpha"} ]
+              }
+            }
+            """.trimIndent()
+        postCreate(body).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    @DisplayName("CREATE rejects distribution.mavenArtifacts[].artifactPattern blank (groupId-only coordinate)")
+    fun create_rejects_blankMavenArtifactPattern() {
+        val body =
+            """
+            {
+              "name": "validation-test-comp-mvn-blankart",
+              "componentOwner": "owner1",
+              "group": {"groupKey": "org.example.test", "isFake": false},
+              "baseConfiguration": {
+                "build": {"buildSystem": "MAVEN"},
+                "mavenArtifacts": [ {"groupPattern": "org.example", "artifactPattern": ""} ]
+              }
+            }
+            """.trimIndent()
+        postCreate(body).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    @DisplayName("CREATE rejects a distribution.mavenArtifacts pattern containing ':' (segment separator)")
+    fun create_rejects_mavenCoordinateWithColon() {
+        // A ':' smuggled into a pattern corrupts the V1-compat GAV round-trip
+        // (EntityMappers.composeGavCsv re-parses to a different coordinate). The
+        // import path can't produce such a segment; the v4 write path rejects it
+        // for symmetry. (',' is intentionally allowed — groupPattern is a CSV.)
+        val colon =
+            """
+            {
+              "name": "validation-test-comp-mvn-colon",
+              "componentOwner": "owner1",
+              "group": {"groupKey": "org.example.test", "isFake": false},
+              "baseConfiguration": {
+                "build": {"buildSystem": "MAVEN"},
+                "mavenArtifacts": [ {"groupPattern": "org.example:injected", "artifactPattern": "alpha"} ]
+              }
+            }
+            """.trimIndent()
+        postCreate(colon).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    @DisplayName("CREATE accepts a CSV groupPattern (comma-separated groups are a valid pattern shape)")
+    fun create_accepts_csvGroupPattern() {
+        val body =
+            """
+            {
+              "name": "validation-test-comp-mvn-csvgroup",
+              "componentOwner": "owner1",
+              "group": {"groupKey": "org.example.test", "isFake": false},
+              "baseConfiguration": {
+                "build": {"buildSystem": "MAVEN"},
+                "mavenArtifacts": [ {"groupPattern": "org.example.a,org.example.b", "artifactPattern": "alpha"} ]
+              }
+            }
+            """.trimIndent()
+        postCreate(body).andExpect(status().isCreated)
+    }
+
+    @Test
+    @DisplayName("PATCH rejects a blank distribution.mavenArtifacts coordinate (symmetric with CREATE)")
+    fun patch_rejects_blankMavenArtifactPattern() {
+        val seedResponse =
+            postCreate(validSeedBody("validation-test-comp-mvn-patch"))
+                .andExpect(status().is2xxSuccessful)
+                .andReturn().response.contentAsString
+        val seed = objectMapper.readTree(seedResponse)
+        val id = seed["id"].asText()
+        val versionLock = seed["version"].asLong()
+        val patchBody =
+            """{"version": $versionLock, "baseConfiguration": {"mavenArtifacts": """ +
+                """[ {"groupPattern": "org.example", "artifactPattern": ""} ]}}"""
+        mvc
+            .perform(
+                patch("/rest/api/4/components/$id")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(patchBody),
+            ).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    @DisplayName("CREATE accepts a well-formed distribution.mavenArtifacts coordinate")
+    fun create_accepts_validMavenCoordinate() {
+        val body =
+            """
+            {
+              "name": "validation-test-comp-mvn-ok",
+              "componentOwner": "owner1",
+              "group": {"groupKey": "org.example.test", "isFake": false},
+              "baseConfiguration": {
+                "build": {"buildSystem": "MAVEN"},
+                "mavenArtifacts": [ {"groupPattern": "org.example", "artifactPattern": "alpha", "extension": "jar"} ]
+              }
+            }
+            """.trimIndent()
+        postCreate(body).andExpect(status().isCreated)
+    }
+
     @Test
     @DisplayName("POST /field-overrides rejects scalar build.buildSystem with unknown enum value")
     fun fieldOverride_rejects_unknownBuildSystemScalar() {

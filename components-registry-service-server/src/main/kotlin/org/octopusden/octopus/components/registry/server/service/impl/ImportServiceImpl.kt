@@ -913,6 +913,12 @@ class ImportServiceImpl(
         // migrateAllComponents fails just this component, not the batch).
         validatePerComponentDistributionInvariants(componentKey, configs)
 
+        // TD-011 / CRS #349: reject malformed distribution.GAV Maven coordinates
+        // (groupId-only / blank segment) that the import previously silently
+        // dropped. Fail-loud with component + raw entry + reason; symmetric with
+        // the v4 write-path check. Same per-component try/catch scope as above.
+        validateDistributionCoordinates(componentKey, configs)
+
         // Decoupled version model (ADR-018): the base row is ALWAYS the effective
         // default at ALL_VERSIONS, and coverage is a separate layer expressed as
         // RANGE_PRESENCE rows. `supported = ALL` exactly when the DSL declares no
