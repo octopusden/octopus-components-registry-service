@@ -28,13 +28,10 @@ data class ComponentUpdateRequest(
     val displayName: String? = null,
     val componentOwner: String? = null,
     val productType: String? = null,
-    // Single-value (see Create DTO). PATCH semantic: null = "don't touch"
-    // (matches the rest of this PATCH body — Jackson cannot distinguish
-    // field-absent from explicit-null without a presence-preserving DTO).
-    // Clearing the system requires an explicit follow-up flag (e.g.
-    // `clearSystem: Boolean`); not in scope here because the original
-    // spec did not request it.
-    val system: String? = null,
+    // Multi-value (see Create DTO). PATCH semantic: null = "don't touch"; a
+    // non-null set (including the empty set) REPLACES the whole membership —
+    // an empty set clears all systems (mirrors the labels PATCH semantic).
+    val systems: Set<String>? = null,
     val clientCode: String? = null,
     val solution: Boolean? = null,
     val parentComponentName: String? = null,

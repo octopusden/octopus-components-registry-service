@@ -2092,14 +2092,10 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
     labels = ['Label1']
     groupId = "org.octopusden.octopus.docmgr"
     artifactId = "document-manager"
-    // Single-value (post ui-swift-sloth-system-single). Was "CLASSIC,ALFA";
-    // collapsed so the GitVsDbValidationTest VAL-001 parity check holds —
-    // the v4 import keeps only the first non-blank DSL system, so a
-    // multi-valued DSL declaration diverges Git ↔ DB JSON shape for this
-    // endpoint. Production-like fixtures intentionally exercise the new
-    // single-value contract; multi-valued legacy DSL is exercised
-    // separately in `test-common/.../TestComponents.groovy` (TESTONE).
-    system = "CLASSIC"
+    // Multi-value system membership (`component_systems` junction). Git-source
+    // and DB-source resolvers both round-trip the full set, so the
+    // GitVsDbValidationTest parity check holds for a multi-valued declaration.
+    system = "CLASSIC,ALFA"
     buildSystem = GRADLE
 
     jira {

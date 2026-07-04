@@ -23,6 +23,7 @@ import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
 import org.octopusden.octopus.components.registry.server.repository.ComponentBuildToolBeanRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentLabelRepository
+import org.octopusden.octopus.components.registry.server.repository.ComponentSystemRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRequiredToolRepository
 import org.octopusden.octopus.components.registry.server.repository.DistributionDockerImageRepository
@@ -86,6 +87,7 @@ class MIG047FieldOverrideWriteGuardTest {
                 componentRepository = componentRepository,
                 configurationRepository = configurationRepository,
                 componentLabelRepository = mock(ComponentLabelRepository::class.java),
+                componentSystemRepository = mock(ComponentSystemRepository::class.java),
                 componentRequiredToolRepository = mock(ComponentRequiredToolRepository::class.java),
                 componentBuildToolBeanRepository = mock(ComponentBuildToolBeanRepository::class.java),
                 mavenArtifactRepository = mock(DistributionMavenArtifactRepository::class.java),

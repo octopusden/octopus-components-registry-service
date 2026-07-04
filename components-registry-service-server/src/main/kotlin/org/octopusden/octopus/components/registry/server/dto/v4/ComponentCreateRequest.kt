@@ -30,12 +30,12 @@ data class ComponentCreateRequest(
     val displayName: String? = null,
     val componentOwner: String? = null,
     val productType: String? = null,
-    // Single-value (see DTO KDoc): a component belongs to at most one system.
-    // The legacy `systems: Set<String>` was widened to many during early DSL
-    // import; business decision (post-#299) is exactly one. The column is
-    // nullable so a component without a designated system stays expressible
-    // until/if a strict-contract follow-up makes it required.
-    val system: String? = null,
+    // Multi-value: a component may be classified under several system codes at
+    // once (stored as `component_systems` junction rows). Empty set = no system
+    // assignment. Each code is validated against the configured supportedSystems
+    // allowlist (or the master `systems` dictionary) on write.
+    @field:Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    val systems: Set<String> = emptySet(),
     val clientCode: String? = null,
     val solution: Boolean? = null,
     val parentComponentName: String? = null,

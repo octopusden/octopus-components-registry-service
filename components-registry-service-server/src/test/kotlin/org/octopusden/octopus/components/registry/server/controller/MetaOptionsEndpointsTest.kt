@@ -342,7 +342,7 @@ class MetaOptionsEndpointsTest {
                     .with(adminJwt())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(
-                        """{"name":"$name","displayName":"$name","system":"$system",""" +
+                        """{"name":"$name","displayName":"$name","systems":["$system"],""" +
                             """"componentOwner":"owner1",""" +
                             """"group":{"groupKey":"org.example.test","isFake":false},""" +
                             """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
@@ -351,7 +351,7 @@ class MetaOptionsEndpointsTest {
     }
 
     @Test
-    @DisplayName("SYS-042: GET /meta/systems returns sorted distinct system codes from components.system_code")
+    @DisplayName("SYS-042: GET /meta/systems returns sorted distinct system codes from the component_systems junction")
     fun `SYS-042 GET meta systems returns sorted distinct codes`() {
         // Seed three components with overlapping system codes; distinct
         // ascending order must be alpha, beta, gamma regardless of

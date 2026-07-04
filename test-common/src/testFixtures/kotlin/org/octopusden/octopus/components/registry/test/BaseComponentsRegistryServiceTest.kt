@@ -104,17 +104,14 @@ abstract class BaseComponentsRegistryServiceTest {
 
     /**
      * Expected `system` set on TESTONE (and the sub-component `versions-api`
-     * which inherits its parent's system) for the V1 resolver shape. The
-     * DSL declares `system = "CLASSIC,ALFA"`, which under the legacy
-     * (git-source) resolver round-trips through `EscrowModuleConfig.system`
-     * verbatim and yields `setOf("ALFA", "CLASSIC")`.
-     *
-     * The DB-source resolver (post ui-swift-sloth-system-single) stores the
-     * component's system as a scalar FK (`components.system_code`) and keeps
-     * only the FIRST DSL entry under the new at-most-one contract; that
-     * variant overrides this property to `setOf("CLASSIC")` so the shared
-     * RES-006/007/008 assertions remain expressive for both backends without
-     * forking the test methods.
+     * which inherits its parent's system) for the V1 resolver shape. The DSL
+     * declares `system = "CLASSIC,ALFA"` (multi-system). System membership is a
+     * many-to-many relationship (`component_systems` junction), so BOTH the
+     * git-source resolver (via `EscrowModuleConfig.systemSet`) and the
+     * DB-source resolver (via the restored junction) round-trip the full set
+     * `setOf("ALFA", "CLASSIC")` — no per-backend override needed. Membership is
+     * order-agnostic (Set equality), matching the consumer semantics
+     * (`Component.system.contains(...)`).
      */
     protected open val expectedTestoneSystemSet: Set<String> = setOf("ALFA", "CLASSIC")
 
@@ -296,9 +293,8 @@ abstract class BaseComponentsRegistryServiceTest {
 
         expectedComponent.releaseManager = "user"
         expectedComponent.securityChampion = "user"
-        // System set is backend-dependent: git-source returns the full
-        // CSV-parsed set, db-source returns only the first under the
-        // single-value contract. See `expectedTestoneSystemSet`.
+        // System set = full multi-system membership; git-source and DB-source
+        // resolvers return it identically. See `expectedTestoneSystemSet`.
         expectedComponent.system = expectedTestoneSystemSet
         expectedComponent.clientCode = "CLIENT_CODE"
         expectedComponent.releasesInDefaultBranch = false
@@ -322,9 +318,8 @@ abstract class BaseComponentsRegistryServiceTest {
             )
         expectedComponent.releaseManager = "user"
         expectedComponent.securityChampion = "user"
-        // System set is backend-dependent: git-source returns the full
-        // CSV-parsed set, db-source returns only the first under the
-        // single-value contract. See `expectedTestoneSystemSet`.
+        // System set = full multi-system membership; git-source and DB-source
+        // resolvers return it identically. See `expectedTestoneSystemSet`.
         expectedComponent.system = expectedTestoneSystemSet
         expectedComponent.clientCode = "CLIENT_CODE"
         expectedComponent.releasesInDefaultBranch = false
@@ -407,9 +402,8 @@ abstract class BaseComponentsRegistryServiceTest {
             )
         expectedComponent.releaseManager = "user"
         expectedComponent.securityChampion = "user"
-        // System set is backend-dependent: git-source returns the full
-        // CSV-parsed set, db-source returns only the first under the
-        // single-value contract. See `expectedTestoneSystemSet`.
+        // System set = full multi-system membership; git-source and DB-source
+        // resolvers return it identically. See `expectedTestoneSystemSet`.
         expectedComponent.system = expectedTestoneSystemSet
         expectedComponent.clientCode = "CLIENT_CODE"
         expectedComponent.releasesInDefaultBranch = false

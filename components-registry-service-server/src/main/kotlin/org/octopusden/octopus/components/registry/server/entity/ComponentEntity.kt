@@ -182,13 +182,6 @@ class ComponentEntity(
     @Column(name = "distribution_external")
     var distributionExternal: Boolean? = null,
 
-    // Scalar FK to `systems(code)`. Collapsed from the M:N junction
-    // `component_systems` in this iteration — a component now belongs to
-    // at most one system. Nullable on the schema; service-layer rejects
-    // a non-blank value that is not in the master `systems` table.
-    @Column(name = "system_code", length = 50)
-    var systemCode: String? = null,
-
     @Version
     @Column(name = "version", nullable = false)
     var version: Long = 0,
@@ -236,6 +229,13 @@ class ComponentEntity(
     @OneToMany(mappedBy = "component", fetch = FetchType.LAZY)
     @BatchSize(size = BATCH_FETCH_SIZE)
     var labelJunctions: MutableList<ComponentLabelEntity> = mutableListOf(),
+
+    // M:N system membership — a component may be classified under several system
+    // codes at once. No cascade (same convention as `labelJunctions`): rows are
+    // written/removed through `ComponentSystemRepository` after the parent flush.
+    @OneToMany(mappedBy = "component", fetch = FetchType.LAZY)
+    @BatchSize(size = BATCH_FETCH_SIZE)
+    var systemJunctions: MutableList<ComponentSystemEntity> = mutableListOf(),
 ) {
     /** Ordered release-manager usernames (first = primary). */
     fun releaseManagerUsernames(): List<String> =

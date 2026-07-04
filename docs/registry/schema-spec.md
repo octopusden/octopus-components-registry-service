@@ -176,7 +176,6 @@ Identity + fields that never vary per version range.
 | `vcs_external_registry` | TEXT | nullable | vcsSettings.externalRegistry — per-component (audit assertion enforced at migration) |
 | `distribution_explicit` | BOOLEAN | nullable | |
 | `distribution_external` | BOOLEAN | nullable | |
-| `system_code` | VARCHAR(50) | nullable, FK → systems(code) | Single-value system assignment (a component belongs to at most one system). Collapsed from the M:N junction `component_systems` in the post-#299 follow-up. Schema-nullable; service-layer validates non-null values against the env-config `components-registry.supportedSystems` allowlist on CREATE/PATCH, with a fallback path that also accepts codes already in the master `systems` table (so `ImportServiceImpl.seedSystems`-discovered codes remain editable through v4 without a config redeploy). The master row is auto-created via `ensureSystemExists` on first write so the FK is always satisfied. Filter `?system=A,B` is an `IN(...)` predicate against this column (OR-semantic across distinct components). |
 | `version` | BIGINT | NOT NULL DEFAULT 0 | `@Version` optimistic locking |
 | `created_at` | TIMESTAMP WITH TIME ZONE | NOT NULL DEFAULT now() | |
 | `updated_at` | TIMESTAMP WITH TIME ZONE | NOT NULL DEFAULT now() | |
@@ -306,9 +305,10 @@ Each junction has composite PK `(component_X_id, target_code)`.
 | Junction | Connects | FK targets |
 |---|---|---|
 | `component_labels` | `components` ↔ `labels` | components(id), labels(code) |
+| `component_systems` | `components` ↔ `systems` | components(id), systems(code) |
 | `component_required_tools` | `component_configurations` ↔ `tools` | component_configurations(id), tools(name) |
 
-System assignment was historically a third M:N junction (`component_systems`), but the cardinality was collapsed to 1:0..1 in the post-#299 follow-up — a component now belongs to at most one system, represented by the scalar FK `components.system_code → systems(code)` (see §4.1). The master `systems` table is unchanged; only the M:N junction was removed.
+System membership is many-to-many — a component may be classified under several system codes at once (the DSL `system = "X,Y"` CSV declares them). Each non-blank code is validated on CREATE/PATCH against the env-config `components-registry.supportedSystems` allowlist, with a fallback that also accepts codes already in the master `systems` table (so migration-discovered codes remain editable through v4 without a config redeploy); the master row is auto-created via `ensureSystemExists` so the FK is always satisfied. Filter `?system=A,B` JOINs the junction with `IN(...)` + `distinct` (OR-semantic). Membership is order-agnostic (every consumer uses `contains(...)`).
 
 `component_required_tools` is per-version-rangeable; replacement at a specific range uses the `build.requiredTools` marker row.
 

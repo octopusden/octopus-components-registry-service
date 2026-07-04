@@ -26,12 +26,11 @@ import java.nio.file.Paths
 import java.util.UUID
 
 /**
- * Schema v2: `system` was a `text[]` column on the legacy schema, which JPA
- * Criteria couldn't filter portably across H2 PG-compat and Postgres, so the
- * v1 implementation rejected `?system=…` with 400. With the v2 normalised
- * `component_systems` junction table the filter is expressible as a plain
- * JOIN (see `ComponentManagementServiceImpl.buildSpecification`), so the
- * endpoint now returns 200 and a filtered (possibly empty) page.
+ * System membership is a many-to-many relationship modelled by the
+ * `component_systems` junction table, so `?system=…` is expressible as a plain
+ * JOIN + `IN(...)` (see `ComponentManagementServiceImpl.buildSpecification`):
+ * the endpoint returns 200 and a filtered (possibly empty) page. A component
+ * that belongs to several systems matches a filter for ANY of them.
  */
 @AutoConfigureMockMvc
 @SpringBootTest(
@@ -72,9 +71,9 @@ class ListComponentsSystemFilterTest {
      * Behaviour, not just status: when the auto-migrated fixture contains
      * components with `system = "CLASSIC"` (see common/TestComponents.groovy),
      * filtering by `?system=CLASSIC` must return a non-empty content list AND
-     * every returned row must have `system == "CLASSIC"`. A weaker
-     * "expect 200" check would still pass if the new scalar-column filter
-     * were silently ignored and the endpoint returned an unfiltered page.
+     * every returned row must carry `CLASSIC` among its `systems`. A weaker
+     * "expect 200" check would still pass if the junction filter were silently
+     * ignored and the endpoint returned an unfiltered page.
      */
     @Test
     @DisplayName("?system=CLASSIC returns only components whose system == CLASSIC")
@@ -87,10 +86,10 @@ class ListComponentsSystemFilterTest {
         val content = objectMapper.readTree(body).path("content")
         assertTrue(content.isArray && content.size() > 0, "Expected at least one CLASSIC component; got: ${body.take(400)}")
         for (component in content) {
-            val system = component.path("system").asText(null)
+            val systems = component.path("systems").map { it.asText() }.toSet()
             assertTrue(
-                system == "CLASSIC",
-                "Component '${component.path("name").asText()}' returned by ?system=CLASSIC must declare CLASSIC; got system=$system",
+                systems.contains("CLASSIC"),
+                "Component '${component.path("name").asText()}' returned by ?system=CLASSIC must declare CLASSIC; got systems=$systems",
             )
         }
     }
@@ -121,11 +120,12 @@ class ListComponentsSystemFilterTest {
     // repeatable params (?system=A&system=B). Controller normalises both
     // via split-by-comma → trim → drop-empty → distinct → null-if-empty.
     // Multi-select semantics is OR — the picker means "components
-    // belonging to any of these systems". After collapsing the system
-    // model to a scalar (`components.system_code`), each component carries
-    // exactly zero-or-one system. The Specification reduces to a plain
-    // `IN(...)` predicate against the scalar column — no JOIN — and a
-    // component cannot match more than one selection at once.
+    // belonging to any of these systems". The Specification JOINs the
+    // `component_systems` junction and applies `systemCode IN (...)` with
+    // `distinct(true)`. The single-system components below exercise OR
+    // across distinct components; multi-system membership (a single
+    // component matching several selections) is covered by
+    // MultiSystemMembershipTest.
     // -------------------------------------------------------------------
 
     private fun uniqueSysCode(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(6)}"
@@ -149,7 +149,7 @@ class ListComponentsSystemFilterTest {
                     .with(adminJwt())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(
-                        """{"name":"$name","displayName":"$name","system":"$system",""" +
+                        """{"name":"$name","displayName":"$name","systems":["$system"],""" +
                             """"componentOwner":"owner1",""" +
                             """"group":{"groupKey":"org.example.test","isFake":false},""" +
                             """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
@@ -190,12 +190,11 @@ class ListComponentsSystemFilterTest {
     }
 
     @Test
-    @DisplayName("SYS-042: ?system=A,B (CSV) returns components whose single system is A OR B (OR semantics)")
+    @DisplayName("SYS-042: ?system=A,B (CSV) returns components in system A OR B (OR semantics)")
     fun `SYS-042 system A,B CSV OR semantics`() {
-        // After the M:N collapse to single-value, a component cannot carry
-        // "both A and B". OR semantics still holds across distinct
-        // components: filter `?system=A,B` matches any component whose
-        // single `system_code` is in {A, B}.
+        // OR semantics across the junction: `?system=A,B` matches any component
+        // that belongs to A OR B. Exercised here with single-system components;
+        // a component belonging to BOTH is covered by MultiSystemMembershipTest.
         val sysA = uniqueSysCode("orsysa")
         val sysB = uniqueSysCode("orsysb")
         val sysC = uniqueSysCode("orsysc")

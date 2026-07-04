@@ -15,6 +15,7 @@ import org.octopusden.octopus.components.registry.server.repository.ComponentBui
 import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentGroupRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentLabelRepository
+import org.octopusden.octopus.components.registry.server.repository.ComponentSystemRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRequiredToolRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentSourceRepository
@@ -77,6 +78,7 @@ class ImportServicePeopleCsvSplitTest {
             toolRepository = mock(ToolRepository::class.java),
             labelRepository = mock(LabelRepository::class.java),
             componentLabelRepository = mock(ComponentLabelRepository::class.java),
+            componentSystemRepository = mock(ComponentSystemRepository::class.java),
             componentRequiredToolRepository = mock(ComponentRequiredToolRepository::class.java),
             componentBuildToolBeanRepository = mock(ComponentBuildToolBeanRepository::class.java),
             mavenArtifactRepository = mock(DistributionMavenArtifactRepository::class.java),

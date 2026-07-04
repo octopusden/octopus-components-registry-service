@@ -787,12 +787,11 @@ private fun buildEscrowModuleConfig(
     // v1/v2/v3 `$.name` byte-for-byte (null stays null).
     setField(config, "componentDisplayName", component.displayName)
     setField(config, "componentOwner", component.componentOwner)
-    // Single-value system: write the scalar code (or empty string when null).
-    // The legacy DSL field was a CSV; keeping the field name shape but
-    // emitting at most one comma-free token preserves backward compat for
-    // any v1-v3 consumer that still treats `system` as "the first / only
-    // entry of a CSV".
-    setField(config, "system", component.systemCode ?: "")
+    // Multi-value system: emit every membership as the legacy CSV shape so the
+    // v1/v2/v3 read path (EscrowModuleConfig.systemSet → Component.system:
+    // Set<String>) surfaces the full set — matching git-mode. Empty membership
+    // → empty string (same as an unclassified component).
+    setField(config, "system", component.systemJunctions.joinToString(",") { it.systemCode })
     setField(config, "clientCode", component.clientCode)
     setField(config, "solution", component.solution)
     setField(config, "parentComponent", component.parentComponent?.componentKey)

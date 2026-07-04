@@ -79,20 +79,10 @@ CREATE TABLE components (
     -- distribution fields that never vary per-version:
     distribution_explicit       BOOLEAN,
     distribution_external       BOOLEAN,
-    -- system assignment: a component belongs to at most one system. Collapsed
-    -- from the M:N junction `component_systems` in this iteration (per
-    -- `project_db_fresh_on_deploy.md`, no backfill is needed; every CRS
-    -- environment recreates the DB on deploy). Nullable on the column —
-    -- business says "should be set" but the strict-contract requirement on
-    -- `system` was not part of the original ui-swift-sloth plan, so we do
-    -- not force NOT NULL here. If/when that requirement lands, tighten via
-    -- a service-layer validator and (optionally) a follow-up migration.
-    --
-    -- The FK to `systems(code)` is added via `ALTER TABLE` after the
-    -- `systems` table is declared further down in this file — Postgres
-    -- requires the referenced table to exist before the CREATE TABLE that
-    -- references it (even inside the same transaction).
-    system_code                 VARCHAR(50),
+    -- system assignment is a MANY-to-many relationship — a component may be
+    -- classified under several system codes at once — modelled by the
+    -- `component_systems` junction declared further down in this file (not a
+    -- scalar column here). See that table for the FK rationale.
     -- audit / optimistic locking:
     version                     BIGINT NOT NULL DEFAULT 0,              -- @Version
     created_at                  TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
@@ -106,11 +96,6 @@ CREATE INDEX idx_components_parent            ON components(parent_component_id)
 CREATE INDEX idx_components_can_be_parent     ON components(can_be_parent) WHERE can_be_parent = true;
 CREATE INDEX idx_components_group             ON components(component_group_id);
 CREATE INDEX idx_components_live              ON components(component_key) WHERE archived = false;
--- Index supports the `?system=A,B` list-filter (`IN (...)`) on the scalar
--- system_code column. Partial: `IS NOT NULL` skips the long tail of
--- unassigned components from the index entirely (those never match a
--- non-empty filter).
-CREATE INDEX idx_components_system_code       ON components(system_code) WHERE system_code IS NOT NULL;
 
 
 -- -----------------------------------------------------------------------------
@@ -292,28 +277,6 @@ CREATE TABLE systems (
     updated_at  TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
 );
 
--- Deferred FK from `components.system_code` to `systems(code)` — declared
--- here (after `systems` exists) because Postgres requires the referenced
--- table to exist before the FK constraint is created, even within a
--- single transaction. The column itself is defined in the CREATE TABLE
--- for `components` above.
---
--- ON DELETE SET NULL: removing a master system row should not be blocked
--- by lingering component references. Components keep their identity, lose
--- their system assignment, and become available again to the assignment
--- workflow. Choosing SET NULL over RESTRICT (the Postgres default) trades
--- a soft data-quality concern (orphaned components surfacing as
--- `system: null` on the API) for admin operability — deleting a
--- decommissioned system code from the dictionary is now a single
--- operation rather than a multi-step "find and rewrite every dependent
--- component first". The old M:N junction `component_systems` had the
--- same default-RESTRICT FK to `systems(code)`, but junction rows could
--- be removed independently of components; this clause preserves the
--- spirit of that decoupling.
-ALTER TABLE components
-    ADD CONSTRAINT fk_components_system
-    FOREIGN KEY (system_code) REFERENCES systems(code) ON DELETE SET NULL;
-
 CREATE TABLE tools (
     name                  VARCHAR(100) PRIMARY KEY,
     escrow_env_variable   VARCHAR(255),
@@ -335,10 +298,19 @@ CREATE TABLE component_labels (
 );
 CREATE INDEX idx_component_labels_label ON component_labels(label_code);
 
--- (M:N junction `component_systems` removed in this iteration. A
--- component now carries its system assignment as the scalar
--- `components.system_code` column above. The master `systems` table
--- below is unchanged — still used by `/meta/systems/dictionary`.)
+-- M:N junction: a component may be classified under several system codes at
+-- once (e.g. a component shared across systems). The FK to `systems(code)`
+-- uses the Postgres default (RESTRICT): a master system row cannot be dropped
+-- while any component still references it — the operator removes the junction
+-- rows first. Junction rows are removed independently of components (ON DELETE
+-- CASCADE on the component side only). Sourced by `/meta/systems` (in-use
+-- codes) while the master `systems` table backs `/meta/systems/dictionary`.
+CREATE TABLE component_systems (
+    component_id UUID NOT NULL REFERENCES components(id) ON DELETE CASCADE,
+    system_code  VARCHAR(50) NOT NULL REFERENCES systems(code),
+    PRIMARY KEY (component_id, system_code)
+);
+CREATE INDEX idx_component_systems_system ON component_systems(system_code);
 
 CREATE TABLE component_required_tools (
     component_configuration_id UUID NOT NULL REFERENCES component_configurations(id) ON DELETE CASCADE,

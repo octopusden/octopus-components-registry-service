@@ -24,6 +24,7 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentGroupEn
 import org.octopusden.octopus.components.registry.server.entity.ComponentLabelEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentRequiredToolEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentSourceEntity
+import org.octopusden.octopus.components.registry.server.entity.ComponentSystemEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionDockerImageEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionFileUrlArtifactEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionMavenArtifactEntity
@@ -43,6 +44,7 @@ import org.octopusden.octopus.components.registry.server.repository.ComponentLab
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRequiredToolRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentSourceRepository
+import org.octopusden.octopus.components.registry.server.repository.ComponentSystemRepository
 import org.octopusden.octopus.components.registry.server.repository.DistributionDockerImageRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentArtifactMappingRepository
 import org.octopusden.octopus.components.registry.server.repository.DistributionMavenArtifactRepository
@@ -112,6 +114,7 @@ class ImportServiceImpl(
     private val toolRepository: ToolRepository,
     private val labelRepository: LabelRepository,
     private val componentLabelRepository: ComponentLabelRepository,
+    private val componentSystemRepository: ComponentSystemRepository,
     private val componentRequiredToolRepository: ComponentRequiredToolRepository,
     private val componentBuildToolBeanRepository: ComponentBuildToolBeanRepository,
     private val mavenArtifactRepository: DistributionMavenArtifactRepository,
@@ -1494,35 +1497,20 @@ class ImportServiceImpl(
         cfg: EscrowModuleConfig,
     ) {
         val systemStr = cfg.system ?: return
-        // Single-value collapse: the DSL field is historically a CSV that
-        // could carry multiple codes per component. The new schema models
-        // exactly one system per component, so we take the FIRST non-blank
-        // entry and drop the rest. Components whose DSL declares multiple
-        // systems are flagged at WARN level so an operator can decide
-        // whether to split the component or keep the first.
-        val codes = systemStr.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-        val firstCode = codes.firstOrNull() ?: return
-        if (codes.size > 1) {
-            LOG.warn(
-                "linkSystems: component '{}' DSL declares multiple systems ({}); " +
-                    "keeping first ('{}') and dropping the rest under the single-value contract.",
-                component.componentKey,
-                codes,
-                firstCode,
+        // A component may be classified under several system codes at once; the
+        // DSL field is a CSV that carries every one. Persist ALL non-blank
+        // entries as `component_systems` junction rows (dedup on the way in) so
+        // multi-system components round-trip through DB-mode read/filter exactly
+        // as they do through git-mode. The old single-value collapse (keep-first,
+        // drop-rest) is what dropped a component from a report filtered by one
+        // of its OTHER systems.
+        val codes = systemStr.split(",").map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+        for (code in codes) {
+            upsertSystem(code) // ensure dictionary exists
+            componentSystemRepository.save(
+                ComponentSystemEntity(componentId = component.id!!, systemCode = code),
             )
         }
-        upsertSystem(firstCode) // ensure dictionary exists
-        component.systemCode = firstCode
-        // Defence-in-depth: explicit save on the managed entity. The
-        // outer batch loop (`flushAndClearComponentsBatch`) flushes +
-        // clears the persistence context every N components; an
-        // explicit save() here pins the dirty `systemCode` field
-        // through dirty-checking on the *next* flush rather than
-        // relying on the managed-entity invariant alone. Cheap (the
-        // entity is already managed, so save() is a no-op merge) and
-        // makes the field unambiguous against future refactors of the
-        // import loop's flush cadence.
-        componentRepository.save(component)
     }
 
     private fun linkLabels(

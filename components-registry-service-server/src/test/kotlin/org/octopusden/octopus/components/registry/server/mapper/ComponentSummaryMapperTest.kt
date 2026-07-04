@@ -10,6 +10,7 @@ import org.junit.jupiter.params.provider.CsvSource
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentLabelEntity
+import org.octopusden.octopus.components.registry.server.entity.ComponentSystemEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentTeamcityProjectEntity
 import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
 import java.util.UUID
@@ -71,18 +72,21 @@ class ComponentSummaryMapperTest {
         assertNull(response.teamcityProjectId)
         assertNull(response.teamcityProjectUrl)
         assertTrue(response.labels.isEmpty())
-        assertNull(response.system)
+        assertTrue(response.systems.isEmpty())
     }
 
     // -----------------------------------------------------------------------
-    // systemCode → system: String? (single-value)
+    // systemJunctions → systems: Set<String> (multi-value)
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("entity systemCode → single-value `system` field in summary response")
-    fun systemCode_mapsToScalarSystem() {
-        val component = minimalComponent().also { it.systemCode = "UNIX" }
-        assertEquals("UNIX", component.toSummaryResponse().system)
+    @DisplayName("entity systemJunctions → multi-value `systems` set in summary response")
+    fun systemJunctions_mapsToSystemsSet() {
+        val component = minimalComponent()
+        val id = component.id!!
+        component.systemJunctions.add(ComponentSystemEntity(componentId = id, systemCode = "SYS_A"))
+        component.systemJunctions.add(ComponentSystemEntity(componentId = id, systemCode = "SYS_B"))
+        assertEquals(setOf("SYS_A", "SYS_B"), component.toSummaryResponse().systems)
     }
 
     // -----------------------------------------------------------------------
