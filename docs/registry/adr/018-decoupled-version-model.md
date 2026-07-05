@@ -98,7 +98,10 @@ Model a component's configuration as **two independent layers**:
 > compat run (build 4099: ~130k replayed prod-trace tuples + the exhaustive sweep) surfaced exactly
 > 11 affected components — ten on `distribution.gav`/`docker` and one on `escrow.generation`
 > (UNSUPPORTED→AUTO). Component keys are withheld from this public repo (CI Content Validation);
-> the authoritative list is in the internal compat report for build 4099. The domain owner reviewed
+> the authoritative list is in the internal compat report for build 4099, re-confirmed by the
+> 2026-07-05 full re-sweep on v3 HEAD (`bd31abf4` vs released `2.0.88`: 130 700 trace tuples +
+> exhaustive matrix, 142 diffs all suppressed by the amendment entries, 0 active — frozen as
+> `crs-compat-baseline v3-full-20260705`). The domain owner reviewed
 > every live baseline↔candidate pair and confirmed the NEW (newest-block) values are the correct
 > component-level representation (the old output showed retired platforms/artifacts: aix/rhel6
 > zips, `file://` installers, dropped docker images, stale artifact names). These diffs are
