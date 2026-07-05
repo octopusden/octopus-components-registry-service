@@ -16,6 +16,7 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentConfigu
 import org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipRendering
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
+import org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipGrouping
 import org.octopusden.octopus.components.registry.server.mapper.escrowModuleConfigField
 import org.octopusden.octopus.components.registry.server.mapper.rangeApplies
 import org.octopusden.octopus.components.registry.server.mapper.toEscrowModule
@@ -352,7 +353,19 @@ class DatabaseComponentRegistryResolver(
                 SiblingContext(emptyList(), emptyMap())
             }
         return effectiveMappingsByRange(componentEntity)
-            .mapValues { (_, mappings) -> renderForwardMapping(mappings.minByOrNull { it.sortOrder }!!, siblings) }
+            .mapValues { (_, mappings) ->
+                // Normalized storage keeps one groupId per row; re-compose the PRIMARY run's split
+                // rows back into the legacy single pair so the wire stays byte-identical (no group
+                // dropped). The primary run begins at the lowest-sortOrder mapping (legacy primary).
+                val primaryRun = ArtifactOwnershipGrouping.collapseRuns(mappings).first()
+                val rendered = renderForwardMapping(primaryRun.first(), siblings)
+                val joinedGroup = ArtifactOwnershipGrouping.joinGroupPattern(primaryRun)
+                if (joinedGroup == rendered.groupPattern) {
+                    rendered
+                } else {
+                    ComponentArtifactConfiguration(joinedGroup, rendered.artifactPattern)
+                }
+            }
             .filterValues { it.groupPattern.isNotEmpty() || it.artifactPattern.isNotEmpty() }
     }
 

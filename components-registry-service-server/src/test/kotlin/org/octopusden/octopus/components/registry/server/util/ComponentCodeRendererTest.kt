@@ -193,6 +193,47 @@ class ComponentCodeRendererTest {
     }
 
     // ----------------------------------------------------------------------
+    // ARTGRP: artifact-group canonicalization — view-as-code re-composes the
+    // contiguous split-equivalent rows of a normalized (one-groupId-per-row)
+    // ownership into a SINGLE `artifact { }` block per legacy pair, so as-code
+    // stays byte-stable against the legacy DSL. Genuinely-distinct same-range
+    // mappings (different tokens) stay separate blocks.
+    // ----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("ARTGRP-AC-001: two split EXPLICIT group rows render as ONE re-composed artifact block")
+    fun `ARTGRP-AC-001 split rows render one recomposed artifact block`() {
+        val c = component()
+        base(c) { buildSystem = "MAVEN" }
+        // Post-canonicalization storage: one row per groupId, identical token, contiguous sortOrder.
+        ownership(c, "grp-alfa", ArtifactIdMode.EXPLICIT, tokens = listOf("widget"), order = 0)
+        ownership(c, "grp-beta", ArtifactIdMode.EXPLICIT, tokens = listOf("widget"), order = 1)
+        val out = renderer.renderFull(c)
+        assertEquals(
+            1,
+            Regex("artifact \\{").findAll(out).count(),
+            "split rows must re-compose to ONE artifact block, not two:\n$out",
+        )
+        assertTrue(out.contains("groupPattern = \"grp-alfa,grp-beta\""), out)
+        assertTrue(out.contains("artifactPattern = \"widget\""), out)
+    }
+
+    @Test
+    @DisplayName("ARTGRP-AC-002 (no over-join): same-range rows with DIFFERENT tokens stay TWO artifact blocks")
+    fun `ARTGRP-AC-002 heterogeneous rows stay separate blocks`() {
+        val c = component()
+        base(c) { buildSystem = "MAVEN" }
+        ownership(c, "grp-alfa", ArtifactIdMode.EXPLICIT, tokens = listOf("widget-x"), order = 0)
+        ownership(c, "grp-beta", ArtifactIdMode.EXPLICIT, tokens = listOf("widget-y"), order = 1)
+        val out = renderer.renderFull(c)
+        assertEquals(
+            2,
+            Regex("artifact \\{").findAll(out).count(),
+            "distinct-token rows are not split-equivalent → must stay two blocks:\n$out",
+        )
+    }
+
+    // ----------------------------------------------------------------------
     // FULL — exact golden for the minimal shape
     // ----------------------------------------------------------------------
 

@@ -833,17 +833,26 @@ private fun buildEscrowModuleConfig(
         }
     val effectiveMappings =
         containingMappings.ifEmpty { component.artifactMappings.filter { it.versionRange == ALL_VERSIONS } }
-    effectiveMappings.minByOrNull { it.sortOrder }?.let { primary ->
-        setField(config, "groupIdPattern", primary.groupPattern)
-        setField(
-            config,
-            "artifactIdPattern",
-            org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipRendering.renderArtifactPattern(
-                org.octopusden.octopus.components.registry.server.entity.ArtifactIdMode.valueOf(primary.artifactIdMode),
-                primary.tokens.sortedBy { it.sortOrder }.map { it.artifactPattern },
-            ),
-        )
-    }
+    // Normalized storage keeps one groupId per row; re-compose the PRIMARY run's split rows back into
+    // the legacy single pair (groupId re-joined by ',') so the escrow view / view-as-code / compat
+    // baseline stay byte-identical. All rows in a run share mode + tokens, so the primary renders both.
+    org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipGrouping
+        .collapseRuns(effectiveMappings).firstOrNull()?.let { primaryRun ->
+            val primary = primaryRun.first()
+            setField(
+                config,
+                "groupIdPattern",
+                org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipGrouping.joinGroupPattern(primaryRun),
+            )
+            setField(
+                config,
+                "artifactIdPattern",
+                org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipRendering.renderArtifactPattern(
+                    org.octopusden.octopus.components.registry.server.entity.ArtifactIdMode.valueOf(primary.artifactIdMode),
+                    primary.tokens.sortedBy { it.sortOrder }.map { it.artifactPattern },
+                ),
+            )
+        }
 
     return config
 }

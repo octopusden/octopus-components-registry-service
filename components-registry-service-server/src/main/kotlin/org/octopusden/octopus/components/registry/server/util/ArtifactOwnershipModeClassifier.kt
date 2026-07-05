@@ -30,6 +30,22 @@ object ArtifactOwnershipModeClassifier {
     fun splitTokens(pattern: String): List<String> =
         pattern.split(',', '|').map { it.trim() }.filter { it.isNotEmpty() }
 
+    /**
+     * Split a group-list into its individual Maven groupIds (comma-separated; pipe is NOT a group
+     * separator). FAIL-LOUD: an empty segment — a leading/trailing/doubled comma, or a bare `,` —
+     * is REJECTED, not silently dropped, so malformed input cannot quietly lose a group or yield an
+     * empty ownership (canonicalization stores exactly one groupId per row). Caller guarantees a
+     * non-blank input; the returned list is never empty.
+     */
+    fun splitGroups(groupPattern: String): List<String> {
+        val groups = groupPattern.split(',').map { it.trim() }
+        require(groups.all { it.isNotEmpty() }) {
+            "groupPattern '$groupPattern' has an empty groupId segment — list exactly one groupId " +
+                "per comma with no empty items"
+        }
+        return groups
+    }
+
     fun isLiteralToken(token: String): Boolean = LITERAL_TOKEN.matches(token)
 
     /**
