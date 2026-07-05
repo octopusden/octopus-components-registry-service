@@ -20,7 +20,7 @@ project {
 
     params {
         param("JDK_VERSION", "11")
-        param("LAST_RELEASE_VERSION", "2.0.87")
+        param("LAST_RELEASE_VERSION", "2.0.88")
         param("PROJECT_VERSION", "")
         param("COMPONENTS_REGISTRY_BRANCH", "master")
         param("OCTOPUS_MODULE_NAME", "octopus-components-registry-service")
@@ -682,7 +682,7 @@ object id17CompatLocalStandManual : BuildType({
         // execution). Lower values trade run time for determinism.
         text("COMPAT_PARALLELISM", "8", allowEmpty = false, display = ParameterDisplay.PROMPT)
         // Baseline version is the project-level `LAST_RELEASE_VERSION` (e.g.
-        // `2.0.87`); pinned, not prompted — operator updates the project
+        // `2.0.88`); pinned, not prompted — operator updates the project
         // param when a new release lands.
         param("COMPAT_BASELINE_VERSION", "%LAST_RELEASE_VERSION%")
         // Candidate image tag = the build number of the upstream id10 chain
