@@ -500,7 +500,7 @@ class ComponentControllerV4(
     )
     fun setSupportedVersions(
         @PathVariable id: UUID,
-        @RequestBody request: SupportedVersionsRequest,
+        @Valid @RequestBody request: SupportedVersionsRequest,
     ): SupportedVersionsResponse = componentManagementService.setSupportedVersions(id, request)
 
     companion object {

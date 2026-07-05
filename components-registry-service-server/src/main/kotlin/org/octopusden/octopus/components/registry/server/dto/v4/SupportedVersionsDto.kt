@@ -1,5 +1,8 @@
 package org.octopusden.octopus.components.registry.server.dto.v4
 
+import io.swagger.v3.oas.annotations.media.Schema
+import jakarta.validation.constraints.Pattern
+
 /**
  * The component's **supported versions** (coverage) — the first layer of the decoupled version
  * model (ADR-018), independent of per-attribute overrides. `resolve(v)` returns 404 outside it.
@@ -29,4 +32,22 @@ data class SupportedVersionsResponse(
 data class SupportedVersionsRequest(
     val all: Boolean? = null,
     val ranges: List<String>? = null,
+    // Optional change metadata recorded on the audit row (not on the component) — mirrors
+    // ComponentCreateRequest / ComponentUpdateRequest so a coverage change carries its "why".
+    // A blank/whitespace key is accepted as "no key" (normalized to null); a non-blank key must
+    // match the Jira key format. See JIRA_TASK_KEY_PATTERN.
+    @field:Pattern(
+        regexp = JIRA_TASK_KEY_PATTERN,
+        message = "must be a Jira task key like ABC-123",
+    )
+    @field:Schema(
+        requiredMode = Schema.RequiredMode.NOT_REQUIRED,
+        description = "Optional Jira task key motivating the change (e.g. ABC-123); recorded on the audit row.",
+    )
+    val jiraTaskKey: String? = null,
+    @field:Schema(
+        requiredMode = Schema.RequiredMode.NOT_REQUIRED,
+        description = "Optional free-text comment describing the change; recorded on the audit row.",
+    )
+    val changeComment: String? = null,
 )

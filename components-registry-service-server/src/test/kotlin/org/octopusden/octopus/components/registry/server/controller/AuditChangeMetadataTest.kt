@@ -20,6 +20,7 @@ import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.nio.file.Paths
 import java.util.UUID
@@ -165,6 +166,42 @@ class AuditChangeMetadataTest {
         assert(row["changeComment"].asText() == comment) {
             "expected changeComment=$comment, got ${row["changeComment"]}"
         }
+    }
+
+    @Test
+    @DisplayName("setSupportedVersions persists jiraTaskKey + changeComment on the UPDATE audit row")
+    fun setSupportedVersions_persistsMetadata() {
+        val id = createComponent(uniqueName("meta_sv"))
+        val key = "GHI-789"
+        val comment = "limit coverage per ticket"
+        mvc
+            .perform(
+                put("/rest/api/4/components/$id/supported-versions")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """{"ranges":["[1.0,2.0)"],"jiraTaskKey":"$key","changeComment":"$comment"}""",
+                    ),
+            ).andExpect(status().isOk)
+
+        val row = auditRow(id, "UPDATE")
+        assert(row["jiraTaskKey"].asText() == key) { "expected jiraTaskKey=$key, got ${row["jiraTaskKey"]}" }
+        assert(row["changeComment"].asText() == comment) {
+            "expected changeComment=$comment, got ${row["changeComment"]}"
+        }
+    }
+
+    @Test
+    @DisplayName("setSupportedVersions rejects a malformed jiraTaskKey with 400")
+    fun setSupportedVersions_malformedKey_rejected() {
+        val id = createComponent(uniqueName("meta_sv_bad"))
+        mvc
+            .perform(
+                put("/rest/api/4/components/$id/supported-versions")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"ranges":["[1.0,2.0)"],"jiraTaskKey":"not a key"}"""),
+            ).andExpect(status().isBadRequest)
     }
 
     @Test
