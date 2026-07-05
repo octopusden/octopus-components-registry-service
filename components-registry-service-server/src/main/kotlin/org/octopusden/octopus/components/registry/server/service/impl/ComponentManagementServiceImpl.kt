@@ -1394,6 +1394,8 @@ class ComponentManagementServiceImpl(
             entityId = component.id.toString(),
             oldValue = mapOf("supportedVersions" to existingPresence.map { it.versionRange }.sortedWith(SUPPORTED_RANGE_ORDER)),
             newValue = mapOf("supportedVersions" to resulting.ifEmpty { listOf("ALL") }),
+            jiraTaskKey = request.jiraTaskKey,
+            changeComment = request.changeComment,
         )
         return SupportedVersionsResponse(all = resulting.isEmpty(), ranges = resulting, warnings = warnings)
     }

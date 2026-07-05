@@ -2153,6 +2153,15 @@
           "all" : {
             "type" : "boolean"
           },
+          "changeComment" : {
+            "description" : "Optional free-text comment describing the change; recorded on the audit row.",
+            "type" : "string"
+          },
+          "jiraTaskKey" : {
+            "description" : "Optional Jira task key motivating the change (e.g. ABC-123); recorded on the audit row.",
+            "pattern" : "^\\s*$|^[A-Z][A-Z0-9]+-\\d+$",
+            "type" : "string"
+          },
           "ranges" : {
             "items" : {
               "type" : "string"
