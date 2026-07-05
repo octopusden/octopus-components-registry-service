@@ -1468,7 +1468,14 @@ class ComponentManagementServiceImpl(
             val versionRange = req.versionRange?.takeIf { it.isNotBlank() } ?: ALL_VERSIONS
             val groupRaw = req.groupPattern.trim()
             require(groupRaw.isNotEmpty()) { "artifactIds: groupPattern must not be blank" }
-            val groupItems = groupRaw.split(',').map { it.trim() }.filter { it.isNotEmpty() }
+            // Split into per-group rows (canonicalization); fail-loud on an empty comma segment
+            // ("a,", "a,,b", ",") rather than silently dropping a group.
+            val groupItems =
+                try {
+                    ArtifactOwnershipModeClassifier.splitGroups(groupRaw)
+                } catch (e: IllegalArgumentException) {
+                    throw IllegalArgumentException("artifactIds: ${e.message}", e)
+                }
             groupItems.forEach { g ->
                 require(ArtifactOwnershipModeClassifier.isLiteralToken(g)) {
                     "artifactIds: invalid group '$g' — letters, digits, . _ - only (no wildcards or regex)"

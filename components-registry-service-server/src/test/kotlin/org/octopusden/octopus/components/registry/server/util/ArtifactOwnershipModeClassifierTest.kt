@@ -59,4 +59,25 @@ class ArtifactOwnershipModeClassifierTest {
         assertEquals(listOf("a", "b", "c"), ArtifactOwnershipModeClassifier.splitTokens("a, b | c"))
         assertEquals(listOf("x"), ArtifactOwnershipModeClassifier.splitTokens("x"))
     }
+
+    @Test
+    @DisplayName("splitGroups splits on comma only, trims, and keeps one groupId per segment")
+    fun splitGroups_valid() {
+        assertEquals(listOf("a", "b", "c"), ArtifactOwnershipModeClassifier.splitGroups("a, b,c"))
+        assertEquals(listOf("x"), ArtifactOwnershipModeClassifier.splitGroups("x"))
+        // pipe is NOT a group separator — it stays part of the (later allowlist-rejected) token
+        assertEquals(listOf("a|b"), ArtifactOwnershipModeClassifier.splitGroups("a|b"))
+    }
+
+    @Test
+    @DisplayName("splitGroups FAILS LOUD on an empty comma segment (no silent group drop)")
+    fun splitGroups_rejectsEmptySegment() {
+        listOf("a,", ",b", "a,,b", ",", "a, ,b").forEach { bad ->
+            assertThrows(
+                IllegalArgumentException::class.java,
+                { ArtifactOwnershipModeClassifier.splitGroups(bad) },
+                "malformed group-list '$bad' must be rejected, not silently normalized",
+            )
+        }
+    }
 }

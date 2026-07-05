@@ -126,4 +126,13 @@ class ArtifactGroupSplitImportTest {
         assertEquals(1, mappings.size)
         assertEquals("grp-alfa", mappings.single().groupPattern)
     }
+
+    @Test
+    @DisplayName("ARTGRP-IMP-004: a malformed comma group-list (empty segment) fails loud, not silently dropped")
+    fun `ARTGRP-IMP-004 empty group segment fails loud`() {
+        val ex = org.junit.jupiter.api.Assertions.assertThrows(
+            java.lang.reflect.InvocationTargetException::class.java,
+        ) { build("grp-alfa,,grp-beta", "widget") }
+        assertTrue(ex.cause is IllegalArgumentException, "must fail loud on the empty segment: ${ex.cause}")
+    }
 }

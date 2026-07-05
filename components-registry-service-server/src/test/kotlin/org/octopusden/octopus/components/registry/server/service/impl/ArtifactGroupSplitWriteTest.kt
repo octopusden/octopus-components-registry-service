@@ -108,6 +108,23 @@ class ArtifactGroupSplitWriteTest {
     }
 
     @Test
+    @DisplayName("ARTGRP-WR-003: a malformed comma group-list (empty segment) is rejected, not silently normalized")
+    fun `ARTGRP-WR-003 empty group segment is rejected`() {
+        val c = component()
+        val ex = org.junit.jupiter.api.Assertions.assertThrows(
+            java.lang.reflect.InvocationTargetException::class.java,
+        ) {
+            apply(c, ArtifactIdRequest(groupPattern = "grp-alfa,,grp-beta", mode = "EXPLICIT", artifactTokens = listOf("widget")))
+        }
+        assertTrue(ex.cause is IllegalArgumentException, "must fail with a 400-mapped IllegalArgumentException")
+        assertTrue(
+            (ex.cause?.message ?: "").contains("empty groupId segment"),
+            "message must name the empty-segment cause: ${ex.cause?.message}",
+        )
+        assertTrue(c.artifactMappings.isEmpty(), "no mappings may be persisted from a rejected request")
+    }
+
+    @Test
     @DisplayName("ARTGRP-WR-002: sortOrder is a RUNNING counter across requests when one request expands to N rows")
     fun `ARTGRP-WR-002 running sort order across expanding requests`() {
         val c = component()

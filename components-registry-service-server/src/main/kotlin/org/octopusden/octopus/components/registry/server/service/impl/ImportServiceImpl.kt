@@ -1456,7 +1456,8 @@ class ImportServiceImpl(
         // ALL_EXCEPT_CLAIMED): a comma group-list "a,b" becomes one mapping per group sharing the same
         // mode/tokens/range. Semantically safe — resolution matches a single real groupId against each
         // token, and the forward wire re-composes the split rows (ArtifactOwnershipGrouping).
-        val groups = group.split(',').map { it.trim() }.filter { it.isNotEmpty() }
+        // Fail-loud on a malformed list (empty segment) rather than silently dropping a group.
+        val groups = ArtifactOwnershipModeClassifier.splitGroups(group)
         val tokens =
             if (mode == ArtifactIdMode.EXPLICIT) {
                 ArtifactOwnershipModeClassifier.splitTokens(artifactIdPattern.orEmpty())
