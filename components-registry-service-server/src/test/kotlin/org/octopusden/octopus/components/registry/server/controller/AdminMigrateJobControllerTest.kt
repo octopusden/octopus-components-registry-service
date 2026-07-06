@@ -69,13 +69,13 @@ class AdminMigrateJobControllerTest {
     fun stubIncompleteMigration() {
         // Default: there is still something to migrate (git > 0) so the completeness guard
         // does not fire for the existing start/attach cases. The git==0 case overrides this.
-        `when`(importService.getMigrationStatus()).thenReturn(MigrationStatus(git = 5, db = 10, total = 15))
+        `when`(importService.getMigrationStatus()).thenReturn(MigrationStatus(git = 5L, db = 10L, total = 15L))
     }
 
     @Test
     fun `POST migrate returns 409 migration-complete when nothing remains in git`() {
         // Full migration done (git == 0): re-running is forbidden — the job must NOT start.
-        `when`(importService.getMigrationStatus()).thenReturn(MigrationStatus(git = 0, db = 15, total = 15))
+        `when`(importService.getMigrationStatus()).thenReturn(MigrationStatus(git = 0L, db = 15L, total = 15L))
 
         mvc
             .perform(post("/rest/api/4/admin/migrate").with(adminJwt()))
