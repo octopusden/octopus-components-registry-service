@@ -646,6 +646,13 @@ spring:
           jwk-set-uri: ${auth-server.url}/realms/${auth-server.realm}/protocol/openid-connect/certs
 ```
 
+**Service-event ingest token (SYS-061):** the portal→CRS ingest shared secret is a
+per-environment Vault entry (`components-registry.service-events.ingest-token` on CRS,
+`portal.service-events.token` on the portal — same value within an env, different across
+envs) plus `portal.service-events.enabled: true`. Step-by-step in
+[deployment/service-event-ingest-token.md](deployment/service-event-ingest-token.md).
+Not required for CRS-side events (redeploys, migrations, TeamCity resync).
+
 ### 10.3 Helm Deployment (`<gitserver>/f1/service-deployment`)
 
 Extend existing deployment spec in `okd/deployments/`:
