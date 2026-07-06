@@ -40,18 +40,18 @@ class TeamcitySyncSchedulerTest {
     @DisplayName("weeklyResync calls startAsync and returns normally on isNewlyStarted=true")
     fun startsFreshJob() {
         val jobService = mock(TeamcitySyncJobService::class.java)
-        `when`(jobService.startAsync()).thenReturn(StartTeamcitySyncResult(startedState("job-1"), isNewlyStarted = true))
+        `when`(jobService.startAsync("scheduler")).thenReturn(StartTeamcitySyncResult(startedState("job-1"), isNewlyStarted = true))
 
         TeamcitySyncScheduler(jobService).weeklyResync()
 
-        verify(jobService, times(1)).startAsync()
+        verify(jobService, times(1)).startAsync("scheduler")
     }
 
     @Test
     @DisplayName("weeklyResync swallows isNewlyStarted=false (same-kind attach) without throwing")
     fun swallowsSameKindAttach() {
         val jobService = mock(TeamcitySyncJobService::class.java)
-        `when`(jobService.startAsync()).thenReturn(StartTeamcitySyncResult(startedState("job-2"), isNewlyStarted = false))
+        `when`(jobService.startAsync("scheduler")).thenReturn(StartTeamcitySyncResult(startedState("job-2"), isNewlyStarted = false))
 
         // Must NOT throw — catching the same-kind attach in @Scheduled is the entire point.
         TeamcitySyncScheduler(jobService).weeklyResync()
@@ -61,7 +61,7 @@ class TeamcitySyncSchedulerTest {
     @DisplayName("weeklyResync swallows MigrationConflictException (cross-kind) without throwing")
     fun swallowsCrossKindConflict() {
         val jobService = mock(TeamcitySyncJobService::class.java)
-        `when`(jobService.startAsync())
+        `when`(jobService.startAsync("scheduler"))
             .thenThrow(
                 MigrationConflictException(
                     MigrationLifecycleGate.ActiveJob(MigrationLifecycleGate.JobKind.HISTORY, "history-1"),
@@ -76,7 +76,7 @@ class TeamcitySyncSchedulerTest {
     @DisplayName("weeklyResync swallows generic RuntimeException without throwing (back-compat)")
     fun swallowsGenericRuntimeException() {
         val jobService = mock(TeamcitySyncJobService::class.java)
-        `when`(jobService.startAsync()).thenThrow(RuntimeException("transient pool issue"))
+        `when`(jobService.startAsync("scheduler")).thenThrow(RuntimeException("transient pool issue"))
 
         // Pre-refactor scheduler had a catch-all — preserve that so a transient
         // RejectedExecutionException doesn't suppress next week's fire.

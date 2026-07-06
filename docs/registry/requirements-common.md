@@ -68,6 +68,8 @@
 | SYS-057 | `GET /rest/api/4/health/statistics` returns registry-wide counts (`totalComponents`, `activeComponents`) and people-dimension breakdowns (`componentsByOwner`, `componentsByReleaseManager`, `componentsBySecurityChampion`) computed via SQL GROUP BY (never by loading all components into memory); ACCESS_COMPONENTS-gated; counts + people only (problem/validation aggregation is portal-owned) | High | integration-test | ✅ Tested |
 | SYS-058 | Artifact-ID ownership is modelled explicitly as a per-component LIST of `(group-list, mode ∈ {EXPLICIT, ALL_EXCEPT_CLAIMED, ALL}, version range)` mappings (`component_artifact_mappings` + `_tokens`), replacing the opaque regex `component_artifact_ids`. Cross-component uniqueness is decided deterministically from the stored modes (restores legacy validator #24/#25), enforced on v4 create/update (409); per-range overrides REPLACE the base for their range; v1–v3 wire renders the primary mapping; migration classifies DSL patterns into modes strictly (no escape hatch) | High | unit + integration-test | ✅ Tested |
 | SYS-059 | `POST /rest/api/4/versions/preview` renders a `DetailedComponentVersion` from ad-hoc Jira formats (base + per-range overrides) and an input version, with no persistence and no component lookup — reusing the persisted-path render seam (including `normalizeVersion` canonicalization) so output matches `detailed-version` for the same effective config. Range is resolved server-side; `line`/`build` mirror `minor`/`release` and `minor`/`release` default to `$major`/`$major.$minor` when blank; hotfix coordinate gated on caller-supplied `hotfixEnabled` (VCS-derived), not format presence; custom `versionPrefix`/`versionFormat` render the wrapped `jiraVersion`; padding is template-driven (no `buildSystem`); blank/non-numeric version or malformed range → 400, a version matching no format → 404; authenticated-only | High | unit + integration-test | ✅ Tested |
+| SYS-060 | An append-only `service_event` journal persists operational events — CRS redeploys (STARTUP + build version), and every components-migration / history-migration / TeamCity-resync run (RUNNING→COMPLETED/FAILED, one row per run) — which previously lived only in an in-memory slot + logs and were lost on restart. **Any job failure (including executor-rejected submission) writes a FAILED row with the error**; a run whose pod dies mid-flight is reconciled to FAILED("interrupted by restart") on next startup (single-pod). Writes are best-effort (`REQUIRES_NEW` + swallow) so journaling never rolls back or crashes the observed job. `GET /rest/api/4/admin/service-events` returns the paginated journal (filter by type/source/status/time), IMPORT_DATA-gated; a scheduled daily prune enforces retention | High | unit + integration-test | ✅ Tested |
+| SYS-061 | `POST /rest/api/4/admin/service-events` ingests portal-sourced events (portal redeploys, validation-sweep runs) into the shared journal, so the Admin "Events" tab shows both services on one timeline. Authenticated by a shared-secret `X-Service-Event-Token` header (the portal BFF calls CRS tokenless), verified constant-time and **fail-closed** (blank/unset configured token rejects every call 403); method-scoped permitAll at the filter chain so the sibling GET read stays JWT+IMPORT_DATA gated; unknown eventType/status/source → 400 | High | integration-test | ✅ Tested |
 
 ---
 
@@ -2178,3 +2180,92 @@ dichotomy `detailed-version` already produces. Authenticated-only via the
 `SYS-059 authenticated preview returns rendered coordinates`,
 `SYS-059 unauthenticated preview is 401`, `SYS-059 invalid version is 400`,
 `SYS-059 preview matches detailed-version for a real component`.
+
+### SYS-060: Operational service-event journal
+
+Migration/resync job runs and pod redeploys previously lived only in an in-memory
+`AtomicReference` (single-pod, lost on restart) + SLF4J logs, so operators had no
+persistent history. SYS-060 adds an append-only `service_event` table
+(`V4__add_service_event.sql`; also auto-created by Hibernate `ddl-auto` in the
+flyway-disabled envs) recording:
+
+- **STARTUP** — one terminal row per pod boot, carrying `service_version`
+  (`ServiceStartupListener` on `ApplicationReadyEvent`), giving a redeploy history.
+- **MIGRATION_COMPONENTS / MIGRATION_HISTORY / TEAMCITY_RESYNC** — one row per run,
+  created RUNNING at the top of the work runnable and transitioned in place to
+  COMPLETED/FAILED (matched by the job id in `correlation_id`).
+
+`ServiceEventRecorder` owns the writes. Each runs in its own `REQUIRES_NEW`
+transaction wrapped in a swallow-and-log so a journal failure never rolls back or
+crashes the job/boot it observes (mirrors `GitHistoryCommitWriter`). `recordFinish`
+falls back to inserting a terminal row if no RUNNING row exists.
+
+**Failure reporting (hard requirement):** every job-failure path writes a FAILED row
+with the error in `detail` — the `catch` branch of each run, AND the executor-reject
+path (`startAsync` catches the rejection, records a standalone terminal FAILED, and
+rethrows). A run interrupted by a pod restart (RUNNING row with no live job) is
+reconciled to `FAILED("interrupted by restart")` on the next startup. Single-pod only
+(prod `replicas: 1`) — the reconcile flips all crs RUNNING rows.
+
+`GET /rest/api/4/admin/service-events` returns the paginated journal (newest first;
+optional `eventType`/`source`/`status`/`from`/`to` filters), IMPORT_DATA-gated like
+`AdminControllerV4`. A `@Scheduled` daily prune deletes rows older than
+`components-registry.service-events.retention-days` (default 90) — scheduled, not
+startup-only, because a long-lived pod would otherwise never prune.
+
+**Acceptance criteria:**
+1. A pod start writes a terminal STARTUP row with the build version.
+2. A TeamCity resync (and components/history migration) writes a RUNNING row that
+   transitions to COMPLETED with the result counters in `detail` on success.
+3. A job that throws writes a single FAILED row (same `correlation_id`) with the
+   error message; a partial TC run (result carries per-component errors) COMPLETEs
+   with a "completed with errors" summary.
+4. An executor-rejected submission (no runnable ran) still writes a terminal FAILED row.
+5. On startup, any leftover RUNNING row of source `crs` is flipped to FAILED
+   ("interrupted by restart").
+6. A recorder write that throws is swallowed (logged) and does not propagate to the job.
+7. `GET /admin/service-events` returns rows newest-first, honours the filters, and is
+   403 for a caller without IMPORT_DATA.
+
+**Test method:** `ServiceEventRecorderImplTest` —
+`SYS-060 recordStart then recordFinish transitions the running row`,
+`SYS-060 recordFinish without a running row inserts a terminal row`,
+`SYS-060 reconcileOrphanedRunning flips running rows to failed`,
+`SYS-060 prune deletes rows before the cutoff`,
+`SYS-060 a write failure is swallowed`;
+`TeamcitySyncJobServiceImplTest` — `SYS-060 completed run records COMPLETED`,
+`SYS-060 failed run records FAILED`, `SYS-060 rejected submission records FAILED`;
+`ServiceStartupListenerTest` — `SYS-060 startup reconciles and records STARTUP`;
+`ServiceEventControllerV4Test` — `SYS-060 lists newest-first with filters`,
+`SYS-060 read requires IMPORT_DATA`.
+
+### SYS-061: Portal service-event ingest (shared-secret)
+
+The "validation of components" sweep and portal redeploys are portal-owned and not
+visible to CRS. SYS-061 lets the portal BFF report them into the shared journal via
+`POST /rest/api/4/admin/service-events` so the Admin "Events" tab shows both services
+on one timeline. Portal events arrive already-terminal (COMPLETED/FAILED) with
+caller-supplied timestamps; the body carries `eventType`/`status`/`source` (parsed
+leniently against the server enums → 400 on unknown values).
+
+Auth is a shared-secret `X-Service-Event-Token` header, not a JWT — the portal BFF
+calls CRS tokenless (same internal-network pattern as the permitAll `/migration-status`
+probe). The POST is method-scoped permitAll at the filter chain (above the
+`/rest/api/4/**` authenticated catch-all) so the sibling GET read stays JWT +
+IMPORT_DATA gated; the secret is verified in the controller (a `@PreAuthorize` cannot
+read a header), constant-time (`MessageDigest.isEqual`), **fail-closed**: a blank/unset
+configured token rejects every call (403), so a misconfiguration never opens ingest to
+the network. A leaked token only lets an attacker forge journal rows (no component data
+is mutated); a stronger service-account/OIDC/mTLS scheme is a post-cutover follow-up.
+
+**Acceptance criteria:**
+1. A POST with the correct token and a valid body records a terminal portal-sourced row.
+2. A POST with a wrong/missing token → 403; with the configured token blank/unset →
+   403 (fail-closed) even if the header is present.
+3. An unknown `eventType`/`status`/`source` → 400.
+4. The GET read side is unaffected (still JWT + IMPORT_DATA).
+
+**Test method:** `ServiceEventIngestControllerV4Test` —
+`SYS-061 valid token and body records the event`,
+`SYS-061 wrong token is 403`, `SYS-061 blank configured token is fail-closed 403`,
+`SYS-061 unknown eventType is 400`.

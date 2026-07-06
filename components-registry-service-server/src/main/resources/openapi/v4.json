@@ -2033,6 +2033,52 @@
         },
         "type" : "object"
       },
+      "PageServiceEventResponse" : {
+        "properties" : {
+          "content" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ServiceEventResponse"
+            },
+            "type" : "array"
+          },
+          "empty" : {
+            "type" : "boolean"
+          },
+          "first" : {
+            "type" : "boolean"
+          },
+          "last" : {
+            "type" : "boolean"
+          },
+          "number" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "numberOfElements" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "pageable" : {
+            "$ref" : "#/components/schemas/PageableObject"
+          },
+          "size" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "sort" : {
+            "$ref" : "#/components/schemas/SortObject"
+          },
+          "totalElements" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "totalPages" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "Pageable" : {
         "properties" : {
           "page" : {
@@ -2131,6 +2177,102 @@
           "groupName",
           "groupType",
           "id"
+        ],
+        "type" : "object"
+      },
+      "ServiceEventIngestRequest" : {
+        "properties" : {
+          "correlationId" : {
+            "type" : "string"
+          },
+          "detail" : {
+            "additionalProperties" : {
+              "type" : "object"
+            },
+            "type" : "object"
+          },
+          "eventType" : {
+            "type" : "string"
+          },
+          "finishedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "serviceVersion" : {
+            "type" : "string"
+          },
+          "source" : {
+            "type" : "string"
+          },
+          "startedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "summary" : {
+            "type" : "string"
+          },
+          "triggeredBy" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "eventType",
+          "source",
+          "status"
+        ],
+        "type" : "object"
+      },
+      "ServiceEventResponse" : {
+        "properties" : {
+          "correlationId" : {
+            "type" : "string"
+          },
+          "detail" : {
+            "additionalProperties" : {
+              "type" : "object"
+            },
+            "type" : "object"
+          },
+          "eventType" : {
+            "type" : "string"
+          },
+          "finishedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "serviceVersion" : {
+            "type" : "string"
+          },
+          "source" : {
+            "type" : "string"
+          },
+          "startedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "summary" : {
+            "type" : "string"
+          },
+          "triggeredBy" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "eventType",
+          "id",
+          "source",
+          "startedAt",
+          "status"
         ],
         "type" : "object"
       },
@@ -3972,6 +4114,266 @@
         },
         "tags" : [
           "admin-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/service-events" : {
+      "get" : {
+        "operationId" : "list",
+        "parameters" : [
+          {
+            "in" : "query",
+            "name" : "eventType",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "in" : "query",
+            "name" : "source",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "in" : "query",
+            "name" : "status",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "in" : "query",
+            "name" : "from",
+            "required" : false,
+            "schema" : {
+              "format" : "date-time",
+              "type" : "string"
+            }
+          },
+          {
+            "in" : "query",
+            "name" : "to",
+            "required" : false,
+            "schema" : {
+              "format" : "date-time",
+              "type" : "string"
+            }
+          },
+          {
+            "in" : "query",
+            "name" : "pageable",
+            "required" : true,
+            "schema" : {
+              "$ref" : "#/components/schemas/Pageable"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageServiceEventResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          }
+        },
+        "tags" : [
+          "service-event-controller-v-4"
+        ]
+      },
+      "post" : {
+        "operationId" : "ingest",
+        "parameters" : [
+          {
+            "in" : "header",
+            "name" : "X-Service-Event-Token",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ServiceEventIngestRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "202" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            },
+            "description" : "Event accepted and recorded"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unknown eventType/status/source, or a non-terminal / non-portal event"
+          },
+          "403" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            },
+            "description" : "Invalid or missing X-Service-Event-Token"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          }
+        },
+        "tags" : [
+          "service-event-ingest-controller-v-4"
         ]
       }
     },

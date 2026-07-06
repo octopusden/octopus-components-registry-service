@@ -90,10 +90,15 @@ interface HistoryMigrationJobService {
      * [GitHistoryImportService.importHistory]:
      *  - `toRef` defaults to the auto-resolved tag matching the configured prefix;
      *  - `reset=true` is required to re-run on top of a terminal `git_history_import_state` row.
+     *
+     * [triggeredBy] is the actor recorded on the service-event journal row (SYS-060) —
+     * a username for admin-triggered runs. Captured on the caller thread because the
+     * background executor does not carry the security context.
      */
     fun startAsync(
         toRef: String?,
         reset: Boolean,
+        triggeredBy: String = "system",
     ): StartHistoryMigrationResult
 
     /**

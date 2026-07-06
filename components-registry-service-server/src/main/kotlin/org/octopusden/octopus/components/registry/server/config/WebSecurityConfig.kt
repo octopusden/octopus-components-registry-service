@@ -103,6 +103,13 @@ class WebSecurityConfig(
                     // migration era is over (no body detail, just a running flag — no leak).
                     .requestMatchers(HttpMethod.GET, "/rest/api/4/migration-status")
                     .permitAll()
+                    // SYS-061: portal service-event ingest. Tokenless at the filter chain
+                    // (the portal BFF has no JWT — same pattern as /migration-status above),
+                    // guarded instead by a shared-secret header verified in
+                    // ServiceEventIngestControllerV4 (fail-closed). ONLY the POST is opened;
+                    // the sibling GET read stays under the /rest/api/4/** authenticated rule.
+                    .requestMatchers(HttpMethod.POST, "/rest/api/4/admin/service-events")
+                    .permitAll()
                     // v4 writes + admin + audit — authenticated + method-level @PreAuthorize.
                     .requestMatchers("/rest/api/4/**")
                     .authenticated()

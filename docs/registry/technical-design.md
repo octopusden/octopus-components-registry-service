@@ -357,6 +357,38 @@ The fallback path is exercised by code paths that don't carry a request context.
 - v4 writes/admin/audit: **require JWT** + the permission named in ADR-004.
 - Gradual migration: consumers can be updated to pass JWT tokens over time. Phase 3 (close anonymous reads on v1/v2/v3) requires coordinated update of all consumers — timeline TBD.
 
+### 6.6 Operational service-event journal (SYS-060/061)
+Distinct from `audit_log` (which tracks **entity** changes), the `service_event` table is
+an append-only journal of **operational** events surfaced on the portal Admin "Events"
+tab: CRS/portal redeploys (STARTUP + build version), and every components-migration /
+history-migration / TeamCity-resync / portal validation-sweep **run**. These previously
+lived only in an in-memory `AtomicReference` (single-pod, lost on restart) + logs.
+
+- **Write path:** `ServiceEventRecorder` (`REQUIRES_NEW` per write via `TransactionTemplate`,
+  wrapped in swallow-and-log so journaling never rolls back or crashes the observed
+  job/boot). Job impls call `recordStart` at the top of the work runnable (executor
+  thread; `triggeredBy` captured on the caller thread and passed in, since the executor
+  carries no `SecurityContext`) and `recordFinish` at the terminal branch — one row per
+  run, RUNNING→COMPLETED/FAILED in place (matched by job id in `correlation_id`).
+- **Failure reporting (hard requirement):** every failure path writes FAILED — the run's
+  `catch`, and the executor-reject path (`startAsync` catches the rejection and records a
+  standalone terminal FAILED). `ServiceStartupListener` (`ApplicationReadyEvent`)
+  reconciles any RUNNING row left by a dead pod to `FAILED("interrupted by restart")`
+  before writing the STARTUP marker. **Single-pod** (`replicas: 1`) — the reconcile flips
+  all crs RUNNING rows.
+- **Read:** `GET /rest/api/4/admin/service-events` (paginated, filter by
+  type/source/status/time), IMPORT_DATA-gated like `AdminControllerV4`.
+- **Ingest (SYS-061):** `POST /rest/api/4/admin/service-events` lets the portal BFF report
+  its own events (portal redeploys, validation sweeps). Shared-secret `X-Service-Event-Token`
+  header (portal calls CRS tokenless), method-scoped permitAll at the filter chain,
+  constant-time + fail-closed secret check in the controller. A stronger
+  service-account/OIDC/mTLS scheme is a post-cutover follow-up.
+- **Retention:** a `@Scheduled` daily prune deletes rows older than
+  `components-registry.service-events.retention-days` (default 90) — scheduled, not
+  startup-only, so a long-lived pod still prunes.
+- **Schema:** `V4__add_service_event.sql` (+ Hibernate `ddl-auto` in the flyway-disabled
+  envs; `detail` is `TEXT`+`@JdbcTypeCode(JSON)` mirroring `audit_log`).
+
 ## 7. Data Migration
 
 ### 7.1 Migration Strategy: Component-Source Routing
@@ -613,6 +645,13 @@ spring:
         jwt:
           jwk-set-uri: ${auth-server.url}/realms/${auth-server.realm}/protocol/openid-connect/certs
 ```
+
+**Service-event ingest token (SYS-061):** the portal→CRS ingest shared secret is a
+per-environment Vault entry (`components-registry.service-events.ingest-token` on CRS,
+`portal.service-events.token` on the portal — same value within an env, different across
+envs). The token is the single on/off switch (no separate enable flag). Step-by-step in
+[deployment/service-event-ingest-token.md](deployment/service-event-ingest-token.md).
+Not required for CRS-side events (redeploys, migrations, TeamCity resync).
 
 ### 10.3 Helm Deployment (`<gitserver>/f1/service-deployment`)
 

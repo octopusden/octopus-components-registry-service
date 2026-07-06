@@ -76,8 +76,12 @@ interface MigrationJobService {
      *
      * COMPLETED / FAILED states do not block: a new call after a finished job replaces
      * the slot.
+     *
+     * [triggeredBy] is the actor recorded on the service-event journal row (SYS-060) —
+     * a username for admin-triggered runs. Captured on the caller thread because the
+     * background executor does not carry the security context.
      */
-    fun startAsync(): StartMigrationResult
+    fun startAsync(triggeredBy: String = "system"): StartMigrationResult
 
     /** Latest known job state, or `null` if no job has been started since the pod booted. */
     fun current(): MigrationJobState?
