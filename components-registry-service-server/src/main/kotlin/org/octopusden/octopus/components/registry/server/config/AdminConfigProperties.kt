@@ -133,6 +133,13 @@ class AdminConfigProperties {
             var buildVersionFormat: String? = null
             var lineVersionFormat: String? = null
             var hotfixVersionFormat: String? = null
+
+            /**
+             * Full version-format wrapper (e.g. `$versionPrefix-$baseVersionFormat`),
+             * surfaced in component-defaults so the create wizard can seed its
+             * Full Version Format field from configuration.
+             */
+            var versionFormat: String? = null
         }
     }
 
