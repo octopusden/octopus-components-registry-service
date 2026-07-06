@@ -24,7 +24,8 @@ data class ServiceEventResponse(
     companion object {
         fun from(entity: ServiceEventEntity): ServiceEventResponse =
             ServiceEventResponse(
-                id = entity.id ?: 0L,
+                // A persisted row always has an id; fail loud rather than emit a misleading 0.
+                id = requireNotNull(entity.id) { "persisted service_event row has a null id" },
                 eventType = entity.eventType,
                 status = entity.status,
                 source = entity.source,

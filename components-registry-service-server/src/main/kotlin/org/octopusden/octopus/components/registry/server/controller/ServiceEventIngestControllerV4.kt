@@ -1,5 +1,7 @@
 package org.octopusden.octopus.components.registry.server.controller
 
+import io.swagger.v3.oas.annotations.responses.ApiResponse
+import io.swagger.v3.oas.annotations.responses.ApiResponses
 import org.octopusden.octopus.components.registry.core.dto.ErrorResponse
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.config.ServiceEventProperties
@@ -45,6 +47,11 @@ class ServiceEventIngestControllerV4(
     private val properties: ServiceEventProperties,
 ) {
     @PostMapping
+    @ApiResponses(
+        ApiResponse(responseCode = "202", description = "Event accepted and recorded"),
+        ApiResponse(responseCode = "400", description = "Unknown eventType/status/source, or a non-terminal / non-portal event"),
+        ApiResponse(responseCode = "403", description = "Invalid or missing X-Service-Event-Token"),
+    )
     fun ingest(
         @RequestHeader(name = HEADER_TOKEN, required = false) token: String?,
         @RequestBody request: ServiceEventIngestRequest,
@@ -95,11 +102,13 @@ class ServiceEventIngestControllerV4(
     private fun tokenAccepted(presented: String?): Boolean {
         val expected = properties.ingestToken
         if (expected.isBlank() || presented.isNullOrEmpty()) return false
-        return MessageDigest.isEqual(
-            presented.toByteArray(StandardCharsets.UTF_8),
-            expected.toByteArray(StandardCharsets.UTF_8),
-        )
+        // Compare fixed-length SHA-256 digests so neither the boolean result nor the timing
+        // leaks the token length (MessageDigest.isEqual short-circuits on unequal array lengths).
+        return MessageDigest.isEqual(sha256(presented), sha256(expected))
     }
+
+    private fun sha256(value: String): ByteArray =
+        MessageDigest.getInstance("SHA-256").digest(value.toByteArray(StandardCharsets.UTF_8))
 
     private inline fun <T> parseEnum(
         raw: String,

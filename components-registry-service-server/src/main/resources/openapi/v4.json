@@ -4281,7 +4281,7 @@
           "required" : true
         },
         "responses" : {
-          "200" : {
+          "202" : {
             "content" : {
               "*/*" : {
                 "schema" : {
@@ -4289,7 +4289,7 @@
                 }
               }
             },
-            "description" : "OK"
+            "description" : "Event accepted and recorded"
           },
           "400" : {
             "content" : {
@@ -4299,7 +4299,17 @@
                 }
               }
             },
-            "description" : "Bad Request"
+            "description" : "Unknown eventType/status/source, or a non-terminal / non-portal event"
+          },
+          "403" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            },
+            "description" : "Invalid or missing X-Service-Event-Token"
           },
           "404" : {
             "content" : {
