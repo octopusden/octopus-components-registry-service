@@ -38,7 +38,7 @@ dependencies {
     // dependency is runtime-only and doesn't propagate to this module's test compile.
     testImplementation "org.octopusden.octopus-cloud-commons:octopus-security-common:${project.properties['octopus-cloud-commons.version']}"
 
-    testImplementation('ch.qos.logback:logback-classic:1.5.13')
+    testImplementation('ch.qos.logback:logback-classic:1.5.37')
 }
 
 sourceSets {

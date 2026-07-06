@@ -48,7 +48,7 @@ dependencies {
     testImplementation("org.testcontainers:postgresql")
 
     testImplementation("org.assertj:assertj-core:3.21.0")
-    testImplementation("ch.qos.logback:logback-classic:1.2.7")
+    testImplementation("ch.qos.logback:logback-classic:1.5.37")
 }
 
 bootJar {
