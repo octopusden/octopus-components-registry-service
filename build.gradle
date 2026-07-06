@@ -161,7 +161,7 @@ configure(subprojects) {
             testImplementation "org.jetbrains.kotlin:kotlin-test-junit5"
             testImplementation "org.junit.jupiter:junit-jupiter-engine"
             testImplementation "org.junit.jupiter:junit-jupiter-params"
-            testImplementation "junit:junit:4.12"
+            testImplementation "junit:junit:4.13.2"
             testRuntimeOnly "org.junit.vintage:junit-vintage-engine"
         }
 
