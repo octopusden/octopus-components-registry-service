@@ -37,16 +37,11 @@ value on both services within one environment (it is a shared secret for the CRS
    secret (nothing is committed to `service-config`):
    - CRS profile: `components-registry.service-events.ingest-token = <secret>`
    - Portal profile: `portal.service-events.token = <same secret for that env>`
-3. **Enable** the portal reporter for that environment (NOT a secret — set in `service-config`):
-   ```yaml
-   # components-management-portal-cloud-qa.yml / -cloud-prod.yml
-   portal:
-     service-events:
-       enabled: true
-   ```
-   (Default is `false`; leaving it off means the portal records nothing and CRS-side events
-   still work.)
-4. **Roll** both services (or wait for the next deploy) so they pick up the config.
+3. **Roll** both services (or wait for the next deploy) so they pick up the config.
+
+The token is the single on/off switch on both sides — setting it (non-blank) turns reporting
+on; there is no separate enable flag. Leaving it blank/unset means the portal records nothing
+and CRS-side events still work.
 
 ## Verify
 
@@ -57,5 +52,5 @@ value on both services within one environment (it is a shared secret for the CRS
 
 ## Rollback / disable
 
-Set `portal.service-events.enabled=false` (or blank the token). Portal events stop being
-recorded immediately; CRS-side events are unaffected. No schema or data change.
+Blank/remove the token (either side). Portal events stop being recorded immediately; CRS-side
+events are unaffected. No schema or data change.

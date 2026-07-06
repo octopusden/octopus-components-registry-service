@@ -649,7 +649,7 @@ spring:
 **Service-event ingest token (SYS-061):** the portal→CRS ingest shared secret is a
 per-environment Vault entry (`components-registry.service-events.ingest-token` on CRS,
 `portal.service-events.token` on the portal — same value within an env, different across
-envs) plus `portal.service-events.enabled: true`. Step-by-step in
+envs). The token is the single on/off switch (no separate enable flag). Step-by-step in
 [deployment/service-event-ingest-token.md](deployment/service-event-ingest-token.md).
 Not required for CRS-side events (redeploys, migrations, TeamCity resync).
 
