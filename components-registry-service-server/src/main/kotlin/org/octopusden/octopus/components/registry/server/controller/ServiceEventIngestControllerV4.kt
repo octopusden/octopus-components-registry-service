@@ -113,7 +113,7 @@ class ServiceEventIngestControllerV4(
     private inline fun <T> parseEnum(
         raw: String,
         parse: (String) -> T,
-    ): T? = runCatching { parse(raw.trim().uppercase()) }.getOrNull()
+    ): T? = runCatching { parse(raw.trim().uppercase(java.util.Locale.ROOT)) }.getOrNull()
 
     private fun badRequest(message: String): ResponseEntity<Any> =
         ResponseEntity.badRequest().body(ErrorResponse(message, "bad-request"))

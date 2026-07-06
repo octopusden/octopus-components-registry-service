@@ -1,5 +1,7 @@
 package org.octopusden.octopus.components.registry.server.service
 
+import java.util.Locale
+
 /**
  * SYS-060: domain enums for the operational service-event journal (`service_event`).
  *
@@ -45,7 +47,7 @@ enum class ServiceEventSource {
      * Wire form is lowercase (`crs` / `portal`) to match the `service_event.source`
      * DDL comment and the portal ingest contract; parsing is case-insensitive.
      */
-    val wire: String get() = name.lowercase()
+    val wire: String get() = name.lowercase(Locale.ROOT)
 
     companion object {
         fun fromWire(value: String): ServiceEventSource? =

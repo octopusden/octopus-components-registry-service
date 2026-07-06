@@ -14,6 +14,7 @@ import org.springframework.data.jpa.domain.Specification
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
+import java.util.Locale
 
 @ConditionalOnDatabaseEnabled
 @Service
@@ -45,13 +46,13 @@ class ServiceEventQueryServiceImpl(
         // Applying upper()/lower() to the column instead would defeat the btree indexes on
         // event_type / source / status as the journal grows.
         filter.eventType?.takeIf { it.isNotBlank() }?.let { eventType ->
-            spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<String>("eventType"), eventType.uppercase()) })
+            spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<String>("eventType"), eventType.uppercase(Locale.ROOT)) })
         }
         filter.source?.takeIf { it.isNotBlank() }?.let { source ->
-            spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<String>("source"), source.lowercase()) })
+            spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<String>("source"), source.lowercase(Locale.ROOT)) })
         }
         filter.status?.takeIf { it.isNotBlank() }?.let { status ->
-            spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<String>("status"), status.uppercase()) })
+            spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<String>("status"), status.uppercase(Locale.ROOT)) })
         }
         filter.from?.let { from ->
             spec = spec.and(Specification { root, _, cb -> cb.greaterThanOrEqualTo(root.get<Instant>("startedAt"), from) })
