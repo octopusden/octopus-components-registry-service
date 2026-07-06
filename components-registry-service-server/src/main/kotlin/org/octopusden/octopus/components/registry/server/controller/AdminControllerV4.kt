@@ -16,6 +16,7 @@ import org.octopusden.octopus.components.registry.server.service.MigrationResult
 import org.octopusden.octopus.components.registry.server.service.MigrationStatus
 import org.octopusden.octopus.components.registry.server.service.ValidationResult
 import org.octopusden.octopus.components.registry.server.service.impl.ConfigValidationException
+import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
 import org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncJobService
 import org.springframework.cloud.context.refresh.ContextRefresher
 import org.springframework.http.HttpStatus
@@ -40,6 +41,7 @@ class AdminControllerV4(
     private val historyMigrationJobService: HistoryMigrationJobService,
     private val teamcitySyncJobService: TeamcitySyncJobService,
     private val contextRefresher: ContextRefresher,
+    private val currentUserResolver: CurrentUserResolver,
 ) {
     @PostMapping("/migrate-component/{name}")
     fun migrateComponent(
@@ -77,7 +79,7 @@ class AdminControllerV4(
      */
     @PostMapping("/migrate")
     fun migrate(): ResponseEntity<MigrationJobResponse> {
-        val outcome = migrationJobService.startAsync()
+        val outcome = migrationJobService.startAsync(currentUserResolver.currentUsername())
         val httpStatus = if (outcome.isNewlyStarted) HttpStatus.ACCEPTED else HttpStatus.CONFLICT
         return ResponseEntity.status(httpStatus).body(MigrationJobResponse.from(outcome.state))
     }
@@ -141,7 +143,7 @@ class AdminControllerV4(
         @RequestParam(required = false) toRef: String?,
         @RequestParam(defaultValue = "false") reset: Boolean,
     ): ResponseEntity<HistoryMigrationJobResponse> {
-        val outcome = historyMigrationJobService.startAsync(toRef, reset)
+        val outcome = historyMigrationJobService.startAsync(toRef, reset, currentUserResolver.currentUsername())
         val httpStatus = if (outcome.isNewlyStarted) HttpStatus.ACCEPTED else HttpStatus.CONFLICT
         return ResponseEntity.status(httpStatus).body(HistoryMigrationJobResponse.from(outcome.state))
     }
@@ -201,7 +203,7 @@ class AdminControllerV4(
      */
     @PostMapping("/teamcity-project-ids/sync")
     fun startTeamcitySync(): ResponseEntity<TeamcitySyncJobResponse> {
-        val outcome = teamcitySyncJobService.startAsync()
+        val outcome = teamcitySyncJobService.startAsync(currentUserResolver.currentUsername())
         val httpStatus = if (outcome.isNewlyStarted) HttpStatus.ACCEPTED else HttpStatus.CONFLICT
         return ResponseEntity.status(httpStatus).body(TeamcitySyncJobResponse.from(outcome.state))
     }

@@ -15,6 +15,10 @@ import org.mockito.Mockito.`when`
 import org.octopusden.octopus.components.registry.server.service.JobState
 import org.octopusden.octopus.components.registry.server.service.MigrationConflictException
 import org.octopusden.octopus.components.registry.server.service.MigrationLifecycleGate
+import org.octopusden.octopus.components.registry.server.service.ServiceEventSource
+import org.octopusden.octopus.components.registry.server.service.ServiceEventStatus
+import org.octopusden.octopus.components.registry.server.service.ServiceEventType
+import org.octopusden.octopus.components.registry.server.support.RecordingServiceEventRecorder
 import org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncResult
 import org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncService
 import org.springframework.core.task.SyncTaskExecutor
@@ -185,6 +189,65 @@ class TeamcitySyncJobServiceImplTest {
         assertTrue(second.isNewlyStarted)
         assertTrue(first.state.id != second.state.id, "completed job should not block a new run")
         verify(syncService, times(2)).resync()
+    }
+
+    @Test
+    @DisplayName("SYS-060 completed run records COMPLETED with result counters + triggeredBy")
+    fun sys060RecordsCompleted() {
+        val populated =
+            TeamcitySyncResult(
+                scanned = 5, updated = 2, unchanged = 3,
+                skippedNoMatch = 0, skippedAmbiguous = 0, ambiguousAutoResolved = 0, errors = emptyList(),
+            )
+        val syncService = mock(TeamcitySyncService::class.java)
+        `when`(syncService.resync()).thenReturn(populated)
+        val recorder = RecordingServiceEventRecorder()
+        val service = TeamcitySyncJobServiceImpl(syncService, SyncTaskExecutor(), MigrationLifecycleGate(), recorder)
+
+        service.startAsync("alice")
+
+        // recordStart precedes recordFinish; one row per run.
+        assertEquals(listOf("start", "finish:COMPLETED"), recorder.order)
+        val start = recorder.starts.single()
+        assertEquals(ServiceEventType.TEAMCITY_RESYNC, start.type)
+        assertEquals(ServiceEventSource.CRS, start.source)
+        assertEquals("alice", start.triggeredBy)
+        val finish = recorder.finishes.single()
+        assertEquals(ServiceEventStatus.COMPLETED, finish.status)
+        assertEquals(start.correlationId, finish.correlationId)
+        assertEquals(2, finish.detail?.get("updated"))
+    }
+
+    @Test
+    @DisplayName("SYS-060 failed run records FAILED with the error message")
+    fun sys060RecordsFailed() {
+        val syncService = mock(TeamcitySyncService::class.java)
+        `when`(syncService.resync()).thenThrow(IllegalStateException("TC unavailable"))
+        val recorder = RecordingServiceEventRecorder()
+        val service = TeamcitySyncJobServiceImpl(syncService, SyncTaskExecutor(), MigrationLifecycleGate(), recorder)
+
+        service.startAsync("alice")
+
+        assertEquals(listOf("start", "finish:FAILED"), recorder.order)
+        val finish = recorder.finishes.single()
+        assertEquals(ServiceEventStatus.FAILED, finish.status)
+        assertEquals("TC unavailable", finish.detail?.get("errorMessage"))
+    }
+
+    @Test
+    @DisplayName("SYS-060 rejected submission records a standalone FAILED (no running row)")
+    fun sys060RecordsRejected() {
+        val syncService = mock(TeamcitySyncService::class.java)
+        val recorder = RecordingServiceEventRecorder()
+        val service = TeamcitySyncJobServiceImpl(syncService, RejectingExecutor("pool shutting down"), MigrationLifecycleGate(), recorder)
+
+        assertFailsWith<java.util.concurrent.RejectedExecutionException> { service.startAsync("alice") }
+
+        // The runnable never ran, so no recordStart; a terminal FAILED is recorded directly.
+        assertTrue(recorder.starts.isEmpty())
+        val instant = recorder.instants.single()
+        assertEquals(ServiceEventType.TEAMCITY_RESYNC, instant.type)
+        assertEquals(ServiceEventStatus.FAILED, instant.status)
     }
 
     // -- Test doubles -------------------------------------------------------

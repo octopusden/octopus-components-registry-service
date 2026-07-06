@@ -3,6 +3,7 @@ package org.octopusden.octopus.components.registry.server.controller
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
+import org.mockito.ArgumentMatchers.anyString
 import org.mockito.Mockito.`when`
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
@@ -58,7 +59,7 @@ class AdminMigrateJobControllerTest {
 
     @Test
     fun `POST migrate first call returns 202 with the freshly-started job body`() {
-        `when`(migrationJobService.startAsync()).thenReturn(
+        `when`(migrationJobService.startAsync(anyString())).thenReturn(
             StartMigrationResult(state = RUNNING_STATE, isNewlyStarted = true),
         )
 
@@ -74,7 +75,7 @@ class AdminMigrateJobControllerTest {
         // Service signals "already running" via isNewlyStarted=false; the controller
         // maps that to 409 Conflict. The body is the existing job state — same id —
         // so the SPA can "attach" and start polling.
-        `when`(migrationJobService.startAsync()).thenReturn(
+        `when`(migrationJobService.startAsync(anyString())).thenReturn(
             StartMigrationResult(state = RUNNING_STATE, isNewlyStarted = false),
         )
 

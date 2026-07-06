@@ -45,12 +45,18 @@ class TeamcitySyncScheduler(
 ) {
     private val log = KotlinLogging.logger {}
 
+    private companion object {
+        // Actor stamped on the SYS-060 service-event journal row for cron-fired runs
+        // (vs a username for admin-triggered ones).
+        const val TRIGGERED_BY_SCHEDULER = "scheduler"
+    }
+
     @Scheduled(cron = "\${teamcity.sync.cron:0 0 4 * * SUN}", zone = "UTC")
     @Suppress("TooGenericExceptionCaught")
     fun weeklyResync() {
         log.info { "TC sync: weekly cron firing" }
         try {
-            val outcome = teamcitySyncJobService.startAsync()
+            val outcome = teamcitySyncJobService.startAsync(TRIGGERED_BY_SCHEDULER)
             if (outcome.isNewlyStarted) {
                 log.info { "TC sync: weekly cron started job ${outcome.state.id}" }
             } else {

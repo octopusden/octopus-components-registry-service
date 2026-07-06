@@ -14,6 +14,11 @@ import org.octopusden.octopus.components.registry.server.service.HistoryRecovery
 import org.octopusden.octopus.components.registry.server.service.JobState
 import org.octopusden.octopus.components.registry.server.service.MigrationLifecycleGate
 import org.octopusden.octopus.components.registry.server.service.MigrationLifecycleGate.JobKind
+import org.octopusden.octopus.components.registry.server.service.NoOpServiceEventRecorder
+import org.octopusden.octopus.components.registry.server.service.ServiceEventRecorder
+import org.octopusden.octopus.components.registry.server.service.ServiceEventSource
+import org.octopusden.octopus.components.registry.server.service.ServiceEventStatus
+import org.octopusden.octopus.components.registry.server.service.ServiceEventType
 import org.octopusden.octopus.components.registry.server.service.StartHistoryMigrationResult
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
@@ -43,6 +48,7 @@ class HistoryMigrationJobServiceImpl(
     @Qualifier("migrationExecutor") executor: TaskExecutor,
     lifecycleGate: MigrationLifecycleGate,
     private val forceResetter: HistoryForceResetter,
+    private val serviceEventRecorder: ServiceEventRecorder = NoOpServiceEventRecorder,
 ) : HistoryMigrationJobService {
     private val lifecycle =
         AsyncJobLifecycle<HistoryMigrationJobState>(
@@ -65,12 +71,29 @@ class HistoryMigrationJobServiceImpl(
     override fun startAsync(
         toRef: String?,
         reset: Boolean,
+        triggeredBy: String,
     ): StartHistoryMigrationResult {
         val outcome =
-            lifecycle.claimAndSubmit(
-                buildCandidate = ::buildCandidate,
-                work = { jobId -> runHistoryMigration(jobId, toRef, reset) },
-            )
+            try {
+                lifecycle.claimAndSubmit(
+                    buildCandidate = ::buildCandidate,
+                    work = { jobId -> runHistoryMigration(jobId, toRef, reset, triggeredBy) },
+                )
+            } catch (
+                @Suppress("TooGenericExceptionCaught") rejected: Throwable,
+            ) {
+                // Executor rejected submission (pod shutdown): runnable never ran, so
+                // recordStart never fired. Record a standalone terminal FAILED (SYS-060).
+                serviceEventRecorder.recordInstant(
+                    type = ServiceEventType.MIGRATION_HISTORY,
+                    source = ServiceEventSource.CRS,
+                    triggeredBy = triggeredBy,
+                    status = ServiceEventStatus.FAILED,
+                    summary = "History migration failed to start",
+                    detail = mapOf("errorMessage" to (rejected.message ?: rejected::class.java.simpleName)),
+                )
+                throw rejected
+            }
         return when (outcome) {
             is AsyncJobLifecycle.ClaimOutcome.Attached ->
                 StartHistoryMigrationResult(outcome.state, isNewlyStarted = false)
@@ -226,7 +249,15 @@ class HistoryMigrationJobServiceImpl(
         jobId: String,
         toRef: String?,
         reset: Boolean,
+        triggeredBy: String,
     ) {
+        serviceEventRecorder.recordStart(
+            type = ServiceEventType.MIGRATION_HISTORY,
+            source = ServiceEventSource.CRS,
+            triggeredBy = triggeredBy,
+            correlationId = jobId,
+            summary = "History migration running",
+        )
         try {
             val result = gitHistoryImportService.importHistory(toRef, reset, progressListener(jobId))
             lifecycle.update(jobId) { current ->
@@ -254,6 +285,23 @@ class HistoryMigrationJobServiceImpl(
                 result.auditRecords,
                 result.durationMs,
             )
+            serviceEventRecorder.recordFinish(
+                type = ServiceEventType.MIGRATION_HISTORY,
+                source = ServiceEventSource.CRS,
+                triggeredBy = triggeredBy,
+                correlationId = jobId,
+                status = ServiceEventStatus.COMPLETED,
+                summary = "History migration completed",
+                detail =
+                    mapOf(
+                        "processedCommits" to result.processedCommits,
+                        "auditRecords" to result.auditRecords,
+                        "skippedNoGroovy" to result.skippedNoGroovy,
+                        "skippedParseError" to result.skippedParseError,
+                        "skippedUnknownNames" to result.skippedUnknownNames,
+                        "durationMs" to result.durationMs,
+                    ),
+            )
         } catch (
             @Suppress("TooGenericExceptionCaught") e: Throwable,
         ) {
@@ -271,6 +319,15 @@ class HistoryMigrationJobServiceImpl(
                     recoveryAction = HistoryRecoveryAction.RETRY,
                 )
             }
+            serviceEventRecorder.recordFinish(
+                type = ServiceEventType.MIGRATION_HISTORY,
+                source = ServiceEventSource.CRS,
+                triggeredBy = triggeredBy,
+                correlationId = jobId,
+                status = ServiceEventStatus.FAILED,
+                summary = "History migration failed",
+                detail = mapOf("errorMessage" to (e.message ?: e::class.java.simpleName)),
+            )
         } finally {
             lifecycle.release(jobId)
         }

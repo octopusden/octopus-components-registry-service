@@ -11,6 +11,11 @@ import org.octopusden.octopus.components.registry.server.service.MigrationLifecy
 import org.octopusden.octopus.components.registry.server.service.MigrationLifecycleGate.JobKind
 import org.octopusden.octopus.components.registry.server.service.MigrationPhase
 import org.octopusden.octopus.components.registry.server.service.MigrationProgressListener
+import org.octopusden.octopus.components.registry.server.service.NoOpServiceEventRecorder
+import org.octopusden.octopus.components.registry.server.service.ServiceEventRecorder
+import org.octopusden.octopus.components.registry.server.service.ServiceEventSource
+import org.octopusden.octopus.components.registry.server.service.ServiceEventStatus
+import org.octopusden.octopus.components.registry.server.service.ServiceEventType
 import org.octopusden.octopus.components.registry.server.service.StartMigrationResult
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
@@ -47,6 +52,7 @@ class MigrationJobServiceImpl(
     private val importService: ImportService,
     @Qualifier("migrationExecutor") executor: TaskExecutor,
     lifecycleGate: MigrationLifecycleGate,
+    private val serviceEventRecorder: ServiceEventRecorder = NoOpServiceEventRecorder,
 ) : MigrationJobService {
     private val lifecycle =
         AsyncJobLifecycle<MigrationJobState>(
@@ -66,12 +72,28 @@ class MigrationJobServiceImpl(
             },
         )
 
-    override fun startAsync(): StartMigrationResult {
+    override fun startAsync(triggeredBy: String): StartMigrationResult {
         val outcome =
-            lifecycle.claimAndSubmit(
-                buildCandidate = ::buildCandidate,
-                work = ::runMigration,
-            )
+            try {
+                lifecycle.claimAndSubmit(
+                    buildCandidate = ::buildCandidate,
+                    work = { jobId -> runMigration(jobId, triggeredBy) },
+                )
+            } catch (
+                @Suppress("TooGenericExceptionCaught") rejected: Throwable,
+            ) {
+                // Executor rejected submission (pod shutdown): runnable never ran, so
+                // recordStart never fired. Record a standalone terminal FAILED (SYS-060).
+                serviceEventRecorder.recordInstant(
+                    type = ServiceEventType.MIGRATION_COMPONENTS,
+                    source = ServiceEventSource.CRS,
+                    triggeredBy = triggeredBy,
+                    status = ServiceEventStatus.FAILED,
+                    summary = "Components migration failed to start",
+                    detail = mapOf("errorMessage" to (rejected.message ?: rejected::class.java.simpleName)),
+                )
+                throw rejected
+            }
         return when (outcome) {
             is AsyncJobLifecycle.ClaimOutcome.Attached -> StartMigrationResult(outcome.state, isNewlyStarted = false)
             is AsyncJobLifecycle.ClaimOutcome.Started -> StartMigrationResult(outcome.state, isNewlyStarted = true)
@@ -106,7 +128,17 @@ class MigrationJobServiceImpl(
             phase = MigrationPhase.DEFAULTS,
         )
 
-    private fun runMigration(jobId: String) {
+    private fun runMigration(
+        jobId: String,
+        triggeredBy: String,
+    ) {
+        serviceEventRecorder.recordStart(
+            type = ServiceEventType.MIGRATION_COMPONENTS,
+            source = ServiceEventSource.CRS,
+            triggeredBy = triggeredBy,
+            correlationId = jobId,
+            summary = "Components migration running",
+        )
         try {
             // phase=DEFAULTS was already published by buildCandidate(); we don't
             // re-set it here because a) it's already correct, b) re-publishing
@@ -143,6 +175,21 @@ class MigrationJobServiceImpl(
                 components.failed,
                 components.skipped,
             )
+            serviceEventRecorder.recordFinish(
+                type = ServiceEventType.MIGRATION_COMPONENTS,
+                source = ServiceEventSource.CRS,
+                triggeredBy = triggeredBy,
+                correlationId = jobId,
+                status = ServiceEventStatus.COMPLETED,
+                summary = "Components migration completed",
+                detail =
+                    mapOf(
+                        "total" to components.total,
+                        "migrated" to components.migrated,
+                        "failed" to components.failed,
+                        "skipped" to components.skipped,
+                    ),
+            )
         } catch (
             @Suppress("TooGenericExceptionCaught") e: Throwable,
         ) {
@@ -156,6 +203,15 @@ class MigrationJobServiceImpl(
                     errorMessage = e.message ?: e::class.java.simpleName,
                 )
             }
+            serviceEventRecorder.recordFinish(
+                type = ServiceEventType.MIGRATION_COMPONENTS,
+                source = ServiceEventSource.CRS,
+                triggeredBy = triggeredBy,
+                correlationId = jobId,
+                status = ServiceEventStatus.FAILED,
+                summary = "Components migration failed",
+                detail = mapOf("errorMessage" to (e.message ?: e::class.java.simpleName)),
+            )
         } finally {
             // Always release the cross-kind gate, even on failure / unhandled
             // throw, so a follow-up history migration isn't blocked forever by

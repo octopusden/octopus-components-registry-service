@@ -4,6 +4,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
+import org.mockito.ArgumentMatchers.anyString
 import org.mockito.Mockito.never
 import org.mockito.Mockito.times
 import org.mockito.Mockito.verify
@@ -89,7 +90,7 @@ class TeamcityResyncControllerTest {
             .perform(post("/rest/api/4/admin/teamcity-project-ids/sync"))
             .andExpect(status().isUnauthorized)
 
-        verify(teamcitySyncJobService, never()).startAsync()
+        verify(teamcitySyncJobService, never()).startAsync(anyString())
     }
 
     @Test
@@ -99,13 +100,13 @@ class TeamcityResyncControllerTest {
             .perform(post("/rest/api/4/admin/teamcity-project-ids/sync").with(editorJwt()))
             .andExpect(status().isForbidden)
 
-        verify(teamcitySyncJobService, never()).startAsync()
+        verify(teamcitySyncJobService, never()).startAsync(anyString())
     }
 
     @Test
     @DisplayName("admin POST /admin/teamcity-project-ids/sync newly-started → 202 with kind=job body")
     fun syncAdminFreshReturns202() {
-        `when`(teamcitySyncJobService.startAsync())
+        `when`(teamcitySyncJobService.startAsync(anyString()))
             .thenReturn(StartTeamcitySyncResult(runningState("job-1"), isNewlyStarted = true))
 
         mvc
@@ -116,13 +117,13 @@ class TeamcityResyncControllerTest {
             .andExpect(jsonPath("$.kind").value("job"))
             .andExpect(jsonPath("$.result").doesNotExist())
 
-        verify(teamcitySyncJobService, times(1)).startAsync()
+        verify(teamcitySyncJobService, times(1)).startAsync(anyString())
     }
 
     @Test
     @DisplayName("admin POST /admin/teamcity-project-ids/sync same-kind RUNNING → 409 with same job body")
     fun syncAdminSameKindAttachReturns409() {
-        `when`(teamcitySyncJobService.startAsync())
+        `when`(teamcitySyncJobService.startAsync(anyString()))
             .thenReturn(StartTeamcitySyncResult(runningState("job-existing"), isNewlyStarted = false))
 
         mvc
@@ -136,7 +137,7 @@ class TeamcityResyncControllerTest {
     @Test
     @DisplayName("admin POST /admin/teamcity-project-ids/sync cross-kind COMPONENTS → 409 with conflict envelope")
     fun syncAdminCrossKindComponentsReturns409Conflict() {
-        `when`(teamcitySyncJobService.startAsync())
+        `when`(teamcitySyncJobService.startAsync(anyString()))
             .thenThrow(
                 MigrationConflictException(
                     MigrationLifecycleGate.ActiveJob(MigrationLifecycleGate.JobKind.COMPONENTS, "components-1"),
@@ -158,7 +159,7 @@ class TeamcityResyncControllerTest {
     @Test
     @DisplayName("admin POST /admin/teamcity-project-ids/sync cross-kind HISTORY → 409 with conflict envelope")
     fun syncAdminCrossKindHistoryReturns409Conflict() {
-        `when`(teamcitySyncJobService.startAsync())
+        `when`(teamcitySyncJobService.startAsync(anyString()))
             .thenThrow(
                 MigrationConflictException(
                     MigrationLifecycleGate.ActiveJob(MigrationLifecycleGate.JobKind.HISTORY, "history-1"),

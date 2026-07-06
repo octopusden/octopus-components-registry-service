@@ -4,6 +4,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
+import org.mockito.ArgumentMatchers.anyString
 import org.mockito.Mockito.never
 import org.mockito.Mockito.times
 import org.mockito.Mockito.verify
@@ -102,7 +103,7 @@ class AdminControllerV4SecurityTest {
             .perform(post("/rest/api/4/admin/migrate"))
             .andExpect(status().isUnauthorized)
 
-        verify(migrationJobService, never()).startAsync()
+        verify(migrationJobService, never()).startAsync(anyString())
     }
 
     @Test
@@ -112,13 +113,13 @@ class AdminControllerV4SecurityTest {
             .perform(post("/rest/api/4/admin/migrate").with(editorJwt()))
             .andExpect(status().isForbidden)
 
-        verify(migrationJobService, never()).startAsync()
+        verify(migrationJobService, never()).startAsync(anyString())
     }
 
     @Test
     @DisplayName("MIG-024: POST /admin/migrate with IMPORT_DATA JWT returns 202 and invokes MigrationJobService.startAsync exactly once")
     fun `MIG-024 admin JWT POST migrate returns 202 and starts the job`() {
-        `when`(migrationJobService.startAsync()).thenReturn(
+        `when`(migrationJobService.startAsync(anyString())).thenReturn(
             StartMigrationResult(state = RUNNING_STATE, isNewlyStarted = true),
         )
 
@@ -126,7 +127,7 @@ class AdminControllerV4SecurityTest {
             .perform(post("/rest/api/4/admin/migrate").with(adminJwt()))
             .andExpect(status().isAccepted)
 
-        verify(migrationJobService, times(1)).startAsync()
+        verify(migrationJobService, times(1)).startAsync(anyString())
     }
 
     // #250: config-write guard. Since #343, field-config / component-defaults are
