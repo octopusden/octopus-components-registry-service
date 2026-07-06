@@ -48,10 +48,15 @@ interface ServiceEventRepository :
         @Param("now") now: Instant,
     ): Int
 
-    /** Retention prune: delete terminal rows older than the cutoff. Returns rows deleted. */
+    /**
+     * Retention prune: delete TERMINAL rows older than the cutoff. RUNNING rows
+     * (finishedAt IS NULL) are never pruned, so a long-running job that outlives the
+     * retention window keeps its row for the in-place recordFinish transition (preserves
+     * one-row-per-run). Returns rows deleted.
+     */
     @Modifying
     @Transactional
-    @Query("DELETE FROM ServiceEventEntity e WHERE e.startedAt < :cutoff")
+    @Query("DELETE FROM ServiceEventEntity e WHERE e.startedAt < :cutoff AND e.finishedAt IS NOT NULL")
     fun deleteByStartedAtBefore(
         @Param("cutoff") cutoff: Instant,
     ): Int

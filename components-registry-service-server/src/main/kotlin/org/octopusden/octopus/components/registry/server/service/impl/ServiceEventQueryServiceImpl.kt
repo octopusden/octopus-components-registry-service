@@ -40,14 +40,15 @@ class ServiceEventQueryServiceImpl(
     private fun buildSpecification(filter: ServiceEventFilter): Specification<ServiceEventEntity> {
         var spec = Specification.where<ServiceEventEntity>(null)
 
+        // Stored values are already canonical (enum name() for eventType/status, lowercase
+        // `wire` for source), so normalize the INPUT and compare directly against the column.
+        // Applying upper()/lower() to the column instead would defeat the btree indexes on
+        // event_type / source / status as the journal grows.
         filter.eventType?.takeIf { it.isNotBlank() }?.let { eventType ->
-            // Case-insensitive, mirroring the source/status filters below: stored values are the
-            // uppercase enum name(), so a caller passing `startup` / `teamcity_resync` still matches.
-            spec = spec.and(Specification { root, _, cb -> cb.equal(cb.upper(root.get("eventType")), eventType.uppercase()) })
+            spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<String>("eventType"), eventType.uppercase()) })
         }
         filter.source?.takeIf { it.isNotBlank() }?.let { source ->
-            // Match the stored lowercase wire form regardless of caller casing.
-            spec = spec.and(Specification { root, _, cb -> cb.equal(cb.lower(root.get("source")), source.lowercase()) })
+            spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<String>("source"), source.lowercase()) })
         }
         filter.status?.takeIf { it.isNotBlank() }?.let { status ->
             spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<String>("status"), status.uppercase()) })
