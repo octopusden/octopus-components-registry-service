@@ -379,6 +379,7 @@ class ConfigSyncServiceTest {
                         buildVersionFormat = "\$major.\$minor.\$service-\$build"
                         lineVersionFormat = "\$major.\$minor"
                         hotfixVersionFormat = "\$major.\$minor.\$service.\$fix"
+                        versionFormat = "\$versionPrefix-\$baseVersionFormat"
                     }
                 }
                 distribution = AdminConfigProperties.Distribution().apply {
@@ -450,6 +451,7 @@ class ConfigSyncServiceTest {
                         "buildVersionFormat" to "\$major.\$minor.\$service-\$build",
                         "lineVersionFormat" to "\$major.\$minor",
                         "hotfixVersionFormat" to "\$major.\$minor.\$service.\$fix",
+                        "versionFormat" to "\$versionPrefix-\$baseVersionFormat",
                     ),
                 ),
                 "distribution" to mapOf(

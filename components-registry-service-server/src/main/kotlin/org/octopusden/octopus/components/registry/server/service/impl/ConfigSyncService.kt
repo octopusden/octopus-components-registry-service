@@ -202,6 +202,7 @@ class ConfigSyncService(
                             cvf.buildVersionFormat?.let { put("buildVersionFormat", it) }
                             cvf.lineVersionFormat?.let { put("lineVersionFormat", it) }
                             cvf.hotfixVersionFormat?.let { put("hotfixVersionFormat", it) }
+                            cvf.versionFormat?.let { put("versionFormat", it) }
                         }.takeIf { it.isNotEmpty() }?.let { put("componentVersionFormat", it) }
                     }
                 }.takeIf { it.isNotEmpty() }?.let { put("jira", it) }
