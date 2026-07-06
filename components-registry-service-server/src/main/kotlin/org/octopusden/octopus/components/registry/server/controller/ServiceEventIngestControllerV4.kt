@@ -36,8 +36,8 @@ import java.security.MessageDigest
  * FAIL-CLOSED: a blank/unset configured token rejects every call (403), so a
  * misconfiguration never opens the endpoint to the network. Constant-time compare
  * avoids leaking the token via timing. A leaked token only lets an attacker forge
- * journal rows (no component data is mutated); a stronger service-account/OIDC/mTLS
- * scheme is tracked as a post-cutover follow-up.
+ * journal rows (no component data is mutated); replacing this with a Keycloak
+ * client-credentials service account is tracked as TD-015 (docs/registry/tech-debt).
  */
 @ConditionalOnDatabaseEnabled
 @RestController
