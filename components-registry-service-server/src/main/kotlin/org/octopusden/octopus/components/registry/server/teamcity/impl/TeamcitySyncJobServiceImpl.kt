@@ -19,6 +19,7 @@ import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.core.task.TaskExecutor
 import org.springframework.stereotype.Service
 import java.time.Instant
+import java.util.concurrent.RejectedExecutionException
 
 /**
  * In-memory async wrapper around [TeamcitySyncService.resync]. Mirrors
@@ -62,13 +63,13 @@ class TeamcitySyncJobServiceImpl(
                     buildCandidate = ::buildCandidate,
                     work = { jobId -> runResync(jobId, triggeredBy) },
                 )
-            } catch (
-                @Suppress("TooGenericExceptionCaught") rejected: Throwable,
-            ) {
-                // Executor rejected the submission (typically pod shutdown): the work
-                // runnable never ran, so recordStart never fired. Record a standalone
-                // terminal FAILED row so the failure is not lost (SYS-060), then let the
-                // rejection propagate as before.
+            } catch (rejected: RejectedExecutionException) {
+                // ONLY executor-rejection (typically pod shutdown; Spring's
+                // TaskRejectedException extends RejectedExecutionException): the work
+                // runnable never ran, so recordStart never fired — record a standalone
+                // terminal FAILED so the failure is not lost (SYS-060), then rethrow.
+                // A cross-kind MigrationConflictException is NOT a failure and must NOT be
+                // journaled — it is deliberately not caught here and propagates to the 409 handler.
                 serviceEventRecorder.recordInstant(
                     type = ServiceEventType.TEAMCITY_RESYNC,
                     source = ServiceEventSource.CRS,

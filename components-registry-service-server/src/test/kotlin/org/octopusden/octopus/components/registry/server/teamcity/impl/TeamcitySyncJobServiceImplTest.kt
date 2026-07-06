@@ -250,6 +250,22 @@ class TeamcitySyncJobServiceImplTest {
         assertEquals(ServiceEventStatus.FAILED, instant.status)
     }
 
+    @Test
+    @DisplayName("SYS-060 cross-kind conflict records NOTHING (a conflict is not a failure)")
+    fun sys060CrossKindConflictRecordsNothing() {
+        val gate = MigrationLifecycleGate()
+        gate.tryClaim(MigrationLifecycleGate.JobKind.COMPONENTS, "components-1")
+        val recorder = RecordingServiceEventRecorder()
+        val service = TeamcitySyncJobServiceImpl(mock(TeamcitySyncService::class.java), SyncTaskExecutor(), gate, recorder)
+
+        assertFailsWith<MigrationConflictException> { service.startAsync("alice") }
+
+        // A cross-kind conflict means the job never started — it must NOT be journaled as FAILED.
+        assertTrue(recorder.starts.isEmpty())
+        assertTrue(recorder.finishes.isEmpty())
+        assertTrue(recorder.instants.isEmpty())
+    }
+
     // -- Test doubles -------------------------------------------------------
 
     /** Capture-but-don't-run executor — observe RUNNING state without the work finishing. */

@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.controller
 
+import org.octopusden.octopus.components.registry.core.dto.ErrorResponse
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.config.ServiceEventProperties
 import org.octopusden.octopus.components.registry.server.dto.v4.ServiceEventIngestRequest
@@ -50,7 +51,7 @@ class ServiceEventIngestControllerV4(
     ): ResponseEntity<Any> {
         if (!tokenAccepted(token)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(mapOf("error" to "forbidden", "message" to "Invalid or missing service-event token"))
+                .body(ErrorResponse("Invalid or missing service-event token", "forbidden"))
         }
 
         val type =
@@ -106,7 +107,7 @@ class ServiceEventIngestControllerV4(
     ): T? = runCatching { parse(raw.trim().uppercase()) }.getOrNull()
 
     private fun badRequest(message: String): ResponseEntity<Any> =
-        ResponseEntity.badRequest().body(mapOf("error" to "bad-request", "message" to message))
+        ResponseEntity.badRequest().body(ErrorResponse(message, "bad-request"))
 
     companion object {
         private val LOG = LoggerFactory.getLogger(ServiceEventIngestControllerV4::class.java)

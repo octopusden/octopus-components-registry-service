@@ -22,6 +22,7 @@ import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.core.task.TaskExecutor
 import org.springframework.stereotype.Service
 import java.time.Instant
+import java.util.concurrent.RejectedExecutionException
 
 /**
  * In-memory async wrapper around [ImportService.migrate]. Lifecycle boilerplate
@@ -79,11 +80,10 @@ class MigrationJobServiceImpl(
                     buildCandidate = ::buildCandidate,
                     work = { jobId -> runMigration(jobId, triggeredBy) },
                 )
-            } catch (
-                @Suppress("TooGenericExceptionCaught") rejected: Throwable,
-            ) {
-                // Executor rejected submission (pod shutdown): runnable never ran, so
-                // recordStart never fired. Record a standalone terminal FAILED (SYS-060).
+            } catch (rejected: RejectedExecutionException) {
+                // ONLY executor-rejection (pod shutdown): runnable never ran, so recordStart
+                // never fired — record a standalone terminal FAILED (SYS-060). A cross-kind
+                // MigrationConflictException is NOT a failure and is deliberately not caught here.
                 serviceEventRecorder.recordInstant(
                     type = ServiceEventType.MIGRATION_COMPONENTS,
                     source = ServiceEventSource.CRS,
