@@ -79,6 +79,16 @@ class AdminControllerV4(
      */
     @PostMapping("/migrate")
     fun migrate(): ResponseEntity<MigrationJobResponse> {
+        // Forbid re-running once the migration is complete: `git` is the count of DSL
+        // (git-sourced) components not yet in the DB, so git==0 means there is nothing left
+        // to migrate. Re-running would only re-do defaults and confuse operators. A partial
+        // state (git>0, e.g. after failures) still allows a retry. Fail-loud (409) so a direct
+        // API caller is blocked too, not only the SPA button.
+        if (importService.getMigrationStatus().git == 0L) {
+            throw MigrationAlreadyCompleteException(
+                "Migration already complete: no git-sourced components remain (git=0). Nothing to migrate.",
+            )
+        }
         val outcome = migrationJobService.startAsync(currentUserResolver.currentUsername())
         val httpStatus = if (outcome.isNewlyStarted) HttpStatus.ACCEPTED else HttpStatus.CONFLICT
         return ResponseEntity.status(httpStatus).body(MigrationJobResponse.from(outcome.state))
@@ -124,6 +134,16 @@ class AdminControllerV4(
     fun handleConfigValidation(e: ConfigValidationException): ResponseEntity<Map<String, Any?>> =
         ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(
             mapOf("error" to "config-validation", "message" to (e.message ?: "Invalid configuration")),
+        )
+
+    /**
+     * Re-running a completed migration (git==0) is a 409 with a distinct `code` so the SPA
+     * can tell it apart from the same-kind attach 409 (which carries a job body).
+     */
+    @ExceptionHandler(MigrationAlreadyCompleteException::class)
+    fun handleMigrationAlreadyComplete(e: MigrationAlreadyCompleteException): ResponseEntity<Map<String, Any?>> =
+        ResponseEntity.status(HttpStatus.CONFLICT).body(
+            mapOf("code" to "migration-complete", "message" to (e.message ?: "Migration already complete")),
         )
 
     @GetMapping("/export")
@@ -241,3 +261,12 @@ class AdminControllerV4(
         )
     }
 }
+
+/**
+ * Thrown by `POST /admin/migrate` when the migration is already complete (no git-sourced
+ * components remain). Mapped to 409 `{code: "migration-complete"}` by the controller so a
+ * finished migration cannot be re-run from the SPA or a direct API call.
+ */
+class MigrationAlreadyCompleteException(
+    message: String,
+) : RuntimeException(message)
