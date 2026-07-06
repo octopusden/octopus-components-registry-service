@@ -1,15 +1,20 @@
 package org.octopusden.octopus.components.registry.server.controller
 
 import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers.anyString
+import org.mockito.Mockito.never
+import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
+import org.octopusden.octopus.components.registry.server.service.ImportService
 import org.octopusden.octopus.components.registry.server.service.JobState
 import org.octopusden.octopus.components.registry.server.service.MigrationJobService
 import org.octopusden.octopus.components.registry.server.service.MigrationJobState
+import org.octopusden.octopus.components.registry.server.service.MigrationStatus
 import org.octopusden.octopus.components.registry.server.service.StartMigrationResult
 import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.springframework.beans.factory.annotation.Autowired
@@ -54,8 +59,31 @@ class AdminMigrateJobControllerTest {
     @MockBean
     private lateinit var migrationJobService: MigrationJobService
 
+    @MockBean
+    private lateinit var importService: ImportService
+
     @Autowired
     private lateinit var mvc: MockMvc
+
+    @BeforeEach
+    fun stubIncompleteMigration() {
+        // Default: there is still something to migrate (git > 0) so the completeness guard
+        // does not fire for the existing start/attach cases. The git==0 case overrides this.
+        `when`(importService.getMigrationStatus()).thenReturn(MigrationStatus(git = 5, db = 10, total = 15))
+    }
+
+    @Test
+    fun `POST migrate returns 409 migration-complete when nothing remains in git`() {
+        // Full migration done (git == 0): re-running is forbidden — the job must NOT start.
+        `when`(importService.getMigrationStatus()).thenReturn(MigrationStatus(git = 0, db = 15, total = 15))
+
+        mvc
+            .perform(post("/rest/api/4/admin/migrate").with(adminJwt()))
+            .andExpect(status().isConflict)
+            .andExpect(jsonPath("$.code").value("migration-complete"))
+
+        verify(migrationJobService, never()).startAsync(anyString())
+    }
 
     @Test
     fun `POST migrate first call returns 202 with the freshly-started job body`() {
