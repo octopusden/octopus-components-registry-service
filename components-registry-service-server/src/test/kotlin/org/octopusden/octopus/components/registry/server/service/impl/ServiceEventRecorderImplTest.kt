@@ -3,6 +3,7 @@ package org.octopusden.octopus.components.registry.server.service.impl
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -51,6 +52,14 @@ class ServiceEventRecorderImplTest {
     @BeforeEach
     fun clean() {
         repository.deleteAll()
+    }
+
+    @Test
+    fun `SYS-060 the wired ServiceEventRecorder bean is the real impl, not the NoOp default`() {
+        // NoOpServiceEventRecorder is only a default constructor arg (not a @Component), so the
+        // sole ServiceEventRecorder candidate in a db-mode context is ServiceEventRecorderImpl —
+        // which Spring therefore injects into the async job impls (guards the DI contract).
+        assertTrue(recorder is ServiceEventRecorderImpl, "expected the real recorder bean, got ${recorder::class}")
     }
 
     @Test
