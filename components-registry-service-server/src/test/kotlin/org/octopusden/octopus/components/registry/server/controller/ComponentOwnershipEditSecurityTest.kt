@@ -5,11 +5,16 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
+import org.mockito.ArgumentMatchers.anyString
+import org.mockito.Mockito.`when` as whenMock
 import org.octopusden.cloud.commons.security.client.AuthServerClient
+import org.octopusden.employee.client.EmployeeServiceClient
+import org.octopusden.employee.client.common.dto.ManagerDTO
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
 import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.octopusden.octopus.components.registry.server.support.editorJwt
@@ -57,6 +62,15 @@ class ComponentOwnershipEditSecurityTest {
     @MockBean
     @Suppress("UnusedPrivateProperty")
     private lateinit var authServerClient: AuthServerClient
+
+    @MockBean
+    private lateinit var employeeServiceClient: EmployeeServiceClient
+
+    @BeforeEach
+    fun setupEmployeeMock() {
+        // Default: no manager — existing tests are unaffected.
+        whenMock(employeeServiceClient.getManager(anyString())).thenReturn(ManagerDTO(null))
+    }
 
     @Autowired
     private lateinit var mvc: MockMvc
@@ -330,4 +344,24 @@ class ComponentOwnershipEditSecurityTest {
         performGet(id, jwt)
             .andExpect(status().isOk)
             .andReturn().response.contentAsString
+
+    // --- OCTOPUS-2191: manager of componentOwner ----------------------------------
+
+    @Test
+    @DisplayName("manager of componentOwner can PATCH the component (OCTOPUS-2191)")
+    fun `owner manager can patch`() {
+        val c = create(uniqueName("mgr_allow"), owner = "bob")
+        whenMock(employeeServiceClient.getManager("bob")).thenReturn(ManagerDTO("mgr-user"))
+        performPatch(c.id(), c.version(), bumpDisplayName(), editorJwt("mgr-user"))
+            .andExpect(status().isOk)
+    }
+
+    @Test
+    @DisplayName("non-manager of componentOwner gets 403 on PATCH")
+    fun `owner non-manager forbidden`() {
+        val c = create(uniqueName("mgr_deny"), owner = "bob")
+        whenMock(employeeServiceClient.getManager("bob")).thenReturn(ManagerDTO("other-mgr"))
+        performPatch(c.id(), c.version(), bumpDisplayName(), editorJwt("frank"))
+            .andExpect(status().isForbidden)
+    }
 }

@@ -148,6 +148,23 @@ class EmployeeDirectoryService(
     /** Coarse health enum for callers that don't need the failure detail. */
     fun probe(): IntegrationHealth = probeHealth().health
 
+    /**
+     * Returns the manager's sAMAccountName for [ownerUsername], or null when the
+     * user has no manager, is not found, or the service is unavailable (fail-open).
+     */
+    @Suppress("TooGenericExceptionCaught")
+    fun getManager(ownerUsername: String): String? {
+        val client = clientProvider.getIfAvailable() ?: return null
+        return try {
+            client.getManager(ownerUsername).manager
+        } catch (e: NotFoundException) {
+            null
+        } catch (e: Exception) {
+            log.warn("employee-service: getManager('{}') failed — skipping manager check", ownerUsername, e)
+            null
+        }
+    }
+
     companion object {
         /**
          * Synthetic username for [probe]. Deliberately implausible so the
