@@ -96,17 +96,3 @@ when entity column definitions are loosened (e.g. removing PG-specific `columnDe
 **Description:** Under the `ft-db` profile (H2 in-memory, PostgreSQL compatibility mode),
 POST creates a component and PATCH updates nested fields whose entity columns use
 `columnDefinition = "jsonb"`.
-
-## CI status reference
-
-PR #148: CodeRabbit ✅ / GitGuardian ✅. The three "failed" entries (`build.yml`,
-`quality-gates.yml`, `security.yml`) are **pre-existing** on base branch `v3` — the same
-three workflows are red on every v3 commit since `dc9ac3d`. Root cause: all three reference
-`octopusden/octopus-base/.github/workflows/*.yml@feature/common-quality-gates`, but that
-branch does not exist in `octopus-base`. The workflows fail at resolution (0 jobs, 0s
-duration) before any code runs. Not a regression introduced by PR #148.
-
-**Fix track (out of scope for #148):** either create/restore
-`octopusden/octopus-base@feature/common-quality-gates`, or update the three workflow files
-on `v3` to pin to an existing ref (e.g. `@main` or `@v2.1.10`). Needs owner confirmation
-of which common-workflow is the intended successor.
