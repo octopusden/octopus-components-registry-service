@@ -38,6 +38,7 @@ class ServiceEventControllerV4(
     @GetMapping
     fun list(
         @RequestParam(required = false) eventType: String?,
+        @RequestParam(required = false) category: String?,
         @RequestParam(required = false) source: String?,
         @RequestParam(required = false) status: String?,
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) from: Instant?,
@@ -45,7 +46,14 @@ class ServiceEventControllerV4(
         pageable: Pageable,
     ): Page<ServiceEventResponse> =
         serviceEventQueryService.find(
-            ServiceEventFilter(eventType = eventType, source = source, status = status, from = from, to = to),
+            ServiceEventFilter(
+                eventType = eventType,
+                category = category,
+                source = source,
+                status = status,
+                from = from,
+                to = to,
+            ),
             pageable,
         )
 }

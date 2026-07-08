@@ -8,6 +8,8 @@ import java.time.Instant
  */
 data class ServiceEventFilter(
     val eventType: String? = null,
+    /** SYSTEM / USER — matches every event_type in that category (case-insensitive). */
+    val category: String? = null,
     val source: String? = null,
     val status: String? = null,
     val from: Instant? = null,

@@ -2227,6 +2227,9 @@
       },
       "ServiceEventResponse" : {
         "properties" : {
+          "category" : {
+            "type" : "string"
+          },
           "correlationId" : {
             "type" : "string"
           },
@@ -2268,6 +2271,7 @@
           }
         },
         "required" : [
+          "category",
           "eventType",
           "id",
           "source",
@@ -4124,6 +4128,14 @@
           {
             "in" : "query",
             "name" : "eventType",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "in" : "query",
+            "name" : "category",
             "required" : false,
             "schema" : {
               "type" : "string"
