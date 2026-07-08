@@ -5,7 +5,9 @@ import org.octopusden.octopus.components.registry.server.dto.v4.ServiceEventFilt
 import org.octopusden.octopus.components.registry.server.dto.v4.ServiceEventResponse
 import org.octopusden.octopus.components.registry.server.entity.ServiceEventEntity
 import org.octopusden.octopus.components.registry.server.repository.ServiceEventRepository
+import org.octopusden.octopus.components.registry.server.service.ServiceEventCategory
 import org.octopusden.octopus.components.registry.server.service.ServiceEventQueryService
+import org.octopusden.octopus.components.registry.server.service.ServiceEventType
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Pageable
@@ -47,6 +49,15 @@ class ServiceEventQueryServiceImpl(
         // event_type / source / status as the journal grows.
         filter.eventType?.takeIf { it.isNotBlank() }?.let { eventType ->
             spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<String>("eventType"), eventType.uppercase(Locale.ROOT)) })
+        }
+        // Category → the set of event_type names in it (SYSTEM/USER). An unknown category
+        // yields no types → match nothing (empty IN), rather than silently ignoring the filter.
+        filter.category?.takeIf { it.isNotBlank() }?.let { category ->
+            val names = runCatching { ServiceEventCategory.valueOf(category.uppercase(Locale.ROOT)) }
+                .getOrNull()
+                ?.let { ServiceEventType.namesOf(it) }
+                ?: emptyList()
+            spec = spec.and(Specification { root, _, cb -> root.get<String>("eventType").`in`(names) })
         }
         filter.source?.takeIf { it.isNotBlank() }?.let { source ->
             spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<String>("source"), source.lowercase(Locale.ROOT)) })

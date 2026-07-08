@@ -44,6 +44,21 @@ class ServiceEventIngestControllerV4Test {
     }
 
     @Test
+    fun `accepts ONBOARDING_VIDEO_VIEW as a portal user-event`() {
+        val recorder = RecordingServiceEventRecorder()
+        val request =
+            validRequest.copy(
+                eventType = ServiceEventType.ONBOARDING_VIDEO_VIEW.name,
+                triggeredBy = "alice",
+                summary = "watched onboarding video",
+            )
+        val response = controller(recorder, token = "secret").ingest("secret", request)
+
+        assertEquals(HttpStatus.ACCEPTED, response.statusCode)
+        assertEquals(ServiceEventType.ONBOARDING_VIDEO_VIEW, recorder.instants.single().type)
+    }
+
+    @Test
     fun `SYS-061 wrong token is 403 and records nothing`() {
         val recorder = RecordingServiceEventRecorder()
         val response = controller(recorder, token = "secret").ingest("nope", validRequest)

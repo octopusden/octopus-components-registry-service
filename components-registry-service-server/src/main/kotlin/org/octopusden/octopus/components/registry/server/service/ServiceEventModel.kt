@@ -10,21 +10,52 @@ import java.util.Locale
  * ordinal shift and unknown values read back gracefully. Validation happens at the
  * recorder / ingest boundary.
  */
-enum class ServiceEventType {
+/**
+ * Coarse split so the Admin "Events" tab can separate operational/system events from
+ * product-usage events triggered by an end user (e.g. watching the onboarding video).
+ */
+enum class ServiceEventCategory {
+    /** Operational / lifecycle events emitted by a service (startup, migration, sweep, …). */
+    SYSTEM,
+
+    /** Product-usage events triggered by a specific end user (`triggeredBy` = username). */
+    USER,
+}
+
+enum class ServiceEventType(val category: ServiceEventCategory) {
     /** A service process (re)started. `serviceVersion` carries the build version. */
-    STARTUP,
+    STARTUP(ServiceEventCategory.SYSTEM),
 
     /** Git→DB components migration run. */
-    MIGRATION_COMPONENTS,
+    MIGRATION_COMPONENTS(ServiceEventCategory.SYSTEM),
 
     /** Git-history backfill run. */
-    MIGRATION_HISTORY,
+    MIGRATION_HISTORY(ServiceEventCategory.SYSTEM),
 
     /** TeamCity project-id/url resync run. */
-    TEAMCITY_RESYNC,
+    TEAMCITY_RESYNC(ServiceEventCategory.SYSTEM),
 
     /** Portal-owned scheduled component-validation sweep run (source=portal). */
-    VALIDATION_SWEEP,
+    VALIDATION_SWEEP(ServiceEventCategory.SYSTEM),
+
+    /** A user opened the onboarding intro video (source=portal, triggeredBy=username). */
+    ONBOARDING_VIDEO_VIEW(ServiceEventCategory.USER),
+    ;
+
+    companion object {
+        /**
+         * Category of a stored `event_type` string. Unknown values (a forward-compat row
+         * written by a newer service) read back as SYSTEM so they never leak into the
+         * user-facing product-usage view.
+         */
+        fun categoryOf(eventType: String): ServiceEventCategory =
+            runCatching { valueOf(eventType.trim().uppercase(Locale.ROOT)) }.getOrNull()?.category
+                ?: ServiceEventCategory.SYSTEM
+
+        /** Enum names whose category is [category] — for translating a category filter to an `event_type IN (…)`. */
+        fun namesOf(category: ServiceEventCategory): List<String> =
+            entries.filter { it.category == category }.map { it.name }
+    }
 }
 
 /** Lifecycle status of a service-event row. STARTUP rows are written terminal (COMPLETED). */
