@@ -828,6 +828,9 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "javaVersion" : {
+            "type" : "string"
+          },
           "jiraProjectKey" : {
             "type" : "string"
           },
@@ -5040,6 +5043,17 @@
           {
             "in" : "query",
             "name" : "buildSystem",
+            "required" : false,
+            "schema" : {
+              "items" : {
+                "type" : "string"
+              },
+              "type" : "array"
+            }
+          },
+          {
+            "in" : "query",
+            "name" : "javaVersion",
             "required" : false,
             "schema" : {
               "items" : {

@@ -67,6 +67,7 @@ class ComponentSummaryMapperTest {
         val response = minimalComponent().toSummaryResponse()
 
         assertNull(response.buildSystem)
+        assertNull(response.javaVersion)
         assertNull(response.jiraProjectKey)
         assertNull(response.vcsPath)
         assertNull(response.teamcityProjectId)
@@ -129,7 +130,7 @@ class ComponentSummaryMapperTest {
     }
 
     @Test
-    @DisplayName("no BASE config (only SCALAR_OVERRIDE) → buildSystem null")
+    @DisplayName("no BASE config (only SCALAR_OVERRIDE) → buildSystem null AND javaVersion null (summary reads BASE only)")
     fun noBaseConfig_buildSystemNull() {
         val component = minimalComponent()
         val override = ComponentConfigurationEntity(
@@ -142,7 +143,36 @@ class ComponentSummaryMapperTest {
         )
         component.configurations.add(override)
 
-        assertNull(component.toSummaryResponse().buildSystem)
+        val response = component.toSummaryResponse()
+        assertNull(response.buildSystem)
+        // javaVersion is genuinely overridable — this SCALAR_OVERRIDE row carries
+        // javaVersion="21", but the summary must NOT surface it: the projection
+        // reads the BASE row only, so an override-only value stays absent.
+        assertNull(response.javaVersion)
+    }
+
+    // -----------------------------------------------------------------------
+    // javaVersion from BASE config row (same shape as buildSystem)
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("BASE config javaVersion propagates to summary")
+    fun baseConfig_javaVersion_propagates() {
+        val component = minimalComponent()
+        val cfg = baseConfigFor(component).also { it.javaVersion = "21" }
+        component.configurations.add(cfg)
+
+        assertEquals("21", component.toSummaryResponse().javaVersion)
+    }
+
+    @Test
+    @DisplayName("BASE config with blank javaVersion → null in summary (blank-to-null)")
+    fun baseConfig_blankJavaVersion_normalizedToNull() {
+        val component = minimalComponent()
+        val cfg = baseConfigFor(component).also { it.javaVersion = "   " }
+        component.configurations.add(cfg)
+
+        assertNull(component.toSummaryResponse().javaVersion)
     }
 
     // -----------------------------------------------------------------------
