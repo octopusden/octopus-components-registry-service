@@ -93,9 +93,9 @@ fun ComponentEntity.toDetailResponse(teamcityBaseUrl: String? = null): Component
     )
 
 /**
- * Compact list-view projection. SYS-040 fields (`buildSystem`, `jiraProjectKey`,
- * `vcsPath`, `teamcityProjectId`, `teamcityProjectUrl`) are derived from the
- * BASE configuration row (`row_type = 'BASE'`) and the first child
+ * Compact list-view projection. SYS-040 fields (`buildSystem`, `javaVersion`,
+ * `jiraProjectKey`, `vcsPath`, `teamcityProjectId`, `teamcityProjectUrl`) are
+ * derived from the BASE configuration row (`row_type = 'BASE'`) and the first child
  * (`sort_order = 0`) so multi-VCS / multi-TC components render their primary
  * link the same way single-target components do. Blank strings → null.
  */
@@ -117,6 +117,7 @@ fun ComponentEntity.toSummaryResponse(teamcityBaseUrl: String? = null): Componen
         releaseManagers = this.releaseManagerUsernames(),
         securityChampions = this.securityChampionUsernames(),
         buildSystem = base?.buildSystem?.takeIf { it.isNotBlank() },
+        javaVersion = base?.javaVersion?.takeIf { it.isNotBlank() },
         jiraProjectKey = base?.jiraProjectKey?.takeIf { it.isNotBlank() },
         vcsPath = firstVcsEntry?.vcsPath?.takeIf { it.isNotBlank() }?.sshUrlToProjectRepo(),
         teamcityProjectId = firstTcProject?.projectId,

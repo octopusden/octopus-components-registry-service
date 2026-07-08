@@ -247,6 +247,7 @@ class ComponentControllerV4(
         @RequestParam(required = false) releaseManager: List<String>?,
         @RequestParam(required = false) securityChampion: List<String>?,
         @RequestParam(required = false) buildSystem: List<String>?,
+        @RequestParam(required = false) javaVersion: List<String>?,
         @RequestParam(required = false) labels: List<String>?,
         @RequestParam(required = false) canBeParent: Boolean?,
         @RequestParam(required = false) clientCode: List<String>?,
@@ -262,8 +263,8 @@ class ComponentControllerV4(
         pageable: Pageable,
     ): Page<ComponentSummaryResponse> {
         // Each multi-value list filter parameter (system, owner, buildSystem,
-        // labels, clientCode, jiraProjectKey, parentComponentName, groupKey) is
-        // normalised through `normalizeCsvParam` — see that helper for the
+        // javaVersion, labels, clientCode, jiraProjectKey, parentComponentName,
+        // groupKey) is normalised through `normalizeCsvParam` — see that helper for the
         // wire-shape contract. The downstream Specifications can rely on
         // receiving a non-null, non-blank, duplicate-free list (or null = "no
         // filter").
@@ -277,6 +278,7 @@ class ComponentControllerV4(
                 releaseManager = normalizeCsvParam(releaseManager),
                 securityChampion = normalizeCsvParam(securityChampion),
                 buildSystem = normalizeCsvParam(buildSystem),
+                javaVersion = normalizeCsvParam(javaVersion),
                 labels = normalizeCsvParam(labels),
                 canBeParent = canBeParent,
                 clientCode = normalizeCsvParam(clientCode),

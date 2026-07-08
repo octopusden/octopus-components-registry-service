@@ -30,7 +30,8 @@ import java.util.UUID
 
 /**
  * CRS-PR2 — extended-search list filters: clientCode, solution, jiraProjectKey,
- * jiraTechnical, vcsPath, productionBranch, parentComponentName, groupKey.
+ * jiraTechnical, vcsPath, productionBranch, parentComponentName, groupKey,
+ * javaVersion.
  *
  * Focused integration test on the H2 `ft-db` profile (does NOT extend the global
  * Groovy fixtures). Also pins the load-bearing pagination concern for the
@@ -383,6 +384,48 @@ class ListComponentsExtendedFiltersTest {
         val n = names("productionBranch" to "release")
         assert(n.contains(match)) { "expected $match in $n" }
         assert(!n.contains(other)) { "did not expect $other in $n" }
+    }
+
+    @Test
+    @DisplayName("?javaVersion= is an exact multi-value (IN) match over the BASE build javaVersion")
+    fun javaVersionExactMultiValueFilter() {
+        val j17 = uniqueName("ext_jv_17")
+        val j21 = uniqueName("ext_jv_21")
+        val j11 = uniqueName("ext_jv_11")
+        create(baseBody(j17, build = """"build":{"buildSystem":"MAVEN","javaVersion":"17"}"""))
+        create(baseBody(j21, build = """"build":{"buildSystem":"MAVEN","javaVersion":"21"}"""))
+        create(baseBody(j11, build = """"build":{"buildSystem":"MAVEN","javaVersion":"11"}"""))
+        // Exact single value matches only the component whose BASE javaVersion equals it.
+        val only17 = names("javaVersion" to "17")
+        assertTrue(only17.contains(j17), "expected $j17 in $only17")
+        assertFalse(only17.contains(j21), "did not expect $j21 in $only17")
+        assertFalse(only17.contains(j11), "did not expect $j11 in $only17")
+        // Exact, not substring: "1" must not match "17"/"11".
+        val partial = names("javaVersion" to "1")
+        assertFalse(partial.contains(j17) || partial.contains(j11), "javaVersion must be IN not LIKE; got $partial")
+        // Multi-value OR: 17,21 returns both, excludes 11.
+        val multi = names("javaVersion" to "17,21")
+        assertTrue(multi.contains(j17) && multi.contains(j21), "expected both in $multi")
+        assertFalse(multi.contains(j11), "did not expect $j11 in $multi")
+    }
+
+    @Test
+    @DisplayName("javaVersion ANDs with buildSystem (two independent BASE-row joins, not a dropped result)")
+    fun javaVersionAndsWithBuildSystem() {
+        // Two BASE-row scalar filters combine via separate joins to `configurations`.
+        // A unique index guarantees one BASE row per component, so both joins resolve
+        // to the same row and the predicates AND correctly (no dropped/duplicated rows).
+        val gradle17 = uniqueName("ext_jvbs_g17")
+        val maven17 = uniqueName("ext_jvbs_m17")
+        val gradle21 = uniqueName("ext_jvbs_g21")
+        create(baseBody(gradle17, build = """"build":{"buildSystem":"GRADLE","javaVersion":"17"}"""))
+        create(baseBody(maven17, build = """"build":{"buildSystem":"MAVEN","javaVersion":"17"}"""))
+        create(baseBody(gradle21, build = """"build":{"buildSystem":"GRADLE","javaVersion":"21"}"""))
+        // buildSystem=GRADLE AND javaVersion=17 → only the GRADLE/17 component.
+        val both = names("buildSystem" to "GRADLE", "javaVersion" to "17")
+        assertTrue(both.contains(gradle17), "expected $gradle17 in $both")
+        assertFalse(both.contains(maven17), "did not expect $maven17 (wrong buildSystem) in $both")
+        assertFalse(both.contains(gradle21), "did not expect $gradle21 (wrong javaVersion) in $both")
     }
 
     @Test

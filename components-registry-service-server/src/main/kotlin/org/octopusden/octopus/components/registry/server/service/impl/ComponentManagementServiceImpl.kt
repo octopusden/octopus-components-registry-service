@@ -3606,6 +3606,26 @@ class ComponentManagementServiceImpl(
                     },
                 )
         }
+        // OR across selected javaVersions — same scalar-on-BASE-row shape as
+        // buildSystem above: one JOIN through configurations with rowType=BASE +
+        // IN(...). A component has exactly one BASE javaVersion at a time, so
+        // multi-select is "any of these". `distinct(true)` guards against row
+        // multiplication from the join. The controller's normalisation
+        // guarantees the list, if present, is non-empty, blank-free, and
+        // duplicate-free.
+        if (!filter.javaVersion.isNullOrEmpty()) {
+            spec =
+                spec.and(
+                    Specification { root, query, cb ->
+                        val join = root.join<ComponentEntity, ComponentConfigurationEntity>("configurations")
+                        query?.distinct(true)
+                        cb.and(
+                            cb.equal(join.get<String>("rowType"), "BASE"),
+                            join.get<String>("javaVersion").`in`(filter.javaVersion),
+                        )
+                    },
+                )
+        }
         // OR across selected system codes — a component matches when ANY of its
         // system junctions has a code in the list. Unlike labels (also
         // junction-backed but AND across selections), the picker semantics here
