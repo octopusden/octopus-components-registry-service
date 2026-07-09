@@ -43,7 +43,6 @@
         <error line="346" column="14" source="standard:function-signature" />
         <error line="346" column="28" source="standard:function-signature" />
         <error line="346" column="62" source="standard:function-signature" />
-        <error line="350" column="32" source="standard:multiline-expression-wrapping" />
         <error line="350" column="36" source="standard:keyword-spacing" />
         <error line="360" column="1" source="standard:no-blank-line-before-rbrace" />
         <error line="369" column="26" source="standard:colon-spacing" />
@@ -88,19 +87,16 @@
         <error line="42" column="21" source="standard:function-signature" />
         <error line="42" column="40" source="standard:function-signature" />
         <error line="42" column="75" source="standard:function-signature" />
-        <error line="49" column="22" source="standard:multiline-expression-wrapping" />
         <error line="80" column="55" source="standard:function-signature" />
         <error line="89" column="5" source="standard:blank-line-before-declaration" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/dsl/script/LocalKotlinEngineFactory.kt">
         <error line="3" column="1" source="standard:import-ordering" />
-        <error line="17" column="47" source="standard:multiline-expression-wrapping" />
         <error line="17" column="47" source="standard:function-signature" />
         <error line="19" column="23" source="standard:trailing-comma-on-call-site" />
         <error line="39" column="29" source="standard:trailing-comma-on-declaration-site" />
     </file>
     <file name="src/test/kotlin/org/octopusden/octopus/components/registry/dsl/test/ComponentsRegistryDSLTest.kt">
-        <error line="31" column="26" source="standard:multiline-expression-wrapping" />
         <error line="59" column="22" source="standard:argument-list-wrapping" />
         <error line="59" column="28" source="standard:argument-list-wrapping" />
         <error line="59" column="38" source="standard:chain-method-continuation" />
@@ -152,14 +148,8 @@
         <error line="61" column="148" source="standard:function-literal" />
         <error line="61" column="152" source="standard:chain-method-continuation" />
         <error line="61" column="160" source="standard:argument-list-wrapping" />
-        <error line="66" column="26" source="standard:multiline-expression-wrapping" />
         <error line="66" column="37" source="standard:paren-spacing" />
-        <error line="137" column="26" source="standard:multiline-expression-wrapping" />
-        <error line="150" column="26" source="standard:multiline-expression-wrapping" />
-        <error line="163" column="26" source="standard:multiline-expression-wrapping" />
-        <error line="177" column="26" source="standard:multiline-expression-wrapping" />
         <error line="197" column="5" source="standard:comment-spacing" />
-        <error line="200" column="26" source="standard:multiline-expression-wrapping" />
         <error line="227" column="52" source="standard:chain-method-continuation" />
         <error line="227" column="63" source="standard:chain-method-continuation" />
         <error line="228" column="49" source="standard:chain-method-continuation" />
@@ -170,7 +160,6 @@
         <error line="229" column="65" source="standard:chain-method-continuation" />
         <error line="229" column="77" source="standard:chain-method-continuation" />
         <error line="229" column="88" source="standard:chain-method-continuation" />
-        <error line="237" column="26" source="standard:multiline-expression-wrapping" />
         <error line="281" column="30" source="standard:chain-method-continuation" />
         <error line="281" column="44" source="standard:chain-method-continuation" />
         <error line="283" column="30" source="standard:chain-method-continuation" />
@@ -217,11 +206,9 @@
         <error line="25" column="44" source="standard:function-signature" />
         <error line="25" column="74" source="standard:function-signature" />
         <error line="25" column="85" source="standard:function-signature" />
-        <error line="26" column="26" source="standard:multiline-expression-wrapping" />
         <error line="33" column="39" source="standard:chain-method-continuation" />
         <error line="33" column="64" source="standard:chain-method-continuation" />
         <error line="33" column="92" source="standard:chain-method-continuation" />
-        <error line="38" column="26" source="standard:multiline-expression-wrapping" />
         <error line="51" column="36" source="standard:chain-method-continuation" />
         <error line="51" column="56" source="standard:chain-method-continuation" />
         <error line="51" column="84" source="standard:chain-method-continuation" />
@@ -229,28 +216,24 @@
         <error line="52" column="61" source="standard:chain-method-continuation" />
         <error line="53" column="31" source="standard:chain-method-continuation" />
         <error line="53" column="54" source="standard:chain-method-continuation" />
-        <error line="58" column="26" source="standard:multiline-expression-wrapping" />
         <error line="75" column="30" source="standard:chain-method-continuation" />
         <error line="75" column="50" source="standard:chain-method-continuation" />
         <error line="76" column="31" source="standard:chain-method-continuation" />
         <error line="76" column="61" source="standard:chain-method-continuation" />
         <error line="77" column="31" source="standard:chain-method-continuation" />
         <error line="77" column="54" source="standard:chain-method-continuation" />
-        <error line="79" column="22" source="standard:multiline-expression-wrapping" />
         <error line="96" column="31" source="standard:chain-method-continuation" />
         <error line="96" column="51" source="standard:chain-method-continuation" />
         <error line="97" column="30" source="standard:chain-method-continuation" />
         <error line="97" column="60" source="standard:chain-method-continuation" />
         <error line="98" column="31" source="standard:chain-method-continuation" />
         <error line="98" column="54" source="standard:chain-method-continuation" />
-        <error line="100" column="22" source="standard:multiline-expression-wrapping" />
         <error line="117" column="31" source="standard:chain-method-continuation" />
         <error line="117" column="51" source="standard:chain-method-continuation" />
         <error line="118" column="31" source="standard:chain-method-continuation" />
         <error line="118" column="61" source="standard:chain-method-continuation" />
         <error line="119" column="30" source="standard:chain-method-continuation" />
         <error line="119" column="53" source="standard:chain-method-continuation" />
-        <error line="124" column="26" source="standard:multiline-expression-wrapping" />
         <error line="146" column="30" source="standard:chain-method-continuation" />
         <error line="146" column="60" source="standard:chain-method-continuation" />
         <error line="147" column="30" source="standard:chain-method-continuation" />
@@ -265,7 +248,6 @@
         <error line="149" column="61" source="standard:chain-method-continuation" />
         <error line="149" column="75" source="standard:chain-method-continuation" />
         <error line="149" column="98" source="standard:chain-method-continuation" />
-        <error line="154" column="26" source="standard:multiline-expression-wrapping" />
         <error line="155" column="1" source="standard:no-empty-first-line-in-method-block" />
         <error line="186" column="30" source="standard:chain-method-continuation" />
         <error line="186" column="60" source="standard:chain-method-continuation" />
@@ -314,7 +296,6 @@
         <error line="189" column="141" source="standard:max-line-length" />
         <error line="189" column="146" source="standard:argument-list-wrapping" />
         <error line="189" column="149" source="standard:argument-list-wrapping" />
-        <error line="194" column="26" source="standard:multiline-expression-wrapping" />
         <error line="224" column="20" source="standard:argument-list-wrapping" />
         <error line="224" column="30" source="standard:chain-method-continuation" />
         <error line="224" column="40" source="standard:argument-list-wrapping" />
@@ -378,8 +359,6 @@
         <error line="228" column="60" source="standard:chain-method-continuation" />
         <error line="228" column="69" source="standard:chain-method-continuation" />
         <error line="228" column="87" source="standard:chain-method-continuation" />
-        <error line="233" column="26" source="standard:multiline-expression-wrapping" />
-        <error line="246" column="26" source="standard:multiline-expression-wrapping" />
         <error line="266" column="46" source="standard:function-expression-body" />
         <error line="274" column="42" source="standard:trailing-comma-on-call-site" />
     </file>

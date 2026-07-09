@@ -29,13 +29,14 @@
         <error line="5" column="42" source="standard:class-signature" />
         <error line="5" column="61" source="standard:class-signature" />
         <error line="5" column="87" source="standard:class-signature" />
-        <error line="19" column="5" source="standard:blank-line-before-declaration" />
-        <error line="44" column="34" source="standard:function-expression-body" />
-        <error line="65" column="37" source="standard:function-expression-body" />
-        <error line="67" column="1" source="standard:indent" />
-        <error line="68" column="1" source="standard:indent" />
-        <error line="69" column="1" source="standard:indent" />
-        <error line="70" column="1" source="standard:indent" />
+        <error line="29" column="1" source="standard:spacing-between-declarations-with-annotations" />
+        <error line="29" column="5" source="standard:blank-line-before-declaration" />
+        <error line="56" column="34" source="standard:function-expression-body" />
+        <error line="78" column="37" source="standard:function-expression-body" />
+        <error line="80" column="1" source="standard:indent" />
+        <error line="81" column="1" source="standard:indent" />
+        <error line="82" column="1" source="standard:indent" />
+        <error line="83" column="1" source="standard:indent" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/core/dto/ComponentArtifactConfigurationDTO.kt">
         <error line="8" column="45" source="standard:annotation" />
@@ -140,10 +141,16 @@
         <error line="12" column="1" source="standard:final-newline" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/core/dto/ErrorResponse.kt">
-        <error line="6" column="25" source="standard:annotation" />
-        <error line="6" column="38" source="standard:annotation" />
-        <error line="7" column="1" source="standard:indent" />
-        <error line="7" column="63" source="standard:trailing-comma-on-declaration-site" />
+        <error line="18" column="25" source="standard:annotation" />
+        <error line="18" column="38" source="standard:annotation" />
+        <error line="19" column="1" source="standard:indent" />
+        <error line="20" column="1" source="standard:indent" />
+        <error line="21" column="1" source="standard:indent" />
+        <error line="22" column="1" source="standard:indent" />
+        <error line="23" column="1" source="standard:indent" />
+        <error line="24" column="1" source="standard:indent" />
+        <error line="25" column="1" source="standard:indent" />
+        <error line="25" column="65" source="standard:trailing-comma-on-declaration-site" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/core/dto/EscrowDTO.kt">
         <error line="9" column="21" source="standard:annotation" />
@@ -195,9 +202,8 @@
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/core/dto/ServiceStatusDTO.kt">
         <error line="6" column="1" source="standard:no-wildcard-imports" />
-        <error line="9" column="28" source="standard:annotation" />
-        <error line="9" column="41" source="standard:annotation" />
-        <error line="12" column="80" source="standard:trailing-comma-on-declaration-site" />
+        <error line="36" column="28" source="standard:annotation" />
+        <error line="36" column="41" source="standard:annotation" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/core/dto/ToolDTO.kt">
         <error line="8" column="19" source="standard:annotation" />
