@@ -183,9 +183,12 @@ tasks.register('jacocoIntegrationTestReport', org.gradle.testing.jacoco.tasks.Ja
 }
 
 // integrationTest (fat-jar boot FT) is intentionally NOT wired into `check`/`build`: in CI it
-// runs in [1.0] only because dockerPushImage HARD-depends on it (so it gates publish/push),
-// and on GH PRs it runs under `qualityCoverage`. See root build.gradle (qualityCoverage +
-// publish gating).
+// runs on TeamCity [1.0] only, because dockerPushImage HARD-depends on it (so it gates
+// publish/push). It is NOT triggered by `qualityCoverage` (i.e. NOT run on GH PRs) — it boots
+// the packaged jar in a separate JVM (in-memory H2) and makes timing-sensitive startup/fail-fast
+// assertions that flake on shared GH-hosted runners (GH issue #424). Its coverage still folds
+// into the aggregate when present (root build.gradle coverageExecData). See root build.gradle
+// (qualityCoverage + publish gating).
 integrationTest.dependsOn bootJar
 integrationTest.finalizedBy jacocoIntegrationTestReport
 
