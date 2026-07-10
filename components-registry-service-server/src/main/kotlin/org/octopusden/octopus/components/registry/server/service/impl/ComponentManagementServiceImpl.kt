@@ -2822,8 +2822,9 @@ class ComponentManagementServiceImpl(
         val parsedNew = parseSimpleSegment(range)
         require(parsedNew != null) {
             "Field-override range '$range' must be a single Maven segment " +
-                "(e.g. [1.0,2.0)). Composite ranges are not accepted on POST / " +
-                "PATCH — split the override into multiple rows, one per segment."
+                "(e.g. [1.0,2.0) or an exact version [1.0.49]). Composite ranges " +
+                "are not accepted on POST / PATCH — split the override into " +
+                "multiple rows, one per segment."
         }
         val newRangeObj = versionRangeFactory.create(range)
         for (row in component.configurations) {

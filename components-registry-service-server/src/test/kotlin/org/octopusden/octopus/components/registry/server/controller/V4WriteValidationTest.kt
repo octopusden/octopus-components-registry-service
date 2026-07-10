@@ -883,6 +883,29 @@ class V4WriteValidationTest {
     }
 
     @Test
+    @DisplayName("EXACT: PATCH /field-overrides/{id} accepts an exact-version range update")
+    fun fieldOverride_patch_accepts_exactVersionRange() {
+        val id = seedComponentForOverlap("exact-patch-${uniqueSuffix()}")
+        val created =
+            postFieldOverride(
+                id,
+                """{"overriddenAttribute":"build.javaVersion","versionRange":"[5.0,6.0)","value":"17"}""",
+            ).andExpect(status().isCreated)
+                .andReturn().response.contentAsString
+        val oid = objectMapper.readTree(created)["id"].asText()
+        // Repoint the range to an exact-version pin — a valid single segment, so
+        // the PATCH path (validateFieldOverrideRange with excludeOverrideId) must
+        // accept it just like POST does.
+        mvc
+            .perform(
+                patch("/rest/api/4/components/$id/field-overrides/$oid")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"versionRange":"[1.0.49]"}"""),
+            ).andExpect(status().is2xxSuccessful)
+    }
+
+    @Test
     @DisplayName("R3: POST /field-overrides rejects composite Maven ranges (single-segment only)")
     fun fieldOverride_rejects_compositeRange() {
         val id = seedComponentForOverlap("composite-${uniqueSuffix()}")
