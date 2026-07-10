@@ -20,10 +20,13 @@ project {
 
     params {
         param("JDK_VERSION", "11")
-        param("LAST_RELEASE_VERSION", "2.0.88")
+        // Mutable release state: the actual value lives on the parent `Octopus`
+        // project (UI-managed, REST-writable) — this project is read-only under
+        // versioned settings, so post-processing cannot write a param here.
+        param("LAST_RELEASE_VERSION", "%LAST_RELEASE_VERSION_COMPONENTS_REGISTRY_SERVICE%")
         // Compat baseline = the FROZEN last-2.x prod byte-compat oracle, pinned
-        // in code (NOT tracking `LAST_RELEASE_VERSION`, which the cutover moved
-        // to 3.0.1 — comparing a v3 candidate against a v3 baseline is a
+        // in code (NOT tracking `LAST_RELEASE_VERSION`, which follows the latest
+        // 3.x release — comparing a v3 candidate against a v3 baseline is a
         // tautology, and the released 3.0.1 image cannot even boot in the
         // harness's V1 mode because its `registry_config` startup read trips
         // H2's reserved `key`). Bump this ONLY on a deliberate re-baseline.
@@ -1366,6 +1369,11 @@ object id50ReleasePostProcessingAuto : BuildType({
 
     params {
         param("env.JAVA_HOME", "%env.JDK_ZULU_17_x64%")
+        // Redirect the template's "Update latest release version" step to the
+        // parent `Octopus` project: this project is read-only (versioned
+        // settings), so a REST PUT against it gets 500 ReadOnlyEntityException.
+        param("TEAMCITY_UPDATE_PROJECT_IDS", "Octopus")
+        param("TEAMCITY_UPDATE_PARAMETER_NAME", "LAST_RELEASE_VERSION_COMPONENTS_REGISTRY_SERVICE")
     }
 })
 
