@@ -337,6 +337,14 @@ object id12IntegrationDbTestsAuto : BuildType({
             onDependencyFailure = FailureAction.FAIL_TO_START
         }
     }
+
+    // Disable the inherited VCS trigger from Octopus_OctopusGradleBuild:
+    //   TRIGGER_1003 — VCS Trigger (fires on every commit on every branch)
+    // [1.2] is driven by the finishBuildTrigger off [1.0] above; a VCS-check-in
+    // trigger here only double-runs the heavy DB suite (once off the commit,
+    // once off [1.0] finishing). The inherited Schedule trigger (TRIGGER_1006)
+    // is intentionally left in place.
+    disableSettings("TRIGGER_1003")
 })
 
 // Compat — HTTP (two pre-deployed URLs) — manual, on-demand. Runs the compat-
@@ -1308,11 +1316,11 @@ object id30DeployToOkdQaDevAuto : BuildType({
     dependencies {
         snapshot(id20ValidateComponentsRegistryProductionDataAuto) {
         }
-        // The heavy DB/integration suite [1.2] must pass before we deploy (it runs in
-        // parallel off [1.0], so by deploy time it's done). The image comes from [1.0].
-        snapshot(id12IntegrationDbTestsAuto) {
-            onDependencyFailure = FailureAction.FAIL_TO_START
-        }
+        // [1.2] Integration & DB Tests is intentionally NOT a deploy dependency:
+        // QA deploy runs right after [1.0] Compile&UT — via [2.0] Validate, which
+        // finishes shortly after [1.0] — IN PARALLEL with the heavy [1.2] suite,
+        // so a slow integration run no longer delays QA availability. The image
+        // still comes from [1.0].
     }
 })
 

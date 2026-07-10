@@ -435,11 +435,22 @@ gradle.projectsEvaluated {
     def testTargets = coverageProjects.findAll { it.tasks.findByName('test') != null }
 
     // Heavy @Tag("integration") tests run in `dbTest`/`integrationTest` (excluded from
-    // `check`), but their coverage must still count toward the gate and they must run
-    // as part of `qualityCoverage` (the command the GH quality job invokes).
+    // `check`). `qualityCoverage` (the command the GH quality job invokes) TRIGGERS the
+    // heavy suites listed here and folds their coverage into the aggregate gate.
+    //
+    // `integrationTest` (FatJar boot FT) is deliberately NOT triggered here. It launches the
+    // packaged fat jar in a SEPARATE JVM (in-memory H2 — no Testcontainers) and asserts
+    // startup/health + the auth-disabled fail-fast contract within tight time windows. Those
+    // timing-sensitive smoke checks flake on shared GH-hosted runners (observed: the fail-fast
+    // assertion missing its 15s window), and the extra full-app JVM piles memory pressure onto
+    // the co-scheduled dbTest Postgres Testcontainers in the same coverage job — code-unrelated
+    // red (GH issue #424). It stays TeamCity-only, where it still runs and gates publish/push
+    // via `dockerPushImage`'s hard dependency (see components-registry-service-server/build.gradle).
+    // Its coverage is NOT lost: `coverageExecData` below still includes `integrationTest.exec`
+    // when present, so any run that DID execute it (TeamCity) folds that coverage in.
     def heavyTestTaskPaths = []
     subprojects.each { sp ->
-        ['dbTest', 'integrationTest'].each { tn ->
+        ['dbTest'].each { tn ->
             if (sp.tasks.findByName(tn) != null) heavyTestTaskPaths << "${sp.path}:${tn}"
         }
     }
@@ -455,7 +466,7 @@ gradle.projectsEvaluated {
 
     tasks.register('jacocoOverallCoverageReport', org.gradle.testing.jacoco.tasks.JacocoReport) {
         group = 'verification'
-        description = 'Aggregated JaCoCo report across all coverage modules (test + dbTest + integrationTest)'
+        description = 'Aggregated JaCoCo report across all coverage modules (test + dbTest, plus integrationTest.exec when present)'
         dependsOn(testTargets.collect { "${it.path}:test" })
         dependsOn(heavyTestTaskPaths)
         executionData.from(coverageExecData(testTargets))
@@ -471,7 +482,7 @@ gradle.projectsEvaluated {
 
     tasks.register('jacocoOverallCoverageVerification', org.gradle.testing.jacoco.tasks.JacocoCoverageVerification) {
         group = 'verification'
-        description = 'Verifies aggregated JaCoCo line coverage >= 70% across all coverage modules (test + dbTest + integrationTest)'
+        description = 'Verifies aggregated JaCoCo line coverage >= 70% across all coverage modules (test + dbTest, plus integrationTest.exec when present)'
         dependsOn(testTargets.collect { "${it.path}:test" })
         dependsOn(heavyTestTaskPaths)
         executionData.from(coverageExecData(testTargets))
