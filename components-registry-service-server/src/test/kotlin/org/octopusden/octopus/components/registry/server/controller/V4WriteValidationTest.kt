@@ -717,6 +717,68 @@ class V4WriteValidationTest {
     }
 
     @Test
+    @DisplayName("EXACT: POST /field-overrides accepts an exact-version range [X] (single Maven hard version)")
+    fun fieldOverride_accepts_exactVersionRange() {
+        // Reported QA case: an exact-version override
+        // range `[1.0.49]` — a valid single Maven segment (hard version, lo == hi,
+        // both inclusive) — was rejected as "composite". parseSimpleSegment only
+        // recognised the two-bound `[X,Y)` form, but a hard version is the SIMPLEST
+        // single segment and must be accepted on POST/PATCH.
+        val id = seedComponentForOverlap("exact-${uniqueSuffix()}")
+        postFieldOverride(
+            id,
+            """{"overriddenAttribute":"build.javaVersion","versionRange":"[1.0.49]","value":"1.8"}""",
+        ).andExpect(status().isCreated)
+    }
+
+    @Test
+    @DisplayName("EXACT: POST /field-overrides accepts two disjoint exact-version ranges on one attribute")
+    fun fieldOverride_accepts_disjointExactVersions() {
+        val id = seedComponentForOverlap("exact-disjoint-${uniqueSuffix()}")
+        postFieldOverride(
+            id,
+            """{"overriddenAttribute":"build.javaVersion","versionRange":"[1.0.49]","value":"1.8"}""",
+        ).andExpect(status().isCreated)
+        // [1.0.50] pins a different single version → disjoint from [1.0.49] → accepted.
+        postFieldOverride(
+            id,
+            """{"overriddenAttribute":"build.javaVersion","versionRange":"[1.0.50]","value":"11"}""",
+        ).andExpect(status().isCreated)
+    }
+
+    @Test
+    @DisplayName("EXACT: POST /field-overrides rejects a duplicate exact-version range (semantic equal)")
+    fun fieldOverride_rejects_duplicateExactVersion() {
+        val id = seedComponentForOverlap("exact-dup-${uniqueSuffix()}")
+        postFieldOverride(
+            id,
+            """{"overriddenAttribute":"build.javaVersion","versionRange":"[1.0.49]","value":"1.8"}""",
+        ).andExpect(status().isCreated)
+        // Same exact version again → the two point-overrides intersect (both match
+        // 1.0.49) → ambiguous duplicate → 400. Guards that intersection detection
+        // still works once hard versions are parsed as simple segments.
+        postFieldOverride(
+            id,
+            """{"overriddenAttribute":"build.javaVersion","versionRange":"[1.0.49]","value":"11"}""",
+        ).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    @DisplayName("EXACT: POST /field-overrides rejects an exact-version range inside an existing sibling range")
+    fun fieldOverride_rejects_exactVersionInsideSibling() {
+        val id = seedComponentForOverlap("exact-inside-${uniqueSuffix()}")
+        postFieldOverride(
+            id,
+            """{"overriddenAttribute":"build.javaVersion","versionRange":"[1.0,2.0)","value":"11"}""",
+        ).andExpect(status().isCreated)
+        // 1.0.49 falls inside [1.0,2.0) → the point override would match both → reject.
+        postFieldOverride(
+            id,
+            """{"overriddenAttribute":"build.javaVersion","versionRange":"[1.0.49]","value":"1.8"}""",
+        ).andExpect(status().isBadRequest)
+    }
+
+    @Test
     @DisplayName("R3: PATCH /field-overrides/{id} rejects a range update that overlaps a sibling")
     fun fieldOverride_patch_rejects_partialOverlap() {
         val id = seedComponentForOverlap("patch-ov-${uniqueSuffix()}")
