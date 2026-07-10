@@ -1,25 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <baseline version="1.0">
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/core/dto/ArtifactComponentDTO.kt">
-        <error line="8" column="32" source="standard:annotation" />
-        <error line="8" column="45" source="standard:annotation" />
-        <error line="10" column="66" source="standard:trailing-comma-on-declaration-site" />
+        <error line="9" column="66" source="standard:trailing-comma-on-declaration-site" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/core/dto/ArtifactComponentsDTO.kt">
-        <error line="8" column="33" source="standard:annotation" />
-        <error line="8" column="46" source="standard:annotation" />
-        <error line="9" column="97" source="standard:trailing-comma-on-declaration-site" />
+        <error line="8" column="97" source="standard:trailing-comma-on-declaration-site" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/core/dto/ArtifactDependency.kt">
-        <error line="5" column="53" source="standard:no-semi" />
-        <error line="8" column="30" source="standard:annotation" />
-        <error line="8" column="43" source="standard:annotation" />
-        <error line="11" column="49" source="standard:trailing-comma-on-declaration-site" />
+        <error line="4" column="53" source="standard:no-semi" />
+        <error line="10" column="49" source="standard:trailing-comma-on-declaration-site" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/core/dto/BuildParametersDTO.kt">
-        <error line="9" column="30" source="standard:annotation" />
-        <error line="9" column="43" source="standard:annotation" />
-        <error line="19" column="1" source="standard:final-newline" />
+        <error line="18" column="1" source="standard:final-newline" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/core/dto/BuildSystem.kt">
         <error line="13" column="29" source="standard:trailing-comma-on-declaration-site" />
@@ -39,24 +31,18 @@
         <error line="83" column="1" source="standard:indent" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/core/dto/ComponentArtifactConfigurationDTO.kt">
-        <error line="8" column="45" source="standard:annotation" />
-        <error line="8" column="58" source="standard:annotation" />
-        <error line="10" column="66" source="standard:trailing-comma-on-declaration-site" />
+        <error line="9" column="66" source="standard:trailing-comma-on-declaration-site" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/core/dto/ComponentImage.kt">
-        <error line="8" column="26" source="standard:annotation" />
-        <error line="8" column="39" source="standard:annotation" />
-        <error line="11" column="44" source="standard:trailing-comma-on-declaration-site" />
+        <error line="10" column="44" source="standard:trailing-comma-on-declaration-site" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/core/dto/ComponentInfoDTO.kt">
-        <error line="6" column="28" source="standard:annotation" />
-        <error line="6" column="41" source="standard:annotation" />
+        <error line="6" column="1" source="standard:indent" />
         <error line="7" column="1" source="standard:indent" />
-        <error line="8" column="1" source="standard:indent" />
-        <error line="8" column="64" source="standard:wrapping" />
-        <error line="8" column="65" source="standard:parameter-list-wrapping" />
-        <error line="8" column="65" source="standard:class-signature" />
-        <error line="8" column="65" source="standard:trailing-comma-on-declaration-site" />
+        <error line="7" column="64" source="standard:wrapping" />
+        <error line="7" column="65" source="standard:parameter-list-wrapping" />
+        <error line="7" column="65" source="standard:class-signature" />
+        <error line="7" column="65" source="standard:trailing-comma-on-declaration-site" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/core/dto/ComponentRegistryVersion.kt">
         <error line="10" column="57" source="standard:trailing-comma-on-declaration-site" />
@@ -75,14 +61,12 @@
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/core/dto/ComponentVersionFormat.kt">
         <error line="1" column="1" source="standard:filename" />
-        <error line="8" column="37" source="standard:annotation" />
-        <error line="8" column="50" source="standard:annotation" />
+        <error line="8" column="1" source="standard:indent" />
         <error line="9" column="1" source="standard:indent" />
         <error line="10" column="1" source="standard:indent" />
         <error line="11" column="1" source="standard:indent" />
         <error line="12" column="1" source="standard:indent" />
         <error line="13" column="1" source="standard:indent" />
-        <error line="14" column="1" source="standard:indent" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/core/dto/ComponentsDTO.kt">
         <error line="7" column="41" source="standard:parameter-list-wrapping" />
@@ -141,53 +125,41 @@
         <error line="12" column="1" source="standard:final-newline" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/core/dto/ErrorResponse.kt">
-        <error line="18" column="25" source="standard:annotation" />
-        <error line="18" column="38" source="standard:annotation" />
+        <error line="18" column="1" source="standard:indent" />
         <error line="19" column="1" source="standard:indent" />
         <error line="20" column="1" source="standard:indent" />
         <error line="21" column="1" source="standard:indent" />
         <error line="22" column="1" source="standard:indent" />
         <error line="23" column="1" source="standard:indent" />
         <error line="24" column="1" source="standard:indent" />
-        <error line="25" column="1" source="standard:indent" />
-        <error line="25" column="65" source="standard:trailing-comma-on-declaration-site" />
+        <error line="24" column="65" source="standard:trailing-comma-on-declaration-site" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/core/dto/EscrowDTO.kt">
-        <error line="9" column="21" source="standard:annotation" />
-        <error line="9" column="34" source="standard:annotation" />
-        <error line="18" column="1" source="standard:final-newline" />
+        <error line="17" column="1" source="standard:final-newline" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/core/dto/EscrowGenerationMode.kt">
         <error line="6" column="16" source="standard:trailing-comma-on-declaration-site" />
         <error line="7" column="1" source="standard:final-newline" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/core/dto/Image.kt">
-        <error line="5" column="53" source="standard:no-semi" />
-        <error line="8" column="17" source="standard:annotation" />
-        <error line="8" column="30" source="standard:annotation" />
-        <error line="10" column="41" source="standard:trailing-comma-on-declaration-site" />
+        <error line="4" column="53" source="standard:no-semi" />
+        <error line="9" column="41" source="standard:trailing-comma-on-declaration-site" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/core/dto/JiraComponentDTO.kt">
-        <error line="6" column="28" source="standard:annotation" />
-        <error line="6" column="41" source="standard:annotation" />
-        <error line="11" column="53" source="standard:wrapping" />
-        <error line="11" column="54" source="standard:parameter-list-wrapping" />
-        <error line="11" column="54" source="standard:class-signature" />
-        <error line="11" column="54" source="standard:trailing-comma-on-declaration-site" />
+        <error line="10" column="53" source="standard:wrapping" />
+        <error line="10" column="54" source="standard:parameter-list-wrapping" />
+        <error line="10" column="54" source="standard:class-signature" />
+        <error line="10" column="54" source="standard:trailing-comma-on-declaration-site" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/core/dto/JiraComponentVersionDTO.kt">
-        <error line="6" column="1" source="standard:no-consecutive-blank-lines" />
-        <error line="7" column="35" source="standard:annotation" />
-        <error line="7" column="48" source="standard:annotation" />
+        <error line="5" column="1" source="standard:no-consecutive-blank-lines" />
+        <error line="7" column="1" source="standard:indent" />
         <error line="8" column="1" source="standard:indent" />
         <error line="9" column="1" source="standard:indent" />
-        <error line="10" column="1" source="standard:indent" />
-        <error line="10" column="67" source="standard:trailing-comma-on-declaration-site" />
+        <error line="9" column="67" source="standard:trailing-comma-on-declaration-site" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/core/dto/JiraComponentVersionRangeDTO.kt">
-        <error line="6" column="40" source="standard:annotation" />
-        <error line="6" column="53" source="standard:annotation" />
-        <error line="11" column="65" source="standard:trailing-comma-on-declaration-site" />
+        <error line="10" column="65" source="standard:trailing-comma-on-declaration-site" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/core/dto/RepositoryType.kt">
         <error line="6" column="8" source="standard:trailing-comma-on-declaration-site" />
@@ -201,52 +173,25 @@
         <error line="12" column="1" source="standard:final-newline" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/core/dto/ServiceStatusDTO.kt">
-        <error line="6" column="1" source="standard:no-wildcard-imports" />
-        <error line="36" column="28" source="standard:annotation" />
-        <error line="36" column="41" source="standard:annotation" />
-    </file>
-    <file name="src/main/kotlin/org/octopusden/octopus/components/registry/core/dto/ToolDTO.kt">
-        <error line="8" column="19" source="standard:annotation" />
-        <error line="8" column="32" source="standard:annotation" />
+        <error line="5" column="1" source="standard:no-wildcard-imports" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/core/dto/VCSSettingsDTO.kt">
-        <error line="8" column="26" source="standard:annotation" />
-        <error line="8" column="39" source="standard:annotation" />
-        <error line="11" column="1" source="standard:final-newline" />
+        <error line="10" column="1" source="standard:final-newline" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/core/dto/VcsRootDateDTO.kt">
-        <error line="5" column="1" source="standard:no-wildcard-imports" />
-        <error line="7" column="26" source="standard:annotation" />
-        <error line="7" column="39" source="standard:annotation" />
-        <error line="9" column="49" source="standard:trailing-comma-on-declaration-site" />
-    </file>
-    <file name="src/main/kotlin/org/octopusden/octopus/components/registry/core/dto/VersionControlSystemRootDTO.kt">
-        <error line="10" column="39" source="standard:annotation" />
-        <error line="10" column="52" source="standard:annotation" />
+        <error line="4" column="1" source="standard:no-wildcard-imports" />
+        <error line="8" column="49" source="standard:trailing-comma-on-declaration-site" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/core/dto/VersionNamesDTO.kt">
-        <error line="9" column="1" source="standard:indent" />
-        <error line="10" column="1" source="standard:indent" />
-        <error line="11" column="1" source="standard:indent" />
-        <error line="12" column="1" source="standard:indent" />
-        <error line="13" column="1" source="standard:indent" />
-        <error line="13" column="45" source="standard:trailing-comma-on-declaration-site" />
-        <error line="14" column="1" source="standard:final-newline" />
-        <error line="14" column="1" source="standard:indent" />
+        <error line="10" column="45" source="standard:trailing-comma-on-declaration-site" />
+        <error line="11" column="1" source="standard:final-newline" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/core/dto/VersionRequest.kt">
         <error line="3" column="27" source="standard:class-signature" />
         <error line="3" column="67" source="standard:class-signature" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/core/dto/VersionedComponent.kt">
-        <error line="9" column="1" source="standard:indent" />
-        <error line="10" column="1" source="standard:indent" />
-        <error line="11" column="1" source="standard:indent" />
-        <error line="12" column="1" source="standard:indent" />
-        <error line="13" column="1" source="standard:indent" />
-        <error line="14" column="1" source="standard:indent" />
-        <error line="14" column="67" source="standard:trailing-comma-on-declaration-site" />
-        <error line="15" column="1" source="standard:indent" />
+        <error line="11" column="67" source="standard:trailing-comma-on-declaration-site" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/core/exceptions/BaseComponentsRegistryException.kt">
         <error line="3" column="44" source="standard:class-signature" />
