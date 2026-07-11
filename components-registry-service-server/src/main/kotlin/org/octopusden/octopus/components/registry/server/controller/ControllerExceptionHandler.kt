@@ -7,6 +7,7 @@ import org.octopusden.octopus.components.registry.core.exceptions.ComponentNameC
 import org.octopusden.octopus.components.registry.core.exceptions.CrossComponentConflictException
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.core.exceptions.RepositoryNotPreparedException
+import org.octopusden.octopus.components.registry.server.config.PayloadTooLargeException
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpEntity
@@ -150,10 +151,28 @@ class ControllerExceptionHandler {
      * see the same shape regardless of who detected the bad input.
      */
     @ExceptionHandler(HttpMessageNotReadableException::class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
-    fun httpMessageNotReadableExceptionHandler(e: HttpMessageNotReadableException): HttpEntity<ErrorResponse> {
+    fun httpMessageNotReadableExceptionHandler(e: HttpMessageNotReadableException): ResponseEntity<ErrorResponse> {
+        // SYS-062: the feedback body-size guard throws PayloadTooLargeException while the
+        // body is being read, so Spring surfaces it wrapped here. Unwrap the cause chain
+        // and preserve the 413 rather than mislabeling an over-cap upload as 400.
+        var cause: Throwable? = e
+        while (cause != null) {
+            if (cause is PayloadTooLargeException) {
+                log.warn("Request body exceeded size cap: {}", cause.localizedMessage)
+                return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                    .body(ErrorResponse(cause.localizedMessage ?: "Payload too large"))
+            }
+            cause = cause.cause
+        }
         log.warn("Malformed request body: {}", e.localizedMessage)
-        return HttpEntity(ErrorResponse("Malformed request body"))
+        return ResponseEntity.badRequest().body(ErrorResponse("Malformed request body"))
+    }
+
+    @ExceptionHandler(PayloadTooLargeException::class)
+    @ResponseStatus(HttpStatus.PAYLOAD_TOO_LARGE)
+    fun payloadTooLargeExceptionHandler(e: PayloadTooLargeException): HttpEntity<ErrorResponse> {
+        log.warn("Request body exceeded size cap: {}", e.localizedMessage)
+        return HttpEntity(ErrorResponse(e.localizedMessage ?: "Payload too large"))
     }
 
     /**
