@@ -2703,6 +2703,15 @@ class ComponentManagementServiceImpl(
     // path inside parseSimpleSegment without a separate composite-detector.
     private val SIMPLE_SEGMENT_PATTERN = Regex("^([\\[(])([^,]*),([^,]*)([\\])])$")
 
+    // The exact-version ("hard version") form `[X]` is also a single Maven
+    // segment — the simplest one — but carries no comma, so it never matched
+    // SIMPLE_SEGMENT_PATTERN and was misclassified as composite (rejected on
+    // POST/PATCH). Maven only allows the closed `[X]` shape for a hard version:
+    // `(X)`, `[X)`, `(X]` are all invalid, so this pattern is intentionally
+    // square-bracket only. The releng VersionRangeFactory parses `[X]` as
+    // lo == hi, both inclusive — we mirror that below.
+    private val EXACT_VERSION_PATTERN = Regex("^\\[([^,\\[\\]()]+)]$")
+
     private data class ParsedSimpleRange(
         val lo: String?,
         val loIncl: Boolean,
@@ -2715,6 +2724,10 @@ class ComponentManagementServiceImpl(
 
     private fun parseSimpleSegment(range: String): ParsedSimpleRange? {
         val compact = normalizeRange(range)
+        EXACT_VERSION_PATTERN.matchEntire(compact)?.let { exact ->
+            val v = exact.groupValues[1]
+            return ParsedSimpleRange(lo = v, loIncl = true, hi = v, hiIncl = true)
+        }
         val m = SIMPLE_SEGMENT_PATTERN.matchEntire(compact) ?: return null
         val (open, loStr, hiStr, close) = m.destructured
         if (loStr.any { it in "()[]" } || hiStr.any { it in "()[]" }) return null
@@ -2809,8 +2822,9 @@ class ComponentManagementServiceImpl(
         val parsedNew = parseSimpleSegment(range)
         require(parsedNew != null) {
             "Field-override range '$range' must be a single Maven segment " +
-                "(e.g. [1.0,2.0)). Composite ranges are not accepted on POST / " +
-                "PATCH — split the override into multiple rows, one per segment."
+                "(e.g. [1.0,2.0) or an exact version [1.0.49]). Composite ranges " +
+                "are not accepted on POST / PATCH — split the override into " +
+                "multiple rows, one per segment."
         }
         val newRangeObj = versionRangeFactory.create(range)
         for (row in component.configurations) {
@@ -3602,6 +3616,26 @@ class ComponentManagementServiceImpl(
                         cb.and(
                             cb.equal(join.get<String>("rowType"), "BASE"),
                             join.get<String>("buildSystem").`in`(filter.buildSystem),
+                        )
+                    },
+                )
+        }
+        // OR across selected javaVersions — same scalar-on-BASE-row shape as
+        // buildSystem above: one JOIN through configurations with rowType=BASE +
+        // IN(...). A component has exactly one BASE javaVersion at a time, so
+        // multi-select is "any of these". `distinct(true)` guards against row
+        // multiplication from the join. The controller's normalisation
+        // guarantees the list, if present, is non-empty, blank-free, and
+        // duplicate-free.
+        if (!filter.javaVersion.isNullOrEmpty()) {
+            spec =
+                spec.and(
+                    Specification { root, query, cb ->
+                        val join = root.join<ComponentEntity, ComponentConfigurationEntity>("configurations")
+                        query?.distinct(true)
+                        cb.and(
+                            cb.equal(join.get<String>("rowType"), "BASE"),
+                            join.get<String>("javaVersion").`in`(filter.javaVersion),
                         )
                     },
                 )

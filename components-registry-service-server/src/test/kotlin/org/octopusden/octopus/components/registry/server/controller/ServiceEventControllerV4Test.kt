@@ -92,6 +92,35 @@ class ServiceEventControllerV4Test {
     }
 
     @Test
+    fun `response carries the derived SYSTEM category for operational events`() {
+        mvc
+            .perform(get("/rest/api/4/admin/service-events").with(adminJwt()))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.content[0].category").value("SYSTEM"))
+            .andExpect(jsonPath("$.content[1].category").value("SYSTEM"))
+    }
+
+    @Test
+    fun `filters by category — USER returns only user events, SYSTEM only operational`() {
+        // Add a user-event (onboarding view) alongside the two seeded system events.
+        repository.save(
+            row(ServiceEventType.ONBOARDING_VIDEO_VIEW, ServiceEventStatus.COMPLETED, Instant.now()),
+        )
+
+        mvc
+            .perform(get("/rest/api/4/admin/service-events?category=USER").with(adminJwt()))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.content.length()").value(1))
+            .andExpect(jsonPath("$.content[0].eventType").value("ONBOARDING_VIDEO_VIEW"))
+            .andExpect(jsonPath("$.content[0].category").value("USER"))
+
+        mvc
+            .perform(get("/rest/api/4/admin/service-events?category=SYSTEM").with(adminJwt()))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.content.length()").value(2))
+    }
+
+    @Test
     fun `SYS-060 read requires IMPORT_DATA (editor is forbidden)`() {
         mvc
             .perform(get("/rest/api/4/admin/service-events").with(editorJwt()))

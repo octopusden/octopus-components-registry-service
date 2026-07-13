@@ -828,6 +828,9 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "javaVersion" : {
+            "type" : "string"
+          },
           "jiraProjectKey" : {
             "type" : "string"
           },
@@ -2227,6 +2230,9 @@
       },
       "ServiceEventResponse" : {
         "properties" : {
+          "category" : {
+            "type" : "string"
+          },
           "correlationId" : {
             "type" : "string"
           },
@@ -2268,6 +2274,7 @@
           }
         },
         "required" : [
+          "category",
           "eventType",
           "id",
           "source",
@@ -4131,6 +4138,14 @@
           },
           {
             "in" : "query",
+            "name" : "category",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "in" : "query",
             "name" : "source",
             "required" : false,
             "schema" : {
@@ -5040,6 +5055,17 @@
           {
             "in" : "query",
             "name" : "buildSystem",
+            "required" : false,
+            "schema" : {
+              "items" : {
+                "type" : "string"
+              },
+              "type" : "array"
+            }
+          },
+          {
+            "in" : "query",
+            "name" : "javaVersion",
             "required" : false,
             "schema" : {
               "items" : {

@@ -1,6 +1,7 @@
 package org.octopusden.octopus.components.registry.server.dto.v4
 
 import org.octopusden.octopus.components.registry.server.entity.ServiceEventEntity
+import org.octopusden.octopus.components.registry.server.service.ServiceEventType
 import java.time.Instant
 
 /**
@@ -11,6 +12,8 @@ import java.time.Instant
 data class ServiceEventResponse(
     val id: Long,
     val eventType: String,
+    /** Derived SYSTEM/USER split (from eventType) so the SPA can separate the two views. */
+    val category: String,
     val status: String,
     val source: String,
     val triggeredBy: String?,
@@ -27,6 +30,7 @@ data class ServiceEventResponse(
                 // A persisted row always has an id; fail loud rather than emit a misleading 0.
                 id = requireNotNull(entity.id) { "persisted service_event row has a null id" },
                 eventType = entity.eventType,
+                category = ServiceEventType.categoryOf(entity.eventType).name,
                 status = entity.status,
                 source = entity.source,
                 triggeredBy = entity.triggeredBy,

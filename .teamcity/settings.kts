@@ -20,7 +20,17 @@ project {
 
     params {
         param("JDK_VERSION", "11")
-        param("LAST_RELEASE_VERSION", "2.0.88")
+        // Mutable release state: the actual value lives on the parent `Octopus`
+        // project (UI-managed, REST-writable) — this project is read-only under
+        // versioned settings, so post-processing cannot write a param here.
+        param("LAST_RELEASE_VERSION", "%LAST_RELEASE_VERSION_COMPONENTS_REGISTRY_SERVICE%")
+        // Compat baseline = the FROZEN last-2.x prod byte-compat oracle, pinned
+        // in code (NOT tracking `LAST_RELEASE_VERSION`, which follows the latest
+        // 3.x release — comparing a v3 candidate against a v3 baseline is a
+        // tautology, and the released 3.0.1 image cannot even boot in the
+        // harness's V1 mode because its `registry_config` startup read trips
+        // H2's reserved `key`). Bump this ONLY on a deliberate re-baseline.
+        param("COMPAT_BASELINE_VERSION", "2.0.88")
         param("PROJECT_VERSION", "")
         param("COMPONENTS_REGISTRY_BRANCH", "master")
         param("OCTOPUS_MODULE_NAME", "octopus-components-registry-service")
@@ -330,6 +340,14 @@ object id12IntegrationDbTestsAuto : BuildType({
             onDependencyFailure = FailureAction.FAIL_TO_START
         }
     }
+
+    // Disable the inherited VCS trigger from Octopus_OctopusGradleBuild:
+    //   TRIGGER_1003 — VCS Trigger (fires on every commit on every branch)
+    // [1.2] is driven by the finishBuildTrigger off [1.0] above; a VCS-check-in
+    // trigger here only double-runs the heavy DB suite (once off the commit,
+    // once off [1.0] finishing). The inherited Schedule trigger (TRIGGER_1006)
+    // is intentionally left in place.
+    disableSettings("TRIGGER_1003")
 })
 
 // Compat — HTTP (two pre-deployed URLs) — manual, on-demand. Runs the compat-
@@ -595,11 +613,11 @@ object id16CompatTraceReplayManual : BuildType({
 })
 
 // Compat — Local Stand (baseline + candidate JARs) — auto-fires after id10
-// succeeds on non-main branches (see `triggers { finishBuildTrigger }` below)
-// AND has a snapshot dep on id10. Operator can still Run manually from any
-// branch — manual run from `main` is a tautological V1-vs-V1 measurement and
-// is skipped server-side. Spins TWO CRS instances side-by-side
-// on the agent: baseline (released `%LAST_RELEASE_VERSION%`, docker
+// succeeds on EVERY branch, `main` included (see `triggers { finishBuildTrigger }`
+// below) AND has a snapshot dep on id10. A run from `main` is now a real
+// regression gate — the frozen 2.0.88 baseline vs the v3 trunk — not the old
+// tautological V1-vs-V1 self-comparison. Spins TWO CRS instances side-by-side
+// on the agent: baseline (frozen `%COMPAT_BASELINE_VERSION%`, docker
 // image from corp registry) and candidate (current chain's image
 // pushed by id10), both pointed at the production Components-Registry
 // DSL + service-config. Then runs the compat-test module's full
@@ -681,10 +699,9 @@ object id17CompatLocalStandManual : BuildType({
         // / VCS-refresh-cycle signal that disappears under sequential
         // execution). Lower values trade run time for determinism.
         text("COMPAT_PARALLELISM", "8", allowEmpty = false, display = ParameterDisplay.PROMPT)
-        // Baseline version is the project-level `LAST_RELEASE_VERSION` (e.g.
-        // `2.0.88`); pinned, not prompted — operator updates the project
-        // param when a new release lands.
-        param("COMPAT_BASELINE_VERSION", "%LAST_RELEASE_VERSION%")
+        // Baseline version = the project-level `COMPAT_BASELINE_VERSION`
+        // (frozen 2.x byte-compat oracle, pinned in code — see its definition
+        // in the project `params` block). Inherited, not overridden here.
         // Candidate image tag = the build number of the upstream id10 chain
         // step that just pushed it via `dockerPushImage`. Also reused as
         // %BUILD_NUMBER% so id17's own build number (set above via
@@ -750,14 +767,16 @@ object id17CompatLocalStandManual : BuildType({
             scriptContent = """
                 set -euo pipefail
                 # Green-skip when the compat-test infra isn't in this checkout. [1.7]/[1.8]
-                # auto-fire on [1.0] success for ANY branch; if a build resolves to `main`
-                # (the legacy V1 trunk) — or a deleted feature branch falls back to the
-                # default branch — `scripts/local-stands/` is absent and the wrapper below
-                # would exit 127. Mirror id15/id16: succeed with a clear status, not a red 127.
+                # auto-fire on [1.0] success for ANY branch, `main` included — which now
+                # carries the compat infra (post v3→main cutover), so this normally proceeds.
+                # The skip only trips on a legacy pre-v3 branch, or a deleted feature branch
+                # that falls back to a default without `scripts/local-stands/`, where the
+                # wrapper below would exit 127. Mirror id15/id16: succeed with a clear
+                # status, not a red 127.
                 if [ ! -f scripts/local-stands/teamcity-run.sh ]; then
                     echo "::: scripts/local-stands/teamcity-run.sh not present in this checkout."
-                    echo "::: [1.7] is only meaningful on v3-family branches that carry the compat-test infra."
-                    echo "##teamcity[buildStatus status='SUCCESS' text='Skipped: compat-test infra absent on this branch (likely main); run from v3 family instead.']"
+                    echo "::: [1.7] is only meaningful on branches carrying the compat-test infra (v3 family + post-cutover main)."
+                    echo "##teamcity[buildStatus status='SUCCESS' text='Skipped: compat-test infra absent on this branch (legacy/pre-v3 checkout).']"
                     exit 0
                 fi
                 WORK_DIR="/tmp/crs-id17-%teamcity.build.id%"
@@ -945,18 +964,17 @@ object id17CompatLocalStandManual : BuildType({
     }
 
     triggers {
-        // Auto-fire id17 after id10 (Compile&UT) succeeds on non-main branches.
-        // The former [1.9] cluster-50 pre-gate (id19) was removed — the full
-        // matrix here is the authoritative compat gate. Manual Run from any
-        // branch still works; a run from `main` is a tautological V1-vs-V1
-        // measurement and is skipped server-side.
+        // Auto-fire id17 after id10 (Compile&UT) succeeds on EVERY branch,
+        // `main` included. The former [1.9] cluster-50 pre-gate (id19) was
+        // removed — the full matrix here is the authoritative compat gate.
+        // `main` is no longer excluded: the baseline is now the FROZEN 2.0.88
+        // oracle (see `COMPAT_BASELINE_VERSION`), so a run from `main` compares
+        // the v3 trunk against last-2.x prod — a real regression gate, not the
+        // old tautological V1-vs-V1 self-comparison.
         finishBuildTrigger {
             buildType = "${id10CompileUtAuto.id}"
             successfulOnly = true
-            branchFilter = """
-                +:*
-                -:main
-            """.trimIndent()
+            branchFilter = "+:*"
         }
     }
 
@@ -1010,7 +1028,8 @@ object id18CompatLocalStandGitModeAuto : BuildType({
         text("COMPAT_COMPONENTS_FILE", "components/all.txt", allowEmpty = false, display = ParameterDisplay.PROMPT)
         text("COMPAT_FULL", "true", allowEmpty = false, display = ParameterDisplay.PROMPT)
         text("COMPAT_PARALLELISM", "8", allowEmpty = false, display = ParameterDisplay.PROMPT)
-        param("COMPAT_BASELINE_VERSION", "%LAST_RELEASE_VERSION%")
+        // Baseline version inherited from the project-level
+        // `COMPAT_BASELINE_VERSION` (frozen 2.x byte-compat oracle).
         param("BUILD_NUMBER", "${id10CompileUtAuto.depParamRefs.buildNumber}")
         param("COMPAT_CANDIDATE_VERSION", "%BUILD_NUMBER%")
         param("DOCKER_REGISTRY_INTERNAL", "%DOCKER_REGISTRY%")
@@ -1055,14 +1074,16 @@ object id18CompatLocalStandGitModeAuto : BuildType({
             scriptContent = """
                 set -euo pipefail
                 # Green-skip when the compat-test infra isn't in this checkout. [1.7]/[1.8]
-                # auto-fire on [1.0] success for ANY branch; if a build resolves to `main`
-                # (the legacy V1 trunk) — or a deleted feature branch falls back to the
-                # default branch — `scripts/local-stands/` is absent and the wrapper below
-                # would exit 127. Mirror id15/id16: succeed with a clear status, not a red 127.
+                # auto-fire on [1.0] success for ANY branch, `main` included — which now
+                # carries the compat infra (post v3→main cutover), so this normally proceeds.
+                # The skip only trips on a legacy pre-v3 branch, or a deleted feature branch
+                # that falls back to a default without `scripts/local-stands/`, where the
+                # wrapper below would exit 127. Mirror id15/id16: succeed with a clear
+                # status, not a red 127.
                 if [ ! -f scripts/local-stands/teamcity-run.sh ]; then
                     echo "::: scripts/local-stands/teamcity-run.sh not present in this checkout."
-                    echo "::: [1.8] is only meaningful on v3-family branches that carry the compat-test infra."
-                    echo "##teamcity[buildStatus status='SUCCESS' text='Skipped: compat-test infra absent on this branch (likely main); run from v3 family instead.']"
+                    echo "::: [1.8] is only meaningful on branches carrying the compat-test infra (v3 family + post-cutover main)."
+                    echo "##teamcity[buildStatus status='SUCCESS' text='Skipped: compat-test infra absent on this branch (legacy/pre-v3 checkout).']"
                     exit 0
                 fi
                 WORK_DIR="/tmp/crs-id18-%teamcity.build.id%"
@@ -1195,17 +1216,15 @@ object id18CompatLocalStandGitModeAuto : BuildType({
     }
 
     triggers {
-        // Auto-fire alongside id17 whenever id10 finishes on a non-main branch.
-        // git-mode has signal on every branch (it guards the no-op invariant),
-        // but mirror id17's main exclusion to avoid burning agent minutes on the
-        // release trunk; Manual Run from any branch still works.
+        // Auto-fire alongside id17 whenever id10 finishes on EVERY branch,
+        // `main` included (mirrors id17). git-mode has signal on every branch
+        // (it guards the no-op invariant), and against the frozen 2.0.88
+        // baseline a `main` run is a real regression gate, so no reason to
+        // exclude the release trunk any more.
         finishBuildTrigger {
             buildType = "${id10CompileUtAuto.id}"
             successfulOnly = true
-            branchFilter = """
-                +:*
-                -:main
-            """.trimIndent()
+            branchFilter = "+:*"
         }
     }
 
@@ -1300,11 +1319,11 @@ object id30DeployToOkdQaDevAuto : BuildType({
     dependencies {
         snapshot(id20ValidateComponentsRegistryProductionDataAuto) {
         }
-        // The heavy DB/integration suite [1.2] must pass before we deploy (it runs in
-        // parallel off [1.0], so by deploy time it's done). The image comes from [1.0].
-        snapshot(id12IntegrationDbTestsAuto) {
-            onDependencyFailure = FailureAction.FAIL_TO_START
-        }
+        // [1.2] Integration & DB Tests is intentionally NOT a deploy dependency:
+        // QA deploy runs right after [1.0] Compile&UT — via [2.0] Validate, which
+        // finishes shortly after [1.0] — IN PARALLEL with the heavy [1.2] suite,
+        // so a slow integration run no longer delays QA availability. The image
+        // still comes from [1.0].
     }
 })
 
@@ -1350,6 +1369,11 @@ object id50ReleasePostProcessingAuto : BuildType({
 
     params {
         param("env.JAVA_HOME", "%env.JDK_ZULU_17_x64%")
+        // Redirect the template's "Update latest release version" step to the
+        // parent `Octopus` project: this project is read-only (versioned
+        // settings), so a REST PUT against it gets 500 ReadOnlyEntityException.
+        param("TEAMCITY_UPDATE_PROJECT_IDS", "Octopus")
+        param("TEAMCITY_UPDATE_PARAMETER_NAME", "LAST_RELEASE_VERSION_COMPONENTS_REGISTRY_SERVICE")
     }
 })
 
