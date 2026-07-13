@@ -4,6 +4,7 @@ import jakarta.validation.Valid
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.dto.v4.FeedbackFilter
+import org.octopusden.octopus.components.registry.server.dto.v4.FeedbackOpenCountResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.FeedbackResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.FeedbackStatusUpdateRequest
 import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
@@ -51,6 +52,10 @@ class FeedbackAdminControllerV4(
         @RequestParam(required = false) status: String?,
         @PageableDefault(size = DEFAULT_PAGE_SIZE) pageable: Pageable,
     ): Page<FeedbackResponse> = feedbackService.list(FeedbackFilter(type = type, status = status), pageable)
+
+    /** Count of open (not RESOLVED) reports — drives the admin header badge. */
+    @GetMapping("/open-count")
+    fun openCount(): FeedbackOpenCountResponse = FeedbackOpenCountResponse(feedbackService.openCount())
 
     @GetMapping("/{id}")
     fun get(

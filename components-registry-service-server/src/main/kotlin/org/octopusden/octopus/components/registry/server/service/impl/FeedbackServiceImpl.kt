@@ -117,6 +117,9 @@ class FeedbackServiceImpl(
             )
         }
 
+    @Transactional(readOnly = true)
+    override fun openCount(): Long = feedbackRepository.countByStatusNot(FeedbackStatus.RESOLVED.name)
+
     @Transactional
     override fun prune(): Int {
         if (properties.retentionDays <= 0) return 0

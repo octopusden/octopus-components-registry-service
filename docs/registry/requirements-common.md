@@ -2302,6 +2302,8 @@ Admin reads/triage are IMPORT_DATA-gated (`/rest/api/4/admin/feedback**`) —
 4. Admin list/detail/status/attachment reads require IMPORT_DATA (viewer/editor → 403);
    an attachment id under the wrong feedback id → 404.
 5. A status change stamps `updated_by` from the JWT.
+6. `GET /rest/api/4/admin/feedback/open-count` returns the count of OPEN (not RESOLVED)
+   reports (IMPORT_DATA-gated), for the portal admin-header badge.
 
 **Test method:** `FeedbackControllerV4Test` —
 `SYS-062 submit requires authentication`, `SYS-062 submit stores submitter from jwt`,
@@ -2309,5 +2311,6 @@ Admin reads/triage are IMPORT_DATA-gated (`/rest/api/4/admin/feedback**`) —
 `SYS-062 submit rejects non image attachment`,
 `SYS-062 submit rejects too many attachments`,
 `SYS-062 admin list is import gated`, `SYS-062 admin fetches attachment bytes`,
-`SYS-062 attachment scoped to its feedback`, `SYS-062 admin updates status`;
+`SYS-062 attachment scoped to its feedback`, `SYS-062 admin updates status`,
+`SYS-062 admin open count`;
 `FeedbackRequestSizeFilterTest` — `SYS-062 body over cap is rejected`.

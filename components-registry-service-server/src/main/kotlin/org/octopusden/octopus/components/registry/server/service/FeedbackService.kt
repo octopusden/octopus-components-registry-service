@@ -41,6 +41,9 @@ interface FeedbackService {
         attachmentId: Long,
     ): FeedbackAttachmentContent?
 
+    /** Count of open (not RESOLVED) reports — NEW + IN_PROGRESS. For the admin badge. */
+    fun openCount(): Long
+
     /** Retention prune of RESOLVED reports older than the configured window. Returns rows deleted. */
     fun prune(): Int
 }

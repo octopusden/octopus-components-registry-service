@@ -53,6 +53,9 @@ interface FeedbackRepository :
         @Param("status") status: String,
         @Param("cutoff") cutoff: Instant,
     ): Int
+
+    /** Count of "open" reports = anything not in [status] (RESOLVED), i.e. NEW + IN_PROGRESS. */
+    fun countByStatusNot(status: String): Long
 }
 
 /**

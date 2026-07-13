@@ -205,6 +205,37 @@ class FeedbackControllerV4Test {
             .andExpect(jsonPath("$.updatedBy").value("alice"))
     }
 
+    @Test
+    @DisplayName("SYS-062 admin open-count counts non-resolved reports; viewer forbidden")
+    fun `SYS-062 admin open count`() {
+        submitAs(editorJwt(), TYPE_BUG, "one")
+        submitAs(editorJwt(), TYPE_IDEA, "two")
+
+        mvc
+            .perform(get("/rest/api/4/admin/feedback/open-count").with(adminJwt()))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.open").value(2))
+
+        // Resolve one → open drops to 1.
+        val firstId = adminFirstId()
+        mvc
+            .perform(
+                put("/rest/api/4/admin/feedback/$firstId/status")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"status":"RESOLVED"}"""),
+            ).andExpect(status().isOk)
+
+        mvc
+            .perform(get("/rest/api/4/admin/feedback/open-count").with(adminJwt()))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.open").value(1))
+
+        mvc
+            .perform(get("/rest/api/4/admin/feedback/open-count").with(viewerJwt()))
+            .andExpect(status().isForbidden)
+    }
+
     // ---- helpers ------------------------------------------------------------
 
     private fun body(
