@@ -57,11 +57,9 @@ class PermissionEvaluatorTest {
             emptySet(),
         )
 
-    private fun viewer(username: String) =
-        User(username, setOf(Role("ROLE_VIEWER", setOf("ACCESS_COMPONENTS"))), emptySet())
+    private fun viewer(username: String) = User(username, setOf(Role("ROLE_VIEWER", setOf("ACCESS_COMPONENTS"))), emptySet())
 
-    private fun noAccess(username: String) =
-        User(username, setOf(Role("ROLE_NO_ACCESS", emptySet())), emptySet())
+    private fun noAccess(username: String) = User(username, setOf(Role("ROLE_NO_ACCESS", emptySet())), emptySet())
 
     private fun stub(
         id: UUID,
@@ -206,7 +204,10 @@ class PermissionEvaluatorTest {
 
     // --- OCTOPUS-2191: manager of componentOwner ----------------------------------
 
-    private fun evaluatorWithManager(owner: String, manager: String?): PermissionEvaluator {
+    private fun evaluatorWithManager(
+        owner: String,
+        manager: String?,
+    ): PermissionEvaluator {
         val client = mock(EmployeeServiceClient::class.java)
         whenMock(client.getManager(owner)).thenReturn(ManagerDTO(manager))
         @Suppress("UNCHECKED_CAST")

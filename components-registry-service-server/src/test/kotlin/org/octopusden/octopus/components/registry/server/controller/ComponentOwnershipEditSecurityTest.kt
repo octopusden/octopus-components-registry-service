@@ -11,7 +11,6 @@ import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.mockito.ArgumentMatchers.anyString
-import org.mockito.Mockito.`when` as whenMock
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.employee.client.EmployeeServiceClient
 import org.octopusden.employee.client.common.dto.ManagerDTO
@@ -37,6 +36,7 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.nio.file.Paths
 import java.util.UUID
+import org.mockito.Mockito.`when` as whenMock
 
 /**
  * End-to-end (HTTP → @PreAuthorize → service → H2) coverage for the per-component
@@ -66,12 +66,6 @@ class ComponentOwnershipEditSecurityTest {
     @MockBean
     private lateinit var employeeServiceClient: EmployeeServiceClient
 
-    @BeforeEach
-    fun setupEmployeeMock() {
-        // Default: no manager — existing tests are unaffected.
-        whenMock(employeeServiceClient.getManager(anyString())).thenReturn(ManagerDTO(null))
-    }
-
     @Autowired
     private lateinit var mvc: MockMvc
 
@@ -85,6 +79,12 @@ class ComponentOwnershipEditSecurityTest {
         val testResourcesPath =
             Paths.get(ComponentOwnershipEditSecurityTest::class.java.getResource("/expected-data")!!.toURI()).parent
         System.setProperty("COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR", testResourcesPath.toString())
+    }
+
+    @BeforeEach
+    fun setupEmployeeMock() {
+        // Default: no manager — existing tests are unaffected.
+        whenMock(employeeServiceClient.getManager(anyString())).thenReturn(ManagerDTO(null))
     }
 
     private fun uniqueName(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(8)}"
@@ -113,7 +113,8 @@ class ComponentOwnershipEditSecurityTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(fields)),
                 ).andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         return objectMapper.readTree(response)
     }
 
@@ -163,8 +164,7 @@ class ComponentOwnershipEditSecurityTest {
 
     // Fail loudly if the flag is absent so a dropped `withCanEdit` can't make an
     // `assertFalse(... .canEdit())` pass vacuously (JsonNode.asBoolean() → false on missing).
-    private fun JsonNode.canEdit(): Boolean =
-        (this["canEdit"] ?: error("canEdit field missing from response")).asBoolean()
+    private fun JsonNode.canEdit(): Boolean = (this["canEdit"] ?: error("canEdit field missing from response")).asBoolean()
 
     // Unique per call: displayName is now UNIQUE, so a shared literal would 400 on the
     // second edit. The value is never asserted — only used as a non-trivial PATCH body.
@@ -285,7 +285,8 @@ class ComponentOwnershipEditSecurityTest {
         val body =
             performPatch(c.id(), c.version(), mapOf("componentOwner" to "zoe"), editorJwt("bob"))
                 .andExpect(status().isOk)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         assertFalse(objectMapper.readTree(body).canEdit(), "bob is no longer owner → canEdit=false on the response")
     }
 
@@ -304,18 +305,20 @@ class ComponentOwnershipEditSecurityTest {
         val c = create(uniqueName("fo_upd"), owner = "bob")
         val overrideId = createOverrideAsOwner(c.id())
         val patchBody = objectMapper.writeValueAsString(mapOf("value" to "21"))
-        mvc.perform(
-            patch("/rest/api/4/components/${c.id()}/field-overrides/$overrideId")
-                .with(editorJwt("frank"))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(patchBody),
-        ).andExpect(status().isForbidden)
-        mvc.perform(
-            patch("/rest/api/4/components/${c.id()}/field-overrides/$overrideId")
-                .with(viewerJwt("bob"))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(patchBody),
-        ).andExpect(status().isOk)
+        mvc
+            .perform(
+                patch("/rest/api/4/components/${c.id()}/field-overrides/$overrideId")
+                    .with(editorJwt("frank"))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(patchBody),
+            ).andExpect(status().isForbidden)
+        mvc
+            .perform(
+                patch("/rest/api/4/components/${c.id()}/field-overrides/$overrideId")
+                    .with(viewerJwt("bob"))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(patchBody),
+            ).andExpect(status().isOk)
     }
 
     @Test
@@ -323,9 +326,11 @@ class ComponentOwnershipEditSecurityTest {
     fun `field override delete gated`() {
         val c = create(uniqueName("fo_del"), owner = "bob")
         val overrideId = createOverrideAsOwner(c.id())
-        mvc.perform(delete("/rest/api/4/components/${c.id()}/field-overrides/$overrideId").with(editorJwt("frank")))
+        mvc
+            .perform(delete("/rest/api/4/components/${c.id()}/field-overrides/$overrideId").with(editorJwt("frank")))
             .andExpect(status().isForbidden)
-        mvc.perform(delete("/rest/api/4/components/${c.id()}/field-overrides/$overrideId").with(viewerJwt("bob")))
+        mvc
+            .perform(delete("/rest/api/4/components/${c.id()}/field-overrides/$overrideId").with(viewerJwt("bob")))
             .andExpect(status().isNoContent)
     }
 
@@ -334,8 +339,10 @@ class ComponentOwnershipEditSecurityTest {
             .readTree(
                 performFieldOverridePost(componentId, viewerJwt("bob"))
                     .andExpect(status().isCreated)
-                    .andReturn().response.contentAsString,
-            )["id"].asText()
+                    .andReturn()
+                    .response.contentAsString,
+            )["id"]
+            .asText()
 
     private fun getBody(
         id: String,
@@ -343,7 +350,8 @@ class ComponentOwnershipEditSecurityTest {
     ): String =
         performGet(id, jwt)
             .andExpect(status().isOk)
-            .andReturn().response.contentAsString
+            .andReturn()
+            .response.contentAsString
 
     // --- OCTOPUS-2191: manager of componentOwner ----------------------------------
 
