@@ -51,6 +51,7 @@ import org.octopusden.octopus.components.registry.server.entity.LabelEntity
 import org.octopusden.octopus.components.registry.server.entity.SystemEntity
 import org.octopusden.octopus.components.registry.server.entity.ToolEntity
 import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
+import org.octopusden.octopus.components.registry.server.event.AuditCorrelationIdProvider
 import org.octopusden.octopus.components.registry.server.event.AuditEvent
 import org.octopusden.octopus.components.registry.server.mapper.ALL_VERSIONS
 import org.octopusden.octopus.components.registry.server.util.VersionRangePartition
@@ -147,6 +148,9 @@ class ComponentManagementServiceImpl(
     private val environment: Environment,
     private val componentCodeRenderer: ComponentCodeRenderer,
     private val employeeDirectory: EmployeeDirectoryService,
+    // Defaulted so the few unit tests that construct this service directly need
+    // no new wiring; Spring injects the singleton bean in production.
+    private val auditCorrelationIdProvider: AuditCorrelationIdProvider = AuditCorrelationIdProvider(),
 ) : ComponentManagementService {
     // ConfigHelper is constructed lazily because it touches the Spring
     // Environment on first access; mirrors the pattern used by
@@ -4048,6 +4052,8 @@ class ComponentManagementServiceImpl(
                 // is never persisted (the @Pattern accepts blank as "no key").
                 jiraTaskKey = jiraTaskKey?.trim()?.ifBlank { null },
                 changeComment = changeComment?.trim()?.ifBlank { null },
+                // Same id for every audit row written in this save's transaction.
+                correlationId = auditCorrelationIdProvider.current(),
             ),
         )
     }

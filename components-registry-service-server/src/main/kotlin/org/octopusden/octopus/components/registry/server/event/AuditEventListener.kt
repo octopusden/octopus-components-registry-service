@@ -42,6 +42,7 @@ class AuditEventListener(
                 changeDiff = changeDiff,
                 jiraTaskKey = event.jiraTaskKey,
                 changeComment = event.changeComment,
+                correlationId = event.correlationId,
             )
         auditLogRepository.save(auditLog)
     }
