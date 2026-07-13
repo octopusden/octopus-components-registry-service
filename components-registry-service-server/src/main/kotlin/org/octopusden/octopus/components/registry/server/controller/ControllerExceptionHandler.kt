@@ -137,9 +137,7 @@ class ControllerExceptionHandler {
      */
     @ExceptionHandler(org.springframework.data.mapping.PropertyReferenceException::class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    fun propertyReferenceExceptionHandler(
-        e: org.springframework.data.mapping.PropertyReferenceException,
-    ): HttpEntity<ErrorResponse> {
+    fun propertyReferenceExceptionHandler(e: org.springframework.data.mapping.PropertyReferenceException): HttpEntity<ErrorResponse> {
         log.warn("Unknown property in sort/filter: {}", e.localizedMessage)
         return HttpEntity(ErrorResponse("Unknown sort/filter property: '${e.propertyName}'"))
     }
@@ -159,7 +157,8 @@ class ControllerExceptionHandler {
         while (cause != null) {
             if (cause is PayloadTooLargeException) {
                 log.warn("Request body exceeded size cap: {}", cause.localizedMessage)
-                return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                return ResponseEntity
+                    .status(HttpStatus.PAYLOAD_TOO_LARGE)
                     .body(ErrorResponse(cause.localizedMessage ?: "Payload too large"))
             }
             cause = cause.cause

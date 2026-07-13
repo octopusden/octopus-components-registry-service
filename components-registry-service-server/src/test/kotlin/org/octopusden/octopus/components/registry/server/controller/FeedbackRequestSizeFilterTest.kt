@@ -44,7 +44,9 @@ class FeedbackRequestSizeFilterTest {
 
     init {
         val testResourcesPath =
-            java.nio.file.Paths.get(FeedbackRequestSizeFilterTest::class.java.getResource("/expected-data")!!.toURI()).parent
+            java.nio.file.Paths
+                .get(FeedbackRequestSizeFilterTest::class.java.getResource("/expected-data")!!.toURI())
+                .parent
         System.setProperty("COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR", testResourcesPath.toString())
     }
 

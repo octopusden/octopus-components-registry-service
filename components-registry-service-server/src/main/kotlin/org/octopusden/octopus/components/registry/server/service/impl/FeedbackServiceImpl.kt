@@ -76,7 +76,8 @@ class FeedbackServiceImpl(
             if (ids.isEmpty()) {
                 emptyMap()
             } else {
-                feedbackRepository.findAttachmentMetaByFeedbackIds(ids)
+                feedbackRepository
+                    .findAttachmentMetaByFeedbackIds(ids)
                     .groupBy({ it.feedbackId }, { toMeta(it) })
             }
         return page.map { FeedbackResponse.from(it, metaByFeedback[it.id].orEmpty()) }
@@ -109,7 +110,7 @@ class FeedbackServiceImpl(
         feedbackId: Long,
         attachmentId: Long,
     ): FeedbackAttachmentContent? =
-        attachmentRepository.findByIdAndFeedback_Id(attachmentId, feedbackId)?.let {
+        attachmentRepository.findByIdAndFeedbackId(attachmentId, feedbackId)?.let {
             FeedbackAttachmentContent(
                 filename = it.filename,
                 contentType = it.contentType ?: ImageMimeDetector.PNG,
@@ -157,24 +158,6 @@ class FeedbackServiceImpl(
         )
     }
 
-    private fun savedAttachmentMeta(entity: FeedbackEntity): List<FeedbackAttachmentMeta> =
-        entity.attachments.map {
-            FeedbackAttachmentMeta(
-                id = requireNotNull(it.id) { "persisted attachment has a null id" },
-                filename = it.filename,
-                contentType = it.contentType,
-                sizeBytes = it.sizeBytes,
-            )
-        }
-
-    private fun toMeta(view: FeedbackAttachmentMetaView): FeedbackAttachmentMeta =
-        FeedbackAttachmentMeta(
-            id = view.id,
-            filename = view.filename,
-            contentType = view.contentType,
-            sizeBytes = view.sizeBytes,
-        )
-
     private fun withDefaultSort(pageable: Pageable): Pageable =
         if (pageable.sort.isUnsorted) {
             PageRequest.of(pageable.pageNumber, pageable.pageSize, Sort.by(Sort.Direction.DESC, "createdAt"))
@@ -194,23 +177,42 @@ class FeedbackServiceImpl(
         }
         return spec
     }
+}
 
-    private fun stripDataUrlPrefix(value: String): String {
-        val marker = "base64,"
-        val idx = value.indexOf(marker)
-        return if (value.startsWith("data:") && idx >= 0) value.substring(idx + marker.length) else value
+// File-level helpers (kept out of the class body so it stays under detekt's TooManyFunctions
+// threshold; these are pure and stateless).
+
+private const val MAX_FILENAME = 120
+
+private fun savedAttachmentMeta(entity: FeedbackEntity): List<FeedbackAttachmentMeta> =
+    entity.attachments.map {
+        FeedbackAttachmentMeta(
+            id = requireNotNull(it.id) { "persisted attachment has a null id" },
+            filename = it.filename,
+            contentType = it.contentType,
+            sizeBytes = it.sizeBytes,
+        )
     }
 
-    /** Keep only the basename and a conservative charset; drop path separators and control chars. */
-    private fun sanitizeFilename(filename: String?): String? {
-        val base = filename?.substringAfterLast('/')?.substringAfterLast('\\')?.trim()
-        return base
-            ?.replace(Regex("[^A-Za-z0-9._-]"), "_")
-            ?.take(MAX_FILENAME)
-            ?.takeIf { it.isNotEmpty() }
-    }
+private fun toMeta(view: FeedbackAttachmentMetaView): FeedbackAttachmentMeta =
+    FeedbackAttachmentMeta(
+        id = view.id,
+        filename = view.filename,
+        contentType = view.contentType,
+        sizeBytes = view.sizeBytes,
+    )
 
-    companion object {
-        private const val MAX_FILENAME = 120
-    }
+private fun stripDataUrlPrefix(value: String): String {
+    val marker = "base64,"
+    val idx = value.indexOf(marker)
+    return if (value.startsWith("data:") && idx >= 0) value.substring(idx + marker.length) else value
+}
+
+/** Keep only the basename and a conservative charset; drop path separators and control chars. */
+private fun sanitizeFilename(filename: String?): String? {
+    val base = filename?.substringAfterLast('/')?.substringAfterLast('\\')?.trim()
+    return base
+        ?.replace(Regex("[^A-Za-z0-9._-]"), "_")
+        ?.take(MAX_FILENAME)
+        ?.takeIf { it.isNotEmpty() }
 }

@@ -79,8 +79,7 @@ class FeedbackRequestSizeFilter(
     ) : HttpServletRequestWrapper(request) {
         override fun getInputStream(): ServletInputStream = CountingStream(super.getInputStream(), max)
 
-        override fun getReader(): java.io.BufferedReader =
-            getInputStream().bufferedReader(charset(characterEncoding ?: "UTF-8"))
+        override fun getReader(): java.io.BufferedReader = getInputStream().bufferedReader(charset(characterEncoding ?: "UTF-8"))
     }
 
     private class CountingStream(

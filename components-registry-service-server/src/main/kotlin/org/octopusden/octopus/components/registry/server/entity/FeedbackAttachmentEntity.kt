@@ -25,20 +25,15 @@ class FeedbackAttachmentEntity(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     var id: Long? = null,
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "feedback_id", nullable = false)
     var feedback: FeedbackEntity? = null,
-
     @Column(name = "filename", columnDefinition = "TEXT")
     var filename: String? = null,
-
     @Column(name = "content_type", length = 100)
     var contentType: String? = null,
-
     @Column(name = "size_bytes")
     var sizeBytes: Int? = null,
-
     @Column(name = "data", nullable = false)
     var data: ByteArray = ByteArray(0),
 )

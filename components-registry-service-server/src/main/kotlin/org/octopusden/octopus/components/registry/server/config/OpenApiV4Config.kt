@@ -23,7 +23,8 @@ import org.springframework.context.annotation.Configuration
 class OpenApiV4Config {
     @Bean
     fun v4OpenApiGroup(): GroupedOpenApi =
-        GroupedOpenApi.builder()
+        GroupedOpenApi
+            .builder()
             .group("v4")
             .pathsToMatch(
                 "/rest/api/4/components/**",
@@ -61,6 +62,5 @@ class OpenApiV4Config {
                                 "Generated from the v4 controllers (TD-003); v1/v2/v3 are separate stable read contracts.",
                         ),
                 )
-            }
-            .build()
+            }.build()
 }

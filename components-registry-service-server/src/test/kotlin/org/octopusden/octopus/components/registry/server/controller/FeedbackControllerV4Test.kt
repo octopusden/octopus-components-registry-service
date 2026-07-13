@@ -54,7 +54,9 @@ class FeedbackControllerV4Test {
     init {
         // The `common` profile resolves components-registry.groovy-path against this dir.
         val testResourcesPath =
-            java.nio.file.Paths.get(FeedbackControllerV4Test::class.java.getResource("/expected-data")!!.toURI()).parent
+            java.nio.file.Paths
+                .get(FeedbackControllerV4Test::class.java.getResource("/expected-data")!!.toURI())
+                .parent
         System.setProperty("COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR", testResourcesPath.toString())
     }
 
@@ -94,7 +96,7 @@ class FeedbackControllerV4Test {
                 post("/rest/api/4/feedback")
                     .with(editorJwt())
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content(bodyWithAttachment(TYPE_BUG, "see screenshot", "shot.png", PNG_1x1_BASE64)),
+                    .content(bodyWithAttachment(TYPE_BUG, "see screenshot", "shot.png", PNG_1X1_BASE64)),
             ).andExpect(status().isCreated)
             .andExpect(jsonPath("$.attachments.length()").value(1))
             .andExpect(jsonPath("$.attachments[0].contentType").value("image/png"))
@@ -115,7 +117,7 @@ class FeedbackControllerV4Test {
     @Test
     @DisplayName("SYS-062 submit rejects more than the allowed attachment count (400)")
     fun `SYS-062 submit rejects too many attachments`() {
-        val four = (1..4).joinToString(",") { attachmentJson("s$it.png", PNG_1x1_BASE64) }
+        val four = (1..4).joinToString(",") { attachmentJson("s$it.png", PNG_1X1_BASE64) }
         val payload = """{"type":"$TYPE_BUG","message":"lots","attachments":[$four]}"""
         mvc
             .perform(
@@ -156,7 +158,7 @@ class FeedbackControllerV4Test {
     @Test
     @DisplayName("SYS-062 admin can fetch details and screenshot bytes with nosniff + inline disposition")
     fun `SYS-062 admin fetches attachment bytes`() {
-        submitWithAttachmentAs(editorJwt(), "shot.png", PNG_1x1_BASE64)
+        submitWithAttachmentAs(editorJwt(), "shot.png", PNG_1X1_BASE64)
         val feedbackId = adminFirstId()
         val attachmentId = adminFirstAttachmentId(feedbackId)
 
@@ -171,7 +173,7 @@ class FeedbackControllerV4Test {
     @Test
     @DisplayName("SYS-062 fetching an attachment under the wrong feedback id is 404")
     fun `SYS-062 attachment scoped to its feedback`() {
-        submitWithAttachmentAs(editorJwt(), "shot.png", PNG_1x1_BASE64)
+        submitWithAttachmentAs(editorJwt(), "shot.png", PNG_1X1_BASE64)
         val feedbackId = adminFirstId()
         val attachmentId = adminFirstAttachmentId(feedbackId)
 
@@ -300,7 +302,7 @@ class FeedbackControllerV4Test {
         private const val TYPE_IDEA = "IDEA"
 
         // 1x1 transparent PNG (magic bytes 89 50 4E 47 …).
-        private const val PNG_1x1_BASE64 =
+        private const val PNG_1X1_BASE64 =
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 
         // base64 of "hello world" — valid base64, but not a PNG/JPEG payload.

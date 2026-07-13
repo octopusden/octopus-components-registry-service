@@ -35,41 +35,29 @@ class FeedbackEntity(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     var id: Long? = null,
-
     @Column(name = "type", nullable = false, length = 20)
     var type: String = "",
-
     @Column(name = "status", nullable = false, length = 20)
     var status: String = "",
-
     @Column(name = "title", columnDefinition = "TEXT")
     var title: String? = null,
-
     @Column(name = "message", nullable = false, columnDefinition = "TEXT")
     var message: String = "",
-
     @Column(name = "submitted_by", length = 255)
     var submittedBy: String? = null,
-
     @Column(name = "page_url", columnDefinition = "TEXT")
     var pageUrl: String? = null,
-
     @Column(name = "app_version", length = 100)
     var appVersion: String? = null,
-
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "detail", columnDefinition = "TEXT")
     var detail: Map<String, Any?>? = null,
-
     @Column(name = "created_at", nullable = false)
     var createdAt: Instant = Instant.now(),
-
     @Column(name = "updated_at")
     var updatedAt: Instant? = null,
-
     @Column(name = "updated_by", length = 255)
     var updatedBy: String? = null,
-
     @OneToMany(
         mappedBy = "feedback",
         cascade = [CascadeType.ALL],

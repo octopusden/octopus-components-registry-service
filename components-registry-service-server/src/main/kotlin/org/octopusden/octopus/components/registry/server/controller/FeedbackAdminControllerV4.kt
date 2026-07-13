@@ -78,7 +78,8 @@ class FeedbackAdminControllerV4(
                 ?: throw NotFoundException("Attachment $attachmentId for feedback $id not found")
         val filename = content.filename?.takeIf { it.isNotBlank() } ?: "attachment-$attachmentId"
         val encoded = URLEncoder.encode(filename, StandardCharsets.UTF_8).replace("+", "%20")
-        return ResponseEntity.ok()
+        return ResponseEntity
+            .ok()
             .contentType(MediaType.parseMediaType(content.contentType))
             .header("X-Content-Type-Options", "nosniff")
             .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename*=UTF-8''$encoded")
