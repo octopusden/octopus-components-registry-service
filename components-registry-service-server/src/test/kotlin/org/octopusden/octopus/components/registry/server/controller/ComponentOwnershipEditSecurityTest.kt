@@ -2,7 +2,6 @@ package org.octopusden.octopus.components.registry.server.controller
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
-import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -353,11 +352,11 @@ class ComponentOwnershipEditSecurityTest {
             .andReturn()
             .response.contentAsString
 
-    // --- OCTOPUS-2191: manager of componentOwner ----------------------------------
+    // --- SYS-062: manager of componentOwner ----------------------------------
 
     @Test
-    @DisplayName("manager of componentOwner can PATCH the component (OCTOPUS-2191)")
-    fun `owner manager can patch`() {
+    @DisplayName("SYS-062: manager of componentOwner can PATCH the component")
+    fun `SYS-062 manager of componentOwner can PATCH the component`() {
         val c = create(uniqueName("mgr_allow"), owner = "bob")
         whenMock(employeeServiceClient.getManager("bob")).thenReturn(ManagerDTO("mgr-user"))
         performPatch(c.id(), c.version(), bumpDisplayName(), editorJwt("mgr-user"))
@@ -365,8 +364,8 @@ class ComponentOwnershipEditSecurityTest {
     }
 
     @Test
-    @DisplayName("non-manager of componentOwner gets 403 on PATCH")
-    fun `owner non-manager forbidden`() {
+    @DisplayName("SYS-062: non-manager of componentOwner gets 403 on PATCH")
+    fun `SYS-062 non-manager of componentOwner gets 403 on PATCH`() {
         val c = create(uniqueName("mgr_deny"), owner = "bob")
         whenMock(employeeServiceClient.getManager("bob")).thenReturn(ManagerDTO("other-mgr"))
         performPatch(c.id(), c.version(), bumpDisplayName(), editorJwt("frank"))

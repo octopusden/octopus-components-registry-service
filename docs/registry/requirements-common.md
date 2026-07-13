@@ -2269,3 +2269,40 @@ is mutated); a stronger service-account/OIDC/mTLS scheme is a post-cutover follo
 `SYS-061 valid token and body records the event`,
 `SYS-061 wrong token is 403`, `SYS-061 blank configured token is fail-closed 403`,
 `SYS-061 unknown eventType is 400`.
+
+### SYS-062: Component owner's manager may edit the component
+
+`PermissionEvaluator.canEditComponent`'s ownership predicate (§6.3: `componentOwner ||
+releaseManager || securityChampion || EDIT_ANY_COMPONENT`) gets a fourth, derived
+condition: the current user is the **manager** of the component's `componentOwner`,
+as resolved by `EmployeeDirectoryService.getManager` (backed by the employee-service
+`getManager` API). This lets a manager cover for an absent or departed report without
+needing the admin-only `EDIT_ANY_COMPONENT`.
+
+The manager check runs last, after the cheaper DB-only owner/RM/SC projections — it is
+the only condition of the four that makes a network call. Any failure to resolve a
+manager (the owner has no manager, the owner is not found, or employee-service is
+unavailable/erroring) makes `getManager` return `null`, which denies the grant — a
+directory failure can only deny edit access here, never grant it (fail-closed, the
+opposite direction from the fail-open convention used by the read-only
+active-employee checks elsewhere in `EmployeeDirectoryService`).
+
+This is a derived grant only: `GET /{idOrName}/editors` intentionally continues to
+list just the explicit `componentOwner`/`releaseManager`/`securityChampion` — the
+owner's manager can edit the component but does not appear as a listed editor in the
+Portal.
+
+**Acceptance criteria:**
+1. The manager of a component's `componentOwner` (per employee-service `getManager`)
+   may PATCH the component and its field-overrides, same as an explicit owner/RM/SC.
+2. A user who is not the owner's manager gets 403.
+3. When employee-service reports no manager for the owner (`ManagerDTO.manager ==
+   null`), the grant is denied.
+
+**Test method:** `PermissionEvaluatorTest` —
+`SYS-062 manager of componentOwner allowed`,
+`SYS-062 non-manager of componentOwner denied`,
+`SYS-062 owner with no manager denied`;
+`ComponentOwnershipEditSecurityTest` —
+`SYS-062 manager of componentOwner can PATCH the component`,
+`SYS-062 non-manager of componentOwner gets 403 on PATCH`.
