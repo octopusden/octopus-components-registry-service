@@ -24,8 +24,12 @@ plugins {
 }
 
 octopusQuality {
-    // TODO(crsctl): enabling the detekt/ktlint quality gate for components-registry-cli is a follow-up;
-    // excluded for the first PR to avoid baseline churn. Keep the module's code clean regardless.
+    // NOTE: in octopus-quality 2.3.5 `excludeProjects` maps ONLY to coverage exclusion
+    // (coverageExcludedProjects) — it does NOT exclude these modules from qualityStatic, which
+    // runs checkstyle/pmd/codenarc/detekt/ktlint over ALL subprojects. These four are excluded
+    // from the aggregate coverage gate (CLI/automation/compat-test/test-common are tooling/test
+    // modules where unit coverage is not meaningful). Their static analysis (incl. detekt/ktlint)
+    // still runs and is gated via each module's baseline.
     excludeProjects('components-registry-automation', 'components-registry-compat-test', 'test-common', 'components-registry-cli')
     java { failOnViolation = true }
     kotlin { failOnViolation = true }
@@ -145,6 +149,13 @@ configure(subprojects) {
 
     if (!project.name.equalsIgnoreCase("components-registry-service-light-client")) {
         apply plugin: 'org.jetbrains.kotlin.jvm'
+        // octopus-quality 2.3.5 only self-applies the Java-source analysers (checkstyle/pmd/
+        // codenarc/spotbugs/jacoco). Per its documented consumer contract it merely *configures*
+        // detekt/ktlint reactively via plugins.withId(...) — they must be APPLIED here or the
+        // Kotlin static-analysis gate silently does nothing (checkstyle/pmd have no .kt to read).
+        // Versions come from settings.gradle pluginManagement (detekt.version / ktlint-gradle.version).
+        apply plugin: 'io.gitlab.arturbosch.detekt'
+        apply plugin: 'org.jlleitschuh.gradle.ktlint'
 
         configurations.matching { cfg ->
             cfg?.name?.toLowerCase()?.contains('test')

@@ -1,8 +1,8 @@
 <?xml version="1.0" ?>
 <SmellBaseline>
-  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>CyclomaticComplexMethod:Component.kt$Component$override fun equals(other: Any?): Boolean</ID>
+    <ID>CyclomaticComplexMethod:Component.kt$Component$@Suppress("DEPRECATION") // reads the deprecated comma-joined RM/SC props for value equality override fun equals(other: Any?): Boolean</ID>
     <ID>EqualsWithHashCodeExist:ComponentV1.kt$ComponentV1 : Component</ID>
     <ID>EqualsWithHashCodeExist:ComponentV2.kt$ComponentV2 : Component</ID>
     <ID>MatchingDeclarationName:ComponentVersionFormat.kt$ComponentVersionFormatDTO</ID>
