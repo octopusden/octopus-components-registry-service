@@ -1,15 +1,10 @@
 package org.octopusden.octopus.components.registry.server.event
 
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
-import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
-import org.octopusden.cloud.commons.security.client.AuthServerClient
-import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
-import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.boot.test.mock.mockito.MockBean
-import org.springframework.test.annotation.DirtiesContext
-import org.springframework.test.context.ActiveProfiles
+import org.springframework.jdbc.datasource.DataSourceTransactionManager
+import org.springframework.jdbc.datasource.DriverManagerDataSource
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.TransactionDefinition
 import org.springframework.transaction.support.TransactionTemplate
@@ -17,23 +12,24 @@ import org.springframework.transaction.support.TransactionTemplate
 /**
  * Transaction-scoping guarantees for [AuditCorrelationIdProvider]: one id per
  * transaction, a fresh id per new transaction, a nested `REQUIRES_NEW` gets its
- * own id (and the outer id is restored afterwards), and no id leaks onto the
- * thread once a transaction has completed.
+ * own id (with the outer id restored afterwards), the id is unbound on rollback,
+ * and none leaks onto the thread once a transaction has completed.
+ *
+ * Focused unit test: it drives a real transaction lifecycle (suspend/resume/
+ * completion) via a [DataSourceTransactionManager] over an in-memory H2 datasource,
+ * with no Spring context — the provider touches no DB, only the synchronization
+ * manager, so this exercises exactly the behaviour under test without a full boot.
  */
-@SpringBootTest(classes = [ComponentRegistryServiceApplication::class])
-@ActiveProfiles("common", "ft-db")
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
-@Tag("integration")
 class AuditCorrelationIdProviderTest {
-    @MockBean
-    @Suppress("UnusedPrivateProperty")
-    private lateinit var authServerClient: AuthServerClient
-
-    @Autowired
-    private lateinit var provider: AuditCorrelationIdProvider
-
-    @Autowired
+    private val provider = AuditCorrelationIdProvider()
     private lateinit var txManager: PlatformTransactionManager
+
+    @BeforeEach
+    fun setUp() {
+        val ds = DriverManagerDataSource("jdbc:h2:mem:audit-corr;DB_CLOSE_DELAY=-1", "sa", "")
+        ds.setDriverClassName("org.h2.Driver")
+        txManager = DataSourceTransactionManager(ds)
+    }
 
     private fun requiresNewTemplate() =
         TransactionTemplate(txManager).apply {
@@ -71,6 +67,22 @@ class AuditCorrelationIdProviderTest {
         }
         assert(inner != outerBefore) { "inner REQUIRES_NEW must not reuse the outer id ($outerBefore)" }
         assert(outerAfter == outerBefore) { "outer id must be restored after the inner txn ($outerBefore vs $outerAfter)" }
+    }
+
+    @Test
+    @DisplayName("the id is unbound on rollback (afterCompletion fires for both outcomes)")
+    fun unbindsOnRollback() {
+        lateinit var rolledBack: String
+        runCatching {
+            TransactionTemplate(txManager).execute {
+                rolledBack = provider.current()
+                throw RuntimeException("boom") // forces rollback
+            }
+        }
+        // After the rolled-back transaction, no id lingers: an out-of-transaction
+        // call mints a fresh one rather than returning the rolled-back id.
+        val after = provider.current()
+        assert(after != rolledBack) { "rolled-back transaction's id must not linger on the thread" }
     }
 
     @Test

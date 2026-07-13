@@ -23,46 +23,56 @@ import java.util.UUID
  * Called with no active transaction, it returns a fresh id each time and binds
  * nothing — no grouping, no leak. (The audit listener is a `@TransactionalEventListener`,
  * so audit events are only ever published inside a transaction in practice.)
+ *
+ * NOTE — `audit_log.correlation_id` is intentionally overloaded: rows from this API
+ * save-path carry a per-save UUID (here), while git-history import rows
+ * (`GitHistoryImportServiceImpl`, `source = "git-history"`) carry the git commit
+ * SHA, written directly to the entity and never through this provider. The two
+ * shapes never collide (UUID vs SHA) and never overwrite each other; a grouping
+ * consumer should expect both, keyed by `source`.
  */
 @Component
 class AuditCorrelationIdProvider {
-    // Stable per-bean key for the transaction-scoped resource map (the provider is
-    // a singleton, so the same key object is used for bind/get/unbind across calls).
-    private val resourceKey = Any()
-
     fun current(): String {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
             return UUID.randomUUID().toString()
         }
-        (TransactionSynchronizationManager.getResource(resourceKey) as String?)?.let { return it }
+        (TransactionSynchronizationManager.getResource(RESOURCE_KEY) as String?)?.let { return it }
         val id = UUID.randomUUID().toString()
-        TransactionSynchronizationManager.bindResource(resourceKey, id)
-        TransactionSynchronizationManager.registerSynchronization(CorrelationIdSynchronization(resourceKey, id))
+        TransactionSynchronizationManager.bindResource(RESOURCE_KEY, id)
+        TransactionSynchronizationManager.registerSynchronization(CorrelationIdSynchronization(id))
         return id
     }
 
     /**
      * Keeps the correlation-id resource in step with the transaction lifecycle:
      * unbind while the transaction is suspended (so an inner `REQUIRES_NEW` sees
-     * none and mints its own), rebind on resume, and unbind for good on completion
-     * (both commit and rollback).
+     * none and mints its own), rebind THIS transaction's own id on resume, and
+     * unbind for good on completion (both commit and rollback). Resume rebinds
+     * unconditionally (unbind-any-then-bind-own), so it can never silently adopt a
+     * foreign id — mis-grouping is structurally impossible, not ordering-dependent.
      */
     private class CorrelationIdSynchronization(
-        private val key: Any,
         private val id: String,
     ) : TransactionSynchronization {
         override fun suspend() {
-            TransactionSynchronizationManager.unbindResourceIfPossible(key)
+            TransactionSynchronizationManager.unbindResourceIfPossible(RESOURCE_KEY)
         }
 
         override fun resume() {
-            if (!TransactionSynchronizationManager.hasResource(key)) {
-                TransactionSynchronizationManager.bindResource(key, id)
-            }
+            TransactionSynchronizationManager.unbindResourceIfPossible(RESOURCE_KEY)
+            TransactionSynchronizationManager.bindResource(RESOURCE_KEY, id)
         }
 
         override fun afterCompletion(status: Int) {
-            TransactionSynchronizationManager.unbindResourceIfPossible(key)
+            TransactionSynchronizationManager.unbindResourceIfPossible(RESOURCE_KEY)
         }
+    }
+
+    private companion object {
+        // Instance-independent resource key: even if a manually-constructed provider
+        // (a unit test) and the Spring singleton ran in one transaction, they'd share
+        // the same resource and mint a single id — never two.
+        private val RESOURCE_KEY = Any()
     }
 }
