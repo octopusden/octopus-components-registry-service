@@ -2269,3 +2269,48 @@ is mutated); a stronger service-account/OIDC/mTLS scheme is a post-cutover follo
 `SYS-061 valid token and body records the event`,
 `SYS-061 wrong token is 403`, `SYS-061 blank configured token is fail-closed 403`,
 `SYS-061 unknown eventType is 400`.
+
+### SYS-062: User feedback / report-a-problem
+
+A single "feedback" surface in the portal lets any authenticated user file a report
+(`type` = BUG / IDEA / QUESTION) with a free-form message and up to a few optional
+screenshots. Reports have their own triage lifecycle (NEW → IN_PROGRESS → RESOLVED),
+distinct from `audit_log` (entity changes) and `service_event` (job runs). Admins
+(IMPORT_DATA) browse, filter, view screenshots, and advance status; see ADR-019 for
+the storage/transport/security decisions.
+
+Screenshots are stored inline as `bytea` in `feedback_attachment` (one row per file).
+The portal transports them base64-in-JSON; the service decodes and validates each by
+**magic bytes** (PNG/JPEG only — never the client's `Content-Type`), size, and count
+before storing, and persists a **server-normalized** MIME that is later echoed on the
+attachment-bytes response with `X-Content-Type-Options: nosniff` and an `inline`
+Content-Disposition. Body size is capped in two rubrics: a portal-gateway limit
+(primary) and a CRS ingress guard (second line, `413` on over-cap, covering both
+`Content-Length` and chunked bodies). RESOLVED reports are pruned by a scheduled
+retention job (`updated_at` older than the window; `retention-days <= 0` disables).
+
+Submit is authenticated-only (`POST /rest/api/4/feedback`, filter-chain
+`authenticated()` — anonymous → 401; submitter taken from the JWT, never the body).
+Admin reads/triage are IMPORT_DATA-gated (`/rest/api/4/admin/feedback**`) —
+`ACCESS_AUDIT` is deliberately NOT used because viewers/editors hold it.
+
+**Acceptance criteria:**
+1. Anonymous submit → 401; authenticated submit → 201 with `submittedBy` from the JWT.
+2. A PNG/JPEG screenshot is accepted; a non-image, oversized, or over-count attachment
+   → 400; the stored/served MIME is server-derived, not the client's claim.
+3. An over-cap request body → 413.
+4. Admin list/detail/status/attachment reads require IMPORT_DATA (viewer/editor → 403);
+   an attachment id under the wrong feedback id → 404.
+5. A status change stamps `updated_by` from the JWT.
+6. `GET /rest/api/4/admin/feedback/open-count` returns the count of OPEN (not RESOLVED)
+   reports (IMPORT_DATA-gated), for the portal admin-header badge.
+
+**Test method:** `FeedbackControllerV4Test` —
+`SYS-062 submit requires authentication`, `SYS-062 submit stores submitter from jwt`,
+`SYS-062 submit stores a valid png attachment`,
+`SYS-062 submit rejects non image attachment`,
+`SYS-062 submit rejects too many attachments`,
+`SYS-062 admin list is import gated`, `SYS-062 admin fetches attachment bytes`,
+`SYS-062 attachment scoped to its feedback`, `SYS-062 admin updates status`,
+`SYS-062 admin open count`;
+`FeedbackRequestSizeFilterTest` — `SYS-062 body over cap is rejected`.
