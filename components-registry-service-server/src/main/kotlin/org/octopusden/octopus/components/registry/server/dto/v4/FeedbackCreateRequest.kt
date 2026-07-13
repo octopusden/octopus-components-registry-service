@@ -23,6 +23,9 @@ data class FeedbackCreateRequest(
     @field:NotBlank(message = "message must not be blank")
     val message: String = "",
     val pageUrl: String? = null,
+    // Maps to VARCHAR(100); validate here so an oversized value is a clean 400, not a
+    // DB-length error surfaced as 409 further down.
+    @field:Size(max = 100, message = "appVersion must be at most 100 characters")
     val appVersion: String? = null,
     @field:Size(max = MAX_ATTACHMENTS, message = "at most $MAX_ATTACHMENTS attachments are allowed")
     @field:Valid

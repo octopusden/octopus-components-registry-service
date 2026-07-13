@@ -127,6 +127,19 @@ class FeedbackControllerV4Test {
     }
 
     @Test
+    @DisplayName("SYS-062 submit rejects an over-long appVersion (400, not a DB-length 409)")
+    fun `SYS-062 submit rejects oversized appVersion`() {
+        val longVersion = "v".repeat(101)
+        mvc
+            .perform(
+                post("/rest/api/4/feedback")
+                    .with(editorJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"type":"BUG","message":"x","appVersion":"$longVersion"}"""),
+            ).andExpect(status().isBadRequest)
+    }
+
+    @Test
     @DisplayName("SYS-062 admin list requires IMPORT_DATA — viewer/editor forbidden, admin ok")
     fun `SYS-062 admin list is import gated`() {
         submitAs(editorJwt(), TYPE_IDEA, "nice to have")
