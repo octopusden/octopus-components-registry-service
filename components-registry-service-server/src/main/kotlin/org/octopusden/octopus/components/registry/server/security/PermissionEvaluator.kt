@@ -66,7 +66,7 @@ class PermissionEvaluator(
             if (matches(username, owner)) return true
             if (repository.findReleaseManagerUsernames(id).any { matches(username, it) }) return true
             if (repository.findSecurityChampionUsernames(id).any { matches(username, it) }) return true
-            // OCTOPUS-2191: the manager of the componentOwner may also edit.
+            // the manager of the componentOwner may also edit.
             val ownerTrimmed = owner?.trim()
             if (!ownerTrimmed.isNullOrEmpty() && matches(username, employeeDirectory.getManager(ownerTrimmed))) return true
             false
