@@ -352,11 +352,11 @@ class ComponentOwnershipEditSecurityTest {
             .andReturn()
             .response.contentAsString
 
-    // --- SYS-062: manager of componentOwner ----------------------------------
+    // --- SYS-063: manager of componentOwner ----------------------------------
 
     @Test
-    @DisplayName("SYS-062: manager of componentOwner can PATCH the component")
-    fun `SYS-062 manager of componentOwner can PATCH the component`() {
+    @DisplayName("SYS-063: manager of componentOwner can PATCH the component")
+    fun `SYS-063 manager of componentOwner can PATCH the component`() {
         val c = create(uniqueName("mgr_allow"), owner = "bob")
         whenMock(employeeServiceClient.getManager("bob")).thenReturn(ManagerDTO("mgr-user"))
         performPatch(c.id(), c.version(), bumpDisplayName(), editorJwt("mgr-user"))
@@ -364,8 +364,8 @@ class ComponentOwnershipEditSecurityTest {
     }
 
     @Test
-    @DisplayName("SYS-062: non-manager of componentOwner gets 403 on PATCH")
-    fun `SYS-062 non-manager of componentOwner gets 403 on PATCH`() {
+    @DisplayName("SYS-063: non-manager of componentOwner gets 403 on PATCH")
+    fun `SYS-063 non-manager of componentOwner gets 403 on PATCH`() {
         val c = create(uniqueName("mgr_deny"), owner = "bob")
         whenMock(employeeServiceClient.getManager("bob")).thenReturn(ManagerDTO("other-mgr"))
         performPatch(c.id(), c.version(), bumpDisplayName(), editorJwt("frank"))

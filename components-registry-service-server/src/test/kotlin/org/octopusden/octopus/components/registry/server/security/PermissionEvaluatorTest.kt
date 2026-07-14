@@ -202,7 +202,7 @@ class PermissionEvaluatorTest {
         verify(repo, never()).findComponentOwnerById(id)
     }
 
-    // --- SYS-062: manager of componentOwner ----------------------------------
+    // --- SYS-063: manager of componentOwner ----------------------------------
 
     private fun evaluatorWithManager(
         owner: String,
@@ -217,8 +217,8 @@ class PermissionEvaluatorTest {
     }
 
     @Test
-    @DisplayName("SYS-062: manager of componentOwner allowed")
-    fun `SYS-062 manager of componentOwner allowed`() {
+    @DisplayName("SYS-063: manager of componentOwner allowed")
+    fun `SYS-063 manager of componentOwner allowed`() {
         loginAs(editor("mgr"))
         val id = UUID.randomUUID()
         stub(id, owner = "bob")
@@ -226,8 +226,8 @@ class PermissionEvaluatorTest {
     }
 
     @Test
-    @DisplayName("SYS-062: non-manager of componentOwner denied")
-    fun `SYS-062 non-manager of componentOwner denied`() {
+    @DisplayName("SYS-063: non-manager of componentOwner denied")
+    fun `SYS-063 non-manager of componentOwner denied`() {
         loginAs(editor("frank"))
         val id = UUID.randomUUID()
         stub(id, owner = "bob")
@@ -235,8 +235,8 @@ class PermissionEvaluatorTest {
     }
 
     @Test
-    @DisplayName("SYS-062: owner with no manager denied")
-    fun `SYS-062 owner with no manager denied`() {
+    @DisplayName("SYS-063: owner with no manager denied")
+    fun `SYS-063 owner with no manager denied`() {
         loginAs(editor("frank"))
         val id = UUID.randomUUID()
         stub(id, owner = "bob")

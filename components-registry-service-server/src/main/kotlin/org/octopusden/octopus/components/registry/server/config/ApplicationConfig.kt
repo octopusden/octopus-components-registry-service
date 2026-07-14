@@ -16,6 +16,7 @@ import java.util.concurrent.ConcurrentHashMap
     TeamcityProperties::class,
     EmployeeServiceProperties::class,
     ServiceEventProperties::class,
+    FeedbackProperties::class,
 )
 class ApplicationConfig(
     val componentsRegistryProperties: ComponentsRegistryProperties,

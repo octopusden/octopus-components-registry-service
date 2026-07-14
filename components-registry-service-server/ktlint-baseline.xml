@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <baseline version="1.0">
-    <file name="src/integrationTest/kotlin/org/octopusden/octopus/components/registry/server/FatJarAuthDisabledIntegrationTest.kt">
+    <file name="../../../octopus-components-registry-service/components-registry-service-server/src/integrationTest/kotlin/org/octopusden/octopus/components/registry/server/FatJarAuthDisabledIntegrationTest.kt">
         <error line="184" column="31" source="standard:function-signature" />
         <error line="184" column="46" source="standard:function-signature" />
         <error line="184" column="71" source="standard:function-signature" />
@@ -26,10 +26,6 @@
         <error line="26" column="23" source="standard:chain-method-continuation" />
         <error line="40" column="13" source="standard:chain-method-continuation" />
     </file>
-    <file name="src/main/kotlin/org/octopusden/octopus/components/registry/server/config/OpenApiV4Config.kt">
-        <error line="26" column="23" source="standard:chain-method-continuation" />
-        <error line="62" column="13" source="standard:chain-method-continuation" />
-    </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/server/config/RequestBodyLoggingConfig.kt">
         <error line="85" column="32" source="standard:function-signature" />
         <error line="85" column="61" source="standard:function-signature" />
@@ -52,10 +48,6 @@
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/server/controller/ConfigControllerV4.kt">
         <error line="55" column="33" source="standard:chain-method-continuation" />
-    </file>
-    <file name="src/main/kotlin/org/octopusden/octopus/components/registry/server/controller/ControllerExceptionHandler.kt">
-        <error line="140" column="9" source="standard:function-signature" />
-        <error line="140" column="72" source="standard:function-signature" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/server/controller/ServiceEventIngestControllerV4.kt">
         <error line="60" column="34" source="standard:chain-method-continuation" />
@@ -404,98 +396,98 @@
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/server/service/impl/ComponentManagementServiceImpl.kt">
         <error line="3" column="1" source="standard:import-ordering" />
-        <error line="112" column="1" source="standard:no-unused-imports" />
         <error line="113" column="1" source="standard:no-unused-imports" />
-        <error line="402" column="67" source="standard:function-signature" />
-        <error line="505" column="34" source="standard:chain-method-continuation" />
-        <error line="505" column="41" source="standard:chain-method-continuation" />
-        <error line="505" column="54" source="standard:chain-method-continuation" />
-        <error line="739" column="37" source="standard:condition-wrapping" />
-        <error line="740" column="54" source="standard:condition-wrapping" />
-        <error line="741" column="48" source="standard:condition-wrapping" />
-        <error line="888" column="30" source="standard:chain-method-continuation" />
-        <error line="929" column="17" source="standard:wrapping" />
+        <error line="114" column="1" source="standard:no-unused-imports" />
+        <error line="406" column="67" source="standard:function-signature" />
+        <error line="509" column="34" source="standard:chain-method-continuation" />
+        <error line="509" column="41" source="standard:chain-method-continuation" />
+        <error line="509" column="54" source="standard:chain-method-continuation" />
+        <error line="743" column="37" source="standard:condition-wrapping" />
+        <error line="744" column="54" source="standard:condition-wrapping" />
+        <error line="745" column="48" source="standard:condition-wrapping" />
+        <error line="892" column="30" source="standard:chain-method-continuation" />
         <error line="933" column="17" source="standard:wrapping" />
-        <error line="1182" column="65" source="standard:function-signature" />
-        <error line="1353" column="38" source="standard:chain-method-continuation" />
-        <error line="1446" column="13" source="standard:chain-method-continuation" />
-        <error line="1537" column="39" source="standard:function-signature" />
-        <error line="1537" column="54" source="standard:function-signature" />
-        <error line="1537" column="74" source="standard:function-signature" />
-        <error line="1550" column="39" source="standard:chain-method-continuation" />
-        <error line="1550" column="63" source="standard:chain-method-continuation" />
-        <error line="1550" column="93" source="standard:chain-method-continuation" />
-        <error line="1622" column="68" source="standard:function-signature" />
-        <error line="1648" column="12" source="standard:chain-method-continuation" />
-        <error line="1872" column="35" source="standard:condition-wrapping" />
-        <error line="1872" column="58" source="standard:condition-wrapping" />
-        <error line="1983" column="73" source="standard:function-signature" />
-        <error line="2258" column="46" source="standard:argument-list-wrapping" />
-        <error line="2258" column="70" source="standard:argument-list-wrapping" />
-        <error line="2258" column="98" source="standard:binary-expression-wrapping" />
-        <error line="2258" column="123" source="standard:argument-list-wrapping" />
-        <error line="2258" column="141" source="standard:argument-list-wrapping" />
-        <error line="2258" column="141" source="standard:max-line-length" />
-        <error line="2308" column="39" source="standard:statement-wrapping" />
-        <error line="2308" column="66" source="standard:statement-wrapping" />
-        <error line="2308" column="101" source="standard:statement-wrapping" />
-        <error line="2371" column="50" source="standard:argument-list-wrapping" />
-        <error line="2371" column="90" source="standard:argument-list-wrapping" />
-        <error line="2371" column="139" source="standard:binary-expression-wrapping" />
-        <error line="2371" column="141" source="standard:max-line-length" />
-        <error line="2400" column="37" source="standard:statement-wrapping" />
-        <error line="2400" column="64" source="standard:statement-wrapping" />
-        <error line="2400" column="99" source="standard:statement-wrapping" />
-        <error line="2699" column="17" source="standard:property-naming" />
-        <error line="2704" column="17" source="standard:property-naming" />
-        <error line="2713" column="17" source="standard:property-naming" />
-        <error line="2722" column="56" source="standard:function-signature" />
-        <error line="2742" column="38" source="standard:function-signature" />
-        <error line="2742" column="49" source="standard:function-signature" />
-        <error line="2742" column="58" source="standard:function-signature" />
-        <error line="2742" column="66" source="standard:function-signature" />
-        <error line="2749" column="17" source="standard:property-naming" />
-        <error line="2755" column="32" source="standard:function-signature" />
-        <error line="2755" column="58" source="standard:function-signature" />
-        <error line="2755" column="82" source="standard:function-signature" />
-        <error line="2953" column="32" source="standard:chain-method-continuation" />
-        <error line="2992" column="38" source="standard:chain-method-continuation" />
-        <error line="2992" column="60" source="standard:chain-method-continuation" />
-        <error line="2992" column="78" source="standard:chain-method-continuation" />
-        <error line="3044" column="53" source="standard:function-signature" />
-        <error line="3044" column="78" source="standard:function-signature" />
-        <error line="3044" column="95" source="standard:function-signature" />
-        <error line="3049" column="22" source="standard:chain-method-continuation" />
-        <error line="3116" column="25" source="standard:chain-method-continuation" />
-        <error line="3116" column="46" source="standard:chain-method-continuation" />
-        <error line="3123" column="25" source="standard:chain-method-continuation" />
-        <error line="3138" column="21" source="standard:chain-method-continuation" />
-        <error line="3194" column="49" source="standard:function-signature" />
-        <error line="3194" column="74" source="standard:function-signature" />
-        <error line="3194" column="91" source="standard:function-signature" />
-        <error line="3203" column="52" source="standard:argument-list-wrapping" />
-        <error line="3204" column="49" source="standard:argument-list-wrapping" />
-        <error line="3205" column="49" source="standard:argument-list-wrapping" />
-        <error line="3206" column="46" source="standard:argument-list-wrapping" />
-        <error line="3219" column="56" source="standard:argument-list-wrapping" />
-        <error line="3220" column="53" source="standard:argument-list-wrapping" />
-        <error line="3252" column="42" source="standard:argument-list-wrapping" />
-        <error line="3252" column="60" source="standard:argument-list-wrapping" />
-        <error line="3253" column="46" source="standard:argument-list-wrapping" />
-        <error line="3253" column="66" source="standard:argument-list-wrapping" />
-        <error line="3259" column="36" source="standard:chain-method-continuation" />
-        <error line="3263" column="42" source="standard:argument-list-wrapping" />
-        <error line="3263" column="59" source="standard:argument-list-wrapping" />
-        <error line="3264" column="49" source="standard:argument-list-wrapping" />
-        <error line="3264" column="64" source="standard:argument-list-wrapping" />
-        <error line="3286" column="47" source="standard:function-signature" />
-        <error line="3286" column="72" source="standard:function-signature" />
-        <error line="3286" column="89" source="standard:function-signature" />
-        <error line="3502" column="23" source="standard:chain-method-continuation" />
-        <error line="3975" column="36" source="standard:chain-method-continuation" />
-        <error line="3975" column="59" source="standard:chain-method-continuation" />
-        <error line="3975" column="69" source="standard:chain-method-continuation" />
-        <error line="3975" column="89" source="standard:chain-method-continuation" />
+        <error line="937" column="17" source="standard:wrapping" />
+        <error line="1186" column="65" source="standard:function-signature" />
+        <error line="1357" column="38" source="standard:chain-method-continuation" />
+        <error line="1450" column="13" source="standard:chain-method-continuation" />
+        <error line="1541" column="39" source="standard:function-signature" />
+        <error line="1541" column="54" source="standard:function-signature" />
+        <error line="1541" column="74" source="standard:function-signature" />
+        <error line="1554" column="39" source="standard:chain-method-continuation" />
+        <error line="1554" column="63" source="standard:chain-method-continuation" />
+        <error line="1554" column="93" source="standard:chain-method-continuation" />
+        <error line="1626" column="68" source="standard:function-signature" />
+        <error line="1652" column="12" source="standard:chain-method-continuation" />
+        <error line="1876" column="35" source="standard:condition-wrapping" />
+        <error line="1876" column="58" source="standard:condition-wrapping" />
+        <error line="1987" column="73" source="standard:function-signature" />
+        <error line="2262" column="46" source="standard:argument-list-wrapping" />
+        <error line="2262" column="70" source="standard:argument-list-wrapping" />
+        <error line="2262" column="98" source="standard:binary-expression-wrapping" />
+        <error line="2262" column="123" source="standard:argument-list-wrapping" />
+        <error line="2262" column="141" source="standard:argument-list-wrapping" />
+        <error line="2262" column="141" source="standard:max-line-length" />
+        <error line="2312" column="39" source="standard:statement-wrapping" />
+        <error line="2312" column="66" source="standard:statement-wrapping" />
+        <error line="2312" column="101" source="standard:statement-wrapping" />
+        <error line="2375" column="50" source="standard:argument-list-wrapping" />
+        <error line="2375" column="90" source="standard:argument-list-wrapping" />
+        <error line="2375" column="139" source="standard:binary-expression-wrapping" />
+        <error line="2375" column="141" source="standard:max-line-length" />
+        <error line="2404" column="37" source="standard:statement-wrapping" />
+        <error line="2404" column="64" source="standard:statement-wrapping" />
+        <error line="2404" column="99" source="standard:statement-wrapping" />
+        <error line="2703" column="17" source="standard:property-naming" />
+        <error line="2708" column="17" source="standard:property-naming" />
+        <error line="2717" column="17" source="standard:property-naming" />
+        <error line="2726" column="56" source="standard:function-signature" />
+        <error line="2746" column="38" source="standard:function-signature" />
+        <error line="2746" column="49" source="standard:function-signature" />
+        <error line="2746" column="58" source="standard:function-signature" />
+        <error line="2746" column="66" source="standard:function-signature" />
+        <error line="2753" column="17" source="standard:property-naming" />
+        <error line="2759" column="32" source="standard:function-signature" />
+        <error line="2759" column="58" source="standard:function-signature" />
+        <error line="2759" column="82" source="standard:function-signature" />
+        <error line="2957" column="32" source="standard:chain-method-continuation" />
+        <error line="2996" column="38" source="standard:chain-method-continuation" />
+        <error line="2996" column="60" source="standard:chain-method-continuation" />
+        <error line="2996" column="78" source="standard:chain-method-continuation" />
+        <error line="3048" column="53" source="standard:function-signature" />
+        <error line="3048" column="78" source="standard:function-signature" />
+        <error line="3048" column="95" source="standard:function-signature" />
+        <error line="3053" column="22" source="standard:chain-method-continuation" />
+        <error line="3120" column="25" source="standard:chain-method-continuation" />
+        <error line="3120" column="46" source="standard:chain-method-continuation" />
+        <error line="3127" column="25" source="standard:chain-method-continuation" />
+        <error line="3142" column="21" source="standard:chain-method-continuation" />
+        <error line="3198" column="49" source="standard:function-signature" />
+        <error line="3198" column="74" source="standard:function-signature" />
+        <error line="3198" column="91" source="standard:function-signature" />
+        <error line="3207" column="52" source="standard:argument-list-wrapping" />
+        <error line="3208" column="49" source="standard:argument-list-wrapping" />
+        <error line="3209" column="49" source="standard:argument-list-wrapping" />
+        <error line="3210" column="46" source="standard:argument-list-wrapping" />
+        <error line="3223" column="56" source="standard:argument-list-wrapping" />
+        <error line="3224" column="53" source="standard:argument-list-wrapping" />
+        <error line="3256" column="42" source="standard:argument-list-wrapping" />
+        <error line="3256" column="60" source="standard:argument-list-wrapping" />
+        <error line="3257" column="46" source="standard:argument-list-wrapping" />
+        <error line="3257" column="66" source="standard:argument-list-wrapping" />
+        <error line="3263" column="36" source="standard:chain-method-continuation" />
+        <error line="3267" column="42" source="standard:argument-list-wrapping" />
+        <error line="3267" column="59" source="standard:argument-list-wrapping" />
+        <error line="3268" column="49" source="standard:argument-list-wrapping" />
+        <error line="3268" column="64" source="standard:argument-list-wrapping" />
+        <error line="3290" column="47" source="standard:function-signature" />
+        <error line="3290" column="72" source="standard:function-signature" />
+        <error line="3290" column="89" source="standard:function-signature" />
+        <error line="3506" column="23" source="standard:chain-method-continuation" />
+        <error line="3979" column="36" source="standard:chain-method-continuation" />
+        <error line="3979" column="59" source="standard:chain-method-continuation" />
+        <error line="3979" column="69" source="standard:chain-method-continuation" />
+        <error line="3979" column="89" source="standard:chain-method-continuation" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/server/service/impl/ComponentRegistryResolverImpl.kt">
         <error line="241" column="22" source="standard:chain-method-continuation" />
@@ -860,6 +852,10 @@
     <file name="src/test/kotlin/org/octopusden/octopus/components/registry/server/config/EmployeeServiceConfigTest.kt">
         <error line="49" column="13" source="standard:chain-method-continuation" />
         <error line="69" column="13" source="standard:chain-method-continuation" />
+    </file>
+    <file name="src/test/kotlin/org/octopusden/octopus/components/registry/server/controller/AuditCorrelationIdTest.kt">
+        <error line="131" column="30" source="standard:chain-method-continuation" />
+        <error line="150" column="30" source="standard:chain-method-continuation" />
     </file>
     <file name="src/test/kotlin/org/octopusden/octopus/components/registry/server/controller/AuditMigratedVisibilityTest.kt">
         <error line="3" column="1" source="standard:import-ordering" />
@@ -2139,4 +2135,15 @@
     <file name="src/test/kotlin/org/octopusden/octopus/components/registry/server/util/VersionRangePartitionTest.kt">
         <error line="15" column="1" source="standard:no-empty-first-line-in-class-body" />
     </file>
-</baseline>
+<file name="src/integrationTest/kotlin/org/octopusden/octopus/components/registry/server/FatJarAuthDisabledIntegrationTest.kt">
+        <error line="184" column="31" source="standard:function-signature" />
+        <error line="184" column="46" source="standard:function-signature" />
+        <error line="184" column="71" source="standard:function-signature" />
+        <error line="197" column="31" source="standard:function-signature" />
+        <error line="197" column="42" source="standard:function-signature" />
+        <error line="197" column="61" source="standard:function-signature" />
+        <error line="216" column="34" source="standard:function-signature" />
+        <error line="216" column="50" source="standard:function-signature" />
+        <error line="216" column="63" source="standard:function-signature" />
+        <error line="216" column="82" source="standard:function-signature" />
+    </file></baseline>
