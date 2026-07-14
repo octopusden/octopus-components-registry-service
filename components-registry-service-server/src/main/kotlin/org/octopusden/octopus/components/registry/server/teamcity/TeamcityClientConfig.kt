@@ -36,13 +36,10 @@ private const val PROJECT_VERSION_PARAM = "PROJECT_VERSION"
 // the project carrying COMPONENT_NAME also owns the release build.
 private const val BUILD_TYPE_REQUIRED = "id,name,projectId,projectName,href"
 
-// Direct buildTypes additionally request `paused` (so the CDRelease tie-break can
-// ignore a paused release build) and their `parameters` (so PROJECT_VERSION can be
-// read from a buildType when the project itself doesn't declare it — see
-// [getProjectVersion]). `paused`/`parameters` are only meaningful on concrete
-// buildTypes, so the nested template(...) / templates(...) entries keep the base
-// field set. `archived` is requested at project level so archived projects can be
-// dropped client-side (see [mapTcProjectsToComponentMatches]).
+// Direct buildTypes also request `paused` (to ignore paused release builds) and
+// `parameters` (to read PROJECT_VERSION from a buildType — see [getProjectVersion]);
+// templates keep the base field set. `archived` is requested per project so archived
+// projects can be dropped client-side (see [mapTcProjectsToComponentMatches]).
 private const val BUILD_TYPE_WITH_PAUSED = "$BUILD_TYPE_REQUIRED,paused,parameters(property(name,value))"
 private const val PROJECT_FIELDS =
     "project(id,name,webUrl,href,archived," +
@@ -127,29 +124,16 @@ internal class ExternalTcProjectFetcher(
 }
 
 /**
- * Pure mapper, extracted for unit-testability. For each TC project, reads the
- * `COMPONENT_NAME` parameter value, looks it up in [componentsByName], and groups
- * the resulting [TcProject]s by component UUID. Projects are dropped when they:
- *  - are flagged `archived` (a retired line must not be linked);
- *  - have build configs where EVERY one is paused (no active build); projects with
- *    no build configs at all are kept;
- *  - lack the `COMPONENT_NAME` parameter, carry a blank value, or a value unknown
- *    to CRS.
+ * Pure mapper (extracted for unit-testability): resolves each project's `COMPONENT_NAME`,
+ * looks it up in [componentsByName], and groups the [TcProject]s by component UUID. A project
+ * is dropped when it is archived, has build configs that are ALL paused (projects with no
+ * build configs are kept), or has a missing/blank/unknown `COMPONENT_NAME`.
  *
- * Both `COMPONENT_NAME` and `PROJECT_VERSION` values may contain TeamCity `%param%`
- * references (e.g. `my-component-%CUSTOMER_NAME%`); these are resolved recursively
- * against the project's parameters via [resolveParam] before use.
+ * `COMPONENT_NAME` and `PROJECT_VERSION` may contain TeamCity `%param%` references
+ * (e.g. `my-component-%CUSTOMER_NAME%`), resolved recursively via [resolveParam].
  *
- * `projectVersion` is read from the optional `PROJECT_VERSION` parameter (null when
- * absent/blank). One component may own several projects across distinct release
- * lines; [TeamcitySyncService] groups by this value downstream.
- *
- * `hasCdReleaseBuild` is computed per-project from the same response: true iff any
- * direct **non-paused** [ExternalTeamcityProject.buildTypes] entry inherits —
- * through either the legacy single `template` or the multi `templates` link — from
- * the configured [cdReleaseTemplateId]. A paused release build does not count.
- * Inheritance is checked **only** at the project carrying the COMPONENT_NAME
- * parameter; sub-projects are not walked.
+ * `hasCdReleaseBuild` is true iff a non-paused buildType inherits (via `template` or
+ * `templates`) from [cdReleaseTemplateId]; sub-projects are not walked.
  */
 internal fun mapTcProjectsToComponentMatches(
     projects: List<ExternalTeamcityProject>,
@@ -178,13 +162,9 @@ internal fun mapTcProjectsToComponentMatches(
         .groupBy({ it.first }, { it.second })
 
 /**
- * Resolve the release line for a project. Prefers the project-level `PROJECT_VERSION`
- * parameter; when absent, falls back to the first NON-PAUSED buildType that declares
- * `PROJECT_VERSION`. Returns null (trimmed-blank counts as absent) when neither has it.
- * Paused buildTypes are ignored on the convention that a paused line is not authoritative.
- *
- * References (`%other%`) in the value are resolved via [resolveParam]; a buildType's own
- * parameters are overlaid on the project's so references defined at either scope resolve.
+ * Release line for a project: the project-level `PROJECT_VERSION`, else the first non-paused
+ * buildType that declares one; null when neither has it. `%param%` references are resolved via
+ * [resolveParam] (a buildType's own params overlaid on the project's).
  */
 private fun getProjectVersion(
     project: ExternalTeamcityProject,
@@ -227,10 +207,8 @@ private fun resolveParam(name: String, params: Map<String, String>): String? {
 }
 
 /**
- * Recursively expand TeamCity `%param%` references in [value] against [params]. A
- * reference whose key is missing, or a cyclic reference (tracked via [seen]), is left as
- * the literal `%token%` and expansion stops for that branch — so resolution always
- * terminates.
+ * Recursively expand `%param%` references in [value] against [params]. A missing key or a
+ * cyclic reference (tracked via [seen]) is left as the literal `%token%`, so this always terminates.
  */
 private fun resolveReferences(
     value: String,

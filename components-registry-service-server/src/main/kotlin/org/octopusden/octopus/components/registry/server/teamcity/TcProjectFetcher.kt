@@ -3,18 +3,12 @@ package org.octopusden.octopus.components.registry.server.teamcity
 import java.util.UUID
 
 /**
- * @property hasCdReleaseBuild true when this TC project owns at least one
- *  NON-PAUSED buildType inheriting from the configured CDRelease template
- *  (see [TeamcityProperties.SyncProperties.cdReleaseTemplateId]). Used by
- *  [TeamcitySyncService] as the tie-breaker when several TC projects share the
- *  same `COMPONENT_NAME` **and** the same [projectVersion] — the only one (or
- *  the lexicographically smallest of several) flagged `true` wins. Computed
- *  once by the fetcher from the same batch response that resolves the projects,
- *  so the field is a static fact about that response, not a re-query trigger.
- * @property projectVersion value of the TC `PROJECT_VERSION` parameter, or null
- *  when the project does not declare one. A single component may legitimately
- *  own several TC projects, one per release line; [TeamcitySyncService] groups
- *  candidates by this value and keeps one project per distinct version.
+ * @property hasCdReleaseBuild true when the project has a non-paused buildType inheriting
+ *  from the configured CDRelease template ([TeamcityProperties.SyncProperties.cdReleaseTemplateId]).
+ *  [TeamcitySyncService] uses it as the tie-breaker among projects sharing a `COMPONENT_NAME`
+ *  and [projectVersion] (flagged one, or smallest id, wins).
+ * @property projectVersion the TC `PROJECT_VERSION` parameter, or null when absent. A component
+ *  may own one project per release line; [TeamcitySyncService] groups candidates by this value.
  */
 data class TcProject(
     val id: String,

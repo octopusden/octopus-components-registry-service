@@ -21,32 +21,19 @@ import java.util.UUID
  *    that carries a `COMPONENT_NAME` parameter (any value), then group the
  *    response client-side by the parameter value.
  * 3. For each component:
- *      - 0 matches → no write. Any existing rows in `component_teamcity_projects`
- *        are preserved as-is (the sync path only writes when [applyMatch]
- *        actually runs). To clear a curated assignment, the operator deletes the
- *        row via the v4 API. The `skippedNoMatch` counter reports "no TC match
- *        this run", not "no link in the DB".
- *      - ≥1 match → if any candidate declares a `PROJECT_VERSION`, the null-version
- *        ("line-less") candidates are discarded first; nulls survive only when every
- *        candidate is null. The survivors are grouped by `PROJECT_VERSION` and one
- *        project is kept per distinct version line (a component may legitimately own
- *        several TC projects, one per line). Within a version group:
- *          - single candidate → happy path;
- *          - >1 candidate → CDRelease tie-break (keep `hasCdReleaseBuild = true`,
- *            then lexicographically smallest by id). If none has a release build
- *            the line is left unresolved.
- *        Each surviving winner must have a usable http(s) webUrl; unusable ones
- *        are dropped. The component is then counted once:
- *          - ≥1 usable winner → reconcile rows, count `updated`/`unchanged`, and
- *            bump `ambiguousAutoResolved` if any line needed a tie-break;
- *          - no usable winner but a line was left unresolved → `skippedAmbiguous`;
- *          - otherwise (e.g. all winners had bad URLs) → `skippedNoMatch`.
- *        Manual override remains the escape hatch for rows that still skip.
+ *      - 0 matches → no write; existing rows are kept (clear via the v4 API).
+ *        Counted `skippedNoMatch`.
+ *      - ≥1 match → if any candidate has a `PROJECT_VERSION`, drop the null-version
+ *        ones (nulls kept only when all are null). Group survivors by version and
+ *        keep one project per line: single candidate wins; on ties prefer a
+ *        `hasCdReleaseBuild` project then the smallest id; a tie with no release
+ *        build leaves that line unresolved. Winners need a usable http(s) webUrl.
+ *        Count the component once: `updated`/`unchanged` (+`ambiguousAutoResolved`
+ *        if a line was tie-broken), else `skippedAmbiguous` (a line unresolved),
+ *        else `skippedNoMatch`.
  *
- * Schema v2: the per-component TC pointer is a child table
- * (`component_teamcity_projects`) rather than scalar columns on `components`. TC
- * sync now writes one row per PROJECT_VERSION line (each row also stores the
- * `project_version` marker), ordered by version then id for stable `sortOrder`.
+ * Writes one row per PROJECT_VERSION line into the `component_teamcity_projects`
+ * child table (each row stores `project_version`), ordered by version then id.
  *
  * Idempotent: only writes when the matched project id actually changes. The
  * change is traced via an INFO log line (so admins can find the source of a
@@ -150,18 +137,15 @@ class TeamcitySyncService(
                     continue
                 }
 
-                // If any candidate declares a PROJECT_VERSION, the versioned lines are
-                // authoritative — drop the null-version ("line-less") projects. Only when
-                // EVERY candidate is null do we keep them (the single default line).
+                // Versioned lines are authoritative: if any candidate has a version, drop
+                // the null-version ones (nulls kept only when every candidate is null).
                 val candidates = if (rawCandidates.any { it.projectVersion != null }) {
                     rawCandidates.filter { it.projectVersion != null }
                 } else {
                     rawCandidates
                 }
 
-                // One project per PROJECT_VERSION line: resolve each version group
-                // independently (single → happy path; ties → CDRelease then smallest
-                // id), then keep the winners we can render a link for.
+                // Resolve each PROJECT_VERSION group to one winner.
                 val resolutions = candidates
                     .groupBy { it.projectVersion }
                     .map { (version, group) -> resolveVersionGroup(component, componentId, version, group) }
@@ -185,8 +169,7 @@ class TeamcitySyncService(
                         // Sub-counter of updated+unchanged: at least one line needed a tie-break.
                         if (usablePicks.any { it.tieBroken }) ambiguousAutoResolved++
                     }
-                    // No linkable winner. If any line was left unresolved by an unbroken
-                    // tie it's ambiguous; otherwise (e.g. single candidate with a bad URL) no-match.
+                    // No linkable winner: ambiguous if a line was left unresolved, else no-match.
                     ambiguousUnresolved -> skippedAmbiguous++
                     else -> skippedNoMatch++
                 }
@@ -232,17 +215,10 @@ class TeamcitySyncService(
         webUrl.isNotBlank() && (webUrl.startsWith("http://") || webUrl.startsWith("https://"))
 
     /**
-     * Resolve one PROJECT_VERSION group to at most one project.
-     *  - single candidate → happy path, no tie-break.
-     *  - >1 candidate → keep only those with a CDRelease build, then pick the
-     *    lexicographically smallest by id (stable across reruns). If none has a
-     *    release build the group is left unresolved (`ambiguousUnresolved = true`),
-     *    which the caller reports as `skippedAmbiguous` unless another line resolves.
-     *
-     * Log-level policy mirrors the previous single-line behavior:
-     *  - exactly one CDRelease candidate → INFO (intended auto-pick);
-     *  - several CDRelease candidates → WARN (deterministic last-resort, needs TC cleanup);
-     *  - none → WARN (skipped, fix in TC).
+     * Resolve one PROJECT_VERSION group to at most one project: a single candidate wins;
+     * with several, keep those with a CDRelease build and take the smallest id. If none
+     * has a release build the group is left unresolved (`ambiguousUnresolved = true`).
+     * The auto-pick logs at INFO; genuine ambiguity (several release builds, or none) at WARN.
      */
     private fun resolveVersionGroup(
         component: ComponentEntity,
@@ -283,16 +259,11 @@ class TeamcitySyncService(
     }
 
     /**
-     * Reconcile the component's `component_teamcity_projects` rows to exactly [matches]
-     * (one project per PROJECT_VERSION line). Returns true when the row set actually
-     * changed (drives the `updated` counter).
-     *
-     * Rows are written in a deterministic order — by version (nulls last), then project
-     * id — so `sortOrder` is stable across reruns and idempotency can be judged by a
-     * plain ordered comparison of (projectId, projectVersion). When unchanged, no write
-     * happens. Otherwise every existing row is wiped and the fresh set is inserted, so
-     * stray rows from a prior run or manual curation are cleaned up too. Per SYS-051
-     * this is traced to the log, NOT the audit_log (automated reconciliation).
+     * Reconcile the component's rows to exactly [matches] (one per PROJECT_VERSION line).
+     * Rows are written ordered by version (nulls last) then id, so `sortOrder` is stable
+     * and idempotency is a plain ordered compare of (projectId, projectVersion): unchanged
+     * → no write, returns false; otherwise wipe all existing rows and insert the fresh set,
+     * returns true. Traced to the log, not `audit_log` (SYS-051).
      */
     private fun applyMatch(
         component: ComponentEntity,
