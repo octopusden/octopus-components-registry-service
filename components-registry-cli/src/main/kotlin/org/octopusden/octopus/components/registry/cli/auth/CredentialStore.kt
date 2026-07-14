@@ -29,7 +29,10 @@ interface CredentialStore {
  * failure during save/load is a HARD error: we never silently fall back to a plaintext file, because
  * doing so would downgrade the user's security posture without their knowledge.
  */
-class CredentialStoreException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
+class CredentialStoreException(
+    message: String,
+    cause: Throwable? = null,
+) : RuntimeException(message, cause)
 
 /**
  * macOS Keychain-backed [CredentialStore] implemented via the system `security` CLI:
@@ -57,7 +60,6 @@ class KeychainCredentialStore(
     private val service: String = DEFAULT_SERVICE,
     private val account: String = DEFAULT_ACCOUNT,
 ) : CredentialStore {
-
     override fun load(): String? {
         val result = runner.run(
             listOf("security", "find-generic-password", "-s", service, "-a", account, "-w"),
@@ -82,11 +84,15 @@ class KeychainCredentialStore(
         // TODO(spike): replace with a native Keychain API to remove that exposure.
         val result = runner.run(
             listOf(
-                "security", "add-generic-password",
+                "security",
+                "add-generic-password",
                 "-U",
-                "-s", service,
-                "-a", account,
-                "-w", refreshToken,
+                "-s",
+                service,
+                "-a",
+                account,
+                "-w",
+                refreshToken,
             ),
             null,
         )
@@ -130,7 +136,6 @@ class InsecureFileCredentialStore(
     private val file: Path = ConfigLoader.configDir().resolve(CREDENTIALS_FILE_NAME),
     private val warn: (String) -> Unit = { System.err.println(it) },
 ) : CredentialStore {
-
     init {
         warn(
             "warning: storing the refresh token in plaintext at $file (--insecure-token-store). " +
@@ -185,7 +190,10 @@ class InsecureFileCredentialStore(
  * Selects the credential store. When [insecure] is true the plaintext file store is used (and warns);
  * otherwise the macOS Keychain store is used, driven by [runner].
  */
-fun credentialStore(insecure: Boolean, runner: CommandRunner): CredentialStore =
+fun credentialStore(
+    insecure: Boolean,
+    runner: CommandRunner,
+): CredentialStore =
     if (insecure) {
         InsecureFileCredentialStore()
     } else {

@@ -11,7 +11,6 @@ import org.octopusden.octopus.components.registry.server.entity.ArtifactIdMode
  * exact-set catch-all forms→ALL; allowlist enumeration→EXPLICIT; anything else hard-fails.
  */
 class ArtifactOwnershipModeClassifierTest {
-
     private fun classify(p: String?) = ArtifactOwnershipModeClassifier.classify(p)
 
     @Test

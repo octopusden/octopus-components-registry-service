@@ -2,7 +2,6 @@
 
 package org.octopusden.octopus.components.registry.server.mapper
 
-import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactMappingEntity
 import org.octopusden.octopus.components.registry.server.dto.v4.ArtifactIdResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.AuditLogResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.BuildAspectResponse
@@ -14,10 +13,12 @@ import org.octopusden.octopus.components.registry.server.dto.v4.ComponentGroupRe
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentGroupRole
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentSummaryResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ConfigurationRowType
-import org.octopusden.octopus.components.registry.server.dto.v4.DockerImageResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.DocLinkResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.DockerImageRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.DockerImageResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.EscrowAspectResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.FileUrlArtifactRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FileUrlArtifactResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.JiraAspectResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.MarkerChildrenPayload
@@ -29,9 +30,8 @@ import org.octopusden.octopus.components.registry.server.dto.v4.SecurityGroupRes
 import org.octopusden.octopus.components.registry.server.dto.v4.TeamcityProjectResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.VcsEntryRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.VcsEntryResponse
-import org.octopusden.octopus.components.registry.server.dto.v4.DockerImageRequest
-import org.octopusden.octopus.components.registry.server.dto.v4.FileUrlArtifactRequest
 import org.octopusden.octopus.components.registry.server.entity.AuditLogEntity
+import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactMappingEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentBuildToolBeanEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
@@ -233,8 +233,7 @@ fun AuditLogEntity.toResponse(componentKey: String? = null): AuditLogResponse =
 // Internal: row classification and per-aspect/per-child helpers
 // ============================================================
 
-private fun ComponentConfigurationEntity.classifyRowType(): ConfigurationRowType =
-    ConfigurationRowType.valueOf(this.rowType)
+private fun ComponentConfigurationEntity.classifyRowType(): ConfigurationRowType = ConfigurationRowType.valueOf(this.rowType)
 
 private fun ComponentConfigurationEntity.shouldEmitBuildAspect(rowType: ConfigurationRowType): Boolean =
     rowType == ConfigurationRowType.BASE ||
@@ -455,7 +454,8 @@ internal val ARTIFACT_MAPPING_ORDER: Comparator<ComponentArtifactMappingEntity> 
     )
 
 private fun org.octopusden.octopus.components.registry.server.entity.ComponentArtifactMappingEntity.toResponse(): ArtifactIdResponse {
-    val mode = org.octopusden.octopus.components.registry.server.entity.ArtifactIdMode.valueOf(this.artifactIdMode)
+    val mode = org.octopusden.octopus.components.registry.server.entity.ArtifactIdMode
+        .valueOf(this.artifactIdMode)
     val tokens = this.tokens.sortedBy { it.sortOrder }.map { it.artifactPattern }
     return ArtifactIdResponse(
         id = this.id!!,

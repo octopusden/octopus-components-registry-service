@@ -7,4 +7,5 @@ data class JiraComponentDTO(
     @JsonProperty("displayName") val displayName: String?,
     @JsonProperty("componentVersionFormat") val componentVersionFormat: ComponentVersionFormatDTO,
     @JsonProperty("componentInfo") val componentInfo: ComponentInfoDTO,
-    @JsonProperty("technical") val technical: Boolean)
+    @JsonProperty("technical") val technical: Boolean,
+)

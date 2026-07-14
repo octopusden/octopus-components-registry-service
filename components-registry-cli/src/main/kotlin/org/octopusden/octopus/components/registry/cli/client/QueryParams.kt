@@ -11,23 +11,27 @@ import java.nio.charset.StandardCharsets
  * Both names and values are percent-encoded. The returned string has NO leading `?`; callers join it
  * onto a path themselves (see [CrsClient]).
  */
-class QueryParams private constructor(private val pairs: List<Pair<String, String>>) {
-
+class QueryParams private constructor(
+    private val pairs: List<Pair<String, String>>,
+) {
     fun isEmpty(): Boolean = pairs.isEmpty()
 
     /** Renders the query string without a leading `?`, or an empty string when there are no params. */
-    fun encode(): String = pairs.joinToString("&") { (name, value) ->
-        "${enc(name)}=${enc(value)}"
-    }
+    fun encode(): String =
+        pairs.joinToString("&") { (name, value) ->
+            "${enc(name)}=${enc(value)}"
+        }
 
-    private fun enc(value: String): String =
-        URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20")
+    private fun enc(value: String): String = URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20")
 
     class Builder {
         private val pairs = mutableListOf<Pair<String, String>>()
 
         /** Adds a single param unless [value] is null. Non-String values use their `toString()`. */
-        fun add(name: String, value: Any?): Builder {
+        fun add(
+            name: String,
+            value: Any?,
+        ): Builder {
             if (value != null) {
                 pairs += name to value.toString()
             }
@@ -35,7 +39,10 @@ class QueryParams private constructor(private val pairs: List<Pair<String, Strin
         }
 
         /** Adds one entry per non-null element of [values]; a null list is skipped entirely. */
-        fun addAll(name: String, values: List<String>?): Builder {
+        fun addAll(
+            name: String,
+            values: List<String>?,
+        ): Builder {
             values?.forEach { pairs += name to it }
             return this
         }
@@ -44,7 +51,11 @@ class QueryParams private constructor(private val pairs: List<Pair<String, Strin
          * Adds the standard Spring pageable params. `page`/`size` are added only when non-null;
          * each entry of `sort` becomes its own `sort=` param (Spring's repeated-param convention).
          */
-        fun pageable(page: Int? = null, size: Int? = null, sort: List<String>? = null): Builder {
+        fun pageable(
+            page: Int? = null,
+            size: Int? = null,
+            sort: List<String>? = null,
+        ): Builder {
             add("page", page)
             add("size", size)
             addAll("sort", sort)

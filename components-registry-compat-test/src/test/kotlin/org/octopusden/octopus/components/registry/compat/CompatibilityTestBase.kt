@@ -71,7 +71,10 @@ abstract class CompatibilityTestBase {
     }
 
     /** Post the same JSON body to both stands and return the response pair. */
-    protected fun postJsonPair(path: String, body: Any): Pair<RawResponse, RawResponse> {
+    protected fun postJsonPair(
+        path: String,
+        body: Any,
+    ): Pair<RawResponse, RawResponse> {
         val b = guarded { baselineRaw.postJson(path, body) }
         val c = guarded { candidateRaw.postJson(path, body) }
         return b to c
@@ -103,14 +106,15 @@ abstract class CompatibilityTestBase {
         candidate: RawResponse,
         headerAllowList: Set<String> = setOf("Content-Type"),
         queryParams: Map<String, String> = emptyMap(),
-    ): List<DiffClassifier> = Comparators.compareRaw(
-        endpoint = endpoint,
-        pathParams = pathParams,
-        baseline = baseline,
-        candidate = candidate,
-        headerAllowList = headerAllowList,
-        queryParams = queryParams,
-    )
+    ): List<DiffClassifier> =
+        Comparators.compareRaw(
+            endpoint = endpoint,
+            pathParams = pathParams,
+            baseline = baseline,
+            candidate = candidate,
+            headerAllowList = headerAllowList,
+            queryParams = queryParams,
+        )
 
     /**
      * Run [block] under the parallel-request limiter.
@@ -211,10 +215,15 @@ abstract class CompatibilityTestBase {
     protected fun singleArgsOrSentinel(items: List<String>): java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> {
         if (items.isEmpty()) {
             return java.util.stream.Stream.of(
-                org.junit.jupiter.params.provider.Arguments.of(NO_SMOKE_CONFIG),
+                org.junit.jupiter.params.provider.Arguments
+                    .of(NO_SMOKE_CONFIG),
             )
         }
-        return items.map { org.junit.jupiter.params.provider.Arguments.of(it) }.stream()
+        return items
+            .map {
+                org.junit.jupiter.params.provider.Arguments
+                    .of(it)
+            }.stream()
     }
 
     /**
@@ -226,10 +235,15 @@ abstract class CompatibilityTestBase {
     ): java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> {
         if (pairs.isEmpty()) {
             return java.util.stream.Stream.of(
-                org.junit.jupiter.params.provider.Arguments.of(NO_SMOKE_CONFIG, NO_SMOKE_CONFIG),
+                org.junit.jupiter.params.provider.Arguments
+                    .of(NO_SMOKE_CONFIG, NO_SMOKE_CONFIG),
             )
         }
-        return pairs.map { (a, b) -> org.junit.jupiter.params.provider.Arguments.of(a, b) }.stream()
+        return pairs
+            .map { (a, b) ->
+                org.junit.jupiter.params.provider.Arguments
+                    .of(a, b)
+            }.stream()
     }
 
     companion object {
@@ -260,7 +274,8 @@ abstract class CompatibilityTestBase {
                     .map { it.trim() }
                     .filter { it.isNotEmpty() }
             } else {
-                this::class.java.getResourceAsStream("/smoke-components.txt")
+                this::class.java
+                    .getResourceAsStream("/smoke-components.txt")
                     ?.bufferedReader()
                     ?.useLines { lines ->
                         lines
@@ -281,6 +296,7 @@ abstract class CompatibilityTestBase {
  * Top-level inline so reified-T works without inline-on-protected-member restrictions.
  */
 inline fun <reified T> RawResponse.asDto(): T {
-    val mapper = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper()
+    val mapper = com.fasterxml.jackson.module.kotlin
+        .jacksonObjectMapper()
     return mapper.readValue(bodyBytes, T::class.java)
 }

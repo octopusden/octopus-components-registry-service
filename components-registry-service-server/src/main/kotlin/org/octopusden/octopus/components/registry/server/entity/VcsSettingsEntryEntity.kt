@@ -24,29 +24,21 @@ class VcsSettingsEntryEntity(
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     var id: UUID? = null,
-
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "component_configuration_id", nullable = false)
     var componentConfiguration: ComponentConfigurationEntity,
-
     @Column(name = "name", nullable = false)
     var name: String,
-
     @Column(name = "vcs_path", columnDefinition = "TEXT", nullable = false)
     var vcsPath: String = "",
-
     @Column(name = "branch", columnDefinition = "TEXT")
     var branch: String? = null,
-
     @Column(name = "tag", columnDefinition = "TEXT")
     var tag: String? = null,
-
     @Column(name = "hotfix_branch", columnDefinition = "TEXT")
     var hotfixBranch: String? = null,
-
     @Column(name = "repository_type", length = 20)
     var repositoryType: String? = null,
-
     @Column(name = "sort_order", nullable = false)
     var sortOrder: Int = 0,
 )

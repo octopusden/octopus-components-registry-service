@@ -98,7 +98,8 @@ object VersionSampler {
     private val mapper = jacksonObjectMapper()
     private val cache = ConcurrentHashMap<String, List<String>>()
 
-    private val http: OkHttpClient = OkHttpClient.Builder()
+    private val http: OkHttpClient = OkHttpClient
+        .Builder()
         .callTimeout(30, TimeUnit.SECONDS)
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
@@ -128,7 +129,11 @@ object VersionSampler {
      * Fetch up to [limit] real release versions for [componentName]. Cached per call regardless
      * of [limit] (first caller wins). Returns empty list when neither source has the component.
      */
-    fun versionsFor(componentName: String, limit: Int = 5, rmsUrl: String? = CompatConfig.load().rmsUrl): List<String> {
+    fun versionsFor(
+        componentName: String,
+        limit: Int = 5,
+        rmsUrl: String? = CompatConfig.load().rmsUrl,
+    ): List<String> {
         return cache.computeIfAbsent(componentName) {
             // File path wins when configured: operator explicitly opted into
             // the snapshot, so we don't sneak past it to RMS even if RMS is
@@ -139,25 +144,38 @@ object VersionSampler {
         }
     }
 
-    private fun fetchFromRms(name: String, limit: Int, rmsUrl: String): List<String> {
+    private fun fetchFromRms(
+        name: String,
+        limit: Int,
+        rmsUrl: String,
+    ): List<String> {
         val base = rmsUrl.trimEnd('/')
         val url = "$base/rest/api/1/builds/component/$name?statuses=RELEASE&descending=true&limit=$limit"
         return runCatching {
-            http.newCall(Request.Builder().url(url).get().build()).execute().use { resp ->
-                if (resp.code !in 200..299) {
-                    log.warn("RMS returned {} for component={}; treating as no releases", resp.code, name)
-                    return@use emptyList<String>()
+            http
+                .newCall(
+                    Request
+                        .Builder()
+                        .url(url)
+                        .get()
+                        .build(),
+                ).execute()
+                .use { resp ->
+                    if (resp.code !in 200..299) {
+                        log.warn("RMS returned {} for component={}; treating as no releases", resp.code, name)
+                        return@use emptyList<String>()
+                    }
+                    val body = resp.body?.string().orEmpty()
+                    val tree: JsonNode = mapper.readTree(body)
+                    if (!tree.isArray) {
+                        log.warn("RMS body for {} not an array: {}", name, body.take(200))
+                        return@use emptyList<String>()
+                    }
+                    tree
+                        .mapNotNull { it.path("version").takeIf { v -> v.isTextual }?.asText() }
+                        .filter { it.isNotBlank() }
+                        .distinct()
                 }
-                val body = resp.body?.string().orEmpty()
-                val tree: JsonNode = mapper.readTree(body)
-                if (!tree.isArray) {
-                    log.warn("RMS body for {} not an array: {}", name, body.take(200))
-                    return@use emptyList<String>()
-                }
-                tree.mapNotNull { it.path("version").takeIf { v -> v.isTextual }?.asText() }
-                    .filter { it.isNotBlank() }
-                    .distinct()
-            }
         }.onFailure {
             log.warn("RMS fetch failed for component={}: {}", name, it.message)
         }.getOrDefault(emptyList())

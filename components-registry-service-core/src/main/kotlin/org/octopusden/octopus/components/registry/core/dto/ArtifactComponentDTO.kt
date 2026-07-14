@@ -6,5 +6,5 @@ import com.fasterxml.jackson.annotation.JsonProperty
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class ArtifactComponentDTO(
     @JsonProperty("artifact") val artifact: ArtifactDependency,
-    @JsonProperty("component") val component: VersionedComponent?
+    @JsonProperty("component") val component: VersionedComponent?,
 )

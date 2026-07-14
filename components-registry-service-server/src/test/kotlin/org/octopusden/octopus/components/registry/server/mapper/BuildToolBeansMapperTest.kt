@@ -21,7 +21,6 @@ import java.util.UUID
  * Oracle with/without edition (uses setEdition setter added to OracleDatabaseToolBean).
  */
 class BuildToolBeansMapperTest {
-
     private fun minimalComponent(): ComponentEntity =
         ComponentEntity(
             id = UUID.randomUUID(),
@@ -150,7 +149,8 @@ class BuildToolBeansMapperTest {
             )
         }
 
-        val buildParams = ComponentConfigurationView.from(base)
+        val buildParams = ComponentConfigurationView
+            .from(base)
             .toBuildParameters(base, emptyList())
 
         assertNotNull(buildParams)

@@ -2,8 +2,6 @@ package org.octopusden.octopus.components.registry.server.controller
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
-import java.nio.file.Paths
-import java.util.UUID
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
@@ -25,6 +23,8 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import java.nio.file.Paths
+import java.util.UUID
 
 /**
  * Item D — field overrides can ride the component PATCH as a desired-FULL-SET in
@@ -135,44 +135,68 @@ class ComponentFieldOverridesPatchTest {
 
     private fun newComponent(): String {
         val name = "fo-patch-${UUID.randomUUID().toString().take(8)}"
-        val body = mvc.perform(
-            post("/rest/api/4/components").with(adminJwt()).contentType(MediaType.APPLICATION_JSON).content(
-                """{"name":"$name","componentOwner":"owner1",""" +
-                    """"group":{"groupKey":"org.example.test","isFake":false},""" +
-                    """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
-            ),
-        ).andExpect(status().is2xxSuccessful).andReturn().response.contentAsString
+        val body = mvc
+            .perform(
+                post("/rest/api/4/components").with(adminJwt()).contentType(MediaType.APPLICATION_JSON).content(
+                    """{"name":"$name","componentOwner":"owner1",""" +
+                        """"group":{"groupKey":"org.example.test","isFake":false},""" +
+                        """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
+                ),
+            ).andExpect(status().is2xxSuccessful)
+            .andReturn()
+            .response.contentAsString
         return objectMapper.readTree(body)["id"].asText()
     }
 
-    private fun seedOverride(componentId: String, attribute: String, range: String, value: String): String {
-        val body = mvc.perform(
-            post("/rest/api/4/components/$componentId/field-overrides").with(adminJwt())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"overriddenAttribute":"$attribute","versionRange":"$range","value":"$value"}"""),
-        ).andExpect(status().is2xxSuccessful).andReturn().response.contentAsString
+    private fun seedOverride(
+        componentId: String,
+        attribute: String,
+        range: String,
+        value: String,
+    ): String {
+        val body = mvc
+            .perform(
+                post("/rest/api/4/components/$componentId/field-overrides")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"overriddenAttribute":"$attribute","versionRange":"$range","value":"$value"}"""),
+            ).andExpect(status().is2xxSuccessful)
+            .andReturn()
+            .response.contentAsString
         return objectMapper.readTree(body)["id"].asText()
     }
 
     private fun currentVersion(componentId: String): Long = getComponent(componentId)["version"].asLong()
 
     private fun getComponent(componentId: String): JsonNode {
-        val body = mvc.perform(get("/rest/api/4/components/$componentId").with(adminJwt()))
-            .andExpect(status().isOk).andReturn().response.contentAsString
+        val body = mvc
+            .perform(get("/rest/api/4/components/$componentId").with(adminJwt()))
+            .andExpect(status().isOk)
+            .andReturn()
+            .response.contentAsString
         return objectMapper.readTree(body)
     }
 
-    private fun patchComponent(componentId: String, fieldsWithoutVersion: String) {
+    private fun patchComponent(
+        componentId: String,
+        fieldsWithoutVersion: String,
+    ) {
         val payload = """{"version":${currentVersion(componentId)},$fieldsWithoutVersion}"""
-        mvc.perform(
-            patch("/rest/api/4/components/$componentId").with(adminJwt())
-                .contentType(MediaType.APPLICATION_JSON).content(payload),
-        ).andExpect(status().isOk)
+        mvc
+            .perform(
+                patch("/rest/api/4/components/$componentId")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(payload),
+            ).andExpect(status().isOk)
     }
 
     private fun listFieldOverrides(componentId: String): List<JsonNode> {
-        val body = mvc.perform(get("/rest/api/4/components/$componentId/field-overrides").with(adminJwt()))
-            .andExpect(status().isOk).andReturn().response.contentAsString
+        val body = mvc
+            .perform(get("/rest/api/4/components/$componentId/field-overrides").with(adminJwt()))
+            .andExpect(status().isOk)
+            .andReturn()
+            .response.contentAsString
         return objectMapper.readTree(body).toList().also { assertTrue(it.isEmpty() || it[0].has("id")) }
     }
 }

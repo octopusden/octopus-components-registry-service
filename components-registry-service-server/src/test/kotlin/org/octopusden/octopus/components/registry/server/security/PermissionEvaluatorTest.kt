@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Test
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
-import org.mockito.Mockito.`when` as whenMock
 import org.octopusden.cloud.commons.security.SecurityService
 import org.octopusden.cloud.commons.security.dto.Role
 import org.octopusden.cloud.commons.security.dto.User
@@ -18,6 +17,7 @@ import org.octopusden.octopus.components.registry.server.repository.ComponentRep
 import org.octopusden.octopus.components.registry.server.service.impl.EmployeeDirectoryService
 import org.springframework.beans.factory.ObjectProvider
 import java.util.UUID
+import org.mockito.Mockito.`when` as whenMock
 
 /**
  * Fast (no-Spring) unit coverage for [PermissionEvaluator.canEditComponent], pinning

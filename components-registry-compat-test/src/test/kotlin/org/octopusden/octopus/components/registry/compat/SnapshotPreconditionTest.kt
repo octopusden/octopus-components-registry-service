@@ -40,7 +40,6 @@ import java.time.Instant
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class SnapshotPreconditionTest : CompatibilityTestBase() {
-
     @Test
     fun `record environment warnings — snapshot revision`() {
         val endpoint = "GET /rest/api/2/components-registry/service/status"

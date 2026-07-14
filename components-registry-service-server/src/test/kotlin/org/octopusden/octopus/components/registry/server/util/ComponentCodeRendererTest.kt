@@ -40,8 +40,7 @@ class ComponentCodeRendererTest {
     // Fixtures
     // ----------------------------------------------------------------------
 
-    private fun component(key: String = "bcomponent"): ComponentEntity =
-        ComponentEntity(id = UUID.randomUUID(), componentKey = key)
+    private fun component(key: String = "bcomponent"): ComponentEntity = ComponentEntity(id = UUID.randomUUID(), componentKey = key)
 
     private fun base(
         c: ComponentEntity,

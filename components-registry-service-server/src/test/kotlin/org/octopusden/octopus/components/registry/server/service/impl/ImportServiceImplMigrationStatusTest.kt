@@ -1,6 +1,5 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
-import java.util.concurrent.TimeUnit
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -12,10 +11,10 @@ import org.octopusden.octopus.components.registry.server.repository.ComponentBui
 import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentGroupRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentLabelRepository
-import org.octopusden.octopus.components.registry.server.repository.ComponentSystemRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRequiredToolRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentSourceRepository
+import org.octopusden.octopus.components.registry.server.repository.ComponentSystemRepository
 import org.octopusden.octopus.components.registry.server.repository.DistributionDockerImageRepository
 import org.octopusden.octopus.components.registry.server.repository.DistributionMavenArtifactRepository
 import org.octopusden.octopus.components.registry.server.repository.LabelRepository
@@ -24,9 +23,10 @@ import org.octopusden.octopus.components.registry.server.repository.ToolReposito
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
 import org.octopusden.octopus.escrow.configuration.model.EscrowModule
-import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.NumericVersionFactory
+import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRangeFactory
+import java.util.concurrent.TimeUnit
 
 /**
  * Unit tests for `ImportServiceImpl.getMigrationStatus`.
@@ -41,7 +41,6 @@ import org.octopusden.releng.versions.VersionRangeFactory
  */
 @Timeout(30, unit = TimeUnit.SECONDS)
 class ImportServiceImplMigrationStatusTest {
-
     private lateinit var service: ImportServiceImpl
     private lateinit var gitResolver: ComponentRegistryResolverImpl
     private lateinit var componentSourceRepository: ComponentSourceRepository

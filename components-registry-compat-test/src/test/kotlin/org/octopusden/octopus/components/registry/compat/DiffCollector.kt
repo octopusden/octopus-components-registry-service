@@ -20,6 +20,7 @@ import java.util.concurrent.ConcurrentLinkedQueue
 object DiffCollector {
     private val records = ConcurrentLinkedQueue<DiffRecord>()
     private val writeLock = Any()
+
     // Per-thread count of records this thread has emitted. JUnit 5 concurrent
     // execution runs one test method on one thread for its lifetime, so the
     // `count()` delta captured around a single test method's body reports only
@@ -49,7 +50,9 @@ object DiffCollector {
         val workerCanon = runCatching { workerFileObj.canonicalPath }.getOrElse { "(canon failed: ${it.message})" }
         val parentExists = workerFile.parent?.let { Files.exists(it) } ?: false
         val parentDir = workerFile.parent?.toString() ?: "(no parent)"
-        val parentDirCanon = workerFile.parent?.let { runCatching { it.toFile().canonicalPath }.getOrElse { e -> "(canon failed: ${e.message})" } } ?: "(no parent)"
+        val parentDirCanon =
+            workerFile.parent?.let { runCatching { it.toFile().canonicalPath }.getOrElse { e -> "(canon failed: ${e.message})" } }
+                ?: "(no parent)"
         val osCwdCanon = runCatching { java.io.File(".").canonicalPath }.getOrElse { "(canon failed: ${it.message})" }
         System.out.println("[compat-diff] === DiffCollector init diagnostic ===")
         System.out.println("[compat-diff]   compat.report-dir (raw)   = $propValue")
@@ -71,24 +74,28 @@ object DiffCollector {
         // The singleton writer must outlive every per-test-class @AfterAll. Per-class
         // close() would race other parallel test classes still recording diffs and crash
         // them with "Stream closed". Close exactly once at JVM shutdown.
-        Runtime.getRuntime().addShutdownHook(Thread {
-            synchronized(writeLock) {
-                runCatching { w.flush() }
-                runCatching { w.close() }
-                System.out.println("[compat-diff] worker pid=${ProcessHandle.current().pid()} totals: ${records.size} diff records persisted to $workerAbs")
-                // INFRA-WORKAROUND: see ExecutionLogger.kt for full context. id17
-                // #3642 confirmed Gradle non-deterministically removes per-worker
-                // ndjson written under reportDir between test-JVM-exit and reporter
-                // doLast. Copy to a stable /tmp location no Gradle task tracks.
-                runCatching {
-                    val backupDir = Path.of(System.getProperty("java.io.tmpdir"), "crs-compat-backup")
-                    Files.createDirectories(backupDir)
-                    val dst = backupDir.resolve(workerFile.fileName)
-                    Files.copy(workerFile, dst, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
-                    System.out.println("[compat-diff] copied $workerFile -> $dst")
+        Runtime.getRuntime().addShutdownHook(
+            Thread {
+                synchronized(writeLock) {
+                    runCatching { w.flush() }
+                    runCatching { w.close() }
+                    System.out.println(
+                        "[compat-diff] worker pid=${ProcessHandle.current().pid()} totals: ${records.size} diff records persisted to $workerAbs",
+                    )
+                    // INFRA-WORKAROUND: see ExecutionLogger.kt for full context. id17
+                    // #3642 confirmed Gradle non-deterministically removes per-worker
+                    // ndjson written under reportDir between test-JVM-exit and reporter
+                    // doLast. Copy to a stable /tmp location no Gradle task tracks.
+                    runCatching {
+                        val backupDir = Path.of(System.getProperty("java.io.tmpdir"), "crs-compat-backup")
+                        Files.createDirectories(backupDir)
+                        val dst = backupDir.resolve(workerFile.fileName)
+                        Files.copy(workerFile, dst, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+                        System.out.println("[compat-diff] copied $workerFile -> $dst")
+                    }
                 }
-            }
-        })
+            },
+        )
         w
     }
 

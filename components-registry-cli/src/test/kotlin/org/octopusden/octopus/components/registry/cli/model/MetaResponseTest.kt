@@ -9,12 +9,13 @@ class MetaResponseTest {
 
     @Test
     fun decodesEmployeeMatchArray() {
-        val literal = """
+        val literal =
+            """
             [
               { "username": "alice", "active": true },
               { "username": "bob", "active": false }
             ]
-        """.trimIndent()
+            """.trimIndent()
 
         val matches = json.decodeFromString<List<EmployeeMatchResponse>>(literal)
 
@@ -26,13 +27,14 @@ class MetaResponseTest {
 
     @Test
     fun decodesEditorsResponse() {
-        val literal = """
+        val literal =
+            """
             {
               "componentOwner": "owner1",
               "releaseManagers": ["rm1", "rm2"],
               "securityChampions": ["sc1"]
             }
-        """.trimIndent()
+            """.trimIndent()
 
         val editors = json.decodeFromString<ComponentEditorsResponse>(literal)
 

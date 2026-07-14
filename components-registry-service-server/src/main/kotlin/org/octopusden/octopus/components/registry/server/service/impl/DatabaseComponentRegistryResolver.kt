@@ -3,6 +3,7 @@ package org.octopusden.octopus.components.registry.server.service.impl
 import org.octopusden.octopus.components.registry.api.beans.PTCProductToolBean
 import org.octopusden.octopus.components.registry.api.build.tools.BuildTool
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes
+import org.octopusden.octopus.components.registry.api.escrow.Escrow
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.core.dto.BuildSystem
 import org.octopusden.octopus.components.registry.core.dto.ComponentImage
@@ -12,11 +13,7 @@ import org.octopusden.octopus.components.registry.core.exceptions.NotFoundExcept
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.entity.ArtifactIdMode
 import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactMappingEntity
-import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
-import org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipRendering
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
-import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
-import org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipGrouping
 import org.octopusden.octopus.components.registry.server.mapper.escrowModuleConfigField
 import org.octopusden.octopus.components.registry.server.mapper.rangeApplies
 import org.octopusden.octopus.components.registry.server.mapper.toEscrowModule
@@ -24,6 +21,8 @@ import org.octopusden.octopus.components.registry.server.mapper.toResolvedEscrow
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.DependencyMappingRepository
 import org.octopusden.octopus.components.registry.server.service.ComponentRegistryResolver
+import org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipGrouping
+import org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipRendering
 import org.octopusden.octopus.components.registry.server.util.formatVersion
 import org.octopusden.octopus.escrow.MavenArtifactMatcher
 import org.octopusden.octopus.escrow.ModelConfigPostProcessor
@@ -35,7 +34,6 @@ import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
 import org.octopusden.octopus.escrow.dto.ComponentArtifactConfiguration
 import org.octopusden.octopus.escrow.model.Distribution
 import org.octopusden.octopus.escrow.model.SecurityGroups
-import org.octopusden.octopus.components.registry.api.escrow.Escrow
 import org.octopusden.octopus.escrow.model.VCSSettings
 import org.octopusden.octopus.escrow.resolvers.ComponentHotfixSupportResolver
 import org.octopusden.octopus.releng.JiraComponentVersionFormatter
@@ -332,9 +330,7 @@ class DatabaseComponentRegistryResolver(
      *    sole-owner-by-validation); EXPLICIT → its literal tokens with regex metacharacters
      *    escaped (so the legacy regex matcher matches them literally), joined by `,`.
      */
-    private fun mavenArtifactParametersFor(
-        componentEntity: ComponentEntity,
-    ): Map<String, ComponentArtifactConfiguration> {
+    private fun mavenArtifactParametersFor(componentEntity: ComponentEntity): Map<String, ComponentArtifactConfiguration> {
         // #357 Option A: the FORWARD /maven-artifacts wire renders an ALL_EXCEPT_CLAIMED mapping as the
         // sibling-aware anchored negative-lookahead (mirroring the legacy DSL's exact-token exclusion),
         // so the v1-v3 wire matches the legacy baseline: byte-identical for a single excluded sibling
@@ -365,8 +361,7 @@ class DatabaseComponentRegistryResolver(
                 } else {
                     ComponentArtifactConfiguration(joinedGroup, rendered.artifactPattern)
                 }
-            }
-            .filterValues { it.groupPattern.isNotEmpty() || it.artifactPattern.isNotEmpty() }
+            }.filterValues { it.groupPattern.isNotEmpty() || it.artifactPattern.isNotEmpty() }
     }
 
     /**
@@ -374,9 +369,7 @@ class DatabaseComponentRegistryResolver(
      * the primary), flattened to `(rangeKey, config)` pairs, so an artifact owned by a
      * non-primary mapping still resolves.
      */
-    private fun ownershipConfigsByRange(
-        componentEntity: ComponentEntity,
-    ): List<Pair<String, ComponentArtifactConfiguration>> =
+    private fun ownershipConfigsByRange(componentEntity: ComponentEntity): List<Pair<String, ComponentArtifactConfiguration>> =
         effectiveMappingsByRange(componentEntity).flatMap { (rangeKey, mappings) ->
             mappings.map { rangeKey to renderMapping(it) }
         }
@@ -392,9 +385,7 @@ class DatabaseComponentRegistryResolver(
      * `[2,4)`,`[4,6)`,`[6,8)`). Those sub-ranges no longer equal the stored ownership range `[2,8)`, so
      * an exact-match `byRange[rangeKey]` would miss and drop ownership to the base — amendment C.
      */
-    private fun effectiveMappingsByRange(
-        componentEntity: ComponentEntity,
-    ): Map<String, List<ComponentArtifactMappingEntity>> {
+    private fun effectiveMappingsByRange(componentEntity: ComponentEntity): Map<String, List<ComponentArtifactMappingEntity>> {
         val byRange = componentEntity.artifactMappings.groupBy { it.versionRange }
         val baseMappings = byRange[ALL_VERSIONS].orEmpty()
         val nonBaseMappings = componentEntity.artifactMappings.filter { it.versionRange != ALL_VERSIONS }
@@ -422,8 +413,7 @@ class DatabaseComponentRegistryResolver(
                         rangeApplies(it.versionRange, rangeKey, versionRangeFactory, numericVersionFactory)
                     }
                 containing.ifEmpty { baseMappings }
-            }
-            .filterValues { it.isNotEmpty() }
+            }.filterValues { it.isNotEmpty() }
     }
 
     /** Render one ownership mapping to the legacy `(groupPattern, artifactPattern)` wire pair. */
@@ -459,11 +449,13 @@ class DatabaseComponentRegistryResolver(
     )
 
     /** Split a comma-separated group pattern into trimmed, non-empty group tokens. */
-    private fun groupTokensOf(groupPattern: String): List<String> =
-        groupPattern.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+    private fun groupTokensOf(groupPattern: String): List<String> = groupPattern.split(",").map { it.trim() }.filter { it.isNotEmpty() }
 
     /** Two version ranges intersect (unparseable → treat as intersecting, the conservative choice). */
-    private fun rangesIntersect(a: String, b: String): Boolean =
+    private fun rangesIntersect(
+        a: String,
+        b: String,
+    ): Boolean =
         runCatching {
             versionRangeFactory.create(a).isIntersect(versionRangeFactory.create(b))
         }.getOrDefault(true)
@@ -476,7 +468,8 @@ class DatabaseComponentRegistryResolver(
     private fun loadSiblingContext(excludingComponentKey: String): SiblingContext {
         val all = componentRepository.findAll()
         val explicit =
-            all.asSequence()
+            all
+                .asSequence()
                 .filter { it.componentKey != excludingComponentKey }
                 .flatMap { component -> component.artifactMappings.asSequence().map { component.componentKey to it } }
                 .filter { (_, mapping) -> mapping.artifactIdMode == ArtifactIdMode.EXPLICIT.name }
@@ -518,8 +511,7 @@ class DatabaseComponentRegistryResolver(
                 .filterNot { ref ->
                     ref.versionRange == ALL_VERSIONS &&
                         mapping.versionRange in ctx.shadowRangesByComponent[ref.componentKey].orEmpty()
-                }
-                .flatMap { it.tokens }
+                }.flatMap { it.tokens }
                 .distinct()
                 .sorted()
         return ComponentArtifactConfiguration(
@@ -561,11 +553,12 @@ class DatabaseComponentRegistryResolver(
 
     override fun findComponentsByDockerImages(images: Set<Image>): Set<ComponentImage> {
         val imageToComponentMap = buildImageToComponentMap()
-        return images.mapNotNull { image ->
-            imageToComponentMap[image.name]?.let { component ->
-                findConfigurationByDockerImage(image.name, image.tag, component)
-            }
-        }.toSet()
+        return images
+            .mapNotNull { image ->
+                imageToComponentMap[image.name]?.let { component ->
+                    findConfigurationByDockerImage(image.name, image.tag, component)
+                }
+            }.toSet()
     }
 
     // ============================================================
@@ -728,8 +721,7 @@ class DatabaseComponentRegistryResolver(
                             null
                         }
                     }
-                }
-                .maxWithOrNull(
+                }.maxWithOrNull(
                     compareBy(
                         { artifactSpecificity(it.second, artifact.name) },
                         { it.second.length },
@@ -743,7 +735,10 @@ class DatabaseComponentRegistryResolver(
      * which beats a catch-all. Used to prefer a specific mapping over a generic one when both match
      * the same artifact in range.
      */
-    private fun artifactSpecificity(artifactPattern: String, artifactName: String): Int =
+    private fun artifactSpecificity(
+        artifactPattern: String,
+        artifactName: String,
+    ): Int =
         when {
             artifactPattern == artifactName -> 3
             isCatchAllArtifactPattern(artifactPattern) -> 0
@@ -771,9 +766,13 @@ class DatabaseComponentRegistryResolver(
      * version-range semantics V1's [org.octopusden.octopus.escrow.configuration.validation.EscrowModuleConfigMatcher]
      * applies. Unparseable range/version → false (no match) rather than throwing.
      */
-    private fun versionInRange(rangeString: String, versionString: String): Boolean =
+    private fun versionInRange(
+        rangeString: String,
+        versionString: String,
+    ): Boolean =
         runCatching {
-            versionRangeFactory.create(rangeString)
+            versionRangeFactory
+                .create(rangeString)
                 .containsVersion(numericVersionFactory.create(versionString))
         }.getOrDefault(false)
 
@@ -826,11 +825,9 @@ class DatabaseComponentRegistryResolver(
     // ADR-018: component-level metrics read the BASE representative, NOT moduleConfigurations[0] — the
     // enumeration is version-sorted, so [0] is the lowest range (e.g. a historical override's build
     // system / archived flag), not the component default.
-    private fun EscrowModule.representative(): EscrowModuleConfig? =
-        componentLevelConfiguration ?: moduleConfigurations.firstOrNull()
+    private fun EscrowModule.representative(): EscrowModuleConfig? = componentLevelConfiguration ?: moduleConfigurations.firstOrNull()
 
-    private fun EscrowModule.getBuildSystem(): BuildSystem =
-        representative()?.buildSystem?.toDTO() ?: BuildSystem.NOT_SUPPORTED
+    private fun EscrowModule.getBuildSystem(): BuildSystem = representative()?.buildSystem?.toDTO() ?: BuildSystem.NOT_SUPPORTED
 
     private fun EscrowModule.isArchived(): Boolean {
         val moduleConfig = representative() ?: return false

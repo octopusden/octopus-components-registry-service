@@ -22,37 +22,39 @@ import org.octopusden.octopus.components.registry.cli.output.Renderer
  * With a resolvable token it calls GET /auth/me and renders the [User] (username + roles) honouring
  * `-o json|table`.
  */
-class WhoamiCommand : CliktCommand(
-    name = "whoami",
-    help = "Show the current identity. Anonymous (no credential) reports a static line without calling the server.",
-) {
+class WhoamiCommand :
+    CliktCommand(
+        name = "whoami",
+        help = "Show the current identity. Anonymous (no credential) reports a static line without calling the server.",
+    ) {
     private val ctx by requireObject<CliContext>()
 
-    override fun run() = runCommand {
-        // whoami must answer "anonymous" out of the box, even with no profile/URL configured —
-        // the anonymous branch makes no server call. Only surface a missing-URL error when the
-        // user supplied a token (they clearly intended an authenticated /auth/me lookup).
-        val target = try {
-            ctx.resolveTarget()
-        } catch (e: ConfigResolutionException) {
-            if (!ctx.tokenFlag.isNullOrBlank()) throw e
-            emit("anonymous; for current CRS versions ACCESS_COMPONENTS is implied")
-            return@runCommand
-        }
-        val token = resolveToken(target)
-        if (token == null) {
-            emit("anonymous; for current CRS versions ACCESS_COMPONENTS is implied")
-            return@runCommand
-        }
+    override fun run() =
+        runCommand {
+            // whoami must answer "anonymous" out of the box, even with no profile/URL configured —
+            // the anonymous branch makes no server call. Only surface a missing-URL error when the
+            // user supplied a token (they clearly intended an authenticated /auth/me lookup).
+            val target = try {
+                ctx.resolveTarget()
+            } catch (e: ConfigResolutionException) {
+                if (!ctx.tokenFlag.isNullOrBlank()) throw e
+                emit("anonymous; for current CRS versions ACCESS_COMPONENTS is implied")
+                return@runCommand
+            }
+            val token = resolveToken(target)
+            if (token == null) {
+                emit("anonymous; for current CRS versions ACCESS_COMPONENTS is implied")
+                return@runCommand
+            }
 
-        val client = ctx.clientFor(target.copy(token = token))
-        val user = client.getJson("/auth/me", User.serializer())
-        render(
-            ctx,
-            json = { Renderer.renderJson(user, User.serializer()) },
-            table = { userTable(user) },
-        )
-    }
+            val client = ctx.clientFor(target.copy(token = token))
+            val user = client.getJson("/auth/me", User.serializer())
+            render(
+                ctx,
+                json = { Renderer.renderJson(user, User.serializer()) },
+                table = { userTable(user) },
+            )
+        }
 
     /**
      * Returns a usable bearer token, or null when the caller is anonymous.
@@ -78,7 +80,10 @@ class WhoamiCommand : CliktCommand(
 
 private fun userTable(user: User): String {
     val roleNames = user.roles.joinToString(", ") { it.name }
-    val authorities = user.roles.flatMap { it.permissions }.distinct().joinToString(", ")
+    val authorities = user.roles
+        .flatMap { it.permissions }
+        .distinct()
+        .joinToString(", ")
     return Renderer.renderTable(
         headers = listOf("FIELD", "VALUE"),
         rows = listOf(

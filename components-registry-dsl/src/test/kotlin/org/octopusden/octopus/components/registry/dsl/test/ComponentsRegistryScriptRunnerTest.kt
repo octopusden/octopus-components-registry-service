@@ -1,16 +1,15 @@
 package org.octopusden.octopus.components.registry.dsl.test
 
-import org.octopusden.octopus.components.registry.dsl.script.ComponentsRegistryScriptRunner
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.octopusden.octopus.components.registry.dsl.PT_C
 import org.octopusden.octopus.components.registry.dsl.PT_D
 import org.octopusden.octopus.components.registry.dsl.PT_D_DB
 import org.octopusden.octopus.components.registry.dsl.PT_K
+import org.octopusden.octopus.components.registry.dsl.script.ComponentsRegistryScriptRunner
 import java.nio.file.Paths
 
 class ComponentsRegistryScriptRunnerTest {
-
     companion object {
         private val PRODUCT_TYPE = mapOf(PT_C to "PT_C", PT_K to "PT_K", PT_D to "PT_D", PT_D_DB to "PT_D_DB")
     }

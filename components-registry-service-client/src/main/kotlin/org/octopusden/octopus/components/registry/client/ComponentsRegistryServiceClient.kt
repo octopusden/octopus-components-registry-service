@@ -3,7 +3,6 @@ package org.octopusden.octopus.components.registry.client
 import feign.CollectionFormat
 import feign.Headers
 import feign.Param
-import feign.QueryMap
 import feign.RequestLine
 import feign.Response
 import org.octopusden.octopus.components.registry.api.build.tools.BuildTool
@@ -48,92 +47,105 @@ interface ComponentsRegistryServiceClient {
 
     @RequestLine("GET /rest/api/1/components/{componentKey}")
     @Throws(NotFoundException::class)
-    fun getById(@Param("componentKey") componentKey: String): ComponentV1
+    fun getById(
+        @Param("componentKey") componentKey: String,
+    ): ComponentV1
 
     @RequestLine("GET rest/api/2/components/{componentKey}/versions/{version}")
     @Throws(NotFoundException::class)
     fun getDetailedComponent(
         @Param("componentKey") componentKey: String,
-        @Param("version") version: String
+        @Param("version") version: String,
     ): DetailedComponent
 
     @RequestLine(
         "GET /rest/api/2/components?vcs-path={vcsPath}&build-system={buildSystem}&systems={systems}&solution={solution}",
-        collectionFormat = CollectionFormat.CSV
+        collectionFormat = CollectionFormat.CSV,
     )
     fun getAllComponents(
         @Param("vcsPath") vcsPath: String? = null,
         @Param("buildSystem") buildSystem: BuildSystem? = null,
         @Param("solution") solution: Boolean? = null,
-        @Param("systems") systems: List<String> = emptyList()
+        @Param("systems") systems: List<String> = emptyList(),
     ): ComponentsDTO<ComponentV2>
 
     @RequestLine("GET rest/api/1/components/{componentKey}/versions/{version}/distribution")
     @Throws(NotFoundException::class)
     fun getComponentDistribution(
         @Param("componentKey") componentKey: String,
-        @Param("version") version: String
+        @Param("version") version: String,
     ): DistributionDTO
 
     @RequestLine("GET rest/api/2/components/{componentKey}/versions/{version}/detailed-version")
     @Throws(NotFoundException::class)
     fun getDetailedComponentVersion(
         @Param("componentKey") componentKey: String,
-        @Param("version") version: String
+        @Param("version") version: String,
     ): DetailedComponentVersion
 
     @RequestLine("POST rest/api/2/components/{componentKey}/detailed-versions")
     @Headers("Content-Type: application/json")
     fun getDetailedComponentVersions(
         @Param("componentKey") componentKey: String,
-        versions: VersionRequest
+        versions: VersionRequest,
     ): DetailedComponentVersions
 
     @RequestLine("GET rest/api/2/components/{componentKey}/maven-artifacts")
-    fun getComponentArtifactsParameters(@Param("componentKey") componentKey: String): Map<String, ComponentArtifactConfigurationDTO>
+    fun getComponentArtifactsParameters(
+        @Param("componentKey") componentKey: String,
+    ): Map<String, ComponentArtifactConfigurationDTO>
 
     @RequestLine("GET rest/api/2/components/{componentKey}/versions/{version}/vcs-settings")
     @Throws(NotFoundException::class)
-    fun getVCSSetting(@Param("componentKey") componentKey: String, @Param("version") version: String): VCSSettingsDTO
+    fun getVCSSetting(
+        @Param("componentKey") componentKey: String,
+        @Param("version") version: String,
+    ): VCSSettingsDTO
 
     @RequestLine("GET rest/api/2/components/{componentKey}/versions/{version}/build-tools?ignore-required={ignoreRequired}")
     fun getBuildTools(
         @Param("componentKey") componentKey: String,
         @Param("version") version: String,
-        @Param("ignoreRequired") ignoreRequired: Boolean? = false
+        @Param("ignoreRequired") ignoreRequired: Boolean? = false,
     ): List<BuildTool>
 
     @RequestLine("GET rest/api/2/components/{componentKey}/versions/{version}/jira-component")
     fun getJiraComponentForComponentAndVersion(
         @Param("componentKey") componentKey: String,
-        @Param("version") version: String
+        @Param("version") version: String,
     ): JiraComponentVersionDTO
 
     @RequestLine("GET rest/api/2/projects/{projectKey}/versions/{version}")
     fun getJiraComponentByProjectAndVersion(
         @Param("projectKey") projectKey: String,
-        @Param("version") version: String
+        @Param("version") version: String,
     ): JiraComponentVersionDTO
 
     @RequestLine("GET rest/api/2/projects/{projectKey}/jira-components")
-    fun getJiraComponentsByProject(@Param("projectKey") projectKey: String): Set<String>
+    fun getJiraComponentsByProject(
+        @Param("projectKey") projectKey: String,
+    ): Set<String>
 
     @RequestLine("GET rest/api/2/projects/{projectKey}/jira-component-version-ranges")
-    fun getJiraComponentVersionRangesByProject(@Param("projectKey") projectKey: String): Set<JiraComponentVersionRangeDTO>
+    fun getJiraComponentVersionRangesByProject(
+        @Param("projectKey") projectKey: String,
+    ): Set<JiraComponentVersionRangeDTO>
 
     @RequestLine("GET rest/api/2/projects/{projectKey}/component-distributions")
-    fun getComponentsDistributionByJiraProject(@Param("projectKey") projectKey: String): Map<String, DistributionDTO>
+    fun getComponentsDistributionByJiraProject(
+        @Param("projectKey") projectKey: String,
+    ): Map<String, DistributionDTO>
 
     @RequestLine("GET rest/api/2/projects/{projectKey}/versions/{version}/vcs-settings")
     fun getVCSSettingForProject(
         @Param("projectKey") projectKey: String,
-        @Param("version") version: String
+        @Param("version") version: String,
     ): VCSSettingsDTO
 
     @RequestLine("GET rest/api/2/projects/{projectKey}/versions/{version}/distribution")
     fun getDistributionForProject(
         @Param("projectKey") projectKey: String,
-        @Param("version") version: String
+        @Param("version") version: String,
     ): DistributionDTO
 
     @RequestLine("GET rest/api/2/common/jira-component-version-ranges")
@@ -165,5 +177,7 @@ interface ComponentsRegistryServiceClient {
 
     @RequestLine("GET rest/api/3/components/{componentKey}/copyright")
     @Headers("Content-Type: application/octet-stream")
-    fun getCopyrightByComponent(@Param("componentKey") componentKey: String): Response
+    fun getCopyrightByComponent(
+        @Param("componentKey") componentKey: String,
+    ): Response
 }

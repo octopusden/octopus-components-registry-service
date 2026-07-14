@@ -28,7 +28,10 @@ import java.nio.file.Path
  *    misconfiguration. Failing fast here means the next misconfigured build
  *    surfaces with a precise error in the first test JVM log line.
  */
-internal fun resolveReportDir(reportDirProp: String?, fallback: Path): Path {
+internal fun resolveReportDir(
+    reportDirProp: String?,
+    fallback: Path,
+): Path {
     if (reportDirProp != null) {
         val candidate = Path.of(reportDirProp)
         check(candidate.isAbsolute) {

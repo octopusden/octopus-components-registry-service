@@ -18,7 +18,10 @@ data class CommandResult(
  * input, and returns a [CommandResult].
  */
 fun interface CommandRunner {
-    fun run(args: List<String>, stdin: String?): CommandResult
+    fun run(
+        args: List<String>,
+        stdin: String?,
+    ): CommandResult
 }
 
 /**
@@ -26,7 +29,10 @@ fun interface CommandRunner {
  * the caller can distinguish a printed secret from a diagnostic message.
  */
 class ProcessCommandRunner : CommandRunner {
-    override fun run(args: List<String>, stdin: String?): CommandResult {
+    override fun run(
+        args: List<String>,
+        stdin: String?,
+    ): CommandResult {
         val process = ProcessBuilder(args)
             .redirectInput(ProcessBuilder.Redirect.PIPE)
             .redirectOutput(ProcessBuilder.Redirect.PIPE)

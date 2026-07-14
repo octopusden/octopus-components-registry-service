@@ -12,7 +12,6 @@ import org.octopusden.octopus.components.registry.server.entity.ArtifactIdMode
  * so re-feeding the DSL to the legacy strict validator does not reintroduce the overlap.
  */
 class ArtifactOwnershipRenderingTest {
-
     @Test
     @DisplayName("wire render: ALL and ALL_EXCEPT_CLAIMED are the plain catch-all")
     fun wireCatchAll() {

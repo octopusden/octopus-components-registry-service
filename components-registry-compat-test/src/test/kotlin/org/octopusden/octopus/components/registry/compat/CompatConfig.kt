@@ -46,13 +46,14 @@ data class CompatConfig(
     val partialUrls: Boolean get() =
         baselineUrl.isNullOrBlank() xor candidateUrl.isNullOrBlank()
 
-    fun explainInvalid(): String? = when {
-        !partialUrls -> null
-        baselineUrl.isNullOrBlank() ->
-            "compat.candidate.url is set but compat.baseline.url is missing — both required, or neither"
-        else ->
-            "compat.baseline.url is set but compat.candidate.url is missing — both required, or neither"
-    }
+    fun explainInvalid(): String? =
+        when {
+            !partialUrls -> null
+            baselineUrl.isNullOrBlank() ->
+                "compat.candidate.url is set but compat.baseline.url is missing — both required, or neither"
+            else ->
+                "compat.baseline.url is set but compat.candidate.url is missing — both required, or neither"
+        }
 
     companion object {
         /** Smoke default — enough to validate the pipeline, fast enough for debugging. */

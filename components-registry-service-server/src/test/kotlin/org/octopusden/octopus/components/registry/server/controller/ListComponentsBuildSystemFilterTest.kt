@@ -83,7 +83,10 @@ class ListComponentsBuildSystemFilterTest {
         createComponent(name, "MAVEN")
     }
 
-    private fun createComponent(name: String, buildSystem: String = "MAVEN"): String {
+    private fun createComponent(
+        name: String,
+        buildSystem: String = "MAVEN",
+    ): String {
         val body =
             mvc
                 .perform(

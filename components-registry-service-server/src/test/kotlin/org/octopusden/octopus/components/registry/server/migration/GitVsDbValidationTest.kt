@@ -2,12 +2,12 @@ package org.octopusden.octopus.components.registry.server.migration
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
-import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assertions.fail
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import org.octopusden.cloud.commons.security.client.AuthServerClient
@@ -529,17 +529,27 @@ class GitVsDbValidationTest {
             val gitBody =
                 mvc
                     .perform(get("/rest/api/2/components/$name/versions/$version").accept(APPLICATION_JSON))
-                    .andReturn().response.contentAsString
+                    .andReturn()
+                    .response.contentAsString
             val gitTools =
-                objectMapper.readTree(gitBody).path("buildParameters").path("tools").map { it.path("name").asText() }
+                objectMapper
+                    .readTree(gitBody)
+                    .path("buildParameters")
+                    .path("tools")
+                    .map { it.path("name").asText() }
 
             sourceRegistry.setComponentSource(name, "db")
             val dbBody =
                 mvc
                     .perform(get("/rest/api/2/components/$name/versions/$version").accept(APPLICATION_JSON))
-                    .andReturn().response.contentAsString
+                    .andReturn()
+                    .response.contentAsString
             val dbTools =
-                objectMapper.readTree(dbBody).path("buildParameters").path("tools").map { it.path("name").asText() }
+                objectMapper
+                    .readTree(dbBody)
+                    .path("buildParameters")
+                    .path("tools")
+                    .map { it.path("name").asText() }
 
             if (gitTools.toSet() != dbTools.toSet()) {
                 failures.add("[$name@$version] git=$gitTools db=$dbTools")
@@ -586,13 +596,17 @@ class GitVsDbValidationTest {
         val a = "cache-service"
         val b = "auth-service"
 
-        fun groupPatternTokens(component: String, source: String): Set<String> {
+        fun groupPatternTokens(
+            component: String,
+            source: String,
+        ): Set<String> {
             sourceRegistry.setComponentSource(component, source)
             val body =
                 mvc
                     .perform(get("/rest/api/2/components/$component/maven-artifacts").accept(APPLICATION_JSON))
                     .andExpect(status().isOk)
-                    .andReturn().response.contentAsString
+                    .andReturn()
+                    .response.contentAsString
             val tree = objectMapper.readTree(body)
             // groupPattern is a comma-separated list of Maven groupIds. Split into
             // individual tokens so isolation can be checked as a set operation rather
@@ -600,8 +614,13 @@ class GitVsDbValidationTest {
             return tree
                 .fields()
                 .asSequence()
-                .flatMap { (_, cfg) -> cfg.path("groupPattern").asText("").split(",").asSequence() }
-                .map { it.trim() }
+                .flatMap { (_, cfg) ->
+                    cfg
+                        .path("groupPattern")
+                        .asText("")
+                        .split(",")
+                        .asSequence()
+                }.map { it.trim() }
                 .filter { it.isNotEmpty() }
                 .toSet()
         }
@@ -622,7 +641,8 @@ class GitVsDbValidationTest {
             }
             val shared = tokensA intersect tokensB
             if (shared.isNotEmpty()) {
-                failures += "[$source] cross-contamination: components '$a' and '$b' share groupPattern tokens $shared (tokensA=$tokensA, tokensB=$tokensB)"
+                failures +=
+                    "[$source] cross-contamination: components '$a' and '$b' share groupPattern tokens $shared (tokensA=$tokensA, tokensB=$tokensB)"
             }
         }
         if (failures.isNotEmpty()) {

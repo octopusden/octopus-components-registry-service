@@ -25,7 +25,6 @@ import org.junit.jupiter.api.TestInstance
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class ServiceStatusV2CompatTest : CompatibilityTestBase() {
-
     @Test
     fun `GET ping must return Pong on both stands`() {
         val endpoint = "GET /rest/api/2/components-registry/service/ping"
@@ -43,7 +42,9 @@ class ServiceStatusV2CompatTest : CompatibilityTestBase() {
         if (baselineBody != candidateBody) {
             DiffCollector.record(
                 DiffRecord(
-                    ts = java.time.Instant.now().toString(),
+                    ts = java.time.Instant
+                        .now()
+                        .toString(),
                     endpoint = endpoint,
                     pathParams = params,
                     category = DiffClassifier.VALUE_DIFF,

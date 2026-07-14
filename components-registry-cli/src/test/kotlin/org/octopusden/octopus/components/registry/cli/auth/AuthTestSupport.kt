@@ -15,12 +15,19 @@ internal class FakeResponse(
     private val req: HttpRequest,
 ) : HttpResponse<String> {
     override fun statusCode(): Int = status
+
     override fun request(): HttpRequest = req
+
     override fun previousResponse(): Optional<HttpResponse<String>> = Optional.empty()
+
     override fun headers(): HttpHeaders = HttpHeaders.of(emptyMap()) { _, _ -> true }
+
     override fun body(): String? = body
+
     override fun sslSession(): Optional<SSLSession> = Optional.empty()
+
     override fun uri(): java.net.URI = req.uri()
+
     override fun version(): HttpClient.Version = HttpClient.Version.HTTP_1_1
 }
 
@@ -29,6 +36,7 @@ internal class QueueExchange(
     private val replies: List<Pair<Int, String?>>,
 ) : HttpExchange {
     val requests = mutableListOf<HttpRequest>()
+
     override fun send(request: HttpRequest): HttpResponse<String> {
         requests += request
         val (status, body) = replies[requests.size - 1]
@@ -36,27 +44,31 @@ internal class QueueExchange(
     }
 
     fun bodyOf(index: Int): String =
-        requests[index].bodyPublisher()
+        requests[index]
+            .bodyPublisher()
             .map { publisher ->
                 val sub = StringBodySubscriber()
                 publisher.subscribe(sub)
                 sub.text
-            }
-            .orElse("")
+            }.orElse("")
 }
 
 /** Records every sleep so tests can assert the polling intervals without real waiting. */
 internal class RecordingSleeper : Sleeper {
     val slept = mutableListOf<Long>()
+
     override fun sleep(millis: Long) {
         slept += millis
     }
 }
 
 /** Records calls to a [CredentialStore] and holds an in-memory value. */
-internal class RecordingStore(initial: String? = null) : CredentialStore {
+internal class RecordingStore(
+    initial: String? = null,
+) : CredentialStore {
     var value: String? = initial
     val calls = mutableListOf<String>()
+
     override fun load(): String? {
         calls += "load"
         return value
@@ -78,7 +90,11 @@ internal class FakeCommandRunner(
     private val results: List<CommandResult>,
 ) : CommandRunner {
     val invocations = mutableListOf<List<String>>()
-    override fun run(args: List<String>, stdin: String?): CommandResult {
+
+    override fun run(
+        args: List<String>,
+        stdin: String?,
+    ): CommandResult {
         invocations += args
         return results[invocations.size - 1]
     }
@@ -88,6 +104,7 @@ internal class FakeCommandRunner(
 private class StringBodySubscriber : java.util.concurrent.Flow.Subscriber<java.nio.ByteBuffer> {
     private val sb = StringBuilder()
     val text: String get() = sb.toString()
+
     override fun onSubscribe(subscription: java.util.concurrent.Flow.Subscription) {
         subscription.request(Long.MAX_VALUE)
     }
@@ -99,5 +116,6 @@ private class StringBodySubscriber : java.util.concurrent.Flow.Subscriber<java.n
     }
 
     override fun onError(throwable: Throwable) = Unit
+
     override fun onComplete() = Unit
 }

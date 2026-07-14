@@ -6,7 +6,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class ExitCodeTest {
-
     @Test
     fun `400 maps to USAGE`() {
         assertEquals(ExitCode.USAGE, ExitCodes.fromHttpStatus(400))

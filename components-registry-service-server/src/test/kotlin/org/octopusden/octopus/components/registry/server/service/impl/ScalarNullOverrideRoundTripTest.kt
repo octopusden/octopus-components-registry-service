@@ -1,7 +1,5 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
-import java.util.UUID
-import java.util.concurrent.TimeUnit
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
@@ -19,6 +17,8 @@ import org.octopusden.octopus.components.registry.server.repository.DependencyMa
 import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRangeFactory
+import java.util.UUID
+import java.util.concurrent.TimeUnit
 
 /**
  * MIG-040 — null scalar override round-trip.
@@ -41,7 +41,6 @@ import org.octopusden.releng.versions.VersionRangeFactory
  */
 @Timeout(30, unit = TimeUnit.SECONDS)
 class ScalarNullOverrideRoundTripTest {
-
     private val componentRepository: ComponentRepository = mock(ComponentRepository::class.java)
     private val dependencyMappingRepository: DependencyMappingRepository =
         mock(DependencyMappingRepository::class.java)
@@ -61,8 +60,7 @@ class ScalarNullOverrideRoundTripTest {
         )
     }
 
-    private fun makeComponent(key: String): ComponentEntity =
-        ComponentEntity(id = UUID.randomUUID(), componentKey = key)
+    private fun makeComponent(key: String): ComponentEntity = ComponentEntity(id = UUID.randomUUID(), componentKey = key)
 
     private fun makeBase(component: ComponentEntity): ComponentConfigurationEntity =
         ComponentConfigurationEntity(

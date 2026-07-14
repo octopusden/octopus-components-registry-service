@@ -18,25 +18,24 @@ import org.octopusden.octopus.components.registry.server.dto.v4.ComponentUpdateR
 import org.octopusden.octopus.components.registry.server.dto.v4.DockerImageRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideCreateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideResponse
-import org.octopusden.octopus.components.registry.server.dto.v4.SupportedVersionsRequest
-import org.octopusden.octopus.components.registry.server.dto.v4.SupportedVersionsResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideUpdateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideUpsertRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FileUrlArtifactRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.MarkerChildrenPayload
 import org.octopusden.octopus.components.registry.server.dto.v4.MavenArtifactRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.PackageRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.SupportedVersionsRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.SupportedVersionsResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.VcsEntryRequest
 import org.octopusden.octopus.components.registry.server.entity.ArtifactIdMode
 import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactMappingEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactMappingTokenEntity
-import org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipModeClassifier
+import org.octopusden.octopus.components.registry.server.entity.ComponentBuildToolBeanEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentDocLinkEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentGroupEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentLabelEntity
-import org.octopusden.octopus.components.registry.server.entity.ComponentBuildToolBeanEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentReleaseManagerEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentRequiredToolEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentSecurityChampionEntity
@@ -54,10 +53,9 @@ import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntry
 import org.octopusden.octopus.components.registry.server.event.AuditCorrelationIdProvider
 import org.octopusden.octopus.components.registry.server.event.AuditEvent
 import org.octopusden.octopus.components.registry.server.mapper.ALL_VERSIONS
-import org.octopusden.octopus.components.registry.server.util.VersionRangePartition
+import org.octopusden.octopus.components.registry.server.mapper.ARTIFACT_MAPPING_ORDER
 import org.octopusden.octopus.components.registry.server.mapper.BEAN_TYPE_NAMES
 import org.octopusden.octopus.components.registry.server.mapper.BUILD_SYSTEM_NAMES
-import org.octopusden.octopus.components.registry.server.mapper.numericVersionComparator
 import org.octopusden.octopus.components.registry.server.mapper.ESCROW_GENERATION_MODE_NAMES
 import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
 import org.octopusden.octopus.components.registry.server.mapper.NOT_AVAILABLE_EXTERNAL_REGISTRY
@@ -66,7 +64,7 @@ import org.octopusden.octopus.components.registry.server.mapper.PRODUCT_TYPE_NAM
 import org.octopusden.octopus.components.registry.server.mapper.REPOSITORY_TYPE_NAMES
 import org.octopusden.octopus.components.registry.server.mapper.SCALAR_ATTRIBUTE_PATHS
 import org.octopusden.octopus.components.registry.server.mapper.applyScalarValue
-import org.octopusden.octopus.components.registry.server.mapper.ARTIFACT_MAPPING_ORDER
+import org.octopusden.octopus.components.registry.server.mapper.numericVersionComparator
 import org.octopusden.octopus.components.registry.server.mapper.toDetailResponse
 import org.octopusden.octopus.components.registry.server.mapper.toFieldOverrideResponse
 import org.octopusden.octopus.components.registry.server.mapper.toSummaryResponse
@@ -89,9 +87,11 @@ import org.octopusden.octopus.components.registry.server.service.ComponentManage
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
 import org.octopusden.octopus.components.registry.server.service.RenderedComponentCode
 import org.octopusden.octopus.components.registry.server.teamcity.TeamcityProperties
+import org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipModeClassifier
 import org.octopusden.octopus.components.registry.server.util.ComponentCodeRenderer
 import org.octopusden.octopus.components.registry.server.util.JiraRowView
 import org.octopusden.octopus.components.registry.server.util.MavenGavCollision
+import org.octopusden.octopus.components.registry.server.util.VersionRangePartition
 import org.octopusden.octopus.components.registry.server.util.computeEffectiveJiraPairs
 import org.octopusden.octopus.escrow.config.ConfigHelper
 import org.octopusden.releng.versions.NumericVersionFactory
@@ -110,8 +110,6 @@ import org.springframework.web.server.ResponseStatusException
 import java.nio.file.Files
 import java.time.Instant
 import java.util.UUID
-import java.util.regex.Pattern
-import java.util.regex.PatternSyntaxException
 
 /**
  * v4 CRUD against the v2 schema (Model A'). Top-level scalars and per-component
@@ -403,8 +401,7 @@ class ComponentManagementServiceImpl(
     // ============================================================
 
     @Transactional(readOnly = true)
-    override fun getComponent(id: UUID): ComponentDetailResponse =
-        toDetail(findComponentOr404(id))
+    override fun getComponent(id: UUID): ComponentDetailResponse = toDetail(findComponentOr404(id))
 
     @Transactional(readOnly = true)
     override fun getComponentByName(name: String): ComponentDetailResponse =
@@ -506,7 +503,10 @@ class ComponentManagementServiceImpl(
         // `baseConfiguration.versionRange` is validated downstream inside the
         // base-configuration patch block via `validateRangeSyntax` — no
         // top-level guard needed here.
-        request.baseConfiguration?.build?.buildSystem?.let { validateBuildSystem(it) }
+        request.baseConfiguration
+            ?.build
+            ?.buildSystem
+            ?.let { validateBuildSystem(it) }
         // Hidden escrow.generation is stripped in applyBaseConfigurationPatch → don't 4xx here.
         request.baseConfiguration?.escrow?.generation?.let {
             if (!fieldConfigService.isHidden("escrow.generation")) validateEscrowGenerationMode(it)
@@ -740,9 +740,12 @@ class ComponentManagementServiceImpl(
         // check when it changes; only untouched legacy data is left alone. On
         // CREATE everything is new, so they always run (see createComponent).
         val crossComponentRelevantChange =
-            request.name != null || // rename can invalidate soft docs[] references to the old key
-                request.baseConfiguration != null || // maven / docker / packages / jira live on the base config row
-                request.artifactIds != null || // groupId/artifactId ownership mapping (#357 cross-component check)
+            request.name != null ||
+                // rename can invalidate soft docs[] references to the old key
+                request.baseConfiguration != null ||
+                // maven / docker / packages / jira live on the base config row
+                request.artifactIds != null ||
+                // groupId/artifactId ownership mapping (#357 cross-component check)
                 request.docs != null ||
                 request.distributionExplicit != null ||
                 request.distributionExternal != null ||
@@ -889,16 +892,17 @@ class ComponentManagementServiceImpl(
         if (pageable.sort.isUnsorted) return pageable
         val translated =
             Sort.by(
-                pageable.sort.map { order ->
-                    when (order.property) {
-                        "name" ->
-                            // 4-arg ctor — preserves `ignoreCase` alongside direction
-                            // and null-handling. The 3-arg variant defaults
-                            // ignoreCase to false and would silently drop the flag.
-                            Sort.Order(order.direction, "componentKey", order.isIgnoreCase, order.nullHandling)
-                        else -> order
-                    }
-                }.toList(),
+                pageable.sort
+                    .map { order ->
+                        when (order.property) {
+                            "name" ->
+                                // 4-arg ctor — preserves `ignoreCase` alongside direction
+                                // and null-handling. The 3-arg variant defaults
+                                // ignoreCase to false and would silently drop the flag.
+                                Sort.Order(order.direction, "componentKey", order.isIgnoreCase, order.nullHandling)
+                            else -> order
+                        }
+                    }.toList(),
             )
         return PageRequest.of(pageable.pageNumber, pageable.pageSize, translated)
     }
@@ -930,11 +934,13 @@ class ComponentManagementServiceImpl(
             attribute = request.overriddenAttribute,
             excludeOverrideId = null,
         )
-        require(configurationRepository.findByComponentIdAndVersionRangeAndOverriddenAttribute(
-            componentId,
-            canonicalRange,
-            request.overriddenAttribute,
-        ) == null) {
+        require(
+            configurationRepository.findByComponentIdAndVersionRangeAndOverriddenAttribute(
+                componentId,
+                canonicalRange,
+                request.overriddenAttribute,
+            ) == null,
+        ) {
             "Override row for attribute '${request.overriddenAttribute}' and range '$canonicalRange' already exists"
         }
 
@@ -1183,8 +1189,7 @@ class ComponentManagementServiceImpl(
         component: ComponentEntity,
         desired: List<FieldOverrideUpsertRequest>,
     ): FieldOverrideApplyPlan {
-        fun isImportManaged(row: ComponentConfigurationEntity) =
-            row.rowType == "MARKER" && row.overriddenAttribute !in MarkerAttributes.ALL
+        fun isImportManaged(row: ComponentConfigurationEntity) = row.rowType == "MARKER" && row.overriddenAttribute !in MarkerAttributes.ALL
 
         val existing = component.configurations.filter { it.rowType in FIELD_OVERRIDE_ROW_TYPES }
         val byId = existing.mapNotNull { row -> row.id?.let { it to row } }.toMap()
@@ -1354,7 +1359,8 @@ class ComponentManagementServiceImpl(
                 // (e.g. ["(,2.0)","[2.0,)"]) collapse to the sentinel under mergeUnion — drop it so we
                 // store zero presence rows (= ALL) rather than a bounded-looking all-versions row that
                 // reports all=false yet matches every override. Mirrors ImportServiceImpl's coverage filter.
-                VersionRangePartition.mergeUnion(normalized, numericVersionComparator(numericVersionFactory))
+                VersionRangePartition
+                    .mergeUnion(normalized, numericVersionComparator(numericVersionFactory))
                     .filterNot { isAllVersionsCoverage(it) }
             }
 
@@ -1446,8 +1452,7 @@ class ComponentManagementServiceImpl(
                 // silently treat it as covered (that would suppress the very advisory it should raise).
                 val ovObj = runCatching { versionRangeFactory.create(ov.versionRange) }.getOrNull() ?: return@filter true
                 supportedObjs.none { it.isIntersect(ovObj) }
-            }
-            .map { ov ->
+            }.map { ov ->
                 "Override '${ov.overriddenAttribute}' on range '${ov.versionRange}' is outside the supported " +
                     "versions and will never resolve (V1/V5) — remove it or extend supported to cover it."
             }
@@ -1538,7 +1543,10 @@ class ComponentManagementServiceImpl(
      * Mode default (review-fix — no silent downgrade): an unspecified mode defaults to ALL only
      * when there are no tokens; tokens present + no mode ⇒ EXPLICIT; an explicit mode is honored.
      */
-    private fun resolveArtifactIdMode(mode: String?, tokens: List<String>): ArtifactIdMode =
+    private fun resolveArtifactIdMode(
+        mode: String?,
+        tokens: List<String>,
+    ): ArtifactIdMode =
         when {
             !mode.isNullOrBlank() ->
                 runCatching { ArtifactIdMode.valueOf(mode) }.getOrElse {
@@ -1551,7 +1559,10 @@ class ComponentManagementServiceImpl(
     /** Per-component non-base ownership ranges must be pairwise non-overlapping (most-specific wins). */
     private fun validateNonOverlappingOwnershipRanges(component: ComponentEntity) {
         val nonBaseRanges =
-            component.artifactMappings.map { it.versionRange }.filter { it != ALL_VERSIONS }.distinct()
+            component.artifactMappings
+                .map { it.versionRange }
+                .filter { it != ALL_VERSIONS }
+                .distinct()
         for (i in nonBaseRanges.indices) {
             for (j in i + 1 until nonBaseRanges.size) {
                 val intersects =
@@ -1623,8 +1634,7 @@ class ComponentManagementServiceImpl(
      * persist `"A "` and never be filterable as `A` again — see SYS-040
      * write-side canonicalisation rationale.
      */
-    private fun canonicalizeLabels(raw: Set<String>): Set<String> =
-        raw.map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+    private fun canonicalizeLabels(raw: Set<String>): Set<String> = raw.map { it.trim() }.filter { it.isNotEmpty() }.toSet()
 
     /**
      * Reject a write that consists entirely of blank/whitespace label
@@ -1649,7 +1659,8 @@ class ComponentManagementServiceImpl(
      * neither config-allowed nor a known master code throws → 400.
      */
     private fun canonicalizeSystems(raw: Set<String>): Set<String> =
-        raw.map { it.trim() }
+        raw
+            .map { it.trim() }
             .filter { it.isNotEmpty() }
             .map { validateAndCanonicalizeSystemCode(it) }
             .toSet()
@@ -1873,7 +1884,9 @@ class ComponentManagementServiceImpl(
                 "parentComponentName: a component that can be a parent cannot itself have a parent"
             }
         }
-        if (canBeParentChanged && !entity.canBeParent && entity.id != null &&
+        if (canBeParentChanged &&
+            !entity.canBeParent &&
+            entity.id != null &&
             componentRepository.existsByParentComponentId(entity.id!!)
         ) {
             throw IllegalArgumentException(
@@ -1984,8 +1997,7 @@ class ComponentManagementServiceImpl(
         }
 
     /** True when the override's attribute maps to a field-config `visibility: hidden`. */
-    private fun isHiddenOverrideAttribute(attribute: String?): Boolean =
-        attribute != null && fieldConfigService.isHidden(attribute)
+    private fun isHiddenOverrideAttribute(attribute: String?): Boolean = attribute != null && fieldConfigService.isHidden(attribute)
 
     /**
      * Standalone field-override CRUD rejects a `hidden` attribute with the SAME 400 as a
@@ -2259,7 +2271,10 @@ class ComponentManagementServiceImpl(
             if (!fieldConfigService.isHidden("build.deprecated")) config.deprecated = b.deprecated
             if (!fieldConfigService.isHidden("build.requiredProject")) config.requiredProject = b.requiredProject
             if (!fieldConfigService.isHidden("build.projectVersion")) config.projectVersion = b.projectVersion?.let(::clearBlankScalar)
-            if (!fieldConfigService.isHidden("build.systemProperties")) config.systemProperties = b.systemProperties?.let(::clearBlankScalar)
+            if (!fieldConfigService.isHidden("build.systemProperties")) {
+                config.systemProperties =
+                    b.systemProperties?.let(::clearBlankScalar)
+            }
             if (!fieldConfigService.isHidden("build.buildTasks")) config.buildTasks = b.buildTasks?.let(::clearBlankScalar)
         }
         request.escrow?.let { e ->
@@ -2309,7 +2324,10 @@ class ComponentManagementServiceImpl(
         request.fileUrlArtifacts?.let { replaceFileUrlArtifacts(config, it) }
         request.dockerImages?.let { replaceDockerImages(config, it) }
         request.packages?.let { replacePackages(config, it) }
-        request.buildToolBeans?.let { validateBuildToolBeans(it); replaceBuildToolBeans(config, it) }
+        request.buildToolBeans?.let {
+            validateBuildToolBeans(it)
+            replaceBuildToolBeans(config, it)
+        }
         // requiredTools is a non-cascaded M:N junction — caller syncs via syncRequiredTools
         // after the configuration row's id has been assigned (post parent flush).
     }
@@ -2372,7 +2390,10 @@ class ComponentManagementServiceImpl(
                 }
             }
             e.gradleIncludeTestConfigurations?.let {
-                if (!fieldConfigService.isHidden("escrow.gradleIncludeTestConfigurations")) config.escrowGradleIncludeTestConfigurations = it
+                if (!fieldConfigService.isHidden("escrow.gradleIncludeTestConfigurations")) {
+                    config.escrowGradleIncludeTestConfigurations =
+                        it
+                }
             }
             e.buildTask?.let { if (!fieldConfigService.isHidden("escrow.buildTask")) config.escrowBuildTask = clearBlankScalar(it) }
         }
@@ -2401,7 +2422,10 @@ class ComponentManagementServiceImpl(
         patch.fileUrlArtifacts?.let { replaceFileUrlArtifacts(config, it) }
         patch.dockerImages?.let { replaceDockerImages(config, it) }
         patch.packages?.let { replacePackages(config, it) }
-        patch.buildToolBeans?.let { validateBuildToolBeans(it); replaceBuildToolBeans(config, it) }
+        patch.buildToolBeans?.let {
+            validateBuildToolBeans(it)
+            replaceBuildToolBeans(config, it)
+        }
         // requiredTools: caller syncs via syncRequiredTools after flush — see updateComponent.
     }
 
@@ -2723,8 +2747,7 @@ class ComponentManagementServiceImpl(
         val hiIncl: Boolean,
     )
 
-    private fun normalizeRange(range: String): String =
-        range.trim().replace(Regex("\\s+"), "")
+    private fun normalizeRange(range: String): String = range.trim().replace(Regex("\\s+"), "")
 
     private fun parseSimpleSegment(range: String): ParsedSimpleRange? {
         val compact = normalizeRange(range)
@@ -2743,8 +2766,10 @@ class ComponentManagementServiceImpl(
         )
     }
 
-    private fun compareMavenVersions(a: String, b: String): Int =
-        DefaultArtifactVersion(a).compareTo(DefaultArtifactVersion(b))
+    private fun compareMavenVersions(
+        a: String,
+        b: String,
+    ): Int = DefaultArtifactVersion(a).compareTo(DefaultArtifactVersion(b))
 
     /**
      * Stable display ordering for supported-coverage ranges: by lower bound (open-lower / composite
@@ -2756,7 +2781,10 @@ class ComponentManagementServiceImpl(
             { it },
         )
 
-    private fun simpleContains(outer: ParsedSimpleRange, inner: ParsedSimpleRange): Boolean {
+    private fun simpleContains(
+        outer: ParsedSimpleRange,
+        inner: ParsedSimpleRange,
+    ): Boolean {
         val leftOK = when {
             outer.lo == null -> true
             inner.lo == null -> false
@@ -2954,7 +2982,8 @@ class ComponentManagementServiceImpl(
         if (referencedKeys.isEmpty()) return
 
         val existingKeys =
-            componentRepository.findByComponentKeyIn(referencedKeys)
+            componentRepository
+                .findByComponentKeyIn(referencedKeys)
                 .mapTo(HashSet()) { it.componentKey }
         val missingKey =
             entity.docLinks
@@ -2993,7 +3022,10 @@ class ComponentManagementServiceImpl(
         }
         entity.configurations.forEach { cfg ->
             cfg.mavenArtifacts.forEach { artifact ->
-                artifact.groupPattern.split(GROUP_ID_SPLIT).map { it.trim() }.filter { it.isNotEmpty() }
+                artifact.groupPattern
+                    .split(GROUP_ID_SPLIT)
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
                     .forEach { groupId ->
                         require(supported.any { groupId.startsWith(it) }) {
                             "groupId: '$groupId' does not start with a supported prefix " +
@@ -3045,12 +3077,16 @@ class ComponentManagementServiceImpl(
      * `component_artifact_mappings` of this component vs every other component). Restores legacy
      * #24/#25 deterministically from stored modes. Throws 409 `CrossComponentConflictException`.
      */
-    private fun validateArtifactOwnershipCollisions(entity: ComponentEntity, componentId: UUID) {
+    private fun validateArtifactOwnershipCollisions(
+        entity: ComponentEntity,
+        componentId: UUID,
+    ) {
         val ownClaims = entity.artifactMappings.map { it.toOwnershipClaim(entity.componentKey) }
         if (ownClaims.isEmpty()) return
         val rivalRows = componentArtifactMappingRepository.findOtherComponents(componentId)
         val explicitTokensByMapping =
-            rivalRows.filter { it.artifactIdMode == ArtifactIdMode.EXPLICIT.name }
+            rivalRows
+                .filter { it.artifactIdMode == ArtifactIdMode.EXPLICIT.name }
                 .map { it.mappingId }
                 .takeIf { it.isNotEmpty() }
                 ?.let { ids -> componentArtifactMappingTokenRepository.findTokensByMappingIdIn(ids) }
@@ -3117,35 +3153,37 @@ class ComponentManagementServiceImpl(
                 .groupBy { it.componentKey }
                 .mapValues { (_, rows) -> rows.map { it.versionRange }.filterTo(mutableSetOf()) { it != OWNERSHIP_ALL_VERSIONS } }
         val tokensByMapping =
-            explicitRows.map { it.mappingId }.takeIf { it.isNotEmpty() }
+            explicitRows
+                .map { it.mappingId }
+                .takeIf { it.isNotEmpty() }
                 ?.let { ids -> componentArtifactMappingTokenRepository.findTokensByMappingIdIn(ids) }
                 ?.groupBy({ it.mappingId }, { it.artifactPattern })
                 .orEmpty()
         val intersect: (String, String) -> Boolean = { a, b ->
             runCatching { versionRangeFactory.create(a).isIntersect(versionRangeFactory.create(b)) }.getOrDefault(true)
         }
-        return allExcept.mapNotNull { m ->
-            val id = m.id ?: return@mapNotNull null
-            val groups = groupTokensOf(m.groupPattern)
-            val siblings =
-                explicitRows
-                    // OTHER components only: ALL_EXCEPT_CLAIMED yields to OTHER components' EXPLICIT
-                    // claims. This component's own EXPLICIT mappings live in disjoint ranges that
-                    // REPLACE (not coexist with) this base mapping, so they must not narrow it.
-                    .filter { it.componentKey != entity.componentKey }
-                    .filter { row -> groupTokensOf(row.groupPattern).any { it in groups } }
-                    .filter { intersect(it.versionRange, m.versionRange) }
-                    .filterNot { row ->
-                        row.versionRange == OWNERSHIP_ALL_VERSIONS &&
-                            m.versionRange in shadowRangesByComponent[row.componentKey].orEmpty()
-                    }
-                    .flatMap { tokensByMapping[it.mappingId].orEmpty() }
-                    .distinct()
-                    .sorted()
-            id to
-                org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipRendering
-                    .renderExportPattern(ArtifactIdMode.ALL_EXCEPT_CLAIMED, emptyList(), siblings)
-        }.toMap()
+        return allExcept
+            .mapNotNull { m ->
+                val id = m.id ?: return@mapNotNull null
+                val groups = groupTokensOf(m.groupPattern)
+                val siblings =
+                    explicitRows
+                        // OTHER components only: ALL_EXCEPT_CLAIMED yields to OTHER components' EXPLICIT
+                        // claims. This component's own EXPLICIT mappings live in disjoint ranges that
+                        // REPLACE (not coexist with) this base mapping, so they must not narrow it.
+                        .filter { it.componentKey != entity.componentKey }
+                        .filter { row -> groupTokensOf(row.groupPattern).any { it in groups } }
+                        .filter { intersect(it.versionRange, m.versionRange) }
+                        .filterNot { row ->
+                            row.versionRange == OWNERSHIP_ALL_VERSIONS &&
+                                m.versionRange in shadowRangesByComponent[row.componentKey].orEmpty()
+                        }.flatMap { tokensByMapping[it.mappingId].orEmpty() }
+                        .distinct()
+                        .sorted()
+                id to
+                    org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipRendering
+                        .renderExportPattern(ArtifactIdMode.ALL_EXCEPT_CLAIMED, emptyList(), siblings)
+            }.toMap()
     }
 
     /**
@@ -3195,7 +3233,10 @@ class ComponentManagementServiceImpl(
         validateCrossComponentIntegrity(reloaded)
     }
 
-    private fun validateMavenArtifactCollisions(entity: ComponentEntity, componentId: UUID) {
+    private fun validateMavenArtifactCollisions(
+        entity: ComponentEntity,
+        componentId: UUID,
+    ) {
         val otherArtifacts = mavenArtifactRepository.findOtherComponents(componentId)
         entity.configurations.forEach { cfg ->
             val ownRange = runCatching { versionRangeFactory.create(cfg.versionRange) }.getOrNull()
@@ -3204,10 +3245,14 @@ class ComponentManagementServiceImpl(
                     // Identity is the FULL coordinate (group, artifact, extension,
                     // classifier) — `g:a:zip` vs `g:a:apk` are distinct artifacts.
                     if (MavenGavCollision.identityCollides(
-                            artifact.groupPattern, artifact.artifactPattern,
-                            artifact.extension, artifact.classifier,
-                            other.groupPattern, other.artifactPattern,
-                            other.extension, other.classifier,
+                            artifact.groupPattern,
+                            artifact.artifactPattern,
+                            artifact.extension,
+                            artifact.classifier,
+                            other.groupPattern,
+                            other.artifactPattern,
+                            other.extension,
+                            other.classifier,
                         )
                     ) {
                         val intersects =
@@ -3220,8 +3265,10 @@ class ComponentManagementServiceImpl(
                             }
                         if (intersects) {
                             val gav = MavenGavCollision.gavLabel(
-                                artifact.groupPattern, artifact.artifactPattern,
-                                artifact.extension, artifact.classifier,
+                                artifact.groupPattern,
+                                artifact.artifactPattern,
+                                artifact.extension,
+                                artifact.classifier,
                             )
                             // Name the REAL source: group-artifact-pattern marker rows come from
                             // the component-level groupId/artifactId mapping, not a distribution{}
@@ -3253,19 +3300,28 @@ class ComponentManagementServiceImpl(
         val ownRows =
             entity.configurations.map { cfg ->
                 JiraRowView(
-                    entity.componentKey, cfg.versionRange, cfg.rowType,
-                    cfg.overriddenAttribute, cfg.jiraProjectKey, cfg.jiraVersionPrefix,
+                    entity.componentKey,
+                    cfg.versionRange,
+                    cfg.rowType,
+                    cfg.overriddenAttribute,
+                    cfg.jiraProjectKey,
+                    cfg.jiraVersionPrefix,
                 )
             }
         val ownPairs = computeEffectiveJiraPairs(ownRows)[entity.componentKey].orEmpty()
         if (ownPairs.isEmpty()) return
         val rivalRows =
-            configurationRepository.findAllNonArchivedJiraRows()
+            configurationRepository
+                .findAllNonArchivedJiraRows()
                 .filter { it.componentKey != entity.componentKey }
                 .map {
                     JiraRowView(
-                        it.componentKey, it.versionRange, it.rowType,
-                        it.overriddenAttribute, it.projectKey, it.versionPrefix,
+                        it.componentKey,
+                        it.versionRange,
+                        it.rowType,
+                        it.overriddenAttribute,
+                        it.projectKey,
+                        it.versionPrefix,
                     )
                 }
         val rivalsByPair = mutableMapOf<Pair<String, String?>, MutableSet<String>>()
@@ -3287,7 +3343,10 @@ class ComponentManagementServiceImpl(
         }
     }
 
-    private fun validateDockerImageUniqueness(entity: ComponentEntity, componentId: UUID) {
+    private fun validateDockerImageUniqueness(
+        entity: ComponentEntity,
+        componentId: UUID,
+    ) {
         val imageNames =
             entity.configurations
                 .flatMap { it.dockerImages }
@@ -3503,7 +3562,8 @@ class ComponentManagementServiceImpl(
         val path = configHelper.copyrightPath() ?: return null
         return runCatching {
             Files.list(path).use { stream ->
-                stream.filter { Files.isRegularFile(it) }
+                stream
+                    .filter { Files.isRegularFile(it) }
                     .map { it.fileName.toString() }
                     .sorted()
                     .toList()
@@ -3976,7 +4036,11 @@ class ComponentManagementServiceImpl(
                         "edition" to it.edition,
                     )
                 },
-            "requiredTools" to base?.requiredToolJunctions.orEmpty().map { it.toolName }.sorted(),
+            "requiredTools" to base
+                ?.requiredToolJunctions
+                .orEmpty()
+                .map { it.toolName }
+                .sorted(),
         )
 
     private fun componentCollectionAuditEntries(entity: ComponentEntity): Map<String, Any?> =

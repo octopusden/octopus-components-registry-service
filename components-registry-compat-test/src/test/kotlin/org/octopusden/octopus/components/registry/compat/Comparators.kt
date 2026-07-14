@@ -280,7 +280,10 @@ object Comparators {
  * decide equality, so the magnitude is irrelevant.
  */
 object GavCsvComparator : Comparator<Any?> {
-    override fun compare(a: Any?, b: Any?): Int {
+    override fun compare(
+        a: Any?,
+        b: Any?,
+    ): Int {
         if (a == null && b == null) return 0
         if (a == null || b == null) return 1
         val normA = normalize(a.toString())
@@ -335,7 +338,10 @@ object ArtifactPatternComparator : Comparator<Any?> {
     private val CATCH_ALL_CORES = setOf("[w-.]+", "[w-]+", "w+", ".*", "*")
     private const val CATCH_ALL = "\u0000CATCHALL"
 
-    override fun compare(a: Any?, b: Any?): Int {
+    override fun compare(
+        a: Any?,
+        b: Any?,
+    ): Int {
         if (a == null && b == null) return 0
         if (a == null || b == null) return 1
         return if (canonical(a.toString()) == canonical(b.toString())) 0 else 1
@@ -352,7 +358,8 @@ object ArtifactPatternComparator : Comparator<Any?> {
         // wrapper, so any unexpected pattern is left intact for the catch-all / token-list
         // canonicalisation below rather than silently mangled.
         val noEsc =
-            raw.replace("\\", "")
+            raw
+                .replace("\\", "")
                 .replace(Regex("""\(\?!\(\?:([^)]*)\)\${'$'}\)""")) { "(?!${it.groupValues[1]})" }
         val lookaheadGroup = Regex("\\(\\?!([^)]*)\\)") // (?!…) — captures the exclusion body
         // A catch-all is the pattern reducing to a known catch-all body once its (?!…) exclusion
@@ -376,6 +383,10 @@ object ArtifactPatternComparator : Comparator<Any?> {
         }
         // Otherwise an explicit token list: separator-agnostic (`,`≡`|`). Order is PRESERVED
         // (a genuine reordering must still surface — same stance as GavCsvComparator).
-        return noEsc.split(Regex("[,|]")).map { it.trim() }.filter { it.isNotEmpty() }.joinToString(",")
+        return noEsc
+            .split(Regex("[,|]"))
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .joinToString(",")
     }
 }

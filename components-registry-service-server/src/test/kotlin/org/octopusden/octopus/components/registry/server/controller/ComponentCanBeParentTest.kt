@@ -103,9 +103,11 @@ class ComponentCanBeParentTest {
 
     private fun getJson(id: String) =
         objectMapper.readTree(
-            mvc.perform(get("/rest/api/4/components/$id").with(adminJwt()))
+            mvc
+                .perform(get("/rest/api/4/components/$id").with(adminJwt()))
                 .andExpect(status().isOk)
-                .andReturn().response.contentAsString,
+                .andReturn()
+                .response.contentAsString,
         )
 
     private fun version(id: String): Long = getJson(id)["version"].asLong()
@@ -144,7 +146,8 @@ class ComponentCanBeParentTest {
                         .param("canBeParent", "true")
                         .param("size", "200"),
                 ).andExpect(status().isOk)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val content = objectMapper.readTree(body)["content"]
         val names = content.map { it["name"].asText() }.toSet()
         assert(names.contains(parent)) { "expected $parent in $names" }

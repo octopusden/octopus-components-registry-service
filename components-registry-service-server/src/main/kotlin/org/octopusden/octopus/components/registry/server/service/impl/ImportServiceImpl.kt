@@ -15,7 +15,6 @@ import org.octopusden.octopus.components.registry.server.config.ConditionalOnDat
 import org.octopusden.octopus.components.registry.server.entity.ArtifactIdMode
 import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactMappingEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactMappingTokenEntity
-import org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipModeClassifier
 import org.octopusden.octopus.components.registry.server.entity.ComponentBuildToolBeanEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentDocLinkEntity
@@ -37,6 +36,7 @@ import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntry
 import org.octopusden.octopus.components.registry.server.mapper.ALL_VERSIONS
 import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
 import org.octopusden.octopus.components.registry.server.mapper.numericVersionComparator
+import org.octopusden.octopus.components.registry.server.repository.ComponentArtifactMappingRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentBuildToolBeanRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentGroupRepository
@@ -46,7 +46,6 @@ import org.octopusden.octopus.components.registry.server.repository.ComponentReq
 import org.octopusden.octopus.components.registry.server.repository.ComponentSourceRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentSystemRepository
 import org.octopusden.octopus.components.registry.server.repository.DistributionDockerImageRepository
-import org.octopusden.octopus.components.registry.server.repository.ComponentArtifactMappingRepository
 import org.octopusden.octopus.components.registry.server.repository.DistributionMavenArtifactRepository
 import org.octopusden.octopus.components.registry.server.repository.LabelRepository
 import org.octopusden.octopus.components.registry.server.repository.SystemRepository
@@ -60,10 +59,10 @@ import org.octopusden.octopus.components.registry.server.service.MigrationProgre
 import org.octopusden.octopus.components.registry.server.service.MigrationResult
 import org.octopusden.octopus.components.registry.server.service.MigrationStatus
 import org.octopusden.octopus.components.registry.server.service.ValidationResult
+import org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipModeClassifier
 import org.octopusden.octopus.components.registry.server.util.JiraRowView
-import org.octopusden.octopus.components.registry.server.util.MavenCoords
-import org.octopusden.octopus.components.registry.server.util.VersionRangePartition
 import org.octopusden.octopus.components.registry.server.util.MavenGavCollision
+import org.octopusden.octopus.components.registry.server.util.VersionRangePartition
 import org.octopusden.octopus.components.registry.server.util.computeEffectiveJiraPairs
 import org.octopusden.octopus.components.registry.server.util.parseMavenGavEntry
 import org.octopusden.octopus.components.registry.server.util.splitCsv
@@ -123,7 +122,6 @@ class ImportServiceImpl(
     private val versionRangeFactory: VersionRangeFactory,
     private val numericVersionFactory: NumericVersionFactory,
 ) : ImportService {
-
     @PersistenceContext
     private lateinit var entityManager: EntityManager
 
@@ -307,7 +305,10 @@ class ImportServiceImpl(
         val labelMs = (System.nanoTime() - labelStart) / 1_000_000
         LOG.info(
             "§6.1 dictionary preupsert complete: {} ms (systems={} ms, tools={} ms, labels={} ms)",
-            (System.nanoTime() - dictStart) / 1_000_000, sysMs, toolMs, labelMs,
+            (System.nanoTime() - dictStart) / 1_000_000,
+            sysMs,
+            toolMs,
+            labelMs,
         )
 
         // Prime in-migration dictionary caches so per-component upserts
@@ -339,12 +340,13 @@ class ImportServiceImpl(
             // group membership are still resolved against the current DSL.
             val deriveStart = System.nanoTime()
             val pendingParentByKey: Map<String, String> =
-                allModules.mapNotNull { (componentKey, escrowModule) ->
-                    val firstConfig = escrowModule.moduleConfigurations.firstOrNull() ?: return@mapNotNull null
-                    firstConfig.parentComponent?.takeIf { it.isNotBlank() }?.let { parentKey ->
-                        componentKey to parentKey
-                    }
-                }.toMap()
+                allModules
+                    .mapNotNull { (componentKey, escrowModule) ->
+                        val firstConfig = escrowModule.moduleConfigurations.firstOrNull() ?: return@mapNotNull null
+                        firstConfig.parentComponent?.takeIf { it.isNotBlank() }?.let { parentKey ->
+                            componentKey to parentKey
+                        }
+                    }.toMap()
 
             // R1: an aggregator is a component that OWNS a `components { }` block (a key in
             // `aggregatorSubComponents`), NOT merely a flat-`parentComponent` target. Among
@@ -354,14 +356,17 @@ class ImportServiceImpl(
             // (ComponentManagementServiceImpl.buildSpecification). This set is kept only for the
             // derivation-summary log below.
             val fakeAggregatorKeys: Set<String> =
-                fullConfig.aggregatorSubComponents.keys.filter { parentKey ->
-                    val firstConfig = allModules[parentKey]?.moduleConfigurations?.firstOrNull()
-                    firstConfig != null && isFakeAggregator(firstConfig)
-                }.toSet()
+                fullConfig.aggregatorSubComponents.keys
+                    .filter { parentKey ->
+                        val firstConfig = allModules[parentKey]?.moduleConfigurations?.firstOrNull()
+                        firstConfig != null && isFakeAggregator(firstConfig)
+                    }.toSet()
             LOG.info(
                 "§6 DSL derivation: {} ms ({} parent refs, {} aggregators, {} FAKE)",
-                (System.nanoTime() - deriveStart) / 1_000_000, pendingParentByKey.size,
-                fullConfig.aggregatorSubComponents.size, fakeAggregatorKeys.size,
+                (System.nanoTime() - deriveStart) / 1_000_000,
+                pendingParentByKey.size,
+                fullConfig.aggregatorSubComponents.size,
+                fakeAggregatorKeys.size,
             )
 
             var total = 0
@@ -386,6 +391,7 @@ class ImportServiceImpl(
             // end-of-Pass-1; that avoids the `merge`-induced SELECT-before-INSERT
             // per row that would otherwise eat back the JDBC batch savings.
             val stagedSourceUpdates = LinkedHashMap<String, Instant>()
+
             fun stageSource(name: String) {
                 stagedSourceUpdates[name] = Instant.now()
             }
@@ -495,7 +501,11 @@ class ImportServiceImpl(
             val pass1Ms = (System.nanoTime() - pass1Start) / 1_000_000
             LOG.info(
                 "§6.2 Pass 1 complete: {} ms ({} migrated, {} skipped, {} failed of {} total)",
-                pass1Ms, migrated, skipped, failed, total,
+                pass1Ms,
+                migrated,
+                skipped,
+                failed,
+                total,
             )
 
             // Pass 2: resolve parentComponent FK references + seed canBeParent
@@ -554,7 +564,8 @@ class ImportServiceImpl(
             val pass3Failures = linkAggregatorGroups(allModules, fullConfig.aggregatorSubComponents)
             LOG.info(
                 "§6.3 Pass 3 complete: {} ms ({} failures)",
-                (System.nanoTime() - pass3Start) / 1_000_000, pass3Failures.size,
+                (System.nanoTime() - pass3Start) / 1_000_000,
+                pass3Failures.size,
             )
             // §6.3 cleanup (re-run safety): the OLD logic grouped by flat parentComponent and could
             // have created groups for non-aggregators (a plain parentComponent target with no
@@ -761,9 +772,7 @@ class ImportServiceImpl(
     private val commonDefaultsTools: List<org.octopusden.octopus.escrow.model.Tool>
         get() = commonDefaultsCache.buildParameters?.tools?.toList() ?: emptyList()
 
-    private fun preupsertToolsFromLoader(
-        fullConfig: org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration,
-    ) {
+    private fun preupsertToolsFromLoader(fullConfig: org.octopusden.octopus.escrow.configuration.model.EscrowConfiguration) {
         // Tools are loaded via EscrowConfigurationLoader.getToolsConfiguration(configObject).
         // We re-use the loadCommonDefaults call (which calls getToolsConfiguration internally)
         // to discover tool names. The simplest approach: load tools via the raw loader's
@@ -774,7 +783,13 @@ class ImportServiceImpl(
         // within each component's config.
         //
         // To upsert tools: collect from all component build configs.
-        data class ToolSpec(val name: String, val env: String?, val src: String?, val tgt: String?, val script: String?)
+        data class ToolSpec(
+            val name: String,
+            val env: String?,
+            val src: String?,
+            val tgt: String?,
+            val script: String?,
+        )
         val seen = LinkedHashMap<String, ToolSpec>()
         for ((_, module) in fullConfig.escrowModules) {
             for (cfg in module.moduleConfigurations) {
@@ -1000,7 +1015,8 @@ class ImportServiceImpl(
             // If the declared blocks together cover everything (e.g. `(,1.0.107)` ∪ `[1.0.107,)`),
             // mergeUnion collapses to the all-versions sentinel — that means supported = ALL, so emit
             // NO presence rows (the ALL_VERSIONS base stands for everything; supported = ALL ⟺ no rows).
-            for (segment in VersionRangePartition.mergeUnion(declaredRanges, numericVersionComparator(numericVersionFactory))
+            for (segment in VersionRangePartition
+                .mergeUnion(declaredRanges, numericVersionComparator(numericVersionFactory))
                 .filterNot { isAllVersionsRange(it) }) {
                 emitRangePresenceRow(saved, segment)
             }
@@ -1028,7 +1044,14 @@ class ImportServiceImpl(
         if (LOG.isDebugEnabled) {
             LOG.debug(
                 "importModule[{}] ms: entity={} junctions={} base={} tools={} overrides={} (configs={}, nonBase={})",
-                componentKey, tEntityMs, tJunctionsMs, tBaseMs, tToolsMs, tOverridesMs, configs.size, nonBaseConfigs.size,
+                componentKey,
+                tEntityMs,
+                tJunctionsMs,
+                tBaseMs,
+                tToolsMs,
+                tOverridesMs,
+                configs.size,
+                nonBaseConfigs.size,
             )
         }
     }
@@ -1082,7 +1105,8 @@ class ImportServiceImpl(
         val displayPairs =
             toImport.map { (key, m) -> key to baseConfigOf(m.moduleConfigurations)?.componentDisplayName }
         violations +=
-            computeDisplayNameCollisions(displayPairs).entries
+            computeDisplayNameCollisions(displayPairs)
+                .entries
                 .sortedBy { it.key }
                 .map { (name, keys) ->
                     "uniqueness violation: display name \"$name\" is claimed by multiple components " +
@@ -1098,8 +1122,12 @@ class ImportServiceImpl(
                 val dbRows =
                     mavenArtifactRepository.findAllRows().map {
                         UniquenessGavRow(
-                            it.componentKey, it.versionRange,
-                            it.groupPattern, it.artifactPattern, it.extension, it.classifier,
+                            it.componentKey,
+                            it.versionRange,
+                            it.groupPattern,
+                            it.artifactPattern,
+                            it.extension,
+                            it.classifier,
                             origin = MavenGavCollision.originLabel(it.overriddenAttribute),
                         )
                     }
@@ -1151,8 +1179,12 @@ class ImportServiceImpl(
             val dbRows =
                 mavenArtifactRepository.findAllRows().map {
                     UniquenessGavRow(
-                        it.componentKey, it.versionRange,
-                        it.groupPattern, it.artifactPattern, it.extension, it.classifier,
+                        it.componentKey,
+                        it.versionRange,
+                        it.groupPattern,
+                        it.artifactPattern,
+                        it.extension,
+                        it.classifier,
                         origin = MavenGavCollision.originLabel(it.overriddenAttribute),
                     )
                 }
@@ -1212,8 +1244,7 @@ class ImportServiceImpl(
      * RANGE_PRESENCE rows, so the two legacy "all versions" shapes converge to one
      * stored representation (schema-spec / spec §7).
      */
-    private fun isAllVersionsRange(range: String?): Boolean =
-        range == null || range == ALL_VERSIONS || range.replace(" ", "") == "(,)"
+    private fun isAllVersionsRange(range: String?): Boolean = range == null || range == ALL_VERSIONS || range.replace(" ", "") == "(,)"
 
     /**
      * EFFECTIVE jira claims of every non-archived persisted component — per-range
@@ -1224,8 +1255,12 @@ class ImportServiceImpl(
         val rows =
             configurationRepository.findAllNonArchivedJiraRows().map {
                 JiraRowView(
-                    it.componentKey, it.versionRange, it.rowType,
-                    it.overriddenAttribute, it.projectKey, it.versionPrefix,
+                    it.componentKey,
+                    it.versionRange,
+                    it.rowType,
+                    it.overriddenAttribute,
+                    it.projectKey,
+                    it.versionPrefix,
                 )
             }
         return computeEffectiveJiraPairs(rows).flatMap { (key, pairs) ->
@@ -1234,7 +1269,10 @@ class ImportServiceImpl(
     }
 
     /** Conservative range intersection: unparseable ranges count as overlapping (same as the API check). */
-    private fun versionRangesIntersect(range1: String, range2: String): Boolean =
+    private fun versionRangesIntersect(
+        range1: String,
+        range2: String,
+    ): Boolean =
         runCatching {
             versionRangeFactory.create(range1).isIntersect(versionRangeFactory.create(range2))
         }.getOrDefault(true)
@@ -1255,14 +1293,21 @@ class ImportServiceImpl(
         val baseConfig = baseConfigOf(configs) ?: return emptyList()
         val rows = mutableListOf<UniquenessGavRow>()
 
-        fun addGavRows(versionRange: String, dist: Distribution?) {
+        fun addGavRows(
+            versionRange: String,
+            dist: Distribution?,
+        ) {
             val gavCsv = dist?.GAV() ?: return
             for (entry in extractMavenGavs(gavCsv)) {
                 val coords = parseMavenGavEntry(entry) ?: continue
                 rows +=
                     UniquenessGavRow(
-                        componentKey, versionRange,
-                        coords.groupId, coords.artifactId, coords.extension, coords.classifier,
+                        componentKey,
+                        versionRange,
+                        coords.groupId,
+                        coords.artifactId,
+                        coords.extension,
+                        coords.classifier,
                         origin = "distribution GAV",
                     )
             }
@@ -1511,7 +1556,11 @@ class ImportServiceImpl(
         // as they do through git-mode. The old single-value collapse (keep-first,
         // drop-rest) is what dropped a component from a report filtered by one
         // of its OTHER systems.
-        val codes = systemStr.split(",").map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+        val codes = systemStr
+            .split(",")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
         for (code in codes) {
             upsertSystem(code) // ensure dictionary exists
             componentSystemRepository.save(
@@ -1745,8 +1794,11 @@ class ImportServiceImpl(
             // prefix — corrupting collision detection. Keep these two attributes on their VERBATIM
             // per-block ranges; every other scalar merges.
             val merged =
-                if (attrPath in JIRA_UNIQUENESS_PAIR_ATTRS) ranges
-                else VersionRangePartition.mergeUnion(ranges, compare)
+                if (attrPath in JIRA_UNIQUENESS_PAIR_ATTRS) {
+                    ranges
+                } else {
+                    VersionRangePartition.mergeUnion(ranges, compare)
+                }
             val effectiveRanges = if (merged.any { isAllVersionsRange(it) }) ranges else merged
             for (versionRange in effectiveRanges) {
                 // Avoid duplicate rows for same (component, range, attribute). NOTE: this exact-range
@@ -1866,7 +1918,10 @@ class ImportServiceImpl(
             (base.buildConfiguration?.tools.takeUnless { it.isNullOrEmpty() } ?: commonDefaultsTools)
                 .mapNotNull { it.name }
                 .toSet()
-        val overTools = override.buildConfiguration?.tools?.map { it.name }?.toSet() ?: emptySet()
+        val overTools = override.buildConfiguration
+            ?.tools
+            ?.map { it.name }
+            ?.toSet() ?: emptySet()
         if (effectiveBaseToolNames != overTools) {
             saveMarkerRowWithChildren(component, versionRange, MarkerAttributes.BUILD_REQUIRED_TOOLS) { row ->
                 // Required tool junctions use the config ID explicitly, so we must
@@ -2176,8 +2231,7 @@ class ImportServiceImpl(
     }
 
     /** Stable key set used to diff build-tool lists across base and override configs. */
-    private fun buildToolKeys(tools: Collection<BuildTool>?): Set<String> =
-        buildBuildToolKeys(tools)
+    private fun buildToolKeys(tools: Collection<BuildTool>?): Set<String> = buildBuildToolKeys(tools)
 
     /** Scratch holder for `attachBuildToolBeans` destructuring. */
     private data class BeanFields(
@@ -2505,7 +2559,8 @@ class ImportServiceImpl(
             componentGroupRepository.delete(group)
             LOG.info(
                 "§6.3 cleanup: removed stale (non-aggregator) group '{}' — unlinked {} member(s)",
-                group.groupKey, members.size,
+                group.groupKey,
+                members.size,
             )
         }
         LOG.info("§6.3 cleanup: removed {} stale group(s)", stale.size)
@@ -2516,7 +2571,10 @@ class ImportServiceImpl(
     // =========================================================================
 
     internal fun isFakeAggregator(cfg: EscrowModuleConfig): Boolean {
-        val vcsUrl = cfg.vcsSettings?.versionControlSystemRoots?.firstOrNull()?.vcsPath
+        val vcsUrl = cfg.vcsSettings
+            ?.versionControlSystemRoots
+            ?.firstOrNull()
+            ?.vcsPath
         val artifactId = cfg.artifactIdPattern ?: ""
         return vcsUrl.isNullOrBlank() || isFakeVcsUrl(vcsUrl) || isFakeArtifactId(artifactId)
     }
@@ -2551,10 +2609,12 @@ class ImportServiceImpl(
         val url = if (questionIdx >= 0) entry.substring(0, questionIdx) else entry
         val queryStr = if (questionIdx >= 0) entry.substring(questionIdx + 1) else ""
         val params =
-            queryStr.split("&").mapNotNull {
-                val eqIdx = it.indexOf('=')
-                if (eqIdx > 0) it.substring(0, eqIdx) to it.substring(eqIdx + 1) else null
-            }.toMap()
+            queryStr
+                .split("&")
+                .mapNotNull {
+                    val eqIdx = it.indexOf('=')
+                    if (eqIdx > 0) it.substring(0, eqIdx) to it.substring(eqIdx + 1) else null
+                }.toMap()
         return FileUrlCoords(
             url = url,
             artifactId = params["artifactId"]?.takeIf { it.isNotEmpty() },
@@ -2605,9 +2665,7 @@ class ImportServiceImpl(
          * `componentDisplayName` are skipped (they store NULL — many NULLs don't collide under the
          * UNIQUE constraint). Empty result ⇒ no collisions. Pure — unit-tested.
          */
-        internal fun computeDisplayNameCollisions(
-            modules: List<Pair<String, String?>>,
-        ): Map<String, List<String>> {
+        internal fun computeDisplayNameCollisions(modules: List<Pair<String, String?>>): Map<String, List<String>> {
             val byDisplayName = mutableMapOf<String, MutableSet<String>>()
             for ((componentKey, cfgDisplayName) in modules) {
                 val name = cfgDisplayName?.takeIf { it.isNotBlank() } ?: continue
@@ -2639,6 +2697,7 @@ class ImportServiceImpl(
  * `settingsProperty` bleeds into the override range. `edition` is meaningful only for
  * Oracle (always null for the others).
  */
+
 /**
  * One would-be `distribution_maven_artifacts` row derived from the DSL, for the §6.0
  * uniqueness pre-pass. [origin] names the DSL source for the conflict message:
@@ -2685,11 +2744,20 @@ internal fun computeDistributionGavCollisions(
 ): List<String> {
     val violations = mutableListOf<String>()
 
-    fun check(row: UniquenessGavRow, rival: UniquenessGavRow) {
+    fun check(
+        row: UniquenessGavRow,
+        rival: UniquenessGavRow,
+    ) {
         if (row.componentKey == rival.componentKey) return
         if (!MavenGavCollision.identityCollides(
-                row.groupPattern, row.artifactPattern, row.extension, row.classifier,
-                rival.groupPattern, rival.artifactPattern, rival.extension, rival.classifier,
+                row.groupPattern,
+                row.artifactPattern,
+                row.extension,
+                row.classifier,
+                rival.groupPattern,
+                rival.artifactPattern,
+                rival.extension,
+                rival.classifier,
             )
         ) {
             return
@@ -2698,8 +2766,8 @@ internal fun computeDistributionGavCollisions(
         val gav = MavenGavCollision.gavLabel(row.groupPattern, row.artifactPattern, row.extension, row.classifier)
         violations +=
             "uniqueness violation: ${row.origin} '$gav' of component '${row.componentKey}' duplicates " +
-                "the ${rival.origin} of component '${rival.componentKey}' in intersecting version ranges " +
-                "'${row.versionRange}' ∩ '${rival.versionRange}'"
+            "the ${rival.origin} of component '${rival.componentKey}' in intersecting version ranges " +
+            "'${row.versionRange}' ∩ '${rival.versionRange}'"
     }
 
     for (i in newRows.indices) {
@@ -2778,21 +2846,22 @@ internal fun computeDisplayNameDbCollisions(
 }
 
 internal fun buildBuildToolKeys(tools: Collection<BuildTool>?): Set<String> =
-    tools?.mapNotNull { tool ->
-        when (tool) {
-            is OracleDatabaseToolBean ->
-                "oracleDatabase:${tool.getSettingsProperty()}:${tool.version}:${tool.edition?.name}"
-            is PTCProductToolBean ->
-                "cProduct:${tool.getSettingsProperty()}:${tool.version}"
-            is PTKProductToolBean ->
-                "kProduct:${tool.getSettingsProperty()}:${tool.version}"
-            is PTDProductToolBean ->
-                "dProduct:${tool.getSettingsProperty()}:${tool.version}"
-            is PTDDbProductToolBean ->
-                "dDbProduct:${tool.getSettingsProperty()}:${tool.version}"
-            is OdbcToolBean ->
-                // OdbcToolBean has no settingsProperty — `<version>` is the only distinguishing field.
-                "odbc:${tool.version}"
-            else -> null
-        }
-    }?.toSet() ?: emptySet()
+    tools
+        ?.mapNotNull { tool ->
+            when (tool) {
+                is OracleDatabaseToolBean ->
+                    "oracleDatabase:${tool.getSettingsProperty()}:${tool.version}:${tool.edition?.name}"
+                is PTCProductToolBean ->
+                    "cProduct:${tool.getSettingsProperty()}:${tool.version}"
+                is PTKProductToolBean ->
+                    "kProduct:${tool.getSettingsProperty()}:${tool.version}"
+                is PTDProductToolBean ->
+                    "dProduct:${tool.getSettingsProperty()}:${tool.version}"
+                is PTDDbProductToolBean ->
+                    "dDbProduct:${tool.getSettingsProperty()}:${tool.version}"
+                is OdbcToolBean ->
+                    // OdbcToolBean has no settingsProperty — `<version>` is the only distinguishing field.
+                    "odbc:${tool.version}"
+                else -> null
+            }
+        }?.toSet() ?: emptySet()

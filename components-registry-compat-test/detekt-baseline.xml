@@ -4,7 +4,7 @@
   <CurrentIssues>
     <ID>ClassOrdering:ComparatorLogicTest.kt$ComparatorLogicTest$private val MAVEN_ARTIFACTS_EP = "GET /rest/api/2/components/{component}/maven-artifacts"</ID>
     <ID>ClassOrdering:CompatibilityTestBase.kt$CompatibilityTestBase$protected fun smokeComponents(): List&lt;String&gt;</ID>
-    <ID>ClassOrdering:VersionRangeMapCanonicalizer.kt$VersionRangeMapCanonicalizer$// Kotlin-aware AND all datatype modules registered: the typed values are Kotlin classes with no // default constructor (need KotlinModule) and carry `Optional&lt;…&gt;` escrow fields (need // jackson-datatype-jdk8). Without findAndRegisterModules the round-trip throws on the first Optional // field and silently no-ops (runCatching → passthrough), leaving the reshaping un-canonicalised. private val mapper = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper() .registerModule(com.fasterxml.jackson.datatype.jdk8.Jdk8Module())</ID>
+    <ID>ClassOrdering:VersionRangeMapCanonicalizer.kt$VersionRangeMapCanonicalizer$// Kotlin-aware AND all datatype modules registered: the typed values are Kotlin classes with no // default constructor (need KotlinModule) and carry `Optional&lt;…&gt;` escrow fields (need // jackson-datatype-jdk8). Without findAndRegisterModules the round-trip throws on the first Optional // field and silently no-ops (runCatching → passthrough), leaving the reshaping un-canonicalised. private val mapper = com.fasterxml.jackson.module.kotlin .jacksonObjectMapper() .registerModule( com.fasterxml.jackson.datatype.jdk8 .Jdk8Module(), )</ID>
     <ID>ClassOrdering:VersionRangeMapCanonicalizer.kt$VersionRangeMapCanonicalizer$private val ZERO = Token("0", 0L)</ID>
     <ID>ComplexCondition:CompatEntityContext.kt$CompatEntityContext$root == null || !root.isArray || index &lt; 0 || index &gt;= root.size()</ID>
     <ID>ComplexCondition:VersionRangeMapCanonicalizer.kt$VersionRangeMapCanonicalizer$iv.lo != null &amp;&amp; iv.hi != null &amp;&amp; iv.loIncl &amp;&amp; iv.hiIncl &amp;&amp; compareVersion(iv.lo, iv.hi) == 0</ID>
@@ -15,15 +15,9 @@
     <ID>CyclomaticComplexMethod:VersionRangeMapCanonicalizer.kt$VersionRangeMapCanonicalizer$fun &lt;V&gt; canonicalizeTypedRangeMap(map: Map&lt;String, V&gt;): Map&lt;String, V&gt;</ID>
     <ID>CyclomaticComplexMethod:VersionRangeMapCanonicalizer.kt$VersionRangeMapCanonicalizer$fun canonicalize(map: ObjectNode): ObjectNode</ID>
     <ID>MatchingDeclarationName:EnvironmentPreflightEvaluator.kt$EnvironmentPreflightInputs</ID>
-    <ID>MaxLineLength:ComparatorLogicTest.kt$ComparatorLogicTest$@DisplayName("Header allow-list is case-insensitive: baseline 'Content-Type' vs candidate 'content-type' → no HEADER_DIFF when values match")</ID>
-    <ID>MaxLineLength:ComparatorLogicTest.kt$ComparatorLogicTest$baseline = VariantHolder("c", canonV(mapOf("[1,2)" to VarVal("A", listOf("a", "b")), "[2,3)" to VarVal("A", listOf("a", "b")))))</ID>
-    <ID>MaxLineLength:ComponentsListCompatTest.kt$ComponentsListCompatTest$compareDto(endpoint, perCompParams, baselineById[id]?.let(::canonicaliseVariants), candidateById[id]?.let(::canonicaliseVariants))</ID>
-    <ID>MaxLineLength:DiffCollector.kt$DiffCollector$System.out.println("[compat-diff] worker pid=${ProcessHandle.current().pid()} totals: ${records.size} diff records persisted to $workerAbs")</ID>
-    <ID>MaxLineLength:DiffCollector.kt$DiffCollector$val parentDirCanon = workerFile.parent?.let { runCatching { it.toFile().canonicalPath }.getOrElse { e -&gt; "(canon failed: ${e.message})" } } ?: "(no parent)"</ID>
+    <ID>MaxLineLength:DiffCollector.kt$DiffCollector$"[compat-diff] worker pid=${ProcessHandle.current().pid()} totals: ${records.size} diff records persisted to $workerAbs"</ID>
     <ID>MaxLineLength:EnvironmentPreflightEvaluator.kt$candidateValue = "defaultSource=${c.defaultSource ?: "&lt;null — old candidate&gt;"}, dbComponentCount=${c.dbComponentCount ?: "&lt;null&gt;"}"</ID>
     <ID>MaxLineLength:EnvironmentPreflightEvaluator.kt$message = "baseline and candidate are pointed at different VCS revisions; data drift cannot be distinguished from migration regressions until they are re-synced"</ID>
-    <ID>MaxLineLength:ExecutionLogger.kt$ExecutionLogger$System.out.println("[compat-exec] worker pid=${ProcessHandle.current().pid()} totals: $counter requests ($diffCounter with diffs)")</ID>
-    <ID>MaxLineLength:ExecutionLogger.kt$ExecutionLogger$val parentDirCanon = workerFile.parent?.let { runCatching { it.toFile().canonicalPath }.getOrElse { e -&gt; "(canon failed: ${e.message})" } } ?: "(no parent)"</ID>
     <ID>MaxLineLength:RealBodyReplayParseTest.kt$RealBodyReplayParseTest$"""{"count":12,"method":"POST","path":"/rest/api/3/components/find-by-artifacts","body":[{"group":"g","name":"n","version":"1.2.3"}]}"""</ID>
     <ID>SwallowedException:RealBodyReplayCompatTest.kt$RealBodyReplayCompatTest$e: java.util.concurrent.CancellationException</ID>
     <ID>SwallowedException:RealBodyReplayCompatTest.kt$RealBodyReplayCompatTest$e: java.util.concurrent.TimeoutException</ID>

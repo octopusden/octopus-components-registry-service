@@ -1,9 +1,6 @@
 package org.octopusden.octopus.components.registry.server.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import java.nio.file.Paths
-import java.util.UUID
-import java.util.concurrent.TimeUnit
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -25,6 +22,8 @@ import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import java.nio.file.Paths
+import java.util.UUID
 
 /**
  * SYS-049 — git-history baseline rows are written with the `MIGRATED` action and
@@ -107,7 +106,8 @@ class AuditMigratedVisibilityTest {
                 .andReturn()
                 .response.contentAsString
         val migratedIds =
-            objectMapper.readTree(body)["content"]
+            objectMapper
+                .readTree(body)["content"]
                 .filter { it["entityId"].asText().startsWith(tag) }
                 .map { it["entityId"].asText() }
                 .toSet()
@@ -155,7 +155,8 @@ class AuditMigratedVisibilityTest {
                 .andExpect(status().isOk)
                 .andReturn()
                 .response.contentAsString
-        return objectMapper.readTree(body)["content"]
+        return objectMapper
+            .readTree(body)["content"]
             .filter { it["entityId"].asText().startsWith(tag) }
             .map { it["action"].asText() }
             .toSet()
@@ -176,7 +177,8 @@ class AuditMigratedVisibilityTest {
                 .andExpect(status().isOk)
                 .andReturn()
                 .response.contentAsString
-        return objectMapper.readTree(body)["content"]
+        return objectMapper
+            .readTree(body)["content"]
             .map { it["action"].asText() }
             .toSet()
     }

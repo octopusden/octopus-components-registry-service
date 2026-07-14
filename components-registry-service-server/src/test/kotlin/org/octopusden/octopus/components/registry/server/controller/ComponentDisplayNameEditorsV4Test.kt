@@ -157,7 +157,8 @@ class ComponentDisplayNameEditorsV4Test {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(createBody(otherName, displayName = unique("Other Display"))),
                 ).andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val otherNode = objectMapper.readTree(otherBody)
         val otherId = otherNode["id"].asText()
         val version = otherNode["version"].asLong()
@@ -180,7 +181,8 @@ class ComponentDisplayNameEditorsV4Test {
                 .perform(get("/rest/api/4/components/meta/java-versions").with(viewerJwt()))
                 .andExpect(status().isOk)
                 .andExpect(jsonPath("$").isArray)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val versions = objectMapper.readTree(result).map { it.asText() }
         assert(versions == listOf("1.8", "11", "17", "21", "25")) {
             "expected configured Java versions numeric-sorted; got $versions"
@@ -195,7 +197,8 @@ class ComponentDisplayNameEditorsV4Test {
                 .perform(get("/rest/api/4/components/meta/maven-versions").with(viewerJwt()))
                 .andExpect(status().isOk)
                 .andExpect(jsonPath("$").isArray)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val versions = objectMapper.readTree(result).map { it.asText() }
         assert(versions == listOf("2.2.1", "3", "3.3.9", "3.6", "3.6.3", "3.9")) {
             "expected configured Maven versions numeric-sorted; got $versions"
@@ -222,7 +225,8 @@ class ComponentDisplayNameEditorsV4Test {
                             ),
                         ),
                 ).andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val id = objectMapper.readTree(body)["id"].asText()
 
         mvc

@@ -45,7 +45,9 @@ class ServiceEventRecorderImplTest {
 
     init {
         val testResourcesPath =
-            java.nio.file.Paths.get(ServiceEventRecorderImplTest::class.java.getResource("/expected-data")!!.toURI()).parent
+            java.nio.file.Paths
+                .get(ServiceEventRecorderImplTest::class.java.getResource("/expected-data")!!.toURI())
+                .parent
         System.setProperty("COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR", testResourcesPath.toString())
     }
 
@@ -70,8 +72,13 @@ class ServiceEventRecorderImplTest {
         assertNull(running.finishedAt)
 
         recorder.recordFinish(
-            ServiceEventType.TEAMCITY_RESYNC, ServiceEventSource.CRS, "alice", "job-1",
-            ServiceEventStatus.COMPLETED, "done", mapOf("updated" to 2),
+            ServiceEventType.TEAMCITY_RESYNC,
+            ServiceEventSource.CRS,
+            "alice",
+            "job-1",
+            ServiceEventStatus.COMPLETED,
+            "done",
+            mapOf("updated" to 2),
         )
 
         val row = repository.findAll().single() // still ONE row — transitioned, not appended
@@ -83,8 +90,13 @@ class ServiceEventRecorderImplTest {
     @Test
     fun `SYS-060 recordFinish without a running row inserts a terminal row`() {
         recorder.recordFinish(
-            ServiceEventType.MIGRATION_COMPONENTS, ServiceEventSource.CRS, "alice", "orphan-job",
-            ServiceEventStatus.FAILED, "boom", mapOf("errorMessage" to "x"),
+            ServiceEventType.MIGRATION_COMPONENTS,
+            ServiceEventSource.CRS,
+            "alice",
+            "orphan-job",
+            ServiceEventStatus.FAILED,
+            "boom",
+            mapOf("errorMessage" to "x"),
         )
 
         val row = repository.findAll().single()
@@ -109,11 +121,15 @@ class ServiceEventRecorderImplTest {
     @Test
     fun `SYS-060 prune deletes rows started before the cutoff`() {
         recorder.recordInstant(
-            type = ServiceEventType.STARTUP, source = ServiceEventSource.CRS, triggeredBy = "system",
+            type = ServiceEventType.STARTUP,
+            source = ServiceEventSource.CRS,
+            triggeredBy = "system",
             startedAt = Instant.now().minus(Duration.ofDays(120)),
         )
         recorder.recordInstant(
-            type = ServiceEventType.STARTUP, source = ServiceEventSource.CRS, triggeredBy = "system",
+            type = ServiceEventType.STARTUP,
+            source = ServiceEventSource.CRS,
+            triggeredBy = "system",
             startedAt = Instant.now(),
         )
 
