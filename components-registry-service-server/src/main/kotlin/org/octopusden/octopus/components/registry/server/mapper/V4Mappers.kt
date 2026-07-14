@@ -83,6 +83,7 @@ fun ComponentEntity.toDetailResponse(teamcityBaseUrl: String? = null): Component
                         id = tc.id!!,
                         projectId = tc.projectId,
                         projectUrl = composeTeamcityProjectUrl(teamcityBaseUrl, tc.projectId),
+                        projectVersion = tc.projectVersion,
                         sortOrder = tc.sortOrder,
                     )
                 },

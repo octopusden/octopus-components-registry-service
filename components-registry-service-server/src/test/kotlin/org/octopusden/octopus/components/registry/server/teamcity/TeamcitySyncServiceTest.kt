@@ -411,6 +411,145 @@ class TeamcitySyncServiceTest {
         )
     }
 
+    @Test
+    @DisplayName("multiple PROJECT_VERSION lines: keeps one project per version, writes one row each")
+    fun multipleVersionsKeepOnePerLine() {
+        val components = listOf(component(alice, "alpha"))
+        val fetcher = stubFetcher(
+            mapOf(
+                "alpha" to listOf(
+                    TcProject("Alpha_1x", "https://tc/1x", hasCdReleaseBuild = false, projectVersion = "1.x"),
+                    TcProject("Alpha_2x", "https://tc/2x", hasCdReleaseBuild = false, projectVersion = "2.x"),
+                ),
+            ),
+        )
+        val repo = StubComponentRepository(components)
+        val tcRepo = StubTcProjectRepository()
+        val publisher = RecordingPublisher()
+        val svc = service(repo, tcRepo, fetcher, publisher, fixedUser("admin"))
+
+        val result = svc.resync()
+
+        assertEquals(1, result.updated)
+        assertEquals(0, result.skippedAmbiguous)
+        assertEquals(0, result.ambiguousAutoResolved) // each line had a single candidate
+        val rows = tcRepo.findByComponentId(alice).sortedBy { it.sortOrder }
+        // Deterministic order: by version then id → 1.x before 2.x.
+        assertEquals(listOf("Alpha_1x", "Alpha_2x"), rows.map { it.projectId })
+        assertEquals(listOf("1.x", "2.x"), rows.map { it.projectVersion })
+    }
+
+    @Test
+    @DisplayName("tie-break is per PROJECT_VERSION: one line resolves trivially, the other via CDRelease")
+    fun sameVersionTieBreakWithinLine() {
+        val components = listOf(component(alice, "alpha"))
+        val fetcher = stubFetcher(
+            mapOf(
+                "alpha" to listOf(
+                    TcProject("Alpha_2x_A", "https://tc/a", hasCdReleaseBuild = false, projectVersion = "2.x"),
+                    TcProject("Alpha_2x_B", "https://tc/b", hasCdReleaseBuild = true, projectVersion = "2.x"),
+                    TcProject("Alpha_1x", "https://tc/1x", hasCdReleaseBuild = false, projectVersion = "1.x"),
+                ),
+            ),
+        )
+        val repo = StubComponentRepository(components)
+        val tcRepo = StubTcProjectRepository()
+        val publisher = RecordingPublisher()
+        val svc = service(repo, tcRepo, fetcher, publisher, fixedUser("admin"))
+
+        val result = svc.resync()
+
+        assertEquals(1, result.updated)
+        assertEquals(0, result.skippedAmbiguous)
+        assertEquals(1, result.ambiguousAutoResolved) // the 2.x line needed a tie-break
+        val rows = tcRepo.findByComponentId(alice).sortedBy { it.sortOrder }
+        assertEquals(listOf("Alpha_1x", "Alpha_2x_B"), rows.map { it.projectId })
+        assertEquals(listOf("1.x", "2.x"), rows.map { it.projectVersion })
+    }
+
+    @Test
+    @DisplayName("one line resolves, another is ambiguous-unresolved: usable winner still written, no skippedAmbiguous")
+    fun mixedResolvableAndAmbiguousLines() {
+        val components = listOf(component(alice, "alpha"))
+        val fetcher = stubFetcher(
+            mapOf(
+                "alpha" to listOf(
+                    // 1.x resolves trivially
+                    TcProject("Alpha_1x", "https://tc/1x", hasCdReleaseBuild = false, projectVersion = "1.x"),
+                    // 2.x is ambiguous with no CDRelease → that line is dropped
+                    TcProject("Alpha_2x_A", "https://tc/a", hasCdReleaseBuild = false, projectVersion = "2.x"),
+                    TcProject("Alpha_2x_B", "https://tc/b", hasCdReleaseBuild = false, projectVersion = "2.x"),
+                ),
+            ),
+        )
+        val repo = StubComponentRepository(components)
+        val tcRepo = StubTcProjectRepository()
+        val publisher = RecordingPublisher()
+        val svc = service(repo, tcRepo, fetcher, publisher, fixedUser("admin"))
+
+        val result = svc.resync()
+
+        // Component counts as updated because at least one line produced a usable winner.
+        assertEquals(1, result.updated)
+        assertEquals(0, result.skippedAmbiguous)
+        val rows = tcRepo.findByComponentId(alice)
+        assertEquals(listOf("Alpha_1x"), rows.map { it.projectId })
+    }
+
+    @Test
+    @DisplayName("null-version candidate is discarded when another candidate declares a version")
+    fun nullVersionDiscardedWhenVersionedPresent() {
+        val components = listOf(component(alice, "alpha"))
+        val fetcher = stubFetcher(
+            mapOf(
+                "alpha" to listOf(
+                    TcProject("Alpha_NoVer", "https://tc/nover", hasCdReleaseBuild = false, projectVersion = null),
+                    TcProject("Alpha_2x", "https://tc/2x", hasCdReleaseBuild = false, projectVersion = "2.x"),
+                    TcProject("Alpha_3x", "https://tc/3x", hasCdReleaseBuild = false, projectVersion = "3.x"),
+                ),
+            ),
+        )
+        val repo = StubComponentRepository(components)
+        val tcRepo = StubTcProjectRepository()
+        val publisher = RecordingPublisher()
+        val svc = service(repo, tcRepo, fetcher, publisher, fixedUser("admin"))
+
+        val result = svc.resync()
+
+        assertEquals(1, result.updated)
+        val rows = tcRepo.findByComponentId(alice).sortedBy { it.sortOrder }
+        // The null-version project is dropped; only the versioned lines survive.
+        assertEquals(listOf("Alpha_2x", "Alpha_3x"), rows.map { it.projectId })
+        assertEquals(listOf("2.x", "3.x"), rows.map { it.projectVersion })
+    }
+
+    @Test
+    @DisplayName("all-null candidates keep default behavior (collapse to one line)")
+    fun allNullKeepsDefaultBehavior() {
+        val components = listOf(component(alice, "alpha"))
+        val fetcher = stubFetcher(
+            mapOf(
+                "alpha" to listOf(
+                    TcProject("Alpha_A", "https://tc/a", hasCdReleaseBuild = false, projectVersion = null),
+                    TcProject("Alpha_B", "https://tc/b", hasCdReleaseBuild = true, projectVersion = null),
+                ),
+            ),
+        )
+        val repo = StubComponentRepository(components)
+        val tcRepo = StubTcProjectRepository()
+        val publisher = RecordingPublisher()
+        val svc = service(repo, tcRepo, fetcher, publisher, fixedUser("admin"))
+
+        val result = svc.resync()
+
+        // Both null → single null group → CDRelease tie-break picks one row.
+        assertEquals(1, result.updated)
+        assertEquals(1, result.ambiguousAutoResolved)
+        val rows = tcRepo.findByComponentId(alice)
+        assertEquals(listOf("Alpha_B"), rows.map { it.projectId })
+        assertEquals(listOf<String?>(null), rows.map { it.projectVersion })
+    }
+
     // -- Test doubles ---------------------------------------------------------
 
     private fun fixedUser(name: String): CurrentUserResolver =

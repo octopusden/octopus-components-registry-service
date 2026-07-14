@@ -317,18 +317,105 @@ class ExternalTcProjectFetcherTest {
         assertEquals(true, tcProject.hasCdReleaseBuild)
     }
 
+    @Test
+    @DisplayName("PROJECT_VERSION parameter is parsed onto TcProject.projectVersion")
+    fun projectVersionParsed() {
+        val projects = listOf(
+            tcProject(id = "Tc_Foo", webUrl = "http://tc/foo", componentName = "foo", projectVersion = "2.x"),
+        )
+        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
+        assertEquals("2.x", result[fooUuid]!!.single().projectVersion)
+    }
+
+    @Test
+    @DisplayName("project without PROJECT_VERSION has null projectVersion")
+    fun projectVersionNullWhenAbsent() {
+        val projects = listOf(tcProject(id = "Tc_Foo", webUrl = "http://tc/foo", componentName = "foo"))
+        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
+        assertEquals(null, result[fooUuid]!!.single().projectVersion)
+    }
+
+    @Test
+    @DisplayName("PROJECT_VERSION falls back to the first non-paused buildType when absent on the project")
+    fun projectVersionFallsBackToBuildType() {
+        val projects = listOf(
+            tcProject(
+                id = "Tc_Foo",
+                webUrl = "http://tc/foo",
+                componentName = "foo",
+                buildTypes = listOf(
+                    // Paused buildType's version is ignored...
+                    buildType(id = "Paused_1x", paused = true, projectVersion = "1.x"),
+                    // ...first non-paused one wins.
+                    buildType(id = "Active_2x", projectVersion = "2.x"),
+                ),
+            ),
+        )
+        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
+        assertEquals("2.x", result[fooUuid]!!.single().projectVersion)
+    }
+
+    @Test
+    @DisplayName("project-level PROJECT_VERSION takes precedence over any buildType value")
+    fun projectVersionProjectLevelWins() {
+        val projects = listOf(
+            tcProject(
+                id = "Tc_Foo",
+                webUrl = "http://tc/foo",
+                componentName = "foo",
+                projectVersion = "1.x",
+                buildTypes = listOf(buildType(id = "Active_2x", projectVersion = "2.x")),
+            ),
+        )
+        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
+        assertEquals("1.x", result[fooUuid]!!.single().projectVersion)
+    }
+
+    @Test
+    @DisplayName("archived project is dropped even with a valid COMPONENT_NAME")
+    fun archivedProjectDropped() {
+        val projects = listOf(
+            tcProject(id = "Tc_Foo", webUrl = "http://tc/foo", componentName = "foo", archived = true),
+        )
+        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    @DisplayName("paused CDRelease build does not count as a release build")
+    fun pausedReleaseBuildNotCounted() {
+        val projects = listOf(
+            tcProject(
+                id = "Tc_Foo",
+                webUrl = "http://tc/foo",
+                componentName = "foo",
+                buildTypes = listOf(buildType(id = "Build1", legacyTemplateId = "CDRelease", paused = true)),
+            ),
+        )
+        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
+        assertEquals(false, result[fooUuid]!!.single().hasCdReleaseBuild)
+    }
+
     private fun tcProject(
         id: String,
         webUrl: String,
         componentName: String,
         buildTypes: List<ExternalTeamcityBuildType> = emptyList(),
+        projectVersion: String? = null,
+        archived: Boolean? = null,
     ) = ExternalTeamcityProject(
         id = id,
         name = id,
         href = "/$id",
         webUrl = webUrl,
+        archived = archived,
         parameters = ExternalTeamcityProperties(
-            properties = mutableListOf(ExternalTeamcityProperty(name = "COMPONENT_NAME", value = componentName)),
+            properties = buildList {
+                add(ExternalTeamcityProperty(name = "COMPONENT_NAME", value = componentName))
+                if (projectVersion != null) {
+                    add(ExternalTeamcityProperty(name = "PROJECT_VERSION", value = projectVersion))
+                }
+            }.toMutableList(),
         ),
         buildTypes = if (buildTypes.isEmpty()) {
             null
@@ -341,12 +428,20 @@ class ExternalTcProjectFetcherTest {
         id: String,
         legacyTemplateId: String? = null,
         pluralTemplateIds: List<String>? = null,
+        paused: Boolean? = null,
+        projectVersion: String? = null,
     ): ExternalTeamcityBuildType = ExternalTeamcityBuildType(
         id = id,
         name = id,
         projectId = "P",
         projectName = "P",
         href = "/$id",
+        paused = paused,
+        parameters = projectVersion?.let {
+            ExternalTeamcityProperties(
+                properties = mutableListOf(ExternalTeamcityProperty(name = "PROJECT_VERSION", value = it)),
+            )
+        },
         template = legacyTemplateId?.let {
             ExternalTeamcityBuildType(id = it, name = it, projectId = "P", projectName = "P", href = "/$it")
         },

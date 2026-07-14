@@ -2583,6 +2583,9 @@
           "projectUrl" : {
             "type" : "string"
           },
+          "projectVersion" : {
+            "type" : "string"
+          },
           "sortOrder" : {
             "format" : "int32",
             "type" : "integer"

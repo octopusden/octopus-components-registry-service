@@ -13,6 +13,7 @@ import org.springframework.context.annotation.Configuration
 import java.util.UUID
 
 private const val COMPONENT_NAME_PARAM = "COMPONENT_NAME"
+private const val PROJECT_VERSION_PARAM = "PROJECT_VERSION"
 
 // `href` and `webUrl` are non-nullable on the library's TeamcityProject DTO, so the
 // fields spec MUST request them or Jackson throws on deserialisation. We don't read
@@ -33,10 +34,19 @@ private const val COMPONENT_NAME_PARAM = "COMPONENT_NAME"
 // Direct buildTypes only — sub-projects are not walked, on the convention that
 // the project carrying COMPONENT_NAME also owns the release build.
 private const val BUILD_TYPE_REQUIRED = "id,name,projectId,projectName,href"
+
+// Direct buildTypes additionally request `paused` (so the CDRelease tie-break can
+// ignore a paused release build) and their `parameters` (so PROJECT_VERSION can be
+// read from a buildType when the project itself doesn't declare it — see
+// [getProjectVersion]). `paused`/`parameters` are only meaningful on concrete
+// buildTypes, so the nested template(...) / templates(...) entries keep the base
+// field set. `archived` is requested at project level so archived projects can be
+// dropped client-side (see [mapTcProjectsToComponentMatches]).
+private const val BUILD_TYPE_WITH_PAUSED = "$BUILD_TYPE_REQUIRED,paused,parameters(property(name,value))"
 private const val PROJECT_FIELDS =
-    "project(id,name,webUrl,href," +
+    "project(id,name,webUrl,href,archived," +
         "parameters(property(name,value))," +
-        "buildTypes(buildType($BUILD_TYPE_REQUIRED," +
+        "buildTypes(buildType($BUILD_TYPE_WITH_PAUSED," +
         "template($BUILD_TYPE_REQUIRED)," +
         "templates(buildType($BUILD_TYPE_REQUIRED)))))"
 
@@ -104,7 +114,7 @@ internal class ExternalTcProjectFetcher(
             }
             throw e
         }
-        val projects = response.projects.orEmpty()
+        val projects = response.projects.filter { it.archived != true }
         log.info { "TC sync: TC returned ${projects.size} projects with $COMPONENT_NAME_PARAM parameter" }
 
         return mapTcProjectsToComponentMatches(
@@ -118,14 +128,21 @@ internal class ExternalTcProjectFetcher(
 /**
  * Pure mapper, extracted for unit-testability. For each TC project, reads the
  * `COMPONENT_NAME` parameter value, looks it up in [componentsByName], and groups
- * the resulting [TcProject]s by component UUID. Projects without the parameter,
- * with a blank value, or whose value is unknown to CRS are dropped.
+ * the resulting [TcProject]s by component UUID. Projects are dropped when they:
+ *  - are flagged `archived` (a retired line must not be linked);
+ *  - lack the `COMPONENT_NAME` parameter, carry a blank value, or a value unknown
+ *    to CRS.
  *
- * `hasCdReleaseBuild` is computed per-project from the same response: true iff
- * any direct [ExternalTeamcityProject.buildTypes] entry inherits — through either
- * the legacy single `template` or the multi `templates` link — from the
- * configured [cdReleaseTemplateId]. Inheritance is checked **only** at the
- * project carrying the COMPONENT_NAME parameter; sub-projects are not walked.
+ * `projectVersion` is read from the optional `PROJECT_VERSION` parameter (null when
+ * absent/blank). One component may own several projects across distinct release
+ * lines; [TeamcitySyncService] groups by this value downstream.
+ *
+ * `hasCdReleaseBuild` is computed per-project from the same response: true iff any
+ * direct **non-paused** [ExternalTeamcityProject.buildTypes] entry inherits —
+ * through either the legacy single `template` or the multi `templates` link — from
+ * the configured [cdReleaseTemplateId]. A paused release build does not count.
+ * Inheritance is checked **only** at the project carrying the COMPONENT_NAME
+ * parameter; sub-projects are not walked.
  */
 internal fun mapTcProjectsToComponentMatches(
     projects: List<ExternalTeamcityProject>,
@@ -134,23 +151,58 @@ internal fun mapTcProjectsToComponentMatches(
 ): Map<UUID, List<TcProject>> =
     projects
         .mapNotNull { project ->
-            val componentName = project.parameters?.properties
+            val params = project.parameters?.properties
+            val componentName = params
                 ?.firstOrNull { it.name == COMPONENT_NAME_PARAM }
                 ?.value
                 ?.trim()
                 ?.takeIf { it.isNotEmpty() }
                 ?: return@mapNotNull null
             val uuid = componentsByName[componentName] ?: return@mapNotNull null
+            val projectVersion = getProjectVersion(project)
             val hasCdRelease = projectHasCdReleaseBuild(project, cdReleaseTemplateId)
-            uuid to TcProject(id = project.id, webUrl = project.webUrl, hasCdReleaseBuild = hasCdRelease)
+            uuid to TcProject(
+                id = project.id,
+                webUrl = project.webUrl,
+                hasCdReleaseBuild = hasCdRelease,
+                projectVersion = projectVersion,
+            )
         }
         .groupBy({ it.first }, { it.second })
+
+/**
+ * Resolve the release line for a project. Prefers the project-level `PROJECT_VERSION`
+ * parameter; when absent, falls back to the first NON-PAUSED buildType that declares
+ * `PROJECT_VERSION`. Returns null (trimmed-blank counts as absent) when neither has it.
+ * Paused buildTypes are ignored on the convention that a paused line is not authoritative.
+ */
+private fun getProjectVersion(project: ExternalTeamcityProject): String? {
+    project.parameters?.properties
+        ?.firstOrNull { it.name == PROJECT_VERSION_PARAM }
+        ?.value
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+        ?.let { return it }
+
+    return project.buildTypes?.buildTypes
+        ?.asSequence()
+        ?.filter { it.paused != true }?.firstNotNullOfOrNull { bt ->
+            bt.parameters?.properties
+                ?.firstOrNull { it.name == PROJECT_VERSION_PARAM }
+                ?.value
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+        }
+}
 
 private fun projectHasCdReleaseBuild(
     project: ExternalTeamcityProject,
     cdReleaseTemplateId: String,
 ): Boolean =
-    project.buildTypes?.buildTypes?.any { bt ->
-        bt.template?.id == cdReleaseTemplateId ||
-            bt.templates?.buildTypes?.any { it.id == cdReleaseTemplateId } == true
-    } == true
+    project.buildTypes?.buildTypes
+        // A paused build config cannot represent an active release build.
+        ?.filter { it.paused != true }
+        ?.any { bt ->
+            bt.template?.id == cdReleaseTemplateId ||
+                bt.templates?.buildTypes?.any { it.id == cdReleaseTemplateId } == true
+        } == true
