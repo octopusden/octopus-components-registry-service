@@ -19,12 +19,14 @@ class VersionRangeMapCanonicalizerTest {
     private val mapper = ObjectMapper()
 
     /** Mirrors the jira DTO round-trip shape: data class + explicit @JsonProperty + @JsonCreator + a Boolean. */
-    data class ArrPayload @com.fasterxml.jackson.annotation.JsonCreator constructor(
-        @com.fasterxml.jackson.annotation.JsonProperty("componentName") val componentName: String,
-        @com.fasterxml.jackson.annotation.JsonProperty("versionRange") val versionRange: String,
-        @com.fasterxml.jackson.annotation.JsonProperty("flag") val flag: Boolean,
-        @com.fasterxml.jackson.annotation.JsonProperty("name") val name: String?,
-    )
+    data class ArrPayload
+        @com.fasterxml.jackson.annotation.JsonCreator
+        constructor(
+            @com.fasterxml.jackson.annotation.JsonProperty("componentName") val componentName: String,
+            @com.fasterxml.jackson.annotation.JsonProperty("versionRange") val versionRange: String,
+            @com.fasterxml.jackson.annotation.JsonProperty("flag") val flag: Boolean,
+            @com.fasterxml.jackson.annotation.JsonProperty("name") val name: String?,
+        )
 
     private fun obj(vararg pairs: Pair<String, String>): ObjectNode {
         val o = mapper.createObjectNode()
@@ -200,7 +202,9 @@ class VersionRangeMapCanonicalizerTest {
     @Test
     @DisplayName("canonicalizeTypedRangeMap preserves a value's collection ORDER verbatim (compareDto ignores it, not us)")
     fun typedRangeMapPreservesCollectionOrder() {
-        data class Val(val ids: List<String> = emptyList())
+        data class Val(
+            val ids: List<String> = emptyList(),
+        )
         // Adjacent ranges with the SAME value merge; the surviving value's list order is preserved as-is
         // (NOT sorted) so the downstream recursive compareDto — not this canonicaliser — decides
         // collection-order equality. (Normalising order here would shift that decision to the wrong layer
@@ -214,7 +218,10 @@ class VersionRangeMapCanonicalizerTest {
     @Test
     @DisplayName("canonicalizeTypedRangeMap: normalises keys + merges adjacent equal values, keeps values typed")
     fun typedRangeMapRoundTrip() {
-        data class V(val pattern: String = "", val groupId: String = "")
+        data class V(
+            val pattern: String = "",
+            val groupId: String = "",
+        )
         val m = mapOf(
             "[1.0,2.0)" to V("a", "g"),
             "[2.0, 3.0)" to V("a", "g"), // contiguous + equal → merges with the above
@@ -232,9 +239,12 @@ class VersionRangeMapCanonicalizerTest {
         // Production DTO (the /maven-artifacts value type): values are kept as the ORIGINAL instances
         // (canonicaliser touches only keys), so no field is lost — merged keys, identical values.
         val real = mapOf(
-            "[1.0,2.0)" to org.octopusden.octopus.components.registry.core.dto.ComponentArtifactConfigurationDTO("g", "a"),
-            "[2.0,3.0)" to org.octopusden.octopus.components.registry.core.dto.ComponentArtifactConfigurationDTO("g", "a"),
-            "[5.0,6.0)" to org.octopusden.octopus.components.registry.core.dto.ComponentArtifactConfigurationDTO("g2", "b"),
+            "[1.0,2.0)" to org.octopusden.octopus.components.registry.core.dto
+                .ComponentArtifactConfigurationDTO("g", "a"),
+            "[2.0,3.0)" to org.octopusden.octopus.components.registry.core.dto
+                .ComponentArtifactConfigurationDTO("g", "a"),
+            "[5.0,6.0)" to org.octopusden.octopus.components.registry.core.dto
+                .ComponentArtifactConfigurationDTO("g2", "b"),
         )
         val rc = VersionRangeMapCanonicalizer.canonicalizeTypedRangeMap(real)
         assertEquals(setOf("[1,3)", "[5,6)"), rc.keys)
@@ -249,7 +259,10 @@ class VersionRangeMapCanonicalizerTest {
         fun cfg(group: String) =
             org.octopusden.octopus.components.registry.api.beans.VersionedComponentConfigurationBean().apply {
                 setGroupId(group)
-                setVcs(org.octopusden.octopus.components.registry.api.beans.GitVersionControlSystemBean("url", "tag1", "main"))
+                setVcs(
+                    org.octopusden.octopus.components.registry.api.beans
+                        .GitVersionControlSystemBean("url", "tag1", "main"),
+                )
             }
         // The variant bean serialises Optional<…> escrow fields (needs the jdk8 module) and an
         // `is`-prefixed boolean that does NOT deserialise back symmetrically — so the canonicaliser must
@@ -269,17 +282,26 @@ class VersionRangeMapCanonicalizerTest {
     @DisplayName("/jira-component-version-ranges Set-array: reshaped per-component ranges → ZERO shape diffs; real payload change surfaces")
     fun jiraRangesSetArrayWiring() {
         val ep = "GET /rest/api/2/common/jira-component-version-ranges"
-        fun el(range: String, project: String) =
-            mapper.readTree("""{"componentName":"c","versionRange":"$range","component":{"projectKey":"$project"}}""")
+
+        fun el(
+            range: String,
+            project: String,
+        ) = mapper.readTree("""{"componentName":"c","versionRange":"$range","component":{"projectKey":"$project"}}""")
         // V1 splits component c into two adjacent same-payload ranges; candidate merges → array size differs.
-        val v1 = mapper.createArrayNode().apply { add(el("[1,2)", "P")); add(el("[2,3)", "P")) }
+        val v1 = mapper.createArrayNode().apply {
+            add(el("[1,2)", "P"))
+            add(el("[2,3)", "P"))
+        }
         val cand = mapper.createArrayNode().apply { add(el("[1,3)", "P")) }
         val bn = VersionRangeMapCanonicalizer.normalizeForEndpoint(ep, v1)
         val cn = VersionRangeMapCanonicalizer.normalizeForEndpoint(ep, cand)
         assertEquals(emptyList<JsonShape.ShapeDiff>(), JsonShape.diff(bn, cn))
 
         // A real payload difference (different projectKey) must NOT be merged away → surfaces.
-        val candReal = mapper.createArrayNode().apply { add(el("[1,2)", "P")); add(el("[2,3)", "Q")) }
+        val candReal = mapper.createArrayNode().apply {
+            add(el("[1,2)", "P"))
+            add(el("[2,3)", "Q"))
+        }
         val cnReal = VersionRangeMapCanonicalizer.normalizeForEndpoint(ep, candReal)
         assertNotEquals(emptyList<JsonShape.ShapeDiff>(), JsonShape.diff(bn, cnReal))
     }
@@ -297,9 +319,11 @@ class VersionRangeMapCanonicalizerTest {
         )
         val canon = VersionRangeMapCanonicalizer.canonicalizeTypedRangeArray(list, ArrPayload::class.java)
         assertEquals(listOf("[1,10)", "[10,12)"), canon.map { it.versionRange })
-        org.junit.jupiter.api.Assertions.assertTrue(canon[0].flag) // boolean faithful (the 4073-risk)
+        org.junit.jupiter.api.Assertions
+            .assertTrue(canon[0].flag) // boolean faithful (the 4073-risk)
         assertEquals("x", canon[0].name)
-        org.junit.jupiter.api.Assertions.assertFalse(canon[1].flag)
+        org.junit.jupiter.api.Assertions
+            .assertFalse(canon[1].flag)
     }
 
     @Test

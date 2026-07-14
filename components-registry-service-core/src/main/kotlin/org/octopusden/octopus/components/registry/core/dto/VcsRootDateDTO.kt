@@ -5,5 +5,5 @@ import java.util.*
 
 data class VcsRootDateDTO(
     @JsonProperty("root") val root: VersionControlSystemRootDTO,
-    @JsonProperty("date") val date: Date? = null
+    @JsonProperty("date") val date: Date? = null,
 )

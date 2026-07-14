@@ -44,7 +44,9 @@ import java.nio.file.Path
 @Tag("unit")
 class ReportDirResolutionTest {
     @Test
-    fun `null prop returns absolute path of fallback`(@TempDir tmp: Path) {
+    fun `null prop returns absolute path of fallback`(
+        @TempDir tmp: Path,
+    ) {
         val fallback = tmp.resolve("build/reports/compat")
         val out = resolveReportDir(null, fallback)
         assertThat(out).isAbsolute()
@@ -52,7 +54,9 @@ class ReportDirResolutionTest {
     }
 
     @Test
-    fun `absolute prop is returned as-is`(@TempDir tmp: Path) {
+    fun `absolute prop is returned as-is`(
+        @TempDir tmp: Path,
+    ) {
         val absolute = tmp.resolve("custom/reports").toAbsolutePath()
         val out = resolveReportDir(absolute.toString(), Path.of("ignored-fallback"))
         assertThat(out).isEqualTo(absolute)
@@ -62,8 +66,7 @@ class ReportDirResolutionTest {
     fun `relative prop throws IllegalStateException — fail-fast on misconfigured build gradle`() {
         assertThatThrownBy {
             resolveReportDir("components-registry-compat-test/build/reports/compat", Path.of("ignored-fallback"))
-        }
-            .isInstanceOf(IllegalStateException::class.java)
+        }.isInstanceOf(IllegalStateException::class.java)
             .hasMessageContaining("compat.report-dir must be absolute")
             .hasMessageContaining("components-registry-compat-test/build/reports/compat")
     }
@@ -72,8 +75,7 @@ class ReportDirResolutionTest {
     fun `relative prop with single segment also throws`() {
         assertThatThrownBy {
             resolveReportDir("build/reports/compat", Path.of("ignored-fallback"))
-        }
-            .isInstanceOf(IllegalStateException::class.java)
+        }.isInstanceOf(IllegalStateException::class.java)
             .hasMessageContaining("compat.report-dir must be absolute")
     }
 }

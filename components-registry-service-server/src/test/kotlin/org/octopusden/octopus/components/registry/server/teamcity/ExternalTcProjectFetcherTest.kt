@@ -6,13 +6,13 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import java.util.UUID
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityBuildType as ExternalTeamcityBuildType
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityBuildTypes as ExternalTeamcityBuildTypes
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProject as ExternalTeamcityProject
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProjects as ExternalTeamcityProjects
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProperties as ExternalTeamcityProperties
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProperty as ExternalTeamcityProperty
-import java.util.UUID
 
 /**
  * Unit tests for the pure mapper inside [ExternalTcProjectFetcher]. The HTTP side
@@ -20,7 +20,6 @@ import java.util.UUID
  * real TC; here we cover only the mapping rules CRS layers on top.
  */
 class ExternalTcProjectFetcherTest {
-
     private val fooUuid = UUID.randomUUID()
     private val barUuid = UUID.randomUUID()
     private val cdReleaseTemplateId = "CDRelease"
@@ -260,7 +259,8 @@ class ExternalTcProjectFetcherTest {
         // The legacy `template` and plural `templates(buildType(...))` blocks
         // both populate all five required buildType columns, mirroring what
         // PROJECT_FIELDS asks TC for.
-        val json = """
+        val json =
+            """
             {
               "project": [
                 {
@@ -303,7 +303,7 @@ class ExternalTcProjectFetcherTest {
                 }
               ]
             }
-        """.trimIndent()
+            """.trimIndent()
         // Mirror the library's getMapper() in TeamcityClassicClient.companion:
         // jacksonObjectMapper + FAIL_ON_UNKNOWN_PROPERTIES=false. That's what
         // hits the wire on real resyncs, so we deserialize through the same
@@ -341,19 +341,28 @@ class ExternalTcProjectFetcherTest {
         id: String,
         legacyTemplateId: String? = null,
         pluralTemplateIds: List<String>? = null,
-    ): ExternalTeamcityBuildType = ExternalTeamcityBuildType(
-        id = id,
-        name = id,
-        projectId = "P",
-        projectName = "P",
-        href = "/$id",
-        template = legacyTemplateId?.let {
-            ExternalTeamcityBuildType(id = it, name = it, projectId = "P", projectName = "P", href = "/$it")
-        },
-        templates = pluralTemplateIds?.let { ids ->
-            ExternalTeamcityBuildTypes(
-                buildTypes = ids.map { ExternalTeamcityBuildType(id = it, name = it, projectId = "P", projectName = "P", href = "/$it") },
-            )
-        },
-    )
+    ): ExternalTeamcityBuildType =
+        ExternalTeamcityBuildType(
+            id = id,
+            name = id,
+            projectId = "P",
+            projectName = "P",
+            href = "/$id",
+            template = legacyTemplateId?.let {
+                ExternalTeamcityBuildType(id = it, name = it, projectId = "P", projectName = "P", href = "/$it")
+            },
+            templates = pluralTemplateIds?.let { ids ->
+                ExternalTeamcityBuildTypes(
+                    buildTypes = ids.map {
+                        ExternalTeamcityBuildType(
+                            id = it,
+                            name = it,
+                            projectId = "P",
+                            projectName = "P",
+                            href = "/$it",
+                        )
+                    },
+                )
+            },
+        )
 }

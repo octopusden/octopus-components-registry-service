@@ -5,5 +5,5 @@ import com.fasterxml.jackson.annotation.JsonProperty
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class ArtifactComponentsDTO(
-    @JsonProperty("artifactComponents") val artifactComponents: Collection<ArtifactComponentDTO>
+    @JsonProperty("artifactComponents") val artifactComponents: Collection<ArtifactComponentDTO>,
 )

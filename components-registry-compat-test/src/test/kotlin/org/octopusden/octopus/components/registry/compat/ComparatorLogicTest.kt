@@ -43,8 +43,8 @@ import org.junit.jupiter.api.Test
  */
 @Tag("unit")
 class ComparatorLogicTest {
-
     private val mapper = jacksonObjectMapper()
+
     private fun node(json: String): JsonNode = mapper.readTree(json)
 
     private fun response(
@@ -322,7 +322,9 @@ class ComparatorLogicTest {
     }
 
     @Test
-    @DisplayName("Header allow-list is case-insensitive: baseline 'Content-Type' vs candidate 'content-type' → no HEADER_DIFF when values match")
+    @DisplayName(
+        "Header allow-list is case-insensitive: baseline 'Content-Type' vs candidate 'content-type' → no HEADER_DIFF when values match",
+    )
     fun headerAllowListIsCaseInsensitive() {
         val baseline = response(
             body = """{"x":1}""",
@@ -452,8 +454,14 @@ class ComparatorLogicTest {
     // Local synthetic DTO mirroring the shape `Component { distribution: Distribution { gav: String } }`.
     // Avoids depending on the production ComponentV2 type so the test stays focused on the comparator,
     // and uses `com.example.*` GAVs throughout (no real internal identifiers).
-    data class TestDistribution(val gav: String?)
-    data class TestComponent(val id: String, val distribution: TestDistribution)
+    data class TestDistribution(
+        val gav: String?,
+    )
+
+    data class TestComponent(
+        val id: String,
+        val distribution: TestDistribution,
+    )
 
     @Test
     @DisplayName("compareDto: trailing-comma-only diff on distribution.gav → NO VALUE_DIFF recorded")
@@ -506,7 +514,10 @@ class ComparatorLogicTest {
         // Verify the comparator was registered ONLY for the GAV field path.
         // `id` differs by a trailing comma — must still surface as a VALUE_DIFF
         // because the comparator must not apply to arbitrary String fields.
-        data class IdHolder(val id: String, val distribution: TestDistribution)
+        data class IdHolder(
+            val id: String,
+            val distribution: TestDistribution,
+        )
         Comparators.compareDto(
             endpoint = "GET /rest/api/2/components",
             pathParams = emptyMap(),
@@ -523,11 +534,17 @@ class ComparatorLogicTest {
     // canonicalizeTypedRangeMap (keys only) BEFORE compareDto, whose recursive comparison
     // (ignoringCollectionOrder) then compares the typed values. NOT a JSON-equality field comparator —
     // that lost ignoringCollectionOrder and exploded VALUE_DIFFs 276->1155 on build 4072/4073.
-    data class VarVal(val gen: String = "", val ids: List<String> = emptyList())
-    data class VariantHolder(val id: String, val variants: Map<String, VarVal>)
+    data class VarVal(
+        val gen: String = "",
+        val ids: List<String> = emptyList(),
+    )
 
-    private fun canonV(m: Map<String, VarVal>): Map<String, VarVal> =
-        VersionRangeMapCanonicalizer.canonicalizeTypedRangeMap(m)
+    data class VariantHolder(
+        val id: String,
+        val variants: Map<String, VarVal>,
+    )
+
+    private fun canonV(m: Map<String, VarVal>): Map<String, VarVal> = VersionRangeMapCanonicalizer.canonicalizeTypedRangeMap(m)
 
     @Test
     @DisplayName("variants: reshaped keys (split/merge/whitespace/version-form) → NO VALUE_DIFF")
@@ -550,7 +567,10 @@ class ComparatorLogicTest {
         Comparators.compareDto(
             endpoint = "GET /rest/api/3/components",
             pathParams = emptyMap(),
-            baseline = VariantHolder("c", canonV(mapOf("[1,2)" to VarVal("A", listOf("a", "b")), "[2,3)" to VarVal("A", listOf("a", "b"))))),
+            baseline = VariantHolder(
+                "c",
+                canonV(mapOf("[1,2)" to VarVal("A", listOf("a", "b")), "[2,3)" to VarVal("A", listOf("a", "b")))),
+            ),
             candidate = VariantHolder("c", canonV(mapOf("[1,3)" to VarVal("A", listOf("b", "a"))))),
         )
         assertThat(DiffCollector.snapshot()).isEmpty()
@@ -574,7 +594,10 @@ class ComparatorLogicTest {
 
     // Synthetic mirror of the /maven-artifacts payload: Map<versionRange, ComponentArtifactConfigurationDTO>
     // where each value carries groupPattern + artifactPattern. com.example.* only (no real identifiers).
-    data class TestArtifactCfg(val groupPattern: String, val artifactPattern: String)
+    data class TestArtifactCfg(
+        val groupPattern: String,
+        val artifactPattern: String,
+    )
 
     private val MAVEN_ARTIFACTS_EP = "GET /rest/api/2/components/{component}/maven-artifacts"
 

@@ -21,8 +21,7 @@ internal data class MavenCoords(
  * Shared between [ImportServiceImpl] (write path) and
  * [DatabaseComponentRegistryResolver] (read path) to ensure consistent tokenisation.
  */
-internal fun splitCsv(csv: String): List<String> =
-    csv.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+internal fun splitCsv(csv: String): List<String> = csv.split(",").map { it.trim() }.filter { it.isNotEmpty() }
 
 /**
  * Parses a single Maven GAV entry of the form `groupId:artifactId[:extension[:classifier]]`.

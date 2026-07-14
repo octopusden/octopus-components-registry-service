@@ -54,7 +54,11 @@ object CompatEntityContext {
     ): String? {
         val canonical = canonicalEndpoint(endpoint)
         if (canonical in jiraRangesEndpoints) {
-            val index = arrayIndex.find(jsonPath)?.groupValues?.get(1)?.toIntOrNull() ?: return null
+            val index = arrayIndex
+                .find(jsonPath)
+                ?.groupValues
+                ?.get(1)
+                ?.toIntOrNull() ?: return null
             val element =
                 elementAt(RawArraySorters.stableSorted(endpoint, baselineJson), index)
                     ?: elementAt(RawArraySorters.stableSorted(endpoint, candidateJson), index)
@@ -86,10 +90,12 @@ object CompatEntityContext {
     }
 
     /** Collapse `$[3]` → `$[N]` so cluster digest groups by field, not wire index. */
-    fun normalizeFieldPath(jsonPath: String): String =
-        jsonPath.replace(arrayIndex, Regex.escapeReplacement("$" + "[N]"))
+    fun normalizeFieldPath(jsonPath: String): String = jsonPath.replace(arrayIndex, Regex.escapeReplacement("$" + "[N]"))
 
-    private fun elementAt(root: JsonNode?, index: Int): JsonNode? {
+    private fun elementAt(
+        root: JsonNode?,
+        index: Int,
+    ): JsonNode? {
         if (root == null || !root.isArray || index < 0 || index >= root.size()) {
             return null
         }

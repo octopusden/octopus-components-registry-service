@@ -1,7 +1,6 @@
 package org.octopusden.octopus.components.registry.server.controller
 
 import io.swagger.v3.oas.annotations.Operation
-import java.util.concurrent.atomic.AtomicBoolean
 import org.octopusden.octopus.components.registry.core.dto.ErrorResponse
 import org.octopusden.octopus.components.registry.core.dto.ServiceStatusDTO
 import org.octopusden.octopus.components.registry.server.service.ComponentsRegistryService
@@ -15,6 +14,7 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
+import java.util.concurrent.atomic.AtomicBoolean
 
 @RestController
 @RequestMapping("rest/api/2/components-registry/service")

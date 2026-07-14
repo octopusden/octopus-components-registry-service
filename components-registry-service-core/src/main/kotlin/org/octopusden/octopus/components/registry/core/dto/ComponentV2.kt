@@ -7,7 +7,7 @@ import com.fasterxml.jackson.annotation.JsonProperty
 class ComponentV2(
     @JsonProperty(value = "id") id: String,
     @JsonProperty(value = "name") name: String?,
-    @JsonProperty(value = "componentOwner") componentOwner: String
+    @JsonProperty(value = "componentOwner") componentOwner: String,
 ) : Component(id, name, componentOwner) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true

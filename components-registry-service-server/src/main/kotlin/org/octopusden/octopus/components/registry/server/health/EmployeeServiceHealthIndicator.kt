@@ -36,15 +36,15 @@ class EmployeeServiceHealthIndicator(
         return when (result.health) {
             IntegrationHealth.UP -> Health.up().build()
             IntegrationHealth.DOWN ->
-                Health.down()
+                Health
+                    .down()
                     .withDetail(
                         "reason",
                         // Carry the real downstream cause (e.g. "...403 Forbidden") so the
                         // aggregate /actuator/health and the Portal banner name access-denied
                         // vs unreachable; fall back to the generic hint when none was captured.
                         result.detail?.let { "employee-service lookup failed — $it" } ?: GENERIC_REASON,
-                    )
-                    .build()
+                    ).build()
             IntegrationHealth.DISABLED -> Health.unknown().withDetail("enabled", false).build()
         }
     }

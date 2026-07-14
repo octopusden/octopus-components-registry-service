@@ -1,7 +1,7 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
-import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import org.octopusden.cloud.commons.security.client.AuthServerClient

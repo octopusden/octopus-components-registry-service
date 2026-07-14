@@ -7,7 +7,7 @@ import com.fasterxml.jackson.annotation.JsonProperty
 class ComponentV1(
     @JsonProperty(value = "id") id: String,
     @JsonProperty(value = "componentDisplayName") name: String?,
-    @JsonProperty(value = "componentOwner") componentOwner: String
+    @JsonProperty(value = "componentOwner") componentOwner: String,
 ) : Component(id, name, componentOwner) {
     @JsonProperty(value = "componentDisplayName")
     fun getComponentDisplayName() = name

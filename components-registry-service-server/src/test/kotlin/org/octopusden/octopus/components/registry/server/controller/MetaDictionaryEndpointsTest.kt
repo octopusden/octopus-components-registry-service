@@ -94,7 +94,8 @@ class MetaDictionaryEndpointsTest {
                 .perform(get("/rest/api/4/components/meta/labels/dictionary").with(viewerJwt()))
                 .andExpect(status().isOk)
                 .andExpect(jsonPath("$").isArray)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val all = objectMapper.readTree(body).map { it.asText() }
         val seeded = all.filter { it == a || it == b || it == g }
         assert(seeded == listOf(a, b, g).sorted()) {
@@ -120,7 +121,8 @@ class MetaDictionaryEndpointsTest {
                 .perform(get("/rest/api/4/components/meta/systems/dictionary").with(viewerJwt()))
                 .andExpect(status().isOk)
                 .andExpect(jsonPath("$").isArray)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val all = objectMapper.readTree(body).map { it.asText() }
         val seeded = all.filter { it == a || it == b || it == g }
         assert(seeded == listOf(a, b, g).sorted()) {

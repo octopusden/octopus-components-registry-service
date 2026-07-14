@@ -44,8 +44,11 @@ class EmployeeServiceConfig {
         return ClassicEmployeeServiceClient(
             object : EmployeeServiceClientParametersProvider {
                 override fun getApiUrl(): String = properties.url
+
                 override fun getTimeRetryInMillis(): Int = properties.retryTimeMillis
+
                 override fun getBearerToken(): String? = properties.token.takeIf { it.isNotBlank() }
+
                 override fun getBasicCredentials(): String? =
                     if (properties.username.isNotBlank() && properties.password.isNotBlank()) {
                         "${properties.username}:${properties.password}"

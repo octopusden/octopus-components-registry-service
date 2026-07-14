@@ -5,6 +5,7 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
+import org.mockito.ArgumentMatchers.anyString
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
@@ -25,7 +26,6 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
-import org.mockito.ArgumentMatchers.anyString
 import java.nio.file.Paths
 import java.util.UUID
 
@@ -89,16 +89,21 @@ class PersonFieldValidationV4Test {
                 .content(body),
         )
 
-    private fun patchComponent(id: String, body: String) =
-        mvc.perform(
-            patch("/rest/api/4/components/$id")
-                .with(adminJwt())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body),
-        )
+    private fun patchComponent(
+        id: String,
+        body: String,
+    ) = mvc.perform(
+        patch("/rest/api/4/components/$id")
+            .with(adminJwt())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(body),
+    )
 
     /** Valid create with an owner and the explicit&&external gate OFF. */
-    private fun validBody(name: String, owner: String = "owner_$name"): String =
+    private fun validBody(
+        name: String,
+        owner: String = "owner_$name",
+    ): String =
         """{"name":"$name","componentOwner":"$owner",""" +
             """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}"""
 
@@ -221,7 +226,10 @@ class PersonFieldValidationV4Test {
             """{"name":"$name","componentOwner":"owner1","releaseManager":["rm1"],""" +
                 """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}"""
         val seed =
-            postCreate(seedBody).andExpect(status().isCreated).andReturn().response.contentAsString
+            postCreate(seedBody)
+                .andExpect(status().isCreated)
+                .andReturn()
+                .response.contentAsString
         val node = objectMapper.readTree(seed)
         val id = node["id"].asText()
         val version = node["version"].asLong()
@@ -239,7 +247,10 @@ class PersonFieldValidationV4Test {
         `when`(employeeDirectory.isActive(anyString())).thenReturn(ActiveStatus.ACTIVE)
         val name = "pf_grandfather_${uniqueSuffix()}"
         val seed =
-            postCreate(validBody(name)).andExpect(status().isCreated).andReturn().response.contentAsString
+            postCreate(validBody(name))
+                .andExpect(status().isCreated)
+                .andReturn()
+                .response.contentAsString
         val node = objectMapper.readTree(seed)
         val id = node["id"].asText()
         val version = node["version"].asLong()

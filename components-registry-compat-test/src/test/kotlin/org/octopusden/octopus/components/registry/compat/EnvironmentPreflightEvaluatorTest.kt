@@ -17,17 +17,19 @@ import org.junit.jupiter.api.Test
  */
 @Tag("unit")
 class EnvironmentPreflightEvaluatorTest {
-
     private val ts = "2026-05-16T20:00:00Z"
 
-    private fun ok(rev: String, defaultSource: String? = "db", dbComponentCount: Long? = 948L) =
-        ServiceStatusSnapshot(
-            cacheUpdatedAt = "2026-05-16T19:59:00Z",
-            serviceMode = "VCS",
-            versionControlRevision = rev,
-            defaultSource = defaultSource,
-            dbComponentCount = dbComponentCount,
-        )
+    private fun ok(
+        rev: String,
+        defaultSource: String? = "db",
+        dbComponentCount: Long? = 948L,
+    ) = ServiceStatusSnapshot(
+        cacheUpdatedAt = "2026-05-16T19:59:00Z",
+        serviceMode = "VCS",
+        versionControlRevision = rev,
+        defaultSource = defaultSource,
+        dbComponentCount = dbComponentCount,
+    )
 
     @Test
     fun `happy path — both stands healthy, revs match, candidate in DB mode → no diffs`() {

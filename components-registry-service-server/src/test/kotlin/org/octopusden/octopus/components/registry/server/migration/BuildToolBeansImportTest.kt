@@ -1,9 +1,9 @@
 package org.octopusden.octopus.components.registry.server.migration
 
-import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
@@ -50,7 +50,6 @@ import java.nio.file.Paths
 @Timeout(120)
 @Tag("integration")
 class BuildToolBeansImportTest {
-
     @MockBean
     @Suppress("UnusedPrivateProperty")
     private lateinit var authServerClient: AuthServerClient
@@ -66,9 +65,10 @@ class BuildToolBeansImportTest {
 
     init {
         val testResourcesPath =
-            Paths.get(
-                BuildToolBeansImportTest::class.java.getResource("/expected-data")!!.toURI(),
-            ).parent
+            Paths
+                .get(
+                    BuildToolBeansImportTest::class.java.getResource("/expected-data")!!.toURI(),
+                ).parent
         System.setProperty("COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR", testResourcesPath.toString())
     }
 

@@ -1,9 +1,9 @@
 package org.octopusden.octopus.components.registry.server.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
@@ -80,8 +80,11 @@ class ListComponentsExtendedFiltersTest {
         // (approved contract change). Inject a default into any fixture payload
         // that omits it, so these filter fixtures keep creating components.
         val withOwner =
-            if (bodyJson.contains("componentOwner")) bodyJson
-            else bodyJson.replaceFirst("{", """{"componentOwner":"owner1",""")
+            if (bodyJson.contains("componentOwner")) {
+                bodyJson
+            } else {
+                bodyJson.replaceFirst("{", """{"componentOwner":"owner1",""")
+            }
         val body =
             mvc
                 .perform(
@@ -98,7 +101,11 @@ class ListComponentsExtendedFiltersTest {
     private fun names(vararg params: Pair<String, String>): Set<String> {
         var request = get("/rest/api/4/components").with(viewerJwt()).param("size", "300")
         for ((k, v) in params) request = request.param(k, v)
-        val body = mvc.perform(request).andExpect(status().isOk).andReturn().response.contentAsString
+        val body = mvc
+            .perform(request)
+            .andExpect(status().isOk)
+            .andReturn()
+            .response.contentAsString
         return objectMapper.readTree(body)["content"].map { it["name"].asText() }.toSet()
     }
 
@@ -107,7 +114,11 @@ class ListComponentsExtendedFiltersTest {
         // query (where a missing distinct would inflate the count).
         var request = get("/rest/api/4/components").with(viewerJwt()).param("size", "1")
         for ((k, v) in params) request = request.param(k, v)
-        val body = mvc.perform(request).andExpect(status().isOk).andReturn().response.contentAsString
+        val body = mvc
+            .perform(request)
+            .andExpect(status().isOk)
+            .andReturn()
+            .response.contentAsString
         return objectMapper.readTree(body)
     }
 

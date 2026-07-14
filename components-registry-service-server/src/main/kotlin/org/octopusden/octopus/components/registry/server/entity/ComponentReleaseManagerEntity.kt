@@ -26,14 +26,11 @@ class ComponentReleaseManagerEntity(
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     var id: UUID? = null,
-
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "component_id", nullable = false)
     var component: ComponentEntity,
-
     @Column(name = "username", nullable = false)
     var username: String = "",
-
     @Column(name = "sort_order", nullable = false)
     var sortOrder: Int = 0,
 )

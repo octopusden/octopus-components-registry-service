@@ -7,5 +7,5 @@ data class JiraComponentVersionRangeDTO(
     @JsonProperty("versionRange") val versionRange: String,
     @JsonProperty("component") val component: JiraComponentDTO,
     @JsonProperty("distribution") val distribution: DistributionDTO,
-    @JsonProperty("vcsSettings") val vcsSettings: VCSSettingsDTO
+    @JsonProperty("vcsSettings") val vcsSettings: VCSSettingsDTO,
 )

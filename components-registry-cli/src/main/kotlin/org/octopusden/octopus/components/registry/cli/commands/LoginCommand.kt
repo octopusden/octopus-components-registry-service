@@ -18,43 +18,45 @@ import org.octopusden.octopus.components.registry.cli.auth.DeviceFlowClient
  * `--offline` requests the `offline_access` scope so the provider returns a refresh token (needed for
  * non-interactive token refresh between invocations).
  */
-class LoginCommand : CliktCommand(
-    name = "login",
-    help = "Log in via the OIDC device authorization grant and store the refresh token.",
-) {
+class LoginCommand :
+    CliktCommand(
+        name = "login",
+        help = "Log in via the OIDC device authorization grant and store the refresh token.",
+    ) {
     private val ctx by requireObject<CliContext>()
     private val offline by option(
         "--offline",
         help = "Request the offline_access scope so a long-lived refresh token is issued.",
     ).flag()
 
-    override fun run() = runCommand {
-        val oidc = ctx.resolveOidcConfig()
-        val deviceFlow = ctx.deviceFlowClient
-        val scope = DeviceFlowClient.scopeFor(offline)
+    override fun run() =
+        runCommand {
+            val oidc = ctx.resolveOidcConfig()
+            val deviceFlow = ctx.deviceFlowClient
+            val scope = DeviceFlowClient.scopeFor(offline)
 
-        val authorization = deviceFlow.requestDeviceAuthorization(oidc.issuer, oidc.clientId, scope)
+            val authorization = deviceFlow.requestDeviceAuthorization(oidc.issuer, oidc.clientId, scope)
 
-        emit("To sign in, open ${authorization.verificationUri} and enter code ${authorization.userCode}")
-        authorization.verificationUriComplete?.let { complete ->
-            emit("Or open this URL directly (code prefilled): $complete")
-        }
-        emit("Waiting for authorization...")
+            emit("To sign in, open ${authorization.verificationUri} and enter code ${authorization.userCode}")
+            authorization.verificationUriComplete?.let { complete ->
+                emit("Or open this URL directly (code prefilled): $complete")
+            }
+            emit("Waiting for authorization...")
 
-        val token = deviceFlow.pollToken(
-            issuer = oidc.issuer,
-            clientId = oidc.clientId,
-            deviceCode = authorization.deviceCode,
-            interval = authorization.interval,
-            expiresInSeconds = authorization.expiresIn,
-        )
-
-        val refreshToken = token.refreshToken
-            ?: error(
-                "Login succeeded but the provider returned no refresh token; pass --offline to " +
-                    "request the offline_access scope.",
+            val token = deviceFlow.pollToken(
+                issuer = oidc.issuer,
+                clientId = oidc.clientId,
+                deviceCode = authorization.deviceCode,
+                interval = authorization.interval,
+                expiresInSeconds = authorization.expiresIn,
             )
-        ctx.credentialStore().save(refreshToken)
-        emit("Login successful. Credentials stored.")
-    }
+
+            val refreshToken = token.refreshToken
+                ?: error(
+                    "Login succeeded but the provider returned no refresh token; pass --offline to " +
+                        "request the offline_access scope.",
+                )
+            ctx.credentialStore().save(refreshToken)
+            emit("Login successful. Credentials stored.")
+        }
 }

@@ -181,7 +181,10 @@ class FatJarAuthDisabledIntegrationTest {
         }
     }
 
-    private fun setupDslFiles(tempDir: Path, testResourcesPath: String): Path {
+    private fun setupDslFiles(
+        tempDir: Path,
+        testResourcesPath: String,
+    ): Path {
         val dslDir = tempDir.resolve("dsl")
         Files.createDirectories(dslDir)
         val testDataDir = File(testResourcesPath, "test-data")
@@ -194,7 +197,10 @@ class FatJarAuthDisabledIntegrationTest {
 
     private fun findRandomPort(): Int = ServerSocket(0).use { it.localPort }
 
-    private fun waitForHealth(port: Int, timeoutSeconds: Int): Boolean {
+    private fun waitForHealth(
+        port: Int,
+        timeoutSeconds: Int,
+    ): Boolean {
         val endTime = System.currentTimeMillis() + (timeoutSeconds * 1000L)
         val healthUrl = URI("http://localhost:$port/actuator/health").toURL()
         while (System.currentTimeMillis() < endTime) {
@@ -213,7 +219,11 @@ class FatJarAuthDisabledIntegrationTest {
         return false
     }
 
-    private fun assertHttpStatus(method: String, url: String, expectedStatus: Int) {
+    private fun assertHttpStatus(
+        method: String,
+        url: String,
+        expectedStatus: Int,
+    ) {
         val connection = URI(url).toURL().openConnection() as HttpURLConnection
         try {
             connection.requestMethod = method

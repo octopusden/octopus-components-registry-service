@@ -37,21 +37,22 @@ import org.octopusden.octopus.components.registry.api.vcs.VersionControlSystem
 import java.util.*
 import java.util.regex.Pattern
 
-open class OdbcToolBean:
-    OdbcTool {
+open class OdbcToolBean : OdbcTool {
     private var version: String = "12.2"
 
     override fun getBuildToolType(): BuildToolTypes = BuildToolTypes.ODBC
 
     fun setVersion(version: String) {
-        this.version  = version
+        this.version = version
     }
 
     override fun getVersion(): String = version
 }
 
-open class ProductToolBean(private val type: ProductTypes, private var settingsProperty: String):
-    ProductTool {
+open class ProductToolBean(
+    private val type: ProductTypes,
+    private var settingsProperty: String,
+) : ProductTool {
     private var version: String? = null
 
     override fun getSettingsProperty(): String = settingsProperty
@@ -61,10 +62,11 @@ open class ProductToolBean(private val type: ProductTypes, private var settingsP
     }
 
     fun setVersion(version: String?) {
-        this.version  = version
+        this.version = version
     }
 
     override fun getVersion(): String? = version
+
     override fun getType(): ProductTypes = type
 
     override fun equals(other: Any?): Boolean {
@@ -87,23 +89,29 @@ open class ProductToolBean(private val type: ProductTypes, private var settingsP
         return result
     }
 
-    override fun toString(): String {
-        return "ProductToolBean(type=$type, settingsProperty='$settingsProperty', version=$version)"
-    }
-
+    override fun toString(): String = "ProductToolBean(type=$type, settingsProperty='$settingsProperty', version=$version)"
 }
 
-open class PTCProductToolBean: ProductToolBean(ProductTypes.PT_C, "uscschema"),
+open class PTCProductToolBean :
+    ProductToolBean(ProductTypes.PT_C, "uscschema"),
     PTCProductTool
-open class PTKProductToolBean: ProductToolBean(ProductTypes.PT_K, "uskschema"),
+
+open class PTKProductToolBean :
+    ProductToolBean(ProductTypes.PT_K, "uskschema"),
     PTKProductTool
-open class PTDDbProductToolBean: ProductToolBean(ProductTypes.PT_D_DB, "usdschema"),
+
+open class PTDDbProductToolBean :
+    ProductToolBean(ProductTypes.PT_D_DB, "usdschema"),
     PTDDbProductTool
-open class PTDProductToolBean: ProductToolBean(ProductTypes.PT_D, "usdschema"),
+
+open class PTDProductToolBean :
+    ProductToolBean(ProductTypes.PT_D, "usdschema"),
     PTDProductTool
 
-open class DatabaseToolBean(private val type: DatabaseTypes, private var settingsProperty: String):
-    DatabaseTool {
+open class DatabaseToolBean(
+    private val type: DatabaseTypes,
+    private var settingsProperty: String,
+) : DatabaseTool {
     private var version: String? = null
 
     override fun getType(): DatabaseTypes = type
@@ -114,7 +122,7 @@ open class DatabaseToolBean(private val type: DatabaseTypes, private var setting
 
     fun setVersion(version: String?) {
         Objects.requireNonNull(version, "Version cannot be null")
-        this.version  = version
+        this.version = version
     }
 
     fun setSettingsProperty(settingsProperty: String) {
@@ -140,14 +148,19 @@ open class DatabaseToolBean(private val type: DatabaseTypes, private var setting
         result = 31 * result + (version?.hashCode() ?: 0)
         return result
     }
-
 }
 
-class OracleDatabaseToolBean: DatabaseToolBean(DatabaseTypes.ORACLE, "db"),
+class OracleDatabaseToolBean :
+    DatabaseToolBean(DatabaseTypes.ORACLE, "db"),
     OracleDatabaseTool {
     private var edition: OracleDatabaseEditions? = null
+
     override fun getEdition(): OracleDatabaseEditions? = edition
-    fun setEdition(edition: OracleDatabaseEditions?) { this.edition = edition }
+
+    fun setEdition(edition: OracleDatabaseEditions?) {
+        this.edition = edition
+    }
+
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other !is OracleDatabaseToolBean) return false
@@ -164,17 +177,16 @@ class OracleDatabaseToolBean: DatabaseToolBean(DatabaseTypes.ORACLE, "db"),
         return result
     }
 
-    override fun toString(): String {
-        return "OracleDatabaseToolBean(edition=$edition)"
-    }
+    override fun toString(): String = "OracleDatabaseToolBean(edition=$edition)"
 }
 
-open class GradleBuildBean: GradleBuild {
+open class GradleBuildBean : GradleBuild {
     private var includeTestConfigurations = false
     private var includeConfigurations: Collection<String> = ArrayList()
     private var excludeConfigurations: Collection<String> = ArrayList()
 
-    override fun getIncludeTestConfigurations(): Boolean  = includeTestConfigurations
+    override fun getIncludeTestConfigurations(): Boolean = includeTestConfigurations
+
     fun setIncludeTestConfigurations(includeTestConfigurations: Boolean) {
         this.includeTestConfigurations = includeTestConfigurations
     }
@@ -183,7 +195,6 @@ open class GradleBuildBean: GradleBuild {
 
     override fun getIncludeConfigurations() = includeConfigurations
 
-
     fun setIncludeConfigurations(includeConfigurations: Collection<String>) {
         this.includeConfigurations = includeConfigurations
     }
@@ -191,10 +202,9 @@ open class GradleBuildBean: GradleBuild {
     fun setExcludeConfigurations(excludeConfigurations: Collection<String>) {
         this.excludeConfigurations = excludeConfigurations
     }
-
 }
 
-open class EscrowBean: Escrow {
+open class EscrowBean : Escrow {
     private var buildTask: String? = null
     private val gradle: GradleBuildBean = GradleBuildBean()
     private val providedDependencies = mutableListOf<String>()
@@ -211,7 +221,7 @@ open class EscrowBean: Escrow {
         providedDependencies: Collection<String> = emptyList(),
         diskSpaceRequirement: Long? = null,
         additionalSources: Collection<String> = emptyList(),
-        reusable: Boolean = true
+        reusable: Boolean = true,
     ) {
         this.generation = generation
         this.buildTask = buildTask
@@ -251,21 +261,22 @@ open class EscrowBean: Escrow {
         this.generation = generation
     }
 
-    override fun toString(): String {
-        return "EscrowBean(buildTask=$buildTask, gradle=$gradle, providedDependencies=$providedDependencies, diskSpaceRequirement=$diskSpaceRequirement, additionalSources=$additionalSources, reusable=$reusable, generation=$generation)"
-    }
-
+    override fun toString(): String =
+        "EscrowBean(buildTask=$buildTask, gradle=$gradle, providedDependencies=$providedDependencies, diskSpaceRequirement=$diskSpaceRequirement, additionalSources=$additionalSources, reusable=$reusable, generation=$generation)"
 }
 
-open class BuildBean: Build {
+open class BuildBean : Build {
     private var javaVersion: String? = null
     private val buildTools = ArrayList<BuildTool>()
     private var dependencies: Dependencies? = null
     private var buildSystem: BuildSystem? = null
 
     override fun getTools() = buildTools
+
     override fun getJavaVersion() = javaVersion
+
     override fun getDependencies() = dependencies
+
     override fun getBuildSystem() = buildSystem
 
     fun setJavaVersion(javaVersion: String?) {
@@ -281,8 +292,7 @@ open class BuildBean: Build {
     }
 }
 
-open class VersionedComponentConfigurationBean:
-    VersionedComponentConfiguration {
+open class VersionedComponentConfigurationBean : VersionedComponentConfiguration {
     private var build: BuildBean? = null
     private var escrow: EscrowBean = EscrowBean()
     private var artifactIds: Collection<String> = emptyList()
@@ -290,8 +300,11 @@ open class VersionedComponentConfigurationBean:
     private var versionControlSystem: VersionControlSystem? = null
 
     override fun getBuild(): Build? = build
+
     override fun getEscrow(): EscrowBean = escrow
+
     override fun getGroupId(): String? = groupId
+
     override fun getVcs(): VersionControlSystem? = versionControlSystem
 
     override fun getArtifactIds(): Collection<String> = artifactIds
@@ -318,27 +331,30 @@ open class VersionedComponentConfigurationBean:
 }
 
 @JsonFilter("cloneFilter")
-open class SubComponentBean: VersionedComponentConfigurationBean(),
+open class SubComponentBean :
+    VersionedComponentConfigurationBean(),
     SubComponent {
     private lateinit var name: String
     private val versions = HashMap<String, VersionedComponentConfigurationBean>()
+
     override fun getVersions(): MutableMap<String, VersionedComponentConfigurationBean> = versions
+
     override fun getName(): String = name
+
     fun setName(name: String) {
         this.name = name
     }
 }
 
 @JsonFilter("cloneFilter")
-open class ComponentBean: SubComponentBean(),
+open class ComponentBean :
+    SubComponentBean(),
     Component {
     private var productType: ProductTypes? = null
     private val subComponents = HashMap<String, SubComponentBean>()
     private var displayName: String? = null
 
-    override fun getDisplayName(): String? {
-        return displayName
-    }
+    override fun getDisplayName(): String? = displayName
 
     fun setProductType(productType: ProductTypes?) {
         this.productType = productType
@@ -346,20 +362,17 @@ open class ComponentBean: SubComponentBean(),
 
     override fun getProductType(): ProductTypes? = productType
 
-
     fun setDisplayName(displayName: String?) {
         this.displayName = displayName
     }
 
     override fun getSubComponents(): MutableMap<String, SubComponentBean> = subComponents
-    override fun toString(): String {
-        return "Component(productType=$productType, subComponents=$subComponents, displayName=$displayName)"
-    }
+
+    override fun toString(): String = "Component(productType=$productType, subComponents=$subComponents, displayName=$displayName)"
 }
 
 @JsonTypeName("mavenDistribution")
-open class MavenArtifactDistributionEntityBean:
-    MavenArtifactDistributionEntity {
+open class MavenArtifactDistributionEntityBean : MavenArtifactDistributionEntity {
     private var gav: String
     private var groupId: String
     private var artifactId: String
@@ -367,11 +380,12 @@ open class MavenArtifactDistributionEntityBean:
     private var extension: String? = null
 
     @JsonCreator
-    constructor(@JsonProperty("gav") gav: String,
-                @JsonProperty("groupId") groupId: String,
-                @JsonProperty("artifactId") artifactId: String,
-                @JsonProperty("classifier") classifier: String?,
-                @JsonProperty("extension") extension: String?
+    constructor(
+        @JsonProperty("gav") gav: String,
+        @JsonProperty("groupId") groupId: String,
+        @JsonProperty("artifactId") artifactId: String,
+        @JsonProperty("classifier") classifier: String?,
+        @JsonProperty("extension") extension: String?,
     ) {
         this.gav = gav
         this.groupId = groupId
@@ -390,14 +404,19 @@ open class MavenArtifactDistributionEntityBean:
     }
 
     override fun getGav() = gav
+
     override fun getGroupId() = groupId
+
     override fun getArtifactId() = artifactId
+
     override fun getClassifier() = Optional.ofNullable(classifier)
+
     override fun getExtension() = Optional.ofNullable(extension)
 }
 
-open class VersionControlSystemBean(private val type: VersionControlSystemType):
-    VersionControlSystem {
+open class VersionControlSystemBean(
+    private val type: VersionControlSystemType,
+) : VersionControlSystem {
     override fun getType(): VersionControlSystemType = type
 
     override fun equals(other: Any?): Boolean {
@@ -407,17 +426,22 @@ open class VersionControlSystemBean(private val type: VersionControlSystemType):
         return true
     }
 
-    override fun hashCode(): Int {
-        return type.hashCode()
-    }
+    override fun hashCode(): Int = type.hashCode()
 }
 
-class ExternalVersionControlSystemBean: ExternalVersionControlSystem, VersionControlSystemBean(
-    VersionControlSystemType.EXTERNAL)
+class ExternalVersionControlSystemBean :
+    VersionControlSystemBean(
+        VersionControlSystemType.EXTERNAL,
+    ),
+    ExternalVersionControlSystem
 
-class MultiplyVersionControlSystemBean: MultiplyVersionControlSystem, VersionControlSystemBean(
-    VersionControlSystemType.MULTIPLY) {
+class MultiplyVersionControlSystemBean :
+    VersionControlSystemBean(
+        VersionControlSystemType.MULTIPLY,
+    ),
+    MultiplyVersionControlSystem {
     private var vcs: Collection<VersionControlSystem> = ArrayList()
+
     override fun getVersionControlSystems(): Collection<VersionControlSystem> = vcs
 
     fun setVcs(vcs: Collection<VersionControlSystem>) {
@@ -425,7 +449,9 @@ class MultiplyVersionControlSystemBean: MultiplyVersionControlSystem, VersionCon
     }
 }
 
-abstract class CommonVersionControlSystemBean: CommonVersionControlSystem, VersionControlSystemBean {
+abstract class CommonVersionControlSystemBean :
+    CommonVersionControlSystem,
+    VersionControlSystemBean {
     private lateinit var url: String
     private lateinit var tag: String
     private lateinit var branch: String
@@ -438,8 +464,10 @@ abstract class CommonVersionControlSystemBean: CommonVersionControlSystem, Versi
         this.branch = branch
     }
 
-    override fun getUrl()= url
+    override fun getUrl() = url
+
     override fun getTag() = tag
+
     override fun getBranch() = branch
 
     fun setUrl(url: String) {
@@ -474,28 +502,30 @@ abstract class CommonVersionControlSystemBean: CommonVersionControlSystem, Versi
         return result
     }
 
-    override fun toString(): String {
-        return "CommonVersionControlSystemBean(url='$url', tag='$tag', branch='$branch')"
-    }
+    override fun toString(): String = "CommonVersionControlSystemBean(url='$url', tag='$tag', branch='$branch')"
 }
 
-class GitVersionControlSystemBean: GitVersionControlSystem, CommonVersionControlSystemBean {
-    constructor(): super(VersionControlSystemType.GIT)
+class GitVersionControlSystemBean :
+    GitVersionControlSystem,
+    CommonVersionControlSystemBean {
+    constructor() : super(VersionControlSystemType.GIT)
     constructor(url: String, tag: String, branch: String) : super(VersionControlSystemType.GIT, url, tag, branch)
-    override fun toString(): String {
-        return "GitVersionControlSystemBean(url='$url', tag='$tag', branch='$branch')"
-    }
+
+    override fun toString(): String = "GitVersionControlSystemBean(url='$url', tag='$tag', branch='$branch')"
 }
 
-class ClassicBuildSystem: BuildSystem {
+class ClassicBuildSystem : BuildSystem {
     private val buildSystemType: BuildSystemType
     private var buildSystemVersion: String? = null
 
-    constructor(@JsonProperty("type") buildSystemType: BuildSystemType): this(buildSystemType, null)
+    constructor(
+        @JsonProperty("type") buildSystemType: BuildSystemType,
+    ) : this(buildSystemType, null)
 
     @JsonCreator
-    constructor(@JsonProperty("type") buildSystemType: BuildSystemType,
-                @JsonProperty("version") buildSystemVersion: String?
+    constructor(
+        @JsonProperty("type") buildSystemType: BuildSystemType,
+        @JsonProperty("version") buildSystemVersion: String?,
     ) {
         this.buildSystemType = buildSystemType
         this.buildSystemVersion = buildSystemVersion
@@ -525,7 +555,5 @@ class ClassicBuildSystem: BuildSystem {
         return result
     }
 
-    override fun toString(): String {
-        return "ClassicBuildSystem(buildSystemType=$buildSystemType, buildSystemVersion=$buildSystemVersion)"
-    }
+    override fun toString(): String = "ClassicBuildSystem(buildSystemType=$buildSystemType, buildSystemVersion=$buildSystemVersion)"
 }

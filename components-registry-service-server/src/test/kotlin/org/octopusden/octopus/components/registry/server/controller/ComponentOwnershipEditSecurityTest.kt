@@ -2,7 +2,6 @@ package org.octopusden.octopus.components.registry.server.controller
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
-import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
@@ -99,7 +98,8 @@ class ComponentOwnershipEditSecurityTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(fields)),
                 ).andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         return objectMapper.readTree(response)
     }
 
@@ -149,8 +149,7 @@ class ComponentOwnershipEditSecurityTest {
 
     // Fail loudly if the flag is absent so a dropped `withCanEdit` can't make an
     // `assertFalse(... .canEdit())` pass vacuously (JsonNode.asBoolean() → false on missing).
-    private fun JsonNode.canEdit(): Boolean =
-        (this["canEdit"] ?: error("canEdit field missing from response")).asBoolean()
+    private fun JsonNode.canEdit(): Boolean = (this["canEdit"] ?: error("canEdit field missing from response")).asBoolean()
 
     // Unique per call: displayName is now UNIQUE, so a shared literal would 400 on the
     // second edit. The value is never asserted — only used as a non-trivial PATCH body.
@@ -271,7 +270,8 @@ class ComponentOwnershipEditSecurityTest {
         val body =
             performPatch(c.id(), c.version(), mapOf("componentOwner" to "zoe"), editorJwt("bob"))
                 .andExpect(status().isOk)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         assertFalse(objectMapper.readTree(body).canEdit(), "bob is no longer owner → canEdit=false on the response")
     }
 
@@ -290,18 +290,20 @@ class ComponentOwnershipEditSecurityTest {
         val c = create(uniqueName("fo_upd"), owner = "bob")
         val overrideId = createOverrideAsOwner(c.id())
         val patchBody = objectMapper.writeValueAsString(mapOf("value" to "21"))
-        mvc.perform(
-            patch("/rest/api/4/components/${c.id()}/field-overrides/$overrideId")
-                .with(editorJwt("frank"))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(patchBody),
-        ).andExpect(status().isForbidden)
-        mvc.perform(
-            patch("/rest/api/4/components/${c.id()}/field-overrides/$overrideId")
-                .with(viewerJwt("bob"))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(patchBody),
-        ).andExpect(status().isOk)
+        mvc
+            .perform(
+                patch("/rest/api/4/components/${c.id()}/field-overrides/$overrideId")
+                    .with(editorJwt("frank"))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(patchBody),
+            ).andExpect(status().isForbidden)
+        mvc
+            .perform(
+                patch("/rest/api/4/components/${c.id()}/field-overrides/$overrideId")
+                    .with(viewerJwt("bob"))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(patchBody),
+            ).andExpect(status().isOk)
     }
 
     @Test
@@ -309,9 +311,11 @@ class ComponentOwnershipEditSecurityTest {
     fun `field override delete gated`() {
         val c = create(uniqueName("fo_del"), owner = "bob")
         val overrideId = createOverrideAsOwner(c.id())
-        mvc.perform(delete("/rest/api/4/components/${c.id()}/field-overrides/$overrideId").with(editorJwt("frank")))
+        mvc
+            .perform(delete("/rest/api/4/components/${c.id()}/field-overrides/$overrideId").with(editorJwt("frank")))
             .andExpect(status().isForbidden)
-        mvc.perform(delete("/rest/api/4/components/${c.id()}/field-overrides/$overrideId").with(viewerJwt("bob")))
+        mvc
+            .perform(delete("/rest/api/4/components/${c.id()}/field-overrides/$overrideId").with(viewerJwt("bob")))
             .andExpect(status().isNoContent)
     }
 
@@ -320,8 +324,10 @@ class ComponentOwnershipEditSecurityTest {
             .readTree(
                 performFieldOverridePost(componentId, viewerJwt("bob"))
                     .andExpect(status().isCreated)
-                    .andReturn().response.contentAsString,
-            )["id"].asText()
+                    .andReturn()
+                    .response.contentAsString,
+            )["id"]
+            .asText()
 
     private fun getBody(
         id: String,
@@ -329,5 +335,6 @@ class ComponentOwnershipEditSecurityTest {
     ): String =
         performGet(id, jwt)
             .andExpect(status().isOk)
-            .andReturn().response.contentAsString
+            .andReturn()
+            .response.contentAsString
 }

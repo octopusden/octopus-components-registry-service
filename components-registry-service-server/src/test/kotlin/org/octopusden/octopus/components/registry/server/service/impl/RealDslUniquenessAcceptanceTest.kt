@@ -6,16 +6,16 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable
 import org.mockito.Mockito.mock
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes
+import org.octopusden.octopus.components.registry.server.repository.ComponentArtifactMappingRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentBuildToolBeanRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentGroupRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentLabelRepository
-import org.octopusden.octopus.components.registry.server.repository.ComponentSystemRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRequiredToolRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentSourceRepository
+import org.octopusden.octopus.components.registry.server.repository.ComponentSystemRepository
 import org.octopusden.octopus.components.registry.server.repository.DistributionDockerImageRepository
-import org.octopusden.octopus.components.registry.server.repository.ComponentArtifactMappingRepository
 import org.octopusden.octopus.components.registry.server.repository.DistributionMavenArtifactRepository
 import org.octopusden.octopus.components.registry.server.repository.LabelRepository
 import org.octopusden.octopus.components.registry.server.repository.SystemRepository
@@ -24,8 +24,8 @@ import org.octopusden.octopus.components.registry.server.service.ComponentSource
 import org.octopusden.octopus.escrow.configuration.loader.ComponentRegistryInfo
 import org.octopusden.octopus.escrow.configuration.loader.ConfigLoader
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
-import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.NumericVersionFactory
+import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRangeFactory
 import java.net.URI
 import java.nio.file.Paths
@@ -52,7 +52,6 @@ import java.util.EnumMap
  */
 @EnabledIfEnvironmentVariable(named = "REAL_CR_DSL_DIR", matches = ".+")
 class RealDslUniquenessAcceptanceTest {
-
     private fun clearScriptRunnerProductTypes() {
         val runnerClass =
             Class.forName("org.octopusden.octopus.components.registry.dsl.script.ComponentsRegistryScriptRunner")
@@ -72,9 +71,15 @@ class RealDslUniquenessAcceptanceTest {
         val props = java.util.Properties()
         val propsFile = generateSequence(dslDir) { it.parent }
             .map { it.resolve("gradle.properties") }
-            .firstOrNull { java.nio.file.Files.exists(it) }
+            .firstOrNull {
+                java.nio.file.Files
+                    .exists(it)
+            }
             ?: throw AssertionError("gradle.properties not found above $dslDir")
-        java.nio.file.Files.newInputStream(propsFile).use { props.load(it) }
+        java.nio.file.Files
+            .newInputStream(propsFile)
+            .use { props.load(it) }
+
         fun required(key: String): String =
             props.getProperty(key)?.takeIf { it.isNotBlank() }
                 ?: throw AssertionError("$key missing in $propsFile")

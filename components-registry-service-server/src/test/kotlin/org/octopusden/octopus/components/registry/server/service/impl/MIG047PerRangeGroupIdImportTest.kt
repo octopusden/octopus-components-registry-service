@@ -1,15 +1,11 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
-import java.lang.reflect.Method
-import java.util.UUID
-import java.util.concurrent.TimeUnit
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.mockito.Mockito.anyList
 import org.mockito.Mockito.doReturn
 import org.mockito.Mockito.mock
@@ -18,16 +14,16 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentArtifac
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
+import org.octopusden.octopus.components.registry.server.repository.ComponentArtifactMappingRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentBuildToolBeanRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentGroupRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentLabelRepository
-import org.octopusden.octopus.components.registry.server.repository.ComponentSystemRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRequiredToolRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentSourceRepository
+import org.octopusden.octopus.components.registry.server.repository.ComponentSystemRepository
 import org.octopusden.octopus.components.registry.server.repository.DistributionDockerImageRepository
-import org.octopusden.octopus.components.registry.server.repository.ComponentArtifactMappingRepository
 import org.octopusden.octopus.components.registry.server.repository.DistributionMavenArtifactRepository
 import org.octopusden.octopus.components.registry.server.repository.LabelRepository
 import org.octopusden.octopus.components.registry.server.repository.SystemRepository
@@ -36,9 +32,12 @@ import org.octopusden.octopus.components.registry.server.service.ComponentSource
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
 import org.octopusden.octopus.escrow.configuration.model.DefaultConfigParameters
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
-import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.NumericVersionFactory
+import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRangeFactory
+import java.lang.reflect.Method
+import java.util.UUID
+import java.util.concurrent.TimeUnit
 
 /**
  * MIG-047 RED test: `emitMarkerOverrides` must create a GROUP_ARTIFACT_PATTERN MARKER
@@ -68,7 +67,6 @@ import org.octopusden.releng.versions.VersionRangeFactory
  */
 @Timeout(30, unit = TimeUnit.SECONDS)
 class MIG047PerRangeGroupIdImportTest {
-
     private lateinit var service: ImportServiceImpl
     private lateinit var configurationRepository: ComponentConfigurationRepository
     private lateinit var componentArtifactMappingRepository: ComponentArtifactMappingRepository
@@ -144,7 +142,11 @@ class MIG047PerRangeGroupIdImportTest {
         return cfg
     }
 
-    private fun setGroovyField(target: Any, fieldName: String, value: Any?) {
+    private fun setGroovyField(
+        target: Any,
+        fieldName: String,
+        value: Any?,
+    ) {
         val field = target.javaClass.getDeclaredField(fieldName)
         field.isAccessible = true
         field.set(target, value)
@@ -254,14 +256,22 @@ class MIG047PerRangeGroupIdImportTest {
 
         // Build a Distribution with an explicit GAV so that mavenArtifactsDiffer returns true
         val baseDist = org.octopusden.octopus.escrow.model.Distribution(
-            true, false,
+            true,
+            false,
             "com.example:gamma-lib:jar",
-            null, null, null, null,
+            null,
+            null,
+            null,
+            null,
         )
         val overrideDist = org.octopusden.octopus.escrow.model.Distribution(
-            true, false,
+            true,
+            false,
             "com.example.new:gamma-lib-v2:jar",
-            null, null, null, null,
+            null,
+            null,
+            null,
+            null,
         )
 
         val baseConfig = makeConfig("com.example", "gamma-lib", "[1.0,)")
@@ -312,14 +322,22 @@ class MIG047PerRangeGroupIdImportTest {
         )
 
         val baseDist = org.octopusden.octopus.escrow.model.Distribution(
-            true, false,
-            null,  // base has no GAV
-            null, null, null, null,
+            true,
+            false,
+            null, // base has no GAV
+            null,
+            null,
+            null,
+            null,
         )
         val overrideDist = org.octopusden.octopus.escrow.model.Distribution(
-            true, false,
+            true,
+            false,
             "com.example.fixture:single-dist:zip",
-            null, null, null, null,
+            null,
+            null,
+            null,
+            null,
         )
 
         val baseConfig = makeConfig("com.example.fixture", "sci_build|sci_utils|fixture_builder", "[5.1, 6.22)")

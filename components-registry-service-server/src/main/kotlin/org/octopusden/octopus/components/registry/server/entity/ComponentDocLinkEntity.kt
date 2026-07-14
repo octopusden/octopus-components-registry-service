@@ -28,24 +28,18 @@ class ComponentDocLinkEntity(
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     var id: UUID? = null,
-
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "component_id", nullable = false)
     var component: ComponentEntity,
-
     @Column(name = "doc_component_key", nullable = false)
     var docComponentKey: String = "",
-
     @Column(name = "major_version", length = 50)
     var majorVersion: String? = null,
-
     @Column(name = "sort_order", nullable = false)
     var sortOrder: Int = 0,
-
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     var createdAt: Instant? = null,
-
     @UpdateTimestamp
     @Column(name = "updated_at")
     var updatedAt: Instant? = null,

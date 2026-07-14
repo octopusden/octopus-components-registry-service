@@ -16,11 +16,12 @@ import org.octopusden.octopus.components.registry.cli.model.PageComponentSummary
 import org.octopusden.octopus.components.registry.cli.output.Renderer
 
 /** `crsctl components` — parent for component-list operations. */
-class ComponentsCommand : CliktCommand(
-    name = "components",
-    help = "List components in the registry.",
-    invokeWithoutSubcommand = false,
-) {
+class ComponentsCommand :
+    CliktCommand(
+        name = "components",
+        help = "List components in the registry.",
+        invokeWithoutSubcommand = false,
+    ) {
     override fun run() = Unit
 }
 
@@ -28,10 +29,11 @@ class ComponentsCommand : CliktCommand(
  * `crsctl components list` — query the components list with the full filter set, paging, and an
  * optional `--all` auto-paginate that walks every page until the server reports `last == true`.
  */
-class ComponentsListCommand : CliktCommand(
-    name = "list",
-    help = "List components, optionally filtered. Reads are anonymous; no token is required.",
-) {
+class ComponentsListCommand :
+    CliktCommand(
+        name = "list",
+        help = "List components, optionally filtered. Reads are anonymous; no token is required.",
+    ) {
     private val ctx by requireObject<CliContext>()
 
     // --- filters (CLI kebab-case -> v4.json listComponents query param) ---
@@ -75,18 +77,20 @@ class ComponentsListCommand : CliktCommand(
         help = "Fetch every page (ignores --page; loops until the last page).",
     ).flag()
 
-    override fun run() = runCommand {
-        val client = ctx.client()
-        val rows = if (all) fetchAll(client) else fetchOnePage(client)
-        render(
-            ctx,
-            json = { Renderer.renderJson(rows, ListSerializer(ComponentSummaryResponse.serializer())) },
-            table = { renderTable(rows) },
-        )
-    }
+    override fun run() =
+        runCommand {
+            val client = ctx.client()
+            val rows = if (all) fetchAll(client) else fetchOnePage(client)
+            render(
+                ctx,
+                json = { Renderer.renderJson(rows, ListSerializer(ComponentSummaryResponse.serializer())) },
+                table = { renderTable(rows) },
+            )
+        }
 
     private fun baseFilters(): QueryParams.Builder =
-        QueryParams.builder()
+        QueryParams
+            .builder()
             .add("search", search)
             .addAll("owner", owner.ifEmpty { null })
             .addAll("system", system.ifEmpty { null })

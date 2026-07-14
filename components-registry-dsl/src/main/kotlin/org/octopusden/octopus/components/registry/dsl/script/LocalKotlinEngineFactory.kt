@@ -1,9 +1,9 @@
 package org.octopusden.octopus.components.registry.dsl.script
 
-import javax.script.ScriptEngine
-import javax.script.ScriptEngineFactory
 import org.jetbrains.kotlin.cli.common.environment.setIdeaIoUseFallback
 import org.jetbrains.kotlin.mainKts.jsr223.KotlinJsr223MainKtsScriptEngineFactory
+import javax.script.ScriptEngine
+import javax.script.ScriptEngineFactory
 
 class LocalKotlinEngineFactory : ScriptEngineFactory {
     override fun getEngineName(): String? = "kotlin-local"
@@ -14,10 +14,11 @@ class LocalKotlinEngineFactory : ScriptEngineFactory {
 
     override fun getMimeTypes(): List<String?>? = listOf("text/x-kotlin")
 
-    override fun getNames(): List<String?>? = listOf(
-        "kotlin",
-        "kotlin-local"
-    )
+    override fun getNames(): List<String?>? =
+        listOf(
+            "kotlin",
+            "kotlin-local",
+        )
 
     override fun getLanguageName(): String? = "kotlin"
 
@@ -36,7 +37,7 @@ class LocalKotlinEngineFactory : ScriptEngineFactory {
     override fun getMethodCallSyntax(
         obj: String?,
         m: String?,
-        vararg args: String?
+        vararg args: String?,
     ): String? = "$obj.$m(${args.joinToString()})"
 
     override fun getOutputStatement(toDisplay: String?): String? = "println($toDisplay)"

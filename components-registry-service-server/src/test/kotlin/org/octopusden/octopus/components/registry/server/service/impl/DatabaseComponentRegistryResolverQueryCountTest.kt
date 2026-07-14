@@ -72,7 +72,6 @@ import java.nio.file.Paths
 @Timeout(180)
 @Tag("integration")
 class DatabaseComponentRegistryResolverQueryCountTest {
-
     @MockBean
     @Suppress("UnusedPrivateProperty")
     private lateinit var authServerClient: AuthServerClient
@@ -94,9 +93,10 @@ class DatabaseComponentRegistryResolverQueryCountTest {
 
     init {
         val testResourcesPath =
-            Paths.get(
-                DatabaseComponentRegistryResolverQueryCountTest::class.java.getResource("/expected-data")!!.toURI(),
-            ).parent
+            Paths
+                .get(
+                    DatabaseComponentRegistryResolverQueryCountTest::class.java.getResource("/expected-data")!!.toURI(),
+                ).parent
         System.setProperty("COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR", testResourcesPath.toString())
     }
 
@@ -127,7 +127,10 @@ class DatabaseComponentRegistryResolverQueryCountTest {
      * junction are persisted separately (the junction keyed by the saved config id).
      * Returns the managed component entity.
      */
-    private fun persistComponent(index: Int, parent: ComponentEntity?): ComponentEntity {
+    private fun persistComponent(
+        index: Int,
+        parent: ComponentEntity?,
+    ): ComponentEntity {
         val component = ComponentEntity(componentKey = "qc-comp-$index", archived = false)
         component.parentComponent = parent
         val base = ComponentConfigurationEntity(

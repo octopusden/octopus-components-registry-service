@@ -15,9 +15,9 @@ import org.octopusden.octopus.components.registry.server.dto.v4.EmployeeIntegrat
 import org.octopusden.octopus.components.registry.server.dto.v4.EmployeeMatchResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideCreateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideUpdateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.SupportedVersionsRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.SupportedVersionsResponse
-import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideUpdateRequest
 import org.octopusden.octopus.components.registry.server.repository.ComponentGroupRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentLabelRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
@@ -115,8 +115,7 @@ class ComponentControllerV4(
     // request. The same probe backs the `employeeService` actuator indicator.
     @GetMapping("/meta/employees/health")
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
-    fun employeeIntegrationHealth(): EmployeeIntegrationHealthResponse =
-        EmployeeIntegrationHealthResponse(employeeDirectory.probe())
+    fun employeeIntegrationHealth(): EmployeeIntegrationHealthResponse = EmployeeIntegrationHealthResponse(employeeDirectory.probe())
 
     // Batch active/inactive status for the component view's "inactive" badge.
     // Body is a list of usernames; response maps each to true (active),

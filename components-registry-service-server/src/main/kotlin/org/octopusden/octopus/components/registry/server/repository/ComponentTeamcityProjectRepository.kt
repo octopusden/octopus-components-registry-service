@@ -7,5 +7,6 @@ import java.util.UUID
 @Repository
 interface ComponentTeamcityProjectRepository : JpaRepository<ComponentTeamcityProjectEntity, UUID> {
     fun findByComponentId(componentId: UUID): List<ComponentTeamcityProjectEntity>
+
     fun findByProjectId(projectId: String): List<ComponentTeamcityProjectEntity>
 }

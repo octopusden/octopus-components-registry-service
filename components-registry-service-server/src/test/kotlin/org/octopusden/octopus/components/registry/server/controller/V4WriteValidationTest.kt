@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
 import org.octopusden.octopus.components.registry.server.support.adminJwt
+import org.octopusden.octopus.components.registry.server.support.viewerJwt
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
@@ -20,7 +21,6 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
-import org.octopusden.octopus.components.registry.server.support.viewerJwt
 import java.nio.file.Paths
 import java.util.UUID
 
@@ -230,7 +230,8 @@ class V4WriteValidationTest {
         val seedResponse =
             postCreate(validSeedBody("validation-test-comp-mvn-patch"))
                 .andExpect(status().is2xxSuccessful)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val seed = objectMapper.readTree(seedResponse)
         val id = seed["id"].asText()
         val versionLock = seed["version"].asLong()
@@ -300,7 +301,10 @@ class V4WriteValidationTest {
     fun fieldOverride_rejects_unknownRepositoryTypeInMarker() {
         val createBody = validSeedBody("validation-test-comp-rt-fo")
         val seedResponse =
-            postCreate(createBody).andExpect(status().is2xxSuccessful).andReturn().response.contentAsString
+            postCreate(createBody)
+                .andExpect(status().is2xxSuccessful)
+                .andReturn()
+                .response.contentAsString
         val id = objectMapper.readTree(seedResponse)["id"].asText()
 
         val payload =
@@ -331,7 +335,10 @@ class V4WriteValidationTest {
     fun fieldOverride_rejects_unknownPackageTypeInMarker() {
         val createBody = validSeedBody("validation-test-comp-pkg-fo")
         val seedResponse =
-            postCreate(createBody).andExpect(status().is2xxSuccessful).andReturn().response.contentAsString
+            postCreate(createBody)
+                .andExpect(status().is2xxSuccessful)
+                .andReturn()
+                .response.contentAsString
         val id = objectMapper.readTree(seedResponse)["id"].asText()
 
         val payload =
@@ -477,7 +484,8 @@ class V4WriteValidationTest {
             mvc
                 .perform(get("/rest/api/4/components/meta/labels").with(viewerJwt()))
                 .andExpect(status().isOk)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val codes = objectMapper.readTree(metaBody).map { it.asText() }
         assert(codes.contains(labelRaw)) {
             "expected canonical '$labelRaw' in $codes (trim should have applied)"
@@ -508,7 +516,8 @@ class V4WriteValidationTest {
         val created =
             postCreate(body)
                 .andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         // ComponentDetailResponse.labels is a Set<String>; the response
         // should carry exactly one entry for this component after dedupe.
         val labels = objectMapper.readTree(created)["labels"].map { it.asText() }
@@ -530,7 +539,8 @@ class V4WriteValidationTest {
         val seedResponse =
             postCreate(seedBody)
                 .andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val seed = objectMapper.readTree(seedResponse)
         val id = seed["id"].asText()
         val versionLock = seed["version"].asLong()
@@ -544,7 +554,8 @@ class V4WriteValidationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(patchBody),
                 ).andExpect(status().isOk)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val labels = objectMapper.readTree(patched)["labels"].map { it.asText() }
         assert(labels == listOf(labelRaw)) {
             "expected canonical [$labelRaw] after patch; got $labels"
@@ -559,7 +570,8 @@ class V4WriteValidationTest {
         val seedResponse =
             postCreate(seedBody)
                 .andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val seed = objectMapper.readTree(seedResponse)
         val id = seed["id"].asText()
         val versionLock = seed["version"].asLong()
@@ -596,13 +608,15 @@ class V4WriteValidationTest {
         return objectMapper.readTree(seedResponse)["id"].asText()
     }
 
-    private fun postFieldOverride(componentId: String, body: String) =
-        mvc.perform(
-            post("/rest/api/4/components/$componentId/field-overrides")
-                .with(adminJwt())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body),
-        )
+    private fun postFieldOverride(
+        componentId: String,
+        body: String,
+    ) = mvc.perform(
+        post("/rest/api/4/components/$componentId/field-overrides")
+            .with(adminJwt())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(body),
+    )
 
     @Test
     @DisplayName("R3: POST /field-overrides rejects a range partially overlapping a sibling on the same attribute")
@@ -793,7 +807,8 @@ class V4WriteValidationTest {
                 id,
                 """{"overriddenAttribute":"build.javaVersion","versionRange":"[5.0,6.0)","value":"17"}""",
             ).andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val bId = objectMapper.readTree(bCreate)["id"].asText()
         // Now PATCH B's range to overlap A — must be rejected; excludeOverrideId
         // means the walk skips B against itself, so the failure is purely the
@@ -820,7 +835,8 @@ class V4WriteValidationTest {
                 id,
                 """{"overriddenAttribute":"build.javaVersion","versionRange":"[5.0,6.0)","value":"17"}""",
             ).andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val bId = objectMapper.readTree(bCreate)["id"].asText()
         // PATCH B to a whitespace-different version of A's range — semantic-
         // equal → 400. Confirms PATCH-side normalisation + duplicate check.
@@ -848,7 +864,8 @@ class V4WriteValidationTest {
                 id,
                 """{"overriddenAttribute":"build.javaVersion","versionRange":"[8.0,9.0)","value":"17"}""",
             ).andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val bId = objectMapper.readTree(bCreate)["id"].asText()
         // PATCH B to [1.0,5.0) which fully contains A's [2.0,3.0) → reject.
         mvc
@@ -869,7 +886,8 @@ class V4WriteValidationTest {
                 id,
                 """{"overriddenAttribute":"build.javaVersion","versionRange":"[1.0,2.0)","value":"11"}""",
             ).andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val oid = objectMapper.readTree(created)["id"].asText()
         // Submitting the same range back must NOT trip the semantic-equal
         // check — excludeOverrideId excludes the row from its own walk.
@@ -891,7 +909,8 @@ class V4WriteValidationTest {
                 id,
                 """{"overriddenAttribute":"build.javaVersion","versionRange":"[5.0,6.0)","value":"17"}""",
             ).andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val oid = objectMapper.readTree(created)["id"].asText()
         // Repoint the range to an exact-version pin — a valid single segment, so
         // the PATCH path (validateFieldOverrideRange with excludeOverrideId) must

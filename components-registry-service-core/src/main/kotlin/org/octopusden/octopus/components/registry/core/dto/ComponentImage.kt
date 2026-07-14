@@ -7,5 +7,5 @@ import com.fasterxml.jackson.annotation.JsonProperty
 data class ComponentImage(
     @JsonProperty("component") val component: String,
     @JsonProperty("version") val version: String,
-    @JsonProperty("image") val image: Image
+    @JsonProperty("image") val image: Image,
 )

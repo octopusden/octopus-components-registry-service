@@ -30,35 +30,25 @@ class ServiceEventEntity(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     var id: Long? = null,
-
     @Column(name = "event_type", nullable = false, length = 40)
     var eventType: String = "",
-
     @Column(name = "status", nullable = false, length = 20)
     var status: String = "",
-
     @Column(name = "source", nullable = false, length = 20)
     var source: String = "",
-
     @Column(name = "triggered_by")
     var triggeredBy: String? = null,
-
     @Column(name = "service_version", length = 100)
     var serviceVersion: String? = null,
-
     @Column(name = "correlation_id")
     var correlationId: String? = null,
-
     @Column(name = "summary", columnDefinition = "TEXT")
     var summary: String? = null,
-
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "detail", columnDefinition = "TEXT")
     var detail: Map<String, Any?>? = null,
-
     @Column(name = "started_at", nullable = false)
     var startedAt: Instant = Instant.now(),
-
     @Column(name = "finished_at")
     var finishedAt: Instant? = null,
 )

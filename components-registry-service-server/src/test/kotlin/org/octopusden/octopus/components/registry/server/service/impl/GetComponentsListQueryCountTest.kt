@@ -75,7 +75,6 @@ import java.nio.file.Paths
 @Timeout(300)
 @Tag("integration")
 class GetComponentsListQueryCountTest {
-
     @MockBean
     @Suppress("UnusedPrivateProperty")
     private lateinit var authServerClient: AuthServerClient
@@ -97,9 +96,10 @@ class GetComponentsListQueryCountTest {
 
     init {
         val testResourcesPath =
-            Paths.get(
-                GetComponentsListQueryCountTest::class.java.getResource("/expected-data")!!.toURI(),
-            ).parent
+            Paths
+                .get(
+                    GetComponentsListQueryCountTest::class.java.getResource("/expected-data")!!.toURI(),
+                ).parent
         System.setProperty("COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR", testResourcesPath.toString())
     }
 

@@ -6,5 +6,5 @@ import com.fasterxml.jackson.annotation.JsonProperty
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class ComponentArtifactConfigurationDTO(
     @JsonProperty("groupPattern") val groupPattern: String?,
-    @JsonProperty("artifactPattern") val artifactPattern: String?
+    @JsonProperty("artifactPattern") val artifactPattern: String?,
 )

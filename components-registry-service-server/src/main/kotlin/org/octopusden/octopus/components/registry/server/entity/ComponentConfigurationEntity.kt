@@ -67,20 +67,15 @@ class ComponentConfigurationEntity(
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     var id: UUID? = null,
-
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "component_id", nullable = false)
     var component: ComponentEntity,
-
     @Column(name = "version_range", nullable = false)
     var versionRange: String = "",
-
     @Column(name = "overridden_attribute", length = 50)
     var overriddenAttribute: String? = null,
-
     @Column(name = "row_type", length = 32, nullable = false)
     var rowType: String,
-
     // Vestigial under ADR-018 (decoupled version model): always false. The
     // pre-ADR-018 importer set it true to mark a synthetic-bounded base; that base
     // no longer exists (the base is always ALL_VERSIONS, coverage lives in
@@ -88,91 +83,63 @@ class ComponentConfigurationEntity(
     // v4-contract stability only — consumers must not infer coverage from it.
     @Column(name = "is_synthetic_base", nullable = false)
     var isSyntheticBase: Boolean = false,
-
     // --- BUILD aspect ---
     @Column(name = "build_system", length = 50)
     var buildSystem: String? = null,
-
     @Column(name = "java_version", length = 50)
     var javaVersion: String? = null,
-
     @Column(name = "maven_version", length = 50)
     var mavenVersion: String? = null,
-
     @Column(name = "gradle_version", length = 50)
     var gradleVersion: String? = null,
-
     @Column(name = "build_file_path", columnDefinition = "TEXT")
     var buildFilePath: String? = null,
-
     @Column(name = "deprecated")
     var deprecated: Boolean? = null,
-
     @Column(name = "required_project")
     var requiredProject: Boolean? = null,
-
     @Column(name = "project_version")
     var projectVersion: String? = null,
-
     @Column(name = "system_properties", columnDefinition = "TEXT")
     var systemProperties: String? = null,
-
     @Column(name = "build_tasks", columnDefinition = "TEXT")
     var buildTasks: String? = null,
-
     @Column(name = "escrow_build_task", columnDefinition = "TEXT")
     var escrowBuildTask: String? = null,
-
     // --- ESCROW aspect ---
     @Column(name = "escrow_provided_dependencies", columnDefinition = "TEXT")
     var escrowProvidedDependencies: String? = null,
-
     @Column(name = "escrow_reusable")
     var escrowReusable: Boolean? = null,
-
     @Column(name = "escrow_generation", length = 50)
     var escrowGeneration: String? = null,
-
     @Column(name = "escrow_disk_space", length = 50)
     var escrowDiskSpace: String? = null,
-
     @Column(name = "escrow_additional_sources", columnDefinition = "TEXT")
     var escrowAdditionalSources: String? = null,
-
     @Column(name = "escrow_gradle_include_configurations", columnDefinition = "TEXT")
     var escrowGradleIncludeConfigurations: String? = null,
-
     @Column(name = "escrow_gradle_exclude_configurations", columnDefinition = "TEXT")
     var escrowGradleExcludeConfigurations: String? = null,
-
     @Column(name = "escrow_gradle_include_test_configurations")
     var escrowGradleIncludeTestConfigurations: Boolean? = null,
-
     // --- JIRA aspect (per-version overridable fields) ---
     @Column(name = "jira_project_key", length = 50)
     var jiraProjectKey: String? = null,
-
     @Column(name = "jira_technical")
     var jiraTechnical: Boolean? = null,
-
     @Column(name = "jira_minor_version_format")
     var jiraMinorVersionFormat: String? = null,
-
     @Column(name = "jira_release_version_format")
     var jiraReleaseVersionFormat: String? = null,
-
     @Column(name = "jira_build_version_format")
     var jiraBuildVersionFormat: String? = null,
-
     @Column(name = "jira_line_version_format")
     var jiraLineVersionFormat: String? = null,
-
     @Column(name = "jira_version_prefix")
     var jiraVersionPrefix: String? = null,
-
     @Column(name = "jira_version_format")
     var jiraVersionFormat: String? = null,
-
     /**
      * Per-range override for `jira.componentVersionFormat.hotfixVersionFormat`.
      * Sibling column to `jira_release_version_format` etc. The per-component
@@ -182,42 +149,32 @@ class ComponentConfigurationEntity(
      */
     @Column(name = "jira_hotfix_version_format")
     var jiraHotfixVersionFormat: String? = null,
-
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     var createdAt: Instant? = null,
-
     @UpdateTimestamp
     @Column(name = "updated_at")
     var updatedAt: Instant? = null,
-
     // --- Bidirectional collections (children of this configuration row;
     //     populated when overridden_attribute is a marker, or part of base) ---
-
     @OneToMany(mappedBy = "componentConfiguration", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
     @BatchSize(size = BATCH_FETCH_SIZE)
     var vcsEntries: MutableList<VcsSettingsEntryEntity> = mutableListOf(),
-
     @OneToMany(mappedBy = "componentConfiguration", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
     @BatchSize(size = BATCH_FETCH_SIZE)
     var mavenArtifacts: MutableList<DistributionMavenArtifactEntity> = mutableListOf(),
-
     @OneToMany(mappedBy = "componentConfiguration", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
     @BatchSize(size = BATCH_FETCH_SIZE)
     var fileUrlArtifacts: MutableList<DistributionFileUrlArtifactEntity> = mutableListOf(),
-
     @OneToMany(mappedBy = "componentConfiguration", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
     @BatchSize(size = BATCH_FETCH_SIZE)
     var dockerImages: MutableList<DistributionDockerImageEntity> = mutableListOf(),
-
     @OneToMany(mappedBy = "componentConfiguration", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
     @BatchSize(size = BATCH_FETCH_SIZE)
     var packages: MutableList<DistributionPackageEntity> = mutableListOf(),
-
     @OneToMany(mappedBy = "componentConfiguration", fetch = FetchType.LAZY)
     @BatchSize(size = BATCH_FETCH_SIZE)
     var requiredToolJunctions: MutableList<ComponentRequiredToolEntity> = mutableListOf(),
-
     @OneToMany(mappedBy = "componentConfiguration", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
     @BatchSize(size = BATCH_FETCH_SIZE)
     var buildToolBeans: MutableList<ComponentBuildToolBeanEntity> = mutableListOf(),

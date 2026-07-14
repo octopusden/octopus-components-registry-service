@@ -42,7 +42,10 @@ object VersionRangeMapCanonicalizer {
      *  - `…/3/components` (list): each element carries a `variants` object keyed by version range →
      *    canonicalise each element's `variants` in place.
      */
-    fun normalizeForEndpoint(endpoint: String, root: JsonNode?): JsonNode? {
+    fun normalizeForEndpoint(
+        endpoint: String,
+        root: JsonNode?,
+    ): JsonNode? {
         if (root == null) return null
         return when {
             endpoint.contains("maven-artifacts") ->
@@ -109,7 +112,10 @@ object VersionRangeMapCanonicalizer {
      * @JsonCreator (faithful serialise/deserialise — unlike EscrowBean's `is`-prefixed boolean). On any
      * failure returns the list unchanged.
      */
-    fun <T : Any> canonicalizeTypedRangeArray(list: List<T>, valueType: Class<T>): List<T> {
+    fun <T : Any> canonicalizeTypedRangeArray(
+        list: List<T>,
+        valueType: Class<T>,
+    ): List<T> {
         if (list.isEmpty()) return list
         return runCatching {
             val arr = mapper.valueToTree<JsonNode>(list) as? com.fasterxml.jackson.databind.node.ArrayNode ?: return list
@@ -142,8 +148,12 @@ object VersionRangeMapCanonicalizer {
     // default constructor (need KotlinModule) and carry `Optional<…>` escrow fields (need
     // jackson-datatype-jdk8). Without findAndRegisterModules the round-trip throws on the first Optional
     // field and silently no-ops (runCatching → passthrough), leaving the reshaping un-canonicalised.
-    private val mapper = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper()
-        .registerModule(com.fasterxml.jackson.datatype.jdk8.Jdk8Module())
+    private val mapper = com.fasterxml.jackson.module.kotlin
+        .jacksonObjectMapper()
+        .registerModule(
+            com.fasterxml.jackson.datatype.jdk8
+                .Jdk8Module(),
+        )
 
     /**
      * Canonicalise a TYPED version-range-keyed map (e.g. /maven-artifacts'
@@ -251,7 +261,12 @@ object VersionRangeMapCanonicalizer {
     // ── interval model ────────────────────────────────────────────────────────────
 
     /** Half-open/closed interval over version space; null bound = unbounded (±∞). */
-    data class Interval(val lo: String?, val loIncl: Boolean, val hi: String?, val hiIncl: Boolean)
+    data class Interval(
+        val lo: String?,
+        val loIncl: Boolean,
+        val hi: String?,
+        val hiIncl: Boolean,
+    )
 
     /**
      * Parse a (possibly composite) version-range KEY into its atomic intervals. Returns null on any
@@ -269,8 +284,7 @@ object VersionRangeMapCanonicalizer {
     }
 
     /** Split a whitespace-stripped composite on the commas that sit BETWEEN segments (`)` or `]` then `[` or `(`). */
-    private fun splitComposite(s: String): List<String> =
-        s.split(Regex("(?<=[\\])]),(?=[\\[(])"))
+    private fun splitComposite(s: String): List<String> = s.split(Regex("(?<=[\\])]),(?=[\\[(])"))
 
     private fun parseSegment(seg: String): Interval? {
         // Single hard version: [x]
@@ -309,7 +323,10 @@ object VersionRangeMapCanonicalizer {
      * p (so p is covered), OR they overlap. Two boundary-EXCLUDING neighbours (a.hi ≡ b.lo, both
      * exclusive) do NOT merge — that is a genuine one-point gap.
      */
-    private fun contiguous(a: Interval, b: Interval): Boolean {
+    private fun contiguous(
+        a: Interval,
+        b: Interval,
+    ): Boolean {
         if (a.hi == null) return true // a runs to +∞ → covers b's start
         if (b.lo == null) return true // b runs from –∞ (shouldn't happen post-sort, but safe)
         val cmp = compareVersion(a.hi, b.lo)
@@ -319,7 +336,10 @@ object VersionRangeMapCanonicalizer {
     }
 
     /** The farther-right upper bound of [a] and [b] (handles +∞ and inclusive-vs-exclusive at the same point). */
-    private fun pickUpper(a: Interval, b: Interval): Pair<String?, Boolean> {
+    private fun pickUpper(
+        a: Interval,
+        b: Interval,
+    ): Pair<String?, Boolean> {
         if (a.hi == null || b.hi == null) return null to false
         val cmp = compareVersion(a.hi, b.hi)
         return when {
@@ -329,7 +349,10 @@ object VersionRangeMapCanonicalizer {
         }
     }
 
-    private fun compareBound(a: String?, b: String?): Int =
+    private fun compareBound(
+        a: String?,
+        b: String?,
+    ): Int =
         when {
             a == null && b == null -> 0
             a == null -> -1
@@ -344,7 +367,10 @@ object VersionRangeMapCanonicalizer {
      * token-by-token (numeric where both tokens are integers, else lexical), with a missing trailing
      * token treated as 0 — so `2` ≡ `2.0`, `1.3` ≡ `1.3.0`, and `0.7-157` ≡ `0.7.157`.
      */
-    fun compareVersion(a: String, b: String): Int {
+    fun compareVersion(
+        a: String,
+        b: String,
+    ): Int {
         val ta = tokenize(a)
         val tb = tokenize(b)
         val n = maxOf(ta.size, tb.size)
@@ -367,7 +393,10 @@ object VersionRangeMapCanonicalizer {
         return toks.joinToString(".") { it.raw }
     }
 
-    private data class Token(val raw: String, val num: Long?)
+    private data class Token(
+        val raw: String,
+        val num: Long?,
+    )
 
     private val ZERO = Token("0", 0L)
 
@@ -376,7 +405,10 @@ object VersionRangeMapCanonicalizer {
             Token(part, part.toLongOrNull())
         }
 
-    private fun compareToken(a: Token, b: Token): Int =
+    private fun compareToken(
+        a: Token,
+        b: Token,
+    ): Int =
         when {
             a.num != null && b.num != null -> a.num.compareTo(b.num)
             a.num != null -> -1 // numeric sorts before alpha (qualifier)

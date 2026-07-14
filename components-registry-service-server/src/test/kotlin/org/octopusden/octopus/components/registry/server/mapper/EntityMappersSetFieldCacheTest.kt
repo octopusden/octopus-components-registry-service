@@ -18,7 +18,6 @@ import org.junit.jupiter.api.Test
  * this same-module test source set.
  */
 class EntityMappersSetFieldCacheTest {
-
     @Test
     @DisplayName("repeated lookups return the identical cached Field instance (discovered once)")
     fun returnsSameInstanceAcrossCalls() {

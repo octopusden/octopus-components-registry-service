@@ -8,5 +8,5 @@ class VersionedComponent(
     @JsonProperty("id") id: String,
     @JsonProperty("name") name: String?,
     @JsonProperty("version") val version: String,
-    @JsonProperty(value = "componentOwner") componentOwner: String
+    @JsonProperty(value = "componentOwner") componentOwner: String,
 ) : Component(id, name, componentOwner)

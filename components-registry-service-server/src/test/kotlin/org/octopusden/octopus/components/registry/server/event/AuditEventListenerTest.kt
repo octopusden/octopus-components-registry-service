@@ -1,6 +1,5 @@
 package org.octopusden.octopus.components.registry.server.event
 
-import java.util.concurrent.TimeUnit
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.BeforeEach
@@ -14,6 +13,7 @@ import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.octopusden.octopus.components.registry.server.entity.AuditLogEntity
 import org.octopusden.octopus.components.registry.server.repository.AuditLogRepository
+import java.util.concurrent.TimeUnit
 
 /**
  * Bug fix: a component "save" that changes nothing used to write an empty

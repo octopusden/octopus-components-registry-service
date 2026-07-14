@@ -57,7 +57,8 @@ class ServiceEventIngestControllerV4(
         @RequestBody request: ServiceEventIngestRequest,
     ): ResponseEntity<Any> {
         if (!tokenAccepted(token)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+            return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
                 .body(ErrorResponse("Invalid or missing service-event token", "forbidden"))
         }
 
@@ -107,16 +108,14 @@ class ServiceEventIngestControllerV4(
         return MessageDigest.isEqual(sha256(presented), sha256(expected))
     }
 
-    private fun sha256(value: String): ByteArray =
-        MessageDigest.getInstance("SHA-256").digest(value.toByteArray(StandardCharsets.UTF_8))
+    private fun sha256(value: String): ByteArray = MessageDigest.getInstance("SHA-256").digest(value.toByteArray(StandardCharsets.UTF_8))
 
     private inline fun <T> parseEnum(
         raw: String,
         parse: (String) -> T,
     ): T? = runCatching { parse(raw.trim().uppercase(java.util.Locale.ROOT)) }.getOrNull()
 
-    private fun badRequest(message: String): ResponseEntity<Any> =
-        ResponseEntity.badRequest().body(ErrorResponse(message, "bad-request"))
+    private fun badRequest(message: String): ResponseEntity<Any> = ResponseEntity.badRequest().body(ErrorResponse(message, "bad-request"))
 
     companion object {
         private val LOG = LoggerFactory.getLogger(ServiceEventIngestControllerV4::class.java)
