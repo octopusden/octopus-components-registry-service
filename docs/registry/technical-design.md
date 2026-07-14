@@ -119,7 +119,7 @@ GET    /rest/api/4/components/{id}
 PATCH  /rest/api/4/components/{id}
   Request:  ComponentUpdateRequest { version, displayName, productType, build, escrow, ... }
   Response: ComponentDetailResponse (incl. per-caller `canEdit`)
-  Auth:     ACCESS_COMPONENTS AND canEditComponent (owner/RM/SC, or EDIT_ANY_COMPONENT for admin)
+  Auth:     ACCESS_COMPONENTS AND canEditComponent (owner/RM/SC/manager-of-owner, or EDIT_ANY_COMPONENT for admin)
   Headers:  If-Match (optional, alternative to version field for optimistic locking)
   Validation: Bean Validation (Jakarta @Valid, @NotBlank, @Size, etc.)
   Semantics: JSON Merge Patch (RFC 7396):
@@ -145,15 +145,15 @@ GET    /rest/api/4/components?productType=&archived=&search=&owner=
 POST   /rest/api/4/components/{id}/field-overrides
   Request:  FieldOverrideCreateRequest { fieldPath, versionRange, value }
   Example:  { "fieldPath": "build.buildSystem", "versionRange": "[1.0, 2.0)", "value": "MAVEN" }
-  Auth:     ACCESS_COMPONENTS AND canEditComponent (owner/RM/SC, or EDIT_ANY_COMPONENT)
+  Auth:     ACCESS_COMPONENTS AND canEditComponent (owner/RM/SC/manager-of-owner, or EDIT_ANY_COMPONENT)
   Validation: No overlap with existing ranges for the same field (409 Conflict)
 
 PATCH  /rest/api/4/components/{id}/field-overrides/{overrideId}
   Request:  FieldOverrideUpdateRequest { versionRange?, value? }
-  Auth:     ACCESS_COMPONENTS AND canEditComponent (owner/RM/SC, or EDIT_ANY_COMPONENT)
+  Auth:     ACCESS_COMPONENTS AND canEditComponent (owner/RM/SC/manager-of-owner, or EDIT_ANY_COMPONENT)
 
 DELETE /rest/api/4/components/{id}/field-overrides/{overrideId}
-  Auth:     ACCESS_COMPONENTS AND canEditComponent (owner/RM/SC, or EDIT_ANY_COMPONENT)
+  Auth:     ACCESS_COMPONENTS AND canEditComponent (owner/RM/SC/manager-of-owner, or EDIT_ANY_COMPONENT)
 
 GET    /rest/api/4/components/{id}/field-overrides
   Response: List of all field overrides for the component, grouped by field path
