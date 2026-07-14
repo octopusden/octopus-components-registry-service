@@ -1,7 +1,5 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
-import java.util.UUID
-import java.util.concurrent.TimeUnit
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
@@ -25,6 +23,8 @@ import org.octopusden.octopus.components.registry.server.repository.DependencyMa
 import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRangeFactory
+import java.util.UUID
+import java.util.concurrent.TimeUnit
 
 /**
  * Unit tests for [DatabaseComponentRegistryResolver] against the v2 entity graph (Model A').
@@ -51,7 +51,6 @@ import org.octopusden.releng.versions.VersionRangeFactory
  */
 @Timeout(30, unit = TimeUnit.SECONDS)
 class DatabaseComponentRegistryResolverTest {
-
     // ========================================================================
     // Infrastructure
     // ========================================================================
@@ -79,8 +78,7 @@ class DatabaseComponentRegistryResolverTest {
     // Entity factory helpers
     // ========================================================================
 
-    private fun makeComponent(key: String): ComponentEntity =
-        ComponentEntity(id = UUID.randomUUID(), componentKey = key)
+    private fun makeComponent(key: String): ComponentEntity = ComponentEntity(id = UUID.randomUUID(), componentKey = key)
 
     /**
      * Creates a BASE configuration row (overriddenAttribute = null).
@@ -113,7 +111,7 @@ class DatabaseComponentRegistryResolverTest {
             buildSystem = buildSystem,
             javaVersion = javaVersion,
             jiraProjectKey = jiraProjectKey,
-            deprecated = false,   // must be non-null; see KDoc above
+            deprecated = false, // must be non-null; see KDoc above
         )
 
     /**
@@ -248,7 +246,13 @@ class DatabaseComponentRegistryResolverTest {
         assertEquals("11", cfg.buildConfiguration?.javaVersion)
         assertNotNull(cfg.vcsSettings)
         assertEquals(1, cfg.vcsSettings!!.versionControlSystemRoots.size)
-        assertEquals("ssh://vcs/comp1", cfg.vcsSettings!!.versionControlSystemRoots.first().vcsPath)
+        assertEquals(
+            "ssh://vcs/comp1",
+            cfg.vcsSettings!!
+                .versionControlSystemRoots
+                .first()
+                .vcsPath,
+        )
     }
 
     @Test
@@ -284,9 +288,27 @@ class DatabaseComponentRegistryResolverTest {
             listOf("(,1.0)", "[1.0,2.0)", "[2.0,)"),
             module!!.moduleConfigurations.map { it.versionRangeString },
         )
-        assertEquals("11", module.moduleConfigurations.first { it.versionRangeString == "(,1.0)" }.buildConfiguration?.javaVersion)
-        assertEquals("21", module.moduleConfigurations.first { it.versionRangeString == "[1.0,2.0)" }.buildConfiguration?.javaVersion)
-        assertEquals("11", module.moduleConfigurations.first { it.versionRangeString == "[2.0,)" }.buildConfiguration?.javaVersion)
+        assertEquals(
+            "11",
+            module.moduleConfigurations
+                .first { it.versionRangeString == "(,1.0)" }
+                .buildConfiguration
+                ?.javaVersion,
+        )
+        assertEquals(
+            "21",
+            module.moduleConfigurations
+                .first { it.versionRangeString == "[1.0,2.0)" }
+                .buildConfiguration
+                ?.javaVersion,
+        )
+        assertEquals(
+            "11",
+            module.moduleConfigurations
+                .first { it.versionRangeString == "[2.0,)" }
+                .buildConfiguration
+                ?.javaVersion,
+        )
     }
 
     @Test
@@ -345,7 +367,13 @@ class DatabaseComponentRegistryResolverTest {
             module!!.moduleConfigurations.map { it.versionRangeString },
             "the three marker edges must produce three enumerated views",
         )
-        val vcsOf = { i: Int -> module.moduleConfigurations[i].vcsSettings!!.versionControlSystemRoots.first().vcsPath }
+        val vcsOf = { i: Int ->
+            module.moduleConfigurations[i]
+                .vcsSettings!!
+                .versionControlSystemRoots
+                .first()
+                .vcsPath
+        }
         assertEquals("ssh://vcs/low", vcsOf(0))
         assertEquals("ssh://vcs/gap", vcsOf(1))
         assertEquals("ssh://vcs/high", vcsOf(2))
@@ -373,7 +401,13 @@ class DatabaseComponentRegistryResolverTest {
             listOf("[1.1.41,1.1.49)", "[1.1.49]"),
             module!!.moduleConfigurations.map { it.versionRangeString },
         )
-        val vcsOf = { i: Int -> module.moduleConfigurations[i].vcsSettings!!.versionControlSystemRoots.first().vcsPath }
+        val vcsOf = { i: Int ->
+            module.moduleConfigurations[i]
+                .vcsSettings!!
+                .versionControlSystemRoots
+                .first()
+                .vcsPath
+        }
         assertEquals("ssh://vcs/mk", vcsOf(0))
         assertEquals("ssh://vcs/base", vcsOf(1))
     }
@@ -451,7 +485,13 @@ class DatabaseComponentRegistryResolverTest {
         assertNotNull(cfg)
         assertNotNull(cfg!!.vcsSettings)
         assertEquals(1, cfg.vcsSettings!!.versionControlSystemRoots.size)
-        assertEquals("ssh://vcs/comp3b", cfg.vcsSettings!!.versionControlSystemRoots.first().vcsPath)
+        assertEquals(
+            "ssh://vcs/comp3b",
+            cfg.vcsSettings!!
+                .versionControlSystemRoots
+                .first()
+                .vcsPath,
+        )
     }
 
     // ========================================================================
@@ -634,7 +674,11 @@ class DatabaseComponentRegistryResolverTest {
         assertEquals(listOf("[1.0,)"), module!!.moduleConfigurations.map { it.versionRangeString })
         assertEquals(
             org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode.AUTO,
-            module.moduleConfigurations.first().escrow!!.generation.orElse(null),
+            module.moduleConfigurations
+                .first()
+                .escrow!!
+                .generation
+                .orElse(null),
             "the only supported range inherits AUTO from base; the out-of-supported MANUAL override does not appear",
         )
     }
@@ -673,7 +717,10 @@ class DatabaseComponentRegistryResolverTest {
             module!!.moduleConfigurations.map { it.versionRangeString },
         )
         val gen = { i: Int ->
-            module.moduleConfigurations[i].escrow!!.generation.orElse(null)
+            module.moduleConfigurations[i]
+                .escrow!!
+                .generation
+                .orElse(null)
         }
         assertEquals(
             org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode.MANUAL,
@@ -694,7 +741,10 @@ class DatabaseComponentRegistryResolverTest {
         // resolved BASE config (MANUAL), NOT the version-sorted moduleConfigurations[0] nor the AUTO island.
         assertEquals(
             org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode.MANUAL,
-            module.componentLevelConfiguration!!.escrow!!.generation.orElse(null),
+            module.componentLevelConfiguration!!
+                .escrow!!
+                .generation
+                .orElse(null),
             "component-level escrow.generation must come from the MANUAL base, not the higher AUTO island",
         )
     }
@@ -730,7 +780,11 @@ class DatabaseComponentRegistryResolverTest {
         // Component-level representative = BASE → AUTO (matches V1), regardless of enumeration order.
         assertEquals(
             org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode.AUTO,
-            module!!.componentLevelConfiguration!!.escrow!!.generation.orElse(null),
+            module!!
+                .componentLevelConfiguration!!
+                .escrow!!
+                .generation
+                .orElse(null),
             "component-level escrow.generation must come from the AUTO base, not the low UNSUPPORTED override",
         )
         // Enumeration stays version-sorted/atomic: the low UNSUPPORTED range is still first in the list.
@@ -741,7 +795,11 @@ class DatabaseComponentRegistryResolverTest {
         )
         assertEquals(
             org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode.UNSUPPORTED,
-            module.moduleConfigurations.first().escrow!!.generation.orElse(null),
+            module.moduleConfigurations
+                .first()
+                .escrow!!
+                .generation
+                .orElse(null),
             "the low range view still carries its UNSUPPORTED override (per-range values unchanged)",
         )
     }

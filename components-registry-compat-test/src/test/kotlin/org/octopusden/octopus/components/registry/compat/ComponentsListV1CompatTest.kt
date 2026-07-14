@@ -24,7 +24,6 @@ import java.util.stream.Stream
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class ComponentsListV1CompatTest : CompatibilityTestBase() {
-
     private val mapper = jacksonObjectMapper()
 
     @Test

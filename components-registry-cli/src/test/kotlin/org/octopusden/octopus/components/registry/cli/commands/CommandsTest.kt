@@ -23,12 +23,19 @@ private class FakeResponse(
     private val req: HttpRequest,
 ) : HttpResponse<String> {
     override fun statusCode(): Int = status
+
     override fun request(): HttpRequest = req
+
     override fun previousResponse(): Optional<HttpResponse<String>> = Optional.empty()
+
     override fun headers(): HttpHeaders = HttpHeaders.of(emptyMap()) { _, _ -> true }
+
     override fun body(): String? = body
+
     override fun sslSession(): Optional<SSLSession> = Optional.empty()
+
     override fun uri(): java.net.URI = req.uri()
+
     override fun version(): HttpClient.Version = HttpClient.Version.HTTP_1_1
 }
 
@@ -40,6 +47,7 @@ private class QueueExchange(
     private val replies: List<Pair<Int, String?>>,
 ) : HttpExchange {
     val requests = mutableListOf<HttpRequest>()
+
     override fun send(request: HttpRequest): HttpResponse<String> {
         requests += request
         val (status, body) = if (replies.size == 1) replies[0] else replies[requests.size - 1]
@@ -57,39 +65,68 @@ private fun cli(exchange: QueueExchange) =
 private const val URL = "--crs-url=https://crs.example"
 
 class CommandsTest {
-
     @Test
     fun `components list maps filter options to spec query params`() {
         val page = """{"content":[],"last":true}"""
         val ex = QueueExchange(listOf(200 to page))
         val result = cli(ex).test(
             listOf(
-                URL, "components", "list",
-                "--search", "foo",
-                "--owner", "alice", "--owner", "bob",
-                "--system", "SYS",
-                "--product-type", "LIB",
-                "--build-system", "GRADLE",
-                "--label", "core",
-                "--client-code", "C1",
-                "--solution", "true",
-                "--jira-project-key", "ABC",
-                "--jira-technical", "false",
-                "--vcs-path", "/git/x",
-                "--production-branch", "main",
-                "--parent", "root",
-                "--group-key", "g1",
-                "--archived", "false",
-                "--can-be-parent", "true",
-                "--distribution-explicit", "true",
-                "--distribution-external", "false",
-                "--page", "2", "--size", "50", "--sort", "name,asc",
+                URL,
+                "components",
+                "list",
+                "--search",
+                "foo",
+                "--owner",
+                "alice",
+                "--owner",
+                "bob",
+                "--system",
+                "SYS",
+                "--product-type",
+                "LIB",
+                "--build-system",
+                "GRADLE",
+                "--label",
+                "core",
+                "--client-code",
+                "C1",
+                "--solution",
+                "true",
+                "--jira-project-key",
+                "ABC",
+                "--jira-technical",
+                "false",
+                "--vcs-path",
+                "/git/x",
+                "--production-branch",
+                "main",
+                "--parent",
+                "root",
+                "--group-key",
+                "g1",
+                "--archived",
+                "false",
+                "--can-be-parent",
+                "true",
+                "--distribution-explicit",
+                "true",
+                "--distribution-external",
+                "false",
+                "--page",
+                "2",
+                "--size",
+                "50",
+                "--sort",
+                "name,asc",
             ),
         )
         assertEquals(0, result.statusCode, result.stderr)
         // rawQuery preserves percent-encoding; uri().query would decode %2F/%2C back to /,
         // hiding the wire-format the server actually receives.
-        val q = ex.requests.single().uri().rawQuery
+        val q = ex.requests
+            .single()
+            .uri()
+            .rawQuery
         // CLI kebab -> spec param-name mapping.
         assertTrue(q.contains("search=foo"))
         assertTrue(q.contains("owner=alice"))
@@ -157,8 +194,18 @@ class CommandsTest {
         val result = cli(ex).test(listOf(URL, "component", "overrides", "my-comp"))
         assertEquals(0, result.statusCode, result.stderr)
         assertEquals(2, ex.requests.size)
-        assertTrue(ex.requests[0].uri().path.endsWith("/components/my-comp"))
-        assertTrue(ex.requests[1].uri().path.endsWith("/components/$uuid/field-overrides"))
+        assertTrue(
+            ex.requests[0]
+                .uri()
+                .path
+                .endsWith("/components/my-comp"),
+        )
+        assertTrue(
+            ex.requests[1]
+                .uri()
+                .path
+                .endsWith("/components/$uuid/field-overrides"),
+        )
     }
 
     @Test
@@ -169,7 +216,13 @@ class CommandsTest {
         val result = cli(ex).test(listOf(URL, "component", "overrides", uuid))
         assertEquals(0, result.statusCode, result.stderr)
         assertEquals(1, ex.requests.size, "no resolve lookup expected for a UUID arg")
-        assertTrue(ex.requests.single().uri().path.endsWith("/components/$uuid/field-overrides"))
+        assertTrue(
+            ex.requests
+                .single()
+                .uri()
+                .path
+                .endsWith("/components/$uuid/field-overrides"),
+        )
     }
 
     @Test
@@ -182,7 +235,13 @@ class CommandsTest {
         val tableEx = QueueExchange(listOf(200 to detail))
         val table = cli(tableEx).test(listOf(URL, "component", "get", uuid))
         assertEquals(0, table.statusCode, table.stderr)
-        assertEquals("/rest/api/4/components/$uuid", tableEx.requests.single().uri().path)
+        assertEquals(
+            "/rest/api/4/components/$uuid",
+            tableEx.requests
+                .single()
+                .uri()
+                .path,
+        )
         assertTrue(table.stdout.contains("FIELD"), "detail table header expected")
         assertTrue(table.stdout.contains("my-comp"))
 
@@ -238,7 +297,13 @@ class CommandsTest {
         val ex = QueueExchange(listOf(401 to """{"errorMessage":"login required"}"""))
         val result = cli(ex).test(listOf(URL, "--token=tok", "meta", "employees", "--search", "ali"))
         assertEquals(4, result.statusCode, "AUTH_REQUIRED exit code expected")
-        assertTrue(ex.requests.single().uri().query.contains("search=ali"))
+        assertTrue(
+            ex.requests
+                .single()
+                .uri()
+                .query
+                .contains("search=ali"),
+        )
     }
 
     @Test
@@ -258,7 +323,11 @@ class CommandsTest {
         val ex = QueueExchange(listOf(200 to "[]"))
         val result = cli(ex).test(listOf(URL, "--token=tok", "meta", "employees", "--search", "x"))
         assertEquals(0, result.statusCode, result.stderr)
-        val auth = ex.requests.single().headers().firstValue("Authorization").orElse("")
+        val auth = ex.requests
+            .single()
+            .headers()
+            .firstValue("Authorization")
+            .orElse("")
         assertEquals("Bearer tok", auth, "meta employees must send the bearer token")
     }
 
@@ -286,16 +355,32 @@ class CommandsTest {
         val ex = QueueExchange(listOf(200 to page))
         val result = cli(ex).test(
             listOf(
-                URL, "--token=tok", "audit", "recent",
-                "--entity-type", "COMPONENT",
-                "--entity-id", "abc",
-                "--changed-by", "alice",
-                "--action", "UPDATE",
-                "--source", "PORTAL",
-                "--from", "2026-06-01T00:00:00Z",
-                "--to", "2026-06-14T00:00:00Z",
-                "--include-migrated", "true",
-                "--page", "1", "--size", "25", "--sort", "changedAt,desc",
+                URL,
+                "--token=tok",
+                "audit",
+                "recent",
+                "--entity-type",
+                "COMPONENT",
+                "--entity-id",
+                "abc",
+                "--changed-by",
+                "alice",
+                "--action",
+                "UPDATE",
+                "--source",
+                "PORTAL",
+                "--from",
+                "2026-06-01T00:00:00Z",
+                "--to",
+                "2026-06-14T00:00:00Z",
+                "--include-migrated",
+                "true",
+                "--page",
+                "1",
+                "--size",
+                "25",
+                "--sort",
+                "changedAt,desc",
             ),
         )
         assertEquals(0, result.statusCode, result.stderr)
@@ -321,7 +406,10 @@ class CommandsTest {
         val ex = QueueExchange(listOf(200 to """{"content":[],"last":true}"""))
         val result = cli(ex).test(listOf(URL, "--token=tok", "audit", "recent"))
         assertEquals(0, result.statusCode, result.stderr)
-        val q = ex.requests.single().uri().rawQuery ?: ""
+        val q = ex.requests
+            .single()
+            .uri()
+            .rawQuery ?: ""
         assertTrue(!q.contains("includeMigrated"), "include-migrated must be omitted when not passed: $q")
     }
 
@@ -330,8 +418,20 @@ class CommandsTest {
         val ex = QueueExchange(listOf(200 to """{"content":[],"last":true}"""))
         val result = cli(ex).test(
             listOf(
-                URL, "--token=tok", "audit", "history", "COMPONENT TYPE", "id/with slash",
-                "--include-migrated", "false", "--page", "0", "--size", "10", "--sort", "changedAt,asc",
+                URL,
+                "--token=tok",
+                "audit",
+                "history",
+                "COMPONENT TYPE",
+                "id/with slash",
+                "--include-migrated",
+                "false",
+                "--page",
+                "0",
+                "--size",
+                "10",
+                "--sort",
+                "changedAt,asc",
             ),
         )
         assertEquals(0, result.statusCode, result.stderr)
@@ -377,7 +477,11 @@ class CommandsTest {
         val ex = QueueExchange(listOf(200 to """{"content":[],"last":true}"""))
         val result = cli(ex).test(listOf(URL, "--token=secret-tok", "audit", "recent"))
         assertEquals(0, result.statusCode, result.stderr)
-        val auth = ex.requests.single().headers().firstValue("Authorization").orElse("")
+        val auth = ex.requests
+            .single()
+            .headers()
+            .firstValue("Authorization")
+            .orElse("")
         assertEquals("Bearer secret-tok", auth, "audit must send the bearer token")
     }
 
@@ -406,7 +510,13 @@ class CommandsTest {
         val ex = QueueExchange(listOf(200 to """["alice","bob"]"""))
         val result = cli(ex).test(listOf(URL, "meta", "owners"))
         assertEquals(0, result.statusCode, result.stderr)
-        assertTrue(ex.requests.single().uri().path.endsWith("/components/meta/owners"))
+        assertTrue(
+            ex.requests
+                .single()
+                .uri()
+                .path
+                .endsWith("/components/meta/owners"),
+        )
         assertTrue(result.stdout.contains("alice"))
         assertTrue(result.stdout.contains("bob"))
     }

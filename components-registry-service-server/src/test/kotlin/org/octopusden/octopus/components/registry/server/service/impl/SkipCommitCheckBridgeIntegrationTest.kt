@@ -1,8 +1,5 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
-import java.nio.file.Files
-import java.nio.file.Path
-import java.nio.file.Paths
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
@@ -25,6 +22,9 @@ import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import org.springframework.transaction.annotation.Transactional
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
 
 /**
  * CRS-C — full DSL-import → storage → dual-read bridge, on real imported data.
@@ -273,7 +273,10 @@ class SkipCommitCheckBridgeIntegrationTest {
             registry.add("pathToConfig") { "file://$workDir" }
         }
 
-        private fun copyTree(src: Path, dst: Path) {
+        private fun copyTree(
+            src: Path,
+            dst: Path,
+        ) {
             Files.createDirectories(dst)
             Files.walk(src).use { stream ->
                 stream.forEach { source ->

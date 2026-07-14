@@ -1,7 +1,5 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
-import java.util.UUID
-import java.util.concurrent.TimeUnit
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
@@ -31,6 +29,8 @@ import org.octopusden.octopus.releng.dto.ComponentVersion
 import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRangeFactory
+import java.util.UUID
+import java.util.concurrent.TimeUnit
 
 /**
  * Range-only parity guard (see #362 for the related migration-time validation).
@@ -59,7 +59,6 @@ import org.octopusden.releng.versions.VersionRangeFactory
  */
 @Timeout(30, unit = TimeUnit.SECONDS)
 class RangeOnlyParityGuardTest {
-
     private val componentRepository: ComponentRepository = mock(ComponentRepository::class.java)
     private val dependencyMappingRepository: DependencyMappingRepository =
         mock(DependencyMappingRepository::class.java)
@@ -97,12 +96,16 @@ class RangeOnlyParityGuardTest {
             // The loader validates that the copyright path is an existing directory, but only
             // reads it when a component declares `copyright`. The fixture declares none, so an
             // empty temp dir satisfies the check without shipping a repo artifact.
-            java.nio.file.Files.createTempDirectory("range-only-guard-copyrights"),
+            java.nio.file.Files
+                .createTempDirectory("range-only-guard-copyrights"),
         )
         return loader.loadFullConfigurationWithoutValidationForUnknownAttributes(emptyMap<String, String>())
     }
 
-    private fun resolveV1(config: EscrowConfiguration, version: String): EscrowModuleConfig? =
+    private fun resolveV1(
+        config: EscrowConfiguration,
+        version: String,
+    ): EscrowModuleConfig? =
         EscrowConfigurationLoader.resolveComponentConfiguration(
             config,
             ComponentVersion.create(COMPONENT, version),

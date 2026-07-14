@@ -5,6 +5,7 @@ import org.octopusden.octopus.components.registry.server.dto.v4.HistoryMigration
 import org.octopusden.octopus.components.registry.server.dto.v4.MigrationConflictResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.MigrationJobResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.TeamcitySyncJobResponse
+import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
 import org.octopusden.octopus.components.registry.server.service.BatchMigrationResult
 import org.octopusden.octopus.components.registry.server.service.ForceResetOutcome
 import org.octopusden.octopus.components.registry.server.service.HistoryMigrationJobService
@@ -16,7 +17,6 @@ import org.octopusden.octopus.components.registry.server.service.MigrationResult
 import org.octopusden.octopus.components.registry.server.service.MigrationStatus
 import org.octopusden.octopus.components.registry.server.service.ValidationResult
 import org.octopusden.octopus.components.registry.server.service.impl.ConfigValidationException
-import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
 import org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncJobService
 import org.springframework.cloud.context.refresh.ContextRefresher
 import org.springframework.http.HttpStatus

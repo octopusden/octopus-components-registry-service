@@ -34,7 +34,6 @@ import java.util.UUID
  *  - MARKER isolation: a VCS-settings marker suppresses all distribution families
  */
 class DistributionEntityMapperTest {
-
     // -----------------------------------------------------------------------
     // Fixture builders
     // -----------------------------------------------------------------------
@@ -144,14 +143,20 @@ class DistributionEntityMapperTest {
         val cfg = baseConfig()
         cfg.mavenArtifacts.add(
             DistributionMavenArtifactEntity(
-                id = UUID.randomUUID(), componentConfiguration = cfg,
-                groupPattern = "org.b", artifactPattern = "b", sortOrder = 2,
+                id = UUID.randomUUID(),
+                componentConfiguration = cfg,
+                groupPattern = "org.b",
+                artifactPattern = "b",
+                sortOrder = 2,
             ),
         )
         cfg.mavenArtifacts.add(
             DistributionMavenArtifactEntity(
-                id = UUID.randomUUID(), componentConfiguration = cfg,
-                groupPattern = "org.a", artifactPattern = "a", sortOrder = 1,
+                id = UUID.randomUUID(),
+                componentConfiguration = cfg,
+                groupPattern = "org.a",
+                artifactPattern = "a",
+                sortOrder = 1,
             ),
         )
 
@@ -297,12 +302,18 @@ class DistributionEntityMapperTest {
         val cfg = baseConfig()
         cfg.dockerImages.add(
             DistributionDockerImageEntity(
-                id = UUID.randomUUID(), componentConfiguration = cfg, imageName = "image-b", sortOrder = 2,
+                id = UUID.randomUUID(),
+                componentConfiguration = cfg,
+                imageName = "image-b",
+                sortOrder = 2,
             ),
         )
         cfg.dockerImages.add(
             DistributionDockerImageEntity(
-                id = UUID.randomUUID(), componentConfiguration = cfg, imageName = "image-a", sortOrder = 1,
+                id = UUID.randomUUID(),
+                componentConfiguration = cfg,
+                imageName = "image-a",
+                sortOrder = 1,
             ),
         )
 
@@ -364,14 +375,20 @@ class DistributionEntityMapperTest {
         val cfg = baseConfig()
         cfg.packages.add(
             DistributionPackageEntity(
-                id = UUID.randomUUID(), componentConfiguration = cfg,
-                packageType = "DEB", packageName = "pkg-b", sortOrder = 2,
+                id = UUID.randomUUID(),
+                componentConfiguration = cfg,
+                packageType = "DEB",
+                packageName = "pkg-b",
+                sortOrder = 2,
             ),
         )
         cfg.packages.add(
             DistributionPackageEntity(
-                id = UUID.randomUUID(), componentConfiguration = cfg,
-                packageType = "DEB", packageName = "pkg-a", sortOrder = 1,
+                id = UUID.randomUUID(),
+                componentConfiguration = cfg,
+                packageType = "DEB",
+                packageName = "pkg-a",
+                sortOrder = 1,
             ),
         )
 

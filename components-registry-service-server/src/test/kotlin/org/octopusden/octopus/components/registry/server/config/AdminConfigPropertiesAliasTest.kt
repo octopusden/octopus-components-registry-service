@@ -12,7 +12,6 @@ import org.junit.jupiter.api.Test
  */
 @Suppress("DEPRECATION")
 class AdminConfigPropertiesAliasTest {
-
     private fun cvf() = AdminConfigProperties.Jira.ComponentVersionFormat()
 
     @Test

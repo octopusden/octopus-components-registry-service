@@ -20,7 +20,6 @@ class DependencyMappingEntity(
     @Id
     @Column(name = "alias", length = 255)
     var alias: String = "",
-
     @Column(name = "component_key", nullable = false, length = 255)
     var componentKey: String = "",
 )

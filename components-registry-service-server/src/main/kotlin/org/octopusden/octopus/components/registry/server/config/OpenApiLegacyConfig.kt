@@ -23,7 +23,8 @@ import org.springframework.context.annotation.Configuration
 @Configuration
 class OpenApiLegacyConfig {
     private fun legacyGroup(major: Int): GroupedOpenApi =
-        GroupedOpenApi.builder()
+        GroupedOpenApi
+            .builder()
             .group("v$major")
             .pathsToMatch("/rest/api/$major/**")
             .addOpenApiCustomizer { openApi ->
@@ -36,8 +37,7 @@ class OpenApiLegacyConfig {
                                 "the Portal binds to v4.",
                         ),
                 )
-            }
-            .build()
+            }.build()
 
     @Bean
     fun v1OpenApiGroup(): GroupedOpenApi = legacyGroup(1)

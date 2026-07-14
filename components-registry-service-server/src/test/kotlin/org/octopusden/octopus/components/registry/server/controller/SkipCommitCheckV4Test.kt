@@ -74,13 +74,21 @@ class SkipCommitCheckV4Test {
 
     private fun uniqueProjectKey() = "PK${UUID.randomUUID().toString().take(8).uppercase().replace("-", "")}"
 
-    private fun createBody(name: String, baseConfigJson: String, topLevelJson: String = ""): String =
+    private fun createBody(
+        name: String,
+        baseConfigJson: String,
+        topLevelJson: String = "",
+    ): String =
         """{"name":"$name","componentOwner":"owner1",""" +
             """"group":{"groupKey":"org.example.test","isFake":false},$topLevelJson""" +
             """"baseConfiguration":$baseConfigJson}"""
 
     /** POST expecting 201; returns the detail node. */
-    private fun create(name: String, baseConfigJson: String, topLevelJson: String = ""): JsonNode =
+    private fun create(
+        name: String,
+        baseConfigJson: String,
+        topLevelJson: String = "",
+    ): JsonNode =
         objectMapper.readTree(
             mvc
                 .perform(
@@ -89,7 +97,8 @@ class SkipCommitCheckV4Test {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(createBody(name, baseConfigJson, topLevelJson)),
                 ).andExpect(status().isCreated)
-                .andReturn().response.contentAsString,
+                .andReturn()
+                .response.contentAsString,
         )
 
     private fun getComponent(id: String): JsonNode =
@@ -97,11 +106,16 @@ class SkipCommitCheckV4Test {
             mvc
                 .perform(get("/rest/api/4/components/$id").with(adminJwt()))
                 .andExpect(status().isOk)
-                .andReturn().response.contentAsString,
+                .andReturn()
+                .response.contentAsString,
         )
 
     /** PATCH expecting 200; returns the detail node. */
-    private fun patch(id: String, version: Long, fieldsJson: String): JsonNode =
+    private fun patch(
+        id: String,
+        version: Long,
+        fieldsJson: String,
+    ): JsonNode =
         objectMapper.readTree(
             mvc
                 .perform(
@@ -110,13 +124,21 @@ class SkipCommitCheckV4Test {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""{"version":$version,$fieldsJson}"""),
                 ).andExpect(status().isOk)
-                .andReturn().response.contentAsString,
+                .andReturn()
+                .response.contentAsString,
         )
 
     private fun version(node: JsonNode): Long = node["version"].asLong()
 
-    private fun JsonNode.baseScalar(aspect: String, field: String): String? =
-        this["configurations"].first { it["rowType"].asText() == "BASE" }[aspect]?.get(field)?.takeUnless { it.isNull }?.asText()
+    private fun JsonNode.baseScalar(
+        aspect: String,
+        field: String,
+    ): String? =
+        this["configurations"]
+            .first { it["rowType"].asText() == "BASE" }[aspect]
+            ?.get(field)
+            ?.takeUnless { it.isNull }
+            ?.asText()
 
     // ------------------------------------------------------------------
     // round-trip
@@ -239,12 +261,15 @@ class SkipCommitCheckV4Test {
         patch(id, version(created), """"skipCommitCheck":true""")
 
         val history =
-            objectMapper.readTree(
-                mvc
-                    .perform(get("/rest/api/4/audit/Component/$id").with(adminJwt()).param("size", "500"))
-                    .andExpect(status().isOk)
-                    .andReturn().response.contentAsString,
-            )["content"].toList()
+            objectMapper
+                .readTree(
+                    mvc
+                        .perform(get("/rest/api/4/audit/Component/$id").with(adminJwt()).param("size", "500"))
+                        .andExpect(status().isOk)
+                        .andReturn()
+                        .response.contentAsString,
+                )["content"]
+                .toList()
         val diff =
             history
                 .filter { it["action"].asText() == "UPDATE" }

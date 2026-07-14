@@ -47,7 +47,6 @@ import java.nio.file.Paths
 @Timeout(120)
 @Tag("integration")
 class RangeViewBroadOverrideContainmentIntegrationTest {
-
     @MockBean
     @Suppress("UnusedPrivateProperty")
     private lateinit var authServerClient: AuthServerClient
@@ -62,10 +61,12 @@ class RangeViewBroadOverrideContainmentIntegrationTest {
     init {
         // application-common.yml binds components-registry.work-dir from this env-backed property.
         val testResourcesPath =
-            Paths.get(
-                RangeViewBroadOverrideContainmentIntegrationTest::class.java
-                    .getResource("/expected-data")!!.toURI(),
-            ).parent
+            Paths
+                .get(
+                    RangeViewBroadOverrideContainmentIntegrationTest::class.java
+                        .getResource("/expected-data")!!
+                        .toURI(),
+                ).parent
         System.setProperty("COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR", testResourcesPath.toString())
     }
 

@@ -7,5 +7,5 @@ import com.fasterxml.jackson.annotation.JsonProperty
 data class VersionNamesDTO(
     @JsonProperty("serviceBranch") val serviceBranch: String,
     @JsonProperty("service") val service: String,
-    @JsonProperty("minor") val minor: String
+    @JsonProperty("minor") val minor: String,
 )

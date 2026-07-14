@@ -2,9 +2,9 @@ package org.octopusden.octopus.components.registry.server.controller
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
-import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
@@ -91,7 +91,8 @@ class MultiValuePeopleV4Test {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body),
                 ).andExpect(status().is2xxSuccessful)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         return objectMapper.readTree(response)
     }
 
@@ -100,7 +101,8 @@ class MultiValuePeopleV4Test {
             mvc
                 .perform(get("/rest/api/4/components/$id").with(adminJwt()))
                 .andExpect(status().isOk)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         return objectMapper.readTree(body)
     }
 
@@ -118,7 +120,8 @@ class MultiValuePeopleV4Test {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body),
                 ).andExpect(status().isOk)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         return objectMapper.readTree(response)
     }
 

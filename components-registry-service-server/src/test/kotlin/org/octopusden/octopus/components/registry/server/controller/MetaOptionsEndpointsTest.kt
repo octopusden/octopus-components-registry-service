@@ -333,7 +333,8 @@ class MetaOptionsEndpointsTest {
         // setup helper; we seed via the repository.
         if (systemRepository.findByCode(system) == null) {
             systemRepository.save(
-                org.octopusden.octopus.components.registry.server.entity.SystemEntity(code = system),
+                org.octopusden.octopus.components.registry.server.entity
+                    .SystemEntity(code = system),
             )
         }
         mvc

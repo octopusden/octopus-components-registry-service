@@ -81,7 +81,11 @@ class V4ClearSemanticsTest {
     private fun uniqueProjectKey() = "PK${UUID.randomUUID().toString().take(8).uppercase().replace("-", "")}"
 
     /** POST a component with the given raw baseConfiguration + top-level JSON fragments; returns the detail node. */
-    private fun create(name: String, baseConfigJson: String, topLevelJson: String = ""): JsonNode {
+    private fun create(
+        name: String,
+        baseConfigJson: String,
+        topLevelJson: String = "",
+    ): JsonNode {
         val body =
             """{"name":"$name","componentOwner":"owner1",""" +
                 """"group":{"groupKey":"org.example.test","isFake":false},$topLevelJson""" +
@@ -94,7 +98,8 @@ class V4ClearSemanticsTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body),
                 ).andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         return objectMapper.readTree(response)
     }
 
@@ -103,10 +108,15 @@ class V4ClearSemanticsTest {
             mvc
                 .perform(get("/rest/api/4/components/$id").with(adminJwt()))
                 .andExpect(status().isOk)
-                .andReturn().response.contentAsString,
+                .andReturn()
+                .response.contentAsString,
         )
 
-    private fun patch(id: String, version: Long, fieldsJson: String): JsonNode =
+    private fun patch(
+        id: String,
+        version: Long,
+        fieldsJson: String,
+    ): JsonNode =
         objectMapper.readTree(
             mvc
                 .perform(
@@ -115,16 +125,18 @@ class V4ClearSemanticsTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""{"version":$version,$fieldsJson}"""),
                 ).andExpect(status().isOk)
-                .andReturn().response.contentAsString,
+                .andReturn()
+                .response.contentAsString,
         )
 
     /** The BASE configuration row of a detail node. */
-    private fun JsonNode.baseRow(): JsonNode =
-        this["configurations"].first { it["rowType"].asText() == "BASE" }
+    private fun JsonNode.baseRow(): JsonNode = this["configurations"].first { it["rowType"].asText() == "BASE" }
 
     /** A scalar under `configurations[BASE].<aspect>.<field>`, or null when JSON null/absent. */
-    private fun JsonNode.baseScalar(aspect: String, field: String): String? =
-        baseRow()[aspect]?.get(field)?.takeUnless { it.isNull }?.asText()
+    private fun JsonNode.baseScalar(
+        aspect: String,
+        field: String,
+    ): String? = baseRow()[aspect]?.get(field)?.takeUnless { it.isNull }?.asText()
 
     private fun version(node: JsonNode): Long = node["version"].asLong()
 
@@ -151,14 +163,20 @@ class V4ClearSemanticsTest {
 
         val patched =
             patch(
-                id, version(created),
+                id,
+                version(created),
                 """"baseConfiguration":{"jira":{"projectKey":"","versionPrefix":"","minorVersionFormat":"",""" +
                     """"releaseVersionFormat":"","buildVersionFormat":"","lineVersionFormat":"","versionFormat":""}}""",
             )
 
         listOf(
-            "projectKey", "versionPrefix", "minorVersionFormat", "releaseVersionFormat",
-            "buildVersionFormat", "lineVersionFormat", "versionFormat",
+            "projectKey",
+            "versionPrefix",
+            "minorVersionFormat",
+            "releaseVersionFormat",
+            "buildVersionFormat",
+            "lineVersionFormat",
+            "versionFormat",
         ).forEach { field ->
             assertNull(patched.baseScalar("jira", field), "jira.$field must be cleared to null, was ${patched.baseScalar("jira", field)}")
         }
@@ -201,7 +219,8 @@ class V4ClearSemanticsTest {
         val id = created["id"].asText()
         val patched =
             patch(
-                id, version(created),
+                id,
+                version(created),
                 """"baseConfiguration":{"build":{"buildSystem":"MAVEN","javaVersion":"","mavenVersion":"","buildFilePath":"",""" +
                     """"gradleVersion":"","projectVersion":"","systemProperties":"","buildTasks":""}}""",
             )
@@ -234,7 +253,8 @@ class V4ClearSemanticsTest {
         // free-text scalars carry "" to clear.
         val patched =
             patch(
-                id, version(created),
+                id,
+                version(created),
                 """"baseConfiguration":{"escrow":{"generation":"AUTO","diskSpace":"","buildTask":"","providedDependencies":"",""" +
                     """"additionalSources":"","gradleIncludeConfigurations":"","gradleExcludeConfigurations":""}}""",
             )
@@ -308,7 +328,8 @@ class V4ClearSemanticsTest {
         // leave both values untouched, in contrast to "" which would clear them.
         val patched =
             patch(
-                id, version(created),
+                id,
+                version(created),
                 """"baseConfiguration":{"build":{"buildSystem":"MAVEN","javaVersion":null},""" +
                     """"jira":{"projectKey":"$pk","releaseVersionFormat":null}}""",
             )
@@ -356,12 +377,15 @@ class V4ClearSemanticsTest {
         patch(id, version(created), """"baseConfiguration":{"build":{"buildSystem":"MAVEN","mavenVersion":""}}""")
 
         val history =
-            objectMapper.readTree(
-                mvc
-                    .perform(get("/rest/api/4/audit/Component/$id").with(adminJwt()).param("size", "500"))
-                    .andExpect(status().isOk)
-                    .andReturn().response.contentAsString,
-            )["content"].toList()
+            objectMapper
+                .readTree(
+                    mvc
+                        .perform(get("/rest/api/4/audit/Component/$id").with(adminJwt()).param("size", "500"))
+                        .andExpect(status().isOk)
+                        .andReturn()
+                        .response.contentAsString,
+                )["content"]
+                .toList()
         val diff =
             history
                 .filter { it["action"].asText() == "UPDATE" }
@@ -433,8 +457,10 @@ class V4ClearSemanticsTest {
                                         """"versionRange":"[1.0,2.0)","value":"${'$'}major.${'$'}minor"}""",
                                 ),
                         ).andExpect(status().is2xxSuccessful)
-                        .andReturn().response.contentAsString,
-                )["id"].asText()
+                        .andReturn()
+                        .response.contentAsString,
+                )["id"]
+                .asText()
 
         // Standalone PATCH of the override with a blank value → 400 (same guard as POST).
         mvc
@@ -465,7 +491,8 @@ class V4ClearSemanticsTest {
                 mvc
                     .perform(get("/rest/api/4/components/$id/field-overrides").with(adminJwt()))
                     .andExpect(status().isOk)
-                    .andReturn().response.contentAsString,
+                    .andReturn()
+                    .response.contentAsString,
             )
         val row = overrides.first { it["id"].asText() == overrideId }
         assertEquals("\$major.\$minor", row["value"].asText(), "rejected blank writes must not alter the override")

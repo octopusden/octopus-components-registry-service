@@ -12,18 +12,22 @@ import org.junit.jupiter.api.Test
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 
 class ComponentsRegistryServiceErrorDecoderTest {
-
     private val decoder = ComponentsRegistryServiceErrorDecoder(ObjectMapper())
 
-    private fun stubResponse(status: Int, reason: String = "", body: String? = null): Response {
+    private fun stubResponse(
+        status: Int,
+        reason: String = "",
+        body: String? = null,
+    ): Response {
         val request = Request.create(
             Request.HttpMethod.GET,
             "http://localhost/test",
             emptyMap(),
             null,
-            RequestTemplate()
+            RequestTemplate(),
         )
-        val builder = Response.builder()
+        val builder = Response
+            .builder()
             .status(status)
             .reason(reason)
             .request(request)
@@ -50,9 +54,10 @@ class ComponentsRegistryServiceErrorDecoderTest {
             "http://localhost/test",
             emptyMap(),
             null,
-            RequestTemplate()
+            RequestTemplate(),
         )
-        val response = Response.builder()
+        val response = Response
+            .builder()
             .status(503)
             .reason("Service Unavailable")
             .request(request)

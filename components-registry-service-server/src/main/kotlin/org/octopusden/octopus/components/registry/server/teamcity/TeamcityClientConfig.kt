@@ -5,12 +5,12 @@ import org.octopusden.octopus.infrastructure.client.commons.ClientParametersProv
 import org.octopusden.octopus.infrastructure.client.commons.CredentialProvider
 import org.octopusden.octopus.infrastructure.client.commons.StandardBasicCredCredentialProvider
 import org.octopusden.octopus.infrastructure.teamcity.client.TeamcityClassicClient
-import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProject as ExternalTeamcityProject
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.locator.ProjectLocator
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.locator.PropertyLocator
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import java.util.UUID
+import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProject as ExternalTeamcityProject
 
 private const val COMPONENT_NAME_PARAM = "COMPONENT_NAME"
 
@@ -81,8 +81,8 @@ internal class ExternalTcProjectFetcher(
         TeamcityClassicClient(
             object : ClientParametersProvider {
                 override fun getApiUrl(): String = properties.baseUrl.trimEnd('/')
-                override fun getAuth(): CredentialProvider =
-                    StandardBasicCredCredentialProvider(properties.username, properties.password)
+
+                override fun getAuth(): CredentialProvider = StandardBasicCredCredentialProvider(properties.username, properties.password)
             },
         )
     }
@@ -134,7 +134,8 @@ internal fun mapTcProjectsToComponentMatches(
 ): Map<UUID, List<TcProject>> =
     projects
         .mapNotNull { project ->
-            val componentName = project.parameters?.properties
+            val componentName = project.parameters
+                ?.properties
                 ?.firstOrNull { it.name == COMPONENT_NAME_PARAM }
                 ?.value
                 ?.trim()
@@ -143,8 +144,7 @@ internal fun mapTcProjectsToComponentMatches(
             val uuid = componentsByName[componentName] ?: return@mapNotNull null
             val hasCdRelease = projectHasCdReleaseBuild(project, cdReleaseTemplateId)
             uuid to TcProject(id = project.id, webUrl = project.webUrl, hasCdReleaseBuild = hasCdRelease)
-        }
-        .groupBy({ it.first }, { it.second })
+        }.groupBy({ it.first }, { it.second })
 
 private fun projectHasCdReleaseBuild(
     project: ExternalTeamcityProject,

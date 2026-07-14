@@ -1,8 +1,5 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
-import java.util.Optional
-import java.util.UUID
-import java.util.concurrent.TimeUnit
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -20,15 +17,15 @@ import org.octopusden.octopus.components.registry.server.dto.v4.MavenArtifactReq
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
+import org.octopusden.octopus.components.registry.server.repository.ComponentArtifactMappingRepository
+import org.octopusden.octopus.components.registry.server.repository.ComponentArtifactMappingTokenRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentBuildToolBeanRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentLabelRepository
-import org.octopusden.octopus.components.registry.server.repository.ComponentSystemRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRequiredToolRepository
+import org.octopusden.octopus.components.registry.server.repository.ComponentSystemRepository
 import org.octopusden.octopus.components.registry.server.repository.DistributionDockerImageRepository
-import org.octopusden.octopus.components.registry.server.repository.ComponentArtifactMappingRepository
-import org.octopusden.octopus.components.registry.server.repository.ComponentArtifactMappingTokenRepository
 import org.octopusden.octopus.components.registry.server.repository.DistributionMavenArtifactRepository
 import org.octopusden.octopus.components.registry.server.repository.LabelRepository
 import org.octopusden.octopus.components.registry.server.repository.SystemRepository
@@ -36,12 +33,15 @@ import org.octopusden.octopus.components.registry.server.repository.ToolReposito
 import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
 import org.octopusden.octopus.components.registry.server.security.PermissionEvaluator
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
-import org.octopusden.octopus.components.registry.server.util.ComponentCodeRenderer
 import org.octopusden.octopus.components.registry.server.teamcity.TeamcityProperties
+import org.octopusden.octopus.components.registry.server.util.ComponentCodeRenderer
 import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRangeFactory
 import org.springframework.context.ApplicationEventPublisher
+import java.util.Optional
+import java.util.UUID
+import java.util.concurrent.TimeUnit
 
 /**
  * MIG-047 post-P1-B hardening: V4 write paths must refuse import-internal markers.
@@ -65,7 +65,6 @@ import org.springframework.context.ApplicationEventPublisher
  */
 @Timeout(30, unit = TimeUnit.SECONDS)
 class MIG047FieldOverrideWriteGuardTest {
-
     private lateinit var componentRepository: ComponentRepository
     private lateinit var configurationRepository: ComponentConfigurationRepository
     private lateinit var service: ComponentManagementServiceImpl

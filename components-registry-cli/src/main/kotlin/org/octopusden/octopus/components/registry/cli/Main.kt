@@ -54,10 +54,10 @@ class Crsctl(
     private val commandRunner: CommandRunner = ProcessCommandRunner(),
     private val deviceFlowClient: DeviceFlowClient = DeviceFlowClient(),
 ) : CliktCommand(
-    name = "crsctl",
-    help = "Command-line client for the Components Registry Service.",
-    invokeWithoutSubcommand = true,
-) {
+        name = "crsctl",
+        help = "Command-line client for the Components Registry Service.",
+        invokeWithoutSubcommand = true,
+    ) {
     private val env by option("--env", help = "Named config profile to target.")
     private val crsUrl by option("--crs-url", help = "CRS base URL (overrides --env and CRS_URL).")
     private val token by option("--token", help = "Bearer token (overrides CRS_TOKEN). Anonymous if omitted.")
@@ -107,22 +107,23 @@ fun crsctl(
     },
     commandRunner: CommandRunner = ProcessCommandRunner(),
     deviceFlowClient: DeviceFlowClient = DeviceFlowClient(),
-): Crsctl = Crsctl(configLoader, clientFactory, commandRunner, deviceFlowClient).subcommands(
-    ComponentsCommand().subcommands(
-        ComponentsListCommand(),
-    ),
-    ComponentCommand().subcommands(
-        ComponentGetCommand(),
-        ComponentAsCodeCommand(),
-        ComponentOverridesCommand(),
-    ),
-    metaCommand(),
-    auditCommand(),
-    WhoamiCommand(),
-    LoginCommand(),
-    LogoutCommand(),
-    HelpCommand(),
-)
+): Crsctl =
+    Crsctl(configLoader, clientFactory, commandRunner, deviceFlowClient).subcommands(
+        ComponentsCommand().subcommands(
+            ComponentsListCommand(),
+        ),
+        ComponentCommand().subcommands(
+            ComponentGetCommand(),
+            ComponentAsCodeCommand(),
+            ComponentOverridesCommand(),
+        ),
+        metaCommand(),
+        auditCommand(),
+        WhoamiCommand(),
+        LoginCommand(),
+        LogoutCommand(),
+        HelpCommand(),
+    )
 
 /** Global options that consume a following value (used to skip their value when scanning args). */
 private val VALUE_OPTIONS = setOf("--env", "--crs-url", "--token", "-o", "--output")
@@ -145,10 +146,10 @@ private fun helpTokenIndex(args: Array<String>): Int {
         }
         val name = token.substringBefore("=")
         i += when {
-            name in VALUE_OPTIONS && token.contains("=") -> 1   // --env=dev
-            name in VALUE_OPTIONS -> 2                          // --env dev / -o json
+            name in VALUE_OPTIONS && token.contains("=") -> 1 // --env=dev
+            name in VALUE_OPTIONS -> 2 // --env dev / -o json
             name in FLAG_OPTIONS -> 1
-            else -> return -1                                   // unknown option -> not help mode
+            else -> return -1 // unknown option -> not help mode
         }
     }
     return -1
@@ -182,7 +183,10 @@ internal fun rewriteHelpArgs(args: Array<String>): Array<String> {
  *   - [UsageError] / any other input-level [CliktError] -> our `{"errorCode","message"}` JSON on
  *     STDERR and exit [ExitCode.USAGE] (2)
  */
-internal fun runCli(args: Array<String>, command: CliktCommand = crsctl()): Int {
+internal fun runCli(
+    args: Array<String>,
+    command: CliktCommand = crsctl(),
+): Int {
     // `help <command-path>` must fail (exit 2) on ANY invalid token rather than let Clikt's eager
     // --help swallow it. Walk the FULL path against the command tree before rewriting.
     val helpIdx = helpTokenIndex(args)
@@ -243,7 +247,10 @@ internal fun runCli(args: Array<String>, command: CliktCommand = crsctl()): Int 
  * leave [Throwable.message] null and compute it via `formatMessage`, so prefer that (using the error's
  * own context for localization) and fall back to the raw message.
  */
-private fun usageMessage(e: UsageError, command: CliktCommand): String {
+private fun usageMessage(
+    e: UsageError,
+    command: CliktCommand,
+): String {
     val localization = (e.context ?: command.currentContext).localization
     val formatted = e.formatMessage(localization, ParameterFormatter.Plain)
     return formatted.ifBlank { e.message ?: "usage error" }

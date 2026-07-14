@@ -21,6 +21,7 @@ class PermissionEvaluator(
 ) : BasePermissionEvaluator(securityService) {
     private val log = LoggerFactory.getLogger(PermissionEvaluator::class.java)
     private val componentRepository: ComponentRepository? by lazy { componentRepositoryProvider.getIfAvailable() }
+
     /**
      * Per-component edit gate (ADR-004, Phase 2). A user may edit a component only
      * when they are listed on it as its `componentOwner`, a `releaseManager`, or a

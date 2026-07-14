@@ -21,7 +21,6 @@ import org.junit.jupiter.api.Test
  */
 @Tag("unit")
 class TraceReplayParsingTest {
-
     @Test
     @DisplayName("path with no '?' returns the whole string and empty query map")
     fun noQuery() {
@@ -71,8 +70,8 @@ class TraceReplayParsingTest {
         // the query, and the path keeps everything before. The second '?'
         // ends up as a literal in the LAST value, since '?' is not a
         // separator inside the query component.
-            val (path, query) =
-                TraceReplayCompatTest.parsePathAndQuery("/search?q=what%3F&filter=x?y")
+        val (path, query) =
+            TraceReplayCompatTest.parsePathAndQuery("/search?q=what%3F&filter=x?y")
         assertThat(path).isEqualTo("/search")
         // value "x?y" is preserved as-is (raw '?' is legal inside a query value)
         assertThat(query).containsEntry("filter", "x?y")

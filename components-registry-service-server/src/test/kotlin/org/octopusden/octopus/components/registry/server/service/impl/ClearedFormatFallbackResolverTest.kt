@@ -1,7 +1,5 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
-import java.util.UUID
-import java.util.concurrent.TimeUnit
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.BeforeEach
@@ -18,6 +16,8 @@ import org.octopusden.octopus.components.registry.server.repository.DependencyMa
 import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRangeFactory
+import java.util.UUID
+import java.util.concurrent.TimeUnit
 
 /**
  * CRS-A — motivation guard for the clear rule at the resolver layer.
@@ -34,7 +34,6 @@ import org.octopusden.releng.versions.VersionRangeFactory
  */
 @Timeout(30, unit = TimeUnit.SECONDS)
 class ClearedFormatFallbackResolverTest {
-
     private val componentRepository: ComponentRepository = mock(ComponentRepository::class.java)
     private val dependencyMappingRepository: DependencyMappingRepository =
         mock(DependencyMappingRepository::class.java)
@@ -54,7 +53,10 @@ class ClearedFormatFallbackResolverTest {
         )
     }
 
-    private fun seed(key: String, buildFormat: String?): ComponentEntity {
+    private fun seed(
+        key: String,
+        buildFormat: String?,
+    ): ComponentEntity {
         val comp = ComponentEntity(id = UUID.randomUUID(), componentKey = key)
         val base =
             ComponentConfigurationEntity(

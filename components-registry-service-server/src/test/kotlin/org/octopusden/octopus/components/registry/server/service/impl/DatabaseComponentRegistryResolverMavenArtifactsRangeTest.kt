@@ -1,7 +1,5 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
-import java.util.UUID
-import java.util.concurrent.TimeUnit
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.BeforeEach
@@ -20,6 +18,8 @@ import org.octopusden.octopus.components.registry.server.repository.DependencyMa
 import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRangeFactory
+import java.util.UUID
+import java.util.concurrent.TimeUnit
 
 /**
  * TDD regression tests for RES-C: getMavenArtifactParameters must return per-range
@@ -34,7 +34,6 @@ import org.octopusden.releng.versions.VersionRangeFactory
  */
 @Timeout(30, unit = TimeUnit.SECONDS)
 class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
-
     // ========================================================================
     // Infrastructure
     // ========================================================================
@@ -62,8 +61,7 @@ class DatabaseComponentRegistryResolverMavenArtifactsRangeTest {
     // Entity helpers
     // ========================================================================
 
-    private fun makeComponent(key: String): ComponentEntity =
-        ComponentEntity(id = UUID.randomUUID(), componentKey = key)
+    private fun makeComponent(key: String): ComponentEntity = ComponentEntity(id = UUID.randomUUID(), componentKey = key)
 
     private fun makeBase(
         component: ComponentEntity,

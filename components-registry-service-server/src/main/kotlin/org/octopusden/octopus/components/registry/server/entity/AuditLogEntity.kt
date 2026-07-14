@@ -25,46 +25,34 @@ class AuditLogEntity(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     var id: Long? = null,
-
     @Column(name = "entity_type", nullable = false, length = 50)
     var entityType: String = "",
-
     @Column(name = "entity_id", nullable = false)
     var entityId: String = "",
-
     @Column(name = "action", nullable = false, length = 20)
     var action: String = "",
-
     @Column(name = "changed_by")
     var changedBy: String? = null,
-
     @Column(name = "changed_at", nullable = false)
     var changedAt: Instant = Instant.now(),
-
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "old_value", columnDefinition = "TEXT")
     var oldValue: Map<String, Any?>? = null,
-
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "new_value", columnDefinition = "TEXT")
     var newValue: Map<String, Any?>? = null,
-
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "change_diff", columnDefinition = "TEXT")
     var changeDiff: Map<String, Any?>? = null,
-
     @Column(name = "correlation_id")
     var correlationId: String? = null,
-
     @Column(name = "source", nullable = false, length = 20)
     var source: String = "api",
-
     // Change metadata captured at save time (component create/update). Optional;
     // a blank Jira key is normalized to null before persisting. The key is
     // indexed to back `GET /audit/recent?jiraTaskKey=...`.
     @Column(name = "jira_task_key")
     var jiraTaskKey: String? = null,
-
     @Column(name = "change_comment", columnDefinition = "TEXT")
     var changeComment: String? = null,
 ) {

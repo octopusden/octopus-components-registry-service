@@ -22,10 +22,10 @@ fun interface HttpExchange {
  * hanging; the per-request read timeout is set by [CrsClient].
  */
 class JdkHttpExchange(
-    private val httpClient: HttpClient = HttpClient.newBuilder()
+    private val httpClient: HttpClient = HttpClient
+        .newBuilder()
         .connectTimeout(Duration.ofSeconds(CONNECT_TIMEOUT_SECONDS))
         .build(),
 ) : HttpExchange {
-    override fun send(request: HttpRequest): HttpResponse<String> =
-        httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+    override fun send(request: HttpRequest): HttpResponse<String> = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
 }

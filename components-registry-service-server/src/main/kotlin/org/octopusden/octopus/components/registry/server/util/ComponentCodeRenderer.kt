@@ -212,7 +212,8 @@ class ComponentCodeRenderer(
         }
 
         val matching =
-            configs.filter { it.rowType == ROW_SCALAR_OVERRIDE || it.rowType == ROW_MARKER }
+            configs
+                .filter { it.rowType == ROW_SCALAR_OVERRIDE || it.rowType == ROW_MARKER }
                 .filter { override ->
                     try {
                         versionRangeFactory.create(override.versionRange).containsVersion(numericVersion)
@@ -256,7 +257,9 @@ class ComponentCodeRenderer(
         val overrideOwnershipRange =
             // sorted for a deterministic pick; per-range ownership ranges are disjoint by invariant,
             // so at most one contains the version (sort only matters defensively if that ever breaks).
-            ownershipByRange.keys.filter { it != ALL_VERSIONS_RANGE }.sorted()
+            ownershipByRange.keys
+                .filter { it != ALL_VERSIONS_RANGE }
+                .sorted()
                 .firstOrNull { range ->
                     try {
                         versionRangeFactory.create(range).containsVersion(numericVersion)
@@ -383,10 +386,19 @@ class ComponentCodeRenderer(
     ) {
         val hasContent =
             listOf(
-                s.buildSystem, s.javaVersion, s.mavenVersion, s.gradleVersion,
-                s.buildFilePath, s.projectVersion, s.systemProperties, s.buildTasks,
-            ).any { it != null } || s.deprecated != null || s.requiredProject != null ||
-                requiredTools.isNotEmpty() || buildToolBeans.isNotEmpty()
+                s.buildSystem,
+                s.javaVersion,
+                s.mavenVersion,
+                s.gradleVersion,
+                s.buildFilePath,
+                s.projectVersion,
+                s.systemProperties,
+                s.buildTasks,
+            ).any { it != null } ||
+                s.deprecated != null ||
+                s.requiredProject != null ||
+                requiredTools.isNotEmpty() ||
+                buildToolBeans.isNotEmpty()
         if (!hasContent) return
         cb.open("build")
         cb.bare("buildSystem", s.buildSystem)
@@ -475,10 +487,17 @@ class ComponentCodeRenderer(
             }
         val hasContent =
             listOf(
-                s.jiraProjectKey, s.jiraMinorVersionFormat, s.jiraReleaseVersionFormat, s.jiraBuildVersionFormat,
-                s.jiraLineVersionFormat, s.jiraVersionPrefix, s.jiraVersionFormat, effectiveHotfix,
+                s.jiraProjectKey,
+                s.jiraMinorVersionFormat,
+                s.jiraReleaseVersionFormat,
+                s.jiraBuildVersionFormat,
+                s.jiraLineVersionFormat,
+                s.jiraVersionPrefix,
+                s.jiraVersionFormat,
+                effectiveHotfix,
                 component.jiraDisplayName,
-            ).any { it != null } || s.jiraTechnical != null
+            ).any { it != null } ||
+                s.jiraTechnical != null
         if (!hasContent) return
         cb.open("jira")
         cb.str("projectKey", s.jiraProjectKey)
@@ -505,9 +524,13 @@ class ComponentCodeRenderer(
     ) {
         val securityGroups = component.securityGroups
         val hasContent =
-            component.distributionExplicit != null || component.distributionExternal != null ||
-                mavenArtifacts.isNotEmpty() || fileUrlArtifacts.isNotEmpty() || dockerImages.isNotEmpty() ||
-                packages.isNotEmpty() || securityGroups.isNotEmpty()
+            component.distributionExplicit != null ||
+                component.distributionExternal != null ||
+                mavenArtifacts.isNotEmpty() ||
+                fileUrlArtifacts.isNotEmpty() ||
+                dockerImages.isNotEmpty() ||
+                packages.isNotEmpty() ||
+                securityGroups.isNotEmpty()
         if (!hasContent) return
         cb.open("distribution")
         cb.bool("explicit", component.distributionExplicit)
@@ -553,9 +576,16 @@ class ComponentCodeRenderer(
     ) {
         val hasContent =
             listOf(
-                s.escrowBuildTask, s.escrowProvidedDependencies, s.escrowGeneration, s.escrowDiskSpace,
-                s.escrowAdditionalSources, s.escrowGradleIncludeConfigurations, s.escrowGradleExcludeConfigurations,
-            ).any { it != null } || s.escrowReusable != null || s.escrowGradleIncludeTestConfigurations != null
+                s.escrowBuildTask,
+                s.escrowProvidedDependencies,
+                s.escrowGeneration,
+                s.escrowDiskSpace,
+                s.escrowAdditionalSources,
+                s.escrowGradleIncludeConfigurations,
+                s.escrowGradleExcludeConfigurations,
+            ).any { it != null } ||
+                s.escrowReusable != null ||
+                s.escrowGradleIncludeTestConfigurations != null
         if (!hasContent) return
         cb.open("escrow")
         cb.str("buildTask", s.escrowBuildTask)
@@ -633,7 +663,8 @@ class ComponentCodeRenderer(
         markers: List<ComponentConfigurationEntity>,
     ) {
         val prefix = "$aspect."
-        val scalars = scalarOverrides.filter { (it.overriddenAttribute ?: "").startsWith(prefix) }
+        val scalars = scalarOverrides
+            .filter { (it.overriddenAttribute ?: "").startsWith(prefix) }
             .sortedBy { it.overriddenAttribute }
         val toolMarker = markers.firstOrNull { it.overriddenAttribute == MarkerAttributes.BUILD_REQUIRED_TOOLS }
         val beanMarker = markers.firstOrNull { it.overriddenAttribute == MarkerAttributes.BUILD_TOOLS }
@@ -732,8 +763,7 @@ class ComponentCodeRenderer(
     }
 
     /** Block header token: bare identifier when valid, quoted otherwise. */
-    private fun blockHeader(name: String): String =
-        if (name.matches(IDENTIFIER_RE)) name else doubleQuoted(name)
+    private fun blockHeader(name: String): String = if (name.matches(IDENTIFIER_RE)) name else doubleQuoted(name)
 
     private companion object {
         const val ROW_BASE = "BASE"
@@ -766,34 +796,55 @@ internal class CodeBuilder {
     }
 
     /** String value — emitted only when non-null. */
-    fun str(name: String, value: String?) {
+    fun str(
+        name: String,
+        value: String?,
+    ) {
         if (value != null) raw("$name = ${groovyString(value)}")
     }
 
     /** String value, always emitted (null → `null`). For per-range null-clear overrides. */
-    fun strRaw(name: String, value: String?) {
+    fun strRaw(
+        name: String,
+        value: String?,
+    ) {
         raw("$name = ${value?.let { groovyString(it) } ?: "null"}")
     }
 
-    fun bool(name: String, value: Boolean?) {
+    fun bool(
+        name: String,
+        value: Boolean?,
+    ) {
         if (value != null) raw("$name = $value")
     }
 
-    fun boolRaw(name: String, value: Boolean?) {
+    fun boolRaw(
+        name: String,
+        value: Boolean?,
+    ) {
         raw("$name = ${value ?: "null"}")
     }
 
     /** Bare (enum) token — emitted only when non-null/blank. */
-    fun bare(name: String, value: String?) {
+    fun bare(
+        name: String,
+        value: String?,
+    ) {
         if (!value.isNullOrBlank()) raw("$name = $value")
     }
 
-    fun bareRaw(name: String, value: String?) {
+    fun bareRaw(
+        name: String,
+        value: String?,
+    ) {
         raw("$name = ${value ?: "null"}")
     }
 
     /** List of strings — emitted only when non-empty. */
-    fun strList(name: String, values: List<String>) {
+    fun strList(
+        name: String,
+        values: List<String>,
+    ) {
         if (values.isNotEmpty()) raw("$name = ${groovyList(values)}")
     }
 
@@ -840,5 +891,4 @@ internal fun singleQuoted(s: String): String =
         append('\'')
     }
 
-internal fun groovyList(values: List<String>): String =
-    values.joinToString(prefix = "[", postfix = "]") { groovyString(it) }
+internal fun groovyList(values: List<String>): String = values.joinToString(prefix = "[", postfix = "]") { groovyString(it) }

@@ -12,11 +12,20 @@ import com.fasterxml.jackson.databind.node.ObjectNode
  * [DiffClassifier.COLLECTION_ORDER] decisions.
  */
 object JsonShape {
-    data class ShapeDiff(val path: String, val kind: Kind, val baseline: String?, val candidate: String?) {
+    data class ShapeDiff(
+        val path: String,
+        val kind: Kind,
+        val baseline: String?,
+        val candidate: String?,
+    ) {
         enum class Kind { KEY_MISSING_BASELINE, KEY_MISSING_CANDIDATE, TYPE_MISMATCH, ARRAY_SIZE_MISMATCH }
     }
 
-    fun diff(baseline: JsonNode?, candidate: JsonNode?, path: String = "$"): List<ShapeDiff> {
+    fun diff(
+        baseline: JsonNode?,
+        candidate: JsonNode?,
+        path: String = "$",
+    ): List<ShapeDiff> {
         if (baseline == null && candidate == null) return emptyList()
         if (baseline == null) return listOf(ShapeDiff(path, ShapeDiff.Kind.KEY_MISSING_BASELINE, null, candidate?.nodeType?.name))
         if (candidate == null) return listOf(ShapeDiff(path, ShapeDiff.Kind.KEY_MISSING_CANDIDATE, baseline.nodeType.name, null))
@@ -30,7 +39,11 @@ object JsonShape {
         }
     }
 
-    private fun diffObjects(a: ObjectNode, b: ObjectNode, path: String): List<ShapeDiff> {
+    private fun diffObjects(
+        a: ObjectNode,
+        b: ObjectNode,
+        path: String,
+    ): List<ShapeDiff> {
         val out = mutableListOf<ShapeDiff>()
         val keys = (a.fieldNames().asSequence() + b.fieldNames().asSequence()).toSortedSet()
         for (k in keys) {
@@ -52,7 +65,11 @@ object JsonShape {
         return if (simple.matches(key)) ".$key" else "[\"${key.replace("\"", "\\\"")}\"]"
     }
 
-    private fun diffArrays(a: ArrayNode, b: ArrayNode, path: String): List<ShapeDiff> {
+    private fun diffArrays(
+        a: ArrayNode,
+        b: ArrayNode,
+        path: String,
+    ): List<ShapeDiff> {
         if (a.size() != b.size()) {
             return listOf(ShapeDiff(path, ShapeDiff.Kind.ARRAY_SIZE_MISMATCH, a.size().toString(), b.size().toString()))
         }

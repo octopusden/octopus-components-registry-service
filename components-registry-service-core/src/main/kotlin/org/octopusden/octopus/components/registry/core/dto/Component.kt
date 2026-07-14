@@ -2,7 +2,11 @@ package org.octopusden.octopus.components.registry.core.dto
 
 import java.util.Objects
 
-abstract class Component(val id: String, val name: String?, val componentOwner: String) {
+abstract class Component(
+    val id: String,
+    val name: String?,
+    val componentOwner: String,
+) {
     var system: Set<String> = emptySet()
     var clientCode: String? = null
     var releasesInDefaultBranch: Boolean? = null
@@ -26,6 +30,7 @@ abstract class Component(val id: String, val name: String?, val componentOwner: 
     var escrow: EscrowDTO? = null
     var copyright: String? = null
     var labels: Set<String> = emptySet()
+
     @Suppress("DEPRECATION") // reads the deprecated comma-joined RM/SC props for value equality
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -53,33 +58,29 @@ abstract class Component(val id: String, val name: String?, val componentOwner: 
     }
 
     @Suppress("DEPRECATION") // reads the deprecated comma-joined RM/SC props
-    override fun hashCode(): Int {
-        return Objects.hash(
-            id,
-            name,
-            componentOwner,
-            system,
-            clientCode,
-            releasesInDefaultBranch,
-            solution,
-            parentComponent,
-            securityChampion,
-            releaseManager,
-            distribution,
-            archived,
-            doc,
-            escrow,
-            copyright,
-            labels,
-        )
-    }
+    override fun hashCode(): Int = Objects.hash(
+        id,
+        name,
+        componentOwner,
+        system,
+        clientCode,
+        releasesInDefaultBranch,
+        solution,
+        parentComponent,
+        securityChampion,
+        releaseManager,
+        distribution,
+        archived,
+        doc,
+        escrow,
+        copyright,
+        labels,
+    )
 
     @Suppress("DEPRECATION") // reads the deprecated comma-joined RM/SC props
-    override fun toString(): String {
-        return "Component(id='$id', name=$name, componentOwner='$componentOwner', system=$system, " +
-                "clientCode=$clientCode, releasesInDefaultBranch=$releasesInDefaultBranch, solution=$solution, " +
-                "parentComponent=$parentComponent, securityChampion=$securityChampion, releaseManager=$releaseManager, " +
-                "distribution=$distribution, archived=$archived, doc=$doc, escrow=$escrow, copyright='$copyright' " +
-                "labels=$labels)"
-    }
+    override fun toString(): String = "Component(id='$id', name=$name, componentOwner='$componentOwner', system=$system, " +
+        "clientCode=$clientCode, releasesInDefaultBranch=$releasesInDefaultBranch, solution=$solution, " +
+        "parentComponent=$parentComponent, securityChampion=$securityChampion, releaseManager=$releaseManager, " +
+        "distribution=$distribution, archived=$archived, doc=$doc, escrow=$escrow, copyright='$copyright' " +
+        "labels=$labels)"
 }

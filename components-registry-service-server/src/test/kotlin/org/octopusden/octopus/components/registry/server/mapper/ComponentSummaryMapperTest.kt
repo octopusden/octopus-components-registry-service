@@ -30,7 +30,6 @@ import java.util.UUID
  * (base row) and vcs entries are direct children of the config row.
  */
 class ComponentSummaryMapperTest {
-
     // -----------------------------------------------------------------------
     // Fixture builders
     // -----------------------------------------------------------------------
@@ -257,12 +256,20 @@ class ComponentSummaryMapperTest {
         val cfg = baseConfigFor(component)
         cfg.vcsEntries.add(
             VcsSettingsEntryEntity(
-                id = UUID.randomUUID(), componentConfiguration = cfg, name = "main", vcsPath = "org/repo-b", sortOrder = 2,
+                id = UUID.randomUUID(),
+                componentConfiguration = cfg,
+                name = "main",
+                vcsPath = "org/repo-b",
+                sortOrder = 2,
             ),
         )
         cfg.vcsEntries.add(
             VcsSettingsEntryEntity(
-                id = UUID.randomUUID(), componentConfiguration = cfg, name = "main", vcsPath = "org/repo-a", sortOrder = 1,
+                id = UUID.randomUUID(),
+                componentConfiguration = cfg,
+                name = "main",
+                vcsPath = "org/repo-a",
+                sortOrder = 1,
             ),
         )
         component.configurations.add(cfg)
@@ -325,7 +332,10 @@ class ComponentSummaryMapperTest {
         val component = minimalComponent()
         component.teamcityProjects.add(
             ComponentTeamcityProjectEntity(
-                id = UUID.randomUUID(), component = component, projectId = "Proj", sortOrder = 0,
+                id = UUID.randomUUID(),
+                component = component,
+                projectId = "Proj",
+                sortOrder = 0,
             ),
         )
 
@@ -338,12 +348,18 @@ class ComponentSummaryMapperTest {
         val component = minimalComponent()
         component.teamcityProjects.add(
             ComponentTeamcityProjectEntity(
-                id = UUID.randomUUID(), component = component, projectId = "Proj_B", sortOrder = 2,
+                id = UUID.randomUUID(),
+                component = component,
+                projectId = "Proj_B",
+                sortOrder = 2,
             ),
         )
         component.teamcityProjects.add(
             ComponentTeamcityProjectEntity(
-                id = UUID.randomUUID(), component = component, projectId = "Proj_A", sortOrder = 1,
+                id = UUID.randomUUID(),
+                component = component,
+                projectId = "Proj_A",
+                sortOrder = 1,
             ),
         )
 

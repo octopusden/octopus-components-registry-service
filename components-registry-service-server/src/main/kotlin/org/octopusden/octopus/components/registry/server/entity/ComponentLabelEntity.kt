@@ -22,15 +22,12 @@ class ComponentLabelEntity(
     @Id
     @Column(name = "component_id", nullable = false)
     var componentId: UUID = UUID(0, 0),
-
     @Id
     @Column(name = "label_code", length = 100, nullable = false)
     var labelCode: String = "",
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "component_id", insertable = false, updatable = false)
     var component: ComponentEntity? = null,
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "label_code", insertable = false, updatable = false)
     var label: LabelEntity? = null,

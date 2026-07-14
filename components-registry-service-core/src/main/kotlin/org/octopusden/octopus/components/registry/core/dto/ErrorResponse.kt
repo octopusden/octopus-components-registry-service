@@ -15,11 +15,11 @@ import com.fasterxml.jackson.annotation.JsonProperty
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class ErrorResponse(
-        @JsonProperty("errorMessage") val errorMessage: String,
-        // NON_NULL is wire-compat-bearing: the [1.7]/[1.8] compat oracles byte-diff
-        // v1-v3 ERROR bodies against the 2.0.87 baseline, and an emitted
-        // `"errorCode": null` produced a KEY_MISSING_BASELINE divergence for every
-        // error-returning case (2691 diffs on build 2.0.88-3928). Null = omit.
-        @JsonInclude(JsonInclude.Include.NON_NULL)
-        @JsonProperty("errorCode") val errorCode: String? = null
+    @JsonProperty("errorMessage") val errorMessage: String,
+    // NON_NULL is wire-compat-bearing: the [1.7]/[1.8] compat oracles byte-diff
+    // v1-v3 ERROR bodies against the 2.0.87 baseline, and an emitted
+    // `"errorCode": null` produced a KEY_MISSING_BASELINE divergence for every
+    // error-returning case (2691 diffs on build 2.0.88-3928). Null = omit.
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @JsonProperty("errorCode") val errorCode: String? = null,
 )

@@ -68,7 +68,6 @@ import java.util.IdentityHashMap
 @Timeout(600)
 @Tag("integration")
 class TypeConfigurationArrayLeakReproTest {
-
     @MockBean
     @Suppress("UnusedPrivateProperty")
     private lateinit var authServerClient: AuthServerClient
@@ -90,9 +89,10 @@ class TypeConfigurationArrayLeakReproTest {
         // application-common.yml resolves components-registry.work-dir / groovy-path from this
         // env-backed property; without it the context fails to bind. Mirrors the QueryCountTest.
         val testResourcesPath =
-            java.nio.file.Paths.get(
-                TypeConfigurationArrayLeakReproTest::class.java.getResource("/expected-data")!!.toURI(),
-            ).parent
+            java.nio.file.Paths
+                .get(
+                    TypeConfigurationArrayLeakReproTest::class.java.getResource("/expected-data")!!.toURI(),
+                ).parent
         System.setProperty("COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR", testResourcesPath.toString())
     }
 
@@ -147,21 +147,22 @@ class TypeConfigurationArrayLeakReproTest {
      * via [touch] while the session is still open (findAll keeps it open for the walk under
      * the open-session-in-view-less test, so we force initialization eagerly here).
      */
-    private fun exerciseReadPath() = txTemplate.executeWithoutResult {
-        val all = componentRepository.findAll()
-        // Force initialization of every @BatchSize role + the parentComponent to-one proxy.
-        all.forEach { c ->
-            c.parentComponent?.componentKey
-            c.configurations.forEach { cfg -> cfg.dockerImages.size }
-            c.artifactMappings.size
-            c.securityGroups.size
-            c.teamcityProjects.size
-            c.docLinks.size
-            c.releaseManagers.size
-            c.securityChampions.size
-            c.labelJunctions.size
+    private fun exerciseReadPath() =
+        txTemplate.executeWithoutResult {
+            val all = componentRepository.findAll()
+            // Force initialization of every @BatchSize role + the parentComponent to-one proxy.
+            all.forEach { c ->
+                c.parentComponent?.componentKey
+                c.configurations.forEach { cfg -> cfg.dockerImages.size }
+                c.artifactMappings.size
+                c.securityGroups.size
+                c.teamcityProjects.size
+                c.docLinks.size
+                c.releaseManagers.size
+                c.securityChampions.size
+                c.labelJunctions.size
+            }
         }
-    }
 
     @Test
     @DisplayName("RED: TypeConfiguration registry grows unbounded per read iteration (HHH-18551 on 6.4.1)")
@@ -259,8 +260,10 @@ class TypeConfigurationArrayLeakReproTest {
         }
 
         val maxDelta = deltas.values.maxOrNull() ?: 0L
-        report.append("\n  largest per-iteration growth: %.2f entries / iteration (maxDelta=%d over %d iters)%n"
-            .format(maxDelta.toDouble() / ITERATIONS, maxDelta, ITERATIONS))
+        report.append(
+            "\n  largest per-iteration growth: %.2f entries / iteration (maxDelta=%d over %d iters)%n"
+                .format(maxDelta.toDouble() / ITERATIONS, maxDelta, ITERATIONS),
+        )
         println(report)
 
         // Durable regression guard (GREEN): after the one-time warmup, NO TypeConfiguration
@@ -362,7 +365,13 @@ class TypeConfigurationArrayLeakReproTest {
         return out
     }
 
-    private fun walk(obj: Any, path: String, out: MutableMap<String, Long>, seen: MutableSet<Any>, depth: Int) {
+    private fun walk(
+        obj: Any,
+        path: String,
+        out: MutableMap<String, Long>,
+        seen: MutableSet<Any>,
+        depth: Int,
+    ) {
         if (depth > MAX_DEPTH || !seen.add(obj)) return
         var cls: Class<*>? = obj.javaClass
         while (cls != null && cls != Any::class.java) {

@@ -1,11 +1,11 @@
 package org.octopusden.octopus.components.registry.server.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import org.junit.jupiter.api.Tag
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
@@ -111,8 +111,10 @@ class StrictContractTest {
                 .content(body),
         )
 
-    private fun validCreateBody(name: String, groupKey: String = "org.example.test") =
-        """
+    private fun validCreateBody(
+        name: String,
+        groupKey: String = "org.example.test",
+    ) = """
         {
           "name": "$name",
           "componentOwner": "owner1",
@@ -217,19 +219,22 @@ class StrictContractTest {
         // has a null group; clearGroup:true leaves it null and returns 2xx.
         val name = unique("strict-patch-clear")
         val seedResponse =
-            postCreate(validCreateBody(name)).andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+            postCreate(validCreateBody(name))
+                .andExpect(status().isCreated)
+                .andReturn()
+                .response.contentAsString
         val seed = objectMapper.readTree(seedResponse)
         val id = seed["id"].asText()
         val versionLock = seed["version"].asLong()
 
         val patchBody = """{"version": $versionLock, "clearGroup": true}"""
-        mvc.perform(
-            patch("/rest/api/4/components/$id")
-                .with(adminJwt())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(patchBody),
-        ).andExpect(status().isOk)
+        mvc
+            .perform(
+                patch("/rest/api/4/components/$id")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(patchBody),
+            ).andExpect(status().isOk)
             .andExpect(jsonPath("$.group").isEmpty)
     }
 
@@ -241,8 +246,10 @@ class StrictContractTest {
         // PATCH carrying a group it is still null.
         val name = unique("strict-patch-newgrp")
         val seedResponse =
-            postCreate(validCreateBody(name)).andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+            postCreate(validCreateBody(name))
+                .andExpect(status().isCreated)
+                .andReturn()
+                .response.contentAsString
         val seed = objectMapper.readTree(seedResponse)
         val id = seed["id"].asText()
         val versionLock = seed["version"].asLong()
@@ -250,12 +257,13 @@ class StrictContractTest {
         val newKey = "org.example.other.${UUID.randomUUID().toString().take(6)}"
         val patchBody =
             """{"version": $versionLock, "clearGroup": false, "group": {"groupKey": "$newKey", "isFake": false}}"""
-        mvc.perform(
-            patch("/rest/api/4/components/$id")
-                .with(adminJwt())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(patchBody),
-        ).andExpect(status().isOk)
+        mvc
+            .perform(
+                patch("/rest/api/4/components/$id")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(patchBody),
+            ).andExpect(status().isOk)
             .andExpect(jsonPath("$.group").isEmpty)
     }
 
@@ -292,8 +300,10 @@ class StrictContractTest {
             }
             """.trimIndent()
         val seedResponse =
-            postCreate(seedBody).andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+            postCreate(seedBody)
+                .andExpect(status().isCreated)
+                .andReturn()
+                .response.contentAsString
         val seed = objectMapper.readTree(seedResponse)
         val id = seed["id"].asText()
         val versionLock = seed["version"].asLong()
@@ -308,13 +318,15 @@ class StrictContractTest {
         val patchBody =
             """{"version": $versionLock, "clearGroup": false, "labels": []}"""
         val patched =
-            mvc.perform(
-                patch("/rest/api/4/components/$id")
-                    .with(adminJwt())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(patchBody),
-            ).andExpect(status().isOk)
-                .andReturn().response.contentAsString
+            mvc
+                .perform(
+                    patch("/rest/api/4/components/$id")
+                        .with(adminJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(patchBody),
+                ).andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString
         val labelsAfter = objectMapper.readTree(patched)["labels"].map { it.asText() }
         assert(labelsAfter.isEmpty()) {
             "expected labels cleared to []; got $labelsAfter"
@@ -338,8 +350,10 @@ class StrictContractTest {
             }
             """.trimIndent()
         val seedResponse =
-            postCreate(seedBody).andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+            postCreate(seedBody)
+                .andExpect(status().isCreated)
+                .andReturn()
+                .response.contentAsString
         val seed = objectMapper.readTree(seedResponse)
         val id = seed["id"].asText()
         val versionLock = seed["version"].asLong()
@@ -348,13 +362,15 @@ class StrictContractTest {
         // which means "don't touch" per the PATCH no-op contract.
         val patchBody = """{"version": $versionLock, "clearGroup": false}"""
         val patched =
-            mvc.perform(
-                patch("/rest/api/4/components/$id")
-                    .with(adminJwt())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(patchBody),
-            ).andExpect(status().isOk)
-                .andReturn().response.contentAsString
+            mvc
+                .perform(
+                    patch("/rest/api/4/components/$id")
+                        .with(adminJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(patchBody),
+                ).andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString
         val labelsAfter = objectMapper.readTree(patched)["labels"].map { it.asText() }.toSet()
         assert(labelsAfter == setOf(labelA, labelB)) {
             "expected labels preserved as [$labelA, $labelB]; got $labelsAfter"
@@ -378,8 +394,7 @@ class StrictContractTest {
     // and MultiSystemMembershipTest.
     // -------------------------------------------------------------------
 
-    private fun systemsOf(node: com.fasterxml.jackson.databind.JsonNode): Set<String> =
-        node["systems"].map { it.asText() }.toSet()
+    private fun systemsOf(node: com.fasterxml.jackson.databind.JsonNode): Set<String> = node["systems"].map { it.asText() }.toSet()
 
     @Test
     @DisplayName("CREATE accepts a single `systems` value and persists it")
@@ -400,7 +415,10 @@ class StrictContractTest {
               "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
             }
             """.trimIndent()
-        val response = postCreate(body).andExpect(status().isCreated).andReturn().response.contentAsString
+        val response = postCreate(body)
+            .andExpect(status().isCreated)
+            .andReturn()
+            .response.contentAsString
         assertEquals(setOf("CLASSIC"), systemsOf(objectMapper.readTree(response)))
     }
 
@@ -417,7 +435,10 @@ class StrictContractTest {
               "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
             }
             """.trimIndent()
-        val response = postCreate(body).andExpect(status().isCreated).andReturn().response.contentAsString
+        val response = postCreate(body)
+            .andExpect(status().isCreated)
+            .andReturn()
+            .response.contentAsString
         assertEquals(setOf("CLASSIC", "ALFA"), systemsOf(objectMapper.readTree(response)))
     }
 
@@ -433,7 +454,10 @@ class StrictContractTest {
               "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
             }
             """.trimIndent()
-        val response = postCreate(body).andExpect(status().isCreated).andReturn().response.contentAsString
+        val response = postCreate(body)
+            .andExpect(status().isCreated)
+            .andReturn()
+            .response.contentAsString
         assertTrue(systemsOf(objectMapper.readTree(response)).isEmpty())
     }
 
@@ -471,8 +495,10 @@ class StrictContractTest {
             }
             """.trimIndent()
         val seedResponse =
-            postCreate(seedBody).andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+            postCreate(seedBody)
+                .andExpect(status().isCreated)
+                .andReturn()
+                .response.contentAsString
         val seed = objectMapper.readTree(seedResponse)
         val id = seed["id"].asText()
         val versionLock = seed["version"].asLong()
@@ -484,12 +510,15 @@ class StrictContractTest {
 
         val patchBody = """{"version": $versionLock, "clearGroup": false, "systems": ["ALFA"]}"""
         val patched =
-            mvc.perform(
-                patch("/rest/api/4/components/$id")
-                    .with(adminJwt())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(patchBody),
-            ).andExpect(status().isOk).andReturn().response.contentAsString
+            mvc
+                .perform(
+                    patch("/rest/api/4/components/$id")
+                        .with(adminJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(patchBody),
+                ).andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString
         assertEquals(setOf("ALFA"), systemsOf(objectMapper.readTree(patched)))
     }
 
@@ -508,8 +537,10 @@ class StrictContractTest {
             }
             """.trimIndent()
         val seedResponse =
-            postCreate(seedBody).andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+            postCreate(seedBody)
+                .andExpect(status().isCreated)
+                .andReturn()
+                .response.contentAsString
         val seed = objectMapper.readTree(seedResponse)
         val id = seed["id"].asText()
         val versionLock = seed["version"].asLong()
@@ -518,12 +549,15 @@ class StrictContractTest {
         // A non-null empty set REPLACES the membership with nothing (clear).
         val patchBody = """{"version": $versionLock, "clearGroup": false, "systems": []}"""
         val patched =
-            mvc.perform(
-                patch("/rest/api/4/components/$id")
-                    .with(adminJwt())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(patchBody),
-            ).andExpect(status().isOk).andReturn().response.contentAsString
+            mvc
+                .perform(
+                    patch("/rest/api/4/components/$id")
+                        .with(adminJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(patchBody),
+                ).andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString
         val clearedSystems = systemsOf(objectMapper.readTree(patched))
         assertTrue(clearedSystems.isEmpty(), "expected empty systems after clear; got $clearedSystems")
     }
@@ -543,8 +577,10 @@ class StrictContractTest {
             }
             """.trimIndent()
         val seedResponse =
-            postCreate(seedBody).andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+            postCreate(seedBody)
+                .andExpect(status().isCreated)
+                .andReturn()
+                .response.contentAsString
         val seed = objectMapper.readTree(seedResponse)
         val id = seed["id"].asText()
         val versionLock = seed["version"].asLong()
@@ -552,12 +588,15 @@ class StrictContractTest {
         // No `systems` key — should be a no-op.
         val patchBody = """{"version": $versionLock, "clearGroup": false}"""
         val patched =
-            mvc.perform(
-                patch("/rest/api/4/components/$id")
-                    .with(adminJwt())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(patchBody),
-            ).andExpect(status().isOk).andReturn().response.contentAsString
+            mvc
+                .perform(
+                    patch("/rest/api/4/components/$id")
+                        .with(adminJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(patchBody),
+                ).andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString
         assertEquals(setOf("CLASSIC"), systemsOf(objectMapper.readTree(patched)))
     }
 
@@ -582,7 +621,10 @@ class StrictContractTest {
               "baseConfiguration": {"build": {"buildSystem": "MAVEN"}}
             }
             """.trimIndent()
-        val response = postCreate(body).andExpect(status().isCreated).andReturn().response.contentAsString
+        val response = postCreate(body)
+            .andExpect(status().isCreated)
+            .andReturn()
+            .response.contentAsString
         assertEquals(setOf("CLASSIC"), systemsOf(objectMapper.readTree(response)))
     }
 
@@ -606,8 +648,10 @@ class StrictContractTest {
             }
             """.trimIndent()
         val seedResponse =
-            postCreate(seedBody).andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+            postCreate(seedBody)
+                .andExpect(status().isCreated)
+                .andReturn()
+                .response.contentAsString
         val seed = objectMapper.readTree(seedResponse)
         val id = seed["id"].asText()
         val versionLock = seed["version"].asLong()
@@ -623,12 +667,15 @@ class StrictContractTest {
         val patchBody =
             """{"version": $versionLock, "clearGroup": false, "systems": ["ALFA"], "displayName": "$name-edited"}"""
         val patched =
-            mvc.perform(
-                patch("/rest/api/4/components/$id")
-                    .with(adminJwt())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(patchBody),
-            ).andExpect(status().isOk).andReturn().response.contentAsString
+            mvc
+                .perform(
+                    patch("/rest/api/4/components/$id")
+                        .with(adminJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(patchBody),
+                ).andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString
         // GET reflects the unchanged stored membership.
         assertEquals(setOf("CLASSIC"), systemsOf(objectMapper.readTree(patched)))
 
@@ -638,10 +685,12 @@ class StrictContractTest {
             mvc
                 .perform(get("/rest/api/4/audit/Component/$id").with(adminJwt()))
                 .andExpect(status().isOk)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val auditPage = objectMapper.readTree(auditBody)
         val updateEntries =
-            auditPage.path("content")
+            auditPage
+                .path("content")
                 .filter { it["action"].asText() == "UPDATE" }
         assertTrue(
             updateEntries.isNotEmpty(),
@@ -673,8 +722,10 @@ class StrictContractTest {
             }
             """.trimIndent()
         val seedResponse =
-            postCreate(seedBody).andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+            postCreate(seedBody)
+                .andExpect(status().isCreated)
+                .andReturn()
+                .response.contentAsString
         val seed = objectMapper.readTree(seedResponse)
         val id = seed["id"].asText()
         val versionLock = seed["version"].asLong()
@@ -682,12 +733,15 @@ class StrictContractTest {
         // PATCH with lower-case `alfa` — should land canonical `ALFA`.
         val patchBody = """{"version": $versionLock, "clearGroup": false, "systems": ["alfa"]}"""
         val patched =
-            mvc.perform(
-                patch("/rest/api/4/components/$id")
-                    .with(adminJwt())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(patchBody),
-            ).andExpect(status().isOk).andReturn().response.contentAsString
+            mvc
+                .perform(
+                    patch("/rest/api/4/components/$id")
+                        .with(adminJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(patchBody),
+                ).andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString
         assertEquals(setOf("ALFA"), systemsOf(objectMapper.readTree(patched)))
     }
 }
