@@ -132,13 +132,6 @@ class TeamcitySyncService(
             val componentId = component.id ?: continue
             try {
                 val rawCandidates = matches[componentId].orEmpty()
-                if (rawCandidates.isEmpty()) {
-                    skippedNoMatch++
-                    continue
-                }
-
-                // Versioned lines are authoritative: if any candidate has a version, drop
-                // the null-version ones (nulls kept only when every candidate is null).
                 val candidates = if (rawCandidates.any { it.projectVersion != null }) {
                     rawCandidates.filter { it.projectVersion != null }
                 } else {
