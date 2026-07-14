@@ -76,7 +76,7 @@ class AuditCorrelationIdProviderTest {
         runCatching {
             TransactionTemplate(txManager).execute {
                 rolledBack = provider.current()
-                throw RuntimeException("boom") // forces rollback
+                error("boom") // forces rollback (error() throws ISE; detekt-idiomatic vs a generic throw)
             }
         }
         // After the rolled-back transaction, no id lingers: an out-of-transaction
