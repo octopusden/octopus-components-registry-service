@@ -6,6 +6,7 @@ import org.octopusden.octopus.infrastructure.client.commons.CredentialProvider
 import org.octopusden.octopus.infrastructure.client.commons.StandardBasicCredCredentialProvider
 import org.octopusden.octopus.infrastructure.teamcity.client.TeamcityClassicClient
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProject as ExternalTeamcityProject
+import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProperties as ExternalTeamcityProperties
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.locator.ProjectLocator
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.locator.PropertyLocator
 import org.springframework.context.annotation.Bean
@@ -114,7 +115,10 @@ internal class ExternalTcProjectFetcher(
             }
             throw e
         }
-        val projects = response.projects.filter { it.archived != true }
+        val projects = response.projects.filter {
+            it.archived != true &&
+                it.buildTypes?.buildTypes?.all { buildType -> buildType.paused == true } == true
+        }
         log.info { "TC sync: TC returned ${projects.size} projects with $COMPONENT_NAME_PARAM parameter" }
 
         return mapTcProjectsToComponentMatches(
@@ -132,6 +136,10 @@ internal class ExternalTcProjectFetcher(
  *  - are flagged `archived` (a retired line must not be linked);
  *  - lack the `COMPONENT_NAME` parameter, carry a blank value, or a value unknown
  *    to CRS.
+ *
+ * Both `COMPONENT_NAME` and `PROJECT_VERSION` values may contain TeamCity `%param%`
+ * references (e.g. `my-component-%CUSTOMER_NAME%`); these are resolved recursively
+ * against the project's parameters via [resolveParam] before use.
  *
  * `projectVersion` is read from the optional `PROJECT_VERSION` parameter (null when
  * absent/blank). One component may own several projects across distinct release
@@ -151,15 +159,11 @@ internal fun mapTcProjectsToComponentMatches(
 ): Map<UUID, List<TcProject>> =
     projects
         .mapNotNull { project ->
-            val params = project.parameters?.properties
-            val componentName = params
-                ?.firstOrNull { it.name == COMPONENT_NAME_PARAM }
-                ?.value
-                ?.trim()
-                ?.takeIf { it.isNotEmpty() }
+            val projectParams = project.parameters.toParamMap()
+            val componentName = resolveParam(COMPONENT_NAME_PARAM, projectParams)
                 ?: return@mapNotNull null
             val uuid = componentsByName[componentName] ?: return@mapNotNull null
-            val projectVersion = getProjectVersion(project)
+            val projectVersion = getProjectVersion(project, projectParams)
             val hasCdRelease = projectHasCdReleaseBuild(project, cdReleaseTemplateId)
             uuid to TcProject(
                 id = project.id,
@@ -175,25 +179,70 @@ internal fun mapTcProjectsToComponentMatches(
  * parameter; when absent, falls back to the first NON-PAUSED buildType that declares
  * `PROJECT_VERSION`. Returns null (trimmed-blank counts as absent) when neither has it.
  * Paused buildTypes are ignored on the convention that a paused line is not authoritative.
+ *
+ * References (`%other%`) in the value are resolved via [resolveParam]; a buildType's own
+ * parameters are overlaid on the project's so references defined at either scope resolve.
  */
-private fun getProjectVersion(project: ExternalTeamcityProject): String? {
-    project.parameters?.properties
-        ?.firstOrNull { it.name == PROJECT_VERSION_PARAM }
-        ?.value
-        ?.trim()
-        ?.takeIf { it.isNotEmpty() }
-        ?.let { return it }
+private fun getProjectVersion(
+    project: ExternalTeamcityProject,
+    projectParams: Map<String, String>,
+): String? {
+    resolveParam(PROJECT_VERSION_PARAM, projectParams)?.let { return it }
 
     return project.buildTypes?.buildTypes
         ?.asSequence()
-        ?.filter { it.paused != true }?.firstNotNullOfOrNull { bt ->
-            bt.parameters?.properties
-                ?.firstOrNull { it.name == PROJECT_VERSION_PARAM }
-                ?.value
-                ?.trim()
-                ?.takeIf { it.isNotEmpty() }
+        ?.filter { it.paused != true }
+        ?.firstNotNullOfOrNull { bt ->
+            val own = bt.parameters.toParamMap()
+            // Only buildTypes that DECLARE the parameter themselves are considered;
+            // references are resolved against project params overlaid by the buildType's.
+            if (own.containsKey(PROJECT_VERSION_PARAM)) {
+                resolveParam(PROJECT_VERSION_PARAM, projectParams + own)
+            } else {
+                null
+            }
         }
 }
+
+// Matches a single TeamCity parameter reference: %name% (name is any run without a '%').
+private val PARAM_REFERENCE = Regex("%([^%]+)%")
+
+/** Flatten a TC properties block to a name→value map, keeping the FIRST value per name. */
+private fun ExternalTeamcityProperties?.toParamMap(): Map<String, String> {
+    val map = LinkedHashMap<String, String>()
+    this?.properties?.forEach { property -> map.putIfAbsent(property.name, property.value.orEmpty()) }
+    return map
+}
+
+/**
+ * Read [name] from [params], resolve any `%reference%` tokens, and return the trimmed
+ * value (null when the parameter is absent or resolves to blank).
+ */
+private fun resolveParam(name: String, params: Map<String, String>): String? {
+    val raw = params[name]?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    return resolveReferences(raw, params, emptySet()).trim().takeIf { it.isNotEmpty() }
+}
+
+/**
+ * Recursively expand TeamCity `%param%` references in [value] against [params]. A
+ * reference whose key is missing, or a cyclic reference (tracked via [seen]), is left as
+ * the literal `%token%` and expansion stops for that branch — so resolution always
+ * terminates.
+ */
+private fun resolveReferences(
+    value: String,
+    params: Map<String, String>,
+    seen: Set<String>,
+): String =
+    PARAM_REFERENCE.replace(value) { match ->
+        val refName = match.groupValues[1]
+        val refValue = params[refName]
+        if (refValue == null || refName in seen) {
+            match.value
+        } else {
+            resolveReferences(refValue, params, seen + refName)
+        }
+    }
 
 private fun projectHasCdReleaseBuild(
     project: ExternalTeamcityProject,

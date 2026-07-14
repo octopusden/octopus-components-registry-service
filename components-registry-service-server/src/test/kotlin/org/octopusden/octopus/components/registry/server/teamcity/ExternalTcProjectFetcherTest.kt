@@ -336,6 +336,80 @@ class ExternalTcProjectFetcherTest {
     }
 
     @Test
+    @DisplayName("COMPONENT_NAME with a %param% reference is resolved before lookup")
+    fun componentNameResolvesReference() {
+        val projects = listOf(
+            tcProject(
+                id = "Tc_Foo",
+                webUrl = "http://tc/foo",
+                componentName = "my-%CUSTOMER%",
+                extraParams = mapOf("CUSTOMER" to "foo"),
+            ),
+        )
+        val result = mapTcProjectsToComponentMatches(projects, mapOf("my-foo" to fooUuid), cdReleaseTemplateId)
+        assertEquals(setOf(fooUuid), result.keys)
+    }
+
+    @Test
+    @DisplayName("PROJECT_VERSION resolves chained references until a literal")
+    fun projectVersionResolvesChainedReferences() {
+        val projects = listOf(
+            tcProject(
+                id = "Tc_Foo",
+                webUrl = "http://tc/foo",
+                componentName = "foo",
+                projectVersion = "%A%",
+                extraParams = mapOf("A" to "%B%", "B" to "3.x"),
+            ),
+        )
+        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
+        assertEquals("3.x", result[fooUuid]!!.single().projectVersion)
+    }
+
+    @Test
+    @DisplayName("unknown %reference% is left as a literal token")
+    fun unknownReferenceLeftLiteral() {
+        val projects = listOf(
+            tcProject(id = "Tc_Foo", webUrl = "http://tc/foo", componentName = "foo", projectVersion = "%MISSING%"),
+        )
+        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
+        assertEquals("%MISSING%", result[fooUuid]!!.single().projectVersion)
+    }
+
+    @Test
+    @DisplayName("cyclic reference terminates and leaves the cycle token as a literal")
+    fun cyclicReferenceTerminates() {
+        val projects = listOf(
+            tcProject(
+                id = "Tc_Foo",
+                webUrl = "http://tc/foo",
+                componentName = "foo",
+                projectVersion = "%A%",
+                extraParams = mapOf("A" to "%A%"),
+            ),
+        )
+        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
+        // Self-cycle A→%A% cannot resolve; the token is preserved (no infinite loop).
+        assertEquals("%A%", result[fooUuid]!!.single().projectVersion)
+    }
+
+    @Test
+    @DisplayName("buildType-level PROJECT_VERSION reference resolves against project params")
+    fun buildTypeVersionResolvesAgainstProjectParams() {
+        val projects = listOf(
+            tcProject(
+                id = "Tc_Foo",
+                webUrl = "http://tc/foo",
+                componentName = "foo",
+                extraParams = mapOf("LINE" to "2.x"), // defined at project scope
+                buildTypes = listOf(buildType(id = "Active", projectVersion = "%LINE%")),
+            ),
+        )
+        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
+        assertEquals("2.x", result[fooUuid]!!.single().projectVersion)
+    }
+
+    @Test
     @DisplayName("PROJECT_VERSION falls back to the first non-paused buildType when absent on the project")
     fun projectVersionFallsBackToBuildType() {
         val projects = listOf(
@@ -403,6 +477,7 @@ class ExternalTcProjectFetcherTest {
         buildTypes: List<ExternalTeamcityBuildType> = emptyList(),
         projectVersion: String? = null,
         archived: Boolean? = null,
+        extraParams: Map<String, String> = emptyMap(),
     ) = ExternalTeamcityProject(
         id = id,
         name = id,
@@ -415,6 +490,7 @@ class ExternalTcProjectFetcherTest {
                 if (projectVersion != null) {
                     add(ExternalTeamcityProperty(name = "PROJECT_VERSION", value = projectVersion))
                 }
+                extraParams.forEach { (k, v) -> add(ExternalTeamcityProperty(name = k, value = v)) }
             }.toMutableList(),
         ),
         buildTypes = if (buildTypes.isEmpty()) {
