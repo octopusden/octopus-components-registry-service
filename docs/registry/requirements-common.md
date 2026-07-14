@@ -1706,17 +1706,19 @@ override PATCH produces an empty diff and is dropped by the SYS-048 guard.
 **Status:** ✅ Tested
 
 **Motivation:**
-The TeamCity sync (`/admin/teamcity-resync` and the scheduled cron) is an
-automated reconciliation that links each component to its TeamCity project.
-Every re-link previously published a Component `UPDATE` `AuditEvent`
+The TeamCity sync (`/admin/teamcity-project-ids/sync` and the scheduled cron) is an
+automated reconciliation that links each component to its TeamCity project(s) — one
+row per distinct `PROJECT_VERSION` release line (see technical-design §6.4.2 for the
+resolution algorithm). Every re-link previously published a Component `UPDATE` `AuditEvent`
 (`changedBy = system`, `teamcityProjectId` / `teamcityProjectUrl`). One such row
 per re-linked component is operational noise in the component history — it is
 not a user-initiated change.
 
 **Description:**
 `TeamcitySyncService.applyMatch` no longer publishes an `AuditEvent`; instead it
-emits an INFO log line tracing the re-link (component id, old → new project id +
-url, and the resolving user) so the source of a write is still discoverable. No
+emits an INFO log line tracing the re-link (component id, the existing → desired
+`(projectId, projectVersion)` row set, and the resolving user) so the source of a
+write is still discoverable. No
 `audit_log` row is written for a TeamCity sync. The `ApplicationEventPublisher`
 seam is retained so the test can assert nothing is published (and as the
 re-wire point if per-sync auditing is ever wanted).

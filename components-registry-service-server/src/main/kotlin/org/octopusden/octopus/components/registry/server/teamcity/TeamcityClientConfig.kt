@@ -115,10 +115,7 @@ internal class ExternalTcProjectFetcher(
             }
             throw e
         }
-        val projects = response.projects.filter {
-            it.archived != true &&
-                it.buildTypes?.buildTypes?.all { buildType -> buildType.paused == true } == true
-        }
+        val projects = response.projects
         log.info { "TC sync: TC returned ${projects.size} projects with $COMPONENT_NAME_PARAM parameter" }
 
         return mapTcProjectsToComponentMatches(
@@ -134,6 +131,8 @@ internal class ExternalTcProjectFetcher(
  * `COMPONENT_NAME` parameter value, looks it up in [componentsByName], and groups
  * the resulting [TcProject]s by component UUID. Projects are dropped when they:
  *  - are flagged `archived` (a retired line must not be linked);
+ *  - have build configs where EVERY one is paused (no active build); projects with
+ *    no build configs at all are kept;
  *  - lack the `COMPONENT_NAME` parameter, carry a blank value, or a value unknown
  *    to CRS.
  *
@@ -159,6 +158,10 @@ internal fun mapTcProjectsToComponentMatches(
 ): Map<UUID, List<TcProject>> =
     projects
         .mapNotNull { project ->
+            if (project.archived == true) return@mapNotNull null
+            val buildTypes = project.buildTypes?.buildTypes
+            if (!buildTypes.isNullOrEmpty() && buildTypes.all { it.paused == true }) return@mapNotNull null
+
             val projectParams = project.parameters.toParamMap()
             val componentName = resolveParam(COMPONENT_NAME_PARAM, projectParams)
                 ?: return@mapNotNull null

@@ -320,7 +320,7 @@ System membership is many-to-many — a component may be classified under severa
 | `component_release_managers` | `username, sort_order` | Ordered multi-value (first = primary). Surrogate UUID PK (mirrors `component_artifact_ids`, NOT a composite PK on `sort_order` — avoids Hibernate INSERT-before-DELETE collisions on clear/re-add). No `UNIQUE(component_id, sort_order)`; username dedupe (keep-first, trim, drop-blank) is service-layer, not DB. Indexed `(component_id)`. Legacy v1/v2/v3 read the comma-joined string. |
 | `component_security_champions` | `username, sort_order` | Identical shape to `component_release_managers` (ordered multi-value security champions). |
 | `distribution_security_groups` | `group_type ∈ {read, write}, group_name` | Audit confirms never per-version |
-| `component_teamcity_projects` | `project_id, sort_order` | Multi-id supported |
+| `component_teamcity_projects` | `project_id, project_version, sort_order` | Multi-id supported. `project_version` (nullable, added in `V6`) is the TC `PROJECT_VERSION` line marker; TeamCity sync writes one row per distinct version line, ordered by version then id. |
 | `component_doc_links` | `doc_component_key, major_version, sort_order` | Soft-reference; target may be archived or out-of-installation; UNIQUE `(component_id, doc_component_key, major_version)` |
 
 ### 4.7 Children of `component_configurations` (per-version-rangeable)
@@ -395,7 +395,7 @@ All v1-v3 endpoints implemented as adapters over the new schema. Mapper rules:
 | `name` (v1-v3) | `components.component_key` (rename in mapper) |
 | `componentKey` (v4) | `components.component_key` direct |
 | `repositoryType` | `vcs_settings_entries.repository_type`; NULL → default GIT |
-| `teamcityProjectUrl` | Computed at mapper: `<teamcity-base>/buildConfiguration/<project_id>` |
+| `teamcityProjectUrl` | Computed at mapper: `<teamcity-base>/project/<project_id>` (see `composeTeamcityProjectUrl`) |
 | `hotfixVersionFormat` (jira) | `components.jira_hotfix_version_format`; UI read-only |
 | `escrow.buildTask` (legacy) | `component_configurations.build_tasks` (consolidated) |
 | `doc: {component, majorVersion}` (singular) | `component_doc_links` filtered: for requested version X.Y.Z, pick row WHERE `major_version = 'X.Y'`; else fall back to row WHERE `major_version IS NULL`; else null |

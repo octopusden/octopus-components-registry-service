@@ -456,6 +456,50 @@ class ExternalTcProjectFetcherTest {
     }
 
     @Test
+    @DisplayName("project whose build configs are all paused is dropped")
+    fun allPausedProjectDropped() {
+        val projects = listOf(
+            tcProject(
+                id = "Tc_Foo",
+                webUrl = "http://tc/foo",
+                componentName = "foo",
+                buildTypes = listOf(
+                    buildType(id = "B1", paused = true),
+                    buildType(id = "B2", paused = true),
+                ),
+            ),
+        )
+        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    @DisplayName("project with at least one non-paused build config is kept")
+    fun oneActiveBuildKeepsProject() {
+        val projects = listOf(
+            tcProject(
+                id = "Tc_Foo",
+                webUrl = "http://tc/foo",
+                componentName = "foo",
+                buildTypes = listOf(
+                    buildType(id = "B1", paused = true),
+                    buildType(id = "B2", paused = false),
+                ),
+            ),
+        )
+        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
+        assertEquals(setOf(fooUuid), result.keys)
+    }
+
+    @Test
+    @DisplayName("project with no build configs is kept (absence != all-paused)")
+    fun noBuildTypesKept() {
+        val projects = listOf(tcProject(id = "Tc_Foo", webUrl = "http://tc/foo", componentName = "foo"))
+        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
+        assertEquals(setOf(fooUuid), result.keys)
+    }
+
+    @Test
     @DisplayName("paused CDRelease build does not count as a release build")
     fun pausedReleaseBuildNotCounted() {
         val projects = listOf(
@@ -463,7 +507,12 @@ class ExternalTcProjectFetcherTest {
                 id = "Tc_Foo",
                 webUrl = "http://tc/foo",
                 componentName = "foo",
-                buildTypes = listOf(buildType(id = "Build1", legacyTemplateId = "CDRelease", paused = true)),
+                buildTypes = listOf(
+                    // The only CDRelease build is paused → must not count...
+                    buildType(id = "Build1", legacyTemplateId = "CDRelease", paused = true),
+                    // ...and a non-paused build keeps the project itself eligible.
+                    buildType(id = "Build2", paused = false),
+                ),
             ),
         )
         val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)

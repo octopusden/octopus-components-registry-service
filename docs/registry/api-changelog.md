@@ -18,6 +18,12 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
 
 ## Unreleased
 
+- **`TeamcityProjectResponse.projectVersion` added (nullable).** Component detail
+  (`GET /rest/api/4/components/{id}`) now exposes `teamcityProjects[].projectVersion` — the
+  TeamCity `PROJECT_VERSION` release line a linked project belongs to, or null when it declares
+  none. TeamCity sync now stores **one project per distinct `PROJECT_VERSION` line**, so a
+  component may surface multiple `teamcityProjects` entries (ordered by version then id). Purely
+  additive; clients that ignore the field are unaffected.
 - **`ErrorResponse.errorCode` added (nullable) + uniqueness-violation wording.** Error bodies now
   carry a machine-readable `errorCode` alongside `errorMessage`: `OPTIMISTIC_LOCK` (stale `version`
   on PATCH — reload and re-apply), `UNIQUENESS_VIOLATION` (cross-component uniqueness: distribution
