@@ -404,7 +404,6 @@ data class TeamcityProjectResponse(
     val projectId: String,
     val projectUrl: String? = null,
     val sortOrder: Int,
-    // TC PROJECT_VERSION line this project belongs to; null when the project declares none.
     val projectVersion: String? = null,
 )
 

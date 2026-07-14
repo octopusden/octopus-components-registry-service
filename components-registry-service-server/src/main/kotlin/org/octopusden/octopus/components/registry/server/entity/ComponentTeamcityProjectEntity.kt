@@ -24,8 +24,6 @@ class ComponentTeamcityProjectEntity(
     @Column(name = "project_id", nullable = false)
     var projectId: String = "",
 
-    // Value of the TC `PROJECT_VERSION` parameter for this project, or null when the
-    // project declares none. A component may own one row per distinct release line.
     @Column(name = "project_version")
     var projectVersion: String? = null,
 
