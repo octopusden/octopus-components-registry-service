@@ -162,9 +162,15 @@ class TeamcitySyncService(
                         // Sub-counter of updated+unchanged: at least one line needed a tie-break.
                         if (usablePicks.any { it.tieBroken }) ambiguousAutoResolved++
                     }
+
                     // No linkable winner: ambiguous if a line was left unresolved, else no-match.
-                    ambiguousUnresolved -> skippedAmbiguous++
-                    else -> skippedNoMatch++
+                    ambiguousUnresolved -> {
+                        skippedAmbiguous++
+                    }
+
+                    else -> {
+                        skippedNoMatch++
+                    }
                 }
             } catch (e: Exception) {
                 // Per-component error: log + count, keep processing the rest.
@@ -193,7 +199,10 @@ class TeamcitySyncService(
     }
 
     /** A resolved winner for one PROJECT_VERSION line, with whether a tie-break was needed. */
-    private data class Pick(val project: TcProject, val tieBroken: Boolean)
+    private data class Pick(
+        val project: TcProject,
+        val tieBroken: Boolean,
+    )
 
     /**
      * Outcome of resolving a single PROJECT_VERSION group.
@@ -201,11 +210,13 @@ class TeamcitySyncService(
      * @property ambiguousUnresolved true when the group had >1 candidate and none owns a
      *  CDRelease build, so no automated pick was possible (drives `skippedAmbiguous`).
      */
-    private data class VersionResolution(val pick: Pick?, val ambiguousUnresolved: Boolean)
+    private data class VersionResolution(
+        val pick: Pick?,
+        val ambiguousUnresolved: Boolean,
+    )
 
     /** True when webUrl is a usable http(s) link we can safely render. */
-    private fun TcProject.isUsableUrl(): Boolean =
-        webUrl.isNotBlank() && (webUrl.startsWith("http://") || webUrl.startsWith("https://"))
+    private fun TcProject.isUsableUrl(): Boolean = webUrl.isNotBlank() && (webUrl.startsWith("http://") || webUrl.startsWith("https://"))
 
     /**
      * Resolve one PROJECT_VERSION group to at most one project: a single candidate wins;

@@ -5,13 +5,13 @@ import org.octopusden.octopus.infrastructure.client.commons.ClientParametersProv
 import org.octopusden.octopus.infrastructure.client.commons.CredentialProvider
 import org.octopusden.octopus.infrastructure.client.commons.StandardBasicCredCredentialProvider
 import org.octopusden.octopus.infrastructure.teamcity.client.TeamcityClassicClient
-import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProject as ExternalTeamcityProject
-import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProperties as ExternalTeamcityProperties
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.locator.ProjectLocator
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.locator.PropertyLocator
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import java.util.UUID
+import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProject as ExternalTeamcityProject
+import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProperties as ExternalTeamcityProperties
 
 private const val COMPONENT_NAME_PARAM = "COMPONENT_NAME"
 private const val PROJECT_VERSION_PARAM = "PROJECT_VERSION"
@@ -89,8 +89,8 @@ internal class ExternalTcProjectFetcher(
         TeamcityClassicClient(
             object : ClientParametersProvider {
                 override fun getApiUrl(): String = properties.baseUrl.trimEnd('/')
-                override fun getAuth(): CredentialProvider =
-                    StandardBasicCredCredentialProvider(properties.username, properties.password)
+
+                override fun getAuth(): CredentialProvider = StandardBasicCredCredentialProvider(properties.username, properties.password)
             },
         )
     }
@@ -158,8 +158,7 @@ internal fun mapTcProjectsToComponentMatches(
                 hasCdReleaseBuild = hasCdRelease,
                 projectVersion = projectVersion,
             )
-        }
-        .groupBy({ it.first }, { it.second })
+        }.groupBy({ it.first }, { it.second })
 
 /**
  * Release line for a project: the project-level `PROJECT_VERSION`, else the first non-paused
@@ -172,7 +171,8 @@ private fun getProjectVersion(
 ): String? {
     resolveParam(PROJECT_VERSION_PARAM, projectParams)?.let { return it }
 
-    return project.buildTypes?.buildTypes
+    return project.buildTypes
+        ?.buildTypes
         ?.asSequence()
         ?.filter { it.paused != true }
         ?.firstNotNullOfOrNull { bt ->
@@ -201,7 +201,10 @@ private fun ExternalTeamcityProperties?.toParamMap(): Map<String, String> {
  * Read [name] from [params], resolve any `%reference%` tokens, and return the trimmed
  * value (null when the parameter is absent or resolves to blank).
  */
-private fun resolveParam(name: String, params: Map<String, String>): String? {
+private fun resolveParam(
+    name: String,
+    params: Map<String, String>,
+): String? {
     val raw = params[name]?.trim()?.takeIf { it.isNotEmpty() } ?: return null
     return resolveReferences(raw, params, emptySet()).trim().takeIf { it.isNotEmpty() }
 }
@@ -229,7 +232,8 @@ private fun projectHasCdReleaseBuild(
     project: ExternalTeamcityProject,
     cdReleaseTemplateId: String,
 ): Boolean =
-    project.buildTypes?.buildTypes
+    project.buildTypes
+        ?.buildTypes
         // A paused build config cannot represent an active release build.
         ?.filter { it.paused != true }
         ?.any { bt ->

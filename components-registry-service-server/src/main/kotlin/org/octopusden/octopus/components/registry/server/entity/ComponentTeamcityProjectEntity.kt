@@ -16,17 +16,13 @@ class ComponentTeamcityProjectEntity(
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     var id: UUID? = null,
-
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "component_id", nullable = false)
     var component: ComponentEntity,
-
     @Column(name = "project_id", nullable = false)
     var projectId: String = "",
-
     @Column(name = "project_version")
     var projectVersion: String? = null,
-
     @Column(name = "sort_order", nullable = false)
     var sortOrder: Int = 0,
 )

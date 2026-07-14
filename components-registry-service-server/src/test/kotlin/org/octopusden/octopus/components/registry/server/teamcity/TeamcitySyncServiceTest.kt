@@ -38,7 +38,7 @@ import java.util.function.Function
  */
 class TeamcitySyncServiceTest {
     private val alice = UUID.fromString("11111111-1111-1111-1111-111111111111")
-    private val bob   = UUID.fromString("22222222-2222-2222-2222-222222222222")
+    private val bob = UUID.fromString("22222222-2222-2222-2222-222222222222")
     private val carol = UUID.fromString("33333333-3333-3333-3333-333333333333")
 
     /**
@@ -46,7 +46,10 @@ class TeamcitySyncServiceTest {
      * `teamcityProjectId` / `teamcityProjectUrl` scalar fields are gone —
      * TC association is kept in [StubTcProjectRepository].
      */
-    private fun component(id: UUID, key: String) = ComponentEntity(id = id, componentKey = key)
+    private fun component(
+        id: UUID,
+        key: String,
+    ) = ComponentEntity(id = id, componentKey = key)
 
     private fun stubFetcher(matchesByKey: Map<String, List<TcProject>>): TcProjectFetcher =
         TcProjectFetcher { componentsByName ->
@@ -54,8 +57,7 @@ class TeamcitySyncServiceTest {
                 .mapNotNull { (key, uuid) ->
                     val projects = matchesByKey[key] ?: return@mapNotNull null
                     uuid to projects
-                }
-                .toMap()
+                }.toMap()
         }
 
     private fun service(
@@ -373,7 +375,7 @@ class TeamcitySyncServiceTest {
     @DisplayName("mixed batch: counts every category in one pass")
     fun mixedBatch() {
         val alphaComponent = component(alice, "alpha")
-        val betaComponent  = component(bob, "beta")
+        val betaComponent = component(bob, "beta")
         val gammaComponent = component(carol, "gamma")
         val components = listOf(alphaComponent, betaComponent, gammaComponent)
 
@@ -400,8 +402,8 @@ class TeamcitySyncServiceTest {
         val result = svc.resync()
 
         assertEquals(3, result.scanned)
-        assertEquals(1, result.updated)       // alpha newly written
-        assertEquals(1, result.unchanged)     // beta already correct
+        assertEquals(1, result.updated) // alpha newly written
+        assertEquals(1, result.unchanged) // beta already correct
         assertEquals(1, result.skippedNoMatch) // gamma
         assertEquals(0, result.skippedAmbiguous)
         assertTrue(result.errors.isEmpty())
@@ -564,14 +566,19 @@ class TeamcitySyncServiceTest {
      */
     private fun inlineTx(): TransactionTemplate =
         object : TransactionTemplate() {
-            override fun <T> execute(action: TransactionCallback<T>): T? =
-                action.doInTransaction(SimpleTransactionStatus())
+            override fun <T> execute(action: TransactionCallback<T>): T? = action.doInTransaction(SimpleTransactionStatus())
         }
 
     private class RecordingPublisher : ApplicationEventPublisher {
         val events = mutableListOf<Any>()
-        override fun publishEvent(event: Any) { events.add(event) }
-        override fun publishEvent(event: ApplicationEvent) { events.add(event) }
+
+        override fun publishEvent(event: Any) {
+            events.add(event)
+        }
+
+        override fun publishEvent(event: ApplicationEvent) {
+            events.add(event)
+        }
     }
 
     /**
@@ -586,13 +593,14 @@ class TeamcitySyncServiceTest {
         val saveCalls = mutableListOf<ComponentTeamcityProjectEntity>()
 
         /** Seed a row as already-persisted before the sync run. */
-        fun preload(entity: ComponentTeamcityProjectEntity) { store.add(entity) }
+        fun preload(entity: ComponentTeamcityProjectEntity) {
+            store.add(entity)
+        }
 
         override fun findByComponentId(componentId: UUID): List<ComponentTeamcityProjectEntity> =
             store.filter { it.component.id == componentId }
 
-        override fun findByProjectId(projectId: String): List<ComponentTeamcityProjectEntity> =
-            store.filter { it.projectId == projectId }
+        override fun findByProjectId(projectId: String): List<ComponentTeamcityProjectEntity> = store.filter { it.projectId == projectId }
 
         override fun <S : ComponentTeamcityProjectEntity> save(entity: S): S {
             store.add(entity)
@@ -607,47 +615,88 @@ class TeamcitySyncServiceTest {
         // Unused standard JPA methods — throw to surface accidental call-sites during refactors.
 
         override fun <S : ComponentTeamcityProjectEntity> saveAll(entities: Iterable<S>): List<S> = unsupported()
+
         override fun <S : ComponentTeamcityProjectEntity> saveAndFlush(entity: S): S = unsupported()
+
         override fun <S : ComponentTeamcityProjectEntity> saveAllAndFlush(entities: Iterable<S>): List<S> = unsupported()
-        override fun findById(id: UUID): Optional<ComponentTeamcityProjectEntity> =
-            Optional.ofNullable(store.firstOrNull { it.id == id })
+
+        override fun findById(id: UUID): Optional<ComponentTeamcityProjectEntity> = Optional.ofNullable(store.firstOrNull { it.id == id })
+
         override fun existsById(id: UUID): Boolean = store.any { it.id == id }
+
         override fun findAll(): List<ComponentTeamcityProjectEntity> = store.toList()
+
         override fun findAllById(ids: Iterable<UUID>): List<ComponentTeamcityProjectEntity> = unsupported()
+
         override fun count(): Long = store.size.toLong()
-        override fun deleteById(id: UUID) { unsupported() }
-        override fun delete(entity: ComponentTeamcityProjectEntity) { unsupported() }
-        override fun deleteAllById(ids: Iterable<UUID>) { unsupported() }
-        override fun deleteAll(entities: Iterable<ComponentTeamcityProjectEntity>) { unsupported() }
-        override fun deleteAll() { unsupported() }
-        override fun deleteAllInBatch() { unsupported() }
-        override fun deleteAllByIdInBatch(ids: Iterable<UUID>) { unsupported() }
+
+        override fun deleteById(id: UUID) {
+            unsupported()
+        }
+
+        override fun delete(entity: ComponentTeamcityProjectEntity) {
+            unsupported()
+        }
+
+        override fun deleteAllById(ids: Iterable<UUID>) {
+            unsupported()
+        }
+
+        override fun deleteAll(entities: Iterable<ComponentTeamcityProjectEntity>) {
+            unsupported()
+        }
+
+        override fun deleteAll() {
+            unsupported()
+        }
+
+        override fun deleteAllInBatch() {
+            unsupported()
+        }
+
+        override fun deleteAllByIdInBatch(ids: Iterable<UUID>) {
+            unsupported()
+        }
+
         override fun getOne(id: UUID): ComponentTeamcityProjectEntity = unsupported()
 
         @Suppress("DEPRECATION")
         override fun getById(id: UUID): ComponentTeamcityProjectEntity = unsupported()
+
         override fun getReferenceById(id: UUID): ComponentTeamcityProjectEntity = unsupported()
-        override fun flush() { unsupported() }
-        override fun findAll(sort: Sort): List<ComponentTeamcityProjectEntity> = store.toList()
-        override fun findAll(pageable: Pageable): Page<ComponentTeamcityProjectEntity> =
-            PageImpl(store, pageable, store.size.toLong())
-        override fun <S : ComponentTeamcityProjectEntity> findOne(example: Example<S>): Optional<S> = Optional.empty()
-        override fun <S : ComponentTeamcityProjectEntity> findAll(example: Example<S>): List<S> = unsupported()
-        override fun <S : ComponentTeamcityProjectEntity> findAll(example: Example<S>, sort: Sort): List<S> =
+
+        override fun flush() {
             unsupported()
+        }
+
+        override fun findAll(sort: Sort): List<ComponentTeamcityProjectEntity> = store.toList()
+
+        override fun findAll(pageable: Pageable): Page<ComponentTeamcityProjectEntity> = PageImpl(store, pageable, store.size.toLong())
+
+        override fun <S : ComponentTeamcityProjectEntity> findOne(example: Example<S>): Optional<S> = Optional.empty()
+
+        override fun <S : ComponentTeamcityProjectEntity> findAll(example: Example<S>): List<S> = unsupported()
+
+        override fun <S : ComponentTeamcityProjectEntity> findAll(
+            example: Example<S>,
+            sort: Sort,
+        ): List<S> = unsupported()
+
         override fun <S : ComponentTeamcityProjectEntity> findAll(
             example: Example<S>,
             pageable: Pageable,
         ): Page<S> = unsupported()
+
         override fun <S : ComponentTeamcityProjectEntity> count(example: Example<S>): Long = 0L
+
         override fun <S : ComponentTeamcityProjectEntity> exists(example: Example<S>): Boolean = false
+
         override fun <S : ComponentTeamcityProjectEntity, R : Any?> findBy(
             example: Example<S>,
             queryFunction: Function<FluentQuery.FetchableFluentQuery<S>, R>,
         ): R = unsupported()
 
-        private fun unsupported(): Nothing =
-            throw UnsupportedOperationException("not used by TeamcitySyncService")
+        private fun unsupported(): Nothing = throw UnsupportedOperationException("not used by TeamcitySyncService")
     }
 
     /**
@@ -667,8 +716,7 @@ class TeamcitySyncServiceTest {
     private class StubComponentRepository(
         private val components: List<ComponentEntity>,
     ) : ComponentRepository {
-        override fun findByComponentKey(componentKey: String): ComponentEntity? =
-            components.firstOrNull { it.componentKey == componentKey }
+        override fun findByComponentKey(componentKey: String): ComponentEntity? = components.firstOrNull { it.componentKey == componentKey }
 
         override fun findByComponentKeyIn(componentKeys: Collection<String>): List<ComponentEntity> =
             components.filter { it.componentKey in componentKeys }
@@ -678,14 +726,14 @@ class TeamcitySyncServiceTest {
 
         override fun findByArchivedFalse(): List<ComponentEntity> = components.filter { !it.archived }
 
-        override fun existsByComponentKey(componentKey: String): Boolean =
-            components.any { it.componentKey == componentKey }
+        override fun existsByComponentKey(componentKey: String): Boolean = components.any { it.componentKey == componentKey }
 
-        override fun existsByDisplayName(displayName: String): Boolean =
-            components.any { it.displayName == displayName }
+        override fun existsByDisplayName(displayName: String): Boolean = components.any { it.displayName == displayName }
 
-        override fun existsByDisplayNameAndIdNot(displayName: String, id: UUID): Boolean =
-            components.any { it.displayName == displayName && it.id != id }
+        override fun existsByDisplayNameAndIdNot(
+            displayName: String,
+            id: UUID,
+        ): Boolean = components.any { it.displayName == displayName && it.id != id }
 
         override fun findAllDisplayNamePairs(): List<org.octopusden.octopus.components.registry.server.repository.DisplayNamePairRow> =
             components.mapNotNull { c ->
@@ -697,11 +745,14 @@ class TeamcitySyncServiceTest {
                 }
             }
 
-        override fun findDistinctOwners(): List<String> =
-            components.mapNotNull { it.componentOwner }.distinct().sorted()
+        override fun findDistinctOwners(): List<String> = components.mapNotNull { it.componentOwner }.distinct().sorted()
 
         override fun findDistinctClientCodes(): List<String> =
-            components.mapNotNull { it.clientCode }.filter { it.isNotBlank() }.distinct().sorted()
+            components
+                .mapNotNull { it.clientCode }
+                .filter { it.isNotBlank() }
+                .distinct()
+                .sorted()
 
         override fun findDistinctJiraProjectKeys(): List<String> =
             components
@@ -713,20 +764,21 @@ class TeamcitySyncServiceTest {
                 .sorted()
 
         override fun findDistinctParentComponentNames(): List<String> =
-            components.mapNotNull { it.parentComponent?.componentKey }.filter { it.isNotBlank() }.distinct().sorted()
+            components
+                .mapNotNull { it.parentComponent?.componentKey }
+                .filter { it.isNotBlank() }
+                .distinct()
+                .sorted()
 
-        override fun existsByParentComponentId(parentId: UUID): Boolean =
-            components.any { it.parentComponent?.id == parentId }
+        override fun existsByParentComponentId(parentId: UUID): Boolean = components.any { it.parentComponent?.id == parentId }
 
-        override fun findByComponentGroupId(groupId: UUID): List<ComponentEntity> =
-            components.filter { it.componentGroup?.id == groupId }
+        override fun findByComponentGroupId(groupId: UUID): List<ComponentEntity> = components.filter { it.componentGroup?.id == groupId }
 
         // Edit-ownership projections. Safe to read the entity accessors here: these are
         // plain in-memory test entities (no Hibernate proxy), so touching the RM/SC lists
         // can't raise LazyInitializationException — the production code uses scalar
         // projection queries precisely to avoid that outside a session.
-        override fun findComponentOwnerById(id: UUID): String? =
-            components.firstOrNull { it.id == id }?.componentOwner
+        override fun findComponentOwnerById(id: UUID): String? = components.firstOrNull { it.id == id }?.componentOwner
 
         override fun findReleaseManagerUsernames(id: UUID): List<String> =
             components.firstOrNull { it.id == id }?.releaseManagerUsernames() ?: emptyList()
@@ -782,58 +834,118 @@ class TeamcitySyncServiceTest {
             )
 
         override fun <S : ComponentEntity> save(entity: S): S = entity
+
         override fun <S : ComponentEntity> saveAll(entities: Iterable<S>): List<S> = unsupported()
+
         override fun <S : ComponentEntity> saveAndFlush(entity: S): S = entity
+
         override fun <S : ComponentEntity> saveAllAndFlush(entities: Iterable<S>): List<S> = unsupported()
-        override fun findById(id: UUID): Optional<ComponentEntity> =
-            Optional.ofNullable(components.firstOrNull { it.id == id })
+
+        override fun findById(id: UUID): Optional<ComponentEntity> = Optional.ofNullable(components.firstOrNull { it.id == id })
+
         override fun existsById(id: UUID): Boolean = components.any { it.id == id }
+
         override fun findAll(): List<ComponentEntity> = components
+
         override fun findAllById(ids: Iterable<UUID>): List<ComponentEntity> = unsupported()
+
         override fun count(): Long = components.size.toLong()
-        override fun deleteById(id: UUID) { unsupported() }
-        override fun delete(entity: ComponentEntity) { unsupported() }
-        override fun deleteAllById(ids: Iterable<UUID>) { unsupported() }
-        override fun deleteAll(entities: Iterable<ComponentEntity>) { unsupported() }
-        override fun deleteAll() { unsupported() }
-        override fun deleteAllInBatch() { unsupported() }
-        override fun deleteAllByIdInBatch(ids: Iterable<UUID>) { unsupported() }
-        override fun deleteAllInBatch(entities: Iterable<ComponentEntity>) { unsupported() }
+
+        override fun deleteById(id: UUID) {
+            unsupported()
+        }
+
+        override fun delete(entity: ComponentEntity) {
+            unsupported()
+        }
+
+        override fun deleteAllById(ids: Iterable<UUID>) {
+            unsupported()
+        }
+
+        override fun deleteAll(entities: Iterable<ComponentEntity>) {
+            unsupported()
+        }
+
+        override fun deleteAll() {
+            unsupported()
+        }
+
+        override fun deleteAllInBatch() {
+            unsupported()
+        }
+
+        override fun deleteAllByIdInBatch(ids: Iterable<UUID>) {
+            unsupported()
+        }
+
+        override fun deleteAllInBatch(entities: Iterable<ComponentEntity>) {
+            unsupported()
+        }
+
         override fun getOne(id: UUID): ComponentEntity = unsupported()
 
         @Suppress("DEPRECATION")
         override fun getById(id: UUID): ComponentEntity = unsupported()
+
         override fun getReferenceById(id: UUID): ComponentEntity = unsupported()
-        override fun flush() { unsupported() }
+
+        override fun flush() {
+            unsupported()
+        }
+
         override fun findAll(sort: Sort): List<ComponentEntity> = components
-        override fun findAll(pageable: Pageable): Page<ComponentEntity> =
-            PageImpl(components, pageable, components.size.toLong())
+
+        override fun findAll(pageable: Pageable): Page<ComponentEntity> = PageImpl(components, pageable, components.size.toLong())
+
         override fun findAll(spec: Specification<ComponentEntity>): List<ComponentEntity> = components
+
         override fun findAll(
             spec: Specification<ComponentEntity>,
             pageable: Pageable,
         ): Page<ComponentEntity> = PageImpl(components, pageable, components.size.toLong())
-        override fun findAll(spec: Specification<ComponentEntity>, sort: Sort): List<ComponentEntity> = components
+
+        override fun findAll(
+            spec: Specification<ComponentEntity>,
+            sort: Sort,
+        ): List<ComponentEntity> = components
+
         override fun findOne(spec: Specification<ComponentEntity>): Optional<ComponentEntity> = Optional.empty()
+
         override fun count(spec: Specification<ComponentEntity>): Long = components.size.toLong()
+
         override fun exists(spec: Specification<ComponentEntity>): Boolean = false
+
         override fun delete(spec: Specification<ComponentEntity>): Long = unsupported()
+
         override fun <S : ComponentEntity, R : Any?> findBy(
             spec: Specification<ComponentEntity>,
             queryFunction: Function<FluentQuery.FetchableFluentQuery<S>, R>,
         ): R = unsupported()
+
         override fun <S : ComponentEntity> findOne(example: Example<S>): Optional<S> = Optional.empty()
+
         override fun <S : ComponentEntity> findAll(example: Example<S>): List<S> = unsupported()
-        override fun <S : ComponentEntity> findAll(example: Example<S>, sort: Sort): List<S> = unsupported()
-        override fun <S : ComponentEntity> findAll(example: Example<S>, pageable: Pageable): Page<S> = unsupported()
+
+        override fun <S : ComponentEntity> findAll(
+            example: Example<S>,
+            sort: Sort,
+        ): List<S> = unsupported()
+
+        override fun <S : ComponentEntity> findAll(
+            example: Example<S>,
+            pageable: Pageable,
+        ): Page<S> = unsupported()
+
         override fun <S : ComponentEntity> count(example: Example<S>): Long = 0L
+
         override fun <S : ComponentEntity> exists(example: Example<S>): Boolean = false
+
         override fun <S : ComponentEntity, R : Any?> findBy(
             example: Example<S>,
             queryFunction: Function<FluentQuery.FetchableFluentQuery<S>, R>,
         ): R = unsupported()
 
-        private fun unsupported(): Nothing =
-            throw UnsupportedOperationException("not used by TeamcitySyncService")
+        private fun unsupported(): Nothing = throw UnsupportedOperationException("not used by TeamcitySyncService")
     }
 }
