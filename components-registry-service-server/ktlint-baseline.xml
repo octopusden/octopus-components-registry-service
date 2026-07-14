@@ -2135,4 +2135,15 @@
     <file name="src/test/kotlin/org/octopusden/octopus/components/registry/server/util/VersionRangePartitionTest.kt">
         <error line="15" column="1" source="standard:no-empty-first-line-in-class-body" />
     </file>
-</baseline>
+<file name="src/integrationTest/kotlin/org/octopusden/octopus/components/registry/server/FatJarAuthDisabledIntegrationTest.kt">
+        <error line="184" column="31" source="standard:function-signature" />
+        <error line="184" column="46" source="standard:function-signature" />
+        <error line="184" column="71" source="standard:function-signature" />
+        <error line="197" column="31" source="standard:function-signature" />
+        <error line="197" column="42" source="standard:function-signature" />
+        <error line="197" column="61" source="standard:function-signature" />
+        <error line="216" column="34" source="standard:function-signature" />
+        <error line="216" column="50" source="standard:function-signature" />
+        <error line="216" column="63" source="standard:function-signature" />
+        <error line="216" column="82" source="standard:function-signature" />
+    </file></baseline>
