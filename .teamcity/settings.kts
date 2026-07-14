@@ -69,14 +69,17 @@ project {
     buildType(id70DeployToOkdProdManual_2)
     buildType(WL_Validation_id)
 
+    // Display order mirrors the numbering: [1.0] first, then the two on-demand
+    // manual compat builds ([1.5]/[1.6]), then the AUTO fan-out that all triggers
+    // in parallel off [1.0] ([2.0]–[2.4]), then the release chain ([4.0]+).
     buildTypesOrder = arrayListOf(
         id10CompileUtAuto,
-        id12IntegrationDbTestsAuto,
         id15CompatManual,
         id16CompatTraceReplayManual,
+        id20ValidateComponentsRegistryProductionDataAuto,
+        id12IntegrationDbTestsAuto,
         id17CompatLocalStandManual,
         id18CompatLocalStandGitModeAuto,
-        id20ValidateComponentsRegistryProductionDataAuto,
         id30DeployToOkdQaDevAuto,
         id40ReleaseManual,
         id50ReleasePostProcessingAuto,
@@ -162,7 +165,7 @@ object id10CompileUtAuto : BuildType({
         // propagation). `build` also runs the fat-jar FT (dockerPushImage depends on it, so it
         // gates the push) and :…-automation:test (depends on ocCreate -> dockerPushImage, so it
         // deploys the just-pushed image). Only the heavy @Tag("integration") DB suite is split
-        // out, to [1.2] (excluded from build/check by the gradle tag filter).
+        // out, to [2.1] (excluded from build/check by the gradle tag filter).
         param("GRADLE_TASK", "clean build publish dockerPushImage")
         param("COMPONENTS_REGISTRY_BRANCH", "master")
     }
@@ -243,15 +246,15 @@ object id10CompileUtAuto : BuildType({
     }
 })
 
-// [1.2] Integration & DB Tests — runs the heavy @Tag("integration") DB suite (Postgres
+// [2.1] Integration & DB Tests — runs the heavy @Tag("integration") DB suite (Postgres
 // Testcontainers / full Spring context, across server/client/light-client), triggered off
-// id10 alongside the compat/validate chain. This is the ONLY thing split out of [1.0]
-// (tagged out of `build`/`check`); it gates the deploy via id30's snapshot below.
+// id10 alongside the compat/validate fan-out. This is the ONLY thing split out of [1.0]
+// (tagged out of `build`/`check`); it is a release gate via id40's snapshot below.
 // automation:test runs in [1.0] (it transitively triggers dockerPushImage), NOT here.
 object id12IntegrationDbTestsAuto : BuildType({
     templates(AbsoluteId("Octopus_OctopusGradleBuild"))
     id("12IntegrationDbTestsAuto")
-    name = "[1.2] Integration & DB Tests [AUTO]"
+    name = "[2.1] Integration & DB Tests [AUTO]"
 
     buildNumberPattern = "%BUILD_NUMBER%"
 
@@ -308,7 +311,21 @@ object id12IntegrationDbTestsAuto : BuildType({
             dockerRunParameters = "--userns=keep-id -e JAVA_HOME=/opt/java/openjdk -v %env.BUILD_ENV%:/opt/BUILD_ENV -v %teamcity.build.checkoutDir%:/home/tcagent/work -v %teamcity.agent.jvm.user.home%:/home/tcagent -w /home/tcagent/work -e TZ=Europe/Brussels"
             param("org.jfrog.artifactory.selectedDeployableServer.defaultModuleVersionConfiguration", "GLOBAL")
         }
-        stepsOrder = arrayListOf("Login_to_the_OKD_cluster", "RUNNER_1720", "RUNNER_1768")
+        // Re-pin the build number to the upstream [1.0] chain number as the LAST
+        // step (point 6). The template's "Calculate build parameters" meta-runner
+        // (RUNNER_1720) emits `##teamcity[buildNumber '<ver>-%build.counter%']` at
+        // runtime, which OVERRIDES this config's `buildNumberPattern = "%BUILD_NUMBER%"`
+        // and made [2.1] show its OWN counter (e.g. 3.0.4-451) instead of the chain
+        // number every sibling shows (3.0.4-4287). We keep RUNNER_1720 enabled (it also
+        // computes PROJECT_VERSION / CURRENT_COMMIT that the gradle step may rely on)
+        // and simply emit a LATER buildNumber service message — TeamCity honours the
+        // last one — so [2.1] ends up tagged with %BUILD_NUMBER% (= [1.0]'s build.number).
+        script {
+            name = "Pin chain build number"
+            id = "PIN_BUILD_NUMBER"
+            scriptContent = "echo \"##teamcity[buildNumber '%BUILD_NUMBER%']\""
+        }
+        stepsOrder = arrayListOf("Login_to_the_OKD_cluster", "RUNNER_1720", "RUNNER_1768", "PIN_BUILD_NUMBER")
     }
 
     failureConditions {
@@ -338,15 +355,19 @@ object id12IntegrationDbTestsAuto : BuildType({
     dependencies {
         snapshot(id10CompileUtAuto) {
             onDependencyFailure = FailureAction.FAIL_TO_START
+            // Reuse a suitable successful [1.0] instead of forcing a fresh one
+            // ("Do not run new build if there is a suitable one").
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
         }
     }
 
     // Disable the inherited VCS trigger from Octopus_OctopusGradleBuild:
     //   TRIGGER_1003 — VCS Trigger (fires on every commit on every branch)
-    // [1.2] is driven by the finishBuildTrigger off [1.0] above; a VCS-check-in
+    // [2.1] is driven by the finishBuildTrigger off [1.0] above; a VCS-check-in
     // trigger here only double-runs the heavy DB suite (once off the commit,
     // once off [1.0] finishing). The inherited Schedule trigger (TRIGGER_1006)
-    // is intentionally left in place.
+    // is intentionally left in place. (The build-number override is handled by
+    // the PIN_BUILD_NUMBER step above, not by disabling RUNNER_1720.)
     disableSettings("TRIGGER_1003")
 })
 
@@ -642,7 +663,7 @@ object id16CompatTraceReplayManual : BuildType({
 // `scripts/local-stands/TEAMCITY.md`.
 object id17CompatLocalStandManual : BuildType({
     id("17CompatLocalStandManual")
-    name = "[1.7] Compat — Local Stand (baseline + candidate JARs) [AUTO]"
+    name = "[2.2] Compat — Local Stand (baseline + candidate JARs) [AUTO]"
 
     // Mirror id20's pattern: surface the upstream id10 build number as id17's
     // own build number so the TC dashboard / build chain UI shows the SAME
@@ -766,7 +787,7 @@ object id17CompatLocalStandManual : BuildType({
             // so there is no port / Postgres collision between them.
             scriptContent = """
                 set -euo pipefail
-                # Green-skip when the compat-test infra isn't in this checkout. [1.7]/[1.8]
+                # Green-skip when the compat-test infra isn't in this checkout. [2.2]/[2.3]
                 # auto-fire on [1.0] success for ANY branch, `main` included — which now
                 # carries the compat infra (post v3→main cutover), so this normally proceeds.
                 # The skip only trips on a legacy pre-v3 branch, or a deleted feature branch
@@ -775,7 +796,7 @@ object id17CompatLocalStandManual : BuildType({
                 # status, not a red 127.
                 if [ ! -f scripts/local-stands/teamcity-run.sh ]; then
                     echo "::: scripts/local-stands/teamcity-run.sh not present in this checkout."
-                    echo "::: [1.7] is only meaningful on branches carrying the compat-test infra (v3 family + post-cutover main)."
+                    echo "::: [2.2] is only meaningful on branches carrying the compat-test infra (v3 family + post-cutover main)."
                     echo "##teamcity[buildStatus status='SUCCESS' text='Skipped: compat-test infra absent on this branch (legacy/pre-v3 checkout).']"
                     exit 0
                 fi
@@ -885,7 +906,7 @@ object id17CompatLocalStandManual : BuildType({
                 echo "Bodies file:     ${'$'}BODIES_FILE_PATH"
                 # Deduplicated production trace (latest-top.txt) replayed by
                 # TraceReplayCompatTest. Cap the replay at the top-200000 tuples so the
-                # AUTO gate [1.7]/[1.8] exercises the FULL enriched trace — including the
+                # AUTO gate [2.2]/[2.3] exercises the FULL enriched trace — including the
                 # client-release-notes generation surface (per-version jira-component /
                 # vcs-settings + detailed-versions; ~130k tuples as of the 2026-06-25
                 # capture). File is ranked desc; id16 replays it unlimited. NOTE: this is
@@ -981,6 +1002,8 @@ object id17CompatLocalStandManual : BuildType({
     dependencies {
         snapshot(id10CompileUtAuto) {
             onDependencyFailure = FailureAction.CANCEL
+            // Reuse a suitable successful [1.0] rather than forcing a fresh one.
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
         }
     }
 })
@@ -1000,7 +1023,7 @@ object id17CompatLocalStandManual : BuildType({
 // default ports (4567/4568) don't collide.
 object id18CompatLocalStandGitModeAuto : BuildType({
     id("18CompatLocalStandGitModeAuto")
-    name = "[1.8] Compat — Local Stand (no DB migration, git-mode) [AUTO]"
+    name = "[2.3] Compat — Local Stand (no DB migration, git-mode) [AUTO]"
 
     // Surface the upstream id10 build number as id18's own (chain view shows the
     // SAME version tag across id10 = id18 = …), mirroring id17.
@@ -1073,7 +1096,7 @@ object id18CompatLocalStandGitModeAuto : BuildType({
             // Runs on a separate agent from id17 so the shared default ports don't collide.
             scriptContent = """
                 set -euo pipefail
-                # Green-skip when the compat-test infra isn't in this checkout. [1.7]/[1.8]
+                # Green-skip when the compat-test infra isn't in this checkout. [2.2]/[2.3]
                 # auto-fire on [1.0] success for ANY branch, `main` included — which now
                 # carries the compat infra (post v3→main cutover), so this normally proceeds.
                 # The skip only trips on a legacy pre-v3 branch, or a deleted feature branch
@@ -1082,7 +1105,7 @@ object id18CompatLocalStandGitModeAuto : BuildType({
                 # status, not a red 127.
                 if [ ! -f scripts/local-stands/teamcity-run.sh ]; then
                     echo "::: scripts/local-stands/teamcity-run.sh not present in this checkout."
-                    echo "::: [1.8] is only meaningful on branches carrying the compat-test infra (v3 family + post-cutover main)."
+                    echo "::: [2.3] is only meaningful on branches carrying the compat-test infra (v3 family + post-cutover main)."
                     echo "##teamcity[buildStatus status='SUCCESS' text='Skipped: compat-test infra absent on this branch (legacy/pre-v3 checkout).']"
                     exit 0
                 fi
@@ -1163,7 +1186,7 @@ object id18CompatLocalStandGitModeAuto : BuildType({
                 echo "Bodies file:     ${'$'}BODIES_FILE_PATH"
                 # Deduplicated production trace (latest-top.txt) replayed by
                 # TraceReplayCompatTest. Cap the replay at the top-200000 tuples so the
-                # AUTO gate [1.7]/[1.8] exercises the FULL enriched trace — including the
+                # AUTO gate [2.2]/[2.3] exercises the FULL enriched trace — including the
                 # client-release-notes generation surface (per-version jira-component /
                 # vcs-settings + detailed-versions; ~130k tuples as of the 2026-06-25
                 # capture). File is ranked desc; id16 replays it unlimited. NOTE: this is
@@ -1231,13 +1254,15 @@ object id18CompatLocalStandGitModeAuto : BuildType({
     dependencies {
         snapshot(id10CompileUtAuto) {
             onDependencyFailure = FailureAction.CANCEL
+            // Reuse a suitable successful [1.0] rather than forcing a fresh one.
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
         }
     }
 })
 
 object id20ValidateComponentsRegistryProductionDataAuto : BuildType({
     id("20ValidateComponentsRegistryProductionDataAuto")
-    name = "[2.0] Validate Production Data [AUTO]"
+    name = "[2.0] Validate Git-based Components Registry [AUTO]"
 
     artifactRules = "%COMPONENTS_REGISTRY_CHECKOUT_DIR% => %COMPONENTS_REGISTRY_CHECKOUT_DIR%"
     buildNumberPattern = "%BUILD_NUMBER%"
@@ -1288,6 +1313,8 @@ object id20ValidateComponentsRegistryProductionDataAuto : BuildType({
     dependencies {
         snapshot(id10CompileUtAuto) {
             onDependencyFailure = FailureAction.FAIL_TO_START
+            // Reuse a suitable successful [1.0] rather than forcing a fresh one.
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
         }
         artifacts(AbsoluteId("bt774")) {
             buildRule = lastSuccessful()
@@ -1299,7 +1326,7 @@ object id20ValidateComponentsRegistryProductionDataAuto : BuildType({
 object id30DeployToOkdQaDevAuto : BuildType({
     templates(AbsoluteId("RnDProcessesAutomation_IdpComponentOkdDeploy"))
     id("30DeployToOkdQaDevAuto")
-    name = "[3.0] Deploy to OKD QA DEV [AUTO]"
+    name = "[2.4] Deploy to OKD QA DEV [AUTO]"
 
     params {
         param("OKD_SERVER_URL", "%OKD_SERVER_DEV_URL%")
@@ -1309,21 +1336,24 @@ object id30DeployToOkdQaDevAuto : BuildType({
     }
 
     triggers {
+        // Fire the QA-DEV deploy DIRECTLY off [1.0] Compile&UT, in parallel with
+        // the [2.0]–[2.3] test/validate/compat fan-out — QA availability no longer
+        // waits on Validate or the heavy DB/compat suites. None of them gate the
+        // deploy; they gate the RELEASE instead (see id40's snapshot set). The
+        // deployed image is [1.0]'s (dockerPushImage).
         finishBuildTrigger {
             id = "TRIGGER_1015"
-            buildType = "${id20ValidateComponentsRegistryProductionDataAuto.id}"
+            buildType = "${id10CompileUtAuto.id}"
             successfulOnly = true
         }
     }
 
     dependencies {
-        snapshot(id20ValidateComponentsRegistryProductionDataAuto) {
+        snapshot(id10CompileUtAuto) {
+            onDependencyFailure = FailureAction.FAIL_TO_START
+            // Reuse a suitable successful [1.0] rather than forcing a fresh one.
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
         }
-        // [1.2] Integration & DB Tests is intentionally NOT a deploy dependency:
-        // QA deploy runs right after [1.0] Compile&UT — via [2.0] Validate, which
-        // finishes shortly after [1.0] — IN PARALLEL with the heavy [1.2] suite,
-        // so a slow integration run no longer delays QA availability. The image
-        // still comes from [1.0].
     }
 })
 
@@ -1354,9 +1384,33 @@ object id40ReleaseManual : BuildType({
         }
     }
 
+    // A release can only cut when the full quality fan-out passed for the SAME
+    // source revision. [2.4] deploy, [2.0] validate, [2.1] integration, and the
+    // [2.2]/[2.3] compat gates all snapshot the same [1.0], so TeamCity pins every
+    // one of them — and this release — to a single [1.0] build. Release params
+    // still come from [1.0] (reachable via any of these deps); the extra gates
+    // only block, they are not a source of release parameters. reuseBuilds =
+    // SUCCESSFUL so a release reuses the green fan-out builds already produced for
+    // that [1.0] instead of re-running the heavy compat/DB suites.
     dependencies {
         snapshot(id30DeployToOkdQaDevAuto) {
-            reuseBuilds = ReuseBuilds.NO
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
+            onDependencyFailure = FailureAction.FAIL_TO_START
+        }
+        snapshot(id20ValidateComponentsRegistryProductionDataAuto) {
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
+            onDependencyFailure = FailureAction.FAIL_TO_START
+        }
+        snapshot(id12IntegrationDbTestsAuto) {
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
+            onDependencyFailure = FailureAction.FAIL_TO_START
+        }
+        snapshot(id17CompatLocalStandManual) {
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
+            onDependencyFailure = FailureAction.FAIL_TO_START
+        }
+        snapshot(id18CompatLocalStandGitModeAuto) {
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
             onDependencyFailure = FailureAction.FAIL_TO_START
         }
     }
@@ -1400,6 +1454,7 @@ object id60DeployToOkdQaGhAuto : BuildType({
     dependencies {
         snapshot(id50ReleasePostProcessingAuto) {
             onDependencyFailure = FailureAction.FAIL_TO_START
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
         }
     }
 })
@@ -1473,6 +1528,7 @@ object id70DeployToOkdProdManual_2 : BuildType({
     dependencies {
         snapshot(id60DeployToOkdQaGhAuto) {
             onDependencyFailure = FailureAction.FAIL_TO_START
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
         }
     }
 })
