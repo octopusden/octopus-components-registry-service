@@ -6,7 +6,9 @@ import java.util.UUID
  * @property hasCdReleaseBuild true when the project has a non-paused buildType inheriting
  *  from the configured CDRelease template ([TeamcityProperties.SyncProperties.cdReleaseTemplateId]).
  *  [TeamcitySyncService] uses it as the tie-breaker among projects sharing a `COMPONENT_NAME`
- *  and [projectVersion] (flagged one, or smallest id, wins).
+ *  and [projectVersion]: only projects flagged `true` are eligible, and the smallest id among
+ *  those wins. Smallest-id ordering applies **only** after filtering to flagged projects — a
+ *  group with no flagged project is left unresolved (skipped), not resolved by id.
  * @property projectVersion the TC `PROJECT_VERSION` parameter, or null when absent. A component
  *  may own one project per release line; [TeamcitySyncService] groups candidates by this value.
  */

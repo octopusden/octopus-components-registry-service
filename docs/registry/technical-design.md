@@ -361,7 +361,7 @@ The fallback path is exercised by code paths that don't carry a request context.
 - **Release line:** the project's line is its `PROJECT_VERSION` parameter; when absent on the project it falls back to the first non-paused buildType that declares it. A component may own **one row per distinct `PROJECT_VERSION` line** (persisted in `project_version`, ordered by version then id for a stable `sort_order`).
 - **Null-version discard:** if any candidate for a component declares a `PROJECT_VERSION`, the null-version ("line-less") candidates are dropped; nulls are kept only when every candidate is null (the single default line).
 - **Per-line tie-break:** when a line has >1 candidate, keep those owning a **non-paused** CDRelease build (`teamcity.sync.cd-release-template-id`, default `CDRelease`), then the lexicographically smallest project id; a line where no candidate has a release build is left unresolved and counted `skipped_ambiguous`.
-- **URL guard:** a winner without a usable `http(s)` `webUrl` is dropped (counts `skipped_no_match`).
+- **URL guard:** a winner without a usable `http(s)` `webUrl` is dropped. Counters are per **component**, not per line: dropping one line's winner does not by itself count `skipped_no_match`. The component still counts `updated`/`unchanged` if another line has a usable winner, `skipped_ambiguous` if another line was left unresolved, and `skipped_no_match` only when no line yields a usable winner and none was ambiguous.
 
 ### 6.5 Backward Compatibility
 - v1/v2/v3 endpoints: **permit all** (existing 7+ Feign client consumers don't send JWT).
