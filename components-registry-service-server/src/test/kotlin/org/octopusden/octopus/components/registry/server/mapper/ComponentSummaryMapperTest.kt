@@ -11,8 +11,9 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentConfigu
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentLabelEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentSystemEntity
-import org.octopusden.octopus.components.registry.server.entity.ComponentTeamcityProjectEntity
+import org.octopusden.octopus.components.registry.server.entity.TeamcityProjectEntity
 import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
+import org.octopusden.octopus.components.registry.server.entity.VersionLineEntity
 import java.util.UUID
 
 /**
@@ -312,12 +313,11 @@ class ComponentSummaryMapperTest {
     @DisplayName("TC project propagates id and computed URL to summary")
     fun tcProject_propagatesIdAndUrl() {
         val component = minimalComponent()
-        component.teamcityProjects.add(
-            ComponentTeamcityProjectEntity(
+        component.versionLines.add(
+            VersionLineEntity(
                 id = UUID.randomUUID(),
                 component = component,
-                projectId = "MyProject_Alpha",
-                sortOrder = 0,
+                teamcityProject = TeamcityProjectEntity(id = UUID.randomUUID(), projectId = "MyProject_Alpha"),
             ),
         )
 
@@ -330,12 +330,11 @@ class ComponentSummaryMapperTest {
     @DisplayName("blank TC base URL → teamcityProjectUrl null even when project configured")
     fun tcProject_blankBaseUrl_urlNull() {
         val component = minimalComponent()
-        component.teamcityProjects.add(
-            ComponentTeamcityProjectEntity(
+        component.versionLines.add(
+            VersionLineEntity(
                 id = UUID.randomUUID(),
                 component = component,
-                projectId = "Proj",
-                sortOrder = 0,
+                teamcityProject = TeamcityProjectEntity(id = UUID.randomUUID(), projectId = "Proj"),
             ),
         )
 
@@ -346,20 +345,18 @@ class ComponentSummaryMapperTest {
     @DisplayName("multiple TC projects → project with lowest sortOrder is picked")
     fun multipleTcProjects_firstBySortOrderPicked() {
         val component = minimalComponent()
-        component.teamcityProjects.add(
-            ComponentTeamcityProjectEntity(
+        component.versionLines.add(
+            VersionLineEntity(
                 id = UUID.randomUUID(),
                 component = component,
-                projectId = "Proj_B",
-                sortOrder = 2,
+                teamcityProject = TeamcityProjectEntity(id = UUID.randomUUID(), projectId = "Proj_B"),
             ),
         )
-        component.teamcityProjects.add(
-            ComponentTeamcityProjectEntity(
+        component.versionLines.add(
+            VersionLineEntity(
                 id = UUID.randomUUID(),
                 component = component,
-                projectId = "Proj_A",
-                sortOrder = 1,
+                teamcityProject = TeamcityProjectEntity(id = UUID.randomUUID(), projectId = "Proj_A"),
             ),
         )
 

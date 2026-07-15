@@ -37,7 +37,7 @@ class ExternalTcProjectFetcherTest {
         val projects = listOf(tcProject(id = "Tc_Foo", webUrl = "http://tc/foo", componentName = "foo"))
         val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
         assertEquals(
-            mapOf(fooUuid to listOf(TcProject(id = "Tc_Foo", webUrl = "http://tc/foo", hasCdReleaseBuild = false))),
+            mapOf(fooUuid to listOf(TcProject(id = "Tc_Foo", hasCdReleaseBuild = false))),
             result,
         )
     }
@@ -103,7 +103,7 @@ class ExternalTcProjectFetcherTest {
         val projects = listOf(tcProject(id = "Tc_Foo", webUrl = "http://tc/foo", componentName = "  foo  "))
         val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
         assertEquals(
-            mapOf(fooUuid to listOf(TcProject(id = "Tc_Foo", webUrl = "http://tc/foo", hasCdReleaseBuild = false))),
+            mapOf(fooUuid to listOf(TcProject(id = "Tc_Foo", hasCdReleaseBuild = false))),
             result,
         )
     }
@@ -134,7 +134,7 @@ class ExternalTcProjectFetcherTest {
             cdReleaseTemplateId,
         )
         assertEquals(
-            mapOf(fooUuid to listOf(TcProject(id = "Tc_Dup", webUrl = "http://tc/dup", hasCdReleaseBuild = false))),
+            mapOf(fooUuid to listOf(TcProject(id = "Tc_Dup", hasCdReleaseBuild = false))),
             result,
         )
     }
@@ -155,8 +155,8 @@ class ExternalTcProjectFetcherTest {
             cdReleaseTemplateId,
         )
         assertEquals(2, result.size)
-        assertEquals(listOf(TcProject(id = "Tc_Foo", webUrl = "http://tc/foo", hasCdReleaseBuild = false)), result[fooUuid])
-        assertEquals(listOf(TcProject(id = "Tc_Bar", webUrl = "http://tc/bar", hasCdReleaseBuild = false)), result[barUuid])
+        assertEquals(listOf(TcProject(id = "Tc_Foo", hasCdReleaseBuild = false)), result[fooUuid])
+        assertEquals(listOf(TcProject(id = "Tc_Bar", hasCdReleaseBuild = false)), result[barUuid])
     }
 
     @Test
@@ -313,7 +313,6 @@ class ExternalTcProjectFetcherTest {
         val result = mapTcProjectsToComponentMatches(response.projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
         val tcProject = result[fooUuid]?.single() ?: error("expected exactly one match for foo")
         assertEquals("Tc_Foo", tcProject.id)
-        assertEquals("http://tc/foo", tcProject.webUrl)
         assertEquals(true, tcProject.hasCdReleaseBuild)
     }
 
@@ -321,10 +320,10 @@ class ExternalTcProjectFetcherTest {
     @DisplayName("PROJECT_VERSION parameter is parsed onto TcProject.projectVersion")
     fun projectVersionParsed() {
         val projects = listOf(
-            tcProject(id = "Tc_Foo", webUrl = "http://tc/foo", componentName = "foo", projectVersion = "2.x"),
+            tcProject(id = "Tc_Foo", webUrl = "http://tc/foo", componentName = "foo", projectVersion = "2.4"),
         )
         val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
-        assertEquals("2.x", result[fooUuid]!!.single().projectVersion)
+        assertEquals("2.4", result[fooUuid]!!.single().projectVersion)
     }
 
     @Test
@@ -359,26 +358,26 @@ class ExternalTcProjectFetcherTest {
                 webUrl = "http://tc/foo",
                 componentName = "foo",
                 projectVersion = "%A%",
-                extraParams = mapOf("A" to "%B%", "B" to "3.x"),
+                extraParams = mapOf("A" to "%B%", "B" to "3.4"),
             ),
         )
         val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
-        assertEquals("3.x", result[fooUuid]!!.single().projectVersion)
+        assertEquals("3.4", result[fooUuid]!!.single().projectVersion)
     }
 
     @Test
-    @DisplayName("unknown %reference% is left as a literal token")
-    fun unknownReferenceLeftLiteral() {
+    @DisplayName("unresolved %reference% yields a null projectVersion (not a literal token)")
+    fun unresolvedReferenceIsNull() {
         val projects = listOf(
             tcProject(id = "Tc_Foo", webUrl = "http://tc/foo", componentName = "foo", projectVersion = "%MISSING%"),
         )
         val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
-        assertEquals("%MISSING%", result[fooUuid]!!.single().projectVersion)
+        assertEquals(null, result[fooUuid]!!.single().projectVersion)
     }
 
     @Test
-    @DisplayName("cyclic reference terminates and leaves the cycle token as a literal")
-    fun cyclicReferenceTerminates() {
+    @DisplayName("cyclic reference terminates and yields a null projectVersion")
+    fun cyclicReferenceIsNull() {
         val projects = listOf(
             tcProject(
                 id = "Tc_Foo",
@@ -389,8 +388,28 @@ class ExternalTcProjectFetcherTest {
             ),
         )
         val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
-        // Self-cycle A→%A% cannot resolve; the token is preserved (no infinite loop).
-        assertEquals("%A%", result[fooUuid]!!.single().projectVersion)
+        // Self-cycle A→%A% can't resolve; unresolved → null (no infinite loop).
+        assertEquals(null, result[fooUuid]!!.single().projectVersion)
+    }
+
+    @Test
+    @DisplayName("resolved value that is not a version format yields null")
+    fun nonVersionFormatIsNull() {
+        val projects = listOf(
+            tcProject(id = "Tc_Foo", webUrl = "http://tc/foo", componentName = "foo", projectVersion = "release-x"),
+        )
+        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
+        assertEquals(null, result[fooUuid]!!.single().projectVersion)
+    }
+
+    @Test
+    @DisplayName("version formats like 03.64.53-2 are accepted verbatim")
+    fun dashedNumericVersionAccepted() {
+        val projects = listOf(
+            tcProject(id = "Tc_Foo", webUrl = "http://tc/foo", componentName = "foo", projectVersion = "03.64.53-2"),
+        )
+        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
+        assertEquals("03.64.53-2", result[fooUuid]!!.single().projectVersion)
     }
 
     @Test
@@ -401,12 +420,12 @@ class ExternalTcProjectFetcherTest {
                 id = "Tc_Foo",
                 webUrl = "http://tc/foo",
                 componentName = "foo",
-                extraParams = mapOf("LINE" to "2.x"), // defined at project scope
+                extraParams = mapOf("LINE" to "2.4"), // defined at project scope
                 buildTypes = listOf(buildType(id = "Active", projectVersion = "%LINE%")),
             ),
         )
         val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
-        assertEquals("2.x", result[fooUuid]!!.single().projectVersion)
+        assertEquals("2.4", result[fooUuid]!!.single().projectVersion)
     }
 
     @Test
@@ -419,14 +438,14 @@ class ExternalTcProjectFetcherTest {
                 componentName = "foo",
                 buildTypes = listOf(
                     // Paused buildType's version is ignored...
-                    buildType(id = "Paused_1x", paused = true, projectVersion = "1.x"),
+                    buildType(id = "Paused_1x", paused = true, projectVersion = "1.2"),
                     // ...first non-paused one wins.
-                    buildType(id = "Active_2x", projectVersion = "2.x"),
+                    buildType(id = "Active_2x", projectVersion = "2.4"),
                 ),
             ),
         )
         val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
-        assertEquals("2.x", result[fooUuid]!!.single().projectVersion)
+        assertEquals("2.4", result[fooUuid]!!.single().projectVersion)
     }
 
     @Test
@@ -437,12 +456,12 @@ class ExternalTcProjectFetcherTest {
                 id = "Tc_Foo",
                 webUrl = "http://tc/foo",
                 componentName = "foo",
-                projectVersion = "1.x",
-                buildTypes = listOf(buildType(id = "Active_2x", projectVersion = "2.x")),
+                projectVersion = "1.2",
+                buildTypes = listOf(buildType(id = "Active_2x", projectVersion = "2.4")),
             ),
         )
         val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
-        assertEquals("1.x", result[fooUuid]!!.single().projectVersion)
+        assertEquals("1.2", result[fooUuid]!!.single().projectVersion)
     }
 
     @Test

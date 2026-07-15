@@ -183,7 +183,7 @@ class ComponentEntity(
     var securityGroups: MutableList<DistributionSecurityGroupEntity> = mutableListOf(),
     @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
     @BatchSize(size = BATCH_FETCH_SIZE)
-    var teamcityProjects: MutableList<ComponentTeamcityProjectEntity> = mutableListOf(),
+    var versionLines: MutableList<VersionLineEntity> = mutableListOf(),
     @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
     @BatchSize(size = BATCH_FETCH_SIZE)
     var docLinks: MutableList<ComponentDocLinkEntity> = mutableListOf(),

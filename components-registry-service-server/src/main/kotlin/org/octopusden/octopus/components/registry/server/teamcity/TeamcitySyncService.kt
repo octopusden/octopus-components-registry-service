@@ -3,9 +3,11 @@ package org.octopusden.octopus.components.registry.server.teamcity
 import mu.KotlinLogging
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
-import org.octopusden.octopus.components.registry.server.entity.ComponentTeamcityProjectEntity
+import org.octopusden.octopus.components.registry.server.entity.TeamcityProjectEntity
+import org.octopusden.octopus.components.registry.server.entity.VersionLineEntity
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
-import org.octopusden.octopus.components.registry.server.repository.ComponentTeamcityProjectRepository
+import org.octopusden.octopus.components.registry.server.repository.TeamcityProjectRepository
+import org.octopusden.octopus.components.registry.server.repository.VersionLineRepository
 import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
@@ -21,29 +23,25 @@ import java.util.UUID
  *    that carries a `COMPONENT_NAME` parameter (any value), then group the
  *    response client-side by the parameter value.
  * 3. For each component:
- *      - 0 matches → no write. Any existing rows in `component_teamcity_projects`
- *        are preserved as-is (the sync path only writes when [applyMatch]
- *        actually runs, and it only runs for components with a non-null TC
- *        `pick`). To clear a curated assignment, the operator deletes the
- *        row via the v4 API. The `skippedNoMatch` counter increments for
- *        every such component regardless of whether the existing rows hold
- *        operator-curated data — it reports "no TC match this run", not
- *        "no link in the DB".
+ *      - 0 matches → no write. Existing `version_line` rows are preserved as-is (the
+ *        sync path only writes when [applyMatch] runs). To clear a curated assignment,
+ *        the operator deletes it via the v4 API. `skippedNoMatch` reports "no TC match
+ *        this run", not "no link in the DB".
  *      - ≥1 match →
  *          - If any candidate has a `PROJECT_VERSION`,
  *            drop the null-version ones (nulls kept only when all are null).
  *          - Group survivors by version and keep one project per line:
  *            single candidate wins; on ties prefer a `hasCdReleaseBuild` project then the smallest id;
  *            a tie with no release build leaves that line unresolved.
- *          - Winners need a usable http(s) webUrl.
- *            Count the component once: `updated`/`unchanged` (+`ambiguousAutoResolved`
+ *          - Count the component once: `updated`/`unchanged` (+`ambiguousAutoResolved`
  *            if a line was tie-broken), else `skippedAmbiguous` (a line unresolved),
  *            else `skippedNoMatch`.
  *
- * Writes one row per PROJECT_VERSION line into the `component_teamcity_projects`
- * child table (each row stores `project_version`), ordered by version then id.
+ * Persistence (schema): each kept line is a `version_line` row (component + version)
+ * pointing at a deduplicated `teamcity_project` (unique `project_id`). The web URL is
+ * not stored — it is composed from the project id at read time.
  *
- * Idempotent: only writes when the matched project id actually changes. The
+ * Idempotent: only writes when the matched project set actually changes. The
  * change is traced via an INFO log line (so admins can find the source of a
  * write) but deliberately does NOT write an `audit_log` row: TeamCity sync is an
  * automated reconciliation, and one such row per re-linked component was noise
@@ -62,7 +60,8 @@ import java.util.UUID
 @Service
 class TeamcitySyncService(
     private val componentRepository: ComponentRepository,
-    private val componentTeamcityProjectRepository: ComponentTeamcityProjectRepository,
+    private val versionLineRepository: VersionLineRepository,
+    private val teamcityProjectRepository: TeamcityProjectRepository,
     private val tcProjectFetcher: TcProjectFetcher,
     // Retained as the audit seam even though TeamCity sync is deliberately NOT
     // audited (SYS-051): TeamcitySyncServiceTest injects a recording publisher
@@ -152,33 +151,23 @@ class TeamcitySyncService(
                     .groupBy { it.projectVersion }
                     .map { (version, group) -> resolveVersionGroup(component, componentId, version, group) }
                 val ambiguousLineCount = resolutions.count { it.ambiguousUnresolved }
-                val resolvedPicks = resolutions.mapNotNull { it.pick }
-
-                // URL guard: a pick we cannot render a safe http(s) link for is dropped.
-                val (usablePicks, unusablePicks) = resolvedPicks.partition { it.project.isUsableUrl() }
-                unusablePicks.forEach { p ->
-                    log.warn {
-                        "TC sync: component '${component.componentKey}' (id=$componentId) matched TC " +
-                            "project '${p.project.id}' (version=${p.project.projectVersion}) but webUrl " +
-                            "'${p.project.webUrl}' is blank or not http/https; dropping it."
-                    }
-                }
+                val picks = resolutions.mapNotNull { it.pick }
 
                 when {
-                    usablePicks.isNotEmpty() -> {
-                        val didChange = applyMatch(component, usablePicks.map { it.project }, changedBy)
+                    picks.isNotEmpty() -> {
+                        val didChange = applyMatch(component, picks.map { it.project }, changedBy)
                         if (didChange) updated++ else unchanged++
                         // Sub-counter of updated+unchanged: at least one line needed a tie-break.
-                        if (usablePicks.any { it.tieBroken }) ambiguousAutoResolved++
-                        // Partial failure: the component is linked, but some lines could not be
-                        // (ambiguous, or a winner with an unusable URL). The component-level
-                        // skipped_* counters do NOT reflect this, so surface it separately.
-                        droppedLines += ambiguousLineCount + unusablePicks.size
+                        if (picks.any { it.tieBroken }) ambiguousAutoResolved++
+                        // Partial failure: the component is linked, but some lines were left
+                        // unresolved (ambiguous). The component-level skipped_* counters do NOT
+                        // reflect this, so surface it separately.
+                        droppedLines += ambiguousLineCount
                     }
 
-                    // No linkable winner at all: ambiguous if a line was left unresolved, else
-                    // no-match. Lines lost here are represented by these component-level counters,
-                    // NOT by droppedLines (which is only for otherwise-linked components).
+                    // No winner at all: ambiguous if a line was left unresolved, else no-match.
+                    // Lines lost here are represented by these component-level counters, NOT by
+                    // droppedLines (which is only for otherwise-linked components).
                     ambiguousLineCount > 0 -> {
                         skippedAmbiguous++
                     }
@@ -232,9 +221,6 @@ class TeamcitySyncService(
         val ambiguousUnresolved: Boolean,
     )
 
-    /** True when webUrl is a usable http(s) link we can safely render. */
-    private fun TcProject.isUsableUrl(): Boolean = webUrl.isNotBlank() && (webUrl.startsWith("http://") || webUrl.startsWith("https://"))
-
     /**
      * Resolve one PROJECT_VERSION group to at most one project: a single candidate wins;
      * with several, keep those with a CDRelease build and take the smallest id. If none
@@ -280,11 +266,11 @@ class TeamcitySyncService(
     }
 
     /**
-     * Reconcile the component's rows to exactly [matches] (one per PROJECT_VERSION line).
-     * Rows are written ordered by version (nulls last) then id, so `sortOrder` is stable
-     * and idempotency is a plain ordered compare of (projectId, projectVersion): unchanged
-     * → no write, returns false; otherwise wipe all existing rows and insert the fresh set,
-     * returns true. Traced to the log, not `audit_log` (SYS-051).
+     * Reconcile the component's `version_line` rows to exactly [matches] (one per
+     * PROJECT_VERSION line). Idempotency is a set compare of (projectId, version): unchanged
+     * → no write, returns false; otherwise wipe all existing lines and insert the fresh set,
+     * each pointing at a deduplicated `teamcity_project` (find-or-create by project id).
+     * Traced to the log, not `audit_log` (SYS-051).
      */
     private fun applyMatch(
         component: ComponentEntity,
@@ -292,26 +278,25 @@ class TeamcitySyncService(
         changedBy: String,
     ): Boolean {
         val componentId = component.id!!
-        val existing = componentTeamcityProjectRepository.findByComponentId(componentId)
+        val existing = versionLineRepository.findByComponentId(componentId)
 
-        val desired = matches.sortedWith(
-            compareBy({ it.projectVersion == null }, { it.projectVersion.orEmpty() }, { it.id }),
-        )
-        val existingKeys = existing.sortedBy { it.sortOrder }.map { it.projectId to it.projectVersion }
-        val desiredKeys = desired.map { it.id to it.projectVersion }
+        // Order-independent identity: the set of (projectId, version) pairs.
+        val existingKeys = existing.map { it.teamcityProject.projectId to it.version }.toSet()
+        val desiredKeys = matches.map { it.id to it.projectVersion }.toSet()
         if (existingKeys == desiredKeys) {
-            // Nothing to do — same projects, same versions, same order.
+            // Nothing to do — same projects, same versions.
             return false
         }
 
-        if (existing.isNotEmpty()) componentTeamcityProjectRepository.deleteAllInBatch(existing)
-        desired.forEachIndexed { index, tc ->
-            componentTeamcityProjectRepository.save(
-                ComponentTeamcityProjectEntity(
+        if (existing.isNotEmpty()) versionLineRepository.deleteAllInBatch(existing)
+        matches.forEach { tc ->
+            val teamcityProject = teamcityProjectRepository.findByProjectId(tc.id)
+                ?: teamcityProjectRepository.save(TeamcityProjectEntity(projectId = tc.id))
+            versionLineRepository.save(
+                VersionLineEntity(
                     component = component,
-                    projectId = tc.id,
-                    projectVersion = tc.projectVersion,
-                    sortOrder = index,
+                    version = tc.projectVersion,
+                    teamcityProject = teamcityProject,
                 ),
             )
         }

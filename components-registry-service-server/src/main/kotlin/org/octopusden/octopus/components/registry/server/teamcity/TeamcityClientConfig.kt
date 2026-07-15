@@ -148,22 +148,27 @@ internal fun mapTcProjectsToComponentMatches(
             val hasCdRelease = projectHasCdReleaseBuild(project, cdReleaseTemplateId)
             uuid to TcProject(
                 id = project.id,
-                webUrl = project.webUrl,
                 hasCdReleaseBuild = hasCdRelease,
                 projectVersion = projectVersion,
             )
         }.groupBy({ it.first }, { it.second })
 
+// A release-line version: dot-separated numbers, optionally a `-N` suffix
+// (e.g. `1.2`, `2.2.4`, `03.64.53-2`). Resolved PROJECT_VERSION values that don't
+// match are treated as "no version" so junk/placeholder values never become a line.
+private val PROJECT_VERSION_FORMAT = Regex("""\d+(\.\d+)*(-\d+)?""")
+
 /**
  * Release line for a project: the project-level `PROJECT_VERSION`, else the first non-paused
- * buildType that declares one; null when neither has it. `%param%` references are resolved via
- * [resolveParam] (a buildType's own params overlaid on the project's).
+ * buildType that declares one; null when neither yields a valid version. `%param%` references
+ * are resolved via [resolveParam] (a buildType's own params overlaid on the project's), and an
+ * unresolved reference or a value not matching [PROJECT_VERSION_FORMAT] counts as no version.
  */
 private fun getProjectVersion(
     project: ExternalTeamcityProject,
     projectParams: Map<String, String>,
 ): String? {
-    resolveParam(PROJECT_VERSION_PARAM, projectParams)?.let { return it }
+    resolveProjectVersion(projectParams)?.let { return it }
 
     return project.buildTypes
         ?.buildTypes
@@ -172,12 +177,16 @@ private fun getProjectVersion(
         ?.firstNotNullOfOrNull { bt ->
             val own = bt.parameters.toParamMap()
             if (own.containsKey(PROJECT_VERSION_PARAM)) {
-                resolveParam(PROJECT_VERSION_PARAM, projectParams + own)
+                resolveProjectVersion(projectParams + own)
             } else {
                 null
             }
         }
 }
+
+/** Resolve `PROJECT_VERSION` from [params] and accept it only if it is a valid version string. */
+private fun resolveProjectVersion(params: Map<String, String>): String? =
+    resolveParam(PROJECT_VERSION_PARAM, params)?.takeIf { PROJECT_VERSION_FORMAT.matches(it) }
 
 // Matches a single TeamCity parameter reference: %name% (name is any run without a '%').
 private val PARAM_REFERENCE = Regex("%([^%]+)%")
@@ -190,20 +199,25 @@ private fun ExternalTeamcityProperties?.toParamMap(): Map<String, String> {
 }
 
 /**
- * Read [name] from [params], resolve any `%reference%` tokens, and return the trimmed
- * value (null when the parameter is absent or resolves to blank).
+ * Read [name] from [params], resolve any `%reference%` tokens, and return the trimmed value.
+ * Returns null when the parameter is absent, resolves to blank, or still contains an
+ * UNRESOLVED reference — i.e. a `%...%` token whose key was missing or formed a cycle. An
+ * unresolvable value is treated as "no value" (applies to both `COMPONENT_NAME` and
+ * `PROJECT_VERSION`).
  */
 private fun resolveParam(
     name: String,
     params: Map<String, String>,
 ): String? {
     val raw = params[name]?.trim()?.takeIf { it.isNotEmpty() } ?: return null
-    return resolveReferences(raw, params, emptySet()).trim().takeIf { it.isNotEmpty() }
+    val resolved = resolveReferences(raw, params, emptySet()).trim()
+    return resolved.takeIf { it.isNotEmpty() && !PARAM_REFERENCE.containsMatchIn(it) }
 }
 
 /**
  * Recursively expand `%param%` references in [value] against [params]. A missing key or a
- * cyclic reference (tracked via [seen]) is left as the literal `%token%`, so this always terminates.
+ * cyclic reference (tracked via [seen]) is left as the literal `%token%` (and [resolveParam]
+ * then rejects the whole value), so this always terminates.
  */
 private fun resolveReferences(
     value: String,

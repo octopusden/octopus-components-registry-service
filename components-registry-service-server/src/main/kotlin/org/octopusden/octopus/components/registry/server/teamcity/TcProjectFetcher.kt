@@ -14,7 +14,6 @@ import java.util.UUID
  */
 data class TcProject(
     val id: String,
-    val webUrl: String,
     val hasCdReleaseBuild: Boolean,
     val projectVersion: String? = null,
 )
