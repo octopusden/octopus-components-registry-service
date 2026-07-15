@@ -171,6 +171,8 @@ class TeamcitySyncServiceTest {
         assertEquals(0, result.unchanged)
         assertEquals(1, result.skippedAmbiguous)
         assertEquals(0, result.ambiguousAutoResolved)
+        // Fully-skipped component: the ambiguous line is reflected in skippedAmbiguous, NOT droppedLines.
+        assertEquals(0, result.droppedLines)
         assertTrue(tcRepo.findByComponentId(alice).isEmpty(), "ambiguous + no CDRelease → no TC row written")
         assertTrue(publisher.events.isEmpty())
     }
@@ -494,6 +496,8 @@ class TeamcitySyncServiceTest {
         // Component counts as updated because at least one line produced a usable winner.
         assertEquals(1, result.updated)
         assertEquals(0, result.skippedAmbiguous)
+        // The dropped 2.x line is invisible to skippedAmbiguous but counted here (partial failure).
+        assertEquals(1, result.droppedLines)
         val rows = tcRepo.findByComponentId(alice)
         assertEquals(listOf("Alpha_1x"), rows.map { it.projectId })
     }

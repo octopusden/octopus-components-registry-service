@@ -35,16 +35,10 @@ private const val PROJECT_VERSION_PARAM = "PROJECT_VERSION"
 // Direct buildTypes only — sub-projects are not walked, on the convention that
 // the project carrying COMPONENT_NAME also owns the release build.
 private const val BUILD_TYPE_REQUIRED = "id,name,projectId,projectName,href"
-
-// Direct buildTypes also request `paused` (to ignore paused release builds) and
-// `parameters` (to read PROJECT_VERSION from a buildType — see [getProjectVersion]);
-// templates keep the base field set. `archived` is requested per project so archived
-// projects can be dropped client-side (see [mapTcProjectsToComponentMatches]).
-private const val BUILD_TYPE_WITH_PAUSED = "$BUILD_TYPE_REQUIRED,paused,parameters(property(name,value))"
 private const val PROJECT_FIELDS =
     "project(id,name,webUrl,href,archived," +
         "parameters(property(name,value))," +
-        "buildTypes(buildType($BUILD_TYPE_WITH_PAUSED," +
+        "buildTypes(buildType($BUILD_TYPE_REQUIRED,paused,parameters(property(name,value))," +
         "template($BUILD_TYPE_REQUIRED)," +
         "templates(buildType($BUILD_TYPE_REQUIRED)))))"
 
@@ -177,8 +171,6 @@ private fun getProjectVersion(
         ?.filter { it.paused != true }
         ?.firstNotNullOfOrNull { bt ->
             val own = bt.parameters.toParamMap()
-            // Only buildTypes that DECLARE the parameter themselves are considered;
-            // references are resolved against project params overlaid by the buildType's.
             if (own.containsKey(PROJECT_VERSION_PARAM)) {
                 resolveParam(PROJECT_VERSION_PARAM, projectParams + own)
             } else {
@@ -234,7 +226,6 @@ private fun projectHasCdReleaseBuild(
 ): Boolean =
     project.buildTypes
         ?.buildTypes
-        // A paused build config cannot represent an active release build.
         ?.filter { it.paused != true }
         ?.any { bt ->
             bt.template?.id == cdReleaseTemplateId ||

@@ -21,16 +21,24 @@ import java.util.UUID
  *    that carries a `COMPONENT_NAME` parameter (any value), then group the
  *    response client-side by the parameter value.
  * 3. For each component:
- *      - 0 matches → no write; existing rows are kept (clear via the v4 API).
- *        Counted `skippedNoMatch`.
- *      - ≥1 match → if any candidate has a `PROJECT_VERSION`, drop the null-version
- *        ones (nulls kept only when all are null). Group survivors by version and
- *        keep one project per line: single candidate wins; on ties prefer a
- *        `hasCdReleaseBuild` project then the smallest id; a tie with no release
- *        build leaves that line unresolved. Winners need a usable http(s) webUrl.
- *        Count the component once: `updated`/`unchanged` (+`ambiguousAutoResolved`
- *        if a line was tie-broken), else `skippedAmbiguous` (a line unresolved),
- *        else `skippedNoMatch`.
+ *      - 0 matches → no write. Any existing rows in `component_teamcity_projects`
+ *        are preserved as-is (the sync path only writes when [applyMatch]
+ *        actually runs, and it only runs for components with a non-null TC
+ *        `pick`). To clear a curated assignment, the operator deletes the
+ *        row via the v4 API. The `skippedNoMatch` counter increments for
+ *        every such component regardless of whether the existing rows hold
+ *        operator-curated data — it reports "no TC match this run", not
+ *        "no link in the DB".
+ *      - ≥1 match →
+ *          - If any candidate has a `PROJECT_VERSION`,
+ *            drop the null-version ones (nulls kept only when all are null).
+ *          - Group survivors by version and keep one project per line:
+ *            single candidate wins; on ties prefer a `hasCdReleaseBuild` project then the smallest id;
+ *            a tie with no release build leaves that line unresolved.
+ *          - Winners need a usable http(s) webUrl.
+ *            Count the component once: `updated`/`unchanged` (+`ambiguousAutoResolved`
+ *            if a line was tie-broken), else `skippedAmbiguous` (a line unresolved),
+ *            else `skippedNoMatch`.
  *
  * Writes one row per PROJECT_VERSION line into the `component_teamcity_projects`
  * child table (each row stores `project_version`), ordered by version then id.
@@ -126,6 +134,7 @@ class TeamcitySyncService(
         var skippedNoMatch = 0
         var skippedAmbiguous = 0
         var ambiguousAutoResolved = 0
+        var droppedLines = 0
         val errors = mutableListOf<String>()
 
         for (component in components) {
@@ -142,7 +151,7 @@ class TeamcitySyncService(
                 val resolutions = candidates
                     .groupBy { it.projectVersion }
                     .map { (version, group) -> resolveVersionGroup(component, componentId, version, group) }
-                val ambiguousUnresolved = resolutions.any { it.ambiguousUnresolved }
+                val ambiguousLineCount = resolutions.count { it.ambiguousUnresolved }
                 val resolvedPicks = resolutions.mapNotNull { it.pick }
 
                 // URL guard: a pick we cannot render a safe http(s) link for is dropped.
@@ -161,10 +170,16 @@ class TeamcitySyncService(
                         if (didChange) updated++ else unchanged++
                         // Sub-counter of updated+unchanged: at least one line needed a tie-break.
                         if (usablePicks.any { it.tieBroken }) ambiguousAutoResolved++
+                        // Partial failure: the component is linked, but some lines could not be
+                        // (ambiguous, or a winner with an unusable URL). The component-level
+                        // skipped_* counters do NOT reflect this, so surface it separately.
+                        droppedLines += ambiguousLineCount + unusablePicks.size
                     }
 
-                    // No linkable winner: ambiguous if a line was left unresolved, else no-match.
-                    ambiguousUnresolved -> {
+                    // No linkable winner at all: ambiguous if a line was left unresolved, else
+                    // no-match. Lines lost here are represented by these component-level counters,
+                    // NOT by droppedLines (which is only for otherwise-linked components).
+                    ambiguousLineCount > 0 -> {
                         skippedAmbiguous++
                     }
 
@@ -185,7 +200,8 @@ class TeamcitySyncService(
         log.info {
             "TC sync done: scanned=$scanned, updated=$updated, unchanged=$unchanged, " +
                 "skippedNoMatch=$skippedNoMatch, skippedAmbiguous=$skippedAmbiguous, " +
-                "ambiguousAutoResolved=$ambiguousAutoResolved, errors=${errors.size}"
+                "ambiguousAutoResolved=$ambiguousAutoResolved, droppedLines=$droppedLines, " +
+                "errors=${errors.size}"
         }
         return TeamcitySyncResult(
             scanned = scanned,
@@ -194,6 +210,7 @@ class TeamcitySyncService(
             skippedNoMatch = skippedNoMatch,
             skippedAmbiguous = skippedAmbiguous,
             ambiguousAutoResolved = ambiguousAutoResolved,
+            droppedLines = droppedLines,
             errors = errors.toList(),
         )
     }

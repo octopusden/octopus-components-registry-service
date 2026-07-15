@@ -47,8 +47,8 @@ import java.time.Instant
  * TeamcityClient bean wiring (which would attempt outbound HTTP if base-url
  * were ever set). Asserts cover 202/409 attach + 409 cross-kind envelope on
  * POST, and 200/404 polling on GET, including the snake_case
- * `skipped_no_match` / `skipped_ambiguous` / `ambiguous_auto_resolved` keys in
- * the COMPLETED `result`.
+ * `skipped_no_match` / `skipped_ambiguous` / `ambiguous_auto_resolved` /
+ * `dropped_lines` keys in the COMPLETED `result`.
  *
  * Other migration job services are @MockBean'd to keep this test scoped to
  * the resync paths — same convention as AdminControllerV4SecurityTest.
@@ -245,6 +245,7 @@ class TeamcityResyncControllerTest {
                 skippedNoMatch = 0,
                 skippedAmbiguous = 0,
                 ambiguousAutoResolved = 0,
+                droppedLines = 0,
                 errors = emptyList(),
             )
         `when`(teamcitySyncJobService.current())
@@ -270,6 +271,7 @@ class TeamcityResyncControllerTest {
             .andExpect(jsonPath("$.result.skipped_no_match").value(0))
             .andExpect(jsonPath("$.result.skipped_ambiguous").value(0))
             .andExpect(jsonPath("$.result.ambiguous_auto_resolved").value(0))
+            .andExpect(jsonPath("$.result.dropped_lines").value(0))
     }
 
     private fun runningState(jobId: String) =

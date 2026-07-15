@@ -395,7 +395,7 @@ All v1-v3 endpoints implemented as adapters over the new schema. Mapper rules:
 | `name` (v1-v3) | `components.component_key` (rename in mapper) |
 | `componentKey` (v4) | `components.component_key` direct |
 | `repositoryType` | `vcs_settings_entries.repository_type`; NULL → default GIT |
-| `teamcityProjectUrl` | Computed at mapper: `<teamcity-base>/project/<project_id>` (see `composeTeamcityProjectUrl`) |
+| `teamcityProjectUrl` | Computed at mapper: `<teamcity-base>/project/<project_id>` |
 | `hotfixVersionFormat` (jira) | `components.jira_hotfix_version_format`; UI read-only |
 | `escrow.buildTask` (legacy) | `component_configurations.build_tasks` (consolidated) |
 | `doc: {component, majorVersion}` (singular) | `component_doc_links` filtered: for requested version X.Y.Z, pick row WHERE `major_version = 'X.Y'`; else fall back to row WHERE `major_version IS NULL`; else null |
