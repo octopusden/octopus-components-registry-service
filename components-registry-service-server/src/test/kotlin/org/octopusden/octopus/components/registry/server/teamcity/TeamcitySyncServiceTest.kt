@@ -78,8 +78,10 @@ class TeamcitySyncServiceTest {
 
     private fun configuredProperties() = TeamcityProperties(baseUrl = "https://teamcity.example.com")
 
-    private fun projectIds(repo: StubVersionLineRepository, componentId: UUID): List<String> =
-        repo.findByComponentId(componentId).map { it.teamcityProject.projectId }.sorted()
+    private fun projectIds(
+        repo: StubVersionLineRepository,
+        componentId: UUID,
+    ): List<String> = repo.findByComponentId(componentId).map { it.teamcityProject.projectId }.sorted()
 
     // ---------- Tests --------------------------------------------------------
 
@@ -102,7 +104,13 @@ class TeamcitySyncServiceTest {
         assertEquals(0, result.skippedNoMatch)
         assertEquals(0, result.skippedAmbiguous)
         assertTrue(result.errors.isEmpty())
-        assertEquals("Alpha_Build", vlRepo.findByComponentId(alice).single().teamcityProject.projectId)
+        assertEquals(
+            "Alpha_Build",
+            vlRepo
+                .findByComponentId(alice)
+                .single()
+                .teamcityProject.projectId,
+        )
         assertTrue(
             publisher.events.filterIsInstance<AuditEvent>().isEmpty(),
             "TeamCity sync must not publish an AuditEvent (SYS-051)",
@@ -186,7 +194,13 @@ class TeamcitySyncServiceTest {
         assertEquals(1, result.updated)
         assertEquals(0, result.skippedAmbiguous)
         assertEquals(1, result.ambiguousAutoResolved)
-        assertEquals("Project_B_Release", vlRepo.findByComponentId(alice).single().teamcityProject.projectId)
+        assertEquals(
+            "Project_B_Release",
+            vlRepo
+                .findByComponentId(alice)
+                .single()
+                .teamcityProject.projectId,
+        )
         assertTrue(publisher.events.filterIsInstance<AuditEvent>().isEmpty(), "no AuditEvent (SYS-051)")
     }
 
@@ -214,7 +228,13 @@ class TeamcitySyncServiceTest {
         assertEquals(1, result.updated)
         assertEquals(0, result.skippedAmbiguous)
         assertEquals(1, result.ambiguousAutoResolved)
-        assertEquals("Project_A_Release", vlRepo.findByComponentId(alice).single().teamcityProject.projectId)
+        assertEquals(
+            "Project_A_Release",
+            vlRepo
+                .findByComponentId(alice)
+                .single()
+                .teamcityProject.projectId,
+        )
     }
 
     @Test
