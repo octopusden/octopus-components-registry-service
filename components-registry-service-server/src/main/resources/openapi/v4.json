@@ -2584,7 +2584,6 @@
             "type" : "string"
           },
           "projectVersion" : {
-            "nullable" : true,
             "type" : "string"
           },
           "sortOrder" : {
