@@ -6,17 +6,17 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class DeviceFlowClientTest {
-
     private val issuer = "https://kc.example/realms/crs"
     private val clientId = "crsctl-public"
 
     @Test
     fun `requestDeviceAuthorization parses response and posts client_id and scope`() {
-        val body = """
+        val body =
+            """
             {"device_code":"DC","user_code":"WXYZ-1234","verification_uri":"https://kc.example/device",
              "verification_uri_complete":"https://kc.example/device?user_code=WXYZ-1234",
              "expires_in":600,"interval":5}
-        """.trimIndent()
+            """.trimIndent()
         val ex = QueueExchange(listOf(200 to body))
         val client = DeviceFlowClient(exchange = ex, sleeper = RecordingSleeper())
 

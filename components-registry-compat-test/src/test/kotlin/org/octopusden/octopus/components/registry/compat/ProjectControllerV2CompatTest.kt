@@ -27,7 +27,6 @@ import java.util.stream.Stream
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class ProjectControllerV2CompatTest : CompatibilityTestBase() {
-
     private val mapper = jacksonObjectMapper()
 
     /** Discovered (or fallback) project keys shared by all test methods. */
@@ -112,10 +111,12 @@ class ProjectControllerV2CompatTest : CompatibilityTestBase() {
             // ADR-018: canonicalise the per-component range partition on BOTH sides (see CommonControllerV2CompatTest).
             val cls = JiraComponentVersionRangeDTO::class.java
             val baselineDto =
-                runCatching { mapper.readValue<Set<JiraComponentVersionRangeDTO>>(baseline.bodyBytes) }.getOrNull()
+                runCatching { mapper.readValue<Set<JiraComponentVersionRangeDTO>>(baseline.bodyBytes) }
+                    .getOrNull()
                     ?.let { VersionRangeMapCanonicalizer.canonicalizeTypedRangeArray(it.toList(), cls) }
             val candidateDto =
-                runCatching { mapper.readValue<Set<JiraComponentVersionRangeDTO>>(candidate.bodyBytes) }.getOrNull()
+                runCatching { mapper.readValue<Set<JiraComponentVersionRangeDTO>>(candidate.bodyBytes) }
+                    .getOrNull()
                     ?.let { VersionRangeMapCanonicalizer.canonicalizeTypedRangeArray(it.toList(), cls) }
             compareDto(endpoint, params, baselineDto, candidateDto)
         }
@@ -168,7 +169,10 @@ class ProjectControllerV2CompatTest : CompatibilityTestBase() {
 
     @ParameterizedTest(name = "GET /rest/api/2/projects/{0}/versions/{1}")
     @MethodSource("projectKeyVersionArgs")
-    fun `GET v2 project version jira-component must match`(projectKey: String, version: String) {
+    fun `GET v2 project version jira-component must match`(
+        projectKey: String,
+        version: String,
+    ) {
         val endpoint = "GET /rest/api/2/projects/{projectKey}/versions/{version}"
         val params = mapOf("projectKey" to projectKey, "version" to version)
         val (baseline, candidate) = fetchPair("/rest/api/2/projects/$projectKey/versions/$version")
@@ -198,7 +202,10 @@ class ProjectControllerV2CompatTest : CompatibilityTestBase() {
 
     @ParameterizedTest(name = "GET /rest/api/2/projects/{0}/versions/{1}/vcs-settings")
     @MethodSource("projectKeyVersionArgs")
-    fun `GET v2 project version vcs-settings must match`(projectKey: String, version: String) {
+    fun `GET v2 project version vcs-settings must match`(
+        projectKey: String,
+        version: String,
+    ) {
         val endpoint = "GET /rest/api/2/projects/{projectKey}/versions/{version}/vcs-settings"
         val params = mapOf("projectKey" to projectKey, "version" to version)
         val (baseline, candidate) = fetchPair("/rest/api/2/projects/$projectKey/versions/$version/vcs-settings")
@@ -226,7 +233,10 @@ class ProjectControllerV2CompatTest : CompatibilityTestBase() {
 
     @ParameterizedTest(name = "GET /rest/api/2/projects/{0}/versions/{1}/distribution")
     @MethodSource("projectKeyVersionArgs")
-    fun `GET v2 project version distribution must match`(projectKey: String, version: String) {
+    fun `GET v2 project version distribution must match`(
+        projectKey: String,
+        version: String,
+    ) {
         val endpoint = "GET /rest/api/2/projects/{projectKey}/versions/{version}/distribution"
         val params = mapOf("projectKey" to projectKey, "version" to version)
         val (baseline, candidate) = fetchPair("/rest/api/2/projects/$projectKey/versions/$version/distribution")
@@ -262,17 +272,17 @@ class ProjectControllerV2CompatTest : CompatibilityTestBase() {
     // MethodSource providers
     // -------------------------------------------------------------------------
 
-    private fun projectKeyArgs(): Stream<Arguments> =
-        projectKeys.map { Arguments.of(it) }.stream()
+    private fun projectKeyArgs(): Stream<Arguments> = projectKeys.map { Arguments.of(it) }.stream()
 
     /**
      * Cartesian product of (projectKey, version) using [PROBE_VERSION].
      * 404 symmetry is the assertion: if both sides 404, no diff recorded.
      */
     private fun projectKeyVersionArgs(): Stream<Arguments> =
-        projectKeys.flatMap { pk ->
-            PROBE_VERSIONS.map { v -> Arguments.of(pk, v) }
-        }.stream()
+        projectKeys
+            .flatMap { pk ->
+                PROBE_VERSIONS.map { v -> Arguments.of(pk, v) }
+            }.stream()
 
     companion object {
         /** Max number of project keys to exercise in smoke mode (no explicit maxComponents). */

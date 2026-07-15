@@ -10,6 +10,7 @@ import java.util.Locale
  * ordinal shift and unknown values read back gracefully. Validation happens at the
  * recorder / ingest boundary.
  */
+
 /**
  * Coarse split so the Admin "Events" tab can separate operational/system events from
  * product-usage events triggered by an end user (e.g. watching the onboarding video).
@@ -22,7 +23,9 @@ enum class ServiceEventCategory {
     USER,
 }
 
-enum class ServiceEventType(val category: ServiceEventCategory) {
+enum class ServiceEventType(
+    val category: ServiceEventCategory,
+) {
     /** A service process (re)started. `serviceVersion` carries the build version. */
     STARTUP(ServiceEventCategory.SYSTEM),
 
@@ -53,8 +56,7 @@ enum class ServiceEventType(val category: ServiceEventCategory) {
                 ?: ServiceEventCategory.SYSTEM
 
         /** Enum names whose category is [category] — for translating a category filter to an `event_type IN (…)`. */
-        fun namesOf(category: ServiceEventCategory): List<String> =
-            entries.filter { it.category == category }.map { it.name }
+        fun namesOf(category: ServiceEventCategory): List<String> = entries.filter { it.category == category }.map { it.name }
     }
 }
 
@@ -81,7 +83,6 @@ enum class ServiceEventSource {
     val wire: String get() = name.lowercase(Locale.ROOT)
 
     companion object {
-        fun fromWire(value: String): ServiceEventSource? =
-            entries.firstOrNull { it.name.equals(value, ignoreCase = true) }
+        fun fromWire(value: String): ServiceEventSource? = entries.firstOrNull { it.name.equals(value, ignoreCase = true) }
     }
 }

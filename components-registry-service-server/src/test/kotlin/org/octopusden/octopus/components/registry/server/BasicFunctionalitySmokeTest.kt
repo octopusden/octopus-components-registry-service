@@ -84,7 +84,8 @@ class BasicFunctionalitySmokeTest {
     @Test
     @DisplayName("smoke: GET /rest/api/4/components serves the JPA->H2 read path (no components -> 200)")
     fun `list endpoint returns ok with no components in h2`() {
-        mvc.perform(get("/rest/api/4/components").accept(APPLICATION_JSON))
+        mvc
+            .perform(get("/rest/api/4/components").accept(APPLICATION_JSON))
             .andExpect(status().isOk)
     }
 

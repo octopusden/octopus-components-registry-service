@@ -7,5 +7,6 @@ import java.util.UUID
 @Repository
 interface ComponentDocLinkRepository : JpaRepository<ComponentDocLinkEntity, UUID> {
     fun findByComponentId(componentId: UUID): List<ComponentDocLinkEntity>
+
     fun findByDocComponentKey(docComponentKey: String): List<ComponentDocLinkEntity>
 }

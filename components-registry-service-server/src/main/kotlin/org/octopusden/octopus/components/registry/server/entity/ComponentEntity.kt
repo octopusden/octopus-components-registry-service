@@ -99,13 +99,10 @@ class ComponentEntity(
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     var id: UUID? = null,
-
     @Column(name = "component_key", nullable = false, unique = true)
     var componentKey: String = "",
-
     @Column(name = "component_owner")
     var componentOwner: String? = null,
-
     // Nullable + unique (schema-spec). NULL when no componentDisplayName is declared —
     // this preserves the legacy v1/v2/v3 wire `$.name` (prod 2.0.87 served null for unnamed
     // components, so we do NOT backfill the key). UNIQUE applies to non-null values only
@@ -114,30 +111,23 @@ class ComponentEntity(
     // explicit+external components only) requiredness, mirroring the DSL validator.
     @Column(name = "display_name", unique = true)
     var displayName: String? = null,
-
     @Column(name = "product_type", length = 20)
     var productType: String? = null,
-
     @Column(name = "client_code")
     var clientCode: String? = null,
-
     @Column(name = "archived", nullable = false)
     var archived: Boolean = false,
-
     @Column(name = "solution")
     var solution: Boolean? = null,
-
     // Batched via the class-level @BatchSize on the TARGET entities (ComponentEntity for
     // parentComponent, ComponentGroupEntity for componentGroup) — to-one batch size is read
     // from the target class, not the field, so no field-level @BatchSize here.
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_component_id")
     var parentComponent: ComponentEntity? = null,
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "component_group_id")
     var componentGroup: ComponentGroupEntity? = null,
-
     // True when this component is referenced as a `parentComponent` by at least one
     // other component — i.e. it is eligible to be picked as a parent. This is the flat
     // peer-reference relationship and is INDEPENDENT of aggregator status: an
@@ -148,26 +138,19 @@ class ComponentEntity(
     // (enforced in the service layer) — single-level: a parent cannot have a parent.
     @Column(name = "can_be_parent", nullable = false)
     var canBeParent: Boolean = false,
-
     // releaseManager / securityChampion are no longer scalar columns — they
     // moved to the ordered child collections below (releaseManagers /
     // securityChampions). componentOwner stays a single-value scalar.
-
     @Column(name = "copyright", columnDefinition = "TEXT")
     var copyright: String? = null,
-
     @Column(name = "releases_in_default_branch")
     var releasesInDefaultBranch: Boolean? = null,
-
     @Column(name = "jira_display_name")
     var jiraDisplayName: String? = null,
-
     @Column(name = "jira_hotfix_version_format")
     var jiraHotfixVersionFormat: String? = null,
-
     @Column(name = "vcs_external_registry", columnDefinition = "TEXT")
     var vcsExternalRegistry: String? = null,
-
     // Dedicated replacement for the legacy `externalRegistry = "NOT_AVAILABLE"` sentinel
     // (Q12): when true, commit checks are skipped at release/RC issue-assignment. The
     // sentinel is NEVER stored — DSL import maps it here (with a NULL vcsExternalRegistry)
@@ -175,61 +158,46 @@ class ComponentEntity(
     // must be false when the effective BASE build system is WHISKEY (validated on write).
     @Column(name = "skip_commit_check", nullable = false)
     var skipCommitCheck: Boolean = false,
-
     @Column(name = "distribution_explicit")
     var distributionExplicit: Boolean? = null,
-
     @Column(name = "distribution_external")
     var distributionExternal: Boolean? = null,
-
     @Version
     @Column(name = "version", nullable = false)
     var version: Long = 0,
-
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     var createdAt: Instant? = null,
-
     @UpdateTimestamp
     @Column(name = "updated_at")
     var updatedAt: Instant? = null,
-
     // --- Bidirectional collections (parent-owned children) ---
-
     @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
     @BatchSize(size = BATCH_FETCH_SIZE)
     var configurations: MutableList<ComponentConfigurationEntity> = mutableListOf(),
-
     @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
     @BatchSize(size = BATCH_FETCH_SIZE)
     var artifactMappings: MutableList<ComponentArtifactMappingEntity> = mutableListOf(),
-
     @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
     @BatchSize(size = BATCH_FETCH_SIZE)
     var securityGroups: MutableList<DistributionSecurityGroupEntity> = mutableListOf(),
-
     @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
     @BatchSize(size = BATCH_FETCH_SIZE)
     var teamcityProjects: MutableList<ComponentTeamcityProjectEntity> = mutableListOf(),
-
     @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
     @BatchSize(size = BATCH_FETCH_SIZE)
     var docLinks: MutableList<ComponentDocLinkEntity> = mutableListOf(),
-
     // Ordered multi-value people. No `@OrderBy` — sort by `sortOrder` in the
     // accessors / mappers (matching the artifactIds / docLinks convention).
     @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
     @BatchSize(size = BATCH_FETCH_SIZE)
     var releaseManagers: MutableList<ComponentReleaseManagerEntity> = mutableListOf(),
-
     @OneToMany(mappedBy = "component", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
     @BatchSize(size = BATCH_FETCH_SIZE)
     var securityChampions: MutableList<ComponentSecurityChampionEntity> = mutableListOf(),
-
     @OneToMany(mappedBy = "component", fetch = FetchType.LAZY)
     @BatchSize(size = BATCH_FETCH_SIZE)
     var labelJunctions: MutableList<ComponentLabelEntity> = mutableListOf(),
-
     // M:N system membership — a component may be classified under several system
     // codes at once. No cascade (same convention as `labelJunctions`): rows are
     // written/removed through `ComponentSystemRepository` after the parent flush.
@@ -238,8 +206,7 @@ class ComponentEntity(
     var systemJunctions: MutableList<ComponentSystemEntity> = mutableListOf(),
 ) {
     /** Ordered release-manager usernames (first = primary). */
-    fun releaseManagerUsernames(): List<String> =
-        releaseManagers.sortedBy { it.sortOrder }.map { it.username }
+    fun releaseManagerUsernames(): List<String> = releaseManagers.sortedBy { it.sortOrder }.map { it.username }
 
     /**
      * Replace the whole ordered release-manager list. Single canonicalization
@@ -258,8 +225,7 @@ class ComponentEntity(
     }
 
     /** Ordered security-champion usernames (first = primary). */
-    fun securityChampionUsernames(): List<String> =
-        securityChampions.sortedBy { it.sortOrder }.map { it.username }
+    fun securityChampionUsernames(): List<String> = securityChampions.sortedBy { it.sortOrder }.map { it.username }
 
     /** Replace the whole ordered security-champion list (same canonical form as RM). */
     fun replaceSecurityChampionUsernames(usernames: List<String>) {

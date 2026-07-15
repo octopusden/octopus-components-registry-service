@@ -45,7 +45,6 @@ import java.nio.file.Paths
 @Timeout(120)
 @Tag("integration")
 class BuildToolBeansMarkerV4Test {
-
     @MockBean
     @Suppress("UnusedPrivateProperty")
     private lateinit var authServerClient: AuthServerClient

@@ -22,7 +22,6 @@ import org.apache.maven.artifact.versioning.DefaultArtifactVersion
  * only and would invert dash-qualifier ranges like `0.7-803` in production.
  */
 object VersionRangePartition {
-
     /** A single half-open/closed interval; a null bound is unbounded (open) on that side. */
     internal data class Segment(
         val lo: String?,
@@ -32,7 +31,10 @@ object VersionRangePartition {
     )
 
     /** A breakpoint value plus whether that value belongs to the LEFT (lower) piece when splitting. */
-    private data class Edge(val value: String, val inLeft: Boolean)
+    private data class Edge(
+        val value: String,
+        val inLeft: Boolean,
+    )
 
     /**
      * A coincident-endpoint group at one numeric [value]. [sawLeft] = at least one edge wants the value
@@ -40,9 +42,14 @@ object VersionRangePartition {
      * (open-upper / closed-lower). Both set ⇒ a `[…,p)` meets a `(p,…]` and p is excluded by both
      * (GAP → singleton `[p,p]`); exactly one set ⇒ an ordinary LEFT/RIGHT split.
      */
-    private data class Breakpoint(val value: String, val sawLeft: Boolean, val sawRight: Boolean)
+    private data class Breakpoint(
+        val value: String,
+        val sawLeft: Boolean,
+        val sawRight: Boolean,
+    )
 
     private val SIMPLE_SEGMENT_PATTERN = Regex("^([\\[(])([^,]*),([^,]*)([\\])])$")
+
     // Maven hard-version form `[x]` (no comma): exactly version x.
     private val SINGLE_VERSION_PATTERN = Regex("^\\[([^,\\[\\]()]+)\\]$")
     internal const val ALL_VERSIONS_SENTINEL = "(,0),[0,)"
@@ -114,11 +121,17 @@ object VersionRangePartition {
      * makes partition emit edges in an order the factory then sees as inverted (`left > right`) — it
      * builds a backwards range like `(0.7-803,0.7.157]` and the factory rejects it (HTTP 400).
      */
-    internal fun defaultVersionCompare(a: String, b: String): Int =
-        DefaultArtifactVersion(a).compareTo(DefaultArtifactVersion(b))
+    internal fun defaultVersionCompare(
+        a: String,
+        b: String,
+    ): Int = DefaultArtifactVersion(a).compareTo(DefaultArtifactVersion(b))
 
     /** True iff finite [point] lies strictly inside [seg] (unbounded side = ±∞). */
-    private fun strictlyInside(seg: Segment, point: String, compare: (String, String) -> Int): Boolean {
+    private fun strictlyInside(
+        seg: Segment,
+        point: String,
+        compare: (String, String) -> Int,
+    ): Boolean {
         val aboveLo = seg.lo == null || compare(point, seg.lo) > 0
         val belowHi = seg.hi == null || compare(point, seg.hi) < 0
         return aboveLo && belowHi
@@ -169,9 +182,11 @@ object VersionRangePartition {
         }
 
         val result = mutableListOf<String>()
+
         fun emit(piece: String) {
             if (piece !in result) result += piece
         }
+
         // Render+emit a piece, skipping degenerate intervals (lo>hi, or lo==hi unless both-inclusive) so
         // boundary carving can never produce an empty range like `(p,p)`.
         fun emitSeg(s: Segment) {
@@ -218,7 +233,8 @@ object VersionRangePartition {
             }
             val effSeg = Segment(effLo, effLoIncl, effHi, effHiIncl)
             val interior =
-                buckets.filter { strictlyInside(effSeg, it.value, compare) }
+                buckets
+                    .filter { strictlyInside(effSeg, it.value, compare) }
                     .sortedWith { a, b -> compare(a.value, b.value) }
             var curLo = effLo
             var curLoIncl = effLoIncl
@@ -295,11 +311,16 @@ object VersionRangePartition {
         }
 
     /** The greatest lower bound across [range]'s segments (`null` = some segment is unbounded-left). */
-    private fun highestFloor(range: String, compare: (String, String) -> Int): String? =
-        toSegments(range).mapNotNull { it.lo }.maxWithOrNull(Comparator(compare))
+    private fun highestFloor(
+        range: String,
+        compare: (String, String) -> Int,
+    ): String? = toSegments(range).mapNotNull { it.lo }.maxWithOrNull(Comparator(compare))
 
     /** The greatest upper bound across [range]'s segments (`null` = some segment runs to +inf). */
-    private fun highestCeiling(range: String, compare: (String, String) -> Int): String? {
+    private fun highestCeiling(
+        range: String,
+        compare: (String, String) -> Int,
+    ): String? {
         val segs = toSegments(range)
         if (segs.any { it.hi == null }) return null
         return segs.mapNotNull { it.hi }.maxWithOrNull(Comparator(compare))
@@ -367,7 +388,11 @@ object VersionRangePartition {
     }
 
     /** True iff `a` (with a ≤ b by lower bound) overlaps or is point-adjacent to `b`. */
-    private fun contiguousOrOverlapping(a: Segment, b: Segment, compare: (String, String) -> Int): Boolean {
+    private fun contiguousOrOverlapping(
+        a: Segment,
+        b: Segment,
+        compare: (String, String) -> Int,
+    ): Boolean {
         if (a.hi == null) return true // a runs to +∞ → covers b's start
         if (b.lo == null) return true // b starts at −∞
         val c = compare(a.hi, b.lo)
@@ -379,7 +404,11 @@ object VersionRangePartition {
     }
 
     /** Union of two contiguous/overlapping segments (a starts no later than b). */
-    private fun unionOf(a: Segment, b: Segment, compare: (String, String) -> Int): Segment {
+    private fun unionOf(
+        a: Segment,
+        b: Segment,
+        compare: (String, String) -> Int,
+    ): Segment {
         val (hi, hiIncl) =
             when {
                 a.hi == null || b.hi == null -> null to false

@@ -82,14 +82,18 @@ class PostPutBodyLoggingFilter : CommonsRequestLoggingFilter() {
     /** Suppress the "Before request" line — body is not yet available
      *  before the controller reads it, so the line carries no extra
      *  info beyond what the access log already has. */
-    override fun beforeRequest(request: HttpServletRequest, message: String) {
+    override fun beforeRequest(
+        request: HttpServletRequest,
+        message: String,
+    ) {
         // intentionally empty
     }
 
     /** Escape CR/LF so a multi-line JSON body stays on a single log line
      *  and cannot inject or forge log entries. */
     override fun getMessagePayload(request: HttpServletRequest): String? =
-        super.getMessagePayload(request)
+        super
+            .getMessagePayload(request)
             ?.replace("\r", "\\r")
             ?.replace("\n", "\\n")
 }

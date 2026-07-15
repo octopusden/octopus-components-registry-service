@@ -1,11 +1,5 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
-import java.nio.file.Files
-import java.nio.file.Path
-import java.util.Optional
-import java.util.UUID
-import java.util.concurrent.TimeUnit
-import java.util.regex.PatternSyntaxException
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -25,15 +19,15 @@ import org.octopusden.octopus.components.registry.server.dto.v4.BuildToolBeanReq
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentCreateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentUpdateRequest
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
+import org.octopusden.octopus.components.registry.server.repository.ComponentArtifactMappingRepository
+import org.octopusden.octopus.components.registry.server.repository.ComponentArtifactMappingTokenRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentBuildToolBeanRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentLabelRepository
-import org.octopusden.octopus.components.registry.server.repository.ComponentSystemRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRequiredToolRepository
+import org.octopusden.octopus.components.registry.server.repository.ComponentSystemRepository
 import org.octopusden.octopus.components.registry.server.repository.DistributionDockerImageRepository
-import org.octopusden.octopus.components.registry.server.repository.ComponentArtifactMappingRepository
-import org.octopusden.octopus.components.registry.server.repository.ComponentArtifactMappingTokenRepository
 import org.octopusden.octopus.components.registry.server.repository.DistributionMavenArtifactRepository
 import org.octopusden.octopus.components.registry.server.repository.LabelRepository
 import org.octopusden.octopus.components.registry.server.repository.SystemRepository
@@ -48,6 +42,11 @@ import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRangeFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.core.env.Environment
+import java.nio.file.Files
+import java.nio.file.Path
+import java.util.Optional
+import java.util.UUID
+import java.util.concurrent.TimeUnit
 
 /**
  * Stage 5 (cheap field-format checks) — restores the pre-publish single-field
@@ -66,7 +65,6 @@ import org.springframework.core.env.Environment
  */
 @Timeout(30, unit = TimeUnit.SECONDS)
 class CheapFieldFormatValidationTest {
-
     private lateinit var componentRepository: ComponentRepository
     private lateinit var environment: Environment
     private lateinit var fieldConfigService: FieldConfigService
@@ -88,7 +86,8 @@ class CheapFieldFormatValidationTest {
         // ConfigHelper.copyrightPath() (env property `components-registry.copyright-path`).
         Files.createFile(copyrightDir.resolve(SUPPORTED_COPYRIGHT))
         doReturn(copyrightDir.toString())
-            .`when`(environment).getProperty("components-registry.copyright-path")
+            .`when`(environment)
+            .getProperty("components-registry.copyright-path")
 
         val versionNames = VersionNames("serviceCBranch", "serviceC", "minorC")
 

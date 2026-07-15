@@ -17,21 +17,22 @@ class DetailedComponent(
     @JsonProperty("buildFilePath") val buildFilePath: String?,
 ) : Component(id, name, componentOwner) {
     var buildParameters: BuildParametersDTO? = null
+
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other !is DetailedComponent) return false
         return buildSystem == other.buildSystem &&
-                vcsSettings == other.vcsSettings &&
-                jiraComponentVersion == other.jiraComponentVersion &&
-                detailedComponentVersion == other.detailedComponentVersion &&
-                deprecated == other.deprecated &&
-                buildParameters == other.buildParameters &&
-                buildFilePath == other.buildFilePath &&
-                super.equals(other)
+            vcsSettings == other.vcsSettings &&
+            jiraComponentVersion == other.jiraComponentVersion &&
+            detailedComponentVersion == other.detailedComponentVersion &&
+            deprecated == other.deprecated &&
+            buildParameters == other.buildParameters &&
+            buildFilePath == other.buildFilePath &&
+            super.equals(other)
     }
 
-    override fun hashCode(): Int {
-        return Objects.hash(
+    override fun hashCode(): Int =
+        Objects.hash(
             super.hashCode(),
             buildSystem,
             vcsSettings,
@@ -39,19 +40,16 @@ class DetailedComponent(
             detailedComponentVersion,
             buildParameters,
             deprecated,
-            buildFilePath
+            buildFilePath,
         )
-    }
 
-    override fun toString(): String {
-        return super.toString() +
-                ", buildSystem=$buildSystem)" +
-                ", vcsSettings=${vcsSettings}" +
-                ", jiraComponentVersion=${jiraComponentVersion}" +
-                ", detailedComponentVersion=${detailedComponentVersion}" +
-                ", buildParameters=${buildParameters}" +
-                ", deprecated=${deprecated}" +
-                ", buildFilePath=${buildFilePath}"
-    }
-
+    override fun toString(): String =
+        super.toString() +
+            ", buildSystem=$buildSystem)" +
+            ", vcsSettings=$vcsSettings" +
+            ", jiraComponentVersion=$jiraComponentVersion" +
+            ", detailedComponentVersion=$detailedComponentVersion" +
+            ", buildParameters=$buildParameters" +
+            ", deprecated=$deprecated" +
+            ", buildFilePath=$buildFilePath"
 }

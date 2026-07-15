@@ -62,10 +62,14 @@ class AsyncJobLifecycle<TState : Any>(
     /** Outcome of [claimAndSubmit]. Cross-kind conflicts are signalled via [MigrationConflictException]. */
     sealed interface ClaimOutcome<TState : Any> {
         /** A same-kind RUNNING state was already present; caller "attaches" rather than spawning a duplicate. */
-        data class Attached<T : Any>(val state: T) : ClaimOutcome<T>
+        data class Attached<T : Any>(
+            val state: T,
+        ) : ClaimOutcome<T>
 
         /** Slot was claimed for a freshly-built candidate and the work has been submitted to the executor. */
-        data class Started<T : Any>(val state: T) : ClaimOutcome<T>
+        data class Started<T : Any>(
+            val state: T,
+        ) : ClaimOutcome<T>
     }
 
     /**
@@ -148,7 +152,10 @@ class AsyncJobLifecycle<TState : Any>(
      * Returns the post-update state (or the un-touched current state if the guard
      * tripped); generally the caller can ignore the return value.
      */
-    fun update(jobId: String, transform: (TState) -> TState): TState? =
+    fun update(
+        jobId: String,
+        transform: (TState) -> TState,
+    ): TState? =
         state.updateAndGet { current ->
             if (current == null || getId(current) != jobId) current else transform(current)
         }

@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.mockito.ArgumentMatchers.anyList
+import org.mockito.ArgumentMatchers.anyString
 import org.mockito.Mockito.`when`
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
@@ -25,7 +26,6 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
-import org.mockito.ArgumentMatchers.anyString
 import java.nio.file.Paths
 
 /**
@@ -67,7 +67,8 @@ class EmployeeLookupEndpointsV4Test {
     @DisplayName("GET /meta/employees returns [{username, active}] for an exact hit")
     fun `search returns match`() {
         `when`(employeeDirectory.search("alice")).thenReturn(listOf(EmployeeMatch("alice", true)))
-        mvc.perform(get("/rest/api/4/components/meta/employees").param("search", "alice").with(viewerJwt()))
+        mvc
+            .perform(get("/rest/api/4/components/meta/employees").param("search", "alice").with(viewerJwt()))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$[0].username").value("alice"))
             .andExpect(jsonPath("$[0].active").value(true))
@@ -77,7 +78,8 @@ class EmployeeLookupEndpointsV4Test {
     @DisplayName("GET /meta/employees returns [] when disabled/unavailable (fail-open)")
     fun `search returns empty when disabled`() {
         `when`(employeeDirectory.search(anyString())).thenReturn(emptyList())
-        mvc.perform(get("/rest/api/4/components/meta/employees").param("search", "ghost").with(viewerJwt()))
+        mvc
+            .perform(get("/rest/api/4/components/meta/employees").param("search", "ghost").with(viewerJwt()))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.length()").value(0))
     }
@@ -85,7 +87,8 @@ class EmployeeLookupEndpointsV4Test {
     @Test
     @DisplayName("GET /meta/employees rejects anonymous username probing")
     fun `search requires authentication`() {
-        mvc.perform(get("/rest/api/4/components/meta/employees").param("search", "alice"))
+        mvc
+            .perform(get("/rest/api/4/components/meta/employees").param("search", "alice"))
             .andExpect(status().isUnauthorized)
     }
 
@@ -94,13 +97,13 @@ class EmployeeLookupEndpointsV4Test {
     fun `status maps usernames`() {
         `when`(employeeDirectory.statuses(anyList()))
             .thenReturn(mapOf("alice" to true, "bob" to false, "ghost" to null))
-        mvc.perform(
-            post("/rest/api/4/components/meta/employees/status")
-                .with(viewerJwt())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""["alice","bob","ghost"]"""),
-        )
-            .andExpect(status().isOk)
+        mvc
+            .perform(
+                post("/rest/api/4/components/meta/employees/status")
+                    .with(viewerJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""["alice","bob","ghost"]"""),
+            ).andExpect(status().isOk)
             .andExpect(jsonPath("$.alice").value(true))
             .andExpect(jsonPath("$.bob").value(false))
             .andExpect(jsonPath("$.ghost").value(org.hamcrest.Matchers.nullValue()))
@@ -110,7 +113,8 @@ class EmployeeLookupEndpointsV4Test {
     @DisplayName("both endpoints accept ACCESS_COMPONENTS (admin) and reach the directory")
     fun `endpoints reachable for admin`() {
         `when`(employeeDirectory.search(anyString())).thenReturn(emptyList())
-        mvc.perform(get("/rest/api/4/components/meta/employees").param("search", "x").with(adminJwt()))
+        mvc
+            .perform(get("/rest/api/4/components/meta/employees").param("search", "x").with(adminJwt()))
             .andExpect(status().isOk)
     }
 
@@ -118,12 +122,14 @@ class EmployeeLookupEndpointsV4Test {
     @DisplayName("GET /meta/employees/health reports the probe status (UP / DOWN / DISABLED)")
     fun `health reports probe status`() {
         `when`(employeeDirectory.probe()).thenReturn(IntegrationHealth.DOWN)
-        mvc.perform(get("/rest/api/4/components/meta/employees/health").with(viewerJwt()))
+        mvc
+            .perform(get("/rest/api/4/components/meta/employees/health").with(viewerJwt()))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value("DOWN"))
 
         `when`(employeeDirectory.probe()).thenReturn(IntegrationHealth.UP)
-        mvc.perform(get("/rest/api/4/components/meta/employees/health").with(viewerJwt()))
+        mvc
+            .perform(get("/rest/api/4/components/meta/employees/health").with(viewerJwt()))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value("UP"))
     }
@@ -132,7 +138,8 @@ class EmployeeLookupEndpointsV4Test {
     @DisplayName("GET /meta/employees/health is 200 even when DOWN (status lives in the body, not the code)")
     fun `health never errors`() {
         `when`(employeeDirectory.probe()).thenReturn(IntegrationHealth.DISABLED)
-        mvc.perform(get("/rest/api/4/components/meta/employees/health").with(viewerJwt()))
+        mvc
+            .perform(get("/rest/api/4/components/meta/employees/health").with(viewerJwt()))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value("DISABLED"))
     }
@@ -140,7 +147,8 @@ class EmployeeLookupEndpointsV4Test {
     @Test
     @DisplayName("GET /meta/employees/health rejects anonymous access (sits under /meta/employees/**)")
     fun `health requires authentication`() {
-        mvc.perform(get("/rest/api/4/components/meta/employees/health"))
+        mvc
+            .perform(get("/rest/api/4/components/meta/employees/health"))
             .andExpect(status().isUnauthorized)
     }
 }

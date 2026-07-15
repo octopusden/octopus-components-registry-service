@@ -28,7 +28,10 @@ fun ComponentEntity.addOwnershipMapping(
             sortOrder = this.artifactMappings.size,
         )
     if (!catchAll) {
-        artifactPattern.split(',', '|').map { it.trim() }.filter { it.isNotEmpty() }
+        artifactPattern
+            .split(',', '|')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
             .forEachIndexed { i, token ->
                 mapping.tokens.add(ComponentArtifactMappingTokenEntity(mapping = mapping, artifactPattern = token, sortOrder = i))
             }

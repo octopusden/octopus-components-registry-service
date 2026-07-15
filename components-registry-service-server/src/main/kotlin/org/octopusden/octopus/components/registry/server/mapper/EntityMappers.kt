@@ -287,7 +287,11 @@ fun ComponentEntity.toResolvedEscrowModuleConfig(
     // the resolved DTO returned base ownership at a version an override owns (disagreeing with
     // ComponentCodeRenderer.renderResolved). Ranges are disjoint by invariant; sorted for determinism.
     val ownershipRange =
-        this.artifactMappings.map { it.versionRange }.filter { it != ALL_VERSIONS }.distinct().sorted()
+        this.artifactMappings
+            .map { it.versionRange }
+            .filter { it != ALL_VERSIONS }
+            .distinct()
+            .sorted()
             .firstOrNull { range ->
                 try {
                     versionRangeFactory.create(range).containsVersion(numericVersion)
@@ -385,6 +389,7 @@ private fun ComponentEntity.resolveForRange(
  * a far-out internal gap); this does not occur for the integer-component, single-range overrides this
  * registry uses, and is noted as a deferred approximation in the TD-010 doc.
  */
+
 /**
  * A comparator over RAW version-range-endpoint strings using the registry's own scheme
  * ([NumericVersionFactory] / [VersionNames]) — the SAME ordering [VersionRangeFactory] uses to
@@ -399,7 +404,8 @@ internal fun numericVersionComparator(factory: NumericVersionFactory): (String, 
         try {
             factory.create(a).compareTo(factory.create(b))
         } catch (_: Exception) {
-            org.octopusden.octopus.components.registry.server.util.VersionRangePartition.defaultVersionCompare(a, b)
+            org.octopusden.octopus.components.registry.server.util.VersionRangePartition
+                .defaultVersionCompare(a, b)
         }
     }
 
@@ -837,18 +843,22 @@ private fun buildEscrowModuleConfig(
     // the legacy single pair (groupId re-joined by ',') so the escrow view / view-as-code / compat
     // baseline stay byte-identical. All rows in a run share mode + tokens, so the primary renders both.
     org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipGrouping
-        .collapseRuns(effectiveMappings).firstOrNull()?.let { primaryRun ->
+        .collapseRuns(effectiveMappings)
+        .firstOrNull()
+        ?.let { primaryRun ->
             val primary = primaryRun.first()
             setField(
                 config,
                 "groupIdPattern",
-                org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipGrouping.joinGroupPattern(primaryRun),
+                org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipGrouping
+                    .joinGroupPattern(primaryRun),
             )
             setField(
                 config,
                 "artifactIdPattern",
                 org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipRendering.renderArtifactPattern(
-                    org.octopusden.octopus.components.registry.server.entity.ArtifactIdMode.valueOf(primary.artifactIdMode),
+                    org.octopusden.octopus.components.registry.server.entity.ArtifactIdMode
+                        .valueOf(primary.artifactIdMode),
                     primary.tokens.sortedBy { it.sortOrder }.map { it.artifactPattern },
                 ),
             )
@@ -951,7 +961,9 @@ internal class ComponentConfigurationView {
             "escrow.additionalSources" -> escrowAdditionalSources = override.escrowAdditionalSources
             "escrow.gradleIncludeConfigurations" -> escrowGradleIncludeConfigurations = override.escrowGradleIncludeConfigurations
             "escrow.gradleExcludeConfigurations" -> escrowGradleExcludeConfigurations = override.escrowGradleExcludeConfigurations
-            "escrow.gradleIncludeTestConfigurations" -> escrowGradleIncludeTestConfigurations = override.escrowGradleIncludeTestConfigurations
+            "escrow.gradleIncludeTestConfigurations" ->
+                escrowGradleIncludeTestConfigurations =
+                    override.escrowGradleIncludeTestConfigurations
 
             "jira.projectKey" -> jiraProjectKey = override.jiraProjectKey
             "jira.technical" -> jiraTechnical = override.jiraTechnical
@@ -1140,8 +1152,16 @@ internal fun buildDistribution(
 ): Distribution? {
     val gavStr = composeGavCsv(mavenArtifacts, fileUrlArtifacts)
     val dockerStr = composeDockerCsv(dockerImages)
-    val debStr = packages.filter { it.packageType == "DEB" }.sortedBy { it.sortOrder }.joinToString(",") { it.packageName }.ifEmpty { null }
-    val rpmStr = packages.filter { it.packageType == "RPM" }.sortedBy { it.sortOrder }.joinToString(",") { it.packageName }.ifEmpty { null }
+    val debStr = packages
+        .filter { it.packageType == "DEB" }
+        .sortedBy { it.sortOrder }
+        .joinToString(",") { it.packageName }
+        .ifEmpty { null }
+    val rpmStr = packages
+        .filter { it.packageType == "RPM" }
+        .sortedBy { it.sortOrder }
+        .joinToString(",") { it.packageName }
+        .ifEmpty { null }
 
     val secReadGroups =
         securityGroups
@@ -1343,7 +1363,9 @@ internal fun ComponentBuildToolBeanEntity.toBuildToolBean(): BuildTool? {
             entityVersionPattern?.let { bean.setVersion(it) }
             entitySettingsProperty?.let { bean.setSettingsProperty(it) }
             entityEdition?.let { edStr ->
-                OracleDatabaseEditions.values().firstOrNull { it.name == edStr }
+                OracleDatabaseEditions
+                    .values()
+                    .firstOrNull { it.name == edStr }
                     ?.let { bean.setEdition(it) }
             }
             bean

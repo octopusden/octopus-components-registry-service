@@ -74,8 +74,11 @@ class MetaInUseOptionsEndpointsTest {
         // (approved contract change). Inject a default into any fixture payload
         // that omits it.
         val withOwner =
-            if (bodyJson.contains("componentOwner")) bodyJson
-            else bodyJson.replaceFirst("{", """{"componentOwner":"owner1",""")
+            if (bodyJson.contains("componentOwner")) {
+                bodyJson
+            } else {
+                bodyJson.replaceFirst("{", """{"componentOwner":"owner1",""")
+            }
         val body =
             mvc
                 .perform(

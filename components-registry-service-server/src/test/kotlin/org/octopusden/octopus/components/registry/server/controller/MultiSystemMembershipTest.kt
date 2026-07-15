@@ -109,7 +109,11 @@ class MultiSystemMembershipTest {
     private fun fetchNames(vararg params: Pair<String, String>): Set<String> {
         var request = get("/rest/api/4/components").with(viewerJwt()).param("size", "200")
         for ((key, value) in params) request = request.param(key, value)
-        val body = mvc.perform(request).andExpect(status().isOk).andReturn().response.contentAsString
+        val body = mvc
+            .perform(request)
+            .andExpect(status().isOk)
+            .andReturn()
+            .response.contentAsString
         return objectMapper.readTree(body)["content"].map { it["name"].asText() }.toSet()
     }
 
@@ -153,7 +157,8 @@ class MultiSystemMembershipTest {
                         .param("system", "$first,$second")
                         .param("size", "200"),
                 ).andExpect(status().isOk)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val names = objectMapper.readTree(body)["content"].map { it["name"].asText() }
         assertEquals(1, names.count { it == dual }, "dual-system component must appear exactly once: $body")
         assertEquals(
@@ -184,7 +189,8 @@ class MultiSystemMembershipTest {
                         .param("system", "$x,$y")
                         .param("size", "1"),
                 ).andExpect(status().isOk)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val root = objectMapper.readTree(body)
         assertEquals(1L, root["totalElements"].asLong(), "multi-system component must be counted once: $body")
         assertEquals(1, root["totalPages"].asInt(), "one match with size=1 must be a single page")
@@ -202,7 +208,8 @@ class MultiSystemMembershipTest {
             mvc
                 .perform(get("/rest/api/4/components/{name}", name).with(viewerJwt()))
                 .andExpect(status().isOk)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val detailSystems = objectMapper.readTree(detailBody)["systems"].map { it.asText() }.toSet()
         assertEquals(setOf(first, second), detailSystems, "detail.systems mismatch: $detailBody")
 
@@ -210,7 +217,8 @@ class MultiSystemMembershipTest {
             mvc
                 .perform(get("/rest/api/4/components").with(viewerJwt()).param("size", "200"))
                 .andExpect(status().isOk)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val summary = objectMapper.readTree(listBody)["content"].first { it["name"].asText() == name }
         val summarySystems = summary["systems"].map { it.asText() }.toSet()
         assertEquals(setOf(first, second), summarySystems, "summary.systems mismatch")

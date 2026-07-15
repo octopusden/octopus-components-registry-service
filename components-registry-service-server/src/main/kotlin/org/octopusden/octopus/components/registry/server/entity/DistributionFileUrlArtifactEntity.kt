@@ -16,20 +16,15 @@ class DistributionFileUrlArtifactEntity(
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     var id: UUID? = null,
-
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "component_configuration_id", nullable = false)
     var componentConfiguration: ComponentConfigurationEntity,
-
     @Column(name = "url", columnDefinition = "TEXT", nullable = false)
     var url: String = "",
-
     @Column(name = "artifact_id", columnDefinition = "TEXT")
     var artifactId: String? = null,
-
     @Column(name = "classifier", columnDefinition = "TEXT")
     var classifier: String? = null,
-
     @Column(name = "sort_order", nullable = false)
     var sortOrder: Int = 0,
 )

@@ -1,10 +1,10 @@
 package org.octopusden.octopus.components.registry.server.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
@@ -82,7 +82,8 @@ class ListComponentsSystemFilterTest {
             mvc
                 .perform(get("/rest/api/4/components").with(viewerJwt()).param("system", "CLASSIC").param("size", "200"))
                 .andExpect(status().isOk)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val content = objectMapper.readTree(body).path("content")
         assertTrue(content.isArray && content.size() > 0, "Expected at least one CLASSIC component; got: ${body.take(400)}")
         for (component in content) {
@@ -105,7 +106,8 @@ class ListComponentsSystemFilterTest {
                         .param("system", "DEFINITELY_NOT_A_REAL_SYSTEM_xyz123")
                         .param("size", "200"),
                 ).andExpect(status().isOk)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val content = objectMapper.readTree(body).path("content")
         assertFalse(
             content.isArray && content.size() > 0,
@@ -140,7 +142,8 @@ class ListComponentsSystemFilterTest {
         // validator rejects codes that aren't in the dictionary.
         if (systemRepository.findByCode(system) == null) {
             systemRepository.save(
-                org.octopusden.octopus.components.registry.server.entity.SystemEntity(code = system),
+                org.octopusden.octopus.components.registry.server.entity
+                    .SystemEntity(code = system),
             )
         }
         mvc
@@ -363,7 +366,8 @@ class ListComponentsSystemFilterTest {
                         .param("size", "1")
                         .param("sort", "componentKey,asc"),
                 ).andExpect(status().isOk)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val pageJson = objectMapper.readTree(pageBody)
         assert(pageJson["content"].size() == 1) {
             "expected page size 1; got ${pageJson["content"].size()}: ${pageBody.take(400)}"
@@ -381,7 +385,8 @@ class ListComponentsSystemFilterTest {
                         .param("size", "10")
                         .param("sort", "componentKey,asc"),
                 ).andExpect(status().isOk)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val returnedNames = objectMapper.readTree(fullBody)["content"].map { it["name"].asText() }
         val seededNames = returnedNames.filter { it.endsWith("_$suffix") }
         assert(seededNames == listOf(first, second, third)) {

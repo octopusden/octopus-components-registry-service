@@ -86,7 +86,10 @@ class CrossComponentValidationTest {
                 .content(withOwner(body)),
         )
 
-    private fun patchComponent(id: String, body: String): ResultActions =
+    private fun patchComponent(
+        id: String,
+        body: String,
+    ): ResultActions =
         mvc.perform(
             patch("/rest/api/4/components/$id")
                 .with(adminJwt())
@@ -96,7 +99,10 @@ class CrossComponentValidationTest {
 
     /** Create a component, asserting 2xx, and return its id. */
     private fun createOk(body: String): String {
-        val resp = postCreate(body).andExpect(status().is2xxSuccessful).andReturn().response.contentAsString
+        val resp = postCreate(body)
+            .andExpect(status().is2xxSuccessful)
+            .andReturn()
+            .response.contentAsString
         return objectMapper.readTree(resp)["id"].asText()
     }
 
@@ -308,7 +314,9 @@ class CrossComponentValidationTest {
     }
 
     @Test
-    @DisplayName("CREATE: identical (group, artifact, extension, classifier) in overlapping ranges → 409 'uniqueness violation' + errorCode")
+    @DisplayName(
+        "CREATE: identical (group, artifact, extension, classifier) in overlapping ranges → 409 'uniqueness violation' + errorCode",
+    )
     fun create_fullGavDuplicate_conflict_withUniquenessMessageAndErrorCode() {
         val s = sfx()
         val group = "org.octopusden.octopus"
@@ -376,15 +384,16 @@ class CrossComponentValidationTest {
                 """"baseConfiguration":{"build":{"buildSystem":"MAVEN"},""" +
                 """"jira":{"projectKey":"PRA${s.take(4).uppercase()}","versionPrefix":"wwem"}}}""",
         )
-        mvc.perform(
-            post("/rest/api/4/components/$idA/field-overrides")
-                .with(adminJwt())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(
-                    """{"overriddenAttribute":"jira.projectKey","versionRange":"[2,)",""" +
-                        """"value":"PRW${s.take(4).uppercase()}"}""",
-                ),
-        ).andExpect(status().is2xxSuccessful)
+        mvc
+            .perform(
+                post("/rest/api/4/components/$idA/field-overrides")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """{"overriddenAttribute":"jira.projectKey","versionRange":"[2,)",""" +
+                            """"value":"PRW${s.take(4).uppercase()}"}""",
+                    ),
+            ).andExpect(status().is2xxSuccessful)
 
         // Component B legitimately owns (PROJW, no prefix) — the prod shape where one
         // component owns (project, null) while another claims the same project only
@@ -703,15 +712,16 @@ class CrossComponentValidationTest {
         // A MARKER field-override on B that introduces the SAME GAV in an
         // overlapping range must hit the cross-component 409 check (review #2:
         // field-override writes previously bypassed it).
-        mvc.perform(
-            post("/rest/api/4/components/$bId/field-overrides")
-                .with(adminJwt())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(
-                    """{"versionRange":"[1.0,2.0)","overriddenAttribute":"distribution.maven",""" +
-                        """"markerChildren":{"mavenArtifacts":[{"groupPattern":"$group","artifactPattern":"$artifact"}]}}""",
-                ),
-        ).andExpect(status().isConflict)
+        mvc
+            .perform(
+                post("/rest/api/4/components/$bId/field-overrides")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """{"versionRange":"[1.0,2.0)","overriddenAttribute":"distribution.maven",""" +
+                            """"markerChildren":{"mavenArtifacts":[{"groupPattern":"$group","artifactPattern":"$artifact"}]}}""",
+                    ),
+            ).andExpect(status().isConflict)
     }
 
     @Test
@@ -730,15 +740,16 @@ class CrossComponentValidationTest {
                     """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
             ).andExpect(status().is2xxSuccessful).andReturn().response.contentAsString
         val bId = objectMapper.readTree(bResp)["id"].asText()
-        mvc.perform(
-            post("/rest/api/4/components/$bId/field-overrides")
-                .with(adminJwt())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(
-                    """{"versionRange":"[1.0,2.0)","overriddenAttribute":"distribution.docker",""" +
-                        """"markerChildren":{"dockerImages":[{"imageName":"$image"}]}}""",
-                ),
-        ).andExpect(status().isConflict)
+        mvc
+            .perform(
+                post("/rest/api/4/components/$bId/field-overrides")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """{"versionRange":"[1.0,2.0)","overriddenAttribute":"distribution.docker",""" +
+                            """"markerChildren":{"dockerImages":[{"imageName":"$image"}]}}""",
+                    ),
+            ).andExpect(status().isConflict)
     }
 
     // ── #357 artifact-ownership mapping uniqueness (mode-aware matrix) ──────────

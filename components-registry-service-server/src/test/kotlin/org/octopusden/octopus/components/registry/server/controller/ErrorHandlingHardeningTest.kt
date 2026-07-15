@@ -89,7 +89,8 @@ class ErrorHandlingHardeningTest {
                 .response.contentAsString
 
         val names =
-            objectMapper.readTree(body)["content"]
+            objectMapper
+                .readTree(body)["content"]
                 .map { it["name"].asText() }
                 .filter { it.startsWith("errhard_") }
         assert(names.indexOf(a) < names.indexOf(b)) {
@@ -164,8 +165,7 @@ class ErrorHandlingHardeningTest {
             ).andExpect(status().isCreated)
     }
 
-    private fun containsSubstring(needle: String) =
-        org.hamcrest.Matchers.containsString(needle)
+    private fun containsSubstring(needle: String) = org.hamcrest.Matchers.containsString(needle)
 
     /**
      * Test-only controller used to drive a `ResponseStatusException` through the
@@ -180,7 +180,6 @@ class ErrorHandlingHardeningTest {
     @RequestMapping("/test-error-helpers")
     class TestThrowingController {
         @GetMapping("/response-status-conflict")
-        fun conflict(): Nothing =
-            throw ResponseStatusException(HttpStatus.CONFLICT, "synthetic conflict for handler test")
+        fun conflict(): Nothing = throw ResponseStatusException(HttpStatus.CONFLICT, "synthetic conflict for handler test")
     }
 }

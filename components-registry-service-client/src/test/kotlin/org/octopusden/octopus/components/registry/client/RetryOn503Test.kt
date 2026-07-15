@@ -2,8 +2,6 @@ package org.octopusden.octopus.components.registry.client
 
 import com.sun.net.httpserver.HttpServer
 import feign.RetryableException
-import java.net.InetSocketAddress
-import java.util.concurrent.atomic.AtomicInteger
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -11,9 +9,10 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.octopusden.octopus.components.registry.client.impl.ClassicComponentsRegistryServiceClient
 import org.octopusden.octopus.components.registry.client.impl.ClassicComponentsRegistryServiceClientUrlProvider
+import java.net.InetSocketAddress
+import java.util.concurrent.atomic.AtomicInteger
 
 class RetryOn503Test {
-
     private lateinit var server: HttpServer
     private lateinit var client: ComponentsRegistryServiceClient
     private val callCount = AtomicInteger(0)
@@ -26,7 +25,7 @@ class RetryOn503Test {
         client = ClassicComponentsRegistryServiceClient(
             object : ClassicComponentsRegistryServiceClientUrlProvider {
                 override fun getApiUrl() = "http://localhost:$port"
-            }
+            },
         )
     }
 

@@ -47,7 +47,8 @@ class OpenApiLegacyGroupsTest {
     private lateinit var mvc: MockMvc
 
     private fun pathKeysOf(group: String): List<String> {
-        val raw = mvc.perform(get("/v3/api-docs/$group"))
+        val raw = mvc
+            .perform(get("/v3/api-docs/$group"))
             .andExpect(status().isOk)
             .andReturn()
             .response

@@ -1,6 +1,5 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
-import java.util.concurrent.TimeUnit
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
@@ -9,6 +8,7 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
+import java.util.concurrent.TimeUnit
 
 /**
  * CRS-C — the import external-registry ⟷ skipCommitCheck fold ([applyImportedExternalRegistry]).
@@ -20,7 +20,6 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
  */
 @Timeout(10, unit = TimeUnit.SECONDS)
 class ImportExternalRegistryBridgeTest {
-
     private fun entity(
         skipCommitCheck: Boolean,
         vcsExternalRegistry: String?,
@@ -66,7 +65,10 @@ class ImportExternalRegistryBridgeTest {
     }
 
     companion object {
-        private fun assertEquals(expected: String?, actual: String?) =
-            org.junit.jupiter.api.Assertions.assertEquals(expected, actual)
+        private fun assertEquals(
+            expected: String?,
+            actual: String?,
+        ) = org.junit.jupiter.api.Assertions
+            .assertEquals(expected, actual)
     }
 }

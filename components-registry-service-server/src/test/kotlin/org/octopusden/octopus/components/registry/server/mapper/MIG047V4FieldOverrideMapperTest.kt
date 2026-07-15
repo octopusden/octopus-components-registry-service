@@ -42,7 +42,6 @@ import java.util.concurrent.TimeUnit
  */
 @Timeout(10, unit = TimeUnit.SECONDS)
 class MIG047V4FieldOverrideMapperTest {
-
     @Test
     @DisplayName(
         "MIG-047 P1-B: toFieldOverrideResponse must not throw on GROUP_ARTIFACT_PATTERN marker; " +

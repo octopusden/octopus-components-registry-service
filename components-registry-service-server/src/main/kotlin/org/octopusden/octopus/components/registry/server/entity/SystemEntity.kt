@@ -13,17 +13,13 @@ class SystemEntity(
     @Id
     @Column(name = "code", length = 50, nullable = false)
     var code: String = "",
-
     @Column(name = "name")
     var name: String? = null,
-
     @Column(name = "description", columnDefinition = "TEXT")
     var description: String? = null,
-
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     var createdAt: Instant? = null,
-
     @UpdateTimestamp
     @Column(name = "updated_at")
     var updatedAt: Instant? = null,

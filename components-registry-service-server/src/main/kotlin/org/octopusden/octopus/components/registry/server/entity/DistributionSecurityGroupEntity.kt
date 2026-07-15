@@ -22,14 +22,11 @@ class DistributionSecurityGroupEntity(
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     var id: UUID? = null,
-
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "component_id", nullable = false)
     var component: ComponentEntity,
-
     @Column(name = "group_type", length = 20, nullable = false)
     var groupType: String = "read",
-
     @Column(name = "group_name", nullable = false)
     var groupName: String = "",
 )

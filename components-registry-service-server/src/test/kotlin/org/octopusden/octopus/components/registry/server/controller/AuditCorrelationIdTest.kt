@@ -128,7 +128,8 @@ class AuditCorrelationIdTest {
                                 """"fieldOverrides":[{"overriddenAttribute":"build.javaVersion",""" +
                                 """"versionRange":"(,2)","value":"$overrideValue"}]}""",
                         ),
-                ).andReturn().response
+                ).andReturn()
+                .response
         assert(res.status == 200) { "combined save failed: HTTP ${res.status} — ${res.contentAsString}" }
     }
 
@@ -147,7 +148,8 @@ class AuditCorrelationIdTest {
                             """{"version":${versionOf(id)},""" +
                                 """"baseConfiguration":{"build":{"buildSystem":"MAVEN","javaVersion":"$java"}}}""",
                         ),
-                ).andReturn().response
+                ).andReturn()
+                .response
         assert(res.status == 200) { "base save failed: HTTP ${res.status} — ${res.contentAsString}" }
     }
 

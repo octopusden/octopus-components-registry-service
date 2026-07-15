@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Test
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
-import org.mockito.Mockito.`when` as whenMock
 import org.octopusden.cloud.commons.security.SecurityService
 import org.octopusden.cloud.commons.security.dto.Role
 import org.octopusden.cloud.commons.security.dto.User
@@ -15,6 +14,7 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.springframework.beans.factory.ObjectProvider
 import java.util.UUID
+import org.mockito.Mockito.`when` as whenMock
 
 /**
  * Fast (no-Spring) unit coverage for [PermissionEvaluator.canEditComponent], pinning
@@ -47,11 +47,9 @@ class PermissionEvaluatorTest {
             emptySet(),
         )
 
-    private fun viewer(username: String) =
-        User(username, setOf(Role("ROLE_VIEWER", setOf("ACCESS_COMPONENTS"))), emptySet())
+    private fun viewer(username: String) = User(username, setOf(Role("ROLE_VIEWER", setOf("ACCESS_COMPONENTS"))), emptySet())
 
-    private fun noAccess(username: String) =
-        User(username, setOf(Role("ROLE_NO_ACCESS", emptySet())), emptySet())
+    private fun noAccess(username: String) = User(username, setOf(Role("ROLE_NO_ACCESS", emptySet())), emptySet())
 
     private fun stub(
         id: UUID,

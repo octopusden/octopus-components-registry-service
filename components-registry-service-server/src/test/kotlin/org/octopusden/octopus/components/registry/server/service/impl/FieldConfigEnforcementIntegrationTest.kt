@@ -2,11 +2,11 @@ package org.octopusden.octopus.components.registry.server.service.impl
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
-import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
@@ -215,8 +215,7 @@ class FieldConfigEnforcementIntegrationTest {
 
     private fun JsonNode.jiraTechnical(): Boolean = baseRow()["jira"]["technical"].asBoolean()
 
-    private fun JsonNode.baseJira(field: String): String? =
-        baseRow()["jira"]?.get(field)?.takeUnless { it.isNull }?.asText()
+    private fun JsonNode.baseJira(field: String): String? = baseRow()["jira"]?.get(field)?.takeUnless { it.isNull }?.asText()
 
     /**
      * Create a component OWNED BY the editor "bob" (so `editorJwt()` passes the
@@ -243,7 +242,8 @@ class FieldConfigEnforcementIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body),
                 ).andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         return objectMapper.readTree(response)
     }
 
@@ -453,7 +453,8 @@ class FieldConfigEnforcementIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""{"overriddenAttribute":"jira.technical","versionRange":"[1.0,2.0)","value":true}"""),
                 ).andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val overrideId = objectMapper.readTree(overrideResponse)["id"].asText()
 
         withFieldConfig(mapOf("jira" to mapOf("technical" to mapOf("editable" to "adminOnly")))) {
@@ -531,7 +532,8 @@ class FieldConfigEnforcementIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""{"overriddenAttribute":"jira.technical","versionRange":"[1.0,2.0)","value":true}"""),
                 ).andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val overrideId = objectMapper.readTree(overrideResponse)["id"].asText()
 
         withFieldConfig(mapOf("jira" to mapOf("technical" to mapOf("editable" to "adminOnly")))) {
@@ -548,8 +550,10 @@ class FieldConfigEnforcementIntegrationTest {
 
     // ---- helpers for the aspect/parent/people coverage below ----
 
-    private fun JsonNode.baseScalar(aspect: String, field: String): String? =
-        baseRow()[aspect]?.get(field)?.takeUnless { it.isNull }?.asText()
+    private fun JsonNode.baseScalar(
+        aspect: String,
+        field: String,
+    ): String? = baseRow()[aspect]?.get(field)?.takeUnless { it.isNull }?.asText()
 
     /** POST a bob-owned component with a caller-supplied baseConfiguration (as admin). */
     private fun createBobRaw(baseConfig: String = """{"build":{"buildSystem":"MAVEN"}}"""): JsonNode {
@@ -560,7 +564,8 @@ class FieldConfigEnforcementIntegrationTest {
             mvc
                 .perform(post("/rest/api/4/components").with(adminJwt()).contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated)
-                .andReturn().response.contentAsString,
+                .andReturn()
+                .response.contentAsString,
         )
     }
 
@@ -576,7 +581,8 @@ class FieldConfigEnforcementIntegrationTest {
     @DisplayName("hidden aspect field (jira.minorVersionFormat): PATCH change silently STRIPPED, not applied, not 4xx")
     fun hiddenAspectField_stripOnPatch() {
         val mvf = "${'$'}major.${'$'}minor"
-        val created = createBobRaw("""{"build":{"buildSystem":"MAVEN"},"jira":{"projectKey":"${uniqueProjectKey()}","minorVersionFormat":"$mvf"}}""")
+        val created =
+            createBobRaw("""{"build":{"buildSystem":"MAVEN"},"jira":{"projectKey":"${uniqueProjectKey()}","minorVersionFormat":"$mvf"}}""")
         val id = created["id"].asText()
         val version = created["version"].asLong()
 
@@ -592,7 +598,9 @@ class FieldConfigEnforcementIntegrationTest {
     fun hiddenAspectField_stripOnCreate() {
         withFieldConfig(mapOf("jira" to mapOf("releaseVersionFormat" to mapOf("visibility" to "hidden")))) {
             val created =
-                createBobRaw("""{"build":{"buildSystem":"MAVEN"},"jira":{"projectKey":"${uniqueProjectKey()}","releaseVersionFormat":"${'$'}foo"}}""")
+                createBobRaw(
+                    """{"build":{"buildSystem":"MAVEN"},"jira":{"projectKey":"${uniqueProjectKey()}","releaseVersionFormat":"${'$'}foo"}}""",
+                )
             assertEquals(null, created.baseScalar("jira", "releaseVersionFormat"), "hidden aspect must be stripped on create")
         }
     }
@@ -670,8 +678,11 @@ class FieldConfigEnforcementIntegrationTest {
 
             val overrides =
                 objectMapper.readTree(
-                    mvc.perform(get("/rest/api/4/components/$id/field-overrides").with(adminJwt()))
-                        .andExpect(status().isOk).andReturn().response.contentAsString,
+                    mvc
+                        .perform(get("/rest/api/4/components/$id/field-overrides").with(adminJwt()))
+                        .andExpect(status().isOk)
+                        .andReturn()
+                        .response.contentAsString,
                 )
             assertTrue(
                 overrides.any { it["overriddenAttribute"].asText() == "jira.technical" },
@@ -756,7 +767,9 @@ class FieldConfigEnforcementIntegrationTest {
             val created =
                 objectMapper.readTree(
                     adminPost(
-                        """{"name":"crsB_rm_${UUID.randomUUID().toString().take(8)}","componentOwner":"owner1","releaseManager":["bob"],""" +
+                        """{"name":"crsB_rm_${UUID.randomUUID().toString().take(
+                            8,
+                        )}","componentOwner":"owner1","releaseManager":["bob"],""" +
                             """"group":{"groupKey":"org.example.test","isFake":false},"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
                     ).andExpect(status().isCreated).andReturn().response.contentAsString,
                 )
@@ -848,7 +861,8 @@ class FieldConfigEnforcementIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""{"overriddenAttribute":"escrow.generation","versionRange":"[1.0,2.0)","value":"MANUAL"}"""),
                 ).andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val overrideId = objectMapper.readTree(overrideResponse)["id"].asText()
 
         withFieldConfig(mapOf("escrow" to mapOf("generation" to mapOf("editable" to "adminOnly")))) {
@@ -877,7 +891,8 @@ class FieldConfigEnforcementIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""{"overriddenAttribute":"escrow.generation","versionRange":"[1.0,2.0)","value":"MANUAL"}"""),
                 ).andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val overrideId = objectMapper.readTree(overrideResponse)["id"].asText()
 
         withFieldConfig(mapOf("escrow" to mapOf("generation" to mapOf("editable" to "adminOnly")))) {

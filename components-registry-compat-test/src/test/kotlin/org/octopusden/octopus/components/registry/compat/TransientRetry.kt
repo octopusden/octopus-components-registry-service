@@ -18,7 +18,10 @@ package org.octopusden.octopus.components.registry.compat
  * diff to absorb, and a both-sides outage must surface, not loop.
  */
 object TransientRetry {
-    fun shouldRetry(baselineStatus: Int, candidateStatus: Int): Boolean {
+    fun shouldRetry(
+        baselineStatus: Int,
+        candidateStatus: Int,
+    ): Boolean {
         if (baselineStatus == candidateStatus) return false
         val baseline5xx = baselineStatus in 500..599
         val candidate5xx = candidateStatus in 500..599

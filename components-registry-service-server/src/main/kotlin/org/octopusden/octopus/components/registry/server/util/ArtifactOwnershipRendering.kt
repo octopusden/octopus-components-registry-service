@@ -27,7 +27,10 @@ object ArtifactOwnershipRendering {
     fun escapeLiteralToken(token: String): String = token.replace(".", "\\.")
 
     /** Render the v3 WIRE `artifactIdPattern` for a mapping from its [mode] and ordered literal [tokens]. */
-    fun renderArtifactPattern(mode: ArtifactIdMode, tokens: List<String>): String =
+    fun renderArtifactPattern(
+        mode: ArtifactIdMode,
+        tokens: List<String>,
+    ): String =
         when (mode) {
             ArtifactIdMode.ALL, ArtifactIdMode.ALL_EXCEPT_CLAIMED -> CATCH_ALL_PATTERN
             ArtifactIdMode.EXPLICIT -> tokens.joinToString(",") { escapeLiteralToken(it) }
@@ -39,7 +42,11 @@ object ArtifactOwnershipRendering {
      * tokens claimed under the same group in an intersecting range, escaped + alternated). With no
      * siblings there is nothing to exclude, so it degrades to the plain catch-all.
      */
-    fun renderExportPattern(mode: ArtifactIdMode, tokens: List<String>, siblings: List<String>): String =
+    fun renderExportPattern(
+        mode: ArtifactIdMode,
+        tokens: List<String>,
+        siblings: List<String>,
+    ): String =
         when (mode) {
             ArtifactIdMode.ALL -> CATCH_ALL_PATTERN
             ArtifactIdMode.EXPLICIT -> renderArtifactPattern(mode, tokens)

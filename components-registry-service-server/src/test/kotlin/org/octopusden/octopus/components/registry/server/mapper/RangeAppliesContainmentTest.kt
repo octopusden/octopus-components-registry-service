@@ -26,7 +26,6 @@ import org.octopusden.releng.versions.VersionRangeFactory
  * (false) rather than wrong. See the deferral note appended to the doc.
  */
 class RangeAppliesContainmentTest {
-
     private val versionNames = VersionNames("serviceCBranch", "serviceC", "minorC")
     private val versionRangeFactory = VersionRangeFactory(versionNames)
     private val numericVersionFactory = NumericVersionFactory(versionNames)
@@ -230,8 +229,20 @@ class RangeAppliesContainmentTest {
                 // to +inf past the parent's finite top). The structural guard (open-upper child requires
                 // an open-upper parent) makes this false regardless of how high the parent's finite
                 // upper is — encoding +inf as a finite number is the flaw being fixed.
-                Arguments.of("OE-9", "[1.0,10000000.0)", "[2.0,)", false, "bounded parent above the sentinel must NOT contain an open-upper child"),
-                Arguments.of("OE-10", "[5.0,)", "[2.0,)", false, "open-upper child's floor (2.0) is below the open-upper parent's floor (5.0)"),
+                Arguments.of(
+                    "OE-9",
+                    "[1.0,10000000.0)",
+                    "[2.0,)",
+                    false,
+                    "bounded parent above the sentinel must NOT contain an open-upper child",
+                ),
+                Arguments.of(
+                    "OE-10",
+                    "[5.0,)",
+                    "[2.0,)",
+                    false,
+                    "open-upper child's floor (2.0) is below the open-upper parent's floor (5.0)",
+                ),
             )
     }
 }

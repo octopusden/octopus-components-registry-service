@@ -2,10 +2,10 @@ package org.octopusden.octopus.components.registry.server.migration
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
-import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
@@ -76,7 +76,10 @@ class TeamcityProjectIdPersistenceRoundtripTest {
 
     private fun uniqueName(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(8)}"
 
-    private fun createComponent(name: String, tcProjectId: String? = null): JsonNode {
+    private fun createComponent(
+        name: String,
+        tcProjectId: String? = null,
+    ): JsonNode {
         val body = buildMap<String, Any?> {
             put("name", name)
             // Strict-contract minimum fields (UI-swift-sloth): every component

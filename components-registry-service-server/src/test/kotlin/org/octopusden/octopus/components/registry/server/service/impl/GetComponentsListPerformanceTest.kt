@@ -53,7 +53,6 @@ import kotlin.system.measureTimeMillis
 @Timeout(600)
 @Tag("performance")
 class GetComponentsListPerformanceTest {
-
     @MockBean
     @Suppress("UnusedPrivateProperty")
     private lateinit var authServerClient: AuthServerClient
@@ -69,9 +68,10 @@ class GetComponentsListPerformanceTest {
 
     init {
         val testResourcesPath =
-            Paths.get(
-                GetComponentsListPerformanceTest::class.java.getResource("/expected-data")!!.toURI(),
-            ).parent
+            Paths
+                .get(
+                    GetComponentsListPerformanceTest::class.java.getResource("/expected-data")!!.toURI(),
+                ).parent
         System.setProperty("COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR", testResourcesPath.toString())
     }
 
@@ -187,7 +187,11 @@ class GetComponentsListPerformanceTest {
 
         log.info(
             "getComponents() perf — components={}, statements={}, iterations={}, elapsedMs={}, medianMs={}",
-            COMPONENT_COUNT, statementCount, MEASURED_ITERATIONS, elapsed.toList(), median,
+            COMPONENT_COUNT,
+            statementCount,
+            MEASURED_ITERATIONS,
+            elapsed.toList(),
+            median,
         )
 
         assertTrue(

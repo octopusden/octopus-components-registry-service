@@ -5,9 +5,9 @@ import com.fasterxml.jackson.annotation.JsonProperty
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 data class ComponentVersionFormatDTO(
-        @JsonProperty("majorVersionFormat") val majorVersionFormat: String,
-        @JsonProperty("releaseVersionFormat") val releaseVersionFormat: String,
-        @JsonProperty("buildVersionFormat") val buildVersionFormat: String,
-        @JsonProperty("lineVersionFormat") val lineVersionFormat: String,
-        @JsonProperty("hotfixVersionFormat") val hotfixVersionFormat: String?,
-        )
+    @JsonProperty("majorVersionFormat") val majorVersionFormat: String,
+    @JsonProperty("releaseVersionFormat") val releaseVersionFormat: String,
+    @JsonProperty("buildVersionFormat") val buildVersionFormat: String,
+    @JsonProperty("lineVersionFormat") val lineVersionFormat: String,
+    @JsonProperty("hotfixVersionFormat") val hotfixVersionFormat: String?,
+)
