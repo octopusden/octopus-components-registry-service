@@ -2332,10 +2332,17 @@ directory failure can only deny edit access here, never grant it (fail-closed, t
 opposite direction from the fail-open convention used by the read-only
 active-employee checks elsewhere in `EmployeeDirectoryService`).
 
-This is a derived grant only: `GET /{idOrName}/editors` intentionally continues to
-list just the explicit `componentOwner`/`releaseManager`/`securityChampion` — the
-owner's manager can edit the component but does not appear as a listed editor in the
-Portal.
+Unlike the admin bypass (an open-ended Keycloak realm-role, not per-component data),
+the manager resolves to one concrete person for this component, so — unlike an
+earlier draft of this requirement — it IS enumerated: `GET /{idOrName}/editors` adds
+a `manager` field (null when the owner has none / is unresolvable / employee-service
+is unavailable) alongside `componentOwner`/`releaseManager`/`securityChampion`, so the
+Portal's "who can edit" surface reflects this grant. `getManager` backs two call
+sites per request in the worst case (the `@PreAuthorize` check and this projection),
+so a resolved answer — including a confirmed "no manager" — is cached for 2 minutes
+per owner in `EmployeeDirectoryService`; lookup failures are deliberately excluded
+from the cache so a transient employee-service outage cannot extend into a
+multi-minute false denial after the service recovers.
 
 **Acceptance criteria:**
 1. The manager of a component's `componentOwner` (per employee-service `getManager`)
@@ -2343,6 +2350,8 @@ Portal.
 2. A user who is not the owner's manager gets 403.
 3. When employee-service reports no manager for the owner (`ManagerDTO.manager ==
    null`), the grant is denied.
+4. `GET /{idOrName}/editors` includes a `manager` field resolved the same way; it is
+   null when the owner has no manager.
 
 **Test method:** `PermissionEvaluatorTest` —
 `SYS-063 manager of componentOwner allowed`,
@@ -2350,4 +2359,6 @@ Portal.
 `SYS-063 owner with no manager denied`;
 `ComponentOwnershipEditSecurityTest` —
 `SYS-063 manager of componentOwner can PATCH the component`,
-`SYS-063 non-manager of componentOwner gets 403 on PATCH`.
+`SYS-063 non-manager of componentOwner gets 403 on PATCH`,
+`SYS-063 editors includes owner manager`,
+`SYS-063 editors omits manager when owner has none`.

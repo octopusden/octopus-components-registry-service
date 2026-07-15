@@ -440,10 +440,12 @@ class ComponentManagementServiceImpl(
     @Transactional(readOnly = true)
     override fun getEditors(idOrName: String): ComponentEditorsResponse {
         val entity = findByIdOrName(idOrName)
+        val ownerTrimmed = entity.componentOwner?.trim()
         return ComponentEditorsResponse(
             componentOwner = entity.componentOwner,
             releaseManagers = entity.releaseManagerUsernames(),
             securityChampions = entity.securityChampionUsernames(),
+            manager = ownerTrimmed?.takeIf { it.isNotEmpty() }?.let { employeeDirectory.getManager(it) },
         )
     }
 

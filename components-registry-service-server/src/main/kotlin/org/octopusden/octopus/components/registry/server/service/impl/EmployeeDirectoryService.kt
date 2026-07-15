@@ -1,10 +1,14 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
+import com.github.benmanes.caffeine.cache.Cache
+import com.github.benmanes.caffeine.cache.Caffeine
 import org.octopusden.employee.client.EmployeeServiceClient
 import org.octopusden.employee.client.common.exception.NotFoundException
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.stereotype.Service
+import java.time.Duration
+import java.util.Optional
 
 /**
  * Resolution of an active-employee lookup.
@@ -47,6 +51,15 @@ enum class ActiveStatus {
 class EmployeeDirectoryService(
     private val clientProvider: ObjectProvider<EmployeeServiceClient>,
 ) {
+    // Bounded (owner count is small relative to component count) short-TTL cache for
+    // getManager — see its doc for why failures are excluded from this cache.
+    private val managerCache: Cache<String, Optional<String>> =
+        Caffeine
+            .newBuilder()
+            .expireAfterWrite(MANAGER_CACHE_TTL)
+            .maximumSize(MANAGER_CACHE_MAX_SIZE)
+            .build()
+
     /** True when an employee-service client bean is wired (flag on + non-blank URL). */
     fun isEnabled(): Boolean = clientProvider.getIfAvailable() != null
 
@@ -150,19 +163,36 @@ class EmployeeDirectoryService(
 
     /**
      * Returns the manager's sAMAccountName for [ownerUsername], or null when the
-     * user has no manager, is not found, or the service is unavailable (fail-open).
+     * user has no manager, is not found, or the service is unavailable (fail-open
+     * for reads; [PermissionEvaluator.canEditComponent]
+     * [org.octopusden.octopus.components.registry.server.security.PermissionEvaluator.canEditComponent]
+     * treats a null return as fail-**closed** — a directory failure can only deny
+     * that grant, never allow it).
+     *
+     * Backs two call sites per request in the worst case (`canEditComponent`'s
+     * `@PreAuthorize` check, and the `/editors` projection's manager field), so a
+     * resolved answer — including a confirmed "no manager" — is cached for
+     * [MANAGER_CACHE_TTL] keyed by owner username. Failures (transport/timeout/no
+     * client) are deliberately NOT cached: caching those would extend a transient
+     * employee-service outage into a multi-minute false denial after the service
+     * recovers, which is worse than the extra call.
      */
     @Suppress("TooGenericExceptionCaught")
     fun getManager(ownerUsername: String): String? {
+        managerCache.getIfPresent(ownerUsername)?.let { return it.orElse(null) }
         val client = clientProvider.getIfAvailable() ?: return null
-        return try {
-            client.getManager(ownerUsername).manager
-        } catch (e: NotFoundException) {
-            null
-        } catch (e: Exception) {
-            log.warn("employee-service: getManager('{}') failed — skipping manager check", ownerUsername, e)
-            null
-        }
+        val resolved =
+            try {
+                Optional.ofNullable(client.getManager(ownerUsername).manager)
+            } catch (e: NotFoundException) {
+                log.debug("employee-service: getManager('{}') — owner not found ({})", ownerUsername, e.message)
+                Optional.empty()
+            } catch (e: Exception) {
+                log.warn("employee-service: getManager('{}') failed — skipping manager check", ownerUsername, e)
+                return null
+            }
+        managerCache.put(ownerUsername, resolved)
+        return resolved.orElse(null)
     }
 
     companion object {
@@ -172,6 +202,12 @@ class EmployeeDirectoryService(
          * ever registers it, ACTIVE/INACTIVE still map to UP.
          */
         const val PROBE_USERNAME = "octopus-integration-health-probe"
+
+        /** How long a resolved [getManager] answer (including "no manager") is cached. */
+        private val MANAGER_CACHE_TTL = Duration.ofMinutes(2)
+
+        /** Bound on distinct cached owners — components have far fewer distinct owners than rows. */
+        private const val MANAGER_CACHE_MAX_SIZE = 10_000L
 
         private val log = LoggerFactory.getLogger(EmployeeDirectoryService::class.java)
     }

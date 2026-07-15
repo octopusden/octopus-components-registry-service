@@ -724,6 +724,9 @@
           "componentOwner" : {
             "type" : "string"
           },
+          "manager" : {
+            "type" : "string"
+          },
           "releaseManagers" : {
             "items" : {
               "type" : "string"
