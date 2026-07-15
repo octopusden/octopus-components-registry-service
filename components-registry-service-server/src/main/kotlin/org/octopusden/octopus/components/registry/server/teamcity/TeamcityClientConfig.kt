@@ -159,10 +159,16 @@ internal fun mapTcProjectsToComponentMatches(
 private val PROJECT_VERSION_FORMAT = Regex("""\d+(\.\d+)*(-\d+)?""")
 
 /**
- * Release line for a project: the project-level `PROJECT_VERSION`, else the first non-paused
- * buildType that declares one; null when neither yields a valid version. `%param%` references
- * are resolved via [resolveParam] (a buildType's own params overlaid on the project's), and an
- * unresolved reference or a value not matching [PROJECT_VERSION_FORMAT] counts as no version.
+ * Release line for a project: the project-level `PROJECT_VERSION`, else the version declared
+ * by its non-paused build types. `%param%` references are resolved via [resolveParam] (a
+ * buildType's own params overlaid on the project's); an unresolved reference or a value not
+ * matching [PROJECT_VERSION_FORMAT] counts as no version.
+ *
+ * The build-type fallback is DETERMINISTIC and conflict-safe: it collects the distinct valid
+ * versions across all eligible build types (evaluated in `id` order, independent of the TC
+ * API's response order) and returns the single value if they agree, or null if they conflict
+ * (or none declares one). This prevents repeated syncs from flipping a project's line without
+ * an actual TeamCity configuration change.
  */
 private fun getProjectVersion(
     project: ExternalTeamcityProject,
@@ -170,18 +176,15 @@ private fun getProjectVersion(
 ): String? {
     resolveProjectVersion(projectParams)?.let { return it }
 
-    return project.buildTypes
+    val buildTypeVersions = project.buildTypes
         ?.buildTypes
-        ?.asSequence()
-        ?.filter { it.paused != true }
-        ?.firstNotNullOfOrNull { bt ->
-            val own = bt.parameters.toParamMap()
-            if (own.containsKey(PROJECT_VERSION_PARAM)) {
-                resolveProjectVersion(projectParams + own)
-            } else {
-                null
-            }
-        }
+        .orEmpty()
+        .filter { it.paused != true && it.parameters.toParamMap().containsKey(PROJECT_VERSION_PARAM) }
+        .sortedBy { it.id }
+        .mapNotNull { bt -> resolveProjectVersion(projectParams + bt.parameters.toParamMap()) }
+        .distinct()
+    // Exactly one agreed version → use it; none or conflicting → ambiguous, no version.
+    return buildTypeVersions.singleOrNull()
 }
 
 /** Resolve `PROJECT_VERSION` from [params] and accept it only if it is a valid version string. */

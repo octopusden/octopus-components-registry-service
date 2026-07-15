@@ -692,9 +692,15 @@ class ComponentManagementServiceImpl(
             entity.securityGroups.clear()
             addSecurityGroups(entity, it.map { req -> req.groupType to req.groupName })
         }
-        request.teamcityProjects?.let {
-            entity.versionLines.clear()
-            addTeamcityProjects(entity, it.map { req -> req.projectId })
+        request.teamcityProjects?.let { reqs ->
+            // `version` is sync-owned metadata (derived from TeamCity), and v4 write carries only
+            // project ids. So a read-modify-write PATCH must NOT wipe it: keep the existing
+            // version_line rows whose project id is still requested (preserving their version),
+            // drop the rest, and add version = null rows only for genuinely new project ids.
+            val desiredProjectIds = reqs.map { it.projectId }.toSet()
+            entity.versionLines.removeAll { it.teamcityProject.projectId !in desiredProjectIds }
+            val keptProjectIds = entity.versionLines.map { it.teamcityProject.projectId }.toSet()
+            addTeamcityProjects(entity, desiredProjectIds.filterNot { it in keptProjectIds })
         }
         request.docs?.let {
             entity.docLinks.clear()

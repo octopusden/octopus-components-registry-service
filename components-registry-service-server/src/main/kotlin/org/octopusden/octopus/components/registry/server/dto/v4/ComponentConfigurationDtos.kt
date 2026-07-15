@@ -402,8 +402,10 @@ data class SecurityGroupRequest(
 data class TeamcityProjectResponse(
     val id: UUID,
     val projectId: String,
+    @field:Schema(nullable = true)
     val projectUrl: String? = null,
     val sortOrder: Int,
+    @field:Schema(nullable = true)
     val projectVersion: String? = null,
 )
 

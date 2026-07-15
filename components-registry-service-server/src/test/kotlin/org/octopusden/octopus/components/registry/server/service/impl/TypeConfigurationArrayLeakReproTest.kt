@@ -156,7 +156,7 @@ class TypeConfigurationArrayLeakReproTest {
                 c.configurations.forEach { cfg -> cfg.dockerImages.size }
                 c.artifactMappings.size
                 c.securityGroups.size
-                c.teamcityProjects.size
+                c.versionLines.size
                 c.docLinks.size
                 c.releaseManagers.size
                 c.securityChampions.size

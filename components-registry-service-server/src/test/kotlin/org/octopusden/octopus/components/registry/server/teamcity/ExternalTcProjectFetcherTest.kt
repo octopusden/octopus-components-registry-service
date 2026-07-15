@@ -439,13 +439,32 @@ class ExternalTcProjectFetcherTest {
                 buildTypes = listOf(
                     // Paused buildType's version is ignored...
                     buildType(id = "Paused_1x", paused = true, projectVersion = "1.2"),
-                    // ...first non-paused one wins.
+                    // ...the single non-paused declared version wins.
                     buildType(id = "Active_2x", projectVersion = "2.4"),
                 ),
             ),
         )
         val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
         assertEquals("2.4", result[fooUuid]!!.single().projectVersion)
+    }
+
+    @Test
+    @DisplayName("conflicting versions across active buildTypes → ambiguous, null (deterministic)")
+    fun conflictingBuildTypeVersionsAreNull() {
+        val projects = listOf(
+            tcProject(
+                id = "Tc_Foo",
+                webUrl = "http://tc/foo",
+                componentName = "foo",
+                buildTypes = listOf(
+                    buildType(id = "A", projectVersion = "1.2"),
+                    buildType(id = "B", projectVersion = "2.4"),
+                ),
+            ),
+        )
+        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId)
+        // Two active buildTypes declare different versions → no single answer → null.
+        assertEquals(null, result[fooUuid]!!.single().projectVersion)
     }
 
     @Test

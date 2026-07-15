@@ -2581,9 +2581,11 @@
             "type" : "string"
           },
           "projectUrl" : {
+            "nullable" : true,
             "type" : "string"
           },
           "projectVersion" : {
+            "nullable" : true,
             "type" : "string"
           },
           "sortOrder" : {
