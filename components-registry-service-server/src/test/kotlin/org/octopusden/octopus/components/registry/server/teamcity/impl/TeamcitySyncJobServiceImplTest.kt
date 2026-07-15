@@ -198,8 +198,13 @@ class TeamcitySyncJobServiceImplTest {
     fun sys060RecordsCompleted() {
         val populated =
             TeamcitySyncResult(
-                scanned = 5, updated = 2, unchanged = 3,
-                skippedNoMatch = 0, skippedAmbiguous = 0, ambiguousAutoResolved = 0, droppedLines = 0,
+                scanned = 5,
+                updated = 2,
+                unchanged = 3,
+                skippedNoMatch = 0,
+                skippedAmbiguous = 0,
+                ambiguousAutoResolved = 0,
+                droppedLines = 0,
                 errors = emptyList(),
             )
         val syncService = mock(TeamcitySyncService::class.java)
