@@ -351,6 +351,18 @@ The fallback path is exercised by code paths that don't carry a request context.
 - **Field-override coverage:** `createFieldOverride` / `updateFieldOverride` / `deleteFieldOverride` publish a Component `UPDATE` event keyed by `fieldOverride[<attr>]`, so version-range edits are auditable like top-level attribute edits (SYS-050).
 - **TeamCity sync not audited:** the automated `changedBy=system` reconciliation in `TeamcitySyncService` writes no `audit_log` row (it was noise); the re-link is logged at INFO instead (SYS-051).
 
+#### 6.4.2 TeamCity project resolution (sync)
+
+`TeamcitySyncService` links each component to its TeamCity **project(s)** by reconciling `component_teamcity_projects` against a live TeamCity scan (`TcProjectFetcher`; scheduled cron or `POST /admin/teamcity-project-ids/sync`). Resolution rules:
+
+- **Match key:** a TC project is claimed by the component whose key equals the project's `COMPONENT_NAME` parameter. TeamCity parameter values may contain TeamCity `%param%` references (e.g. `my-component-%CUSTOMER_NAME%`); these are resolved recursively against the project's parameters, stopping on a missing key or a reference cycle (`resolveParam` / `resolveReferences`).
+- **Archived exclusion:** archived TC projects are dropped.
+- **All-paused exclusion:** a project whose build configs are **all** paused (no active build) is dropped; a project with no build configs at all is kept (absence of builds is not "all paused").
+- **Release line:** the project's line is its `PROJECT_VERSION` parameter; when absent on the project it falls back to the first non-paused buildType that declares it. A component may own **one row per distinct `PROJECT_VERSION` line** (persisted in `project_version`, ordered by version then id for a stable `sort_order`).
+- **Null-version discard:** if any candidate for a component declares a `PROJECT_VERSION`, the null-version ("line-less") candidates are dropped; nulls are kept only when every candidate is null (the single default line). This is useful for the case where there is main parent TC project with no `PROJECT_VERSION` that aggregates multiple projects with different line.
+- **Per-line tie-break:** when a line has >1 candidate, keep those owning a **non-paused** CDRelease build (`teamcity.sync.cd-release-template-id`, default `CDRelease`), then the lexicographically smallest project id; a line where no candidate has a release build is left unresolved and counted `skipped_ambiguous`.
+- **URL guard:** a winner without a usable `http(s)` `webUrl` is dropped. Counters are per **component**, not per line: dropping one line's winner does not by itself count `skipped_no_match`. The component still counts `updated`/`unchanged` if another line has a usable winner, `skipped_ambiguous` if another line was left unresolved, and `skipped_no_match` only when no line yields a usable winner and none was ambiguous.
+
 ### 6.5 Backward Compatibility
 - v1/v2/v3 endpoints: **permit all** (existing 7+ Feign client consumers don't send JWT).
 - v4 reads (`GET /components/**`, `/config/**`): **permit all** through the filter chain; method-level `@PreAuthorize` passes thanks to `ROLE_ANONYMOUS → ACCESS_COMPONENTS` in the role map.

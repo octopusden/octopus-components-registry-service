@@ -3,10 +3,11 @@ package org.octopusden.octopus.components.registry.server.teamcity
 import mu.KotlinLogging
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
-import org.octopusden.octopus.components.registry.server.entity.ComponentTeamcityProjectEntity
-import org.octopusden.octopus.components.registry.server.mapper.composeTeamcityProjectUrl
+import org.octopusden.octopus.components.registry.server.entity.TeamcityProjectEntity
+import org.octopusden.octopus.components.registry.server.entity.VersionLineEntity
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
-import org.octopusden.octopus.components.registry.server.repository.ComponentTeamcityProjectRepository
+import org.octopusden.octopus.components.registry.server.repository.TeamcityProjectRepository
+import org.octopusden.octopus.components.registry.server.repository.VersionLineRepository
 import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
@@ -22,35 +23,25 @@ import java.util.UUID
  *    that carries a `COMPONENT_NAME` parameter (any value), then group the
  *    response client-side by the parameter value.
  * 3. For each component:
- *      - 0 matches → no write. Any existing rows in `component_teamcity_projects`
- *        are preserved as-is (the sync path only writes when [applyMatch]
- *        actually runs, and it only runs for components with a non-null TC
- *        `pick`). To clear a curated assignment, the operator deletes the
- *        row via the v4 API. The `skippedNoMatch` counter increments for
- *        every such component regardless of whether the existing rows hold
- *        operator-curated data — it reports "no TC match this run", not
- *        "no link in the DB".
- *      - 1 match with non-blank webUrl → upsert one row in
- *        `component_teamcity_projects` with the matched project id; count
- *        `updated` or `unchanged`.
- *      - 1 match with blank webUrl → treat as no-match (cannot link).
- *      - 2+ matches → CDRelease tie-break:
- *          - filter to projects with `hasCdReleaseBuild = true`;
- *          - if filtered is empty → leave nulls, count `skippedAmbiguous`
- *            (no release build → no automated way to pick the right project);
- *          - if non-empty → pick the lexicographically smallest by id (stable
- *            across runs), apply the match, count it under `updated`/`unchanged`
- *            and bump `ambiguousAutoResolved` for visibility.
- *        Manual override remains the escape hatch for rows that still skip.
- *        TODO: properly support multiple TC projects per component (DTO/UI work).
+ *      - 0 matches → no write. Existing `version_line` rows are preserved as-is (the
+ *        sync path only writes when [applyMatch] runs). To clear a curated assignment,
+ *        the operator deletes it via the v4 API. `skippedNoMatch` reports "no TC match
+ *        this run", not "no link in the DB".
+ *      - ≥1 match →
+ *          - If any candidate has a `PROJECT_VERSION`,
+ *            drop the null-version ones (nulls kept only when all are null).
+ *          - Group survivors by version and keep one project per line:
+ *            single candidate wins; on ties prefer a `hasCdReleaseBuild` project then the smallest id;
+ *            a tie with no release build leaves that line unresolved.
+ *          - Count the component once: `updated`/`unchanged` (+`ambiguousAutoResolved`
+ *            if a line was tie-broken), else `skippedAmbiguous` (a line unresolved),
+ *            else `skippedNoMatch`.
  *
- * Schema v2: the per-component TC pointer is now a child table
- * (`component_teamcity_projects`) rather than a pair of scalar columns on
- * `components`. TC sync writes exactly one row per matched component (the
- * `sortOrder = 0` slot). Multi-project support is still future work; for
- * now sync collapses to one row to preserve v1–v3 wire compatibility.
+ * Persistence (schema): each kept line is a `version_line` row (component + version)
+ * pointing at a deduplicated `teamcity_project` (unique `project_id`). The web URL is
+ * not stored — it is composed from the project id at read time.
  *
- * Idempotent: only writes when the matched project id actually changes. The
+ * Idempotent: only writes when the matched project set actually changes. The
  * change is traced via an INFO log line (so admins can find the source of a
  * write) but deliberately does NOT write an `audit_log` row: TeamCity sync is an
  * automated reconciliation, and one such row per re-linked component was noise
@@ -69,7 +60,8 @@ import java.util.UUID
 @Service
 class TeamcitySyncService(
     private val componentRepository: ComponentRepository,
-    private val componentTeamcityProjectRepository: ComponentTeamcityProjectRepository,
+    private val versionLineRepository: VersionLineRepository,
+    private val teamcityProjectRepository: TeamcityProjectRepository,
     private val tcProjectFetcher: TcProjectFetcher,
     // Retained as the audit seam even though TeamCity sync is deliberately NOT
     // audited (SYS-051): TeamcitySyncServiceTest injects a recording publisher
@@ -141,61 +133,47 @@ class TeamcitySyncService(
         var skippedNoMatch = 0
         var skippedAmbiguous = 0
         var ambiguousAutoResolved = 0
+        var droppedLines = 0
         val errors = mutableListOf<String>()
 
         for (component in components) {
             val componentId = component.id ?: continue
             try {
-                val candidates = matches[componentId].orEmpty()
-                val pick: TcProject?
-                val pickedFromAmbiguous: Boolean
-                when {
-                    candidates.isEmpty() -> {
-                        pick = null
-                        pickedFromAmbiguous = false
-                    }
-                    candidates.size == 1 -> {
-                        pick = candidates.single()
-                        pickedFromAmbiguous = false
-                    }
-                    else -> {
-                        pick = resolveAmbiguous(component, componentId, candidates)
-                        pickedFromAmbiguous = pick != null
-                    }
+                val rawCandidates = matches[componentId].orEmpty()
+                val candidates = if (rawCandidates.any { it.projectVersion != null }) {
+                    rawCandidates.filter { it.projectVersion != null }
+                } else {
+                    rawCandidates
                 }
 
+                // Resolve each PROJECT_VERSION group to one winner.
+                val resolutions = candidates
+                    .groupBy { it.projectVersion }
+                    .map { (version, group) -> resolveVersionGroup(component, componentId, version, group) }
+                val ambiguousLineCount = resolutions.count { it.ambiguousUnresolved }
+                val picks = resolutions.mapNotNull { it.pick }
+
                 when {
-                    candidates.isEmpty() -> {
-                        skippedNoMatch++
+                    picks.isNotEmpty() -> {
+                        val didChange = applyMatch(component, picks.map { it.project }, changedBy)
+                        if (didChange) updated++ else unchanged++
+                        // Sub-counter of updated+unchanged: at least one line needed a tie-break.
+                        if (picks.any { it.tieBroken }) ambiguousAutoResolved++
+                        // Partial failure: the component is linked, but some lines were left
+                        // unresolved (ambiguous). The component-level skipped_* counters do NOT
+                        // reflect this, so surface it separately.
+                        droppedLines += ambiguousLineCount
                     }
-                    pick == null -> {
-                        // Ambiguous and none of the candidates owns a CDRelease build —
-                        // tie-break failed, fall through to skipped_ambiguous.
+
+                    // No winner at all: ambiguous if a line was left unresolved, else no-match.
+                    // Lines lost here are represented by these component-level counters, NOT by
+                    // droppedLines (which is only for otherwise-linked components).
+                    ambiguousLineCount > 0 -> {
                         skippedAmbiguous++
                     }
+
                     else -> {
-                        val isUsableUrl =
-                            pick.webUrl.isNotBlank() &&
-                                (pick.webUrl.startsWith("http://") || pick.webUrl.startsWith("https://"))
-                        if (!isUsableUrl) {
-                            // webUrl missing, blank, or non-http → cannot render
-                            // a safe link. Treat as no-match: leave nulls, count it.
-                            // ambiguousAutoResolved is NOT incremented here — the row is
-                            // counted as skipped_no_match, not as a successful auto-resolve,
-                            // so the result KDoc invariant "sub-counter of updated+unchanged"
-                            // holds.
-                            log.warn {
-                                "TC sync: component '${component.componentKey}' (id=$componentId) " +
-                                    "matched TC project '${pick.id}' but webUrl " +
-                                    "'${pick.webUrl}' is blank or not http/https; " +
-                                    "treating as no-match."
-                            }
-                            skippedNoMatch++
-                        } else {
-                            val didChange = applyMatch(component, pick, changedBy)
-                            if (didChange) updated++ else unchanged++
-                            if (pickedFromAmbiguous) ambiguousAutoResolved++
-                        }
+                        skippedNoMatch++
                     }
                 }
             } catch (e: Exception) {
@@ -211,7 +189,8 @@ class TeamcitySyncService(
         log.info {
             "TC sync done: scanned=$scanned, updated=$updated, unchanged=$unchanged, " +
                 "skippedNoMatch=$skippedNoMatch, skippedAmbiguous=$skippedAmbiguous, " +
-                "ambiguousAutoResolved=$ambiguousAutoResolved, errors=${errors.size}"
+                "ambiguousAutoResolved=$ambiguousAutoResolved, droppedLines=$droppedLines, " +
+                "errors=${errors.size}"
         }
         return TeamcitySyncResult(
             scanned = scanned,
@@ -220,117 +199,111 @@ class TeamcitySyncService(
             skippedNoMatch = skippedNoMatch,
             skippedAmbiguous = skippedAmbiguous,
             ambiguousAutoResolved = ambiguousAutoResolved,
+            droppedLines = droppedLines,
             errors = errors.toList(),
         )
     }
 
+    /** A resolved winner for one PROJECT_VERSION line, with whether a tie-break was needed. */
+    private data class Pick(
+        val project: TcProject,
+        val tieBroken: Boolean,
+    )
+
     /**
-     * Tie-break for `candidates.size > 1`: keep only those with a CDRelease build,
-     * then pick the lexicographically smallest by id so the choice is stable
-     * across reruns. Returns null when no candidate has a release build — caller
-     * counts that as `skippedAmbiguous` (manual override is the escape hatch).
-     *
-     * Log-level policy:
-     *  - `withCdRelease.size == 1` → INFO. The auto-pick is the *intended*
-     *    outcome — exactly one project carries the release build, the other
-     *    candidates are typically legacy/archived duplicates of the
-     *    COMPONENT_NAME. Ops want this counted, not paged on.
-     *  - `withCdRelease.size > 1` → WARN. Genuine ambiguity (multiple "release"
-     *    projects share the same COMPONENT_NAME) where lexicographic tie-break
-     *    is just a deterministic last-resort; the row needs a TC cleanup.
-     *  - `withCdRelease.isEmpty()` → WARN. Skipped, ops should fix in TC.
+     * Outcome of resolving a single PROJECT_VERSION group.
+     * @property pick the chosen project, or null when the group could not be resolved.
+     * @property ambiguousUnresolved true when the group had >1 candidate and none owns a
+     *  CDRelease build, so no automated pick was possible (drives `skippedAmbiguous`).
      */
-    private fun resolveAmbiguous(
+    private data class VersionResolution(
+        val pick: Pick?,
+        val ambiguousUnresolved: Boolean,
+    )
+
+    /**
+     * Resolve one PROJECT_VERSION group to at most one project: a single candidate wins;
+     * with several, keep those with a CDRelease build and take the smallest id. If none
+     * has a release build the group is left unresolved (`ambiguousUnresolved = true`).
+     * The auto-pick logs at INFO; genuine ambiguity (several release builds, or none) at WARN.
+     */
+    private fun resolveVersionGroup(
         component: ComponentEntity,
         componentId: UUID,
-        candidates: List<TcProject>,
-    ): TcProject? {
-        val withCdRelease = candidates.filter { it.hasCdReleaseBuild }
+        projectVersion: String?,
+        group: List<TcProject>,
+    ): VersionResolution {
+        if (group.size == 1) {
+            return VersionResolution(Pick(group.single(), tieBroken = false), ambiguousUnresolved = false)
+        }
+        val withCdRelease = group.filter { it.hasCdReleaseBuild }
         if (withCdRelease.isEmpty()) {
             log.warn {
-                "TC sync: ambiguous match for component '${component.componentKey}' " +
-                    "(id=$componentId): ${candidates.size} TC projects share " +
-                    "COMPONENT_NAME=${component.componentKey} but none has a CDRelease build " +
-                    "(${candidates.joinToString { it.id }}) — skipping."
+                "TC sync: ambiguous match for component '${component.componentKey}' (id=$componentId) " +
+                    "version=$projectVersion: ${group.size} TC projects share COMPONENT_NAME and version " +
+                    "but none has a CDRelease build (${group.joinToString { it.id }}) — skipping this line."
             }
-            return null
+            return VersionResolution(pick = null, ambiguousUnresolved = true)
         }
-        // String.compareTo on TC ids: TC project ids are conventionally
-        // [A-Za-z0-9_], so ASCII-lexicographic order is total and
-        // case-insensitivity is moot. !! is safe: we returned above when
-        // withCdRelease was empty, so minByOrNull cannot return null here.
-        // (Kotlin 1.9.x deprecated `minBy` in favour of `minByOrNull`.)
+        // TC project ids are conventionally [A-Za-z0-9_], so ASCII-lexicographic order is
+        // total. !! is safe: we returned above when withCdRelease was empty.
         val pick = withCdRelease.minByOrNull { it.id }!!
         if (withCdRelease.size == 1) {
             log.info {
-                "TC sync: ambiguous match for component '${component.componentKey}' " +
-                    "(id=$componentId): ${candidates.size} TC projects share " +
-                    "COMPONENT_NAME=${component.componentKey}, exactly one has a CDRelease build " +
+                "TC sync: ambiguous match for component '${component.componentKey}' (id=$componentId) " +
+                    "version=$projectVersion: exactly one of ${group.size} has a CDRelease build " +
                     "(${pick.id}); auto-picking it."
             }
         } else {
             log.warn {
-                "TC sync: ambiguous match for component '${component.componentKey}' " +
-                    "(id=$componentId): ${candidates.size} TC projects share " +
-                    "COMPONENT_NAME=${component.componentKey}, ${withCdRelease.size} have a CDRelease build " +
+                "TC sync: ambiguous match for component '${component.componentKey}' (id=$componentId) " +
+                    "version=$projectVersion: ${withCdRelease.size} have a CDRelease build " +
                     "(${withCdRelease.joinToString { it.id }}); auto-picking '${pick.id}' " +
                     "(lexicographically smallest) — TC cleanup recommended."
             }
         }
-        return pick
+        return VersionResolution(Pick(pick, tieBroken = true), ambiguousUnresolved = false)
     }
 
     /**
-     * Write the match if it differs from current state. Returns true when the
-     * `component_teamcity_projects` row set actually changed (drives the
-     * `updated` counter and the audit-log emission).
-     *
-     * Schema v2: TC sync writes exactly one row per matched component
-     * (`sortOrder = 0`). The table has no DB-level UNIQUE constraint on
-     * `component_id` — only an index — so this "one row" invariant is
-     * enforced purely by service logic: every successful sync run
-     * `deleteAllInBatch`s ALL existing rows for the component and inserts a
-     * single fresh row. That means even when `oldId == newId` (sortOrder 0
-     * row matches the TC pick), if the component has SECONDARY rows from
-     * a prior multi-write or manual curation, we still wipe them so the
-     * invariant holds. Idempotency (`updated` vs `unchanged`) is judged on
-     * whether the visible (sortOrder=0) projectId changed AND whether any
-     * extra rows had to be removed.
+     * Reconcile the component's `version_line` rows to exactly [matches] (one per
+     * PROJECT_VERSION line). Idempotency is a set compare of (projectId, version): unchanged
+     * → no write, returns false; otherwise wipe all existing lines and insert the fresh set,
+     * each pointing at a deduplicated `teamcity_project` (find-or-create by project id).
+     * Traced to the log, not `audit_log` (SYS-051).
      */
     private fun applyMatch(
         component: ComponentEntity,
-        match: TcProject,
+        matches: List<TcProject>,
         changedBy: String,
     ): Boolean {
         val componentId = component.id!!
-        val existing = componentTeamcityProjectRepository.findByComponentId(componentId)
-        val oldId = existing.minByOrNull { it.sortOrder }?.projectId
-        val oldUrl = oldId?.let { composeTeamcityProjectUrl(teamcityProperties.baseUrl, it) }
-        val newId = match.id
-        val newUrl = composeTeamcityProjectUrl(teamcityProperties.baseUrl, newId)
-        val hasExtraRows = existing.size > 1 || existing.any { it.projectId != newId }
+        val existing = versionLineRepository.findByComponentId(componentId)
 
-        if (oldId == newId && !hasExtraRows) {
-            // Truly nothing to do — sortOrder=0 row matches AND no leftovers.
+        // Order-independent identity: the set of (projectId, version) pairs.
+        val existingKeys = existing.map { it.teamcityProject.projectId to it.version }.toSet()
+        val desiredKeys = matches.map { it.id to it.projectVersion }.toSet()
+        if (existingKeys == desiredKeys) {
+            // Nothing to do — same projects, same versions.
             return false
         }
 
-        if (existing.isNotEmpty()) componentTeamcityProjectRepository.deleteAllInBatch(existing)
-        componentTeamcityProjectRepository.save(
-            ComponentTeamcityProjectEntity(
-                component = component,
-                projectId = newId,
-                sortOrder = 0,
-            ),
-        )
+        if (existing.isNotEmpty()) versionLineRepository.deleteAllInBatch(existing)
+        matches.forEach { tc ->
+            val teamcityProject = teamcityProjectRepository.findByProjectId(tc.id)
+                ?: teamcityProjectRepository.save(TeamcityProjectEntity(projectId = tc.id))
+            versionLineRepository.save(
+                VersionLineEntity(
+                    component = component,
+                    version = tc.projectVersion,
+                    teamcityProject = teamcityProject,
+                ),
+            )
+        }
 
-        // SYS-051: trace the re-link in the log (NOT the audit_log). TeamCity
-        // sync is an automated reconciliation; a per-link audit row was noise in
-        // the component history. `changedBy` is the resolving user — "system" for
-        // the cron, or the admin who triggered an authenticated resync.
         log.info {
             "TeamCity sync re-linked component ${component.id}: " +
-                "'$oldId' ($oldUrl) -> '$newId' ($newUrl) (by $changedBy)"
+                "$existingKeys -> $desiredKeys (by $changedBy)"
         }
         return true
     }

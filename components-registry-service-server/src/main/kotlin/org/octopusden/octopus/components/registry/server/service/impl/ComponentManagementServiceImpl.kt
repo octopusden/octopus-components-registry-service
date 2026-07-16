@@ -40,7 +40,6 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentRelease
 import org.octopusden.octopus.components.registry.server.entity.ComponentRequiredToolEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentSecurityChampionEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentSystemEntity
-import org.octopusden.octopus.components.registry.server.entity.ComponentTeamcityProjectEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionDockerImageEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionFileUrlArtifactEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionMavenArtifactEntity
@@ -48,8 +47,10 @@ import org.octopusden.octopus.components.registry.server.entity.DistributionPack
 import org.octopusden.octopus.components.registry.server.entity.DistributionSecurityGroupEntity
 import org.octopusden.octopus.components.registry.server.entity.LabelEntity
 import org.octopusden.octopus.components.registry.server.entity.SystemEntity
+import org.octopusden.octopus.components.registry.server.entity.TeamcityProjectEntity
 import org.octopusden.octopus.components.registry.server.entity.ToolEntity
 import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
+import org.octopusden.octopus.components.registry.server.entity.VersionLineEntity
 import org.octopusden.octopus.components.registry.server.event.AuditCorrelationIdProvider
 import org.octopusden.octopus.components.registry.server.event.AuditEvent
 import org.octopusden.octopus.components.registry.server.mapper.ALL_VERSIONS
@@ -80,6 +81,7 @@ import org.octopusden.octopus.components.registry.server.repository.Distribution
 import org.octopusden.octopus.components.registry.server.repository.DistributionMavenArtifactRepository
 import org.octopusden.octopus.components.registry.server.repository.LabelRepository
 import org.octopusden.octopus.components.registry.server.repository.SystemRepository
+import org.octopusden.octopus.components.registry.server.repository.TeamcityProjectRepository
 import org.octopusden.octopus.components.registry.server.repository.ToolRepository
 import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
 import org.octopusden.octopus.components.registry.server.security.PermissionEvaluator
@@ -134,6 +136,7 @@ class ComponentManagementServiceImpl(
     private val dockerImageRepository: DistributionDockerImageRepository,
     private val labelRepository: LabelRepository,
     private val systemRepository: SystemRepository,
+    private val teamcityProjectRepository: TeamcityProjectRepository,
     private val toolRepository: ToolRepository,
     private val sourceRegistry: ComponentSourceRegistry,
     private val applicationEventPublisher: ApplicationEventPublisher,
@@ -689,9 +692,15 @@ class ComponentManagementServiceImpl(
             entity.securityGroups.clear()
             addSecurityGroups(entity, it.map { req -> req.groupType to req.groupName })
         }
-        request.teamcityProjects?.let {
-            entity.teamcityProjects.clear()
-            addTeamcityProjects(entity, it.map { req -> req.projectId })
+        request.teamcityProjects?.let { reqs ->
+            // `version` is sync-owned metadata (derived from TeamCity), and v4 write carries only
+            // project ids. So a read-modify-write PATCH must NOT wipe it: keep the existing
+            // version_line rows whose project id is still requested (preserving their version),
+            // drop the rest, and add version = null rows only for genuinely new project ids.
+            val desiredProjectIds = reqs.map { it.projectId }.toSet()
+            entity.versionLines.removeAll { it.teamcityProject.projectId !in desiredProjectIds }
+            val keptProjectIds = entity.versionLines.map { it.teamcityProject.projectId }.toSet()
+            addTeamcityProjects(entity, desiredProjectIds.filterNot { it in keptProjectIds })
         }
         request.docs?.let {
             entity.docLinks.clear()
@@ -1596,12 +1605,16 @@ class ComponentManagementServiceImpl(
         component: ComponentEntity,
         projectIds: List<String>,
     ) {
-        projectIds.forEachIndexed { index, projectId ->
-            component.teamcityProjects.add(
-                ComponentTeamcityProjectEntity(
+        // v4 write carries only project ids (no version yet), so each becomes a version_line
+        // with version = null, pointing at a deduplicated teamcity_project (find-or-create).
+        projectIds.forEach { projectId ->
+            val teamcityProject = teamcityProjectRepository.findByProjectId(projectId)
+                ?: teamcityProjectRepository.save(TeamcityProjectEntity(projectId = projectId))
+            component.versionLines.add(
+                VersionLineEntity(
                     component = component,
-                    projectId = projectId,
-                    sortOrder = index,
+                    version = null,
+                    teamcityProject = teamcityProject,
                 ),
             )
         }
@@ -4061,7 +4074,7 @@ class ComponentManagementServiceImpl(
                         "groupName" to it.groupName,
                     )
                 },
-            "teamcityProjects" to entity.teamcityProjects.sortedBy { it.sortOrder }.map { it.projectId },
+            "teamcityProjects" to entity.versionLines.sortedBy { it.teamcityProject.projectId }.map { it.teamcityProject.projectId },
             "docs" to
                 entity.docLinks.sortedBy { it.sortOrder }.map {
                     mapOf(

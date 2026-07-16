@@ -27,7 +27,7 @@
         <error line="393" column="1" source="standard:no-consecutive-comments" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/server/mapper/V4Mappers.kt">
-        <error line="410" column="140" source="standard:max-line-length" />
+        <error line="411" column="140" source="standard:max-line-length" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/server/model/ServiceStatus.kt">
         <error line="4" column="1" source="standard:no-wildcard-imports" />
@@ -36,10 +36,10 @@
         <error line="14" column="1" source="standard:no-consecutive-comments" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/server/service/impl/ComponentManagementServiceImpl.kt">
-        <error line="2727" column="17" source="standard:property-naming" />
-        <error line="2732" column="17" source="standard:property-naming" />
-        <error line="2741" column="17" source="standard:property-naming" />
-        <error line="2778" column="17" source="standard:property-naming" />
+        <error line="2740" column="17" source="standard:property-naming" />
+        <error line="2745" column="17" source="standard:property-naming" />
+        <error line="2754" column="17" source="standard:property-naming" />
+        <error line="2791" column="17" source="standard:property-naming" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/server/service/impl/ImportServiceImpl.kt">
         <error line="2701" column="1" source="standard:no-consecutive-comments" />

@@ -27,6 +27,21 @@ import com.fasterxml.jackson.annotation.JsonProperty
  *                              those rows came from a CDRelease tie-break on a
  *                              multi-candidate match. Lets ops see whether the
  *                              auto-resolve path is firing without grepping logs.
+ * - `droppedLines` — number of individual `PROJECT_VERSION` release lines that were
+ *                    dropped even though their component WAS still linked
+ *                    (counted `updated`/`unchanged`). A line is dropped when its
+ *                    version group stayed ambiguous (≥2 candidates, none owning a
+ *                    CDRelease build) or its chosen winner had an unusable http(s)
+ *                    `webUrl`, while at least one OTHER line for that component
+ *                    resolved. This exists because the component-level
+ *                    `skipped_ambiguous` / `skipped_no_match` counters only fire when
+ *                    a component resolves NOTHING — so a partially-linked component
+ *                    (one good line, one bad line) would otherwise be invisible.
+ *                    To avoid double counting, lines in components that resolved
+ *                    nothing are NOT counted here — those are already reflected in
+ *                    `skipped_ambiguous` / `skipped_no_match`. `droppedLines > 0`
+ *                    means some release lines were silently dropped this run; the
+ *                    per-line reason is in the WARN logs.
  * - `errors`      — component-level error messages caught during the post-fetch
  *                   `applyMatches` loop. A fetch-level TC API failure aborts the
  *                   whole sync and is surfaced via the job's `errorMessage`, not
@@ -39,5 +54,6 @@ data class TeamcitySyncResult(
     @JsonProperty("skipped_no_match") val skippedNoMatch: Int,
     @JsonProperty("skipped_ambiguous") val skippedAmbiguous: Int,
     @JsonProperty("ambiguous_auto_resolved") val ambiguousAutoResolved: Int,
+    @JsonProperty("dropped_lines") val droppedLines: Int,
     val errors: List<String>,
 )

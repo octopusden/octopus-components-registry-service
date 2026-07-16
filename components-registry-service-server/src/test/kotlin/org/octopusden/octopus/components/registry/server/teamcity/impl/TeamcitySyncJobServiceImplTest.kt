@@ -51,6 +51,7 @@ class TeamcitySyncJobServiceImplTest {
             skippedNoMatch = 0,
             skippedAmbiguous = 0,
             ambiguousAutoResolved = 0,
+            droppedLines = 0,
             errors = emptyList(),
         )
 
@@ -72,6 +73,7 @@ class TeamcitySyncJobServiceImplTest {
                 skippedNoMatch = 1,
                 skippedAmbiguous = 1,
                 ambiguousAutoResolved = 0,
+                droppedLines = 0,
                 errors = listOf("oops on alpha"),
             )
         val syncService = mock(TeamcitySyncService::class.java)
@@ -202,6 +204,7 @@ class TeamcitySyncJobServiceImplTest {
                 skippedNoMatch = 0,
                 skippedAmbiguous = 0,
                 ambiguousAutoResolved = 0,
+                droppedLines = 0,
                 errors = emptyList(),
             )
         val syncService = mock(TeamcitySyncService::class.java)

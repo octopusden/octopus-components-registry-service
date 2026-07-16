@@ -76,14 +76,15 @@ fun ComponentEntity.toDetailResponse(teamcityBaseUrl: String? = null): Component
         artifactIds = this.artifactMappings.sortedWith(ARTIFACT_MAPPING_ORDER).map { it.toResponse() },
         securityGroups = this.securityGroups.map { it.toResponse() },
         teamcityProjects =
-            this.teamcityProjects
-                .sortedBy { it.sortOrder }
-                .map { tc ->
+            this.versionLines
+                .sortedBy { it.teamcityProject.projectId }
+                .mapIndexed { index, vl ->
                     TeamcityProjectResponse(
-                        id = tc.id!!,
-                        projectId = tc.projectId,
-                        projectUrl = composeTeamcityProjectUrl(teamcityBaseUrl, tc.projectId),
-                        sortOrder = tc.sortOrder,
+                        id = vl.id!!,
+                        projectId = vl.teamcityProject.projectId,
+                        projectUrl = composeTeamcityProjectUrl(teamcityBaseUrl, vl.teamcityProject.projectId),
+                        projectVersion = vl.version,
+                        sortOrder = index,
                     )
                 },
         configurations =
@@ -101,7 +102,7 @@ fun ComponentEntity.toDetailResponse(teamcityBaseUrl: String? = null): Component
  */
 fun ComponentEntity.toSummaryResponse(teamcityBaseUrl: String? = null): ComponentSummaryResponse {
     val base = this.configurations.firstOrNull { it.rowType == "BASE" }
-    val firstTcProject = this.teamcityProjects.minByOrNull { it.sortOrder }
+    val firstTcProject = this.versionLines.minByOrNull { it.teamcityProject.projectId }
     val firstVcsEntry = base?.vcsEntries?.minByOrNull { it.sortOrder }
     return ComponentSummaryResponse(
         id = this.id!!,
@@ -120,8 +121,8 @@ fun ComponentEntity.toSummaryResponse(teamcityBaseUrl: String? = null): Componen
         javaVersion = base?.javaVersion?.takeIf { it.isNotBlank() },
         jiraProjectKey = base?.jiraProjectKey?.takeIf { it.isNotBlank() },
         vcsPath = firstVcsEntry?.vcsPath?.takeIf { it.isNotBlank() }?.sshUrlToProjectRepo(),
-        teamcityProjectId = firstTcProject?.projectId,
-        teamcityProjectUrl = firstTcProject?.let { composeTeamcityProjectUrl(teamcityBaseUrl, it.projectId) },
+        teamcityProjectId = firstTcProject?.teamcityProject?.projectId,
+        teamcityProjectUrl = firstTcProject?.let { composeTeamcityProjectUrl(teamcityBaseUrl, it.teamcityProject.projectId) },
     )
 }
 

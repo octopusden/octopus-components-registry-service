@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
+import org.octopusden.octopus.components.registry.server.repository.VersionLineRepository
 import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
@@ -63,6 +64,9 @@ class TeamcityProjectIdPersistenceRoundtripTest {
 
     @Autowired
     private lateinit var objectMapper: ObjectMapper
+
+    @Autowired
+    private lateinit var versionLineRepository: VersionLineRepository
 
     init {
         val testResourcesPath =
@@ -191,5 +195,41 @@ class TeamcityProjectIdPersistenceRoundtripTest {
             tcProjects == null || (tcProjects.isArray && tcProjects.size() == 0),
             "expected no TC project rows after PATCH with empty list",
         )
+    }
+
+    @Test
+    @DisplayName("SYS-063: PATCH re-submitting an existing projectId preserves the sync-owned projectVersion")
+    fun teamcityProject_patchPreservesSyncOwnedVersion() {
+        val created = createComponent(uniqueName("TC_PRESERVE"), tcProjectId = "TcProj_Keep")
+        val id = created["id"].asText()
+
+        // The v4 write carries only projectId, so the create leaves version = null. Simulate
+        // the TeamCity sync having stamped a release-line version on the link (only the sync
+        // owns it) by setting it directly on the persisted row.
+        val line = versionLineRepository.findByComponentId(UUID.fromString(id)).single()
+        line.version = "2.4"
+        versionLineRepository.save(line)
+
+        // Read-modify-write PATCH that re-submits the SAME projectId (payload has no version).
+        val version = getComponent(id)["version"].asLong()
+        mvc
+            .perform(
+                patch("/rest/api/4/components/$id")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        objectMapper.writeValueAsBytes(
+                            mapOf(
+                                "version" to version,
+                                "teamcityProjects" to listOf(mapOf("projectId" to "TcProj_Keep")),
+                            ),
+                        ),
+                    ),
+            ).andExpect(status().isOk)
+
+        // The sync-owned projectVersion must NOT be wiped by the PATCH.
+        val row = getComponent(id)["teamcityProjects"][0]
+        assertEquals("TcProj_Keep", row["projectId"].asText())
+        assertEquals("2.4", row["projectVersion"].asText(), "sync-owned projectVersion must survive a v4 PATCH")
     }
 }

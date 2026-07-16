@@ -84,6 +84,7 @@
     <ID>ThrowsCount:ComponentManagementServiceImpl.kt$ComponentManagementServiceImpl$private fun validateFieldOverrideRange( range: String, component: ComponentEntity, attribute: String, excludeOverrideId: UUID?, )</ID>
     <ID>TooGenericExceptionCaught:ComponentManagementServiceImpl.kt$ComponentManagementServiceImpl$e: Exception</ID>
     <ID>TooGenericExceptionCaught:PermissionEvaluator.kt$PermissionEvaluator$e: RuntimeException</ID>
+    <ID>TooGenericExceptionThrown:AuditCorrelationIdProviderTest.kt$AuditCorrelationIdProviderTest$throw RuntimeException("boom")</ID>
     <ID>TooGenericExceptionThrown:TeamcitySyncServiceTest.kt$TeamcitySyncServiceTest$throw RuntimeException("TC unavailable")</ID>
     <ID>TooManyFunctions:ComponentCodeRenderer.kt$CodeBuilder</ID>
     <ID>TooManyFunctions:ComponentControllerV2.kt$ComponentControllerV2 : BaseComponentController</ID>

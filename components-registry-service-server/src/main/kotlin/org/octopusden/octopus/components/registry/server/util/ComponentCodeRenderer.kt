@@ -342,7 +342,10 @@ class ComponentCodeRenderer(
         writeDistribution(cb, component, mavenArtifacts, fileUrlArtifacts, dockerImages, packages)
         writeEscrow(cb, scalars)
         writeDocs(cb, component)
-        cb.strList("teamcityProjects", component.teamcityProjects.sortedBy { it.sortOrder }.map { it.projectId })
+        cb.strList(
+            "teamcityProjects",
+            component.versionLines.sortedBy { it.teamcityProject.projectId }.map { it.teamcityProject.projectId },
+        )
     }
 
     private fun writeVcs(
