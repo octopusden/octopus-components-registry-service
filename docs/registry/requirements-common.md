@@ -70,6 +70,7 @@
 | SYS-059 | `POST /rest/api/4/versions/preview` renders a `DetailedComponentVersion` from ad-hoc Jira formats (base + per-range overrides) and an input version, with no persistence and no component lookup — reusing the persisted-path render seam (including `normalizeVersion` canonicalization) so output matches `detailed-version` for the same effective config. Range is resolved server-side; `line`/`build` mirror `minor`/`release` and `minor`/`release` default to `$major`/`$major.$minor` when blank; hotfix coordinate gated on caller-supplied `hotfixEnabled` (VCS-derived), not format presence; custom `versionPrefix`/`versionFormat` render the wrapped `jiraVersion`; padding is template-driven (no `buildSystem`); blank/non-numeric version or malformed range → 400, a version matching no format → 404; authenticated-only | High | unit + integration-test | ✅ Tested |
 | SYS-060 | An append-only `service_event` journal persists operational events — CRS redeploys (STARTUP + build version), and every components-migration / history-migration / TeamCity-resync run (RUNNING→COMPLETED/FAILED, one row per run) — which previously lived only in an in-memory slot + logs and were lost on restart. **Any job failure (including executor-rejected submission) writes a FAILED row with the error**; a run whose pod dies mid-flight is reconciled to FAILED("interrupted by restart") on next startup (single-pod). Writes are best-effort (`REQUIRES_NEW` + swallow) so journaling never rolls back or crashes the observed job. `GET /rest/api/4/admin/service-events` returns the paginated journal (filter by type/source/status/time), IMPORT_DATA-gated; a scheduled daily prune enforces retention | High | unit + integration-test | ✅ Tested |
 | SYS-061 | `POST /rest/api/4/admin/service-events` ingests portal-sourced events (portal redeploys, validation-sweep runs) into the shared journal, so the Admin "Events" tab shows both services on one timeline. Authenticated by a shared-secret `X-Service-Event-Token` header (the portal BFF calls CRS tokenless), verified constant-time and **fail-closed** (blank/unset configured token rejects every call 403); method-scoped permitAll at the filter chain so the sibling GET read stays JWT+IMPORT_DATA gated; unknown eventType/status/source → 400 | High | integration-test | ✅ Tested |
+| SYS-063 | The component owner's manager (resolved via employee-service `getManager`) may edit the component and its field-overrides — a fourth, derived condition on `canEditComponent` alongside owner/RM/SC/admin. A directory failure or no-manager answer denies (fail-closed), never grants. `GET /{idOrName}/editors` enumerates the resolved manager (unlike the admin bypass, it is one concrete person per component); `getManager` is 2-minute cached per owner (resolved answers only) and its DB read runs in its own short-lived transaction, closed before the network call | High | unit + integration-test | ✅ Tested |
 
 ---
 
@@ -2317,6 +2318,10 @@ Admin reads/triage are IMPORT_DATA-gated (`/rest/api/4/admin/feedback**`) —
 
 ### SYS-063: Component owner's manager may edit the component
 
+**Priority:** High
+**Test layer:** unit + integration-test
+**Status:** ✅ Tested
+
 `PermissionEvaluator.canEditComponent`'s ownership predicate (§6.3: `componentOwner ||
 releaseManager || securityChampion || EDIT_ANY_COMPONENT`) gets a fourth, derived
 condition: the current user is the **manager** of the component's `componentOwner`,
@@ -2342,7 +2347,11 @@ sites per request in the worst case (the `@PreAuthorize` check and this projecti
 so a resolved answer — including a confirmed "no manager" — is cached for 2 minutes
 per owner in `EmployeeDirectoryService`; lookup failures are deliberately excluded
 from the cache so a transient employee-service outage cannot extend into a
-multi-minute false denial after the service recovers.
+multi-minute false denial after the service recovers. `getEditors`' DB read (the
+entity + its LAZY release-manager/security-champion collections) runs in its own
+short-lived transaction via an explicit `TransactionTemplate`, which closes BEFORE
+the manager lookup — so a slow/degraded employee-service call never holds a pooled
+DB connection for its duration.
 
 **Acceptance criteria:**
 1. The manager of a component's `componentOwner` (per employee-service `getManager`)

@@ -105,7 +105,10 @@ import org.springframework.data.domain.Sort
 import org.springframework.data.jpa.domain.Specification
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
+import org.springframework.transaction.PlatformTransactionManager
+import org.springframework.transaction.annotation.Propagation
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionTemplate
 import org.springframework.web.server.ResponseStatusException
 import java.nio.file.Files
 import java.time.Instant
@@ -146,6 +149,7 @@ class ComponentManagementServiceImpl(
     private val environment: Environment,
     private val componentCodeRenderer: ComponentCodeRenderer,
     private val employeeDirectory: EmployeeDirectoryService,
+    transactionManager: PlatformTransactionManager,
     // Defaulted so the few unit tests that construct this service directly need
     // no new wiring; Spring injects the singleton bean in production.
     private val auditCorrelationIdProvider: AuditCorrelationIdProvider = AuditCorrelationIdProvider(),
@@ -158,6 +162,16 @@ class ComponentManagementServiceImpl(
     // first access is sufficient — admins re-config via redeploy, not
     // hot-reload.
     private val configHelper: ConfigHelper by lazy { ConfigHelper(environment) }
+
+    // Used only by getEditors, via an explicit TransactionTemplate rather than
+    // @Transactional — same self-invocation-avoidance precedent as
+    // ServiceEventRecorderImpl / TeamcitySyncService — so the DB read gets its own
+    // short-lived transaction that closes BEFORE the employee-service manager lookup,
+    // instead of that network call holding a pooled DB connection for its duration.
+    private val readOnlyTemplate =
+        TransactionTemplate(transactionManager).apply {
+            isReadOnly = true
+        }
     // ============================================================
     // Create
     // ============================================================
@@ -435,16 +449,30 @@ class ComponentManagementServiceImpl(
         return RenderedComponentCode(entity.componentKey, body)
     }
 
-    // Reads LAZY child collections (releaseManagers / securityChampions), so it must run
-    // inside this readOnly transaction (the session that loaded the entity).
-    @Transactional(readOnly = true)
+    // employeeDirectory.getManager() is a network call that can take up to the configured
+    // read timeout under an employee-service outage (failures are deliberately not cached —
+    // see EmployeeDirectoryService.getManager), so it must NOT run inside a DB transaction:
+    // concurrent /editors requests would each hold a pooled connection for that long and
+    // could exhaust the pool (PR #434 review). NOT_SUPPORTED overrides the class-level
+    // @Transactional so this method runs with no ambient transaction; only the DB read
+    // (entity + LAZY releaseManagers/securityChampions) gets its own short-lived transaction
+    // via readOnlyTemplate, which closes before the manager lookup below runs.
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     override fun getEditors(idOrName: String): ComponentEditorsResponse {
-        val entity = findByIdOrName(idOrName)
-        val ownerTrimmed = entity.componentOwner?.trim()
-        return ComponentEditorsResponse(
-            componentOwner = entity.componentOwner,
-            releaseManagers = entity.releaseManagerUsernames(),
-            securityChampions = entity.securityChampionUsernames(),
+        val projection =
+            readOnlyTemplate.execute {
+                val entity = findByIdOrName(idOrName)
+                ComponentEditorsResponse(
+                    componentOwner = entity.componentOwner,
+                    releaseManagers = entity.releaseManagerUsernames(),
+                    securityChampions = entity.securityChampionUsernames(),
+                )
+                // execute() returns the callback's value; the lambda never returns null, so the
+                // !! cannot trip in practice — Kotlin just sees the API's declared T? signature
+                // (mirrors the same !! precedent in TeamcitySyncService.resync).
+            }!!
+        val ownerTrimmed = projection.componentOwner?.trim()
+        return projection.copy(
             manager = ownerTrimmed?.takeIf { it.isNotEmpty() }?.let { employeeDirectory.getManager(it) },
         )
     }

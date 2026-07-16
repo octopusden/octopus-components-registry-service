@@ -42,6 +42,7 @@ import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRangeFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.core.env.Environment
+import org.springframework.transaction.PlatformTransactionManager
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.Optional
@@ -121,6 +122,7 @@ class CheapFieldFormatValidationTest {
                         NumericVersionFactory(versionNames),
                     ),
                 employeeDirectory = EmployeeDirectoryService(EmptyObjectProvider()),
+                transactionManager = mock(PlatformTransactionManager::class.java),
             )
 
         // CREATE path: no name collision.

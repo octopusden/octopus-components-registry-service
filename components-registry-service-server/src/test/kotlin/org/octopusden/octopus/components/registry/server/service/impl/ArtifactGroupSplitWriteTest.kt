@@ -33,6 +33,7 @@ import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRangeFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.core.env.Environment
+import org.springframework.transaction.PlatformTransactionManager
 import java.lang.reflect.Method
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -78,6 +79,7 @@ class ArtifactGroupSplitWriteTest {
             environment = mock(Environment::class.java),
             componentCodeRenderer = mock(ComponentCodeRenderer::class.java),
             employeeDirectory = mock(EmployeeDirectoryService::class.java),
+            transactionManager = mock(PlatformTransactionManager::class.java),
         )
         addArtifactIds = ComponentManagementServiceImpl::class.java
             .getDeclaredMethod(

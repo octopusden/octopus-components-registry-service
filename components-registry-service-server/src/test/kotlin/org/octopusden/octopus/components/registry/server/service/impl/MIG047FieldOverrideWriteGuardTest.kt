@@ -111,6 +111,7 @@ class MIG047FieldOverrideWriteGuardTest {
                         NumericVersionFactory(versionNames),
                     ),
                 employeeDirectory = EmployeeDirectoryService(EmptyObjectProvider()),
+                transactionManager = mock(org.springframework.transaction.PlatformTransactionManager::class.java),
             )
 
         component = ComponentEntity(id = componentId, componentKey = "alpha-fixture")
