@@ -2584,6 +2584,11 @@
             "type" : "string"
           },
           "projectUrl" : {
+            "nullable" : true,
+            "type" : "string"
+          },
+          "projectVersion" : {
+            "nullable" : true,
             "type" : "string"
           },
           "sortOrder" : {
@@ -2643,6 +2648,10 @@
             "format" : "int32",
             "type" : "integer"
           },
+          "dropped_lines" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
           "errors" : {
             "items" : {
               "type" : "string"
@@ -2672,6 +2681,7 @@
         },
         "required" : [
           "ambiguous_auto_resolved",
+          "dropped_lines",
           "errors",
           "scanned",
           "skipped_ambiguous",

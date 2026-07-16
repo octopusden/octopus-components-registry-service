@@ -127,7 +127,7 @@ class TeamcitySyncJobServiceImpl(
             }
             LOG.info(
                 "TC resync job {} COMPLETED: scanned={}, updated={}, unchanged={}, " +
-                    "skippedNoMatch={}, skippedAmbiguous={}, ambiguousAutoResolved={}, errors={}",
+                    "skippedNoMatch={}, skippedAmbiguous={}, ambiguousAutoResolved={}, droppedLines={}, errors={}",
                 jobId,
                 result.scanned,
                 result.updated,
@@ -135,6 +135,7 @@ class TeamcitySyncJobServiceImpl(
                 result.skippedNoMatch,
                 result.skippedAmbiguous,
                 result.ambiguousAutoResolved,
+                result.droppedLines,
                 result.errors.size,
             )
             // A run that matched everything but hit per-component errors still COMPLETED
@@ -155,6 +156,7 @@ class TeamcitySyncJobServiceImpl(
                         "skippedNoMatch" to result.skippedNoMatch,
                         "skippedAmbiguous" to result.skippedAmbiguous,
                         "ambiguousAutoResolved" to result.ambiguousAutoResolved,
+                        "droppedLines" to result.droppedLines,
                         "errors" to result.errors,
                     ),
             )

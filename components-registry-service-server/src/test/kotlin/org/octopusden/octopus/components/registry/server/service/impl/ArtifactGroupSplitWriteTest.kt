@@ -22,6 +22,7 @@ import org.octopusden.octopus.components.registry.server.repository.Distribution
 import org.octopusden.octopus.components.registry.server.repository.DistributionMavenArtifactRepository
 import org.octopusden.octopus.components.registry.server.repository.LabelRepository
 import org.octopusden.octopus.components.registry.server.repository.SystemRepository
+import org.octopusden.octopus.components.registry.server.repository.TeamcityProjectRepository
 import org.octopusden.octopus.components.registry.server.repository.ToolRepository
 import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
 import org.octopusden.octopus.components.registry.server.security.PermissionEvaluator
@@ -67,6 +68,7 @@ class ArtifactGroupSplitWriteTest {
             dockerImageRepository = mock(DistributionDockerImageRepository::class.java),
             labelRepository = mock(LabelRepository::class.java),
             systemRepository = mock(SystemRepository::class.java),
+            teamcityProjectRepository = mock(TeamcityProjectRepository::class.java),
             toolRepository = mock(ToolRepository::class.java),
             sourceRegistry = mock(ComponentSourceRegistry::class.java),
             applicationEventPublisher = mock(ApplicationEventPublisher::class.java),

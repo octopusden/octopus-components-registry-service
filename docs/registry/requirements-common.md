@@ -70,7 +70,7 @@
 | SYS-059 | `POST /rest/api/4/versions/preview` renders a `DetailedComponentVersion` from ad-hoc Jira formats (base + per-range overrides) and an input version, with no persistence and no component lookup — reusing the persisted-path render seam (including `normalizeVersion` canonicalization) so output matches `detailed-version` for the same effective config. Range is resolved server-side; `line`/`build` mirror `minor`/`release` and `minor`/`release` default to `$major`/`$major.$minor` when blank; hotfix coordinate gated on caller-supplied `hotfixEnabled` (VCS-derived), not format presence; custom `versionPrefix`/`versionFormat` render the wrapped `jiraVersion`; padding is template-driven (no `buildSystem`); blank/non-numeric version or malformed range → 400, a version matching no format → 404; authenticated-only | High | unit + integration-test | ✅ Tested |
 | SYS-060 | An append-only `service_event` journal persists operational events — CRS redeploys (STARTUP + build version), and every components-migration / history-migration / TeamCity-resync run (RUNNING→COMPLETED/FAILED, one row per run) — which previously lived only in an in-memory slot + logs and were lost on restart. **Any job failure (including executor-rejected submission) writes a FAILED row with the error**; a run whose pod dies mid-flight is reconciled to FAILED("interrupted by restart") on next startup (single-pod). Writes are best-effort (`REQUIRES_NEW` + swallow) so journaling never rolls back or crashes the observed job. `GET /rest/api/4/admin/service-events` returns the paginated journal (filter by type/source/status/time), IMPORT_DATA-gated; a scheduled daily prune enforces retention | High | unit + integration-test | ✅ Tested |
 | SYS-061 | `POST /rest/api/4/admin/service-events` ingests portal-sourced events (portal redeploys, validation-sweep runs) into the shared journal, so the Admin "Events" tab shows both services on one timeline. Authenticated by a shared-secret `X-Service-Event-Token` header (the portal BFF calls CRS tokenless), verified constant-time and **fail-closed** (blank/unset configured token rejects every call 403); method-scoped permitAll at the filter chain so the sibling GET read stays JWT+IMPORT_DATA gated; unknown eventType/status/source → 400 | High | integration-test | ✅ Tested |
-| SYS-063 | The component owner's manager (resolved via employee-service `getManager`) may edit the component and its field-overrides — a fourth, derived condition on `canEditComponent` alongside owner/RM/SC/admin. A directory failure or no-manager answer denies (fail-closed), never grants. `GET /{idOrName}/editors` enumerates the resolved manager (unlike the admin bypass, it is one concrete person per component); `getManager` is 2-minute cached per owner (resolved answers only) and its DB read runs in its own short-lived transaction, closed before the network call | High | unit + integration-test | ✅ Tested |
+| SYS-064 | The component owner's manager (resolved via employee-service `getManager`) may edit the component and its field-overrides — a fourth, derived condition on `canEditComponent` alongside owner/RM/SC/admin. A directory failure or no-manager answer denies (fail-closed), never grants. `GET /{idOrName}/editors` enumerates the resolved manager (unlike the admin bypass, it is one concrete person per component); `getManager` is 2-minute cached per owner (resolved answers only) and its DB read runs in its own short-lived transaction, closed before the network call | High | unit + integration-test | ✅ Tested |
 
 ---
 
@@ -1707,17 +1707,19 @@ override PATCH produces an empty diff and is dropped by the SYS-048 guard.
 **Status:** ✅ Tested
 
 **Motivation:**
-The TeamCity sync (`/admin/teamcity-resync` and the scheduled cron) is an
-automated reconciliation that links each component to its TeamCity project.
-Every re-link previously published a Component `UPDATE` `AuditEvent`
+The TeamCity sync (`/admin/teamcity-project-ids/sync` and the scheduled cron) is an
+automated reconciliation that links each component to its TeamCity project(s) — one
+row per distinct `PROJECT_VERSION` release line (see technical-design §6.4.2 for the
+resolution algorithm). Every re-link previously published a Component `UPDATE` `AuditEvent`
 (`changedBy = system`, `teamcityProjectId` / `teamcityProjectUrl`). One such row
 per re-linked component is operational noise in the component history — it is
 not a user-initiated change.
 
 **Description:**
 `TeamcitySyncService.applyMatch` no longer publishes an `AuditEvent`; instead it
-emits an INFO log line tracing the re-link (component id, old → new project id +
-url, and the resolving user) so the source of a write is still discoverable. No
+emits an INFO log line tracing the re-link (component id, the existing → desired
+`(projectId, projectVersion)` row set, and the resolving user) so the source of a
+write is still discoverable. No
 `audit_log` row is written for a TeamCity sync. The `ApplicationEventPublisher`
 seam is retained so the test can assert nothing is published (and as the
 re-wire point if per-sync auditing is ever wanted).
@@ -2316,7 +2318,56 @@ Admin reads/triage are IMPORT_DATA-gated (`/rest/api/4/admin/feedback**`) —
 `SYS-062 admin open count`;
 `FeedbackRequestSizeFilterTest` — `SYS-062 body over cap is rejected`.
 
-### SYS-063: Component owner's manager may edit the component
+### SYS-063: TeamCity project reconciliation (version lines)
+
+**Priority:** Medium
+**Test layer:** unit-test
+**Status:** ✅ Tested
+
+**Motivation:**
+The TeamCity sync links each component to the TeamCity project(s) that claim it via the
+`COMPONENT_NAME` parameter. A component may legitimately have several projects — one per
+release line — so a single flat association is insufficient. This requirement covers the
+reconciliation *behavior*; SYS-051 separately covers the decision NOT to write audit rows.
+
+**Description:**
+`TeamcitySyncService` reconciles per component against a batched TeamCity scan:
+1. `COMPONENT_NAME` (and `PROJECT_VERSION`) values are resolved recursively through TeamCity
+   `%param%` references; an unresolved reference (missing key / cycle) yields no value.
+2. `PROJECT_VERSION` is read from the project, else deterministically from its non-paused
+   build types (distinct valid values in `id` order; conflicting values → ambiguous → none),
+   and must match a numeric version format (`1.2`, `2.2.4`, `03.64.53-2`) or it is treated as
+   absent.
+3. If any candidate declares a `PROJECT_VERSION`, null-version ("line-less") candidates are
+   dropped (nulls survive only when every candidate is null).
+4. Candidates are grouped by `PROJECT_VERSION`; each line resolves to one project — a lone
+   candidate wins, ties prefer a non-paused CDRelease build then the lexicographically smallest
+   id, and a tie with no release build leaves the line unresolved.
+5. Archived projects and projects whose build configs are all paused are excluded.
+
+Persistence is the transitional `version_line` → `teamcity_project` model: one `version_line`
+row per kept line (`version` is sync-owned, nullable, a reconciliation discriminator — see
+`VersionLineEntity`), pointing at a deduplicated `teamcity_project`. Reconciliation is
+idempotent (writes only when the (projectId, version) set changes). Counters are reported per
+component (`updated`/`unchanged`/`skipped_no_match`/`skipped_ambiguous`/`ambiguous_auto_resolved`);
+`dropped_lines` separately surfaces lines dropped from otherwise-linked components. A v4 PATCH
+preserves the sync-owned `version` for project ids it retains.
+
+**Acceptance criteria:**
+1. Multiple `PROJECT_VERSION` lines → one persisted project per line.
+2. Null-version candidates are discarded when any versioned candidate exists; all-null keeps the default line.
+3. Within a line, the CDRelease-then-smallest-id tie-break selects deterministically; no release build → unresolved.
+4. The build-type version fallback is deterministic and treats conflicting values as ambiguous.
+5. Unresolved `%param%` references and non-version-format values yield no version.
+6. A v4 PATCH that re-submits an existing project id does not wipe its sync-owned `version`.
+7. `dropped_lines` counts lines dropped from linked components without inflating `skipped_*`.
+
+**Test method:** `TeamcitySyncServiceTest` (multi-line, null-discard, tie-break, `dropped_lines`
+cases) and `ExternalTcProjectFetcherTest` (reference resolution, version-format, deterministic
+build-type fallback, archived/all-paused exclusion); v4 PATCH preservation in
+`ComponentManagementServiceImpl` write-path tests.
+
+### SYS-064: Component owner's manager may edit the component
 
 **Priority:** High
 **Test layer:** unit + integration-test
@@ -2363,11 +2414,11 @@ DB connection for its duration.
    null when the owner has no manager.
 
 **Test method:** `PermissionEvaluatorTest` —
-`SYS-063 manager of componentOwner allowed`,
-`SYS-063 non-manager of componentOwner denied`,
-`SYS-063 owner with no manager denied`;
+`SYS-064 manager of componentOwner allowed`,
+`SYS-064 non-manager of componentOwner denied`,
+`SYS-064 owner with no manager denied`;
 `ComponentOwnershipEditSecurityTest` —
-`SYS-063 manager of componentOwner can PATCH the component`,
-`SYS-063 non-manager of componentOwner gets 403 on PATCH`,
-`SYS-063 editors includes owner manager`,
-`SYS-063 editors omits manager when owner has none`.
+`SYS-064 manager of componentOwner can PATCH the component`,
+`SYS-064 non-manager of componentOwner gets 403 on PATCH`,
+`SYS-064 editors includes owner manager`,
+`SYS-064 editors omits manager when owner has none`.

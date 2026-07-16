@@ -13,10 +13,11 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentGroupEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentLabelEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentSystemEntity
-import org.octopusden.octopus.components.registry.server.entity.ComponentTeamcityProjectEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionMavenArtifactEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionSecurityGroupEntity
+import org.octopusden.octopus.components.registry.server.entity.TeamcityProjectEntity
 import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
+import org.octopusden.octopus.components.registry.server.entity.VersionLineEntity
 import org.octopusden.octopus.components.registry.server.service.impl.addOwnershipMapping
 import java.util.UUID
 
@@ -31,7 +32,7 @@ import java.util.UUID
  *  - configurations list: BASE / SCALAR_OVERRIDE / MARKER rowType discriminator
  *  - group: AGGREGATOR vs MEMBER role based on groupKey == componentKey
  *  - docs sorted by sortOrder
- *  - teamcityProjects sorted by sortOrder with URL computation
+ *  - teamcityProjects sorted by project id (from version_line → teamcity_project) with URL computation
  *  - artifactIds and securityGroups mapping
  *  - parentComponentName from parentComponent?.componentKey
  */
@@ -496,12 +497,11 @@ class ComponentDetailMapperTest {
     @DisplayName("TC project with base URL → projectUrl computed correctly")
     fun teamcityProject_urlComposed_whenBaseUrlProvided() {
         val component = minimalComponent()
-        component.teamcityProjects.add(
-            ComponentTeamcityProjectEntity(
+        component.versionLines.add(
+            VersionLineEntity(
                 id = UUID.randomUUID(),
                 component = component,
-                projectId = "MyProject_Alpha",
-                sortOrder = 0,
+                teamcityProject = TeamcityProjectEntity(id = UUID.randomUUID(), projectId = "MyProject_Alpha"),
             ),
         )
 
@@ -514,12 +514,11 @@ class ComponentDetailMapperTest {
     @DisplayName("TC project with trailing-slash base URL → projectUrl has no double slash")
     fun teamcityProject_trailingSlashBaseUrl_noDoubleSlash() {
         val component = minimalComponent()
-        component.teamcityProjects.add(
-            ComponentTeamcityProjectEntity(
+        component.versionLines.add(
+            VersionLineEntity(
                 id = UUID.randomUUID(),
                 component = component,
-                projectId = "Proj",
-                sortOrder = 0,
+                teamcityProject = TeamcityProjectEntity(id = UUID.randomUUID(), projectId = "Proj"),
             ),
         )
 
@@ -531,12 +530,11 @@ class ComponentDetailMapperTest {
     @DisplayName("TC project with blank base URL → projectUrl is null")
     fun teamcityProject_urlNull_whenBaseUrlBlank() {
         val component = minimalComponent()
-        component.teamcityProjects.add(
-            ComponentTeamcityProjectEntity(
+        component.versionLines.add(
+            VersionLineEntity(
                 id = UUID.randomUUID(),
                 component = component,
-                projectId = "MyProject_Alpha",
-                sortOrder = 0,
+                teamcityProject = TeamcityProjectEntity(id = UUID.randomUUID(), projectId = "MyProject_Alpha"),
             ),
         )
 
@@ -548,20 +546,18 @@ class ComponentDetailMapperTest {
     @DisplayName("TC projects sorted by sortOrder ascending")
     fun teamcityProjects_sortedBySortOrder() {
         val component = minimalComponent()
-        component.teamcityProjects.add(
-            ComponentTeamcityProjectEntity(
+        component.versionLines.add(
+            VersionLineEntity(
                 id = UUID.randomUUID(),
                 component = component,
-                projectId = "Proj_B",
-                sortOrder = 2,
+                teamcityProject = TeamcityProjectEntity(id = UUID.randomUUID(), projectId = "Proj_B"),
             ),
         )
-        component.teamcityProjects.add(
-            ComponentTeamcityProjectEntity(
+        component.versionLines.add(
+            VersionLineEntity(
                 id = UUID.randomUUID(),
                 component = component,
-                projectId = "Proj_A",
-                sortOrder = 1,
+                teamcityProject = TeamcityProjectEntity(id = UUID.randomUUID(), projectId = "Proj_A"),
             ),
         )
 
