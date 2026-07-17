@@ -36,10 +36,12 @@ import org.springframework.web.bind.annotation.RestController
  *
  * WARNING for frozen rules: the violation store keys each baseline by the rule's full textual
  * description, INCLUDING the `.because(...)` text (see `archunit_violation_store/stored.rules`).
- * Editing the description or `.because(...)` of a frozen rule orphans its baseline — every
- * previously-accepted violation then resurfaces as "new" and fails the build. If you must change
- * that text, regenerate the baseline in the same commit (delete the rule's store file and re-run
- * the test to re-record the accepted violations).
+ * Editing the description or `.because(...)` of a frozen rule orphans its baseline. Because the
+ * store is configured with `allowStoreCreation=false` (see `archunit.properties`), an orphaned /
+ * missing baseline FAILS the build loudly rather than being silently re-created — so a text change
+ * must be paired, in the same commit, with a deliberate baseline regeneration (override
+ * `-Darchunit.freeze.store.default.allowStoreCreation=true` and re-run the test to re-record the
+ * accepted violations under the new key).
  */
 @AnalyzeClasses(
     packages = [ArchitectureFitnessTest.BASE_PACKAGE],
@@ -63,6 +65,14 @@ class ArchitectureFitnessTest {
     // A method is authorized when @PreAuthorize is present on the method itself OR on its
     // declaring controller (class-level guard). Endpoints that are intentionally public today
     // are captured in the baseline; the rule prevents any NEW unguarded v4 endpoint.
+    //
+    // COVERAGE LIMITATION (accepted, follow-up): "v4 endpoint" is identified by the class-name
+    // suffix `*ControllerV4`, and that convention is not itself enforced. All v4 controllers follow
+    // it today (verified), but a future v4 controller named differently, or one using a custom
+    // composed mapping annotation not in MAPPING_ANNOTATIONS, would not be checked by this rule.
+    // Closing the gap robustly means identifying endpoints by request path (`/rest/api/4/**`),
+    // which requires stitching class-level @RequestMapping paths with method-level mappings —
+    // deferred as a separate hardening task.
     @ArchTest
     val v4EndpointsMustBeAuthorized: ArchRule =
         FreezingArchRule.freeze(
