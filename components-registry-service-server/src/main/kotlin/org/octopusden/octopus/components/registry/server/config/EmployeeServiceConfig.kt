@@ -47,6 +47,12 @@ class EmployeeServiceConfig {
 
                 override fun getTimeRetryInMillis(): Int = properties.retryTimeMillis
 
+                override fun getConnectTimeoutMillis(): Int = properties.connectTimeoutMillis
+
+                override fun getReadTimeoutMillis(): Int = properties.readTimeoutMillis
+
+                override fun getConnectionTtlMillis(): Int = properties.connectionTtlMillis
+
                 override fun getBearerToken(): String? = properties.token.takeIf { it.isNotBlank() }
 
                 override fun getBasicCredentials(): String? =

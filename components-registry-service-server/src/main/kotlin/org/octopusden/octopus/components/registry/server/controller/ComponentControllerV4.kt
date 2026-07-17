@@ -402,8 +402,9 @@ class ComponentControllerV4(
 
     /**
      * The people who may edit this component (componentOwner + ordered releaseManagers +
-     * securityChampions). Read-only informational projection for the Portal's "who can edit"
-     * surface — administrators (EDIT_ANY_COMPONENT) may also edit but are not enumerated here.
+     * securityChampions + the owner's manager, SYS-063). Read-only informational projection
+     * for the Portal's "who can edit" surface — administrators (EDIT_ANY_COMPONENT) may also
+     * edit but are not enumerated here (an open-ended realm-role, not per-component data).
      */
     @GetMapping("/{idOrName}/editors")
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")

@@ -221,6 +221,21 @@ class ComponentRegistryValidationTask {
             }
 
             @Override
+            int getConnectTimeoutMillis() {
+                return 5000
+            }
+
+            @Override
+            int getReadTimeoutMillis() {
+                return 10000
+            }
+
+            @Override
+            int getConnectionTtlMillis() {
+                return 300000
+            }
+
+            @Override
             String getBearerToken() {
                 return employeeServiceToken
             }

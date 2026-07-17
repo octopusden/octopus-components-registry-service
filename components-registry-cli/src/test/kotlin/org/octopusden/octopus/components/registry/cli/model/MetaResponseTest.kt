@@ -32,7 +32,8 @@ class MetaResponseTest {
             {
               "componentOwner": "owner1",
               "releaseManagers": ["rm1", "rm2"],
-              "securityChampions": ["sc1"]
+              "securityChampions": ["sc1"],
+              "manager": "mgr1"
             }
             """.trimIndent()
 
@@ -41,6 +42,23 @@ class MetaResponseTest {
         assertEquals("owner1", editors.componentOwner)
         assertEquals(listOf("rm1", "rm2"), editors.releaseManagers)
         assertEquals(listOf("sc1"), editors.securityChampions)
+        assertEquals("mgr1", editors.manager)
+    }
+
+    @Test
+    fun decodesEditorsResponseWithoutManager() {
+        val literal =
+            """
+            {
+              "componentOwner": "owner1",
+              "releaseManagers": ["rm1"],
+              "securityChampions": []
+            }
+            """.trimIndent()
+
+        val editors = json.decodeFromString<ComponentEditorsResponse>(literal)
+
+        assertEquals(null, editors.manager)
     }
 
     @Test

@@ -10,8 +10,11 @@ import org.mockito.Mockito.verify
 import org.octopusden.cloud.commons.security.SecurityService
 import org.octopusden.cloud.commons.security.dto.Role
 import org.octopusden.cloud.commons.security.dto.User
+import org.octopusden.employee.client.EmployeeServiceClient
+import org.octopusden.employee.client.common.dto.ManagerDTO
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
+import org.octopusden.octopus.components.registry.server.service.impl.EmployeeDirectoryService
 import org.springframework.beans.factory.ObjectProvider
 import java.util.UUID
 import org.mockito.Mockito.`when` as whenMock
@@ -33,7 +36,14 @@ class PermissionEvaluatorTest {
         (mock(ObjectProvider::class.java) as ObjectProvider<ComponentRepository>)
             .also { whenMock(it.getIfAvailable()).thenReturn(repo) }
 
-    private val evaluator = PermissionEvaluator(sec, repoProvider)
+    // Disabled directory: no employee-service client wired — getManager always returns null.
+    @Suppress("UNCHECKED_CAST")
+    private val disabledDirectory = EmployeeDirectoryService(
+        (mock(ObjectProvider::class.java) as ObjectProvider<EmployeeServiceClient>)
+            .also { whenMock(it.getIfAvailable()).thenReturn(null) },
+    )
+
+    private val evaluator = PermissionEvaluator(sec, repoProvider, disabledDirectory)
 
     private fun loginAs(user: User) = whenMock(sec.getCurrentUser()).thenReturn(user)
 
@@ -176,7 +186,7 @@ class PermissionEvaluatorTest {
         @Suppress("UNCHECKED_CAST")
         val emptyProvider = mock(ObjectProvider::class.java) as ObjectProvider<ComponentRepository>
         whenMock(emptyProvider.getIfAvailable()).thenReturn(null)
-        val noDbEvaluator = PermissionEvaluator(sec, emptyProvider)
+        val noDbEvaluator = PermissionEvaluator(sec, emptyProvider, disabledDirectory)
         loginAs(editor("bob"))
         assertFalse(noDbEvaluator.canEditComponent(UUID.randomUUID().toString()))
     }
@@ -190,5 +200,46 @@ class PermissionEvaluatorTest {
         val id = UUID.randomUUID()
         assertFalse(evaluator.canEditComponent(id.toString()))
         verify(repo, never()).findComponentOwnerById(id)
+    }
+
+    // --- SYS-063: manager of componentOwner ----------------------------------
+
+    private fun evaluatorWithManager(
+        owner: String,
+        manager: String?,
+    ): PermissionEvaluator {
+        val client = mock(EmployeeServiceClient::class.java)
+        whenMock(client.getManager(owner)).thenReturn(ManagerDTO(manager))
+        @Suppress("UNCHECKED_CAST")
+        val provider = (mock(ObjectProvider::class.java) as ObjectProvider<EmployeeServiceClient>)
+            .also { whenMock(it.getIfAvailable()).thenReturn(client) }
+        return PermissionEvaluator(sec, repoProvider, EmployeeDirectoryService(provider))
+    }
+
+    @Test
+    @DisplayName("SYS-063: manager of componentOwner allowed")
+    fun `SYS-063 manager of componentOwner allowed`() {
+        loginAs(editor("mgr"))
+        val id = UUID.randomUUID()
+        stub(id, owner = "bob")
+        assertTrue(evaluatorWithManager("bob", "mgr").canEditComponent(id.toString()))
+    }
+
+    @Test
+    @DisplayName("SYS-063: non-manager of componentOwner denied")
+    fun `SYS-063 non-manager of componentOwner denied`() {
+        loginAs(editor("frank"))
+        val id = UUID.randomUUID()
+        stub(id, owner = "bob")
+        assertFalse(evaluatorWithManager("bob", "other-mgr").canEditComponent(id.toString()))
+    }
+
+    @Test
+    @DisplayName("SYS-063: owner with no manager denied")
+    fun `SYS-063 owner with no manager denied`() {
+        loginAs(editor("frank"))
+        val id = UUID.randomUUID()
+        stub(id, owner = "bob")
+        assertFalse(evaluatorWithManager("bob", null).canEditComponent(id.toString()))
     }
 }
