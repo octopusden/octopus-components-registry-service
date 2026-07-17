@@ -128,6 +128,7 @@ All existing v1/v2/v3 endpoints (34 endpoints, 28 Feign client methods) must rem
 - Groovy CodeNarc is **report-only** — do not make blocking without explicit decision.
 - **SpotBugs intentionally disabled** in `build.gradle` via `tasks.matching { it.name.startsWith('spotbugs') }.configureEach { enabled = false }` (the plugin itself stays applied because it's owned by the `octopus-quality` convention plugin). Bytecode-flow analysis gave high false-positive rate on Kotlin lateinit / DSL getter / test code; the per-language tools above already cover the same ground. Do not re-enable without an explicit policy decision.
 - JaCoCo coverage: per-module minimum 10%, overall weighted minimum 70%.
+- **ArchUnit** architecture fitness functions in `components-registry-service-server` (`server/architecture/ArchitectureFitnessTest.kt`, runs in the fast `test` gate). Pre-existing violations of the frozen rules (controllers → repository; v4 endpoints without `@PreAuthorize`) are baselined in `archunit_violation_store/` — treat it like `detekt-baseline.xml`: **new** violations fail the build; regenerate only to prune fixed entries, never to absorb new ones (`freeze.refreeze=false`). See `docs/registry/non-functional-spec.md` §5.3.
 
 ## CI Workflows
 

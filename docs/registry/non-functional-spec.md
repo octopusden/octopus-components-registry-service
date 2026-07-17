@@ -163,28 +163,35 @@ For each component:
 
 ### 5.3 Architecture Fitness Functions (ArchUnit)
 
-```java
-// Layering: controllers never access repositories directly
-@ArchTest
-noClasses().that().resideInAPackage("..controller..")
-    .should().accessClassesThat().resideInAPackage("..repository..")
+**Implemented** in `components-registry-service-server` as JUnit 5 `@ArchTest` rules —
+`server/architecture/ArchitectureFitnessTest.kt` — analyzing the `...server` package. The rules
+run inside the fast `test` gate (no Spring context, no DB). Dependency: `archunit-junit5`
+(`archunit.version` in `gradle.properties`).
 
-// Security: all v4 endpoints require authorization
-@ArchTest
-methods().that().areDeclaredInClassesThat().resideInAPackage("..controller.v4..")
-    .and().areAnnotatedWith(RequestMapping.class)
-    .should().beAnnotatedWith(PreAuthorize.class)
+Two rules match pre-existing code that does not yet satisfy them. Rather than block the build or
+force a large refactor up front, those rules are wrapped in `FreezingArchRule`: the accepted
+violations are recorded in the `archunit_violation_store/` baseline (committed to VCS, the
+ArchUnit analogue of `detekt-baseline.xml`) and configured via `src/test/resources/archunit.properties`.
+A frozen rule fails only on **new** violations; the baselined ones are burned down over time
+(`freeze.store.default.allowStoreUpdate=true` auto-prunes entries once the code is fixed;
+`freeze.refreeze=false` guarantees new breaches fail rather than being silently absorbed).
 
-// No new Groovy code
-@ArchTest
-noClasses().that().resideInAPackage("..db..")
-    .should().dependOnClassesThat().haveNameMatching(".*groovy.*")
+| # | Rule | Status |
+|---|------|--------|
+| 1 | Controllers must not access `..repository..` directly (go through the service layer) | **Frozen** — 17 baselined calls in `ComponentControllerV4` / `ConfigControllerV4` / `HealthControllerV4` |
+| 2 | Every v4 HTTP endpoint (`*ControllerV4` mapping method) must be guarded by `@PreAuthorize` — on the method **or** its declaring controller | **Frozen** — 5 baselined intentionally-public endpoints (`info`, `versions/preview`, `migration-status`, feedback `submit`, service-event `ingest`) |
+| 3 | The DB-source implementation (`..db..`) must not depend on Groovy | **Active** (forward guard; vacuous until the `..db..` package exists) |
+| 4 | No cyclic dependencies between the server's top-level slices | **Deferred** — the module has one large pre-existing package cycle (`config → dto → service → …`); a frozen baseline would be ~586 KB and break on any import reshuffle. Re-enable after a package-decoupling effort |
 
-// No cyclic package dependencies
-@ArchTest
-slices().matching("org.octopusden.octopus.components.registry.(*)..")
-    .should().beFreeOfCycles()
-```
+Plus naming/placement conventions (expected to hold for the whole module, not frozen):
+`@RestController` → `..controller..`, `@Repository` → `..repository..`, `@Entity` → `..entity..`,
+`@Service` → `..service..` or `..teamcity..`.
+
+Notes vs. the original sketch: v4 controllers live in one `...server.controller` package with the
+version encoded in the class name (`*ControllerV4`), not a `..controller.v4..` package; method
+mappings use `@GetMapping`/`@PostMapping`/… (not class-level `@RequestMapping`); and the
+authorization check honours class-level `@PreAuthorize` (e.g. `AdminControllerV4`), so those
+methods are not falsely flagged.
 
 ### 5.4 Database Reliability
 
