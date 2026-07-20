@@ -4,7 +4,7 @@ import org.octopusden.octopus.components.registry.server.teamcity.TeamcityValida
 import org.octopusden.octopus.validation.dto.teamcity.TemplateCatalog
 import org.springframework.stereotype.Component
 
-/** Supplies the module's `TemplateCatalog` from `teamcity.validation.*` config (see TD-016 / D2). */
+/** Supplies the module's `TemplateCatalog` from `teamcity.validation.*` config (decision D2). */
 @Component
 class ConfigTemplateCatalog(
     properties: TeamcityValidationProperties,

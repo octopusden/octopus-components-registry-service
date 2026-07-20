@@ -328,7 +328,7 @@ class ComponentControllerV4(
     // identity ignores the variable name, so `{idOrName}` here vs `{id}` on PATCH would emit two
     // colliding path items. The binding keeps the descriptive `idOrName` name (this GET resolves
     // by UUID *or* name — SYS-028) via the explicit @PathVariable("id").
-    //    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
+    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
     @GetMapping("/{id}")
     fun getComponent(
         @PathVariable("id") idOrName: String,

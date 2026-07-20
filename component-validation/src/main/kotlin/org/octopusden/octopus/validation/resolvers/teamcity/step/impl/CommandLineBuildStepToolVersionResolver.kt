@@ -10,8 +10,8 @@ import org.octopusden.octopus.validation.resolvers.teamcity.step.BuildStepToolVe
 import org.octopusden.octopus.validation.resolvers.teamcity.value.ValueVersionResolver
 
 /**
- * A TeamCity `simpleRunner` (command-line) step — and, per an unconfirmed assumption (see
- * TD-016), an `IN_CONTAINER` step: reads `script.content`, splits it on whitespace, resolves
+ * A TeamCity `simpleRunner` (command-line) step — and, per an unconfirmed assumption, an
+ * `IN_CONTAINER` step: reads `script.content`, splits it on whitespace, resolves
  * each token's `%param%` reference chain, and tries both the Maven and the Java resolver against
  * each resolved token (a plain command line gives no other signal about which tool a token
  * belongs to).

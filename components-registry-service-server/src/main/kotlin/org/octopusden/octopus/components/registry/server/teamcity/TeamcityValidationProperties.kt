@@ -4,7 +4,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties
 
 /**
  * Configuration for the TeamCity validation run, bound from `teamcity.validation.*`. Supplies the
- * template/step ids the `component-validation` module's `TemplateCatalog` needs (see TD-016 / D2 —
+ * template/step ids the `component-validation` module's `TemplateCatalog` needs (decision D2 —
  * confirm the real ids against the live TeamCity instance) and the enriched-fetch cache TTL.
  *
  * TC connection details (base url / credentials) are shared with the sync engine via

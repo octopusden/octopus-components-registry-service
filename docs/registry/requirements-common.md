@@ -75,7 +75,7 @@
 | SYS-066 | `component-validation` module: `HAS_CUSTOM_BUILD_STEP` is WARNING when any uninherited build step across every configuration (attached to a template or not) resolves any tool version at all — Java or Maven, whichever it uses; OK otherwise | High | unit-test | ✅ Tested |
 | SYS-067 | `component-validation` module: `USES_OLD_JAVA_VERSION` is WARNING if any resolved Java version is 1.8 (every uninherited step across every configuration, plus each attached configuration's default build step regardless of its own inherited flag), OK if versions resolved but none is 1.8, NOT_APPLICABLE if nothing Java was inspected; an unresolved version is ignored, not flagged (decision D7) | High | unit-test | ✅ Tested |
 | SYS-068 | `component-validation` module: `ValidatorSuite.validate` isolates a throwing validator as a single `Status.ERROR` result instead of losing every other check's result (decision D6) | Medium | unit-test | ✅ Tested |
-| SYS-069 | `component-validation` module: `JavaVersion.isEight` is true only for the exact `"1.8"` / `"8"` spellings; `JavaVersionParser` normalizes richer real-world values (`"1.8.0_392"`, `"JDK_ZULU_17_x64"`, `"/opt/java/openjdk-11"`, etc. — see TD-016) down to that major-version form before `isEight` is checked | Medium | unit-test | ✅ Tested |
+| SYS-069 | `component-validation` module: `JavaVersion.isEight` is true only for the exact `"1.8"` / `"8"` spellings; `JavaVersionParser` normalizes richer real-world values (`"1.8.0_392"`, `"JDK_ZULU_17_x64"`, `"/opt/java/openjdk-11"`, etc.) down to that major-version form before `isEight` is checked | Medium | unit-test | ✅ Tested |
 | SYS-070 | `component-validation` module: `TeamCityValidators` (the suite) returns exactly the five TeamCity results for a given project, each with the status the individual checks would produce in isolation | High | unit-test | ✅ Tested |
 | SYS-071 | `component-validation` module: `BuildStepToolVersionResolver` — given one `BuildStep`, dispatch by `StepType` (Maven/Gradle/command-line+in-container) to read the right parameter(s), recursively resolve `%param%` references via `ParameterReferenceResolver`, and derive `Set<ToolVersion>` via the per-tool `ValueVersionResolver`s (`JavaVersionResolver`, `MavenVersionResolver`) | High | unit-test | ✅ Tested |
 | SYS-072 | `component-validation` module: `MULTIPLE_JAVA_VERSIONS` is WARNING when more than one distinct Java version is found across the same inspected steps as `USES_OLD_JAVA_VERSION`, OK for zero or one distinct version, NOT_APPLICABLE if nothing was inspectable | High | unit-test | ✅ Tested |
@@ -2503,8 +2503,8 @@ validators' results are still returned.
 **Description:**
 `JavaVersion.isEight` is a literal test: `raw.trim() == "1.8" || raw.trim() == "8"` (per the
 implementation brief — no fuzzy matching at that layer). The burden of normalizing real-world
-values to that exact major-version form falls on `JavaVersionResolver` (decision **D1** — see
-TD-016): it extracts the major (or `1.<major>`) version from clean strings (`"11.0.2"` → `"11"`),
+values to that exact major-version form falls on `JavaVersionResolver` (decision **D1**): it
+extracts the major (or `1.<major>`) version from clean strings (`"11.0.2"` → `"11"`),
 from build-suffixed strings (`"1.8.0_392"` → `"1.8"`, `"8u392"` → `"8"`), and from
 marker-embedded identifiers (`"JDK_21_0_x64"` → `"21"`, `"JDK_ZULU_17_x64"` → `"17"`,
 `"/opt/java/openjdk-11"` → `"11"`).
@@ -2547,7 +2547,7 @@ returns the `Set<ToolVersion>` (Java and/or Maven, for now) that step uses. Disp
 `StepType` (`DefaultBuildStepToolVersionResolver`): `MAVEN` → reads `maven.path` (Maven version)
 and `target.jdk.home` (Java version); `GRADLE` → reads only `target.jdk.home`; `COMMAND_LINE` and
 `IN_CONTAINER` (the latter an unconfirmed assumption — an in-container step is assumed to run a
-script the same way a command-line step does; see TD-016) → read `script.content`, split it on
+script the same way a command-line step does) → read `script.content`, split it on
 whitespace, and try *both* the Maven and the Java value-resolver on each (reference-resolved)
 token, since a bare command line gives no other signal about which tool a token belongs to.
 Every parameter read first goes through `ParameterReferenceResolver`, which recursively

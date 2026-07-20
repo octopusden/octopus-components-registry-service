@@ -13,7 +13,7 @@ import org.octopusden.octopus.validation.dto.teamcity.TeamcityProject as ValTeam
 
 /**
  * External TeamCity DTOs -> module model. Merges project + config + step params into each step and
- * maps the raw step `type` string to `StepType`. See TD-016.
+ * maps the raw step `type` string to `StepType`.
  */
 @Component
 class TeamcityProjectMapper {

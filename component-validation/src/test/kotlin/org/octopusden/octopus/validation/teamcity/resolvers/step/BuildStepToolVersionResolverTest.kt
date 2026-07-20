@@ -84,7 +84,7 @@ class BuildStepToolVersionResolverTest {
     }
 
     @Test
-    @DisplayName("CommandLineBuildStepToolVersionResolver supports both COMMAND_LINE and IN_CONTAINER (D-assumption, see TD-016)")
+    @DisplayName("CommandLineBuildStepToolVersionResolver supports both COMMAND_LINE and IN_CONTAINER (D-assumption)")
     fun `command line resolver supports command line and in container`() {
         val resolver = CommandLineBuildStepToolVersionResolver(javaVersionResolver, mavenVersionResolver)
 

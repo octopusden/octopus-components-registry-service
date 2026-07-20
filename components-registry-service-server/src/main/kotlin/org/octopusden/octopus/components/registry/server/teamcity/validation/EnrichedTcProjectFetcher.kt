@@ -56,7 +56,7 @@ class CachingEnrichedTcProjectFetcher(
 
     private companion object {
         // Every buildType node must list the DTO's non-nullable fields or Jackson throws on missing
-        // `name`. Mirrors the sync's PROJECT_FIELDS, plus steps. See TD-016.
+        // `name`. Mirrors the sync's PROJECT_FIELDS, plus steps.
         private const val BUILD_TYPE_REQUIRED = "id,name,projectId,projectName,href"
         const val FIELDS =
             "project(id,name,webUrl,href," +
