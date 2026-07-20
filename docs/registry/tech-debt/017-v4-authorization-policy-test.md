@@ -13,9 +13,24 @@ Authorization in CRS is **hybrid**, not uniformly method-security:
 - some endpoints use method-level `@PreAuthorize`;
 - some are covered by filter-chain matchers (`authenticated()` / permission rules) in
   `WebSecurityConfig`;
-- some are intentionally public (`info`, version `preview`, `migration-status`, feedback `submit`);
-- the service-event ingest is guarded by a shared-secret check inside the controller;
-- anonymous component reads pass through a permission granted to `ROLE_ANONYMOUS`.
+- some are intentionally public (`permitAll()`);
+- the service-event ingest is `permitAll()` at the filter chain but guarded by a shared-secret
+  check inside the controller;
+- anonymous component reads are `permitAll()` but pass through a permission granted to `ROLE_ANONYMOUS`.
+
+The five endpoints that carry no `@PreAuthorize` today (and were flagged by the removed rule) are
+NOT all "public" — per `WebSecurityConfig` matcher order they split across mechanisms:
+
+| Endpoint | Actual policy |
+|----------|---------------|
+| `GET /rest/api/4/info` | intentionally public (`permitAll()`) |
+| `GET /rest/api/4/migration-status` | intentionally public (`permitAll()`, transitional) |
+| `POST /rest/api/4/versions/preview` | **filter-chain secured** — falls to the `/rest/api/4/**` `authenticated()` catch-all |
+| `POST /rest/api/4/feedback` (`submit`) | **filter-chain secured** — any authenticated user, via the same catch-all |
+| `POST /rest/api/4/admin/service-events` (`ingest`) | shared-secret (filter-chain `permitAll()` + in-controller check) |
+
+So a naive "no `@PreAuthorize` ⇒ public" reading is wrong: `preview` and feedback `submit` require
+authentication via the filter chain, not `@PublicV4Endpoint`.
 
 A static "must carry `@PreAuthorize`" rule therefore mis-classifies several deliberate mechanisms as
 "unguarded", and cannot see filter-chain protection at all. Worse, deciding "is this a v4 endpoint"
