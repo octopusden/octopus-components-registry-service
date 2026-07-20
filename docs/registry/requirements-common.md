@@ -2459,6 +2459,8 @@ whole live collection, including legacy composite siblings (via `isIntersect`).
 3. Composite CREATE (desired-set or POST) → 400 (message unchanged).
 4. Changing a composite row's range (echoing a different composite) → 400.
 5. A value-only edit of a legacy composite (unchanged range, changed markerChildren) → 200.
+6. A valid range change on an existing override (`[1.0,2.0)` → `[3.0,4.0)`) is validated AND the new
+   normalized range is persisted → 200 (guards the positive validate-and-assign branch).
 
 **Test method:** `ComponentFieldOverridesPatchTest` —
 `SYS-065 unchanged composite echo plus new override is accepted`,
@@ -2466,4 +2468,5 @@ whole live collection, including legacy composite siblings (via `isIntersect`).
 `SYS-065 composite create still rejected`,
 `SYS-065 changing composite range still validated`,
 `SYS-065 value-only edit of composite is accepted`,
-`SYS-065 disjointness still enforced against untouched composite`.
+`SYS-065 disjointness still enforced against untouched composite`,
+`SYS-065 valid range change is persisted`.

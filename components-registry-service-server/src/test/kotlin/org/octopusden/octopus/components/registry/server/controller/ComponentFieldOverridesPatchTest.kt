@@ -87,6 +87,7 @@ class ComponentFieldOverridesPatchTest {
         assertEquals(1, overrides.size, "PATCH fieldOverrides must create the override")
         assertEquals("build.buildFilePath", overrides[0]["overriddenAttribute"].asText())
         assertEquals("FileA", overrides[0]["value"].asText())
+        assertEquals("[1.0,2.0)", overrides[0]["versionRange"].asText(), "the created range must be persisted")
     }
 
     @Test
@@ -217,6 +218,25 @@ class ComponentFieldOverridesPatchTest {
             composite["markerChildren"]["vcsEntries"][0]["vcsPath"].asText(),
             "the child edit must be applied",
         )
+    }
+
+    @Test
+    @DisplayName("SYS-065: a valid range change on an existing override is validated AND persisted (200)")
+    fun `SYS-065 valid range change is persisted`() {
+        val id = newComponent()
+        val overrideId = seedOverride(id, "build.buildFilePath", "[1.0,2.0)", "FileA")
+        // Exercises the positive `!rangeUnchangedOnUpdate` branch: a genuinely changed range must be
+        // BOTH validated AND assigned. A regression that validates but drops the assignment would leave
+        // the stored range at [1.0,2.0) and fail the final assertion.
+        patchComponent(
+            id,
+            """"fieldOverrides":[{"id":"$overrideId","overriddenAttribute":"build.buildFilePath",""" +
+                """"versionRange":"[3.0,4.0)","value":"FileA"}]""",
+        )
+        val overrides = listFieldOverrides(id)
+        assertEquals(1, overrides.size)
+        assertEquals(overrideId, overrides[0]["id"].asText(), "same row updated in place, not recreated")
+        assertEquals("[3.0,4.0)", overrides[0]["versionRange"].asText(), "the changed range must be persisted")
     }
 
     @Test
