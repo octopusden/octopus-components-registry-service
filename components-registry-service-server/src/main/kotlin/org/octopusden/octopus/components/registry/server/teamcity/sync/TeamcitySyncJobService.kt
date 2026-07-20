@@ -1,4 +1,4 @@
-package org.octopusden.octopus.components.registry.server.teamcity
+package org.octopusden.octopus.components.registry.server.teamcity.sync
 
 import org.octopusden.octopus.components.registry.server.service.JobState
 import java.time.Instant

@@ -1,4 +1,4 @@
-package org.octopusden.octopus.components.registry.server.teamcity.impl
+package org.octopusden.octopus.components.registry.server.teamcity.validation.impl
 
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.service.AsyncJobLifecycle
@@ -10,10 +10,10 @@ import org.octopusden.octopus.components.registry.server.service.ServiceEventRec
 import org.octopusden.octopus.components.registry.server.service.ServiceEventSource
 import org.octopusden.octopus.components.registry.server.service.ServiceEventStatus
 import org.octopusden.octopus.components.registry.server.service.ServiceEventType
-import org.octopusden.octopus.components.registry.server.teamcity.StartTeamcitySyncResult
-import org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncJobService
-import org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncJobState
-import org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncService
+import org.octopusden.octopus.components.registry.server.teamcity.validation.StartTeamcityValidationResult
+import org.octopusden.octopus.components.registry.server.teamcity.validation.TeamcityValidationJobService
+import org.octopusden.octopus.components.registry.server.teamcity.validation.TeamcityValidationJobState
+import org.octopusden.octopus.components.registry.server.teamcity.validation.TeamcityValidationService
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.core.task.TaskExecutor
@@ -22,26 +22,20 @@ import java.time.Instant
 import java.util.concurrent.RejectedExecutionException
 
 /**
- * In-memory async wrapper around [TeamcitySyncService.resync]. Mirrors
- * `MigrationJobServiceImpl` for the components flow — same gate integration via
- * [AsyncJobLifecycle], same CAS-then-publish ordering, same finally-release.
- *
- * No DB-backed claim: TC sync is not resumable, so a pod restart starts the
- * next run from scratch. There is also no `forceReset` / `clearInMemory`
- * surface — those exist on history because of its DB-backed
- * `git_history_import_state` row; TC has nothing equivalent to clear.
+ * Async wrapper around [TeamcityValidationService.validate] — mirrors `TeamcitySyncJobServiceImpl`
+ * with `JobKind.TC_VALIDATION`: gate-serialized and single-flight (one validation at a time).
  */
 @ConditionalOnDatabaseEnabled
 @Service
-class TeamcitySyncJobServiceImpl(
-    private val teamcitySyncService: TeamcitySyncService,
+class TeamcityValidationJobServiceImpl(
+    private val teamcityValidationService: TeamcityValidationService,
     @Qualifier("migrationExecutor") executor: TaskExecutor,
     lifecycleGate: MigrationLifecycleGate,
     private val serviceEventRecorder: ServiceEventRecorder = NoOpServiceEventRecorder,
-) : TeamcitySyncJobService {
+) : TeamcityValidationJobService {
     private val lifecycle =
-        AsyncJobLifecycle<TeamcitySyncJobState>(
-            jobKind = JobKind.TC_RESYNC,
+        AsyncJobLifecycle<TeamcityValidationJobState>(
+            jobKind = JobKind.TC_VALIDATION,
             executor = executor,
             gate = lifecycleGate,
             getId = { it.id },
@@ -51,47 +45,41 @@ class TeamcitySyncJobServiceImpl(
                     state = JobState.FAILED,
                     finishedAt = Instant.now(),
                     errorMessage =
-                        "Failed to submit teamcity resync: ${rejected.message ?: rejected::class.java.simpleName}",
+                        "Failed to submit teamcity validation: ${rejected.message ?: rejected::class.java.simpleName}",
                 )
             },
         )
 
-    override fun startAsync(triggeredBy: String): StartTeamcitySyncResult {
+    override fun startAsync(triggeredBy: String): StartTeamcityValidationResult {
         val outcome =
             try {
                 lifecycle.claimAndSubmit(
                     buildCandidate = ::buildCandidate,
-                    work = { jobId -> runResync(jobId, triggeredBy) },
+                    work = { jobId -> runValidation(jobId, triggeredBy) },
                 )
             } catch (rejected: RejectedExecutionException) {
-                // ONLY executor-rejection (typically pod shutdown; Spring's
-                // TaskRejectedException extends RejectedExecutionException): the work
-                // runnable never ran, so recordStart never fired — record a standalone
-                // terminal FAILED so the failure is not lost (SYS-060), then rethrow.
-                // A cross-kind MigrationConflictException is NOT a failure and must NOT be
-                // journaled — it is deliberately not caught here and propagates to the 409 handler.
                 serviceEventRecorder.recordInstant(
-                    type = ServiceEventType.TEAMCITY_RESYNC,
+                    type = ServiceEventType.TEAMCITY_VALIDATION,
                     source = ServiceEventSource.CRS,
                     triggeredBy = triggeredBy,
                     status = ServiceEventStatus.FAILED,
-                    summary = "TeamCity resync failed to start",
+                    summary = "TeamCity validation failed to start",
                     detail = mapOf("errorMessage" to (rejected.message ?: rejected::class.java.simpleName)),
                 )
                 throw rejected
             }
         return when (outcome) {
             is AsyncJobLifecycle.ClaimOutcome.Attached ->
-                StartTeamcitySyncResult(outcome.state, isNewlyStarted = false)
+                StartTeamcityValidationResult(outcome.state, isNewlyStarted = false)
             is AsyncJobLifecycle.ClaimOutcome.Started ->
-                StartTeamcitySyncResult(outcome.state, isNewlyStarted = true)
+                StartTeamcityValidationResult(outcome.state, isNewlyStarted = true)
         }
     }
 
-    override fun current(): TeamcitySyncJobState? = lifecycle.current()
+    override fun current(): TeamcityValidationJobState? = lifecycle.current()
 
-    private fun buildCandidate(jobId: String): TeamcitySyncJobState =
-        TeamcitySyncJobState(
+    private fun buildCandidate(jobId: String): TeamcityValidationJobState =
+        TeamcityValidationJobState(
             id = jobId,
             state = JobState.RUNNING,
             startedAt = Instant.now(),
@@ -100,24 +88,19 @@ class TeamcitySyncJobServiceImpl(
             errorMessage = null,
         )
 
-    private fun runResync(
+    private fun runValidation(
         jobId: String,
         triggeredBy: String,
     ) {
-        // recordStart runs here (executor thread) rather than at claim time so the
-        // RUNNING journal row is written before the finish transition in BOTH the
-        // async executor and the SyncTaskExecutor (tests) — ordering that a
-        // claim-time write cannot guarantee. triggeredBy is captured on the caller
-        // thread and passed in, so no SecurityContext propagation is needed here.
         serviceEventRecorder.recordStart(
-            type = ServiceEventType.TEAMCITY_RESYNC,
+            type = ServiceEventType.TEAMCITY_VALIDATION,
             source = ServiceEventSource.CRS,
             triggeredBy = triggeredBy,
             correlationId = jobId,
-            summary = "TeamCity resync running",
+            summary = "TeamCity validation running",
         )
         try {
-            val result = teamcitySyncService.resync()
+            val result = teamcityValidationService.validate()
             lifecycle.update(jobId) { current ->
                 current.copy(
                     state = JobState.COMPLETED,
@@ -126,44 +109,42 @@ class TeamcitySyncJobServiceImpl(
                 )
             }
             LOG.info(
-                "TC resync job {} COMPLETED: scanned={}, updated={}, unchanged={}, " +
-                    "skippedNoMatch={}, skippedAmbiguous={}, ambiguousAutoResolved={}, droppedLines={}, errors={}",
+                "TC validation job {} COMPLETED: scanned={}, succeeded={}, failed={}, " +
+                    "projectsWithIssues={}, removed={}, errors={}",
                 jobId,
                 result.scanned,
-                result.updated,
-                result.unchanged,
-                result.skippedNoMatch,
-                result.skippedAmbiguous,
-                result.ambiguousAutoResolved,
-                result.droppedLines,
+                result.succeeded,
+                result.failed,
+                result.projectsWithIssues,
+                result.removed,
                 result.errors.size,
             )
-            // A run that matched everything but hit per-component errors still COMPLETED
-            // the pass; flag it so the Events feed distinguishes clean from partial runs.
-            val completedWithErrors = result.errors.isNotEmpty()
             serviceEventRecorder.recordFinish(
-                type = ServiceEventType.TEAMCITY_RESYNC,
+                type = ServiceEventType.TEAMCITY_VALIDATION,
                 source = ServiceEventSource.CRS,
                 triggeredBy = triggeredBy,
                 correlationId = jobId,
                 status = ServiceEventStatus.COMPLETED,
-                summary = if (completedWithErrors) "TeamCity resync completed with errors" else "TeamCity resync completed",
+                summary =
+                    if (result.failed > 0) {
+                        "TeamCity validation completed with per-project failures"
+                    } else {
+                        "TeamCity validation completed"
+                    },
                 detail =
                     mapOf(
                         "scanned" to result.scanned,
-                        "updated" to result.updated,
-                        "unchanged" to result.unchanged,
-                        "skippedNoMatch" to result.skippedNoMatch,
-                        "skippedAmbiguous" to result.skippedAmbiguous,
-                        "ambiguousAutoResolved" to result.ambiguousAutoResolved,
-                        "droppedLines" to result.droppedLines,
+                        "succeeded" to result.succeeded,
+                        "failed" to result.failed,
+                        "projectsWithIssues" to result.projectsWithIssues,
+                        "removed" to result.removed,
                         "errors" to result.errors,
                     ),
             )
         } catch (
             @Suppress("TooGenericExceptionCaught") e: Throwable,
         ) {
-            LOG.error("TC resync job {} FAILED", jobId, e)
+            LOG.error("TC validation job {} FAILED", jobId, e)
             lifecycle.update(jobId) { current ->
                 current.copy(
                     state = JobState.FAILED,
@@ -172,12 +153,12 @@ class TeamcitySyncJobServiceImpl(
                 )
             }
             serviceEventRecorder.recordFinish(
-                type = ServiceEventType.TEAMCITY_RESYNC,
+                type = ServiceEventType.TEAMCITY_VALIDATION,
                 source = ServiceEventSource.CRS,
                 triggeredBy = triggeredBy,
                 correlationId = jobId,
                 status = ServiceEventStatus.FAILED,
-                summary = "TeamCity resync failed",
+                summary = "TeamCity validation failed",
                 detail = mapOf("errorMessage" to (e.message ?: e::class.java.simpleName)),
             )
         } finally {
@@ -186,6 +167,6 @@ class TeamcitySyncJobServiceImpl(
     }
 
     companion object {
-        private val LOG = LoggerFactory.getLogger(TeamcitySyncJobServiceImpl::class.java)
+        private val LOG = LoggerFactory.getLogger(TeamcityValidationJobServiceImpl::class.java)
     }
 }

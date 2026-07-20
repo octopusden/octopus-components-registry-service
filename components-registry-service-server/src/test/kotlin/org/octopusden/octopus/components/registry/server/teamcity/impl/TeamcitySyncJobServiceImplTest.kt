@@ -19,8 +19,9 @@ import org.octopusden.octopus.components.registry.server.service.ServiceEventSou
 import org.octopusden.octopus.components.registry.server.service.ServiceEventStatus
 import org.octopusden.octopus.components.registry.server.service.ServiceEventType
 import org.octopusden.octopus.components.registry.server.support.RecordingServiceEventRecorder
-import org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncResult
-import org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncService
+import org.octopusden.octopus.components.registry.server.teamcity.sync.TeamcitySyncResult
+import org.octopusden.octopus.components.registry.server.teamcity.sync.TeamcitySyncService
+import org.octopusden.octopus.components.registry.server.teamcity.sync.impl.TeamcitySyncJobServiceImpl
 import org.springframework.core.task.SyncTaskExecutor
 import kotlin.test.assertFailsWith
 

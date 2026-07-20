@@ -1,4 +1,4 @@
-package org.octopusden.octopus.components.registry.server.teamcity
+package org.octopusden.octopus.components.registry.server.teamcity.sync
 
 import mu.KotlinLogging
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled

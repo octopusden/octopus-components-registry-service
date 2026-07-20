@@ -38,6 +38,9 @@ enum class ServiceEventType(
     /** TeamCity project-id/url resync run. */
     TEAMCITY_RESYNC(ServiceEventCategory.SYSTEM),
 
+    /** TeamCity project Java/Maven validation run. */
+    TEAMCITY_VALIDATION(ServiceEventCategory.SYSTEM),
+
     /** Portal-owned scheduled component-validation sweep run (source=portal). */
     VALIDATION_SWEEP(ServiceEventCategory.SYSTEM),
 

@@ -1,4 +1,4 @@
-package org.octopusden.octopus.components.registry.server.teamcity
+package org.octopusden.octopus.components.registry.server.teamcity.sync
 
 import mu.KotlinLogging
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
@@ -9,6 +9,7 @@ import org.octopusden.octopus.components.registry.server.repository.ComponentRep
 import org.octopusden.octopus.components.registry.server.repository.TeamcityProjectRepository
 import org.octopusden.octopus.components.registry.server.repository.VersionLineRepository
 import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
+import org.octopusden.octopus.components.registry.server.teamcity.TeamcityProperties
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.support.TransactionTemplate

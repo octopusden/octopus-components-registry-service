@@ -1,4 +1,4 @@
-package org.octopusden.octopus.components.registry.server.teamcity
+package org.octopusden.octopus.components.registry.server.teamcity.sync
 
 import java.util.UUID
 

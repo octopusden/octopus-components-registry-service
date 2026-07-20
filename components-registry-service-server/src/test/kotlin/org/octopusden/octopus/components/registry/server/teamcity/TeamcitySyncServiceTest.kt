@@ -13,6 +13,10 @@ import org.octopusden.octopus.components.registry.server.repository.ComponentRep
 import org.octopusden.octopus.components.registry.server.repository.TeamcityProjectRepository
 import org.octopusden.octopus.components.registry.server.repository.VersionLineRepository
 import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
+import org.octopusden.octopus.components.registry.server.teamcity.TeamcityProperties
+import org.octopusden.octopus.components.registry.server.teamcity.sync.TcProject
+import org.octopusden.octopus.components.registry.server.teamcity.sync.TcProjectFetcher
+import org.octopusden.octopus.components.registry.server.teamcity.sync.TeamcitySyncService
 import org.springframework.context.ApplicationEvent
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.data.domain.Example
@@ -30,10 +34,12 @@ import java.util.UUID
 import java.util.function.Function
 
 /**
- * Unit tests for [TeamcitySyncService] against the version_line / teamcity_project schema.
+ * Unit tests for [org.octopusden.octopus.components.registry.server.teamcity.sync.TeamcitySyncService]
+ * against the version_line / teamcity_project schema.
  *
  * All dependencies are hand-rolled in-memory stubs — no Spring context, no Mockito, no DB.
- * [TcProjectFetcher] is a SAM interface. [StubVersionLineRepository] owns the per-component
+ * [org.octopusden.octopus.components.registry.server.teamcity.sync.TcProjectFetcher] is a SAM interface.
+ * [StubVersionLineRepository] owns the per-component
  * link rows; [StubTeamcityProjectRepository] holds the deduplicated TeamCity projects.
  */
 class TeamcitySyncServiceTest {
@@ -74,7 +80,16 @@ class TeamcitySyncServiceTest {
         publisher: ApplicationEventPublisher,
         user: CurrentUserResolver,
         properties: TeamcityProperties = configuredProperties(),
-    ) = TeamcitySyncService(repo, versionLineRepo, teamcityProjectRepo, fetcher, publisher, user, inlineTx(), properties)
+    ) = TeamcitySyncService(
+        repo,
+        versionLineRepo,
+        teamcityProjectRepo,
+        fetcher,
+        publisher,
+        user,
+        inlineTx(),
+        properties,
+    )
 
     private fun configuredProperties() = TeamcityProperties(baseUrl = "https://teamcity.example.com")
 
@@ -538,6 +553,9 @@ class TeamcitySyncServiceTest {
 
         override fun findByComponentId(componentId: UUID): List<VersionLineEntity> = store.filter { it.component.id == componentId }
 
+        override fun findByProjectIdsWithComponent(projectIds: Collection<String>): List<VersionLineEntity> =
+            store.filter { it.teamcityProject.projectId in projectIds }
+
         override fun <S : VersionLineEntity> save(entity: S): S {
             store.add(entity)
             saveCalls.add(entity)
@@ -622,6 +640,8 @@ class TeamcitySyncServiceTest {
         private val store = mutableListOf<TeamcityProjectEntity>()
 
         override fun findByProjectId(projectId: String): TeamcityProjectEntity? = store.firstOrNull { it.projectId == projectId }
+
+        override fun findDistinctProjectIds(): List<String> = store.map { it.projectId }.distinct()
 
         override fun <S : TeamcityProjectEntity> save(entity: S): S {
             if (entity.id == null) entity.id = UUID.randomUUID()
