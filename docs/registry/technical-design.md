@@ -119,7 +119,7 @@ GET    /rest/api/4/components/{id}
 PATCH  /rest/api/4/components/{id}
   Request:  ComponentUpdateRequest { version, displayName, productType, build, escrow, ... }
   Response: ComponentDetailResponse (incl. per-caller `canEdit`)
-  Auth:     ACCESS_COMPONENTS AND canEditComponent (owner/RM/SC, or EDIT_ANY_COMPONENT for admin)
+  Auth:     ACCESS_COMPONENTS AND canEditComponent (owner/RM/SC/manager-of-owner, or EDIT_ANY_COMPONENT for admin)
   Headers:  If-Match (optional, alternative to version field for optimistic locking)
   Validation: Bean Validation (Jakarta @Valid, @NotBlank, @Size, etc.)
   Semantics: JSON Merge Patch (RFC 7396):
@@ -145,15 +145,15 @@ GET    /rest/api/4/components?productType=&archived=&search=&owner=
 POST   /rest/api/4/components/{id}/field-overrides
   Request:  FieldOverrideCreateRequest { fieldPath, versionRange, value }
   Example:  { "fieldPath": "build.buildSystem", "versionRange": "[1.0, 2.0)", "value": "MAVEN" }
-  Auth:     ACCESS_COMPONENTS AND canEditComponent (owner/RM/SC, or EDIT_ANY_COMPONENT)
+  Auth:     ACCESS_COMPONENTS AND canEditComponent (owner/RM/SC/manager-of-owner, or EDIT_ANY_COMPONENT)
   Validation: No overlap with existing ranges for the same field (409 Conflict)
 
 PATCH  /rest/api/4/components/{id}/field-overrides/{overrideId}
   Request:  FieldOverrideUpdateRequest { versionRange?, value? }
-  Auth:     ACCESS_COMPONENTS AND canEditComponent (owner/RM/SC, or EDIT_ANY_COMPONENT)
+  Auth:     ACCESS_COMPONENTS AND canEditComponent (owner/RM/SC/manager-of-owner, or EDIT_ANY_COMPONENT)
 
 DELETE /rest/api/4/components/{id}/field-overrides/{overrideId}
-  Auth:     ACCESS_COMPONENTS AND canEditComponent (owner/RM/SC, or EDIT_ANY_COMPONENT)
+  Auth:     ACCESS_COMPONENTS AND canEditComponent (owner/RM/SC/manager-of-owner, or EDIT_ANY_COMPONENT)
 
 GET    /rest/api/4/components/{id}/field-overrides
   Response: List of all field overrides for the component, grouped by field path
@@ -320,7 +320,7 @@ Implemented in `WebSecurityConfig.kt` (extends `CloudCommonWebSecurityConfig` fr
 
 | Method | Required permission | Used on |
 |---|---|---|
-| `canEditComponent(idOrName)` | `ACCESS_COMPONENTS` **and** (owner/RM/SC membership **or** `EDIT_ANY_COMPONENT`) | `PATCH /components/{id}` (plain edit) and all field-override CRUD (`POST`/`PATCH`/`DELETE /{id}/field-overrides`). `POST /components` (create) uses `hasPermission('CREATE_COMPONENTS')` directly because no owner exists yet |
+| `canEditComponent(idOrName)` | `ACCESS_COMPONENTS` **and** (owner/RM/SC membership **or** manager of the owner (SYS-063) **or** `EDIT_ANY_COMPONENT`) | `PATCH /components/{id}` (plain edit) and all field-override CRUD (`POST`/`PATCH`/`DELETE /{id}/field-overrides`). `POST /components` (create) uses `hasPermission('CREATE_COMPONENTS')` directly because no owner exists yet |
 | `canArchiveComponent(name)` | `ARCHIVE_COMPONENTS` | `PATCH /components/{id}` when `archived` is in payload |
 | `canRenameComponent(name)` | `RENAME_COMPONENTS` | `PATCH /components/{id}` when `name` is in payload |
 | `canDeleteComponent(name)` | `DELETE_COMPONENTS` | `DELETE /components/{id}` |
@@ -333,7 +333,9 @@ The `PATCH /components/{id}` SpEL guard combines these (the path variable is a `
 ```
 Plain edits use the ownership/admin predicate; archive/rename payloads fail closed with 403 for anyone without the extra permission.
 
-**Per-component edit ownership (implemented).** `canEditComponent(idOrName)` resolves the component (UUID, or component key as a fallback) and allows the edit only when the caller satisfies `ACCESS_COMPONENTS && (componentOwner || releaseManager || securityChampion || EDIT_ANY_COMPONENT)`. Owner/RM/SC matching uses the JWT `preferred_username`, trimmed + case-insensitive; `EDIT_ANY_COMPONENT` is mapped to `ROLE_ADMIN` and bypasses the membership check. `CREATE_COMPONENTS` is not required after creation; assignment to the component is the edit grant. A legacy component with no owner AND empty RM AND empty SC passes the security gate only for `EDIT_ANY_COMPONENT` holders, and write validation requires the admin to assign an owner in the PATCH final state. An unresolvable id/key denies — so `PATCH` of a non-existent component is **403, not 404** (the gate runs before the controller). Owner/RM/SC are read via scalar projection queries on `ComponentRepository` (never the LAZY child collections, since `@PreAuthorize` runs outside a Hibernate session). The same predicate stamps the per-caller `canEdit` flag on the `GET`/create/`PATCH` detail responses for the Portal. This mirrors the entity-scoped evaluator pattern already used in `octopus-dms-service` (`hasPermissionByComponent`).
+**Per-component edit ownership (implemented).** `canEditComponent(idOrName)` resolves the component (UUID, or component key as a fallback) and allows the edit only when the caller satisfies `ACCESS_COMPONENTS && (componentOwner || releaseManager || securityChampion || managerOfOwner || EDIT_ANY_COMPONENT)`. Owner/RM/SC matching uses the JWT `preferred_username`, trimmed + case-insensitive; `EDIT_ANY_COMPONENT` is mapped to `ROLE_ADMIN` and bypasses the membership check. `CREATE_COMPONENTS` is not required after creation; assignment to the component is the edit grant. A legacy component with no owner AND empty RM AND empty SC passes the security gate only for `EDIT_ANY_COMPONENT` holders, and write validation requires the admin to assign an owner in the PATCH final state. An unresolvable id/key denies — so `PATCH` of a non-existent component is **403, not 404** (the gate runs before the controller). Owner/RM/SC are read via scalar projection queries on `ComponentRepository` (never the LAZY child collections, since `@PreAuthorize` runs outside a Hibernate session). The same predicate stamps the per-caller `canEdit` flag on the `GET`/create/`PATCH` detail responses for the Portal. This mirrors the entity-scoped evaluator pattern already used in `octopus-dms-service` (`hasPermissionByComponent`).
+
+**Manager-of-owner grant (SYS-063, implemented).** The fourth condition, `managerOfOwner`, checks last (it is the only one requiring a network call): `EmployeeDirectoryService.getManager(componentOwner)` resolves the owner's manager via the employee-service client, and the caller matches (trimmed, case-insensitive) if so. Any failure to resolve — no manager, owner not found, or employee-service unavailable/erroring — returns `null` and denies; a directory failure can only deny this grant, never allow it. Unlike the admin bypass (an open-ended realm-role), the manager resolves to one concrete person per component, so it IS enumerated: `ComponentEditorsResponse` (the `GET /{idOrName}/editors` DTO) carries a `manager` field alongside `componentOwner`/`releaseManagers`/`securityChampions`. `getManager` is cached 2 minutes per owner in `EmployeeDirectoryService` (resolved answers only, not failures) since it now backs two call sites per request in the worst case — the `@PreAuthorize` check and this projection.
 
 ### 6.4 Audit `changedBy` wiring
 

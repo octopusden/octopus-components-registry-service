@@ -34,10 +34,13 @@ data class EmployeeIntegrationHealthResponse(
 /**
  * Mirror of v4.json `ComponentEditorsResponse` — body of
  * GET /rest/api/4/components/{idOrName}/editors. Required: releaseManagers, securityChampions.
+ * `manager` (SYS-063) is the componentOwner's manager per employee-service, null when the
+ * owner has none / is unresolvable / employee-service is unavailable.
  */
 @Serializable
 data class ComponentEditorsResponse(
     val releaseManagers: List<String>,
     val securityChampions: List<String>,
     val componentOwner: String? = null,
+    val manager: String? = null,
 )

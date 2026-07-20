@@ -4,11 +4,15 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
+import org.mockito.ArgumentMatchers.anyString
 import org.octopusden.cloud.commons.security.client.AuthServerClient
+import org.octopusden.employee.client.EmployeeServiceClient
+import org.octopusden.employee.client.common.dto.ManagerDTO
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
 import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.octopusden.octopus.components.registry.server.support.editorJwt
@@ -28,9 +32,11 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.request.RequestPostProcessor
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.nio.file.Paths
 import java.util.UUID
+import org.mockito.Mockito.`when` as whenMock
 
 /**
  * End-to-end (HTTP → @PreAuthorize → service → H2) coverage for the per-component
@@ -57,6 +63,9 @@ class ComponentOwnershipEditSecurityTest {
     @Suppress("UnusedPrivateProperty")
     private lateinit var authServerClient: AuthServerClient
 
+    @MockBean
+    private lateinit var employeeServiceClient: EmployeeServiceClient
+
     @Autowired
     private lateinit var mvc: MockMvc
 
@@ -70,6 +79,12 @@ class ComponentOwnershipEditSecurityTest {
         val testResourcesPath =
             Paths.get(ComponentOwnershipEditSecurityTest::class.java.getResource("/expected-data")!!.toURI()).parent
         System.setProperty("COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR", testResourcesPath.toString())
+    }
+
+    @BeforeEach
+    fun setupEmployeeMock() {
+        // Default: no manager — existing tests are unaffected.
+        whenMock(employeeServiceClient.getManager(anyString())).thenReturn(ManagerDTO(null))
     }
 
     private fun uniqueName(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(8)}"
@@ -337,4 +352,58 @@ class ComponentOwnershipEditSecurityTest {
             .andExpect(status().isOk)
             .andReturn()
             .response.contentAsString
+
+    // --- SYS-063: manager of componentOwner ----------------------------------
+    //
+    // These use a per-test unique owner (never the shared "bob" used throughout this
+    // file) because EmployeeDirectoryService.getManager is now cached (2 min TTL) on
+    // the shared singleton bean for this whole test class: several unrelated tests
+    // above also reach the manager-check branch for owner "bob" (a non-owner/RM/SC
+    // caller) and would cache "bob" → null, silently shadowing these tests' own
+    // per-owner stub regardless of execution order.
+
+    @Test
+    @DisplayName("SYS-063: manager of componentOwner can PATCH the component")
+    fun `SYS-063 manager of componentOwner can PATCH the component`() {
+        val owner = uniqueName("mgr_allow_owner")
+        val c = create(uniqueName("mgr_allow"), owner = owner)
+        whenMock(employeeServiceClient.getManager(owner)).thenReturn(ManagerDTO("mgr-user"))
+        performPatch(c.id(), c.version(), bumpDisplayName(), editorJwt("mgr-user"))
+            .andExpect(status().isOk)
+    }
+
+    @Test
+    @DisplayName("SYS-063: non-manager of componentOwner gets 403 on PATCH")
+    fun `SYS-063 non-manager of componentOwner gets 403 on PATCH`() {
+        val owner = uniqueName("mgr_deny_owner")
+        val c = create(uniqueName("mgr_deny"), owner = owner)
+        whenMock(employeeServiceClient.getManager(owner)).thenReturn(ManagerDTO("other-mgr"))
+        performPatch(c.id(), c.version(), bumpDisplayName(), editorJwt("frank"))
+            .andExpect(status().isForbidden)
+    }
+
+    @Test
+    @DisplayName("SYS-063: GET /editors includes the owner's manager")
+    fun `SYS-063 editors includes owner manager`() {
+        val owner = uniqueName("mgr_editors_owner")
+        val c = create(uniqueName("mgr_editors"), owner = owner)
+        whenMock(employeeServiceClient.getManager(owner)).thenReturn(ManagerDTO("mgr-user"))
+        mvc
+            .perform(get("/rest/api/4/components/${c.id()}/editors").with(viewerJwt()))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.componentOwner").value(owner))
+            .andExpect(jsonPath("$.manager").value("mgr-user"))
+    }
+
+    @Test
+    @DisplayName("SYS-063: GET /editors omits manager when the owner has none")
+    fun `SYS-063 editors omits manager when owner has none`() {
+        val owner = uniqueName("mgr_editors_none_owner")
+        val c = create(uniqueName("mgr_editors_none"), owner = owner)
+        whenMock(employeeServiceClient.getManager(owner)).thenReturn(ManagerDTO(null))
+        mvc
+            .perform(get("/rest/api/4/components/${c.id()}/editors").with(viewerJwt()))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.manager").value(org.hamcrest.Matchers.nullValue()))
+    }
 }

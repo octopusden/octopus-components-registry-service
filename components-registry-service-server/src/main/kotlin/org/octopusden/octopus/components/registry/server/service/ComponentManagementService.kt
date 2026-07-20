@@ -84,9 +84,9 @@ interface ComponentManagementService {
     ): RenderedComponentCode
 
     /**
-     * The component's editors (componentOwner + ordered releaseManagers + securityChampions)
-     * for the Portal's read-only "who can edit" surface. Informational only — see
-     * [ComponentEditorsResponse].
+     * The component's editors (componentOwner + ordered releaseManagers + securityChampions +
+     * the owner's manager, SYS-063) for the Portal's read-only "who can edit" surface.
+     * Informational only — see [ComponentEditorsResponse].
      */
     fun getEditors(idOrName: String): ComponentEditorsResponse
 }

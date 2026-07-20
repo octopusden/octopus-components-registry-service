@@ -3,6 +3,7 @@ package org.octopusden.octopus.components.registry.server.security
 import org.octopusden.cloud.commons.security.BasePermissionEvaluator
 import org.octopusden.cloud.commons.security.SecurityService
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
+import org.octopusden.octopus.components.registry.server.service.impl.EmployeeDirectoryService
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.stereotype.Component
@@ -18,6 +19,7 @@ class PermissionEvaluator(
     // so `canEditComponent` is never actually invoked there — but if it were, a null repo
     // denies (fail-closed).
     componentRepositoryProvider: ObjectProvider<ComponentRepository>,
+    private val employeeDirectory: EmployeeDirectoryService,
 ) : BasePermissionEvaluator(securityService) {
     private val log = LoggerFactory.getLogger(PermissionEvaluator::class.java)
     private val componentRepository: ComponentRepository? by lazy { componentRepositoryProvider.getIfAvailable() }
@@ -61,9 +63,13 @@ class PermissionEvaluator(
             // match skips the SC query. Any no-match — including an owner-less component (no
             // owner, empty RM, empty SC) — falls through to deny (owner-less is then admin-only,
             // reachable only via the EDIT_ANY_COMPONENT bypass handled above).
-            if (matches(username, repository.findComponentOwnerById(id))) return true
+            val owner = repository.findComponentOwnerById(id)
+            if (matches(username, owner)) return true
             if (repository.findReleaseManagerUsernames(id).any { matches(username, it) }) return true
             if (repository.findSecurityChampionUsernames(id).any { matches(username, it) }) return true
+            // the manager of the componentOwner may also edit.
+            val ownerTrimmed = owner?.trim()
+            if (!ownerTrimmed.isNullOrEmpty() && matches(username, employeeDirectory.getManager(ownerTrimmed))) return true
             false
         } catch (e: RuntimeException) {
             // Fail closed: a lookup failure (e.g. DB unavailable) denies the edit (→ 403)
