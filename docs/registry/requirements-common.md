@@ -8,8 +8,8 @@
 
 ## Summary Table
 
-| ID | Title | Priority | Layer | Status |
-|----|-------|----------|-------|--------|
+| ID      | Title | Priority | Layer | Status |
+|---------|-------|----------|-------|--------|
 | SYS-001 | GET /components returns paginated list | High | integration-test | ❌ Not tested |
 | SYS-002 | GET /components/{id} returns full tree | High | integration-test | ❌ Not tested |
 | SYS-003 | PATCH updates scalar fields | High | integration-test | ❌ Not tested |
@@ -70,7 +70,17 @@
 | SYS-059 | `POST /rest/api/4/versions/preview` renders a `DetailedComponentVersion` from ad-hoc Jira formats (base + per-range overrides) and an input version, with no persistence and no component lookup — reusing the persisted-path render seam (including `normalizeVersion` canonicalization) so output matches `detailed-version` for the same effective config. Range is resolved server-side; `line`/`build` mirror `minor`/`release` and `minor`/`release` default to `$major`/`$major.$minor` when blank; hotfix coordinate gated on caller-supplied `hotfixEnabled` (VCS-derived), not format presence; custom `versionPrefix`/`versionFormat` render the wrapped `jiraVersion`; padding is template-driven (no `buildSystem`); blank/non-numeric version or malformed range → 400, a version matching no format → 404; authenticated-only | High | unit + integration-test | ✅ Tested |
 | SYS-060 | An append-only `service_event` journal persists operational events — CRS redeploys (STARTUP + build version), and every components-migration / history-migration / TeamCity-resync run (RUNNING→COMPLETED/FAILED, one row per run) — which previously lived only in an in-memory slot + logs and were lost on restart. **Any job failure (including executor-rejected submission) writes a FAILED row with the error**; a run whose pod dies mid-flight is reconciled to FAILED("interrupted by restart") on next startup (single-pod). Writes are best-effort (`REQUIRES_NEW` + swallow) so journaling never rolls back or crashes the observed job. `GET /rest/api/4/admin/service-events` returns the paginated journal (filter by type/source/status/time), IMPORT_DATA-gated; a scheduled daily prune enforces retention | High | unit + integration-test | ✅ Tested |
 | SYS-061 | `POST /rest/api/4/admin/service-events` ingests portal-sourced events (portal redeploys, validation-sweep runs) into the shared journal, so the Admin "Events" tab shows both services on one timeline. Authenticated by a shared-secret `X-Service-Event-Token` header (the portal BFF calls CRS tokenless), verified constant-time and **fail-closed** (blank/unset configured token rejects every call 403); method-scoped permitAll at the filter chain so the sibling GET read stays JWT+IMPORT_DATA gated; unknown eventType/status/source → 400 | High | integration-test | ✅ Tested |
-| SYS-064 | The component owner's manager (resolved via employee-service `getManager`) may edit the component and its field-overrides — a fourth, derived condition on `canEditComponent` alongside owner/RM/SC/admin. A directory failure or no-manager answer denies (fail-closed), never grants. `GET /{idOrName}/editors` enumerates the resolved manager (unlike the admin bypass, it is one concrete person per component); `getManager` is 2-minute cached per owner (resolved answers only) and its DB read runs in its own short-lived transaction, closed before the network call | High | unit + integration-test | ✅ Tested |
+| SYS-064 | `component-validation` module: `ATTACHED_TO_BUILD_TEMPLATE` is OK when exactly one build configuration is attached to a build template, WARNING when more than one is (ambiguous), WARNING when none is (always applicable) | High | unit-test | ✅ Tested |
+| SYS-065 | `component-validation` module: `OVERRIDES_DEFAULT_BUILD_STEP` is NOT_APPLICABLE with no attached configuration, WARNING if any attached configuration's default build step is overridden, OK if all are inherited | High | unit-test | ✅ Tested |
+| SYS-066 | `component-validation` module: `HAS_CUSTOM_BUILD_STEP` is WARNING when any uninherited build step across every configuration (attached to a template or not) resolves any tool version at all — Java or Maven, whichever it uses; OK otherwise | High | unit-test | ✅ Tested |
+| SYS-067 | `component-validation` module: `USES_OLD_JAVA_VERSION` is WARNING if any resolved Java version is 1.8 (every uninherited step across every configuration, plus each attached configuration's default build step regardless of its own inherited flag), OK if versions resolved but none is 1.8, NOT_APPLICABLE if nothing Java was inspected; an unresolved version is ignored, not flagged (decision D7) | High | unit-test | ✅ Tested |
+| SYS-068 | `component-validation` module: `ValidatorSuite.validate` isolates a throwing validator as a single `Status.ERROR` result instead of losing every other check's result (decision D6) | Medium | unit-test | ✅ Tested |
+| SYS-069 | `component-validation` module: `JavaVersion.isEight` is true only for the exact `"1.8"` / `"8"` spellings; `JavaVersionParser` normalizes richer real-world values (`"1.8.0_392"`, `"JDK_ZULU_17_x64"`, `"/opt/java/openjdk-11"`, etc. — see TD-016) down to that major-version form before `isEight` is checked | Medium | unit-test | ✅ Tested |
+| SYS-070 | `component-validation` module: `TeamCityValidators` (the suite) returns exactly the five TeamCity results for a given project, each with the status the individual checks would produce in isolation | High | unit-test | ✅ Tested |
+| SYS-071 | `component-validation` module: `BuildStepToolVersionResolver` — given one `BuildStep`, dispatch by `StepType` (Maven/Gradle/command-line+in-container) to read the right parameter(s), recursively resolve `%param%` references via `ParameterReferenceResolver`, and derive `Set<ToolVersion>` via the per-tool `ValueVersionResolver`s (`JavaVersionResolver`, `MavenVersionResolver`) | High | unit-test | ✅ Tested |
+| SYS-072 | `component-validation` module: `MULTIPLE_JAVA_VERSIONS` is WARNING when more than one distinct Java version is found across the same inspected steps as `USES_OLD_JAVA_VERSION`, OK for zero or one distinct version, NOT_APPLICABLE if nothing was inspectable | High | unit-test | ✅ Tested |
+| SYS-073 | `component-validation` module: `MULTIPLE_MAVEN_VERSIONS` is WARNING when more than one distinct Maven version is found across the same inspected steps, OK for zero or one distinct version, NOT_APPLICABLE if nothing was inspectable | High | unit-test | ✅ Tested |
+| SYS-074 | The component owner's manager (resolved via employee-service `getManager`) may edit the component and its field-overrides — a fourth, derived condition on `canEditComponent` alongside owner/RM/SC/admin. A directory failure or no-manager answer denies (fail-closed), never grants. `GET /{idOrName}/editors` enumerates the resolved manager (unlike the admin bypass, it is one concrete person per component); `getManager` is 2-minute cached per owner (resolved answers only) and its DB read runs in its own short-lived transaction, closed before the network call | High | unit + integration-test | ✅ Tested |
 
 ---
 
@@ -2367,7 +2377,247 @@ cases) and `ExternalTcProjectFetcherTest` (reference resolution, version-format,
 build-type fallback, archived/all-paused exclusion); v4 PATCH preservation in
 `ComponentManagementServiceImpl` write-path tests.
 
-### SYS-064: Component owner's manager may edit the component
+### SYS-064: component-validation — ATTACHED_TO_BUILD_TEMPLATE
+
+New pure-Kotlin module `component-validation` (see
+[`docs/teamcity-validation-design.md`](../teamcity-validation-design.md) and
+[`-implementation-brief.md`](../teamcity-validation-implementation-brief.md)) validates
+TeamCity projects: input in (`TeamcityProject`), `List<ValidationResult>` out — no Spring, no
+DB, no TeamCity-client dependency, no IO. `ATTACHED_TO_BUILD_TEMPLATE` is the first of its five
+checks: is any build configuration attached to a build template (`CDGradleBuild` /
+`CDJavaMavenBuild` in the real deployment; the module itself takes a `TemplateCatalog` and knows
+no concrete ids)?
+
+**Description:**
+`AttachedToBuildTemplateValidator` reports `OK` when exactly one configuration is attached
+(`BuildConfigurationResolver.attachedToBuildTemplate(project).size == 1`), `WARNING` when more
+than one is attached (ambiguous — which one is authoritative?), `WARNING` when none is — a
+finding about the project's own configuration, not a failure of validation itself, so it stays at
+the same severity as every other content check (`ERROR` is reserved for the validation process
+itself failing to run, see decision D6). Always applicable (never `NOT_APPLICABLE`).
+
+**Acceptance criteria:**
+1. A project with exactly one configuration attached to a build template → `OK`.
+2. A project with more than one configuration attached to a build template → `WARNING`.
+3. A project with configurations, none attached to a build template → `WARNING`.
+4. A project with no build configurations at all → `WARNING`.
+
+**Test method:** `AttachedToBuildTemplateValidatorTest` —
+`SYS-064 OK for a single attached config`, `SYS-064 WARNING for multiple attached configs`,
+`SYS-064 WARNING when nothing attached`, `SYS-064 WARNING for empty project`.
+
+### SYS-065: component-validation — OVERRIDES_DEFAULT_BUILD_STEP
+
+**Description:**
+`OverridesDefaultBuildStepValidator` reports `NOT_APPLICABLE` when no configuration is attached
+to a build template. Otherwise, for each attached configuration's default build step
+(`BuildStepSelector.defaultBuildStep`, id `X` per `TemplateCatalog.defaultBuildStepId`): any
+`OVERRIDDEN` → `WARNING` (message names the configuration(s)); all `INHERITED` → `OK`.
+
+**Acceptance criteria:**
+1. No attached configuration → `NOT_APPLICABLE`.
+2. Attached configuration, default step `INHERITED` → `OK`.
+3. Attached configuration, default step `OVERRIDDEN` → `WARNING`.
+
+**Test method:** `OverridesDefaultBuildStepValidatorTest` —
+`SYS-065 NOT_APPLICABLE when nothing attached`, `SYS-065 OK when default step inherited`,
+`SYS-065 WARNING when default step overridden`.
+
+### SYS-066: component-validation — HAS_CUSTOM_BUILD_STEP
+
+**Description:**
+`CustomBuildStepValidator` answers a single question: "is there any overriding custom build step
+at all" — it doesn't matter whether that step uses Java or Maven, so `HAS_CUSTOM_JAVA_BUILD_STEP`
+and `HAS_CUSTOM_MAVEN_BUILD_STEP` were merged into one `HAS_CUSTOM_BUILD_STEP` (see decision log
+§5 decision 24). It gathers every uninherited build step across every build configuration —
+attached to a build template or not — resolves each one's tool versions via
+`BuildStepToolVersionResolver`, and reports `WARNING` if any uninherited step resolves any tool
+version at all (Java or Maven), `OK` otherwise. Always applicable.
+
+**Acceptance criteria:**
+1. No uninherited step at all → `OK`.
+2. An uninherited step exists but resolves no tool version → `OK`.
+3. A non-template configuration has an uninherited step resolving a Java version → `WARNING`.
+4. A non-template configuration has an uninherited step resolving a Maven version → `WARNING`
+   (both tools count — the question is "is there a custom step", not "which tool").
+5. An attached configuration's overridden default step resolves a version → `WARNING`.
+
+**Test method:** `CustomBuildStepValidatorTest` —
+`SYS-066 OK when nothing custom`, `SYS-066 OK when custom step resolves nothing`,
+`SYS-066 WARNING for non-template custom step with a java version`,
+`SYS-066 WARNING for non-template custom step with a maven version`,
+`SYS-066 WARNING for overridden default step`.
+
+### SYS-067: component-validation — USES_OLD_JAVA_VERSION
+
+**Description:**
+`OldJavaVersionValidator` is a single pass owning "where do I read the version" per step, so
+nothing is double-counted or missed. It delegates to `BuildStepToolVersionResolver` (see
+SYS-071) uniformly for every step — every uninherited (`OVERRIDDEN`) build step across every
+build configuration (attached to a template or not) plus each attached configuration's default
+build step regardless of its own `inherited` flag — since the resolver reads each step's own
+parameters directly, there is no separate "inherited reads config-level, overridden reads
+step-level" branch anymore. `WARNING` if any resolved `JavaVersion.isEight` — this is a finding
+about the project's configuration, not a failure of validation itself, so it stays a warning
+rather than `ERROR` (which is reserved for when the validation process itself couldn't run
+cleanly, e.g. a validator throwing — see decision D6); `OK` if versions resolved but none is 1.8;
+`NOT_APPLICABLE` if nothing Java-relevant was inspected (tracked via
+`BuildStepToolVersionResolver.supports(type)`, not a fixed runner-type set owned by the
+validator). Resolved decision **D7**: an unresolved (`null`) version is ignored, not flagged.
+
+**Acceptance criteria:**
+1. Nothing Java to inspect → `NOT_APPLICABLE`.
+2. Inherited default step resolving to Java 1.8 → `WARNING`.
+3. Inherited default step resolving to a modern Java version → `OK`.
+4. Overridden default step resolving to Java 1.8 → `WARNING`.
+5. Custom (uninherited) step on any configuration resolving to Java 1.8 → `WARNING`.
+6. A parameter present but not parseable as a version → ignored, not flagged (`OK`, not
+   `WARNING`), since a default step was still inspected.
+
+**Test method:** `OldJavaVersionValidatorTest` — `SYS-067 NOT_APPLICABLE when nothing to inspect`,
+`SYS-067 WARNING for inherited default step on Java 8`,
+`SYS-067 OK for inherited default step on Java 21`,
+`SYS-067 WARNING for overridden default step on Java 8`,
+`SYS-067 WARNING for custom step on Java 8`,
+`SYS-067 OK when version cannot be resolved`.
+
+### SYS-068: component-validation — ValidatorSuite error isolation (D6)
+
+**Description:**
+Resolved decision **D6** (implementer's discretion per the implementation brief): a validator
+that throws must not sink the whole suite. `ValidatorSuite.validate` catches a `RuntimeException`
+from an individual validator and turns it into a `Status.ERROR` result (type = the failing
+validator's type, message = the exception detail) instead of propagating, so the remaining
+validators' results are still returned.
+
+**Acceptance criteria:**
+1. One throwing validator among several → its slot becomes `Status.ERROR`; every other
+   validator's result is unaffected.
+2. No throwing validator → every result passes through unchanged.
+
+**Test method:** `ValidatorSuiteTest` — `SYS-068 throwing validator is isolated as an ERROR result`,
+`SYS-068 all-ok suite returns every result as-is`.
+
+### SYS-069: component-validation — JavaVersion.isEight and version normalization
+
+**Description:**
+`JavaVersion.isEight` is a literal test: `raw.trim() == "1.8" || raw.trim() == "8"` (per the
+implementation brief — no fuzzy matching at that layer). The burden of normalizing real-world
+values to that exact major-version form falls on `JavaVersionResolver` (decision **D1** — see
+TD-016): it extracts the major (or `1.<major>`) version from clean strings (`"11.0.2"` → `"11"`),
+from build-suffixed strings (`"1.8.0_392"` → `"1.8"`, `"8u392"` → `"8"`), and from
+marker-embedded identifiers (`"JDK_21_0_x64"` → `"21"`, `"JDK_ZULU_17_x64"` → `"17"`,
+`"/opt/java/openjdk-11"` → `"11"`).
+
+**Acceptance criteria:**
+1. `JavaVersion("1.8").isEight` and `JavaVersion("8").isEight` are `true`.
+2. `JavaVersion("11")`, `("17")`, `("21")`, `("1.7")`, `("80")`, and a full build string
+   `("1.8.0_392")` all have `isEight == false` (normalization is the resolver's job, not
+   `isEight`'s).
+3. `JavaVersionResolver.resolve(...)` correctly extracts the major version from every real-world
+   shape listed above, and returns `null` for a blank or unrecognised value.
+
+**Test method:** `JavaVersionTest` — `SYS-069 isEight true for 1_8 and 8`,
+`SYS-069 isEight false for other versions`; `JavaVersionResolverTest` —
+`resolve extracts version` (parameterized), `resolve returns null when nothing resembles a version`.
+
+### SYS-070: component-validation — TeamCityValidators suite, end to end
+
+**Description:**
+`TeamCityValidators` wires the six validators together over one shared `BuildConfigurationResolver`
+/ `BuildStepResolver` pair and returns exactly six `ValidationResult`s per `validate(project)`
+call, matching what each validator would independently produce.
+
+**Acceptance criteria:**
+1. A well-behaved project (attached, inherited default step, modern Java, no custom steps) →
+   all six checks `OK`.
+2. An unattached project with an old-Java custom command-line step → `ATTACHED_TO_BUILD_TEMPLATE`
+   `WARNING`, `OVERRIDES_DEFAULT_BUILD_STEP` `NOT_APPLICABLE`, `HAS_CUSTOM_BUILD_STEP` `WARNING`,
+   `USES_OLD_JAVA_VERSION` `WARNING`, both `MULTIPLE_*_VERSIONS` `OK` (only one distinct version
+   of either tool resolves).
+
+**Test method:** `TeamCityValidatorsTest` — `SYS-070 well-behaved project resolves all six checks`,
+`SYS-070 unattached project with custom java 8 step`.
+
+### SYS-071: component-validation — BuildStepToolVersionResolver (per-step-type tool-version dispatch)
+
+**Description:**
+A step-scoped abstraction: given a single `BuildStep`, `BuildStepToolVersionResolver.resolve(step)`
+returns the `Set<ToolVersion>` (Java and/or Maven, for now) that step uses. Dispatch is by
+`StepType` (`DefaultBuildStepToolVersionResolver`): `MAVEN` → reads `maven.path` (Maven version)
+and `target.jdk.home` (Java version); `GRADLE` → reads only `target.jdk.home`; `COMMAND_LINE` and
+`IN_CONTAINER` (the latter an unconfirmed assumption — an in-container step is assumed to run a
+script the same way a command-line step does; see TD-016) → read `script.content`, split it on
+whitespace, and try *both* the Maven and the Java value-resolver on each (reference-resolved)
+token, since a bare command line gives no other signal about which tool a token belongs to.
+Every parameter read first goes through `ParameterReferenceResolver`, which recursively
+substitutes TeamCity `%paramName%` references within the same `Parameters` bag until no
+reference remains, returning `null` on a missing reference or a reference cycle (mirroring real
+TeamCity `%param%` semantics). The "value → version" step is a separate, per-tool abstraction
+(`ValueVersionResolver<V>`): `JavaVersionResolver` and `MavenVersionResolver` each derive their
+tool's version from an already reference-resolved raw string.
+
+**Acceptance criteria:**
+1. A Maven step with both `maven.path` and `target.jdk.home` set → both a `MavenVersion` and a
+   `JavaVersion` are resolved.
+2. A Gradle step → only a `JavaVersion` is ever resolved, never a `MavenVersion`.
+3. A command-line step's `script.content` → split into tokens; each token is tried against both
+   resolvers; a token that is itself a `%param%` reference is resolved first.
+4. `IN_CONTAINER` steps are dispatched through the same logic as `COMMAND_LINE` steps.
+5. An unsupported `StepType` (e.g. `OTHER`) → `resolve` returns an empty set; `supports` returns
+   `false`.
+6. `ParameterReferenceResolver` follows single- and multi-hop `%param%` chains, resolves multiple
+   distinct (or repeated) references within one value, and returns `null` on a missing reference
+   or a direct/indirect cycle — without false-flagging a legitimately repeated reference as a
+   cycle.
+
+**Test method:** `BuildStepToolVersionResolverTest` (Maven/Gradle/command-line/dispatcher cases),
+`ParameterReferenceResolverTest` (single-hop, multi-hop, missing, direct cycle, indirect cycle,
+repeated-reference, embedded-value cases), `JavaVersionResolverTest`, `MavenVersionResolverTest`.
+
+### SYS-072: component-validation — MULTIPLE_JAVA_VERSIONS
+
+**Description:**
+`MultipleJavaVersionValidator` reuses the same step-gathering logic as `OldJavaVersionValidator`
+(every uninherited build step across every build configuration, plus each attached
+configuration's default build step regardless of its own `inherited` flag) and resolves a Java
+version per step via `BuildStepToolVersionResolver`. `WARNING` if more than one distinct
+`JavaVersion` is found across those steps; `OK` if zero or one distinct version is found;
+`NOT_APPLICABLE` if nothing was inspectable.
+
+**Acceptance criteria:**
+1. Nothing Java to inspect → `NOT_APPLICABLE`.
+2. Exactly one distinct Java version found (whether from one step or repeated across several
+   steps) → `OK`.
+3. No Java version resolved from any inspected step → `OK`.
+4. More than one distinct Java version found across the inspected steps → `WARNING`.
+
+**Test method:** `MultipleJavaVersionValidatorTest` —
+`SYS-072 NOT_APPLICABLE when nothing to inspect`, `SYS-072 OK for a single distinct Java version`,
+`SYS-072 OK when no Java version resolves`, `SYS-072 WARNING for multiple distinct Java versions`.
+
+### SYS-073: component-validation — MULTIPLE_MAVEN_VERSIONS
+
+**Description:**
+`MultipleMavenVersionValidator` mirrors `MultipleJavaVersionValidator`, using the same
+step-gathering logic (every uninherited build step across every build configuration, plus each
+attached configuration's default build step regardless of its own `inherited` flag) and resolving
+a Maven version per step via `BuildStepToolVersionResolver`. `WARNING` if more than one distinct
+`MavenVersion` is found across those steps; `OK` if zero or one distinct version is found;
+`NOT_APPLICABLE` if nothing was inspectable.
+
+**Acceptance criteria:**
+1. Nothing Maven to inspect → `NOT_APPLICABLE`.
+2. Exactly one distinct Maven version found (whether from one step or repeated across several
+   steps) → `OK`.
+3. No Maven version resolved from any inspected step → `OK`.
+4. More than one distinct Maven version found across the inspected steps → `WARNING`.
+
+**Test method:** `MultipleMavenVersionValidatorTest` —
+`SYS-073 NOT_APPLICABLE when nothing to inspect`, `SYS-073 OK for a single distinct Maven version`,
+`SYS-073 OK when no Maven version resolves`, `SYS-073 WARNING for multiple distinct Maven versions`.
+
+### SYS-074: Component owner's manager may edit the component
 
 **Priority:** High
 **Test layer:** unit + integration-test
