@@ -6,6 +6,7 @@ import org.octopusden.octopus.components.registry.server.dto.v4.ComponentEditors
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentFilter
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentSummaryResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentUpdateRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.CompositeOverrideSplitResult
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideCreateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideUpdateRequest
@@ -89,6 +90,23 @@ interface ComponentManagementService {
      * Informational only — see [ComponentEditorsResponse].
      */
     fun getEditors(idOrName: String): ComponentEditorsResponse
+
+    /**
+     * SYS-066 — one-off split of legacy composite field-override rows (multi-segment Maven ranges
+     * from the old DSL import) into single-segment rows, so their ranges become API-editable while
+     * the resolved per-version output is preserved. Fail-closed: a malformed range, a composite on
+     * any attribute other than `vcs.settings`, self-overlapping segments, or a sibling collision
+     * whose payload is not provably identical aborts the WHOLE transaction (no writes).
+     *
+     * [dryRun] = true previews the change and returns a deterministic [CompositeOverrideSplitResult.manifestToken];
+     * a write ([dryRun] = false) must pass that token back (from a preceding dry-run), which is
+     * recomputed in-transaction and compared — a mismatch (the data moved since review) or a
+     * missing token aborts. Idempotent: with no composites left the manifest is empty.
+     */
+    fun splitCompositeFieldOverrides(
+        dryRun: Boolean,
+        manifestToken: String?,
+    ): CompositeOverrideSplitResult
 }
 
 /** A rendered as-code document plus the canonical component key (for the filename). */

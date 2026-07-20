@@ -36,10 +36,10 @@
         <error line="14" column="1" source="standard:no-consecutive-comments" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/server/service/impl/ComponentManagementServiceImpl.kt">
-        <error line="2783" column="17" source="standard:property-naming" />
-        <error line="2788" column="17" source="standard:property-naming" />
-        <error line="2797" column="17" source="standard:property-naming" />
-        <error line="2834" column="17" source="standard:property-naming" />
+        <error line="2787" column="17" source="standard:property-naming" />
+        <error line="2792" column="17" source="standard:property-naming" />
+        <error line="2801" column="17" source="standard:property-naming" />
+        <error line="2838" column="17" source="standard:property-naming" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/server/service/impl/ImportServiceImpl.kt">
         <error line="2701" column="1" source="standard:no-consecutive-comments" />
