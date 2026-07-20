@@ -164,37 +164,35 @@ For each component:
 ### 5.3 Architecture Fitness Functions (ArchUnit)
 
 **Implemented** in `components-registry-service-server` as JUnit 5 `@ArchTest` rules —
-`server/architecture/ArchitectureFitnessTest.kt` — analyzing the `...server` package. The rules
-run inside the fast `test` gate (no Spring context, no DB). Dependency: `archunit-junit5`
-(`archunit.version` in `gradle.properties`).
+`server/architecture/ArchitectureFitnessTest.kt` — analyzing the `...server` package. The rules run
+inside the fast `test` gate (no Spring context, no DB). Dependency: `archunit-junit5`
+(`archunit.version` in `gradle.properties`). Scope is deliberately **structural** (package
+architecture); runtime/framework policy is out of scope here (see *Deferred* below).
 
-Two rules match pre-existing code that does not yet satisfy them. Rather than block the build or
-force a large refactor up front, those rules are wrapped in `FreezingArchRule`: the accepted
-violations are recorded in the `archunit_violation_store/` baseline (committed to VCS, the
-ArchUnit analogue of `detekt-baseline.xml`) and configured via `src/test/resources/archunit.properties`.
-A frozen rule fails only on **new** violations; the baselined ones are burned down over time
-(`freeze.store.default.allowStoreUpdate=true` auto-prunes entries once the code is fixed;
-`freeze.refreeze=false` guarantees new breaches fail rather than being silently absorbed).
+#### Active rules
 
-| # | Rule | Status |
-|---|------|--------|
-| 1 | Controllers must not access `..repository..` directly (go through the service layer) | **Frozen** — 17 baselined calls in `ComponentControllerV4` / `ConfigControllerV4` / `HealthControllerV4` |
-| 2 | Every v4 HTTP endpoint must be guarded by `@PreAuthorize` — on the method **or** its declaring controller. v4 endpoints are identified by **request path** (`rest/api/4/**` — the class-level `@RequestMapping` base stitched with the method mapping, matched on a segment boundary), with a `*ControllerV4` class-name signal as a fallback; endpoint methods are detected via `@RequestMapping` **meta-annotations** so Spring composed mappings are covered (residual detection gaps → TD-018) | **Frozen** — 5 baselined intentionally-public endpoints (`info`, `versions/preview`, `migration-status`, feedback `submit`, service-event `ingest`) |
-| 3 | The DB-source implementation (`..db..`) must not depend on legacy Groovy — denied by **package/module boundary** (`org.octopusden.octopus.escrow..`, `org.codehaus.groovy..`, `groovy..`, which catches Groovy-authored classes whose compiled names carry no "Groovy" token) plus a `*Groovy*` name backstop | **Active** (forward guard; vacuous until the `..db..` package exists) |
-| 4 | No cyclic dependencies between the server's top-level slices | **Deferred (TD-016)** — the module has one large pre-existing package cycle (`config → dto → service → …`); a frozen baseline would be ~586 KB and break on any import reshuffle. Re-enable after a package-decoupling effort |
+| # | Rule | Kind |
+|---|------|------|
+| 1 | Controllers (`..controller..`) must not access Spring Data repositories directly — targets classes **assignable to `org.springframework.data.repository.Repository`** (every `JpaRepository`) or annotated `@Repository`, so query PROJECTION types living in the repository package (e.g. `NameCountRow`) are **not** flagged | **Frozen ratchet** — 15 baselined pre-existing accesses (mostly `ComponentControllerV4` dictionary/count queries); baselined accesses are allowed, NEW ones fail |
+| 2 | `@RestController` beans reside in `..controller..` | Active (whole module) |
+| 3 | `@Repository` beans reside in `..repository..` | Active |
+| 4 | `@Entity` types reside in `..entity..` | Active |
+| 5 | `@Service` beans reside in `..service..` or `..teamcity..` | Active |
 
-Plus naming/placement conventions (expected to hold for the whole module, not frozen):
-`@RestController` → `..controller..`, `@Repository` → `..repository..`, `@Entity` → `..entity..`,
-`@Service` → `..service..` or `..teamcity..`.
+The frozen rule's accepted violations are recorded in `archunit_violation_store/` (committed to VCS,
+the ArchUnit analogue of `detekt-baseline.xml`), configured via `src/test/resources/archunit.properties`.
+It is a **ratchet**, not a burndown queue: `freeze.refreeze=false` makes new breaches fail; the store
+is **immutable in normal runs** (`allowStoreUpdate=false`) — updating the baseline is a deliberate,
+reviewed action (regenerate with the flags flipped, then inspect the diff), which also prevents a
+rule-text change from silently re-recording a fresh baseline.
 
-Notes vs. the original sketch: v4 controllers live in one `...server.controller` package with the
-version encoded in the class name (`*ControllerV4`), not a `..controller.v4..` package; each carries
-a class-level `@RequestMapping("rest/api/4/…")` alongside method-level `@GetMapping`/`@PostMapping`/…,
-and the security rule stitches the two to scope endpoints by **request path** rather than trusting
-the class name (a wrongly-named v4 controller is still checked). The authorization check honours
-class-level `@PreAuthorize` (e.g. `AdminControllerV4`), so those methods are not falsely flagged.
-Deferred hardening is tracked as TD-016 (package-cycle rule), TD-017 (reject permissive
-`@PreAuthorize` SpEL), and TD-018 (composed/inherited mapping detection).
+#### Deferred architecture goals (tracked as tech-debt, not active gates)
+
+| Goal | Why deferred | TD |
+|------|--------------|----|
+| **v4 endpoint authorization policy** | Authorization is hybrid (`@PreAuthorize` + filter-chain + intentionally-public + shared-secret + anonymous-permission). A static "must have `@PreAuthorize`" rule mis-classifies deliberate mechanisms and would need to re-implement Spring's request-mapping resolution — it belongs in a Spring-context test that reads real mappings and asserts an explicit per-endpoint policy classification | **TD-017** |
+| **No cyclic package dependencies** | The module is currently one large cycle (`config → dto → service → …`); a frozen baseline would be ~586 KB and break on any import reshuffle. Enable **unfrozen** after a decoupling effort | **TD-016** |
+| **DB-source must not depend on legacy Groovy** | No real boundary exists yet: the DB read path (`service.impl.DatabaseComponentRegistryResolver`) intentionally depends on the escrow model for wire-compatibility. Define the boundary (ADR) before guarding it — do not key a rule on a placeholder `..db..` package | **TD-019** |
 
 ### 5.4 Database Reliability
 

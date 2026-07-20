@@ -1,5 +1,0 @@
-org.octopusden.octopus.components.registry.server.controller.FeedbackControllerV4.submit(org.octopusden.octopus.components.registry.server.dto.v4.FeedbackCreateRequest, java.lang.String) is a v4 endpoint without @PreAuthorize on the method or its controller
-org.octopusden.octopus.components.registry.server.controller.InfoControllerV4.info() is a v4 endpoint without @PreAuthorize on the method or its controller
-org.octopusden.octopus.components.registry.server.controller.MigrationStatusControllerV4.migrationStatus() is a v4 endpoint without @PreAuthorize on the method or its controller
-org.octopusden.octopus.components.registry.server.controller.ServiceEventIngestControllerV4.ingest(java.lang.String, org.octopusden.octopus.components.registry.server.dto.v4.ServiceEventIngestRequest) is a v4 endpoint without @PreAuthorize on the method or its controller
-org.octopusden.octopus.components.registry.server.controller.VersionsControllerV4.preview(org.octopusden.octopus.components.registry.server.dto.v4.VersionPreviewRequest) is a v4 endpoint without @PreAuthorize on the method or its controller
