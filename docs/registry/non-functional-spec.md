@@ -163,28 +163,36 @@ For each component:
 
 ### 5.3 Architecture Fitness Functions (ArchUnit)
 
-```java
-// Layering: controllers never access repositories directly
-@ArchTest
-noClasses().that().resideInAPackage("..controller..")
-    .should().accessClassesThat().resideInAPackage("..repository..")
+**Implemented** in `components-registry-service-server` as JUnit 5 `@ArchTest` rules —
+`server/architecture/ArchitectureFitnessTest.kt` — analyzing the `...server` package. The rules run
+inside the fast `test` gate (no Spring context, no DB). Dependency: `archunit-junit5`
+(`archunit.version` in `gradle.properties`). Scope is deliberately **structural** (package
+architecture); runtime/framework policy is out of scope here (see *Deferred* below).
 
-// Security: all v4 endpoints require authorization
-@ArchTest
-methods().that().areDeclaredInClassesThat().resideInAPackage("..controller.v4..")
-    .and().areAnnotatedWith(RequestMapping.class)
-    .should().beAnnotatedWith(PreAuthorize.class)
+#### Active rules
 
-// No new Groovy code
-@ArchTest
-noClasses().that().resideInAPackage("..db..")
-    .should().dependOnClassesThat().haveNameMatching(".*groovy.*")
+| # | Rule | Kind |
+|---|------|------|
+| 1 | Controllers (`..controller..`) must not access Spring Data repositories directly — targets classes **assignable to `org.springframework.data.repository.Repository`** (every `JpaRepository`) or annotated `@Repository`, so query PROJECTION types living in the repository package (e.g. `NameCountRow`) are **not** flagged | **Frozen ratchet** — 15 baselined pre-existing accesses (mostly `ComponentControllerV4` dictionary/count queries); baselined accesses are allowed, NEW ones fail |
+| 2 | `@RestController` beans reside in `..controller..` | Active (whole module) |
+| 3 | `@Repository` beans reside in `..repository..` | Active |
+| 4 | `@Entity` types reside in `..entity..` | Active |
+| 5 | `@Service` beans reside in `..service..` or `..teamcity..` | Active |
 
-// No cyclic package dependencies
-@ArchTest
-slices().matching("org.octopusden.octopus.components.registry.(*)..")
-    .should().beFreeOfCycles()
-```
+The frozen rule's accepted violations are recorded in `archunit_violation_store/` (committed to VCS,
+the ArchUnit analogue of `detekt-baseline.xml`), configured via `src/test/resources/archunit.properties`.
+It is a **ratchet**, not a burndown queue: `freeze.refreeze=false` makes new breaches fail; the store
+is **immutable in normal runs** (`allowStoreUpdate=false`) — updating the baseline is a deliberate,
+reviewed action (regenerate with the flags flipped, then inspect the diff), which also prevents a
+rule-text change from silently re-recording a fresh baseline.
+
+#### Deferred architecture goals (tracked as tech-debt, not active gates)
+
+| Goal | Why deferred | TD |
+|------|--------------|----|
+| **v4 endpoint authorization policy** | Authorization is hybrid (`@PreAuthorize` + filter-chain + intentionally-public + shared-secret + anonymous-permission). A static "must have `@PreAuthorize`" rule mis-classifies deliberate mechanisms and would need to re-implement Spring's request-mapping resolution — it belongs in a Spring-context test that reads real mappings and asserts an explicit per-endpoint policy classification | **TD-017** |
+| **No cyclic package dependencies** | The module is currently one large cycle (`config → dto → service → …`); a frozen baseline would be ~586 KB and break on any import reshuffle. Enable **unfrozen** after a decoupling effort | **TD-016** |
+| **DB-source must not depend on legacy Groovy** | No real boundary exists yet: the DB read path (`service.impl.DatabaseComponentRegistryResolver`) intentionally depends on the escrow model for wire-compatibility. Define the boundary (ADR) before guarding it — do not key a rule on a placeholder `..db..` package | **TD-019** |
 
 ### 5.4 Database Reliability
 
