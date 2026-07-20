@@ -23,6 +23,7 @@ import org.octopusden.octopus.components.registry.server.teamcity.validation.Tea
 import org.springframework.cloud.context.refresh.ContextRefresher
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -34,7 +35,7 @@ import org.springframework.web.bind.annotation.RestController
 @ConditionalOnDatabaseEnabled
 @RestController
 @RequestMapping("rest/api/4/admin")
-// @PreAuthorize("@permissionEvaluator.canImport()")
+@PreAuthorize("@permissionEvaluator.canImport()")
 @Suppress("TooManyFunctions") // Each migration / import endpoint is its own method; consistent with ComponentControllerV4.
 class AdminControllerV4(
     private val importService: ImportService,

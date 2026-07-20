@@ -4,6 +4,7 @@ import org.octopusden.octopus.components.registry.server.config.ConditionalOnDat
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentTeamcityValidationRow
 import org.octopusden.octopus.components.registry.server.dto.v4.TeamcityValidationSummaryResponse
 import org.octopusden.octopus.components.registry.server.teamcity.validation.TeamcityValidationQueryService
+import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
@@ -15,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController
  * (IMPORT_DATA-gated read API). The trigger side lives on [AdminControllerV4]
  * (`POST /admin/teamcity-validation`); results are read here (`/admin/teamcity-validations`).
  */
-// @PreAuthorize("@permissionEvaluator.canImport()")
+@PreAuthorize("@permissionEvaluator.canImport()")
 @ConditionalOnDatabaseEnabled
 @RestController
 @RequestMapping("rest/api/4/admin/teamcity-validations")
