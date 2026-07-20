@@ -15,14 +15,9 @@ import org.octopusden.octopus.validation.validators.type.TeamCityValidationType
  * [TeamCityValidationType.MULTIPLE_JAVA_VERSIONS] (`{ it is JavaVersion }`, "Java") and
  * [TeamCityValidationType.MULTIPLE_MAVEN_VERSIONS] (`{ it is MavenVersion }`, "Maven").
  *
- * Inspects every [relevantBuildSteps] step (uninherited steps across every configuration, plus
- * each attached configuration's default build step, whatever its inheritance). [Status.WARNING] if
- * more than one distinct version accepted by [isRelevantVersion] resolves across those steps;
- * [Status.OK] if zero or one distinct version resolves; [Status.NOT_APPLICABLE] if there was
- * nothing relevant to inspect.
- *
- * The message reports each distinct version found alongside which build step(s) -- and build
- * configuration(s) -- it was resolved from.
+ * Inspects every [relevantBuildSteps] step. [Status.WARNING] if more than one distinct version
+ * accepted by [isRelevantVersion] resolves across those steps, [Status.OK] if zero or one does,
+ * [Status.NOT_APPLICABLE] if there was nothing relevant to inspect.
  */
 class MultipleVersionValidator(
     override val type: TeamCityValidationType,

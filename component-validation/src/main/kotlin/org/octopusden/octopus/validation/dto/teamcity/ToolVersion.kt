@@ -6,9 +6,8 @@ sealed interface ToolVersion {
 }
 
 /**
- * A resolved Java version. [isEight] accepts both the legacy `"1.8"` spelling and the modern
- * `"8"` spelling — both are seen in real TeamCity configs (see docs/teamcity-validation-design.md
- * §4 and the implementation brief §2).
+ * A resolved Java version. [isEight] accepts both the legacy `"1.8"` spelling and the modern `"8"`
+ * spelling — both are seen in real TeamCity configs.
  */
 data class JavaVersion(
     override val raw: String,

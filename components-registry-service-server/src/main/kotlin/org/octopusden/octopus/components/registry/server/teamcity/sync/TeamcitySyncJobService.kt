@@ -6,17 +6,13 @@ import java.time.Instant
 /**
  * Server-side state of a long-running `POST /admin/teamcity-project-ids/sync` run.
  *
- * Mirrors `MigrationJobState` for components but with TC-specific shape: the only
- * domain-specific payload is the per-pass [result] (component counts) emitted on
- * COMPLETED. There are no per-component progress fields in v1 — adding them
- * would require threading a `TeamcitySyncProgressListener` through
- * `TcProjectFetcher`; the JSON shape leaves room (the SPA can flip a spinner
- * to a counter view without a backend contract change).
+ * Mirrors `MigrationJobState` for components; the only domain-specific payload is the
+ * per-pass [result] (component counts) emitted on COMPLETED. No per-component progress
+ * fields in v1.
  *
- * State lives in an [java.util.concurrent.atomic.AtomicReference] inside the
- * impl — single-pod scope. A pod restart drops it (and the in-flight sync along
- * with it); the operator sees "no current job" and starts fresh. TC sync is
- * **not resumable** — restarting from scratch is the right semantic.
+ * State lives in an [java.util.concurrent.atomic.AtomicReference] inside the impl —
+ * single-pod scope. A pod restart drops it along with any in-flight sync; TC sync is
+ * **not resumable**, so restarting from scratch is the right semantic.
  */
 data class TeamcitySyncJobState(
     val id: String,
@@ -46,27 +42,19 @@ data class StartTeamcitySyncResult(
  */
 interface TeamcitySyncJobService {
     /**
-     * If no resync is currently RUNNING, claim a slot, start the work on the
-     * background executor, and return the freshly-created [TeamcitySyncJobState]
-     * with `isNewlyStarted=true`.
+     * If no resync is currently RUNNING, claim a slot, start the work on the background
+     * executor, and return the freshly-created [TeamcitySyncJobState] with `isNewlyStarted=true`.
      *
-     * If a same-kind RUNNING job is already active, return the existing state
-     * with `isNewlyStarted=false` and do NOT spawn a duplicate run. The
-     * controller maps `isNewlyStarted=false` to HTTP 409 so the SPA can
-     * "attach" to the in-flight job rather than start a parallel one.
-     *
-     * If the gate is held by a different kind (components migration, history
+     * If a same-kind RUNNING job is already active, return its state with `isNewlyStarted=false`
+     * instead of spawning a duplicate — the controller maps that to HTTP 409 so the SPA can
+     * attach to the in-flight job. If the gate is held by a different kind (components/history
      * migration), throws
-     * [org.octopusden.octopus.components.registry.server.service.MigrationConflictException]
-     * which the controller maps to HTTP 409 with a structured cross-kind body.
+     * [org.octopusden.octopus.components.registry.server.service.MigrationConflictException],
+     * mapped to a structured cross-kind 409. COMPLETED/FAILED states don't block a new call.
      *
-     * COMPLETED / FAILED states do not block: a new call after a finished job
-     * replaces the slot.
-     *
-     * [triggeredBy] is the actor recorded on the service-event journal row
-     * (SYS-060): a username for admin-triggered runs, `"scheduler"` for the cron.
-     * Captured on the caller thread because the background executor does not carry
-     * the security context.
+     * [triggeredBy] is the actor recorded on the service-event journal row (SYS-060): a username
+     * for admin-triggered runs, `"scheduler"` for the cron. Captured on the caller thread since
+     * the background executor doesn't carry the security context.
      */
     fun startAsync(triggeredBy: String = "system"): StartTeamcitySyncResult
 

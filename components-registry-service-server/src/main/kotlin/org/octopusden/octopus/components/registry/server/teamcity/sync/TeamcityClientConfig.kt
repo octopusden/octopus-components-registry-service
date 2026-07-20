@@ -17,24 +17,17 @@ import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityPropert
 private const val COMPONENT_NAME_PARAM = "COMPONENT_NAME"
 private const val PROJECT_VERSION_PARAM = "PROJECT_VERSION"
 
-// `href` and `webUrl` are non-nullable on the library's TeamcityProject DTO, so the
-// fields spec MUST request them or Jackson throws on deserialisation. We don't read
-// `href` ourselves — it just has to round-trip through the client.
+// `href`/`webUrl` are non-nullable on the library's TeamcityProject DTO, so the fields spec
+// must request them or Jackson throws on deserialisation (we don't read `href` ourselves).
 //
-// `buildTypes(...)` powers the CDRelease tie-breaker for ambiguous matches. Even
-// though we only need the buildType id and its template ancestry to detect
-// inheritance, the library's [TeamcityBuildType] DTO also has non-nullable
-// `name`, `projectId`, `projectName`, and `href` (TC always returns them on
-// full-object queries). Jackson would throw on missing required fields if we
-// asked for `id` only — so every nested `buildType(...)` here lists all five
-// required fields, both for the direct entries in `buildTypes(...)` and for the
-// nested entries inside `template(...)` / `templates(buildType(...))`.
+// `buildTypes(...)` powers the CDRelease tie-breaker. Its DTO also has non-nullable `name`,
+// `projectId`, `projectName`, `href`, so every nested `buildType(...)` (direct entries and
+// inside `template(...)`/`templates(...)`) must list all five fields even though only `id`
+// and template ancestry are actually used.
 //
-// Both `template` (legacy single, TC <2018) and `templates` (multi, TC2018+) are
-// requested because TC populates only one of the two depending on installation/
-// version; checking both keeps the detection robust at minor extra-bytes cost.
-// Direct buildTypes only — sub-projects are not walked, on the convention that
-// the project carrying COMPONENT_NAME also owns the release build.
+// Both `template` (legacy single, TC <2018) and `templates` (multi, TC2018+) are requested
+// since TC populates only one depending on version. Direct buildTypes only — sub-projects
+// aren't walked, on the convention that the project carrying COMPONENT_NAME owns the release build.
 private const val BUILD_TYPE_REQUIRED = "id,name,projectId,projectName,href"
 private const val PROJECT_FIELDS =
     "project(id,name,webUrl,href,archived," +
@@ -51,26 +44,21 @@ class TeamcityClientConfig {
 
 /**
  * Adapter that queries TC in a single batched GET for all projects carrying the
- * `COMPONENT_NAME` parameter, then maps the response to UUIDs known to CRS by
- * looking up each project's `COMPONENT_NAME` value in [componentsByName] (client-side
- * grouping).
+ * `COMPONENT_NAME` parameter, then maps the response to UUIDs known to CRS by looking up
+ * each project's `COMPONENT_NAME` value in [componentsByName] (client-side grouping).
  *
- * Why batch instead of per-component:
- * - One HTTP call vs. N (registry size).
- * - Avoids version-specific behavior we previously hit where some TC builds silently
- *   return an empty list for `parameter:(name:X,value:Y,matchType:equals)` queries.
- *   The simple `parameter:(name:X)` filter is universally supported.
+ * Batched (one call vs. N) rather than per-component, and uses the plain `parameter:(name:X)`
+ * filter rather than a value-matching one, since some TC builds silently return an empty
+ * list for the latter.
  *
- * Multiple TC projects sharing the same `COMPONENT_NAME` are all included in the
- * `List<TcProject>` for that component; each carries `hasCdReleaseBuild` derived
- * from the same response so [TeamcitySyncService.applyMatches] can pick the
- * release-flagged one without an extra round-trip. Projects whose `COMPONENT_NAME`
- * is unknown to CRS, missing, or blank are silently dropped.
+ * Multiple TC projects sharing a `COMPONENT_NAME` are all included in that component's
+ * `List<TcProject>`, each carrying `hasCdReleaseBuild` so [TeamcitySyncService.applyMatches]
+ * can pick the release-flagged one without an extra round-trip. Projects with an unknown,
+ * missing, or blank `COMPONENT_NAME` are silently dropped.
  *
- * The client is lazily initialised so that a blank [TeamcityProperties.baseUrl]
- * does not attempt a connection until [findByComponentNames] is actually called.
- * The blank-URL check itself lives in [TeamcitySyncService] (before any DB or HTTP
- * work), so this adapter does not need to defend against it separately.
+ * The client is lazily initialised so a blank [TeamcityProperties.baseUrl] doesn't attempt a
+ * connection until [findByComponentNames] is called; the blank-URL check itself lives in
+ * [TeamcitySyncService].
  */
 internal class ExternalTcProjectFetcher(
     private val properties: TeamcityProperties,

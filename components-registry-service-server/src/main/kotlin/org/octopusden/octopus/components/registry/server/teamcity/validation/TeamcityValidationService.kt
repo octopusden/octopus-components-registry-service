@@ -15,7 +15,7 @@ import java.time.Instant
 
 /**
  * Runs the `component-validation` module over the TeamCity projects the registry knows about, and
- * persists the WARNING/ERROR findings. See docs/teamcity-validation-server-integration-design.md.
+ * persists the WARNING/ERROR findings.
  */
 @ConditionalOnDatabaseEnabled
 @Service

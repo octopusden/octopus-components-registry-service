@@ -2,7 +2,7 @@ package org.octopusden.octopus.validation.validators.type
 
 import org.octopusden.octopus.validation.core.ValidationType
 
-/** The six TeamCity project questions. See docs/teamcity-validation-design.md §1. */
+/** The six TeamCity project questions. */
 enum class TeamCityValidationType : ValidationType {
     /** Is any build configuration attached to default build template? */
     ATTACHED_TO_BUILD_TEMPLATE,

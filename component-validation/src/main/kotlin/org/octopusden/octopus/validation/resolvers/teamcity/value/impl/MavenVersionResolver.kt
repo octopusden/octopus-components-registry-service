@@ -6,12 +6,10 @@ import org.octopusden.octopus.validation.resolvers.teamcity.value.ValueVersionRe
 /**
  * Derives a [MavenVersion] from an already reference-resolved parameter value.
  *
- * Detection no longer depends on the `BUILD_ENV` convention specifically -- any value containing
- * a `maven` token (case-insensitive) is treated as a Maven version reference, and the known
- * version tokens below are matched against the whole value.
- *
- * Tokens are checked longest/most-specific first so bare `3` never shadows `3.3.9`/`3.6.0`/`3.6.3`.
- * Values with no `maven` marker, or no known version token, resolve to `null`.
+ * Any value containing a `maven` token (case-insensitive) is treated as a Maven version
+ * reference; known version tokens are checked longest/most-specific first so bare `3` never
+ * shadows `3.3.9`/`3.6.0`/`3.6.3`. Values with no `maven` marker, or no known token, resolve to
+ * `null`.
  */
 class MavenVersionResolver : ValueVersionResolver<MavenVersion> {
     override fun resolve(value: String): MavenVersion? {

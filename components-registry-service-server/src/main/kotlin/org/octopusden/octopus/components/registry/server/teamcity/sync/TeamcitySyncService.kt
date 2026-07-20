@@ -18,44 +18,27 @@ import java.util.UUID
 /**
  * The TeamCity sync engine.
  *
- * One pass:
- * 1. Read all non-archived components.
- * 2. Single batched TC REST call via [TcProjectFetcher]: ask for every project
- *    that carries a `COMPONENT_NAME` parameter (any value), then group the
- *    response client-side by the parameter value.
- * 3. For each component:
- *      - 0 matches → no write. Existing `version_line` rows are preserved as-is (the
- *        sync path only writes when [applyMatch] runs). To clear a curated assignment,
- *        the operator deletes it via the v4 API. `skippedNoMatch` reports "no TC match
- *        this run", not "no link in the DB".
- *      - ≥1 match →
- *          - If any candidate has a `PROJECT_VERSION`,
- *            drop the null-version ones (nulls kept only when all are null).
- *          - Group survivors by version and keep one project per line:
- *            single candidate wins; on ties prefer a `hasCdReleaseBuild` project then the smallest id;
- *            a tie with no release build leaves that line unresolved.
- *          - Count the component once: `updated`/`unchanged` (+`ambiguousAutoResolved`
- *            if a line was tie-broken), else `skippedAmbiguous` (a line unresolved),
- *            else `skippedNoMatch`.
+ * One pass: read all non-archived components, then a single batched TC REST call via
+ * [TcProjectFetcher] for every project carrying a `COMPONENT_NAME` parameter, grouped
+ * client-side by that value. For each component: no match → no write (existing
+ * `version_line` rows are left as-is; `skippedNoMatch` means "no TC match this run", not
+ * "no link in the DB"). On a match, candidates are grouped by `PROJECT_VERSION` and one
+ * project is kept per line — single candidate wins; ties prefer a `hasCdReleaseBuild`
+ * project then the smallest id; an unresolved tie leaves that line unresolved. The
+ * component is then counted once as `updated`/`unchanged` (+`ambiguousAutoResolved` if
+ * tie-broken), `skippedAmbiguous`, or `skippedNoMatch`.
  *
- * Persistence (schema): each kept line is a `version_line` row (component + version)
- * pointing at a deduplicated `teamcity_project` (unique `project_id`). The web URL is
- * not stored — it is composed from the project id at read time.
+ * Persistence: each kept line is a `version_line` row pointing at a deduplicated
+ * `teamcity_project`. The web URL is not stored — it's composed from the project id at read time.
  *
- * Idempotent: only writes when the matched project set actually changes. The
- * change is traced via an INFO log line (so admins can find the source of a
- * write) but deliberately does NOT write an `audit_log` row: TeamCity sync is an
- * automated reconciliation, and one such row per re-linked component was noise
- * in the component history (SYS-051). `changedBy` comes from `CurrentUserResolver`
- * — `"system"` for the scheduled cron, or the admin's username when the resync is
- * triggered via an authenticated request. If per-sync auditing is ever wanted,
- * re-publish an `AuditEvent` here.
+ * Idempotent: only writes when the matched project set changes, traced via an INFO log
+ * line. Deliberately does NOT write an `audit_log` row — TC sync is automated
+ * reconciliation and a row per re-link was noise in the component history (SYS-051).
+ * `changedBy` is `"system"` for the cron, or the admin's username for a triggered run.
  *
- * Error handling: a fetcher failure (TC unreachable, auth refused, malformed
- * response) propagates out of [resync] — for the admin endpoint that surfaces
- * as 502/500, for the scheduled cron that is logged-and-swallowed by the
- * scheduler. Per-write JPA failures inside the transaction template cause the
- * whole transaction to roll back, leaving DB state untouched.
+ * Error handling: a fetcher failure propagates out of [resync] (502/500 for the admin
+ * endpoint; logged-and-swallowed by the scheduler). A per-write JPA failure rolls back
+ * the whole transaction.
  */
 @ConditionalOnDatabaseEnabled
 @Service

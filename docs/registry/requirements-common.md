@@ -2379,9 +2379,7 @@ build-type fallback, archived/all-paused exclusion); v4 PATCH preservation in
 
 ### SYS-064: component-validation — ATTACHED_TO_BUILD_TEMPLATE
 
-New pure-Kotlin module `component-validation` (see
-[`docs/teamcity-validation-design.md`](../teamcity-validation-design.md) and
-[`-implementation-brief.md`](../teamcity-validation-implementation-brief.md)) validates
+New pure-Kotlin module `component-validation` validates
 TeamCity projects: input in (`TeamcityProject`), `List<ValidationResult>` out — no Spring, no
 DB, no TeamCity-client dependency, no IO. `ATTACHED_TO_BUILD_TEMPLATE` is the first of its five
 checks: is any build configuration attached to a build template (`CDGradleBuild` /

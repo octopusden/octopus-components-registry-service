@@ -11,17 +11,11 @@ import org.octopusden.octopus.validation.resolvers.teamcity.step.BuildStepToolVe
 import org.octopusden.octopus.validation.validators.type.TeamCityValidationType
 
 /**
- * [org.octopusden.octopus.validation.validators.type.TeamCityValidationType.USES_OLD_JAVA_VERSION] — inspects every [relevantBuildSteps] step (uninherited
- * steps across every configuration, plus each attached configuration's default build step,
- * whatever its inheritance). [Status.WARNING] if any resolved [JavaVersion.isEight] — this is a
- * finding about the project's configuration, not a failure of the validation process itself, so it
- * stays a warning rather than [Status.ERROR] (reserved for when validation itself couldn't run
- * cleanly, see [org.octopusden.octopus.validation.core.ValidatorSuite] decision D6). [Status.OK] if
- * versions were resolved but none is 1.8; [Status.NOT_APPLICABLE] if there was nothing Java-relevant
- * to inspect. Unresolved (`null`) versions are ignored (decision D7).
- *
- * The message reports which build step, and which build configuration it lives in, resolved to
- * Java 1.8 -- not just the version value itself.
+ * [org.octopusden.octopus.validation.validators.type.TeamCityValidationType.USES_OLD_JAVA_VERSION]
+ * — inspects every [relevantBuildSteps] step. [Status.WARNING] if any resolved
+ * [JavaVersion.isEight]; this is a finding about the project's configuration, not a validation
+ * failure, so it stays a warning rather than [Status.ERROR]. [Status.OK] if versions were resolved
+ * but none is 1.8, [Status.NOT_APPLICABLE] if nothing Java-relevant was found to inspect.
  */
 class OldJavaVersionValidator(
     private val buildConfigurationResolver: BuildConfigurationResolver,

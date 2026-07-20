@@ -9,17 +9,10 @@ import org.octopusden.octopus.validation.resolvers.teamcity.step.BuildStepToolVe
 import org.octopusden.octopus.validation.validators.type.TeamCityValidationType
 
 /**
- * [TeamCityValidationType.HAS_CUSTOM_BUILD_STEP] — a single check covering both tools: is there
- * any uninherited ("custom") build step that uses Java or Maven at all?
- *
- * Gathers every uninherited build step across every build configuration — attached to a build
- * template or not — and resolves each one's tool versions via [buildStepToolVersionResolver].
- * [Status.WARNING] if any uninherited step resolves to any tool version (Java or Maven alike),
- * [Status.OK] otherwise. Always applicable — an empty registry-wide project still meaningfully
- * answers "no".
- *
- * The message reports which build step -- and which build configuration it lives in -- was
- * flagged, not the resolved tool version itself.
+ * [TeamCityValidationType.HAS_CUSTOM_BUILD_STEP] — is there any uninherited ("custom") build step
+ * that resolves to a Java or Maven version? Checks every uninherited step across every build
+ * configuration, attached to a build template or not. [Status.WARNING] if any is found,
+ * [Status.OK] otherwise — always applicable.
  */
 class CustomBuildStepValidator(
     private val buildConfigurationResolver: BuildConfigurationResolver,

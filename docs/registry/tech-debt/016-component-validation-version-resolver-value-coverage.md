@@ -70,4 +70,3 @@ a value shape the resolvers don't recognize. No structural/API impact; contained
 
 - `component-validation/src/main/kotlin/org/octopusden/octopus/validation/resolvers/teamcity/value/impl/JavaVersionResolver.kt`
 - `component-validation/src/main/kotlin/org/octopusden/octopus/validation/resolvers/teamcity/value/impl/MavenVersionResolver.kt`
-- `docs/teamcity-validation-design.md` §4; `docs/teamcity-validation-decision-log.md` §6.

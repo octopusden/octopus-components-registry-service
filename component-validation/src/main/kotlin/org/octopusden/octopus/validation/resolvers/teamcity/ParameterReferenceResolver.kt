@@ -5,13 +5,9 @@ import org.octopusden.octopus.validation.dto.teamcity.Parameters
 /**
  * Recursively resolves TeamCity `%paramName%` references within a parameter value, looking up
  * each referenced name in the same [Parameters] bag, until no resolvable `%...%` pattern remains.
- * A reference to a **missing** parameter is left as the literal `%paramName%` text in the result
- * — TeamCity itself doesn't fail a whole value just because one embedded reference doesn't
- * resolve, and neither does this org's own server-side `TeamcityClientConfig.kt`
- * (`resolveReferences` leaves an unresolved token literal at the point of substitution). A
- * reference **cycle**, however, makes the whole value unresolved (`null`) — once a name is
- * already being expanded on the current path, resolving it again can never terminate, so the
- * whole call fails rather than looping or guessing.
+ * A reference to a **missing** parameter is left as the literal `%paramName%` text in the result,
+ * matching TeamCity's own behavior. A reference **cycle** makes the whole value unresolved
+ * (`null`) rather than looping.
  *
  * Stateless — a plain utility, called directly rather than injected as a collaborator.
  */
