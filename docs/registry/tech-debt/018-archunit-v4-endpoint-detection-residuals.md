@@ -34,9 +34,9 @@ This covers every controller in the module today. It does NOT cover, when the cl
 (Endpoint DETECTION already follows meta-annotations, so composed method mappings are still seen as
 HTTP endpoints — the gap above is purely in resolving their PATH, i.e. the v4 classification.)
 
-Neither case exists in the codebase now (all 12 v4 controllers are standalone final classes named
-`*ControllerV4` with a class-level `rest/api/4` `@RequestMapping` and standard method mappings), so
-this is latent, not an active hole.
+None of these cases exist in the codebase now (all 12 v4 controllers are standalone final classes
+named `*ControllerV4` with a class-level `rest/api/4` `@RequestMapping` and standard method
+mappings), so this is latent, not an active hole.
 
 ## Target
 
@@ -55,7 +55,8 @@ alone. Options, in rough order of robustness:
 
 ## Effort / notes
 
-- Add regression fixtures in `ArchitectureFitnessRegressionTest` for each closed case (a composed
-  method-level `rest/api/4` mapping on a plainly-named class; an inherited-mapping v4 controller).
+- Add regression fixtures in `ArchitectureFitnessRegressionTest` for each closed case: a composed
+  method-level `rest/api/4` mapping on a plainly-named class; a composed class-level `rest/api/4`
+  mapping on a plainly-named class; and an inherited-mapping v4 controller.
 - Until then, the belt-and-suspenders `*ControllerV4` name check plus the class-path check make the
   gap require BOTH an unconventional annotation shape AND an off-convention class name at once.
