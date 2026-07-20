@@ -1,70 +1,73 @@
-# TD-016: component-validation — version resolvers only recognize marker-based values; unmarked/plain-path values are silently ignored
+# TD-016: component-validation — version resolvers match against a hardcoded token list, not arbitrary versions
 
 ## Status
 
-Open · deferred enhancement, explicitly parked for a later iteration (user decision during the
-server-integration design). This is a distinct, narrower concern: the *coverage* of the
-value-parsing resolvers, not the parameter names / template ids.
+Open. The original concern this ticket tracked — marker-based resolvers missing unmarked/plain-path
+values — is fixed for real-world values seen today (see below). What remains, for both resolvers,
+is that they recognize versions from a fixed, hardcoded list rather than parsing the version
+generically — so a *new* tool version silently resolves to `null` until someone updates the code.
 
 ## Context
 
-Inside the `component-validation` module, the `ValueVersionResolver<V>` implementations derive a
-tool version from an already reference-resolved parameter value:
+`JavaVersionResolver` and `MavenVersionResolver` (`ValueVersionResolver<V>` implementations)
+derive a tool version from an already reference-resolved parameter value:
 
-- `JavaVersionResolver` recognizes a version **only** when the value contains one of two markers —
-  `BUILD_ENV` or `env.JDK` — and then only for an allowlist of tokens (`1.8`, `17`, `21`, `25`).
-- `MavenVersionResolver` recognizes a version **only** under a `BUILD_ENV` marker, for the tokens
-  `3`, `3.3.9`, `3.6.0`, `3.6.3`, `LATEST`.
+- `JavaVersionResolver` treats any value containing a `jdk`/`java`/`jvm` token (case-insensitive)
+  as a Java reference, covering both env-var-style names (`env.JDK_ORACLE_17_x64`) and resolved
+  directory paths on Linux/Windows (`/usr/lib/jvm/java-21-openjdk-21.0.11...`, `C:\Java\RedHat\17`).
+  It only recognizes a fixed list of tokens: `1.8`, `8`, `11`, `17`, `21`, `25` (plus the `18`
+  legacy alias for `1.8`). This currently covers every Java version this org is known to use — but
+  the day a new LTS (e.g. Java 29) shows up in a build config, it resolves to `null` and is
+  silently invisible to `USES_OLD_JAVA_VERSION`/`MULTIPLE_JAVA_VERSIONS` until `TOKENS` is updated.
+- `MavenVersionResolver` treats any value containing a `maven` token as a Maven reference (e.g.
+  `apache-maven-3.6.3`), against an even narrower fixed list: `3.6.3`, `3.6.0`, `3.3.9`, `LATEST`,
+  and a bare `3` fallback. This one already misses versions in active use today — e.g.
+  `apache-maven-3.8.6` collapses to the imprecise bare `3`, and `apache-maven-4.0.0` resolves to
+  `null` outright, since `4` isn't a recognized token.
 
-Any value without a recognized marker, or with a version outside the allowlist, resolves to `null`
-and is silently ignored (per decision D7: unresolved versions are not flagged). Concretely, this
-value observed in real usage resolves to `null`:
-
-```
-JAVA_HOME=/usr/lib/jvm/java-17
-```
-
-(a plain install path, no `BUILD_ENV` / `env.JDK` marker). Java `11` also resolves to `null`
-(`BUILD_ENV_11` is explicitly rejected by the tests), as do build-suffixed or path-style values
-like `1.8.0_392` and `/opt/java/openjdk-11`.
+Neither resolver emits any signal when a recognized marker is present but no known token is (it
+silently resolves to `null`, or in Maven's case, coarsens to `3`).
 
 ## Why this matters
 
-For `USES_OLD_JAVA_VERSION` this is a correctness risk in the "wrong" direction: a Java **1.8**
-expressed as an unmarked value or a plain path (e.g. `/usr/lib/jvm/java-8`, `jdk1.8.0_392`) would
-resolve to `null` and be treated as "no old Java found" — a **silent false negative** for the exact
-thing the check exists to catch. The allowlist is a deliberate, data-driven fit to the versions
-this org is currently known to use, so it is acceptable for the first iteration, but it is fragile:
-a new Java version, a new marker convention, or a plain-path value will be missed without any
-signal.
+Both checks depend on the tool version resolving correctly:
+
+- `MULTIPLE_MAVEN_VERSIONS` can under-report or coarsen distinct Maven versions *today*, for
+  versions already in use outside the current token list (`3.8.x`, `3.9.x`, `4.x`).
+- `USES_OLD_JAVA_VERSION` / `MULTIPLE_JAVA_VERSIONS` have no known false negative today, but are
+  one new Java release away from one: nothing fails loudly when a build config references a Java
+  version this module doesn't yet know about, it just silently doesn't count.
+
+Because both resolvers are hardcoded token lists rather than generic version parsers, this is a
+recurring maintenance burden, not a one-time fix — every new Java/Maven release needs a code
+change here before validation can see it.
 
 ## Decision
 
-Ship the current marker-based, allowlist resolvers as-is for now. Enhance in a later iteration:
+Ship the current token-list resolvers as-is for now; in a later iteration:
 
-- Broaden `JavaVersionResolver` / `MavenVersionResolver` to also parse plain-path and
-  build-suffixed value shapes (e.g. `.../java-17`, `.../jdk1.8.0_x`, `/opt/apache-maven-3.8.6`) and
-  versions beyond the current allowlist (Java 11, etc.).
-- Add visibility for unresolved-but-non-empty values (log, or a distinct signal) so a miss becomes
-  detectable instead of silently dropping to `null`.
+- Extend `MavenVersionResolver` to parse arbitrary `X.Y.Z` version strings following a `maven`
+  marker, instead of matching a fixed token list — this closes today's known gap.
+- Consider the same generic-parsing approach for `JavaVersionResolver` (extract any digit-bounded
+  major version, or `1.<major>`, after a `jdk`/`java`/`jvm` marker) so a future Java release
+  doesn't require a code change to be detected.
+- Add visibility (log, or a distinct signal) for a recognized marker with no resolvable version,
+  for both resolvers, so a miss becomes detectable instead of silently dropping to `null`.
 
 ## Acceptance criteria (to close this ticket)
 
-- [ ] Gather real parameter values (JDK/Maven) across `CDGradleBuild` / `CDJavaMavenBuild` and
-      representative custom steps.
-- [ ] Extend `JavaVersionResolver` to cover plain-path / build-suffixed forms and out-of-allowlist
-      versions, without regressing the marker cases.
-- [ ] Extend `MavenVersionResolver` similarly.
-- [ ] Add a visible signal (log or status) when a non-empty value fails to resolve, so silent
-      misses are detectable.
-- [ ] Add a regression test proving a Java 1.8 expressed as a plain path is flagged by
-      `USES_OLD_JAVA_VERSION`.
+- [ ] Extend `MavenVersionResolver` to extract arbitrary Maven version strings rather than
+      matching a fixed token allowlist, without regressing the existing cases.
+- [ ] Extend or replace `JavaVersionResolver`'s fixed token list with generic major-version
+      extraction, so a new Java release resolves without a code change.
+- [ ] Add a visible signal (log or status) when a recognized marker resolves no version, for both
+      resolvers.
 
 ## Risk classification
 
-Medium — until closed, `USES_OLD_JAVA_VERSION` can under-report Java 1.8 usage that is expressed in
-a value shape the resolvers don't recognize. No structural/API impact; contained to the two
-`ValueVersionResolver` implementations.
+Medium — `MULTIPLE_MAVEN_VERSIONS` can already under-report or coarsen Maven versions outside the
+current token list. `USES_OLD_JAVA_VERSION` / `MULTIPLE_JAVA_VERSIONS` have no active false
+negative today, but will silently miss the next new Java version until this is addressed.
 
 ## See also
 
