@@ -1325,13 +1325,26 @@ class ComponentManagementServiceImpl(
         excludeOverrideId: UUID?,
     ): List<String>? {
         val canonicalRange = normalizeRange(d.versionRange)
-        validateFieldOverrideRange(
-            range = canonicalRange,
-            component = component,
-            attribute = d.overriddenAttribute,
-            excludeOverrideId = excludeOverrideId,
-        )
-        row.versionRange = canonicalRange
+        // SYS-065 — change-scoped range validation on the desired-set path. On the UPDATE branch
+        // (excludeOverrideId == row.id, a persisted row) an echo of an UNCHANGED range must be a true
+        // no-op: legacy composite rows predate the single-segment input contract, so the portal's
+        // combined Save (which re-sends the whole desired set, untouched rows included) would otherwise
+        // 400 on every save of a component that owns one. Compare NORMALIZED forms — stored ranges are
+        // returned verbatim by the read mapper and may carry whitespace — and when unchanged neither
+        // validate NOR reassign (reassigning would mutate the row and trip audit/editability diffs).
+        // A CREATE (excludeOverrideId == null) always validates + assigns, so composite CREATE stays
+        // rejected and an empty/invalid range cannot slip in. An actual range change is still validated.
+        val rangeUnchangedOnUpdate =
+            excludeOverrideId != null && canonicalRange == normalizeRange(row.versionRange)
+        if (!rangeUnchangedOnUpdate) {
+            validateFieldOverrideRange(
+                range = canonicalRange,
+                component = component,
+                attribute = d.overriddenAttribute,
+                excludeOverrideId = excludeOverrideId,
+            )
+            row.versionRange = canonicalRange
+        }
         return when {
             d.overriddenAttribute in MarkerAttributes.ALL -> {
                 row.rowType = "MARKER"
@@ -2861,6 +2874,19 @@ class ComponentManagementServiceImpl(
      *    Existing composite rows (legacy DSL import) are untouched — the
      *    sibling walk below uses `isIntersect` on them but treats them as
      *    opaque when measuring containment.
+     *
+     *    ECHO-SAFETY CONTRACT (SYS-065): this composite rejection is an
+     *    INPUT-CONTRACT limit (a shape the API declines to accept), NOT a data
+     *    invariant — legacy data may legitimately hold a composite. On the
+     *    desired-set path (a full-collection echo), per-row input-contract
+     *    validators like this one MUST be change-scoped: an UNCHANGED echo of a
+     *    stored row must be a no-op, or a component owning a legacy composite
+     *    can never be saved. See `applyOverrideUpsertPayload`, which skips this
+     *    call when the normalized range is unchanged on update. Set-level data
+     *    invariants (disjointness, point 3) still run against the whole set but
+     *    are satisfied by unchanged rows. Checklist for any future desired-set /
+     *    full-collection-echo endpoint: does any per-item validator reject data
+     *    that already legitimately exists in the store?
      * 3. Any intersection with a sibling override on the same attribute is
      *    rejected — field-override ranges must be DISJOINT. Partial overlap
      *    AND strict containment are both conflicts: a version inside the
