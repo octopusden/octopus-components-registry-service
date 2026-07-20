@@ -6,7 +6,9 @@ import jetbrains.buildServer.configs.kotlin.buildFeatures.xmlReport
 import jetbrains.buildServer.configs.kotlin.buildSteps.gradle
 import jetbrains.buildServer.configs.kotlin.buildSteps.kotlinFile
 import jetbrains.buildServer.configs.kotlin.buildSteps.script
+import jetbrains.buildServer.configs.kotlin.triggers.ScheduleTrigger
 import jetbrains.buildServer.configs.kotlin.triggers.finishBuildTrigger
+import jetbrains.buildServer.configs.kotlin.triggers.schedule
 import jetbrains.buildServer.configs.kotlin.vcs.GitVcsRoot
 
 version = "2025.03"
@@ -244,6 +246,26 @@ object id10CompileUtAuto : BuildType({
     requirements {
         doesNotContain("env.OS_TYPE", "WIN", "RQ_2875")
     }
+
+    triggers {
+        // Weekly heartbeat, MAIN ONLY. The inherited Schedule trigger (TRIGGER_1006,
+        // Sundays 10:00 UTC) fired on EVERY active branch, rebuilding the whole
+        // [2.x] fan-out on weekends. It is disabled below and replaced by this
+        // schedule scoped to the default branch; downstream AUTO configs reach main
+        // through their finishBuildTrigger off [1.0]. (TRIGGER_1003, the per-commit
+        // VCS trigger, stays — normal per-branch CI on check-in.)
+        schedule {
+            schedulingPolicy = weekly {
+                timezone = "UTC"
+                dayOfWeek = ScheduleTrigger.DAY.Sunday
+                hour = 10
+            }
+            branchFilter = "+:<default>"
+            triggerBuild = always()
+        }
+    }
+
+    disableSettings("TRIGGER_1006")
 })
 
 // [2.1] Integration & DB Tests — runs the heavy @Tag("integration") DB suite (Postgres
@@ -361,14 +383,16 @@ object id12IntegrationDbTestsAuto : BuildType({
         }
     }
 
-    // Disable the inherited VCS trigger from Octopus_OctopusGradleBuild:
+    // Disable the inherited triggers from Octopus_OctopusGradleBuild:
     //   TRIGGER_1003 — VCS Trigger (fires on every commit on every branch)
+    //   TRIGGER_1006 — Schedule Trigger (weekly, Sundays 10:00 UTC, all branches)
     // [2.1] is driven by the finishBuildTrigger off [1.0] above; a VCS-check-in
     // trigger here only double-runs the heavy DB suite (once off the commit,
-    // once off [1.0] finishing). The inherited Schedule trigger (TRIGGER_1006)
-    // is intentionally left in place. (The build-number override is handled by
-    // the PIN_BUILD_NUMBER step above, not by disabling RUNNER_1720.)
-    disableSettings("TRIGGER_1003")
+    // once off [1.0] finishing). The Schedule trigger is dropped too — the weekend
+    // run is now MAIN-ONLY via [1.0]'s schedule → this config's finishBuildTrigger.
+    // (The build-number override is handled by the PIN_BUILD_NUMBER step above,
+    // not by disabling RUNNER_1720.)
+    disableSettings("TRIGGER_1003", "TRIGGER_1006")
 })
 
 // Compat — HTTP (two pre-deployed URLs) — manual, on-demand. Runs the compat-
