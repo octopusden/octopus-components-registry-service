@@ -183,9 +183,10 @@ class ArchitectureFitnessTest {
         //   - request path: class-level @RequestMapping base stitched with the method mapping starts
         //     at the `rest/api/4` segment (exact or `rest/api/4/…`, not `rest/api/40`); OR
         //   - class name: the declaring controller is `*ControllerV4`.
-        // Residual gaps — a composed annotation carrying the full `rest/api/4` path ONLY at method
-        // level in a non-`*ControllerV4` class, and endpoint methods inheriting their class-level
-        // @RequestMapping from an abstract base — are tracked in TD-018.
+        // Residual gaps, all only when the class is NOT `*ControllerV4` — a composed annotation
+        // carrying the `rest/api/4` path on a custom method- OR class-level mapping annotation (only
+        // the six standard mappings' paths are read), and endpoint methods inheriting their
+        // class-level @RequestMapping from an abstract base — are tracked in TD-018.
         private val isV4HttpEndpoint =
             object : DescribedPredicate<JavaMethod>(
                 "are v4 HTTP endpoints (mapped under $V4_PATH_PREFIX, or declared in a *$V4_CONTROLLER_SUFFIX class)",
@@ -257,12 +258,12 @@ class ArchitectureFitnessTest {
             return basePaths.any { base -> subPaths.any { sub -> isUnderV4(normalizePath("$base/$sub")) } }
         }
 
-        // Reads the class-level @RequestMapping of the method's DECLARING class (`method.owner`).
-        // Limitation: a controller that inherits endpoint methods from an abstract base (the base
-        // declares the method, the concrete subclass carries the class-level @RequestMapping — the
-        // existing v1/v2 `BaseComponentController` idiom) resolves `owner` to the base, so the
-        // subclass base path is not stitched in. No v4 controller uses that pattern today (all are
-        // standalone final classes); revisit if a v4 controller ever inherits its mappings.
+        // Reads the DIRECT class-level @RequestMapping of the method's DECLARING class
+        // (`method.owner`). Two limitations, both tracked in TD-018 and inactive today (no v4
+        // controller triggers them): a composed/meta-annotated class-level mapping is not resolved
+        // (only the direct @RequestMapping is read), and an inherited mapping is missed because
+        // `owner` is the abstract base, not the concrete subclass that carries the class-level
+        // @RequestMapping (the existing v1/v2 `BaseComponentController` idiom).
         private fun classMappingPaths(owner: JavaClass): List<String> =
             owner
                 .tryGetAnnotationOfType(RequestMapping::class.java)
