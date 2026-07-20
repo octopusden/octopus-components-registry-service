@@ -11,9 +11,6 @@
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/server/controller/ComponentControllerV4.kt">
         <error line="363" column="5" source="standard:no-consecutive-comments" />
     </file>
-    <file name="src/main/kotlin/org/octopusden/octopus/components/registry/server/controller/TeamcityValidationControllerV4.kt">
-        <error line="18" column="1" source="standard:no-consecutive-comments" />
-    </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/server/dto/v4/ComponentFilter.kt">
         <error line="92" column="5" source="standard:no-consecutive-comments" />
     </file>
