@@ -148,6 +148,10 @@ class ArchitectureFitnessTest {
         // v4 endpoints are scoped by request path, independent of class naming.
         private const val V4_PATH_PREFIX = "rest/api/4"
 
+        // Secondary v4 signal (belt-and-suspenders alongside the path): the declaring controller's
+        // class-name suffix. Only ADDS coverage — the path check already catches wrongly-named ones.
+        private const val V4_CONTROLLER_SUFFIX = "ControllerV4"
+
         // The `..db..` source must not reach into the legacy escrow tree or the Groovy runtime.
         // `org.octopusden.octopus.escrow..` is denied as a whole MODULE boundary, not just its
         // Groovy files: that tree is the legacy component-resolver config model (a mix of Groovy
@@ -172,20 +176,23 @@ class ArchitectureFitnessTest {
             PatchMapping::class.java,
         )
 
-        // In scope when the method carries a Spring mapping annotation AND its effective path
-        // (class-level @RequestMapping base + method mapping) is `rest/api/4` or under it. The
-        // segment-boundary match (exact, or prefixed with a `/`) avoids false-positives such as
-        // `rest/api/40`.
+        // A v4 endpoint = an HTTP-endpoint method whose controller is v4. "HTTP endpoint" is any
+        // method (meta-)annotated with @RequestMapping — this covers the six standard mappings AND
+        // Spring composed annotations meta-annotated with them. "v4" is decided by EITHER signal, so
+        // a controller needs only one to be covered:
+        //   - request path: class-level @RequestMapping base stitched with the method mapping starts
+        //     at the `rest/api/4` segment (exact or `rest/api/4/…`, not `rest/api/40`); OR
+        //   - class name: the declaring controller is `*ControllerV4`.
+        // Residual gaps — a composed annotation carrying the full `rest/api/4` path ONLY at method
+        // level in a non-`*ControllerV4` class, and endpoint methods inheriting their class-level
+        // @RequestMapping from an abstract base — are tracked in TD-018.
         private val isV4HttpEndpoint =
-            object : DescribedPredicate<JavaMethod>("are HTTP endpoints mapped under $V4_PATH_PREFIX") {
+            object : DescribedPredicate<JavaMethod>(
+                "are v4 HTTP endpoints (mapped under $V4_PATH_PREFIX, or declared in a *$V4_CONTROLLER_SUFFIX class)",
+            ) {
                 override fun test(method: JavaMethod): Boolean {
-                    val methodMappings = MAPPING_ANNOTATIONS.mapNotNull { method.tryGetAnnotationOfType(it).orElse(null) }
-                    if (methodMappings.isEmpty()) return false
-                    val basePaths = classMappingPaths(method.owner)
-                    val subPaths = methodMappings.flatMap(::mappingPaths)
-                    return basePaths.any { base ->
-                        subPaths.any { sub -> isUnderV4(normalizePath("$base/$sub")) }
-                    }
+                    if (!isHttpEndpoint(method)) return false
+                    return isMappedUnderV4(method) || method.owner.simpleName.endsWith(V4_CONTROLLER_SUFFIX)
                 }
             }
 
@@ -231,6 +238,24 @@ class ArchitectureFitnessTest {
                     resideInAnyPackage(*LEGACY_GROOVY_PACKAGES).or(nameMatching(".*[Gg]roovy.*")),
                 ).because("the DB-source implementation must not depend on legacy Groovy (non-functional-spec §5.3)")
                 .allowEmptyShould(true)
+
+        // Any method (meta-)annotated with @RequestMapping — direct @RequestMapping, one of the six
+        // standard mappings (each meta-annotated with @RequestMapping), or a composed annotation
+        // meta-annotated with any of them.
+        private fun isHttpEndpoint(method: JavaMethod): Boolean =
+            method.isAnnotatedWith(RequestMapping::class.java) || method.isMetaAnnotatedWith(RequestMapping::class.java)
+
+        // True when the method's effective path (declaring class base + method mapping) is under
+        // `rest/api/4`. Composed annotations whose own path is not one of MAPPING_ANNOTATIONS
+        // contribute an empty sub-path, so this relies on the class-level base for that case.
+        private fun isMappedUnderV4(method: JavaMethod): Boolean {
+            val basePaths = classMappingPaths(method.owner)
+            val subPaths = MAPPING_ANNOTATIONS
+                .mapNotNull { method.tryGetAnnotationOfType(it).orElse(null) }
+                .flatMap(::mappingPaths)
+                .ifEmpty { listOf("") }
+            return basePaths.any { base -> subPaths.any { sub -> isUnderV4(normalizePath("$base/$sub")) } }
+        }
 
         // Reads the class-level @RequestMapping of the method's DECLARING class (`method.owner`).
         // Limitation: a controller that inherits endpoint methods from an abstract base (the base

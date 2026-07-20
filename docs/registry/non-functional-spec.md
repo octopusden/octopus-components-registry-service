@@ -179,19 +179,22 @@ A frozen rule fails only on **new** violations; the baselined ones are burned do
 | # | Rule | Status |
 |---|------|--------|
 | 1 | Controllers must not access `..repository..` directly (go through the service layer) | **Frozen** — 17 baselined calls in `ComponentControllerV4` / `ConfigControllerV4` / `HealthControllerV4` |
-| 2 | Every v4 HTTP endpoint (`*ControllerV4` mapping method) must be guarded by `@PreAuthorize` — on the method **or** its declaring controller | **Frozen** — 5 baselined intentionally-public endpoints (`info`, `versions/preview`, `migration-status`, feedback `submit`, service-event `ingest`) |
-| 3 | The DB-source implementation (`..db..`) must not depend on Groovy | **Active** (forward guard; vacuous until the `..db..` package exists) |
-| 4 | No cyclic dependencies between the server's top-level slices | **Deferred** — the module has one large pre-existing package cycle (`config → dto → service → …`); a frozen baseline would be ~586 KB and break on any import reshuffle. Re-enable after a package-decoupling effort |
+| 2 | Every v4 HTTP endpoint must be guarded by `@PreAuthorize` — on the method **or** its declaring controller. v4 endpoints are identified by **request path** (`rest/api/4/**` — the class-level `@RequestMapping` base stitched with the method mapping, matched on a segment boundary), with a `*ControllerV4` class-name signal as a fallback; endpoint methods are detected via `@RequestMapping` **meta-annotations** so Spring composed mappings are covered (residual detection gaps → TD-018) | **Frozen** — 5 baselined intentionally-public endpoints (`info`, `versions/preview`, `migration-status`, feedback `submit`, service-event `ingest`) |
+| 3 | The DB-source implementation (`..db..`) must not depend on legacy Groovy — denied by **package/module boundary** (`org.octopusden.octopus.escrow..`, `org.codehaus.groovy..`, `groovy..`, which catches Groovy-authored classes whose compiled names carry no "Groovy" token) plus a `*Groovy*` name backstop | **Active** (forward guard; vacuous until the `..db..` package exists) |
+| 4 | No cyclic dependencies between the server's top-level slices | **Deferred (TD-016)** — the module has one large pre-existing package cycle (`config → dto → service → …`); a frozen baseline would be ~586 KB and break on any import reshuffle. Re-enable after a package-decoupling effort |
 
 Plus naming/placement conventions (expected to hold for the whole module, not frozen):
 `@RestController` → `..controller..`, `@Repository` → `..repository..`, `@Entity` → `..entity..`,
 `@Service` → `..service..` or `..teamcity..`.
 
 Notes vs. the original sketch: v4 controllers live in one `...server.controller` package with the
-version encoded in the class name (`*ControllerV4`), not a `..controller.v4..` package; method
-mappings use `@GetMapping`/`@PostMapping`/… (not class-level `@RequestMapping`); and the
-authorization check honours class-level `@PreAuthorize` (e.g. `AdminControllerV4`), so those
-methods are not falsely flagged.
+version encoded in the class name (`*ControllerV4`), not a `..controller.v4..` package; each carries
+a class-level `@RequestMapping("rest/api/4/…")` alongside method-level `@GetMapping`/`@PostMapping`/…,
+and the security rule stitches the two to scope endpoints by **request path** rather than trusting
+the class name (a wrongly-named v4 controller is still checked). The authorization check honours
+class-level `@PreAuthorize` (e.g. `AdminControllerV4`), so those methods are not falsely flagged.
+Deferred hardening is tracked as TD-016 (package-cycle rule), TD-017 (reject permissive
+`@PreAuthorize` SpEL), and TD-018 (composed/inherited mapping detection).
 
 ### 5.4 Database Reliability
 

@@ -4,6 +4,8 @@ import com.tngtech.archunit.core.importer.ClassFileImporter
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.octopusden.octopus.components.registry.server.architecture.fixtures.ComposedMappingProbe
+import org.octopusden.octopus.components.registry.server.architecture.fixtures.ComposedV4Get
 import org.octopusden.octopus.components.registry.server.architecture.fixtures.GuardedRest4ProbeEndpoint
 import org.octopusden.octopus.components.registry.server.architecture.fixtures.NonV4ProbeEndpoint
 import org.octopusden.octopus.components.registry.server.architecture.fixtures.Rest4ProbeEndpoint
@@ -39,6 +41,17 @@ class ArchitectureFitnessRegressionTest {
         val classes = importer.importClasses(GuardedRest4ProbeEndpoint::class.java)
         val result = ArchitectureFitnessTest.v4AuthorizationRule().evaluate(classes)
         assertFalse(result.hasViolation(), "a @PreAuthorize-guarded v4 endpoint must satisfy the rule")
+    }
+
+    @Test
+    fun `v4 rule flags an unguarded endpoint declared via a composed mapping annotation`() {
+        val classes = importer.importClasses(ComposedMappingProbe::class.java, ComposedV4Get::class.java)
+        val result = ArchitectureFitnessTest.v4AuthorizationRule().evaluate(classes)
+        assertTrue(
+            result.hasViolation(),
+            "endpoint detection must follow @RequestMapping meta-annotations, not just the six standard types",
+        )
+        assertTrue(result.failureReport.toString().contains("ComposedMappingProbe"))
     }
 
     @Test

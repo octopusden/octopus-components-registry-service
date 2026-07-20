@@ -1,4 +1,4 @@
 #
-#Mon Jul 20 15:54:43 EEST 2026
-methods\ that\ are\ HTTP\ endpoints\ mapped\ under\ rest/api/4\ should\ be\ guarded\ by\ @PreAuthorize\ (on\ the\ method\ or\ its\ declaring\ controller),\ because\ all\ v4\ endpoints\ (mapped\ under\ rest/api/4)\ must\ declare\ an\ authorization\ policy\ (non-functional-spec\ \u00A75.3)=8fab28f6-88ad-44ee-b949-68feb07b2fd2
+#Mon Jul 20 16:30:48 EEST 2026
+methods\ that\ are\ v4\ HTTP\ endpoints\ (mapped\ under\ rest/api/4,\ or\ declared\ in\ a\ *ControllerV4\ class)\ should\ be\ guarded\ by\ @PreAuthorize\ (on\ the\ method\ or\ its\ declaring\ controller),\ because\ all\ v4\ endpoints\ (mapped\ under\ rest/api/4)\ must\ declare\ an\ authorization\ policy\ (non-functional-spec\ \u00A75.3)=c2072792-e2bd-4c46-829e-7d73550952a1
 no\ classes\ that\ reside\ in\ a\ package\ '..controller..'\ should\ access\ classes\ that\ reside\ in\ a\ package\ '..repository..',\ because\ controllers\ must\ go\ through\ the\ service\ layer\ (non-functional-spec\ \u00A75.3)=75419c2e-08fb-421b-a20f-9850d8424159
