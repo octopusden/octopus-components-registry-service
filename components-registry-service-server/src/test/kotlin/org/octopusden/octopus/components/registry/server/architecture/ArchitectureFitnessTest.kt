@@ -1,7 +1,10 @@
 package org.octopusden.octopus.components.registry.server.architecture
 
 import com.tngtech.archunit.base.DescribedPredicate
+import com.tngtech.archunit.core.domain.JavaClass
+import com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAnyPackage
 import com.tngtech.archunit.core.domain.JavaMethod
+import com.tngtech.archunit.core.domain.properties.HasName.Predicates.nameMatching
 import com.tngtech.archunit.core.importer.ImportOption
 import com.tngtech.archunit.junit.AnalyzeClasses
 import com.tngtech.archunit.junit.ArchTest
@@ -36,12 +39,15 @@ import org.springframework.web.bind.annotation.RestController
  *
  * WARNING for frozen rules: the violation store keys each baseline by the rule's full textual
  * description, INCLUDING the `.because(...)` text (see `archunit_violation_store/stored.rules`).
- * Editing the description or `.because(...)` of a frozen rule orphans its baseline. Because the
- * store is configured with `allowStoreCreation=false` (see `archunit.properties`), an orphaned /
- * missing baseline FAILS the build loudly rather than being silently re-created — so a text change
- * must be paired, in the same commit, with a deliberate baseline regeneration (override
- * `-Darchunit.freeze.store.default.allowStoreCreation=true` and re-run the test to re-record the
- * accepted violations under the new key).
+ * Editing the description or `.because(...)` of a frozen rule orphans its stored baseline. Note the
+ * store semantics (see `archunit.properties`): `allowStoreCreation=false` only fails loud on a
+ * wholesale MISSING store directory — a single renamed rule's NEW key is instead SILENTLY
+ * re-recorded against the current violations on the next run, because `allowStoreUpdate=true`. That
+ * silent re-record captures ALL current violations under the new key, so it can mask a regression
+ * introduced alongside the rename. Therefore, when you change a frozen rule's text you must, in the
+ * same commit: (1) delete the orphaned old key line from `stored.rules` and its baseline file, then
+ * (2) re-run the test to record the new key, and (3) verify the regenerated baseline lists exactly
+ * the violations you intend to accept.
  */
 @AnalyzeClasses(
     packages = [ArchitectureFitnessTest.BASE_PACKAGE],
@@ -66,45 +72,33 @@ class ArchitectureFitnessTest {
     // declaring controller (class-level guard). Endpoints that are intentionally public today
     // are captured in the baseline; the rule prevents any NEW unguarded v4 endpoint.
     //
-    // COVERAGE LIMITATION (accepted, follow-up): "v4 endpoint" is identified by the class-name
-    // suffix `*ControllerV4`, and that convention is not itself enforced. All v4 controllers follow
-    // it today (verified), but a future v4 controller named differently, or one using a custom
-    // composed mapping annotation not in MAPPING_ANNOTATIONS, would not be checked by this rule.
-    // Closing the gap robustly means identifying endpoints by request path (`/rest/api/4/**`),
-    // which requires stitching class-level @RequestMapping paths with method-level mappings —
-    // deferred as a separate hardening task.
+    // "v4 endpoint" is identified by REQUEST PATH, not by class name: a method is in scope when it
+    // carries a Spring mapping annotation and its effective path (the class-level @RequestMapping
+    // base stitched with the method mapping) starts with `rest/api/4`. This does not rely on the
+    // `*ControllerV4` naming convention, so a v4 controller named differently — or with no class
+    // suffix at all — is still checked. `ArchitectureFitnessRegressionTest` pins this: an unguarded
+    // `rest/api/4/probe` endpoint whose class is NOT named `*ControllerV4` is caught.
     @ArchTest
-    val v4EndpointsMustBeAuthorized: ArchRule =
-        FreezingArchRule.freeze(
-            methods()
-                .that()
-                .areDeclaredInClassesThat()
-                .haveSimpleNameEndingWith("ControllerV4")
-                .and(isHttpEndpoint)
-                .should(beGuardedByPreAuthorize)
-                .because("all v4 endpoints must declare an authorization policy (non-functional-spec §5.3)"),
-        )
+    val v4EndpointsMustBeAuthorized: ArchRule = FreezingArchRule.freeze(v4AuthorizationRule())
 
     // --- Rule 3: no legacy Groovy inside the DB-source implementation. ---
     // Forward guard: the future `..db..` package (DB-backed component source) must stay pure
     // Kotlin/Java. Vacuously satisfied until that package exists — kept to lock the intent in.
+    //
+    // Legacy Groovy is denied by SOURCE PACKAGE, not only by a `*Groovy*` class name: the escrow
+    // config/model classes are authored in Groovy but compile to ordinary names (e.g.
+    // `org.octopusden.octopus.escrow.model.Distribution`) that carry no "Groovy" token, so a
+    // name-only match misses them. We forbid the escrow legacy packages and the Groovy runtime,
+    // keeping the name heuristic as a backstop. `ArchitectureFitnessRegressionTest` pins this.
     @ArchTest
-    val dbSourceMustNotDependOnGroovy: ArchRule =
-        noClasses()
-            .that()
-            .resideInAPackage("..db..")
-            .should()
-            .dependOnClassesThat()
-            .haveNameMatching(".*[Gg]roovy.*")
-            .because("the DB-source implementation must not depend on legacy Groovy (non-functional-spec §5.3)")
-            .allowEmptyShould(true)
+    val dbSourceMustNotDependOnGroovy: ArchRule = dbNoLegacyGroovyRule()
 
     // --- Rule 4 (spec §5.3): no cyclic dependencies between the server's top-level slices. ---
-    // DEFERRED. The module currently has one large package cycle spanning most slices
+    // DEFERRED — see TD-016. The module currently has one large package cycle spanning most slices
     // (config -> dto -> service -> ...). Freezing it produces a ~586 KB baseline whose exact
     // per-edge text breaks on any import reshuffle, causing false CI failures — it would guard
     // almost nothing while being maximally brittle. Enabling this rule requires an actual
-    // package-decoupling effort, tracked as a follow-up. Re-add here once the tangle is broken:
+    // package-decoupling effort, tracked in TD-016. Re-add here once the tangle is broken:
     //
     //   @ArchTest
     //   val serverSlicesMustBeFreeOfCycles: ArchRule =
@@ -151,6 +145,21 @@ class ArchitectureFitnessTest {
     companion object {
         const val BASE_PACKAGE = "org.octopusden.octopus.components.registry.server"
 
+        // v4 endpoints are scoped by request path, independent of class naming.
+        private const val V4_PATH_PREFIX = "rest/api/4"
+
+        // The `..db..` source must not reach into the legacy escrow tree or the Groovy runtime.
+        // `org.octopusden.octopus.escrow..` is denied as a whole MODULE boundary, not just its
+        // Groovy files: that tree is the legacy component-resolver config model (a mix of Groovy
+        // and Java) and the DB-backed source should stay decoupled from all of it. If a future
+        // `..db..` legitimately needs a non-Groovy escrow Java type, narrow this to the Groovy-only
+        // subpackages (`..escrow.model..`, `..escrow.configuration..`) at that point.
+        private val LEGACY_GROOVY_PACKAGES = arrayOf(
+            "org.octopusden.octopus.escrow..",
+            "org.codehaus.groovy..",
+            "groovy..",
+        )
+
         // All six mapping annotations are enumerated explicitly (not just @RequestMapping):
         // ArchUnit's isAnnotatedWith checks DIRECT annotation presence, and @GetMapping/@PostMapping/…
         // are meta-annotated with @RequestMapping, so matching on @RequestMapping alone would miss them.
@@ -163,15 +172,27 @@ class ArchitectureFitnessTest {
             PatchMapping::class.java,
         )
 
-        private val isHttpEndpoint =
-            object : DescribedPredicate<JavaMethod>("are HTTP endpoint methods") {
-                override fun test(method: JavaMethod): Boolean = MAPPING_ANNOTATIONS.any { method.isAnnotatedWith(it) }
+        // In scope when the method carries a Spring mapping annotation AND its effective path
+        // (class-level @RequestMapping base + method mapping) is `rest/api/4` or under it. The
+        // segment-boundary match (exact, or prefixed with a `/`) avoids false-positives such as
+        // `rest/api/40`.
+        private val isV4HttpEndpoint =
+            object : DescribedPredicate<JavaMethod>("are HTTP endpoints mapped under $V4_PATH_PREFIX") {
+                override fun test(method: JavaMethod): Boolean {
+                    val methodMappings = MAPPING_ANNOTATIONS.mapNotNull { method.tryGetAnnotationOfType(it).orElse(null) }
+                    if (methodMappings.isEmpty()) return false
+                    val basePaths = classMappingPaths(method.owner)
+                    val subPaths = methodMappings.flatMap(::mappingPaths)
+                    return basePaths.any { base ->
+                        subPaths.any { sub -> isUnderV4(normalizePath("$base/$sub")) }
+                    }
+                }
             }
 
         // Presence-only check: it verifies @PreAuthorize is declared, NOT that its SpEL expression
         // is restrictive. A future `@PreAuthorize("permitAll()")` would satisfy this rule while being
         // effectively public. Today every @PreAuthorize uses a real permission check, so this is a
-        // known limitation to tighten later, not a current gap.
+        // known limitation to tighten later, tracked in TD-017 (not a current gap).
         private val beGuardedByPreAuthorize =
             object : ArchCondition<JavaMethod>("be guarded by @PreAuthorize (on the method or its declaring controller)") {
                 override fun check(
@@ -190,5 +211,58 @@ class ArchitectureFitnessTest {
                     }
                 }
             }
+
+        // Rule 2, exposed unfrozen so ArchitectureFitnessRegressionTest can exercise it against
+        // hand-built fixtures. The @ArchTest field wraps this in FreezingArchRule.
+        internal fun v4AuthorizationRule(): ArchRule =
+            methods()
+                .that(isV4HttpEndpoint)
+                .should(beGuardedByPreAuthorize)
+                .because("all v4 endpoints (mapped under $V4_PATH_PREFIX) must declare an authorization policy (non-functional-spec §5.3)")
+
+        // Rule 3, exposed unfrozen for the same reason. Denies the legacy packages (catches
+        // Groovy-authored classes with plain names) plus any `*Groovy*` class as a backstop.
+        internal fun dbNoLegacyGroovyRule(): ArchRule =
+            noClasses()
+                .that()
+                .resideInAPackage("..db..")
+                .should()
+                .dependOnClassesThat(
+                    resideInAnyPackage(*LEGACY_GROOVY_PACKAGES).or(nameMatching(".*[Gg]roovy.*")),
+                ).because("the DB-source implementation must not depend on legacy Groovy (non-functional-spec §5.3)")
+                .allowEmptyShould(true)
+
+        // Reads the class-level @RequestMapping of the method's DECLARING class (`method.owner`).
+        // Limitation: a controller that inherits endpoint methods from an abstract base (the base
+        // declares the method, the concrete subclass carries the class-level @RequestMapping — the
+        // existing v1/v2 `BaseComponentController` idiom) resolves `owner` to the base, so the
+        // subclass base path is not stitched in. No v4 controller uses that pattern today (all are
+        // standalone final classes); revisit if a v4 controller ever inherits its mappings.
+        private fun classMappingPaths(owner: JavaClass): List<String> =
+            owner
+                .tryGetAnnotationOfType(RequestMapping::class.java)
+                .map { mappingPaths(it) }
+                .orElse(listOf(""))
+
+        // Spring mapping annotations expose the path via `value` (aliased to `path`); read both so
+        // either attribute style is picked up. An empty mapping contributes a single "" segment.
+        private fun mappingPaths(annotation: Annotation): List<String> {
+            val paths = when (annotation) {
+                is RequestMapping -> annotation.value.toList() + annotation.path.toList()
+                is GetMapping -> annotation.value.toList() + annotation.path.toList()
+                is PostMapping -> annotation.value.toList() + annotation.path.toList()
+                is PutMapping -> annotation.value.toList() + annotation.path.toList()
+                is DeleteMapping -> annotation.value.toList() + annotation.path.toList()
+                is PatchMapping -> annotation.value.toList() + annotation.path.toList()
+                else -> emptyList()
+            }
+            return paths.distinct().ifEmpty { listOf("") }
+        }
+
+        private fun normalizePath(path: String): String = path.removePrefix("/").replace(Regex("/+"), "/")
+
+        // Segment-aware prefix test: the normalized path is exactly `rest/api/4` or a child of it
+        // (`rest/api/4/…`). Guards against `rest/api/40`-style false matches.
+        private fun isUnderV4(path: String): Boolean = path == V4_PATH_PREFIX || path.startsWith("$V4_PATH_PREFIX/")
     }
 }
