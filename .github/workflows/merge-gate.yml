@@ -6,7 +6,7 @@ on:
 
 jobs:
   build:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-build.yml@v2.3.5
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-build.yml@v2.4.0
     with:
       java-version: '21'
       flow-type: hybrid
