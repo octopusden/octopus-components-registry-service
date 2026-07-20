@@ -10,6 +10,10 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
+import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
+import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
+import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
+import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
@@ -58,6 +62,12 @@ class ComponentFieldOverridesPatchTest {
 
     @Autowired
     private lateinit var objectMapper: ObjectMapper
+
+    @Autowired
+    private lateinit var configurationRepository: ComponentConfigurationRepository
+
+    @Autowired
+    private lateinit var componentRepository: ComponentRepository
 
     init {
         val testResourcesPath =
@@ -131,7 +141,146 @@ class ComponentFieldOverridesPatchTest {
         assertEquals(before + 1, detail["version"].asLong(), "one combined PATCH must bump the version exactly once")
     }
 
+    // ── SYS-065: echo-safe desired-set save (legacy composite ranges) ────────
+
+    @Test
+    @DisplayName(
+        "SYS-065: desired-set PATCH echoing an unchanged legacy composite row + a new override → 200",
+    )
+    fun `SYS-065 unchanged composite echo plus new override is accepted`() {
+        val id = newComponent()
+        val compositeId = seedCompositeMarker(id, "[1.0,2.0-1),(2.0-1,3.0)")
+        // Echo the composite verbatim (same id, same range, same marker children) AND add a new,
+        // disjoint single-segment override. Before the fix the untouched composite echo re-ran range
+        // validation and 400'd; now it is a no-op.
+        patchComponent(
+            id,
+            """"fieldOverrides":[""" +
+                echoVcsMarker(compositeId, "[1.0,2.0-1),(2.0-1,3.0)") + "," +
+                """{"overriddenAttribute":"build.buildFilePath","versionRange":"[5.0,6.0)","value":"FileA"}""" +
+                """]""",
+        )
+        val overrides = listFieldOverrides(id)
+        val composite = overrides.first { it["id"].asText() == compositeId }
+        assertEquals("[1.0,2.0-1),(2.0-1,3.0)", composite["versionRange"].asText(), "composite preserved byte-identical")
+        assertTrue(overrides.any { it["overriddenAttribute"].asText() == "build.buildFilePath" }, "new override added")
+    }
+
+    @Test
+    @DisplayName("SYS-065: a whitespace composite echoed verbatim → 200 and stays byte-identical")
+    fun `SYS-065 whitespace composite echo is a no-op`() {
+        val id = newComponent()
+        val range = "[1.7, 2), [2.4.0,2.4.11]"
+        val compositeId = seedCompositeMarker(id, range)
+        patchComponent(id, """"fieldOverrides":[${echoVcsMarker(compositeId, range)}]""")
+        val composite = listFieldOverrides(id).first { it["id"].asText() == compositeId }
+        // Proves BOTH the normalized comparison (whitespace echo recognised as unchanged) AND that an
+        // unchanged echo is not reassigned (the stored string keeps its original whitespace).
+        assertEquals(range, composite["versionRange"].asText(), "stored range must keep its original whitespace")
+    }
+
+    @Test
+    @DisplayName("SYS-065: composite CREATE via desired-set is still rejected (400)")
+    fun `SYS-065 composite create still rejected`() {
+        val id = newComponent()
+        patchComponentExpectingBadRequest(
+            id,
+            """"fieldOverrides":[{"overriddenAttribute":"build.buildFilePath","versionRange":"[1.0,2.0),[3.0,4.0)","value":"X"}]""",
+        )
+    }
+
+    @Test
+    @DisplayName("SYS-065: changing a composite row's range (echo a different composite) is still validated (400)")
+    fun `SYS-065 changing composite range still validated`() {
+        val id = newComponent()
+        val compositeId = seedCompositeMarker(id, "[1.0,2.0-1),(2.0-1,3.0)")
+        patchComponentExpectingBadRequest(
+            id,
+            """"fieldOverrides":[${echoVcsMarker(compositeId, "[1.0,2.0),[9.0,10.0)")}]""",
+        )
+    }
+
+    @Test
+    @DisplayName("SYS-065: value-only edit of a legacy composite (unchanged range, changed children) → 200")
+    fun `SYS-065 value-only edit of composite is accepted`() {
+        val id = newComponent()
+        val range = "[1.0,2.0-1),(2.0-1,3.0)"
+        val compositeId = seedCompositeMarker(id, range)
+        patchComponent(
+            id,
+            """"fieldOverrides":[${echoVcsMarker(compositeId, range, vcsPath = "ssh://vcs/changed")}]""",
+        )
+        val composite = listFieldOverrides(id).first { it["id"].asText() == compositeId }
+        assertEquals(range, composite["versionRange"].asText(), "range unchanged")
+        assertEquals(
+            "ssh://vcs/changed",
+            composite["markerChildren"]["vcsEntries"][0]["vcsPath"].asText(),
+            "the child edit must be applied",
+        )
+    }
+
+    @Test
+    @DisplayName("SYS-065: a NEW override intersecting an untouched composite sibling is still rejected (400)")
+    fun `SYS-065 disjointness still enforced against untouched composite`() {
+        val id = newComponent()
+        // Composite covers [1.0,3.0) except 2.0-1. Echo it unchanged (no-op) AND add a new vcs.settings
+        // override at [1.5,1.6) — inside the composite's first segment. The fix must NOT weaken the
+        // disjoint-range rule: the new row is still validated against the untouched composite sibling.
+        val compositeId = seedCompositeMarker(id, "[1.0,2.0-1),(2.0-1,3.0)")
+        patchComponentExpectingBadRequest(
+            id,
+            """"fieldOverrides":[""" +
+                echoVcsMarker(compositeId, "[1.0,2.0-1),(2.0-1,3.0)") + "," +
+                """{"overriddenAttribute":"vcs.settings","versionRange":"[1.5,1.6)",""" +
+                """"markerChildren":{"vcsEntries":[{"name":"main","vcsPath":"ssh://vcs/new","repositoryType":"GIT"}]}}""" +
+                """]""",
+        )
+    }
+
     // ── helpers ────────────────────────────────────────────────────────────
+
+    /** Seed a composite (multi-segment) `vcs.settings` MARKER row directly via the repository — the
+     *  public POST rejects composites, so a legacy DSL-imported composite can only be created here. */
+    private fun seedCompositeMarker(
+        componentId: String,
+        range: String,
+        vcsPath: String = "ssh://vcs/legacy",
+    ): String {
+        val component = componentRepository.findById(UUID.fromString(componentId)).orElseThrow()
+        val row = ComponentConfigurationEntity(
+            component = component,
+            versionRange = range,
+            overriddenAttribute = "vcs.settings",
+            rowType = "MARKER",
+        )
+        row.vcsEntries.add(
+            VcsSettingsEntryEntity(componentConfiguration = row, name = "main", vcsPath = vcsPath, repositoryType = "GIT"),
+        )
+        return configurationRepository.save(row).id!!.toString()
+    }
+
+    /** A desired-set entry that echoes a `vcs.settings` MARKER override by id. */
+    private fun echoVcsMarker(
+        id: String,
+        range: String,
+        vcsPath: String = "ssh://vcs/legacy",
+    ): String =
+        """{"id":"$id","overriddenAttribute":"vcs.settings","versionRange":"$range",""" +
+            """"markerChildren":{"vcsEntries":[{"name":"main","vcsPath":"$vcsPath","repositoryType":"GIT"}]}}"""
+
+    private fun patchComponentExpectingBadRequest(
+        componentId: String,
+        fieldsWithoutVersion: String,
+    ) {
+        val payload = """{"version":${currentVersion(componentId)},$fieldsWithoutVersion}"""
+        mvc
+            .perform(
+                patch("/rest/api/4/components/$componentId")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(payload),
+            ).andExpect(status().isBadRequest)
+    }
 
     private fun newComponent(): String {
         val name = "fo-patch-${UUID.randomUUID().toString().take(8)}"

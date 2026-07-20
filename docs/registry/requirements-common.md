@@ -71,6 +71,7 @@
 | SYS-060 | An append-only `service_event` journal persists operational events — CRS redeploys (STARTUP + build version), and every components-migration / history-migration / TeamCity-resync run (RUNNING→COMPLETED/FAILED, one row per run) — which previously lived only in an in-memory slot + logs and were lost on restart. **Any job failure (including executor-rejected submission) writes a FAILED row with the error**; a run whose pod dies mid-flight is reconciled to FAILED("interrupted by restart") on next startup (single-pod). Writes are best-effort (`REQUIRES_NEW` + swallow) so journaling never rolls back or crashes the observed job. `GET /rest/api/4/admin/service-events` returns the paginated journal (filter by type/source/status/time), IMPORT_DATA-gated; a scheduled daily prune enforces retention | High | unit + integration-test | ✅ Tested |
 | SYS-061 | `POST /rest/api/4/admin/service-events` ingests portal-sourced events (portal redeploys, validation-sweep runs) into the shared journal, so the Admin "Events" tab shows both services on one timeline. Authenticated by a shared-secret `X-Service-Event-Token` header (the portal BFF calls CRS tokenless), verified constant-time and **fail-closed** (blank/unset configured token rejects every call 403); method-scoped permitAll at the filter chain so the sibling GET read stays JWT+IMPORT_DATA gated; unknown eventType/status/source → 400 | High | integration-test | ✅ Tested |
 | SYS-064 | The component owner's manager (resolved via employee-service `getManager`) may edit the component and its field-overrides — a fourth, derived condition on `canEditComponent` alongside owner/RM/SC/admin. A directory failure or no-manager answer denies (fail-closed), never grants. `GET /{idOrName}/editors` enumerates the resolved manager (unlike the admin bypass, it is one concrete person per component); `getManager` is 2-minute cached per owner (resolved answers only) and its DB read runs in its own short-lived transaction, closed before the network call | High | unit + integration-test | ✅ Tested |
+| SYS-065 | Desired-set field-override PATCH is echo-safe: re-submitting an UNCHANGED override row (same id, same normalized range) does not re-validate its range, so a component carrying a legacy composite range can still be saved; a CREATE or an actual range change is still validated (composite still rejected) | High | integration-test | ✅ Tested |
 
 ---
 
@@ -2422,3 +2423,47 @@ DB connection for its duration.
 `SYS-064 non-manager of componentOwner gets 403 on PATCH`,
 `SYS-064 editors includes owner manager`,
 `SYS-064 editors omits manager when owner has none`.
+
+### SYS-065: Echo-safe desired-set field-override save
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+The component PATCH accepts field overrides as a desired-FULL-SET (#385): the client re-sends every
+override row, and the server upserts by id and deletes anything omitted. The portal's combined Save
+therefore echoes untouched rows verbatim, including their `id` and original `versionRange`.
+Separately, composite Maven ranges (multiple top-level segments, e.g.
+`[2.2.18,2.2.20-132),(2.2.20-132,2.2.21)`) are rejected on POST/PATCH as an input-contract limit.
+Legacy DSL import legitimately created composite rows, so a component that owns one could not be
+saved through the portal at all — the desired-set UPDATE loop re-validated the untouched composite
+echo and returned 400, even though the user changed a *different* override. This requirement makes
+the desired-set path change-scoped: an unchanged echo is a true no-op.
+
+**Description:**
+On the desired-set UPDATE path (`applyFieldOverrideDesiredSet` → `applyOverrideUpsertPayload` with a
+persisted row), range validation runs ONLY when the submitted range actually differs from the stored
+range. The comparison normalizes both sides (stored ranges are returned verbatim by the read mapper
+and may contain whitespace). When unchanged, the row is neither re-validated nor reassigned, so its
+stored string stays byte-identical and no audit/editability diff is triggered. A CREATE (no
+`excludeOverrideId`) always validates and assigns — composite CREATE stays rejected and an
+empty/invalid range cannot bypass validation. An actual range change on an existing row is validated
+as before. Set-level disjointness is unaffected: any new/changed row still validates against the
+whole live collection, including legacy composite siblings (via `isIntersect`).
+
+**Acceptance criteria:**
+1. A desired-set PATCH that echoes an unchanged legacy composite `vcs.settings` row and adds a new
+   disjoint single-segment override → 200; the composite row is preserved byte-identical.
+2. A whitespace composite (`[1.7, 2), [2.4.0,2.4.11]`) echoed verbatim → 200; row unchanged.
+3. Composite CREATE (desired-set or POST) → 400 (message unchanged).
+4. Changing a composite row's range (echoing a different composite) → 400.
+5. A value-only edit of a legacy composite (unchanged range, changed markerChildren) → 200.
+
+**Test method:** `ComponentFieldOverridesPatchTest` —
+`SYS-065 unchanged composite echo plus new override is accepted`,
+`SYS-065 whitespace composite echo is a no-op`,
+`SYS-065 composite create still rejected`,
+`SYS-065 changing composite range still validated`,
+`SYS-065 value-only edit of composite is accepted`,
+`SYS-065 disjointness still enforced against untouched composite`.
