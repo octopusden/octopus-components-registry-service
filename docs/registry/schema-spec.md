@@ -3,7 +3,7 @@
 **Status:** Accepted (see [ADR-014](adr/014-schema-v2.md))
 **Implementation status:** the Flyway baseline `V1__schema.sql` is the canonical schema; the entity layer matches it. See ADR-014 for the landing PRs.
 
-This document is the canonical reference for the v2 schema. ADR-014 records the decision and alternatives; this file specifies the exact shape, semantics, and intended usage of every table.
+This document is the canonical reference for the v2 schema. ADR-014 records the decision and alternatives; this file specifies the exact shape, semantics, and intended usage of every table. Tables added by migrations after the baseline are tracked in [§10 Post-v2 additions](#10-post-v2-additions), not folded into the counts/diagrams above.
 
 ## 1. Overview
 
@@ -605,3 +605,18 @@ Baseline JSON files in internal artifact storage record exact counts per install
 ## 9. Anonymization
 
 This document and all artifacts published to the public repository use anonymized names and structural descriptions. Real component names from production DSL appear only in internal working notes (kept outside the repository).
+
+## 10. Post-v2 additions
+
+This document specifies the ADR-014 **v2 baseline** (`V1__schema.sql`, 25 tables) and is not
+rewritten for every later migration. Tables added since the baseline, in order, with the
+technical-design.md section that documents their behavior/lifecycle:
+
+| Migration | Table(s) | Purpose | Details |
+|---|---|---|---|
+| `V4__add_service_event.sql` | `service_event` | Append-only operational-event journal (redeploys, migration/sync/validation job runs) | [technical-design.md §6.6](technical-design.md#66-operational-service-event-journal-sys-060061) |
+| `V6__add_teamcity_project_version.sql` | `teamcity_project`, `version_line` | Normalizes the former flat `component_teamcity_projects` table: `teamcity_project` is one row per distinct TeamCity project id (append-only — sync never removes a row here even after a project is unlinked); `version_line` links a component + release version to a `teamcity_project` and is the source of truth for which projects are *currently* linked | §6 (TeamCity sync) |
+| `V7__add_teamcity_validation.sql` | `teamcity_validation` | Stores WARNING/ERROR build-configuration findings (Java/Maven version checks, template attachment), latest-only per project, keyed by `(project_id, type)` | [technical-design.md §6.7](technical-design.md#67-teamcity-validation-sys-064-sys-075084) |
+
+`teamcity_validation`'s scope (which projects to validate/prune) is derived from `version_line`,
+not `teamcity_project` — see §6.7 for why the append-only table is the wrong source for that.
