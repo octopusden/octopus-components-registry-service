@@ -2883,7 +2883,6 @@
           },
           "updatedAt" : {
             "format" : "date-time",
-            "nullable" : true,
             "type" : "string"
           }
         },
@@ -5584,11 +5583,11 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/TeamcitySyncJobResponse"
+                  "$ref" : "#/components/schemas/ErrorResponse"
                 }
               }
             },
-            "description" : "A TC resync is already RUNNING; body is the in-flight job's state (attach). NOTE: a cross-kind conflict (components/history migration running instead) returns a different shape, MigrationConflictResponse, via a shared @ExceptionHandler — that schema is not yet in this spec at all (pre-existing gap, not introduced by this PR); regenerate with generateOpenApiDocs and confirm springdoc picks it up, or add it by hand if not."
+            "description" : "A TC resync (or a conflicting migration kind) is already running; body describes the in-flight job/conflict"
           },
           "413" : {
             "content" : {
@@ -5784,11 +5783,11 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/TeamcityValidationJobResponse"
+                  "$ref" : "#/components/schemas/ErrorResponse"
                 }
               }
             },
-            "description" : "A TC validation is already RUNNING; body is the in-flight job's state (attach). A cross-kind conflict (a components/history/TC-sync migration running instead) returns MigrationConflictResponse via a shared @ExceptionHandler — same pre-existing spec gap noted on POST /teamcity-project-ids/sync."
+            "description" : "A TC validation (or a conflicting migration kind) is already running; body describes the in-flight job/conflict"
           },
           "413" : {
             "content" : {

@@ -556,6 +556,8 @@ class TeamcitySyncServiceTest {
         override fun findByProjectIdsWithComponent(projectIds: Collection<String>): List<VersionLineEntity> =
             store.filter { it.teamcityProject.projectId in projectIds }
 
+        override fun findDistinctLinkedProjectIds(): List<String> = store.map { it.teamcityProject.projectId }.distinct()
+
         override fun <S : VersionLineEntity> save(entity: S): S {
             store.add(entity)
             saveCalls.add(entity)
