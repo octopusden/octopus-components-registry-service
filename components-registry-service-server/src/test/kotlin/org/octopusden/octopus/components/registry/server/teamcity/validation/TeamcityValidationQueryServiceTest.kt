@@ -64,6 +64,23 @@ class TeamcityValidationQueryServiceTest {
     }
 
     @Test
+    @DisplayName("list dedupes a component reachable through multiple version lines to the same project")
+    fun `list dedupes component reached via multiple version lines to same project`() {
+        // comp-a reaches "Foo" via two distinct version lines (e.g. duplicate manual v4 curation).
+        Mockito.`when`(versionLineRepo.findByProjectIdsWithComponent(Mockito.anyCollection())).thenAnswer { inv ->
+            val ids = inv.getArgument<Collection<String>>(0)
+            (versionLines + versionLine(a, "comp-a", "Foo")).filter { it.teamcityProject.projectId in ids }
+        }
+
+        val rows = service.list(type = "USES_OLD_JAVA_VERSION", status = null, component = null)
+        // Foo(old-java) -> a,b ; Bar(old-java) -> a = 3 rows.
+        // Without the projectId+componentId de-dupe, the duplicate Foo->a version line would add
+        // a 4th row (a second "Foo" row for comp-a).
+        assertEquals(setOf(a, b), rows.map { it.componentId }.toSet())
+        assertEquals(3, rows.size, "expected exactly one row per distinct (project, component) pair")
+    }
+
+    @Test
     @DisplayName("summary counts DISTINCT components per type and overall")
     fun `summary distinct component counts`() {
         val summary = service.summary()

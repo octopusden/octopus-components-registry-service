@@ -30,8 +30,8 @@ private class FakeSuite(
 
 class ValidatorSuiteTest {
     @Test
-    @DisplayName("SYS-068: a throwing validator does not sink the other validators' results (D6)")
-    fun `SYS-068 throwing validator is isolated as an ERROR result`() {
+    @DisplayName("SYS-079: a throwing validator does not sink the other validators' results (D6)")
+    fun `SYS-079 throwing validator is isolated as an ERROR result`() {
         val suite = FakeSuite(listOf(OkValidator(FakeType.A), ThrowingValidator(FakeType.B)))
 
         val results = suite.validate("input")
@@ -44,8 +44,8 @@ class ValidatorSuiteTest {
     }
 
     @Test
-    @DisplayName("SYS-068: a suite with no throwing validators returns all results unchanged")
-    fun `SYS-068 all-ok suite returns every result as-is`() {
+    @DisplayName("SYS-079: a suite with no throwing validators returns all results unchanged")
+    fun `SYS-079 all-ok suite returns every result as-is`() {
         val suite = FakeSuite(listOf(OkValidator(FakeType.A), OkValidator(FakeType.B)))
 
         val results = suite.validate("input")

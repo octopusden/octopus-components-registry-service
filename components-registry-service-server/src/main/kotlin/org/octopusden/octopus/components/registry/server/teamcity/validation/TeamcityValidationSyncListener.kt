@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component
 @Component
 class TeamcityValidationSyncListener(
     private val teamcityValidationJobService: TeamcityValidationJobService,
+    private val fetcher: EnrichedTcProjectFetcher,
 ) {
     private val log = KotlinLogging.logger {}
 
@@ -18,6 +19,10 @@ class TeamcityValidationSyncListener(
     @Suppress("TooGenericExceptionCaught")
     fun onSyncCompleted(event: TeamcitySyncCompletedEvent) {
         try {
+            // Drop cached enriched-fetch results before triggering validation: a manual run
+            // earlier in the cache TTL window must not let this post-sync run see a stale
+            // pre-sync TeamCity snapshot.
+            fetcher.invalidateAll()
             val outcome = teamcityValidationJobService.startAsync(POST_SYNC_TRIGGER)
             log.info {
                 val what = if (outcome.isNewlyStarted) "started" else "attached to already-running job"

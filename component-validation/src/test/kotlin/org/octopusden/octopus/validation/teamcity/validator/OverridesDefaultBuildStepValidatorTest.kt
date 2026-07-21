@@ -22,16 +22,16 @@ class OverridesDefaultBuildStepValidatorTest {
     )
 
     @Test
-    @DisplayName("SYS-065: NOT_APPLICABLE when no config is attached to a build template")
-    fun `SYS-065 NOT_APPLICABLE when nothing attached`() {
+    @DisplayName("SYS-076: NOT_APPLICABLE when no config is attached to a build template")
+    fun `SYS-076 NOT_APPLICABLE when nothing attached`() {
         val project = tcProject(configs = listOf(buildConfig("Plain")))
 
         assertEquals(Status.NOT_APPLICABLE, validator.validate(project).status)
     }
 
     @Test
-    @DisplayName("SYS-065: OK when the attached config's default step is inherited")
-    fun `SYS-065 OK when default step inherited`() {
+    @DisplayName("SYS-076: OK when the attached config's default step is inherited")
+    fun `SYS-076 OK when default step inherited`() {
         val config = buildConfig(
             "Gradle",
             templateIds = setOf(GRADLE_TEMPLATE_ID),
@@ -42,8 +42,8 @@ class OverridesDefaultBuildStepValidatorTest {
     }
 
     @Test
-    @DisplayName("SYS-065: WARNING when the attached config's default step is overridden")
-    fun `SYS-065 WARNING when default step overridden`() {
+    @DisplayName("SYS-076: WARNING when the attached config's default step is overridden")
+    fun `SYS-076 WARNING when default step overridden`() {
         val config = buildConfig(
             "Gradle",
             templateIds = setOf(GRADLE_TEMPLATE_ID),

@@ -2877,10 +2877,19 @@
           },
           "status" : {
             "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          },
+          "updatedAt" : {
+            "format" : "date-time",
+            "nullable" : true,
+            "type" : "string"
           }
         },
         "required" : [
-          "status"
+          "status",
+          "type"
         ],
         "type" : "object"
       },

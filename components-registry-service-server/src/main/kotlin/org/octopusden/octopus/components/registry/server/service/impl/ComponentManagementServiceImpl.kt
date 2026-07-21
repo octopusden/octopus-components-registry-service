@@ -3268,8 +3268,10 @@ class ComponentManagementServiceImpl(
                         validations =
                             byProject[project.projectId].orEmpty().map { finding ->
                                 org.octopusden.octopus.components.registry.server.dto.v4.ValidationResponse(
+                                    type = finding.type,
                                     status = finding.status,
                                     message = finding.message,
+                                    updatedAt = finding.updatedAt,
                                 )
                             },
                     )

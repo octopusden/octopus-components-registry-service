@@ -3,8 +3,8 @@ package org.octopusden.octopus.components.registry.server.teamcity.validation
 import mu.KotlinLogging
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.entity.TeamcityValidationEntity
-import org.octopusden.octopus.components.registry.server.repository.TeamcityProjectRepository
 import org.octopusden.octopus.components.registry.server.repository.TeamcityValidationRepository
+import org.octopusden.octopus.components.registry.server.repository.VersionLineRepository
 import org.octopusden.octopus.components.registry.server.teamcity.validation.TeamcityValidationResult
 import org.octopusden.octopus.validation.core.Status
 import org.octopusden.octopus.validation.dto.teamcity.TemplateCatalog
@@ -20,7 +20,7 @@ import java.time.Instant
 @ConditionalOnDatabaseEnabled
 @Service
 class TeamcityValidationService(
-    private val teamcityProjectRepository: TeamcityProjectRepository,
+    private val versionLineRepository: VersionLineRepository,
     private val teamcityValidationRepository: TeamcityValidationRepository,
     private val fetcher: EnrichedTcProjectFetcher,
     private val mapper: TeamcityProjectMapper,
@@ -34,7 +34,7 @@ class TeamcityValidationService(
 
     @Suppress("TooGenericExceptionCaught")
     fun validate(): TeamcityValidationResult {
-        val knownProjectIds = teamcityProjectRepository.findDistinctProjectIdsSafely()
+        val knownProjectIds = versionLineRepository.findDistinctLinkedProjectIdsSafely()
         log.info { "TC validation starting: ${knownProjectIds.size} project ids in scope" }
 
         var succeeded = 0
@@ -108,12 +108,13 @@ class TeamcityValidationService(
         }
     }
 
-    /** Delete findings for projects no longer known. Skips when the known set is empty (never wipes all). */
+    /**
+     * Delete findings for projects no longer known. An empty [knownProjectIds] is a legitimate
+     * state (e.g. the last linked TeamCity project was unlinked) and must still prune every
+     * stored row, not retain them indefinitely — there is no separate signal here that
+     * distinguishes "scope legitimately empty" from "scope query failed", so we don't guess.
+     */
     private fun removeStaleProjects(knownProjectIds: Set<String>): Int {
-        if (knownProjectIds.isEmpty()) {
-            log.warn { "TC validation: known project set is empty; skipping stale-row cleanup" }
-            return 0
-        }
         val removed = teamcityValidationRepository.findDistinctStoredProjectIds().toSet() - knownProjectIds
         if (removed.isNotEmpty()) {
             transactionTemplate.executeWithoutResult { teamcityValidationRepository.deleteByProjectIdIn(removed) }
@@ -121,6 +122,6 @@ class TeamcityValidationService(
         return removed.size
     }
 
-    private fun TeamcityProjectRepository.findDistinctProjectIdsSafely(): Set<String> =
-        findDistinctProjectIds().filter { it.isNotBlank() }.toSet()
+    private fun VersionLineRepository.findDistinctLinkedProjectIdsSafely(): Set<String> =
+        findDistinctLinkedProjectIds().filter { it.isNotBlank() }.toSet()
 }

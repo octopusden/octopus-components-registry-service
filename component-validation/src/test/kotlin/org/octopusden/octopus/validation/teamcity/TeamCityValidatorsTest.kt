@@ -12,8 +12,8 @@ class TeamCityValidatorsTest {
     private val suite = TeamCityValidators(catalog = TestTemplateCatalog)
 
     @Test
-    @DisplayName("SYS-070: the suite returns exactly the six TeamCity results, in a well-behaved project")
-    fun `SYS-070 well-behaved project resolves all six checks`() {
+    @DisplayName("SYS-081: the suite returns exactly the six TeamCity results, in a well-behaved project")
+    fun `SYS-081 well-behaved project resolves all six checks`() {
         val config = buildConfig(
             "Gradle",
             templateIds = setOf(GRADLE_TEMPLATE_ID),
@@ -44,8 +44,8 @@ class TeamCityValidatorsTest {
     }
 
     @Test
-    @DisplayName("SYS-070: an unattached project with an uninherited old-Java step flags the relevant checks")
-    fun `SYS-070 unattached project with custom java 8 step`() {
+    @DisplayName("SYS-081: an unattached project with an uninherited old-Java step flags the relevant checks")
+    fun `SYS-081 unattached project with custom java 8 step`() {
         val plainConfig = buildConfig(
             "Plain",
             steps = listOf(

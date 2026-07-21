@@ -16,16 +16,16 @@ class AttachedToBuildTemplateValidatorTest {
     private val validator = AttachedToBuildTemplateValidator(DefaultBuildConfigurationResolver(TestTemplateCatalog))
 
     @Test
-    @DisplayName("SYS-064: OK when exactly one config is attached to a build template")
-    fun `SYS-064 OK for a single attached config`() {
+    @DisplayName("SYS-075: OK when exactly one config is attached to a build template")
+    fun `SYS-075 OK for a single attached config`() {
         val project = tcProject(configs = listOf(buildConfig("Gradle", templateIds = setOf(GRADLE_TEMPLATE_ID))))
 
         assertEquals(Status.OK, validator.validate(project).status)
     }
 
     @Test
-    @DisplayName("SYS-064: WARNING when more than one config is attached to a build template")
-    fun `SYS-064 WARNING for multiple attached configs`() {
+    @DisplayName("SYS-075: WARNING when more than one config is attached to a build template")
+    fun `SYS-075 WARNING for multiple attached configs`() {
         val project = tcProject(
             configs = listOf(
                 buildConfig("Gradle", templateIds = setOf(GRADLE_TEMPLATE_ID)),
@@ -37,16 +37,16 @@ class AttachedToBuildTemplateValidatorTest {
     }
 
     @Test
-    @DisplayName("SYS-064: WARNING when no config is attached to a build template")
-    fun `SYS-064 WARNING when nothing attached`() {
+    @DisplayName("SYS-075: WARNING when no config is attached to a build template")
+    fun `SYS-075 WARNING when nothing attached`() {
         val project = tcProject(configs = listOf(buildConfig("Plain")))
 
         assertEquals(Status.WARNING, validator.validate(project).status)
     }
 
     @Test
-    @DisplayName("SYS-064: WARNING when the project has no build configurations at all")
-    fun `SYS-064 WARNING for empty project`() {
+    @DisplayName("SYS-075: WARNING when the project has no build configurations at all")
+    fun `SYS-075 WARNING for empty project`() {
         assertEquals(Status.WARNING, validator.validate(tcProject()).status)
     }
 }

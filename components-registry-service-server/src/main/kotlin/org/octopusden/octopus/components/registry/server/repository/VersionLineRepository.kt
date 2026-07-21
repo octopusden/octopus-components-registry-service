@@ -15,4 +15,15 @@ interface VersionLineRepository : JpaRepository<VersionLineEntity, UUID> {
             "JOIN FETCH vl.component JOIN FETCH vl.teamcityProject tp WHERE tp.projectId IN :projectIds",
     )
     fun findByProjectIdsWithComponent(projectIds: Collection<String>): List<VersionLineEntity>
+
+    /**
+     * Distinct TeamCity project ids currently referenced by at least one version line — i.e.
+     * actually linked to a component right now. `teamcity_project` (see
+     * `TeamcityProjectRepository.findDistinctProjectIds`) is effectively append-only (sync
+     * replaces `version_line` rows but never removes orphaned `teamcity_project` rows), so it
+     * returns every project ever seen rather than the live scope. Use this for anything that
+     * should track "linked today", such as TC validation scope and stale-row pruning.
+     */
+    @Query("SELECT DISTINCT vl.teamcityProject.projectId FROM VersionLineEntity vl")
+    fun findDistinctLinkedProjectIds(): List<String>
 }

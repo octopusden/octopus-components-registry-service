@@ -67,10 +67,19 @@ class TeamcityValidationQueryService(
         )
     }
 
-    /** project id -> the components (id + key) that own it, via version_line. */
+    /**
+     * project id -> the components (id + key) that own it, via version_line.
+     *
+     * A component can reach the same project through more than one version line (the schema
+     * permits it even though the normal TC sync path avoids it in practice; manual v4 curation
+     * can still create it). Without a `distinct` here, such a project/component pair would be
+     * counted once per version line, inflating `list()`/`findings` counts. `distinctBy` on
+     * `(projectId, componentId)` keeps this query correct for every schema-valid state.
+     */
     private fun componentsByProject(projectIds: Set<String>): Map<String, List<Pair<UUID, String>>> =
         versionLineRepository
             .findByProjectIdsWithComponent(projectIds)
+            .distinctBy { it.teamcityProject.projectId to it.component.id }
             .groupBy(
                 { it.teamcityProject.projectId },
                 { requireNotNull(it.component.id) { "component id must not be null" } to it.component.componentKey },

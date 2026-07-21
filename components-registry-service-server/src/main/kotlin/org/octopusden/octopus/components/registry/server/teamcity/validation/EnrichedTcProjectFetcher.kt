@@ -17,6 +17,16 @@ import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProject
 interface EnrichedTcProjectFetcher {
     /** The enriched project, or `null` if TeamCity no longer returns it (archived / removed / renamed). */
     fun fetch(projectId: String): ExternalTeamcityProject?
+
+    /**
+     * Drop every cached entry. Each validation run already fetches each project id at most once,
+     * so the cache's only purpose is to survive *across* runs within its TTL — which is exactly
+     * what makes it unsafe to leave populated across a TeamCity sync: a manual validation run
+     * followed by a sync within the TTL window would otherwise let the post-sync auto-validation
+     * read findings computed from the pre-sync TeamCity snapshot. Callers that trigger validation
+     * right after a sync completes must invalidate first.
+     */
+    fun invalidateAll()
 }
 
 /**
@@ -52,6 +62,10 @@ class CachingEnrichedTcProjectFetcher(
         val fetched = client.getProjectsWithLocatorAndFields(ProjectLocator(id = projectId), FIELDS).projects.firstOrNull()
         cache[projectId] = Cached(fetched, now)
         return fetched
+    }
+
+    override fun invalidateAll() {
+        cache.clear()
     }
 
     private companion object {

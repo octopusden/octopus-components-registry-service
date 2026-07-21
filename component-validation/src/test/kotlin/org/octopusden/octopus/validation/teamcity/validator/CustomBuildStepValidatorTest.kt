@@ -24,8 +24,8 @@ class CustomBuildStepValidatorTest {
     private val validator = CustomBuildStepValidator(configs, toolVersionResolver)
 
     @Test
-    @DisplayName("SYS-066: OK when there is no uninherited step at all")
-    fun `SYS-066 OK when nothing custom`() {
+    @DisplayName("SYS-077: OK when there is no uninherited step at all")
+    fun `SYS-077 OK when nothing custom`() {
         val templateConfig = buildConfig(
             "Gradle",
             templateIds = setOf(GRADLE_TEMPLATE_ID),
@@ -36,8 +36,8 @@ class CustomBuildStepValidatorTest {
     }
 
     @Test
-    @DisplayName("SYS-066: OK when an uninherited step exists but resolves no tool version")
-    fun `SYS-066 OK when custom step resolves nothing`() {
+    @DisplayName("SYS-077: OK when an uninherited step exists but resolves no tool version")
+    fun `SYS-077 OK when custom step resolves nothing`() {
         val plainConfig = buildConfig(
             "Plain",
             steps = listOf(buildStep("s1", StepType.OTHER, inherited = false)),
@@ -47,8 +47,8 @@ class CustomBuildStepValidatorTest {
     }
 
     @Test
-    @DisplayName("SYS-066: WARNING when an uninherited step in a non-template config resolves a Java version")
-    fun `SYS-066 WARNING for non-template custom step with a java version`() {
+    @DisplayName("SYS-077: WARNING when an uninherited step in a non-template config resolves a Java version")
+    fun `SYS-077 WARNING for non-template custom step with a java version`() {
         val plainConfig = buildConfig(
             "Plain",
             steps = listOf(
@@ -65,8 +65,8 @@ class CustomBuildStepValidatorTest {
     }
 
     @Test
-    @DisplayName("SYS-066: WARNING when an uninherited step resolves a Maven version (both tools count)")
-    fun `SYS-066 WARNING for non-template custom step with a maven version`() {
+    @DisplayName("SYS-077: WARNING when an uninherited step resolves a Maven version (both tools count)")
+    fun `SYS-077 WARNING for non-template custom step with a maven version`() {
         val plainConfig = buildConfig(
             "Plain",
             steps = listOf(
@@ -83,8 +83,8 @@ class CustomBuildStepValidatorTest {
     }
 
     @Test
-    @DisplayName("SYS-066: WARNING when an attached config's overridden default step resolves a version")
-    fun `SYS-066 WARNING for overridden default step`() {
+    @DisplayName("SYS-077: WARNING when an attached config's overridden default step resolves a version")
+    fun `SYS-077 WARNING for overridden default step`() {
         val templateConfig = buildConfig(
             "Maven",
             templateIds = setOf(MAVEN_TEMPLATE_ID),

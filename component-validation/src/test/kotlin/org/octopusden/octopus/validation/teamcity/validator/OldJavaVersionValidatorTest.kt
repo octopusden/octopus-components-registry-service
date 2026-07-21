@@ -24,16 +24,16 @@ class OldJavaVersionValidatorTest {
     private val validator = OldJavaVersionValidator(configs, steps, DefaultBuildStepToolVersionResolver.standard())
 
     @Test
-    @DisplayName("SYS-067: NOT_APPLICABLE when there is nothing Java to inspect")
-    fun `SYS-067 NOT_APPLICABLE when nothing to inspect`() {
+    @DisplayName("SYS-078: NOT_APPLICABLE when there is nothing Java to inspect")
+    fun `SYS-078 NOT_APPLICABLE when nothing to inspect`() {
         val plainConfig = buildConfig("Plain", steps = listOf(buildStep("s1", StepType.OTHER)))
 
         assertEquals(Status.NOT_APPLICABLE, validator.validate(tcProject(configs = listOf(plainConfig))).status)
     }
 
     @Test
-    @DisplayName("SYS-067: WARNING when the untouched inherited default step resolves to Java 1.8")
-    fun `SYS-067 WARNING for inherited default step on Java 8`() {
+    @DisplayName("SYS-078: WARNING when the untouched inherited default step resolves to Java 1.8")
+    fun `SYS-078 WARNING for inherited default step on Java 8`() {
         val config = buildConfig(
             "Gradle",
             templateIds = setOf(GRADLE_TEMPLATE_ID),
@@ -53,8 +53,8 @@ class OldJavaVersionValidatorTest {
     }
 
     @Test
-    @DisplayName("SYS-067: OK when the inherited default step resolves to a modern Java version")
-    fun `SYS-067 OK for inherited default step on Java 21`() {
+    @DisplayName("SYS-078: OK when the inherited default step resolves to a modern Java version")
+    fun `SYS-078 OK for inherited default step on Java 21`() {
         val config = buildConfig(
             "Gradle",
             templateIds = setOf(GRADLE_TEMPLATE_ID),
@@ -72,8 +72,8 @@ class OldJavaVersionValidatorTest {
     }
 
     @Test
-    @DisplayName("SYS-067: WARNING when an overridden default step resolves to Java 1.8")
-    fun `SYS-067 WARNING for overridden default step on Java 8`() {
+    @DisplayName("SYS-078: WARNING when an overridden default step resolves to Java 1.8")
+    fun `SYS-078 WARNING for overridden default step on Java 8`() {
         val config = buildConfig(
             "Gradle",
             templateIds = setOf(GRADLE_TEMPLATE_ID),
@@ -91,8 +91,8 @@ class OldJavaVersionValidatorTest {
     }
 
     @Test
-    @DisplayName("SYS-067: WARNING when an uninherited custom step on a non-template config resolves to Java 1.8")
-    fun `SYS-067 WARNING for custom step on Java 8`() {
+    @DisplayName("SYS-078: WARNING when an uninherited custom step on a non-template config resolves to Java 1.8")
+    fun `SYS-078 WARNING for custom step on Java 8`() {
         val plainConfig = buildConfig(
             "Plain",
             steps = listOf(
@@ -109,8 +109,8 @@ class OldJavaVersionValidatorTest {
     }
 
     @Test
-    @DisplayName("SYS-067: an unresolved version is ignored, not flagged (D7)")
-    fun `SYS-067 OK when version cannot be resolved`() {
+    @DisplayName("SYS-078: an unresolved version is ignored, not flagged (D7)")
+    fun `SYS-078 OK when version cannot be resolved`() {
         val config = buildConfig(
             "Gradle",
             templateIds = setOf(GRADLE_TEMPLATE_ID),
