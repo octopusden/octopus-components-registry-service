@@ -81,6 +81,7 @@
 | SYS-083 | `component-validation` module: `MULTIPLE_JAVA_VERSIONS` is WARNING when more than one distinct Java version is found across the same inspected steps as `USES_OLD_JAVA_VERSION`, OK for zero or one distinct version, NOT_APPLICABLE if nothing was inspectable | High | unit-test | ✅ Tested |
 | SYS-084 | `component-validation` module: `MULTIPLE_MAVEN_VERSIONS` is WARNING when more than one distinct Maven version is found across the same inspected steps, OK for zero or one distinct version, NOT_APPLICABLE if nothing was inspectable | High | unit-test | ✅ Tested |
 | SYS-064 | The component owner's manager (resolved via employee-service `getManager`) may edit the component and its field-overrides — a fourth, derived condition on `canEditComponent` alongside owner/RM/SC/admin. A directory failure or no-manager answer denies (fail-closed), never grants. `GET /{idOrName}/editors` enumerates the resolved manager (unlike the admin bypass, it is one concrete person per component); `getManager` is 2-minute cached per owner (resolved answers only) and its DB read runs in its own short-lived transaction, closed before the network call | High | unit + integration-test | ✅ Tested |
+| SYS-065 | Desired-set field-override PATCH is echo-safe: re-submitting an UNCHANGED override row (same id, same normalized range) does not re-validate its range, so a component carrying a legacy composite range can still be saved; a CREATE or an actual range change is still validated (composite still rejected) | High | integration-test | ✅ Tested |
 
 ---
 
@@ -2670,3 +2671,50 @@ DB connection for its duration.
 `SYS-064 non-manager of componentOwner gets 403 on PATCH`,
 `SYS-064 editors includes owner manager`,
 `SYS-064 editors omits manager when owner has none`.
+
+### SYS-065: Echo-safe desired-set field-override save
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+The component PATCH accepts field overrides as a desired-FULL-SET (#385): the client re-sends every
+override row, and the server upserts by id and deletes anything omitted. The portal's combined Save
+therefore echoes untouched rows verbatim, including their `id` and original `versionRange`.
+Separately, composite Maven ranges (multiple top-level segments, e.g.
+`[2.2.18,2.2.20-132),(2.2.20-132,2.2.21)`) are rejected on POST/PATCH as an input-contract limit.
+Legacy DSL import legitimately created composite rows, so a component that owns one could not be
+saved through the portal at all — the desired-set UPDATE loop re-validated the untouched composite
+echo and returned 400, even though the user changed a *different* override. This requirement makes
+the desired-set path change-scoped: an unchanged echo is a true no-op.
+
+**Description:**
+On the desired-set UPDATE path (`applyFieldOverrideDesiredSet` → `applyOverrideUpsertPayload` with a
+persisted row), range validation runs ONLY when the submitted range actually differs from the stored
+range. The comparison normalizes both sides (stored ranges are returned verbatim by the read mapper
+and may contain whitespace). When unchanged, the row is neither re-validated nor reassigned, so its
+stored string stays byte-identical and no audit/editability diff is triggered. A CREATE (no
+`excludeOverrideId`) always validates and assigns — composite CREATE stays rejected and an
+empty/invalid range cannot bypass validation. An actual range change on an existing row is validated
+as before. Set-level disjointness is unaffected: any new/changed row still validates against the
+whole live collection, including legacy composite siblings (via `isIntersect`).
+
+**Acceptance criteria:**
+1. A desired-set PATCH that echoes an unchanged legacy composite `vcs.settings` row and adds a new
+   disjoint single-segment override → 200; the composite row is preserved byte-identical.
+2. A whitespace composite (`[1.7, 2), [2.4.0,2.4.11]`) echoed verbatim → 200; row unchanged.
+3. Composite CREATE (desired-set or POST) → 400 (message unchanged).
+4. Changing a composite row's range (echoing a different composite) → 400.
+5. A value-only edit of a legacy composite (unchanged range, changed markerChildren) → 200.
+6. A valid range change on an existing override (`[1.0,2.0)` → `[3.0,4.0)`) is validated AND the new
+   normalized range is persisted → 200 (guards the positive validate-and-assign branch).
+
+**Test method:** `ComponentFieldOverridesPatchTest` —
+`SYS-065 unchanged composite echo plus new override is accepted`,
+`SYS-065 whitespace composite echo is a no-op`,
+`SYS-065 composite create still rejected`,
+`SYS-065 changing composite range still validated`,
+`SYS-065 value-only edit of composite is accepted`,
+`SYS-065 disjointness still enforced against untouched composite`,
+`SYS-065 valid range change is persisted`.

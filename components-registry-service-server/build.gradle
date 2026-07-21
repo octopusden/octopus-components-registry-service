@@ -73,6 +73,9 @@ dependencies {
     testImplementation('org.springframework.boot:spring-boot-starter-test')
     testImplementation("org.springframework.security:spring-security-test")
     testImplementation testFixtures(project(":test-common"))
+
+    // Architecture fitness functions (see server/architecture/*ArchitectureTest)
+    testImplementation "com.tngtech.archunit:archunit-junit5:${project['archunit.version']}"
 }
 
 // HHH-18551 (array-type leak → OOM). Spring Boot 3.2.x recommends hibernate-core
