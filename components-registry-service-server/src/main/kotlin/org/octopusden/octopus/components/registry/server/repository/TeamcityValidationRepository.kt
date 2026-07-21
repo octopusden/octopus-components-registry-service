@@ -12,14 +12,6 @@ import org.springframework.stereotype.Repository
 interface TeamcityValidationRepository : JpaRepository<TeamcityValidationEntity, TeamcityValidationId> {
     fun findByProjectIdIn(projectIds: Collection<String>): List<TeamcityValidationEntity>
 
-    /**
-     * Bulk DELETE issued directly against the DB (not a derived load-then-remove), so it does not
-     * leave managed "removed" instances in the persistence context. `clearAutomatically` detaches
-     * the context afterward so a same-transaction `saveAll` with the same composite id issues an
-     * INSERT (via `persist`) rather than colliding with a stale managed/removed instance and being
-     * downgraded to `merge` — the repeated-run bug where a finding type surviving between runs could
-     * throw `ObjectDeletedException` or hit insert-before-delete PK ordering.
-     */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("DELETE FROM TeamcityValidationEntity e WHERE e.projectId = :projectId")
     fun deleteByProjectId(

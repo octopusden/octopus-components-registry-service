@@ -9,13 +9,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties
  *
  * TC connection details (base url / credentials) are shared with the sync engine via
  * [TeamcityProperties].
- *
- * There is no `enabled` toggle: validation always runs after a successful sync and on demand,
- * there is no scheduler to gate. The template/step-id properties below have **no defaults on
- * purpose** — a blank default-build-step id silently made `OVERRIDES_DEFAULT_BUILD_STEP` (and
- * anything depending on it) report a false "clean" result instead of failing to boot, so every
- * environment that wants correct results must declare real values; there is nothing sensible to
- * default them to.
  */
 @ConfigurationProperties(prefix = "teamcity.validation")
 class TeamcityValidationProperties(

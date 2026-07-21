@@ -5,7 +5,6 @@ import org.octopusden.octopus.components.registry.server.config.ConditionalOnDat
 import org.octopusden.octopus.components.registry.server.entity.TeamcityValidationEntity
 import org.octopusden.octopus.components.registry.server.repository.TeamcityValidationRepository
 import org.octopusden.octopus.components.registry.server.repository.VersionLineRepository
-import org.octopusden.octopus.components.registry.server.teamcity.validation.TeamcityValidationResult
 import org.octopusden.octopus.validation.core.Status
 import org.octopusden.octopus.validation.dto.teamcity.TemplateCatalog
 import org.octopusden.octopus.validation.validators.TeamCityValidators
@@ -108,12 +107,6 @@ class TeamcityValidationService(
         }
     }
 
-    /**
-     * Delete findings for projects no longer known. An empty [knownProjectIds] is a legitimate
-     * state (e.g. the last linked TeamCity project was unlinked) and must still prune every
-     * stored row, not retain them indefinitely — there is no separate signal here that
-     * distinguishes "scope legitimately empty" from "scope query failed", so we don't guess.
-     */
     private fun removeStaleProjects(knownProjectIds: Set<String>): Int {
         val removed = teamcityValidationRepository.findDistinctStoredProjectIds().toSet() - knownProjectIds
         if (removed.isNotEmpty()) {
