@@ -32,16 +32,38 @@ class MultipleMavenVersionValidatorTest {
     ) { it is MavenVersion }
 
     @Test
-    @DisplayName("NOT_APPLICABLE when there is nothing Maven to inspect")
-    fun `NOT_APPLICABLE when nothing to inspect`() {
+    @DisplayName("SYS-084 NOT_APPLICABLE when there is nothing Maven to inspect")
+    fun `SYS-084 NOT_APPLICABLE when nothing to inspect`() {
         val plainConfig = buildConfig("Plain", steps = listOf(buildStep("s1", StepType.OTHER)))
 
         assertEquals(Status.NOT_APPLICABLE, validator.validate(tcProject(configs = listOf(plainConfig))).status)
     }
 
     @Test
-    @DisplayName("OK when only one distinct Maven version resolves")
-    fun `OK for a single maven version`() {
+    @DisplayName("SYS-084 OK when no Maven version resolves")
+    fun `SYS-084 OK when no Maven version resolves`() {
+        // A MAVEN step is inspectable (buildStepToolVersionResolver.supports == true), but its
+        // maven.path value carries no recognizable Maven version token, so nothing resolves.
+        // Distinct from NOT_APPLICABLE (StepType.OTHER, nothing inspectable at all).
+        val config = buildConfig(
+            "Maven",
+            templateIds = setOf(MAVEN_TEMPLATE_ID),
+            steps = listOf(
+                buildStep(
+                    MAVEN_DEFAULT_STEP_ID,
+                    StepType.MAVEN,
+                    inherited = true,
+                    parameters = params("maven.path" to "env.MAVEN_HOME"),
+                ),
+            ),
+        )
+
+        assertEquals(Status.OK, validator.validate(tcProject(configs = listOf(config))).status)
+    }
+
+    @Test
+    @DisplayName("SYS-084 OK for a single distinct Maven version")
+    fun `SYS-084 OK for a single distinct Maven version`() {
         val config = buildConfig(
             "Maven",
             templateIds = setOf(MAVEN_TEMPLATE_ID),
@@ -59,8 +81,8 @@ class MultipleMavenVersionValidatorTest {
     }
 
     @Test
-    @DisplayName("WARNING when more than one distinct Maven version resolves across steps")
-    fun `WARNING for multiple maven versions`() {
+    @DisplayName("SYS-084 WARNING for multiple distinct Maven versions")
+    fun `SYS-084 WARNING for multiple distinct Maven versions`() {
         val templateConfig = buildConfig(
             "Maven",
             templateIds = setOf(MAVEN_TEMPLATE_ID),

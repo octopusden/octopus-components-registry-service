@@ -70,18 +70,26 @@
 | SYS-059 | `POST /rest/api/4/versions/preview` renders a `DetailedComponentVersion` from ad-hoc Jira formats (base + per-range overrides) and an input version, with no persistence and no component lookup — reusing the persisted-path render seam (including `normalizeVersion` canonicalization) so output matches `detailed-version` for the same effective config. Range is resolved server-side; `line`/`build` mirror `minor`/`release` and `minor`/`release` default to `$major`/`$major.$minor` when blank; hotfix coordinate gated on caller-supplied `hotfixEnabled` (VCS-derived), not format presence; custom `versionPrefix`/`versionFormat` render the wrapped `jiraVersion`; padding is template-driven (no `buildSystem`); blank/non-numeric version or malformed range → 400, a version matching no format → 404; authenticated-only | High | unit + integration-test | ✅ Tested |
 | SYS-060 | An append-only `service_event` journal persists operational events — CRS redeploys (STARTUP + build version), and every components-migration / history-migration / TeamCity-resync run (RUNNING→COMPLETED/FAILED, one row per run) — which previously lived only in an in-memory slot + logs and were lost on restart. **Any job failure (including executor-rejected submission) writes a FAILED row with the error**; a run whose pod dies mid-flight is reconciled to FAILED("interrupted by restart") on next startup (single-pod). Writes are best-effort (`REQUIRES_NEW` + swallow) so journaling never rolls back or crashes the observed job. `GET /rest/api/4/admin/service-events` returns the paginated journal (filter by type/source/status/time), IMPORT_DATA-gated; a scheduled daily prune enforces retention | High | unit + integration-test | ✅ Tested |
 | SYS-061 | `POST /rest/api/4/admin/service-events` ingests portal-sourced events (portal redeploys, validation-sweep runs) into the shared journal, so the Admin "Events" tab shows both services on one timeline. Authenticated by a shared-secret `X-Service-Event-Token` header (the portal BFF calls CRS tokenless), verified constant-time and **fail-closed** (blank/unset configured token rejects every call 403); method-scoped permitAll at the filter chain so the sibling GET read stays JWT+IMPORT_DATA gated; unknown eventType/status/source → 400 | High | integration-test | ✅ Tested |
+| SYS-064 | The component owner's manager (resolved via employee-service `getManager`) may edit the component and its field-overrides — a fourth, derived condition on `canEditComponent` alongside owner/RM/SC/admin. A directory failure or no-manager answer denies (fail-closed), never grants. `GET /{idOrName}/editors` enumerates the resolved manager (unlike the admin bypass, it is one concrete person per component); `getManager` is 2-minute cached per owner (resolved answers only) and its DB read runs in its own short-lived transaction, closed before the network call | High | unit + integration-test | ✅ Tested |
+| SYS-065 | Desired-set field-override PATCH is echo-safe: re-submitting an UNCHANGED override row (same id, same normalized range) does not re-validate its range, so a component carrying a legacy composite range can still be saved; a CREATE or an actual range change is still validated (composite still rejected) | High | integration-test | ✅ Tested |
 | SYS-075 | `component-validation` module: `ATTACHED_TO_BUILD_TEMPLATE` is OK when exactly one build configuration is attached to a build template, WARNING when more than one is (ambiguous), WARNING when none is (always applicable) | High | unit-test | ✅ Tested |
 | SYS-076 | `component-validation` module: `OVERRIDES_DEFAULT_BUILD_STEP` is NOT_APPLICABLE with no attached configuration, WARNING if any attached configuration's default build step is overridden, OK if all are inherited | High | unit-test | ✅ Tested |
 | SYS-077 | `component-validation` module: `HAS_CUSTOM_BUILD_STEP` is WARNING when any uninherited build step across every configuration (attached to a template or not) resolves any tool version at all — Java or Maven, whichever it uses; OK otherwise | High | unit-test | ✅ Tested |
 | SYS-078 | `component-validation` module: `USES_OLD_JAVA_VERSION` is WARNING if any resolved Java version is 1.8 (every uninherited step across every configuration, plus each attached configuration's default build step regardless of its own inherited flag), OK if versions resolved but none is 1.8, NOT_APPLICABLE if nothing Java was inspected; an unresolved version is ignored, not flagged (decision D7) | High | unit-test | ✅ Tested |
 | SYS-079 | `component-validation` module: `ValidatorSuite.validate` isolates a throwing validator as a single `Status.ERROR` result instead of losing every other check's result (decision D6) | Medium | unit-test | ✅ Tested |
-| SYS-080 | `component-validation` module: `JavaVersion.isEight` is true only for the exact `"1.8"` / `"8"` spellings; `JavaVersionParser` normalizes richer real-world values (`"1.8.0_392"`, `"JDK_ZULU_17_x64"`, `"/opt/java/openjdk-11"`, etc.) down to that major-version form before `isEight` is checked | Medium | unit-test | ✅ Tested |
+| SYS-080 | `component-validation` module: `JavaVersion.isEight` is true only for the exact `"1.8"` / `"8"` spellings; `JavaVersionResolver` normalizes marker-bearing real-world values (`"env.JDK_ZULU_17_x64"`, `"/opt/java/openjdk-11"`, etc. — a value with no `jdk`/`java`/`jvm` marker never resolves) down to that major-version form before `isEight` is checked | Medium | unit-test | ✅ Tested |
 | SYS-081 | `component-validation` module: `TeamCityValidators` (the suite) returns exactly the six TeamCity results for a given project, each with the status the individual checks would produce in isolation | High | unit-test | ✅ Tested |
-| SYS-082 | `component-validation` module: `BuildStepToolVersionResolver` — given one `BuildStep`, dispatch by `StepType` (Maven/Gradle/command-line+in-container) to read the right parameter(s), recursively resolve `%param%` references via `ParameterReferenceResolver`, and derive `Set<ToolVersion>` via the per-tool `ValueVersionResolver`s (`JavaVersionResolver`, `MavenVersionResolver`) | High | unit-test | ✅ Tested |
+| SYS-082 | `component-validation` module: `BuildStepToolVersionResolver` — given one `BuildStep`, dispatch by `StepType` (Maven/Gradle/command-line) to read the right parameter(s), recursively resolve `%param%` references via `ParameterReferenceResolver`, and derive `Set<ToolVersion>` via the per-tool `ValueVersionResolver`s (`JavaVersionResolver`, `MavenVersionResolver`) | High | unit-test | ✅ Tested |
 | SYS-083 | `component-validation` module: `MULTIPLE_JAVA_VERSIONS` is WARNING when more than one distinct Java version is found across the same inspected steps as `USES_OLD_JAVA_VERSION`, OK for zero or one distinct version, NOT_APPLICABLE if nothing was inspectable | High | unit-test | ✅ Tested |
 | SYS-084 | `component-validation` module: `MULTIPLE_MAVEN_VERSIONS` is WARNING when more than one distinct Maven version is found across the same inspected steps, OK for zero or one distinct version, NOT_APPLICABLE if nothing was inspectable | High | unit-test | ✅ Tested |
-| SYS-064 | The component owner's manager (resolved via employee-service `getManager`) may edit the component and its field-overrides — a fourth, derived condition on `canEditComponent` alongside owner/RM/SC/admin. A directory failure or no-manager answer denies (fail-closed), never grants. `GET /{idOrName}/editors` enumerates the resolved manager (unlike the admin bypass, it is one concrete person per component); `getManager` is 2-minute cached per owner (resolved answers only) and its DB read runs in its own short-lived transaction, closed before the network call | High | unit + integration-test | ✅ Tested |
-| SYS-065 | Desired-set field-override PATCH is echo-safe: re-submitting an UNCHANGED override row (same id, same normalized range) does not re-validate its range, so a component carrying a legacy composite range can still be saved; a CREATE or an actual range change is still validated (composite still rejected) | High | integration-test | ✅ Tested |
+| SYS-085 | TC validation persistence is latest-only per project: each run replaces that project's stored rows via a bulk `DELETE` + insert (not a derived load-then-remove), so a finding `type` that survives between two consecutive runs for the same project does not collide with a stale managed/removed instance | High | integration-test | ✅ Tested |
+| SYS-086 | TC validation scope (which projects to validate and to prune stale rows for) is derived from `version_line` — the projects currently linked to a component — not from the append-only `teamcity_project` table, which never removes a project once unlinked | High | unit-test | ❌ Not tested |
+| SYS-087 | Stale-row pruning deletes `teamcity_validation` rows for any project no longer in scope, including every remaining row when the scope shrinks to empty (e.g. the last linked project is unlinked) — an empty scope is not treated as a failure that skips cleanup | High | integration-test | ✅ Tested |
+| SYS-088 | TC validation runs automatically after a successful TeamCity sync (`TeamcitySyncCompletedEvent` → `TeamcityValidationSyncListener`, async, best-effort — a validation failure never affects the sync), and on demand via `POST /admin/teamcity-validation`; the enriched-fetch cache is invalidated before the post-sync run so it cannot serve a pre-sync TeamCity snapshot | High | unit-test | ❌ Not tested |
+| SYS-089 | TC sync and TC validation are mutually exclusive: both run through the shared single-pod `MigrationLifecycleGate` (`TC_VALIDATION` job kind alongside `COMPONENTS`/`HISTORY`), so a validation run cannot start while a sync (or vice versa) is in flight | High | unit-test | ❌ Not tested |
+| SYS-090 | `POST /admin/teamcity-validation` returns 202 Accepted with the freshly-started job for a new run, 409 Conflict with the existing job's state when attaching to an already-RUNNING validation (same-kind), and 409 Conflict with a structured conflict envelope for a cross-kind gate conflict; `GET /admin/teamcity-validation/job` returns the latest known state or 404 if none; both endpoints are IMPORT_DATA-gated (401 anonymous, 403 non-IMPORT_DATA) | High | integration-test | ✅ Tested |
+| SYS-091 | Component detail (`GET /rest/api/4/components/{id}`) embeds stored WARNING/ERROR findings per linked TeamCity project as `{type, status, message, updatedAt}`; a project with no stored findings is presented as clean (no entries), not as "not yet validated" vs "validated clean" | Medium | integration-test | ❌ Not tested |
+| SYS-092 | The admin dashboard read APIs (`GET /admin/teamcity-validations` + `.../summary`) join stored findings back to their owning component(s) via `version_line`, de-duplicate a component reachable through more than one version line to the same project, and count DISTINCT components (not raw finding rows) per type/status; both endpoints are IMPORT_DATA-gated | High | unit + integration-test | ✅ Tested |
 
 ---
 
@@ -2502,19 +2510,27 @@ validators' results are still returned.
 **Description:**
 `JavaVersion.isEight` is a literal test: `raw.trim() == "1.8" || raw.trim() == "8"` (per the
 implementation brief — no fuzzy matching at that layer). The burden of normalizing real-world
-values to that exact major-version form falls on `JavaVersionResolver` (decision **D1**): it
-extracts the major (or `1.<major>`) version from clean strings (`"11.0.2"` → `"11"`),
-from build-suffixed strings (`"1.8.0_392"` → `"1.8"`, `"8u392"` → `"8"`), and from
-marker-embedded identifiers (`"JDK_21_0_x64"` → `"21"`, `"JDK_ZULU_17_x64"` → `"17"`,
-`"/opt/java/openjdk-11"` → `"11"`).
+values to that exact major-version form falls on `JavaVersionResolver` (decision **D1**), which
+requires a `jdk` / `java` / `jvm` marker token (case-insensitive) to be present in the value at
+all — a bare, unmarked value never resolves, by design, so an unrelated bare number (e.g. a Maven
+artifact version) isn't misread as a Java version. Given that marker, it extracts the major
+(or `1.<major>`) version from env-var-style names (`"env.JDK_ORACLE_17_x64"` → `"17"`,
+`"env.JDK_1_8_x64"` → `"1.8"`) and already-resolved directory paths (`"/usr/lib/jvm/java-21-openjdk-21.0.11.0.10-2.el9.x86_64"`
+→ `"21"`, `"C:\JDK\Oracle\1.8"` → `"1.8"`), picking the *earliest* known version token when
+several digit runs are present so a trailing build/update number isn't mistaken for the major
+version. A marker-bearing value with no recognizable version token, or a value with no marker at
+all, resolves to `null`.
 
 **Acceptance criteria:**
 1. `JavaVersion("1.8").isEight` and `JavaVersion("8").isEight` are `true`.
 2. `JavaVersion("11")`, `("17")`, `("21")`, `("1.7")`, `("80")`, and a full build string
    `("1.8.0_392")` all have `isEight == false` (normalization is the resolver's job, not
    `isEight`'s).
-3. `JavaVersionResolver.resolve(...)` correctly extracts the major version from every real-world
-   shape listed above, and returns `null` for a blank or unrecognised value.
+3. `JavaVersionResolver.resolve(...)` correctly extracts the major version from every
+   marker-bearing real-world shape listed above, returns `null` for a value with no `jdk`/`java`/`jvm`
+   marker at all (e.g. a bare `"11.0.2"` or a build-system env var that happens to contain a
+   number), and returns `null` for a marker-bearing value with no recognizable version token or a
+   blank value.
 
 **Test method:** `JavaVersionTest` — `SYS-080 isEight true for 1_8 and 8`,
 `SYS-080 isEight false for other versions`; `JavaVersionResolverTest` —
@@ -2544,15 +2560,19 @@ call, matching what each validator would independently produce.
 A step-scoped abstraction: given a single `BuildStep`, `BuildStepToolVersionResolver.resolve(step)`
 returns the `Set<ToolVersion>` (Java and/or Maven, for now) that step uses. Dispatch is by
 `StepType` (`DefaultBuildStepToolVersionResolver`): `MAVEN` → reads `maven.path` (Maven version)
-and `target.jdk.home` (Java version); `GRADLE` → reads only `target.jdk.home`; `COMMAND_LINE` and
-`IN_CONTAINER` (the latter an unconfirmed assumption — an in-container step is assumed to run a
-script the same way a command-line step does) → read `script.content`, split it on
-whitespace, and try *both* the Maven and the Java value-resolver on each (reference-resolved)
-token, since a bare command line gives no other signal about which tool a token belongs to.
+and `target.jdk.home` (Java version); `GRADLE` → reads only `target.jdk.home`; `COMMAND_LINE` →
+reads `script.content`, splits it on whitespace, and tries *both* the Maven and the Java
+value-resolver on each (reference-resolved) token, since a bare command line gives no other
+signal about which tool a token belongs to. There is no separate in-container step type — an
+earlier `IN_CONTAINER` `StepType` was an unconfirmed assumption (TeamCity's actual raw runner
+`type` string for a containerized step was never confirmed against a live instance) and has been
+removed; only `gradle-runner` / `Maven2` / `simpleRunner` map to a recognized `StepType`, anything
+else is `OTHER`.
 Every parameter read first goes through `ParameterReferenceResolver`, which recursively
 substitutes TeamCity `%paramName%` references within the same `Parameters` bag until no
-reference remains, returning `null` on a missing reference or a reference cycle (mirroring real
-TeamCity `%param%` semantics). The "value → version" step is a separate, per-tool abstraction
+reference remains. A reference to a **missing** parameter is left as the literal `%paramName%`
+text and scanning continues (mirroring real TeamCity `%param%` semantics); a reference **cycle**
+fails the whole value (`null`) rather than looping. The "value → version" step is a separate, per-tool abstraction
 (`ValueVersionResolver<V>`): `JavaVersionResolver` and `MavenVersionResolver` each derive their
 tool's version from an already reference-resolved raw string.
 
@@ -2562,13 +2582,13 @@ tool's version from an already reference-resolved raw string.
 2. A Gradle step → only a `JavaVersion` is ever resolved, never a `MavenVersion`.
 3. A command-line step's `script.content` → split into tokens; each token is tried against both
    resolvers; a token that is itself a `%param%` reference is resolved first.
-4. `IN_CONTAINER` steps are dispatched through the same logic as `COMMAND_LINE` steps.
-5. An unsupported `StepType` (e.g. `OTHER`) → `resolve` returns an empty set; `supports` returns
+4. An unsupported `StepType` (e.g. `OTHER`) → `resolve` returns an empty set; `supports` returns
    `false`.
-6. `ParameterReferenceResolver` follows single- and multi-hop `%param%` chains, resolves multiple
-   distinct (or repeated) references within one value, and returns `null` on a missing reference
-   or a direct/indirect cycle — without false-flagging a legitimately repeated reference as a
-   cycle.
+5. `ParameterReferenceResolver` follows single- and multi-hop `%param%` chains, resolves multiple
+   distinct (or repeated) references within one value, leaves a reference to a missing parameter
+   as literal `%paramName%` text (matching real TeamCity behavior — not `null`), and returns
+   `null` for a direct/indirect cycle — without false-flagging a legitimately repeated reference
+   as a cycle.
 
 **Test method:** `BuildStepToolVersionResolverTest` (Maven/Gradle/command-line/dispatcher cases),
 `ParameterReferenceResolverTest` (single-hop, multi-hop, missing, direct cycle, indirect cycle,
@@ -2718,3 +2738,211 @@ whole live collection, including legacy composite siblings (via `isIntersect`).
 `SYS-065 value-only edit of composite is accepted`,
 `SYS-065 disjointness still enforced against untouched composite`,
 `SYS-065 valid range change is persisted`.
+
+### SYS-085: TC validation — repeated-run persistence
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Description:**
+`TeamcityValidationService.replaceFindings` deletes then re-inserts a project's rows in one
+transaction on every run. `TeamcityValidationRepository.deleteByProjectId`/`deleteByProjectIdIn`
+are bulk `@Modifying` `DELETE` queries (`clearAutomatically`/`flushAutomatically`) rather than
+Spring Data's default derived delete (load each matching entity, then `EntityManager.remove` —
+which leaves a managed/removed instance in the persistence context until flush). Without the bulk
+delete, a same-transaction `saveAll` for a finding `type` that survives between runs could collide
+with that stale instance (`ObjectDeletedException` or insert-before-delete PK ordering), silently
+retaining old findings for that type.
+
+**Acceptance criteria:**
+1. Two consecutive `replaceFindings` calls for the same project with an overlapping finding
+   `type` complete without throwing.
+2. After the second run, exactly the second run's rows are present — the first run's rows that
+   didn't survive are gone, survivors are present once (not duplicated).
+
+**Test method:** `TeamcityValidationRepeatedRunIntegrationTest` —
+`repeated_replace_with_surviving_type_does_not_collide`.
+
+### SYS-086: TC validation — scope derived from currently-linked projects
+
+**Priority:** High
+**Test layer:** unit-test
+**Status:** ❌ Not tested
+
+**Description:**
+`teamcity_project` is effectively append-only: sync replaces `version_line` rows but never
+removes an orphaned `teamcity_project` row, so `TeamcityProjectRepository.findDistinctProjectIds`
+returns every project ever seen. `TeamcityValidationService.validate()` instead derives its scope
+from `VersionLineRepository.findDistinctLinkedProjectIds()` — distinct TeamCity project ids
+currently referenced by at least one `version_line` row, i.e. actually linked to a component right
+now. This is what makes SYS-087 pruning effective: a project unlinked from every component drops
+out of scope and its stored findings become eligible for removal.
+
+**Acceptance criteria:**
+1. A project referenced by at least one current `version_line` row is included in scope.
+2. A project present in `teamcity_project` but with no current `version_line` row is excluded
+   from scope, even though it would appear in `teamcity_project`'s own distinct-id list.
+
+**Test method:** none yet — the fix is exercised indirectly through SYS-087's pruning test, but
+there is no unit test isolating `findDistinctLinkedProjectIds` itself against a mixed
+linked/orphaned `teamcity_project`+`version_line` fixture. Flagged as a follow-up.
+
+### SYS-087: TC validation — stale-project pruning, including down to empty scope
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Description:**
+`TeamcityValidationService.removeStaleProjects` deletes `teamcity_validation` rows for any
+project in `findDistinctStoredProjectIds()` that is absent from the current scope (SYS-086). An
+empty scope (e.g. the last linked TeamCity project was unlinked from every component) is a
+legitimate state, not a signal that the scope query failed — the guard that used to skip cleanup
+entirely on an empty scope was removed, since there's no separate signal here to distinguish
+"legitimately empty" from "failed to load".
+
+**Acceptance criteria:**
+1. A project absent from the current scope has its stored rows removed.
+2. When the scope is empty, every stored row across every previously-known project is removed —
+   nothing is retained just because the known-project set happened to be empty.
+
+**Test method:** `TeamcityValidationRepeatedRunIntegrationTest` —
+`stale_row_pruning_with_empty_scope_removes_the_last_project`.
+
+### SYS-088: TC validation — automatic post-sync trigger + cache invalidation
+
+**Priority:** High
+**Test layer:** unit-test
+**Status:** ❌ Not tested
+
+**Description:**
+`TeamcityValidationSyncListener` runs a validation job after every successful TeamCity sync
+(`TeamcitySyncCompletedEvent`), async and best-effort — a validation failure is logged and never
+propagates back to affect the sync. Before triggering, it calls
+`EnrichedTcProjectFetcher.invalidateAll()` to drop the enriched-fetch cache: without this, a
+manual validation run earlier in the cache TTL window (default 30 minutes) could let the
+automatic post-sync run read enriched project data computed from the pre-sync TeamCity snapshot.
+
+**Acceptance criteria:**
+1. A `TeamcitySyncCompletedEvent` triggers `TeamcityValidationJobService.startAsync` exactly once.
+2. `EnrichedTcProjectFetcher.invalidateAll()` is called before `startAsync`, on every event,
+   regardless of whether the resulting job newly starts or attaches to one already running.
+3. An exception from `startAsync` is caught and logged; it does not propagate to the sync's own
+   completion path.
+
+**Test method:** none yet. `TeamcityValidationSyncListener` and `CachingEnrichedTcProjectFetcher`
+each have no dedicated unit test as of this PR. Flagged as a follow-up.
+
+### SYS-089: TC validation — mutual exclusion with sync/migration via the lifecycle gate
+
+**Priority:** High
+**Test layer:** unit-test
+**Status:** ❌ Not tested
+
+**Description:**
+TC validation runs through the same shared single-pod `MigrationLifecycleGate` as the
+components/history migrations and the TC resync (`TC_VALIDATION` job kind alongside `COMPONENTS`
+/ `HISTORY`). A same-kind attempt while a validation job is RUNNING attaches to it rather than
+starting a duplicate (SYS-090); a cross-kind attempt (e.g. starting a TC resync while validation
+is RUNNING, or vice versa) is rejected with `MigrationConflictException`.
+
+**Acceptance criteria:**
+1. Starting TC validation while a TC validation job is already RUNNING attaches to the existing
+   job (`isNewlyStarted = false`) rather than starting a second one.
+2. Starting TC validation while a COMPONENTS or HISTORY migration is RUNNING is rejected via
+   `MigrationConflictException`.
+3. Starting a COMPONENTS or HISTORY migration (or a TC resync) while TC validation is RUNNING is
+   likewise rejected.
+
+**Test method:** none yet — `MigrationLifecycleGateTest` (if one exists) does not appear to cover
+the `TC_VALIDATION` kind specifically; existing cross-kind coverage is exercised indirectly via
+`TeamcityValidationTriggerControllerTest`'s cross-kind-COMPONENTS case (SYS-090), which asserts
+the controller-level 409 envelope but not the gate's own kind-matching logic in isolation.
+Flagged as a follow-up.
+
+### SYS-090: TC validation — admin trigger/poll endpoint contract
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Description:**
+`POST /admin/teamcity-validation` returns 202 Accepted with a `TeamcityValidationJobResponse` for
+a newly-started job, or 409 Conflict with the same shape for a same-kind attach; a cross-kind
+lifecycle-gate conflict is mapped to 409 with a `MigrationConflictResponse` envelope by the shared
+`@ExceptionHandler`. `GET /admin/teamcity-validation/job` returns the latest known job state
+(200), or 404 if no validation has run since the pod came up. Both endpoints carry
+`AdminControllerV4`'s class-level `@PreAuthorize("@permissionEvaluator.canImport()")`
+(IMPORT_DATA-gated): 401 for anonymous callers, 403 for authenticated callers without
+IMPORT_DATA.
+
+**Acceptance criteria:**
+1. Anonymous POST/GET → 401; the underlying job service is never invoked.
+2. Authenticated, non-IMPORT_DATA POST/GET → 403; the underlying job service is never invoked.
+3. IMPORT_DATA POST, newly-started → 202 with the job body (`kind = "job"`).
+4. IMPORT_DATA POST, same-kind RUNNING → 409 with the existing job's body (attach).
+5. IMPORT_DATA POST, cross-kind conflict → 409 with the conflict envelope (`kind = "conflict"`).
+6. IMPORT_DATA GET, idle (no job since startup) → 404.
+7. IMPORT_DATA GET, COMPLETED → 200 with the result counts.
+
+**Test method:** `TeamcityValidationTriggerControllerTest` —
+`postAnonymousReturns401`, `postEditorReturns403`, `postAdminFreshReturns202`,
+`postAdminSameKindAttachReturns409`, `postAdminCrossKindComponentsReturns409Conflict`,
+`getJobAnonymousReturns401`, `getJobEditorReturns403`, `getJobIdleReturns404`,
+`getJobCompletedReturns200WithResult`.
+
+### SYS-091: TC validation — component-detail embedding
+
+**Priority:** Medium
+**Test layer:** integration-test
+**Status:** ❌ Not tested
+
+**Description:**
+`ComponentManagementServiceImpl.attachTeamcityValidations` attaches stored WARNING/ERROR findings
+onto each linked TeamCity project in a component-detail response, as
+`ValidationResponse{type, status, message, updatedAt}`. A project with no stored findings is
+presented as clean (an empty `validations` list) — this is only a meaningful "clean" signal once a
+validation run has actually completed for that project; it is not distinguished in this DTO from
+"never validated".
+
+**Acceptance criteria:**
+1. A linked project with stored findings has those findings' `type`/`status`/`message`/`updatedAt`
+   embedded in `teamcityProjects[].validations`.
+2. A linked project with no stored findings has an empty `validations` list.
+3. A component with no linked TeamCity projects is unaffected (no findings query is issued).
+
+**Test method:** none yet — `attachTeamcityValidations` has no dedicated unit or integration test
+as of this PR. Flagged as a follow-up.
+
+### SYS-092: TC validation — admin dashboard read APIs
+
+**Priority:** High
+**Test layer:** unit + integration-test
+**Status:** ✅ Tested
+
+**Description:**
+`GET /admin/teamcity-validations` (optional `type`/`status`/`component` filters) and
+`.../summary` are component-centric: `TeamcityValidationQueryService` joins stored findings back
+to their owning component(s) via `version_line`, de-duplicating a component reachable through more
+than one version line to the same project (distinct by `(projectId, componentId)`), and `summary`
+counts DISTINCT components per type/status rather than raw finding rows. Both endpoints carry
+`TeamcityValidationControllerV4`'s class-level `@PreAuthorize("@permissionEvaluator.canImport()")`
+(IMPORT_DATA-gated).
+
+**Acceptance criteria:**
+1. A finding on a project shared by multiple components fans out to one row per component.
+2. A component reachable through more than one version line to the same project is counted once
+   for that project, not once per version line.
+3. `type`/`status`/`component` filters narrow the result set as expected.
+4. `summary` reports DISTINCT-component counts, both overall and per type/status.
+5. Anonymous/non-IMPORT_DATA callers get 401/403 on both endpoints; an IMPORT_DATA caller gets
+   200.
+
+**Test method:** `TeamcityValidationQueryServiceTest` —
+`list fans out shared project to each component`,
+`list dedupes component reached via multiple version lines to same project`,
+`list filters by type`, `summary distinct component counts`;
+`TeamcityValidationControllerV4SecurityTest` —
+`listAnonymousReturns401`, `listEditorReturns403`, `listAdminReturns200`,
+`summaryAnonymousReturns401`, `summaryEditorReturns403`, `summaryAdminReturns200`.

@@ -84,12 +84,14 @@ class BuildStepToolVersionResolverTest {
     }
 
     @Test
-    @DisplayName("CommandLineBuildStepToolVersionResolver supports both COMMAND_LINE and IN_CONTAINER (D-assumption)")
-    fun `command line resolver supports command line and in container`() {
+    @DisplayName("CommandLineBuildStepToolVersionResolver supports only COMMAND_LINE")
+    fun `command line resolver supports only command line`() {
         val resolver = CommandLineBuildStepToolVersionResolver(javaVersionResolver, mavenVersionResolver)
 
         assertTrue(resolver.supports(StepType.COMMAND_LINE))
-        assertTrue(resolver.supports(StepType.IN_CONTAINER))
+        assertTrue(!resolver.supports(StepType.GRADLE))
+        assertTrue(!resolver.supports(StepType.MAVEN))
+        assertTrue(!resolver.supports(StepType.OTHER))
     }
 
     @Test
@@ -100,13 +102,11 @@ class BuildStepToolVersionResolverTest {
         val mavenStep = buildStep("m", StepType.MAVEN, parameters = params("maven.path" to "env.MAVEN_3.6.3"))
         val gradleStep = buildStep("g", StepType.GRADLE, parameters = params("target.jdk.home" to "env.JDK_21"))
         val commandLineStep = buildStep("c", StepType.COMMAND_LINE, parameters = params("script.content" to "env.JDK_25"))
-        val inContainerStep = buildStep("i", StepType.IN_CONTAINER, parameters = params("script.content" to "env.JDK_25"))
         val otherStep = buildStep("o", StepType.OTHER)
 
         assertEquals(setOf(MavenVersion("3.6.3")), dispatcher.resolve(mavenStep))
         assertEquals(setOf(JavaVersion("21")), dispatcher.resolve(gradleStep))
         assertEquals(setOf(JavaVersion("25")), dispatcher.resolve(commandLineStep))
-        assertEquals(setOf(JavaVersion("25")), dispatcher.resolve(inContainerStep))
         assertEquals(emptySet(), dispatcher.resolve(otherStep))
         assertTrue(!dispatcher.supports(StepType.OTHER))
     }

@@ -32,16 +32,38 @@ class MultipleJavaVersionValidatorTest {
     ) { it is JavaVersion }
 
     @Test
-    @DisplayName("NOT_APPLICABLE when there is nothing Java to inspect")
-    fun `NOT_APPLICABLE when nothing to inspect`() {
+    @DisplayName("SYS-083 NOT_APPLICABLE when there is nothing Java to inspect")
+    fun `SYS-083 NOT_APPLICABLE when nothing to inspect`() {
         val plainConfig = buildConfig("Plain", steps = listOf(buildStep("s1", StepType.OTHER)))
 
         assertEquals(Status.NOT_APPLICABLE, validator.validate(tcProject(configs = listOf(plainConfig))).status)
     }
 
     @Test
-    @DisplayName("OK when only one distinct Java version resolves")
-    fun `OK for a single java version`() {
+    @DisplayName("SYS-083 OK when no Java version resolves")
+    fun `SYS-083 OK when no Java version resolves`() {
+        // A GRADLE step is inspectable (buildStepToolVersionResolver.supports == true), but its
+        // target.jdk.home value carries no jdk/java/jvm marker, so nothing resolves. Distinct from
+        // NOT_APPLICABLE (StepType.OTHER, nothing inspectable at all).
+        val config = buildConfig(
+            "Gradle",
+            templateIds = setOf(GRADLE_TEMPLATE_ID),
+            steps = listOf(
+                buildStep(
+                    GRADLE_DEFAULT_STEP_ID,
+                    StepType.GRADLE,
+                    inherited = true,
+                    parameters = params("target.jdk.home" to "BUILD_ENV_21"),
+                ),
+            ),
+        )
+
+        assertEquals(Status.OK, validator.validate(tcProject(configs = listOf(config))).status)
+    }
+
+    @Test
+    @DisplayName("SYS-083 OK for a single distinct Java version")
+    fun `SYS-083 OK for a single distinct Java version`() {
         val config = buildConfig(
             "Gradle",
             templateIds = setOf(GRADLE_TEMPLATE_ID),
@@ -59,8 +81,8 @@ class MultipleJavaVersionValidatorTest {
     }
 
     @Test
-    @DisplayName("WARNING when more than one distinct Java version resolves across steps")
-    fun `WARNING for multiple java versions`() {
+    @DisplayName("SYS-083 WARNING for multiple distinct Java versions")
+    fun `SYS-083 WARNING for multiple distinct Java versions`() {
         val templateConfig = buildConfig(
             "Gradle",
             templateIds = setOf(GRADLE_TEMPLATE_ID),

@@ -12,9 +12,7 @@ import org.octopusden.octopus.validation.resolvers.teamcity.value.impl.MavenVers
 
 /**
  * The standard per-[StepType] dispatch: `MAVEN` -> [MavenBuildStepToolVersionResolver], `GRADLE`
- * -> [GradleBuildStepToolVersionResolver], `COMMAND_LINE` / `IN_CONTAINER` ->
- * [CommandLineBuildStepToolVersionResolver] (an in-container step is assumed to run the same
- * kind of script a command-line step does — unconfirmed against real data).
+ * -> [GradleBuildStepToolVersionResolver], `COMMAND_LINE` -> [CommandLineBuildStepToolVersionResolver].
  */
 class DefaultBuildStepToolVersionResolver(
     private val resolvers: Map<StepType, BuildStepToolVersionResolver>,
@@ -36,7 +34,6 @@ class DefaultBuildStepToolVersionResolver(
                     StepType.MAVEN to maven,
                     StepType.GRADLE to gradle,
                     StepType.COMMAND_LINE to commandLine,
-                    StepType.IN_CONTAINER to commandLine,
                 ),
             )
         }

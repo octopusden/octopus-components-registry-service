@@ -1,5 +1,7 @@
 package org.octopusden.octopus.components.registry.server.controller
 
+import io.swagger.v3.oas.annotations.responses.ApiResponse
+import io.swagger.v3.oas.annotations.responses.ApiResponses
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.dto.v4.HistoryMigrationJobResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.MigrationConflictResponse
@@ -225,6 +227,10 @@ class AdminControllerV4(
      * surface a clear "something else is running" message.
      */
     @PostMapping("/teamcity-project-ids/sync")
+    @ApiResponses(
+        ApiResponse(responseCode = "202", description = "A new TC resync job was started"),
+        ApiResponse(responseCode = "409", description = "A TC resync (or a conflicting migration kind) is already running; body describes the in-flight job/conflict"),
+    )
     fun startTeamcitySync(): ResponseEntity<TeamcitySyncJobResponse> {
         val outcome = teamcitySyncJobService.startAsync(currentUserResolver.currentUsername())
         val httpStatus = if (outcome.isNewlyStarted) HttpStatus.ACCEPTED else HttpStatus.CONFLICT
@@ -248,6 +254,10 @@ class AdminControllerV4(
      * [handleCrossKindConflict].
      */
     @PostMapping("/teamcity-validation")
+    @ApiResponses(
+        ApiResponse(responseCode = "202", description = "A new TC validation job was started"),
+        ApiResponse(responseCode = "409", description = "A TC validation (or a conflicting migration kind) is already running; body describes the in-flight job/conflict"),
+    )
     fun startTeamcityValidation(): ResponseEntity<TeamcityValidationJobResponse> {
         val outcome = teamcityValidationJobService.startAsync(currentUserResolver.currentUsername())
         val httpStatus = if (outcome.isNewlyStarted) HttpStatus.ACCEPTED else HttpStatus.CONFLICT

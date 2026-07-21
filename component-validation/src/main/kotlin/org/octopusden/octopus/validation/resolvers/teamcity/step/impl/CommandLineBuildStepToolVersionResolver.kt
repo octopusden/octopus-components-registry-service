@@ -10,11 +10,10 @@ import org.octopusden.octopus.validation.resolvers.teamcity.step.BuildStepToolVe
 import org.octopusden.octopus.validation.resolvers.teamcity.value.ValueVersionResolver
 
 /**
- * A TeamCity `simpleRunner` (command-line) step — and, per an unconfirmed assumption, an
- * `IN_CONTAINER` step: reads `script.content`, splits it on whitespace, resolves
- * each token's `%param%` reference chain, and tries both the Maven and the Java resolver against
- * each resolved token (a plain command line gives no other signal about which tool a token
- * belongs to).
+ * A TeamCity `simpleRunner` (command-line) step: reads `script.content`, splits it on whitespace,
+ * resolves each token's `%param%` reference chain, and tries both the Maven and the Java resolver
+ * against each resolved token (a plain command line gives no other signal about which tool a
+ * token belongs to).
  */
 class CommandLineBuildStepToolVersionResolver(
     private val javaVersionResolver: ValueVersionResolver<JavaVersion>,
@@ -31,7 +30,7 @@ class CommandLineBuildStepToolVersionResolver(
         return versions
     }
 
-    override fun supports(type: StepType): Boolean = type == StepType.COMMAND_LINE || type == StepType.IN_CONTAINER
+    override fun supports(type: StepType): Boolean = type == StepType.COMMAND_LINE
 
     private companion object {
         const val SCRIPT_CONTENT_PARAMETER = "script.content"

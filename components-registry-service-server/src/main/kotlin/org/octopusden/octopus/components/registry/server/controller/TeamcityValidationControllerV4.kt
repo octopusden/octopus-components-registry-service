@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.controller
 
+import io.swagger.v3.oas.annotations.Operation
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentTeamcityValidationRow
 import org.octopusden.octopus.components.registry.server.dto.v4.TeamcityValidationSummaryResponse
@@ -25,6 +26,7 @@ class TeamcityValidationControllerV4(
 ) {
     /** Component-centric findings; optional filters: validation `type`, `status`, `component` (name substring). */
     @GetMapping
+    @Operation(operationId = "listTeamcityValidations")
     fun list(
         @RequestParam(required = false) type: String?,
         @RequestParam(required = false) status: String?,
@@ -33,5 +35,6 @@ class TeamcityValidationControllerV4(
 
     /** Dashboard aggregates: components with issues, and distinct-component counts per type/status. */
     @GetMapping("/summary")
+    @Operation(operationId = "getTeamcityValidationsSummary")
     fun summary(): TeamcityValidationSummaryResponse = teamcityValidationQueryService.summary()
 }

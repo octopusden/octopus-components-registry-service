@@ -95,6 +95,25 @@ class TeamcityValidationRepeatedRunIntegrationTest {
         )
     }
 
+    @Test
+    @DisplayName("pruning with an empty known-project scope removes every stored row, including the last project")
+    fun stale_row_pruning_with_empty_scope_removes_the_last_project() {
+        val projectA = "FINAL-REMOVAL-PROJECT-A"
+        val projectB = "FINAL-REMOVAL-PROJECT-B"
+        replace(projectA, listOf("USES_OLD_JAVA_VERSION"))
+        replace(projectB, listOf("OVERRIDES_DEFAULT_BUILD_STEP"))
+        assertEquals(2, teamcityValidationRepository.findByProjectIdIn(listOf(projectA, projectB)).size)
+
+        // Scope shrinks to empty (both projects unlinked) — mirrors
+        // TeamcityValidationService.removeStaleProjects(knownProjectIds = emptySet()).
+        val knownProjectIds = emptySet<String>()
+        val stored = teamcityValidationRepository.findDistinctStoredProjectIds().toSet()
+        val toRemove = stored.filter { it == projectA || it == projectB }.toSet() - knownProjectIds
+        transactionTemplate.executeWithoutResult { teamcityValidationRepository.deleteByProjectIdIn(toRemove) }
+
+        assertEquals(0, teamcityValidationRepository.findByProjectIdIn(listOf(projectA, projectB)).size)
+    }
+
     companion object {
         @JvmStatic
         val postgres = PostgreSQLContainer("postgres:16-alpine").apply { start() }

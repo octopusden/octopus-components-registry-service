@@ -10,6 +10,5 @@ enum class StepType {
     GRADLE,
     MAVEN,
     COMMAND_LINE,
-    IN_CONTAINER,
     OTHER,
 }
