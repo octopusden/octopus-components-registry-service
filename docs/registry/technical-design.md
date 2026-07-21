@@ -403,7 +403,7 @@ lived only in an in-memory `AtomicReference` (single-pod, lost on restart) + log
 - **Schema:** `V4__add_service_event.sql` (+ Hibernate `ddl-auto` in the flyway-disabled
   envs; `detail` is `TEXT`+`@JdbcTypeCode(JSON)` mirroring `audit_log`).
 
-### 6.7 TeamCity validation (SYS-064, SYS-075–084)
+### 6.7 TeamCity validation (SYS-075–084)
 A new pure-Kotlin module, `component-validation` (no Spring/DB/TeamCity-client/IO — see
 [TD-016](tech-debt/016-validator-token-matching.md) for its one tracked follow-up), inspects each
 registered TeamCity project's build configs/steps and reports six findings per project

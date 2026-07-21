@@ -13,20 +13,19 @@ generically — so a *new* tool version silently resolves to `null` until someon
 derive a tool version from an already reference-resolved parameter value:
 
 - `JavaVersionResolver` treats any value containing a `jdk`/`java`/`jvm` token (case-insensitive)
-  as a Java reference, covering both env-var-style names (`env.JDK_ORACLE_17_x64`) and resolved
-  directory paths on Linux/Windows (`/usr/lib/jvm/java-21-openjdk-21.0.11...`, `C:\Java\RedHat\17`).
+  as a Java reference, covering both env-var-style names (`env.JDK_ORACLE_17_x64`), resolved
+  directory paths on Linux/Windows (`/usr/lib/jvm/java-21-openjdk-21.0.11...`, `C:\Java\RedHat\17`),
+  and `%env.BUILD_ENV%/JAVA/<version` references.
   It only recognizes a fixed list of tokens: `1.8`, `8`, `11`, `17`, `21`, `25` (plus the `18`
   legacy alias for `1.8`). This currently covers every Java version this org is known to use — but
   the day a new LTS (e.g. Java 29) shows up in a build config, it resolves to `null` and is
   silently invisible to `USES_OLD_JAVA_VERSION`/`MULTIPLE_JAVA_VERSIONS` until `TOKENS` is updated.
 - `MavenVersionResolver` treats any value containing a `maven` token as a Maven reference (e.g.
   `apache-maven-3.6.3`), against an even narrower fixed list: `3.6.3`, `3.6.0`, `3.3.9`, `LATEST`,
-  and a bare `3` fallback. This one already misses versions in active use today — e.g.
-  `apache-maven-3.8.6` collapses to the imprecise bare `3`, and `apache-maven-4.0.0` resolves to
-  `null` outright, since `4` isn't a recognized token.
+  and a bare `3` fallback.
 
 Neither resolver emits any signal when a recognized marker is present but no known token is (it
-silently resolves to `null`, or in Maven's case, coarsens to `3`).
+silently resolves to `null`).
 
 ## Why this matters
 
