@@ -58,13 +58,6 @@ teamcity:
     maven-default-build-step-id: <real default build-step id for the Maven template>
 ```
 
-Confirm the real ids against the live TeamCity instance per environment before rollout (decision
-D2 in `technical-design.md` §6.7) — the values previously hardcoded in `application.yml` during
-development (`CDGradleBuild` / `CDJavaMavenBuild` / `CDRelease`, `CdReleaseCandidateNew`,
-`CdReleaseChecklistValidation` / `GRADLE_ID` / `MAVEN_ID`) were placeholders for local testing,
-not guaranteed to be correct for any given TeamCity project, and must be re-verified per
-environment rather than copied as-is.
-
 Every profile must declare all five keys explicitly (see Activation model above) — test profiles
 supply their own fixture values (see `application-integration-test.yml`'s `teamcity.validation.*`
 block, used by the fat-jar startup tests, and the `test-db-validate` profile used by the
@@ -76,7 +69,7 @@ CI.
 1. Deploy this change with `teamcity.validation.*` explicitly blank in `service-config` (matching
    this repo's `application.yml` baseline). The application boots normally; validation runs but
    reports nothing.
-2. Confirm the real template/step ids for the target TeamCity instance (see decision D2).
+2. Confirm the real template/step ids for the target TeamCity instance.
 3. Set all five `teamcity.validation.*` properties together, in the same `service-config` change,
    and roll the deployment. Setting them one at a time (or leaving one blank) will NOT fail
    startup — see the "partially set" note above — so treat "all five together" as a manual
