@@ -81,8 +81,8 @@ class TeamcityValidationTriggerControllerTest {
     // ---------------------------------------------------------------------
 
     @Test
-    @DisplayName("anonymous POST /admin/teamcity-validation → 401, startAsync not invoked")
-    fun postAnonymousReturns401() {
+    @DisplayName("SYS-090 anonymous POST /admin/teamcity-validation → 401, startAsync not invoked")
+    fun SYS_090_postAnonymousReturns401() {
         mvc
             .perform(post("/rest/api/4/admin/teamcity-validation"))
             .andExpect(status().isUnauthorized)
@@ -91,8 +91,8 @@ class TeamcityValidationTriggerControllerTest {
     }
 
     @Test
-    @DisplayName("editor JWT POST /admin/teamcity-validation → 403, startAsync not invoked")
-    fun postEditorReturns403() {
+    @DisplayName("SYS-090 editor JWT POST /admin/teamcity-validation → 403, startAsync not invoked")
+    fun SYS_090_postEditorReturns403() {
         mvc
             .perform(post("/rest/api/4/admin/teamcity-validation").with(editorJwt()))
             .andExpect(status().isForbidden)
@@ -101,8 +101,8 @@ class TeamcityValidationTriggerControllerTest {
     }
 
     @Test
-    @DisplayName("admin POST /admin/teamcity-validation newly-started → 202 with kind=job body")
-    fun postAdminFreshReturns202() {
+    @DisplayName("SYS-090 admin POST /admin/teamcity-validation newly-started → 202 with kind=job body")
+    fun SYS_090_postAdminFreshReturns202() {
         `when`(teamcityValidationJobService.startAsync(anyString()))
             .thenReturn(StartTeamcityValidationResult(runningState("job-1"), isNewlyStarted = true))
 
@@ -118,8 +118,8 @@ class TeamcityValidationTriggerControllerTest {
     }
 
     @Test
-    @DisplayName("admin POST /admin/teamcity-validation same-kind RUNNING → 409 with same job body (attach)")
-    fun postAdminSameKindAttachReturns409() {
+    @DisplayName("SYS-090 admin POST /admin/teamcity-validation same-kind RUNNING → 409 with same job body (attach)")
+    fun SYS_090_postAdminSameKindAttachReturns409() {
         `when`(teamcityValidationJobService.startAsync(anyString()))
             .thenReturn(StartTeamcityValidationResult(runningState("job-existing"), isNewlyStarted = false))
 
@@ -134,8 +134,8 @@ class TeamcityValidationTriggerControllerTest {
     }
 
     @Test
-    @DisplayName("admin POST /admin/teamcity-validation cross-kind COMPONENTS → 409 with conflict envelope")
-    fun postAdminCrossKindComponentsReturns409Conflict() {
+    @DisplayName("SYS-090 admin POST /admin/teamcity-validation cross-kind COMPONENTS → 409 with conflict envelope")
+    fun SYS_090_postAdminCrossKindComponentsReturns409Conflict() {
         `when`(teamcityValidationJobService.startAsync(anyString()))
             .thenThrow(
                 MigrationConflictException(
@@ -157,8 +157,8 @@ class TeamcityValidationTriggerControllerTest {
     // ---------------------------------------------------------------------
 
     @Test
-    @DisplayName("anonymous GET /admin/teamcity-validation/job → 401")
-    fun getJobAnonymousReturns401() {
+    @DisplayName("SYS-090 anonymous GET /admin/teamcity-validation/job → 401")
+    fun SYS_090_getJobAnonymousReturns401() {
         mvc
             .perform(get("/rest/api/4/admin/teamcity-validation/job"))
             .andExpect(status().isUnauthorized)
@@ -167,8 +167,8 @@ class TeamcityValidationTriggerControllerTest {
     }
 
     @Test
-    @DisplayName("editor GET /admin/teamcity-validation/job → 403")
-    fun getJobEditorReturns403() {
+    @DisplayName("SYS-090 editor GET /admin/teamcity-validation/job → 403")
+    fun SYS_090_getJobEditorReturns403() {
         mvc
             .perform(get("/rest/api/4/admin/teamcity-validation/job").with(editorJwt()))
             .andExpect(status().isForbidden)
@@ -177,8 +177,8 @@ class TeamcityValidationTriggerControllerTest {
     }
 
     @Test
-    @DisplayName("admin GET /admin/teamcity-validation/job idle → 404")
-    fun getJobIdleReturns404() {
+    @DisplayName("SYS-090 admin GET /admin/teamcity-validation/job idle → 404")
+    fun SYS_090_getJobIdleReturns404() {
         `when`(teamcityValidationJobService.current()).thenReturn(null)
 
         mvc
@@ -187,8 +187,8 @@ class TeamcityValidationTriggerControllerTest {
     }
 
     @Test
-    @DisplayName("admin GET /admin/teamcity-validation/job COMPLETED → 200 with result counts")
-    fun getJobCompletedReturns200WithResult() {
+    @DisplayName("SYS-090 admin GET /admin/teamcity-validation/job COMPLETED → 200 with result counts")
+    fun SYS_090_getJobCompletedReturns200WithResult() {
         val result =
             org.octopusden.octopus.components.registry.server.teamcity.validation.TeamcityValidationResult(
                 scanned = 5,

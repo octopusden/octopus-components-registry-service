@@ -58,8 +58,8 @@ class TeamcityValidationControllerV4SecurityTest {
     private lateinit var mvc: MockMvc
 
     @Test
-    @DisplayName("anonymous GET /admin/teamcity-validations → 401, query service not invoked")
-    fun listAnonymousReturns401() {
+    @DisplayName("SYS-092 anonymous GET /admin/teamcity-validations → 401, query service not invoked")
+    fun SYS_092_listAnonymousReturns401() {
         mvc
             .perform(get("/rest/api/4/admin/teamcity-validations"))
             .andExpect(status().isUnauthorized)
@@ -68,8 +68,8 @@ class TeamcityValidationControllerV4SecurityTest {
     }
 
     @Test
-    @DisplayName("editor JWT GET /admin/teamcity-validations → 403, query service not invoked")
-    fun listEditorReturns403() {
+    @DisplayName("SYS-092 editor JWT GET /admin/teamcity-validations → 403, query service not invoked")
+    fun SYS_092_listEditorReturns403() {
         mvc
             .perform(get("/rest/api/4/admin/teamcity-validations").with(editorJwt()))
             .andExpect(status().isForbidden)
@@ -78,8 +78,8 @@ class TeamcityValidationControllerV4SecurityTest {
     }
 
     @Test
-    @DisplayName("admin JWT GET /admin/teamcity-validations → 200, query service invoked once")
-    fun listAdminReturns200() {
+    @DisplayName("SYS-092 admin JWT GET /admin/teamcity-validations → 200, query service invoked once")
+    fun SYS_092_listAdminReturns200() {
         `when`(teamcityValidationQueryService.list(null, null, null)).thenReturn(emptyList())
 
         mvc
@@ -90,8 +90,8 @@ class TeamcityValidationControllerV4SecurityTest {
     }
 
     @Test
-    @DisplayName("anonymous GET /admin/teamcity-validations/summary → 401, query service not invoked")
-    fun summaryAnonymousReturns401() {
+    @DisplayName("SYS-092 anonymous GET /admin/teamcity-validations/summary → 401, query service not invoked")
+    fun SYS_092_summaryAnonymousReturns401() {
         mvc
             .perform(get("/rest/api/4/admin/teamcity-validations/summary"))
             .andExpect(status().isUnauthorized)
@@ -100,8 +100,8 @@ class TeamcityValidationControllerV4SecurityTest {
     }
 
     @Test
-    @DisplayName("editor JWT GET /admin/teamcity-validations/summary → 403, query service not invoked")
-    fun summaryEditorReturns403() {
+    @DisplayName("SYS-092 editor JWT GET /admin/teamcity-validations/summary → 403, query service not invoked")
+    fun SYS_092_summaryEditorReturns403() {
         mvc
             .perform(get("/rest/api/4/admin/teamcity-validations/summary").with(editorJwt()))
             .andExpect(status().isForbidden)
@@ -110,8 +110,8 @@ class TeamcityValidationControllerV4SecurityTest {
     }
 
     @Test
-    @DisplayName("admin JWT GET /admin/teamcity-validations/summary → 200, query service invoked once")
-    fun summaryAdminReturns200() {
+    @DisplayName("SYS-092 admin JWT GET /admin/teamcity-validations/summary → 200, query service invoked once")
+    fun SYS_092_summaryAdminReturns200() {
         `when`(teamcityValidationQueryService.summary()).thenReturn(
             TeamcityValidationSummaryResponse(componentsWithIssues = 0, findings = 0, byType = emptyMap(), byStatus = emptyMap()),
         )

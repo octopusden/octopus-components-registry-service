@@ -46,6 +46,9 @@ class TeamcityValidationRepeatedRunIntegrationTest {
     private lateinit var teamcityValidationRepository: TeamcityValidationRepository
 
     @Autowired
+    private lateinit var teamcityValidationService: TeamcityValidationService
+
+    @Autowired
     private lateinit var transactionTemplate: TransactionTemplate
 
     private fun replace(
@@ -73,9 +76,10 @@ class TeamcityValidationRepeatedRunIntegrationTest {
 
     @Test
     @DisplayName(
-        "two consecutive replacements with an overlapping (projectId, type) do not throw and leave only the latest row",
+        "SYS-085 two consecutive replacements with an overlapping (projectId, type) do not throw " +
+            "and leave only the latest row",
     )
-    fun repeated_replace_with_surviving_type_does_not_collide() {
+    fun SYS_085_repeated_replace_with_surviving_type_does_not_collide() {
         val projectId = "REPEATED-RUN-PROJECT"
 
         // First run: two findings, including one that will survive into the next run.
@@ -96,21 +100,21 @@ class TeamcityValidationRepeatedRunIntegrationTest {
     }
 
     @Test
-    @DisplayName("pruning with an empty known-project scope removes every stored row, including the last project")
-    fun stale_row_pruning_with_empty_scope_removes_the_last_project() {
+    @DisplayName(
+        "SYS-087 calling TeamcityValidationService.validate() with an empty linked-project scope " +
+            "prunes every stored row, including the last project",
+    )
+    fun SYS_087_validate_with_empty_scope_removes_the_last_project() {
         val projectA = "FINAL-REMOVAL-PROJECT-A"
         val projectB = "FINAL-REMOVAL-PROJECT-B"
         replace(projectA, listOf("USES_OLD_JAVA_VERSION"))
         replace(projectB, listOf("OVERRIDES_DEFAULT_BUILD_STEP"))
         assertEquals(2, teamcityValidationRepository.findByProjectIdIn(listOf(projectA, projectB)).size)
 
-        // Scope shrinks to empty (both projects unlinked) — mirrors
-        // TeamcityValidationService.removeStaleProjects(knownProjectIds = emptySet()).
-        val knownProjectIds = emptySet<String>()
-        val stored = teamcityValidationRepository.findDistinctStoredProjectIds().toSet()
-        val toRemove = stored.filter { it == projectA || it == projectB }.toSet() - knownProjectIds
-        transactionTemplate.executeWithoutResult { teamcityValidationRepository.deleteByProjectIdIn(toRemove) }
+        val result = teamcityValidationService.validate()
 
+        assertEquals(0, result.scanned, "no project should be in scope")
+        assertEquals(true, result.removed >= 2, "at least both stale projects should have been pruned")
         assertEquals(0, teamcityValidationRepository.findByProjectIdIn(listOf(projectA, projectB)).size)
     }
 
