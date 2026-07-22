@@ -1981,6 +1981,32 @@
         ],
         "type" : "object"
       },
+      "MigrationConflictResponse" : {
+        "properties" : {
+          "activeJobId" : {
+            "type" : "string"
+          },
+          "activeKind" : {
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "activeKind",
+          "code",
+          "kind",
+          "message"
+        ],
+        "type" : "object"
+      },
       "MigrationJobResponse" : {
         "properties" : {
           "currentComponent" : {
@@ -5583,11 +5609,18 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/ErrorResponse"
+                  "oneOf" : [
+                    {
+                      "$ref" : "#/components/schemas/TeamcitySyncJobResponse"
+                    },
+                    {
+                      "$ref" : "#/components/schemas/MigrationConflictResponse"
+                    }
+                  ]
                 }
               }
             },
-            "description" : "A TC resync (or a conflicting migration kind) is already running; body describes the in-flight job/conflict"
+            "description" : "Same-kind attach: a TC resync is already running, body is the in-flight TeamcitySyncJobResponse. Cross-kind conflict: another migration kind (components migration, history migration, or TC validation) is running, body is a MigrationConflictResponse describing which one."
           },
           "413" : {
             "content" : {
@@ -5783,11 +5816,18 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/ErrorResponse"
+                  "oneOf" : [
+                    {
+                      "$ref" : "#/components/schemas/TeamcityValidationJobResponse"
+                    },
+                    {
+                      "$ref" : "#/components/schemas/MigrationConflictResponse"
+                    }
+                  ]
                 }
               }
             },
-            "description" : "A TC validation (or a conflicting migration kind) is already running; body describes the in-flight job/conflict"
+            "description" : "Same-kind attach: a TC validation is already running, body is the in-flight TeamcityValidationJobResponse. Cross-kind conflict: another migration kind (components migration, history migration, or TC resync) is running, body is a MigrationConflictResponse describing which one."
           },
           "413" : {
             "content" : {

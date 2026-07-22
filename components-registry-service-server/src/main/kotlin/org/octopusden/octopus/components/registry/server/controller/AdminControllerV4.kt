@@ -1,5 +1,7 @@
 package org.octopusden.octopus.components.registry.server.controller
 
+import io.swagger.v3.oas.annotations.media.Content
+import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
@@ -231,7 +233,17 @@ class AdminControllerV4(
         ApiResponse(responseCode = "202", description = "A new TC resync job was started"),
         ApiResponse(
             responseCode = "409",
-            description = "A TC resync (or a conflicting migration kind) is already running; body describes the in-flight job/conflict",
+            description = "Same-kind attach: a TC resync is already running, body is the in-flight " +
+                "TeamcitySyncJobResponse. Cross-kind conflict: another migration kind (components " +
+                "migration, history migration, or TC validation) is running, body is a " +
+                "MigrationConflictResponse describing which one.",
+            content = [
+                Content(
+                    schema = Schema(
+                        oneOf = [TeamcitySyncJobResponse::class, MigrationConflictResponse::class],
+                    ),
+                ),
+            ],
         ),
     )
     fun startTeamcitySync(): ResponseEntity<TeamcitySyncJobResponse> {
@@ -261,7 +273,17 @@ class AdminControllerV4(
         ApiResponse(responseCode = "202", description = "A new TC validation job was started"),
         ApiResponse(
             responseCode = "409",
-            description = "A TC validation (or a conflicting migration kind) is already running; body describes the in-flight job/conflict",
+            description = "Same-kind attach: a TC validation is already running, body is the " +
+                "in-flight TeamcityValidationJobResponse. Cross-kind conflict: another migration " +
+                "kind (components migration, history migration, or TC resync) is running, body is " +
+                "a MigrationConflictResponse describing which one.",
+            content = [
+                Content(
+                    schema = Schema(
+                        oneOf = [TeamcityValidationJobResponse::class, MigrationConflictResponse::class],
+                    ),
+                ),
+            ],
         ),
     )
     fun startTeamcityValidation(): ResponseEntity<TeamcityValidationJobResponse> {
