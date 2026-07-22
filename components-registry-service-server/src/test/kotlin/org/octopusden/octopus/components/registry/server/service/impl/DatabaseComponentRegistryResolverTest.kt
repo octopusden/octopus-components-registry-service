@@ -89,10 +89,6 @@ class DatabaseComponentRegistryResolverTest {
      * Leaving `deprecated = null` (the entity default) causes an
      * `IllegalArgumentException` at runtime when the mapper calls
      * `field.set(config, null)` on the primitive field.
-     *
-     * // FIXME(Phase 6 review): EntityMappers.setField should use `merged.deprecated ?: false`
-     * //   (or catch IllegalArgumentException) so that components with no deprecated column
-     * //   value survive toEscrowModule / toResolvedEscrowModuleConfig without crashing.
      */
     private fun makeBase(
         component: ComponentEntity,

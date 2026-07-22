@@ -1,11 +1,5 @@
 # Common System Requirements
 
-## Status
-
-**Draft** | Date: 2026-03-16
-
----
-
 ## Summary Table
 
 | ID | Title | Priority | Layer | Status |

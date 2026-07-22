@@ -1,7 +1,7 @@
 # Non-Functional Specification: Components Registry DB Migration
 
 ## Status
-**Living document** | Last updated: 2026-04-29 (was Draft 2026-03-08)
+**Living document**
 
 ---
 
